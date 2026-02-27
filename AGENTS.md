@@ -91,7 +91,38 @@ Keep these constraints intact in documentation and future code scaffolding:
 - No hardcoded secrets
 - Budget-aware AI routing with graceful fallback
 
-### 5) Prefer incremental bootstrap when code work is requested
+### 5) Test-first development (TDD) — mandatory
+
+**Every implementation task must follow this cycle. No exceptions.**
+
+1. **Write tests first** — Define expected behavior as unit tests before writing implementation
+2. **Run tests, confirm RED** — Verify tests fail for the right reason (missing implementation)
+3. **Write the minimum implementation** to make tests pass
+4. **Run tests for the new feature** — Confirm the new tests pass
+5. **Run `make test-all`** — Run the FULL test suite to ensure no earlier code is broken
+6. **Fix any regressions** before moving on — if anything broke, fix it now
+7. **Refactor** if needed, re-run `make test-all` to confirm nothing breaks
+8. **Commit only when `make test-all` is fully green**
+
+**Go backend testing rules:**
+- Every `.go` file gets a corresponding `_test.go` in the same package
+- Use table-driven tests for all tests with multiple cases
+- Use `testcontainers-go` for integration tests needing real PostgreSQL/Dragonfly/NATS
+- All external dependencies (AI providers, chat channels, database) behind interfaces for mocking
+- `make test` = unit tests, `make test-integration` = integration tests, `make test-all` = everything + lint
+
+**Admin panel (Next.js) testing rules:**
+- Jest + React Testing Library for component tests
+- Test data provider integrations and auth flows
+
+**Bug fix workflow:**
+1. Write a test that reproduces the bug
+2. Confirm test fails (bug exists)
+3. Fix the bug
+4. Run `make test-all` — full suite green, no regressions
+5. Commit
+
+### 6) Prefer incremental bootstrap when code work is requested
 
 If asked to start implementation, scaffold in this order unless user specifies otherwise:
 
