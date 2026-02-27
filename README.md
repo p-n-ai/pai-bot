@@ -86,7 +86,7 @@ LEARN_AI_OLLAMA_ENABLED=true
 docker compose up -d
 ```
 
-This starts: PostgreSQL, Dragonfly (cache), the Go server, and the admin panel.
+This starts: PostgreSQL, Dragonfly (cache), NATS (messaging), the Go server, and the admin panel.
 
 ### 3. Pull a free AI model (optional)
 
@@ -156,7 +156,7 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 │  │           Agent Engine                    │       │
 │  │  ┌─────────────┐  ┌──────────────────┐   │       │
 │  │  │ Conversation │  │ Proactive        │   │       │
-│  │  │ State Machine│  │ Scheduler        │   │       │
+│  │  │ State Machine│  │ Scheduler (NATS) │   │       │
 │  │  └─────────────┘  └──────────────────┘   │       │
 │  │  ┌─────────────┐  ┌──────────────────┐   │       │
 │  │  │ Progress    │  │ Pedagogical      │   │       │
@@ -190,6 +190,7 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 | **Backend** | Go 1.22+ (stdlib) | Goroutines handle millions of concurrent connections. Single binary, ~15MB. |
 | **Database** | PostgreSQL 17 | Standard, portable. Every cloud has managed Postgres. |
 | **Cache** | Dragonfly | Redis-compatible, multi-threaded, 80% less memory. |
+| **Messaging** | NATS + JetStream | Proactive nudge scheduling, background jobs, event-driven communication. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
 | **Admin Panel** | Next.js 14, TypeScript, Refine, shadcn/ui | Teacher dashboards, parent views, school admin. |
@@ -202,60 +203,73 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 pai-bot/
 ├── cmd/
 │   └── server/
-│       └── main.go              # Application entrypoint
+│       └── main.go                  # Application entrypoint
 ├── internal/
-│   ├── ai/                      # AI Gateway
-│   │   ├── gateway.go           # Provider-agnostic interface
-│   │   ├── router.go            # Model routing + fallback chains
-│   │   ├── budget.go            # Token budget tracking + enforcement
-│   │   ├── provider_openai.go   # OpenAI implementation
+│   ├── ai/                          # AI Gateway
+│   │   ├── gateway.go               # Provider-agnostic interface
+│   │   ├── router.go                # Model routing + fallback chains
+│   │   ├── budget.go                # Token budget tracking + enforcement
+│   │   ├── provider_openai.go       # OpenAI implementation
 │   │   ├── provider_anthropic.go
-│   │   ├── provider_ollama.go   # Self-hosted models
+│   │   ├── provider_ollama.go       # Self-hosted models
 │   │   └── provider_openrouter.go
-│   ├── agent/                   # Agent Engine
-│   │   ├── engine.go            # Conversation state machine
-│   │   ├── scheduler.go         # Proactive nudges + spaced repetition
-│   │   ├── prompts.go           # Pedagogical system prompts
-│   │   ├── quiz.go              # Assessment engine
-│   │   └── challenge.go         # Peer battle system
-│   ├── chat/                    # Chat Gateway
-│   │   ├── gateway.go           # Unified message routing
-│   │   ├── telegram.go          # Telegram adapter
-│   │   ├── whatsapp.go          # WhatsApp adapter
-│   │   └── websocket.go         # Web chat adapter
-│   ├── curriculum/              # Curriculum Service
-│   │   └── loader.go            # Reads from OSS repository
-│   ├── progress/                # Progress Tracker
-│   │   ├── tracker.go           # Mastery scoring
-│   │   ├── spaced_rep.go        # SM-2 algorithm
-│   │   └── streaks.go           # Streak + XP system
-│   ├── auth/                    # Authentication
-│   │   ├── jwt.go               # Token generation + validation
-│   │   └── middleware.go        # Role-based access control
-│   └── platform/                # Shared infrastructure
-│       ├── config/              # Environment configuration
-│       ├── database/            # PostgreSQL connection + helpers
-│       └── cache/               # Dragonfly client
-├── admin/                       # Next.js admin panel
+│   ├── agent/                       # Agent Engine
+│   │   ├── engine.go                # Conversation state machine
+│   │   ├── scheduler.go             # Proactive nudges via NATS
+│   │   ├── prompts.go               # Pedagogical system prompts
+│   │   ├── quiz.go                  # Assessment engine
+│   │   └── challenge.go             # Peer battle system
+│   ├── chat/                        # Chat Gateway
+│   │   ├── gateway.go               # Unified message routing
+│   │   ├── telegram.go              # Telegram adapter
+│   │   ├── whatsapp.go              # WhatsApp adapter
+│   │   └── websocket.go             # Web chat adapter
+│   ├── curriculum/                   # Curriculum Service
+│   │   ├── loader.go                # Reads YAML from OSS repository
+│   │   ├── cache.go                 # In-memory + Dragonfly curriculum cache
+│   │   └── types.go                 # Go structs matching OSS schema
+│   ├── progress/                    # Progress Tracker
+│   │   ├── tracker.go               # Mastery scoring
+│   │   ├── spaced_rep.go            # SM-2 algorithm
+│   │   └── streaks.go               # Streak + XP system
+│   ├── auth/                        # Authentication
+│   │   ├── jwt.go                   # Token generation + validation
+│   │   └── middleware.go            # Role-based access control
+│   ├── tenant/                      # Multi-tenancy
+│   │   ├── tenant.go                # Tenant isolation logic
+│   │   └── middleware.go            # Tenant resolution from JWT/subdomain
+│   └── platform/                    # Shared infrastructure
+│       ├── config/                  # Environment configuration
+│       ├── database/                # PostgreSQL connection (pgx)
+│       ├── cache/                   # Dragonfly client (go-redis)
+│       ├── messaging/               # NATS client + JetStream helpers
+│       ├── storage/                 # Object storage interface (S3-compatible)
+│       ├── telemetry/               # OpenTelemetry setup
+│       └── health/                  # Health check endpoints
+├── admin/                           # Next.js admin panel
 │   ├── src/
-│   │   ├── app/                 # App Router pages
-│   │   ├── components/          # Shared UI components
-│   │   └── providers/           # Auth + data providers
+│   │   ├── app/                     # App Router pages
+│   │   ├── components/              # Shared UI components
+│   │   └── providers/               # Auth + data providers
 │   ├── package.json
 │   └── next.config.js
-├── migrations/                  # SQL migration files
+├── migrations/                      # SQL migration files (golang-migrate)
 ├── deploy/
 │   ├── docker/
-│   │   └── Dockerfile           # Multi-stage Go + Admin build
+│   │   ├── Dockerfile               # Multi-stage Go + Admin build
+│   │   └── Dockerfile.dev           # Development with hot reload
 │   └── helm/
-│       └── pai/                 # Helm chart for Kubernetes
+│       └── pai/                     # Helm chart for Kubernetes
+├── terraform/                       # Infrastructure as Code
 ├── scripts/
-│   ├── setup.sh                 # First-time setup wizard
-│   ├── deploy.sh                # Production deployment
-│   └── analytics.sh             # Quick metrics from CLI
-├── docker-compose.yml           # One-command local development
-├── Makefile                     # Dev shortcuts
-├── .env.example                 # All configuration documented
+│   ├── setup.sh                     # First-time setup wizard
+│   ├── deploy.sh                    # Production deployment
+│   └── analytics.sh                 # Quick metrics from CLI
+├── docker-compose.yml               # One-command local development
+├── docker-compose.prod.yml          # Production compose (single-server)
+├── Makefile                         # Dev shortcuts
+├── .env.example                     # All configuration documented
+├── .github/workflows/               # CI/CD (build, test, lint, release)
 └── README.md
 ```
 
@@ -291,8 +305,10 @@ Currently supported:
 
 | Curriculum | Subjects | Status |
 |-----------|----------|--------|
-| Cambridge IGCSE 0580 | Mathematics | ✅ Complete |
-| Malaysia KSSM Form 3 | Mathematics | ✅ Complete |
+| Malaysia KSSM Form 1 | Matematik (Algebra) | Planned |
+| Malaysia KSSM Form 2 | Matematik (Algebra) | Planned |
+| Malaysia KSSM Form 3 | Matematik (Algebra) | Planned |
+| Cambridge IGCSE 0580 | Mathematics | Planned |
 | *More coming — contributions welcome!* | | |
 
 Adding a new curriculum doesn't require code changes — just add YAML files to the OSS repository and P&AI picks them up automatically. See the [OSS contribution guide](https://github.com/p-n-ai/oss/blob/main/CONTRIBUTING.md).
@@ -337,6 +353,7 @@ P&AI is designed to run on any cloud without lock-in:
 | Compute | EKS | GKE | AKS | Any K8s |
 | Database | RDS PostgreSQL | Cloud SQL | Azure DB | PostgreSQL |
 | Cache | (self-hosted Dragonfly) | (self-hosted) | (self-hosted) | Dragonfly/Redis |
+| Messaging | (self-hosted NATS) | (self-hosted) | (self-hosted) | NATS |
 | Storage | S3 | GCS | Blob | MinIO |
 
 ---
@@ -350,6 +367,7 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 | `LEARN_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from @BotFather |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
+| `LEARN_NATS_URL` | No | `nats://localhost:4222` | NATS messaging server |
 | `LEARN_AI_OPENAI_API_KEY` | No* | — | OpenAI API key |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | — | Anthropic API key |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
@@ -373,8 +391,8 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 ### Local Development
 
 ```bash
-# Start infrastructure (Postgres, Dragonfly, Ollama)
-docker compose up -d postgres dragonfly ollama
+# Start infrastructure (Postgres, Dragonfly, NATS, Ollama)
+docker compose up -d postgres dragonfly nats ollama
 
 # Run database migrations
 make migrate
