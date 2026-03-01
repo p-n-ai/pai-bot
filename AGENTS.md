@@ -4,19 +4,20 @@ This file is the working guide for **any coding agent** operating in this reposi
 
 ## Project Status (Current Reality)
 
-P&AI Bot is currently in a **planning/docs phase**.
+**Day 0 foundation is complete** (as of March 2026). The repository has working application code:
 
-As of February 2026, this repo contains documentation only:
+- `cmd/server/main.go` — HTTP server with `/healthz` and `/readyz` endpoints
+- `internal/platform/config/` — Configuration from `LEARN_` env vars
+- `internal/platform/database/` — PostgreSQL client (pgxpool)
+- `internal/platform/cache/` — Dragonfly/Redis client (go-redis)
+- `internal/ai/` — AI Gateway with 6 providers (OpenAI, Anthropic, Google, Ollama, OpenRouter + DeepSeek via OpenAI), router with fallback chain, budget tracker
+- `migrations/001_initial.{up,down}.sql` — Database schema (tenants, users, conversations, messages, learning_progress, events)
+- `deploy/docker/Dockerfile` — Multi-stage Docker build
+- `docker-compose.yml` — PostgreSQL, Dragonfly, NATS, Ollama, app
+- `.github/workflows/ci.yml` — CI pipeline
+- `.env.example`, `Makefile` — Developer tooling
 
-- `README.md`
-- `docs/technical-plan.md`
-- `docs/business-plan.md`
-- `docs/development-timeline.md`
-- `AGENTS.md`
-- `CLAUDE.md`
-- `LICENSE`
-
-There is **no application source code yet** (`cmd/`, `internal/`, `admin/`, `migrations/`, `deploy/`, `terraform/`, `.env.example`, etc. are planned but not present).
+All unit tests pass (`make test-all`). See `docs/development-timeline.md` for current progress.
 
 ## Mission and Product Context
 
@@ -38,11 +39,27 @@ Use these files as primary references:
 1. `README.md` for positioning, scope, and contribution framing
 2. `docs/technical-plan.md` for architecture and implementation plan
 3. `docs/business-plan.md` for product strategy and metrics intent
-4. `docs/development-timeline.md` for phased execution plan
+4. `docs/development-timeline.md` for phased execution plan and task assignments
+5. `docs/implementation-guide.md` for code templates, test specs, and exit criteria
 
 If you change one doc and it affects others, update all impacted docs in the same task.
 
 ## Agent Rules of Engagement
+
+### 0) MANDATORY: Read both implementation documents before any daily task
+
+**Before starting ANY daily implementation task, you MUST read and cross-reference BOTH:**
+
+1. **`docs/implementation-guide.md`** — Contains exact code templates, function signatures, test specifications, file-by-file details, and exit criteria for each day
+2. **`docs/development-timeline.md`** — Contains task IDs, dependencies between tasks, engineer allocation, and execution order
+
+**Do NOT implement from one document alone.** The implementation guide defines **what** and **how**; the timeline defines **when** and **in what order**. Skipping either will lead to missed dependencies or divergent implementations.
+
+**For each day's work:**
+1. Read the day's section in `docs/development-timeline.md` — identify task IDs, dependencies, and assignments
+2. Read the day's section in `docs/implementation-guide.md` — identify code templates, test specs, and exit criteria
+3. Follow TDD (Rule 5 below)
+4. Verify ALL exit criteria from the implementation guide before marking any day complete
 
 ### 1) Be explicit about present vs planned state
 
@@ -148,11 +165,11 @@ Before finishing any documentation change, verify:
 
 ## Non-Goals (for now)
 
-Until code exists, avoid pretending runtime behavior is validated:
+Avoid pretending unbuilt features are validated:
 
-- No claims that APIs/endpoints are operational
-- No claims that Docker/Helm/Terraform artifacts are present
-- No claims that tests/lint pipelines are passing
+- Only claim endpoints/features are operational if they exist in the codebase and tests pass
+- Do not claim future-day features are present (e.g., Day 3 features during Day 1 work)
+- Verify claims against actual code, not just documentation
 
 ## Related Repositories
 

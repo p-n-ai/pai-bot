@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS learning_progress;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS conversations;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS tenants;

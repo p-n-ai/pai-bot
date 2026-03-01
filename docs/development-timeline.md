@@ -16,20 +16,99 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 
 ---
 
-## DAY 0 — SETUP (4.5 hours)
+## DAY 0 — SETUP (4.5 hours) ✅ COMPLETE
 
-| Task ID | Task | Owner | Time |
-|---------|------|-------|------|
-| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, `internal/{ai,agent,chat,auth,progress,curriculum,platform/{config,database,cache}}`, `migrations/`, `deploy/docker/` | 🤖 Claude Code | 1hr |
-| `P-D0-2` | Create `internal/platform/config/config.go` — all env vars with `LEARN_` prefix | 🤖 Claude Code | 30min |
-| `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) | 🤖 Claude Code | 1hr |
-| `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, app) + multi-stage Dockerfile | 🤖 Claude Code | 30min |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, progress, conversations (with messages as JSONB column), assessments, streaks, token_budgets, events tables. Schema per technical-plan.md §4 | 🤖 Claude Code | 30min |
-| `P-D0-6` | Create AI gateway: Provider interface + OpenAI implementation (configurable base URL — supports DeepSeek and other OpenAI-compatible APIs) + Google Gemini implementation + Ollama implementation + OpenRouter implementation + router with fallback chain. Note: DeepSeek reuses `provider_openai.go` with different base URL — no separate file | 🤖 Claude Code | 2hr |
-| `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 Claude Code | 30min |
-| `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 Human | 15min |
+| Task ID | Task | Owner | Status |
+|---------|------|-------|--------|
+| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, `Makefile`, `.env.example` | 🤖 | ✅ |
+| `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
+| `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
+| `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
+| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
+| `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
+| `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
+| `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
 
-**Exit:** `docker compose up` runs, health check returns 200, `make test` passes (unit tests for config, gateway, providers), AI gateway compiles with all 5 provider files, GitHub Actions CI workflow committed.
+**What was built (45+ unit tests, all passing):**
+- Config: nested structs (`ServerConfig`, `DatabaseConfig`, `AIConfig`, etc.) with `Load()` and `Validate()`
+- Database: `DB` struct wrapping `pgxpool.Pool` with `ParseURL`, `New`, `Close`, `HealthCheck`
+- Cache: `Cache` struct wrapping `redis.Client` with `ParseURL`, `New`, `Close`, `HealthCheck`
+- AI Gateway: `Provider` interface, `Router` (fallback chain), `MockProvider`, `BudgetChecker` interface
+- 6 AI providers: OpenAI, DeepSeek (via OpenAI base URL), Anthropic, Google Gemini, Ollama, OpenRouter
+- Docker Compose: Postgres 17, Dragonfly, NATS 2.10 (JetStream), app, Ollama (optional `--profile ollama`)
+- Dockerfile: Go 1.22 builder → Alpine 3.20 runtime (~25MB)
+- HTTP server: `/healthz` + `/readyz` endpoints, graceful SIGTERM shutdown
+
+---
+
+## Developer Onboarding — Getting Ready for Day 1
+
+All Day 0 code is committed. Before starting Day 1 tasks, every engineer must set up their local environment.
+
+### Prerequisites
+
+```bash
+# Go 1.22+ (backend)
+go version   # Expected: go1.22.x or higher
+
+# Docker + Docker Compose
+docker --version && docker compose version
+
+# golangci-lint (linter)
+golangci-lint --version   # Expected: ≥1.55
+# Install if missing: brew install golangci-lint
+
+# Optional but recommended: Air (hot reload)
+go install github.com/air-verse/air@latest
+```
+
+### Setup Steps
+
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/p-n-ai/pai-bot.git
+cd pai-bot
+
+# 2. First-time setup (copies .env.example → .env, downloads Go modules)
+make setup
+
+# 3. Edit .env — add your Telegram bot token and at least one AI provider key
+#    LEARN_TELEGRAM_BOT_TOKEN=<your-token>
+#    LEARN_AI_OPENAI_API_KEY=<key>   (or any other provider)
+
+# 4. Verify all tests pass
+make test
+
+# 5. Start infrastructure (Postgres, Dragonfly, NATS)
+docker compose up -d postgres dragonfly nats
+
+# 6. Apply the database migration
+docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+
+# 7. Verify the server runs and health check works
+go run ./cmd/server &
+curl http://localhost:8080/healthz   # → {"status":"ok"}
+kill %1
+
+# 8. Stop infrastructure when done
+docker compose down
+```
+
+### Day 1 Task Distribution (4 engineers)
+
+Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates them all.
+
+| Task ID | Task | Assigned To | Dependencies |
+|---------|------|-------------|--------------|
+| `P-W1D1-1` | Chat Gateway — `internal/chat/gateway.go` (types + interface + router) | Engineer A | None |
+| `P-W1D1-2` | Telegram Adapter — `internal/chat/telegram.go` (long polling, /start, markdown splitting) | Engineer A | Uses types from 1.1 |
+| `P-W1D1-3` | Agent Engine — `internal/agent/engine.go` (ProcessMessage pipeline) | Engineer B | Uses `ai.Provider` from Day 0 |
+| `P-W1D1-4` | Curriculum Loader — `internal/curriculum/loader.go` (load YAML + teaching notes) | Engineer C | None |
+| `P-W1D1-5` | Wire main.go — connect all components, start polling | Engineer D (lead) | After 1.1–1.4 merge |
+
+**Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
+
+**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `make test-all`. Never commit until the full suite passes.
 
 ---
 

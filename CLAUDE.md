@@ -12,7 +12,9 @@ Built by the [Pandai](https://pandai.org) team. Licensed under Apache 2.0.
 
 ## Status
 
-This project is in the **planning/early development phase**. The repository currently contains documentation only (README, business plan, technical plan, development timeline). No application code has been written yet.
+**Day 0 foundation is complete.** The repository has a working Go backend with health endpoints, configuration system, AI gateway (6 providers), database/cache clients, Docker infrastructure, CI pipeline, and full test suite.
+
+Development follows a 30-day timeline. See [docs/development-timeline.md](docs/development-timeline.md) for current progress.
 
 The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specifically Algebra topics first.
 
@@ -149,8 +151,8 @@ This project follows a **test-first development workflow**. Every feature must h
 - Structured logging with `slog`
 - No external web framework — stdlib only
 - Domain code in `internal/` — nothing exported outside the module
-- Each AI provider implements the `AIProvider` interface
-- Each chat channel implements the `ChatChannel` interface
+- Each AI provider implements the `Provider` interface (in `internal/ai/gateway.go`)
+- Each chat channel implements the `Channel` interface (in `internal/chat/`)
 - All external dependencies behind interfaces for testability
 
 ### Database
@@ -250,9 +252,25 @@ All prefixed with `LEARN_`. Key ones:
 - **Adaptive Explanation Depth:** Mastery-based prompt adjustment (beginner/developing/proficient) in `internal/agent/prompts.go`
 - **Dynamic Question Generation:** AI generates quiz questions from teaching notes with exam-style mimicry in `internal/agent/quiz.go`
 
+## Daily Implementation: Required References
+
+**MANDATORY: Before starting ANY daily implementation task, you MUST read and cross-reference BOTH of these documents:**
+
+1. **[docs/implementation-guide.md](docs/implementation-guide.md)** — Code templates, function signatures, test specifications, file-by-file implementation details, and exit criteria for each day
+2. **[docs/development-timeline.md](docs/development-timeline.md)** — Task assignments, dependencies between tasks, engineer allocation, and day-by-day execution order
+
+**Why both?** The implementation guide tells you **what** to build and **how** (exact code patterns, test cases, API contracts). The development timeline tells you **when** and **in what order** (task dependencies, parallelization, which tasks block others). Using only one will lead to missed dependencies or divergent implementations.
+
+**The workflow for each day:**
+1. Read the day's section in `docs/development-timeline.md` — understand task IDs, dependencies, and assignments
+2. Read the day's section in `docs/implementation-guide.md` — understand code templates, test specs, and exit criteria
+3. Follow the TDD cycle (see "Development Workflow" above)
+4. Verify all exit criteria from the implementation guide before marking the day complete
+
 ## Documentation
 
 - [README.md](README.md) — Project overview, quick start, features, deployment
 - [docs/technical-plan.md](docs/technical-plan.md) — Detailed architecture, schema, infra, security
 - [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
 - [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
+- [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day

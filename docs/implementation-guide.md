@@ -69,9 +69,11 @@ go version && docker --version && docker compose version
 
 ---
 
-## DAY 0 — SETUP (4 hours)
+## DAY 0 — SETUP (4 hours) ✅ COMPLETE
 
 **Entry criteria:** Repository exists with documentation only (README.md, CLAUDE.md, AGENTS.md, docs/). No Go code exists yet.
+
+> **Status:** All 8 tasks completed. 45+ unit tests passing. `go test ./...` green. `go vet ./...` clean.
 
 ### Tasks
 
@@ -1760,19 +1762,113 @@ docker compose down
 
 ### Day 0 Exit Criteria
 
-- [ ] `go.mod` exists with Go 1.22+
-- [ ] Directory structure created: `cmd/`, `internal/`, `migrations/`, `deploy/`, `scripts/`
-- [ ] `cmd/server/main.go` builds and returns health check 200
-- [ ] `internal/platform/config/` — config loads from `LEARN_` env vars with tests
-- [ ] `internal/platform/database/` — pgx pool wrapper with tests
-- [ ] `internal/platform/cache/` — go-redis wrapper with tests
-- [ ] `internal/ai/` — Provider interface, MockProvider, OpenAI, Anthropic, Ollama, Router with tests
-- [ ] `docker-compose.yml` — Postgres 17, Dragonfly, NATS, app, optional Ollama
-- [ ] `migrations/001_initial.up.sql` — tenants, users, conversations, messages, learning_progress, events
-- [ ] `Makefile`, `.env.example`, `.github/workflows/ci.yml`
-- [ ] `go test ./...` passes with zero failures
+- [x] `go.mod` exists with Go 1.22+
+- [x] Directory structure created: `cmd/`, `internal/`, `migrations/`, `deploy/`, `scripts/`
+- [x] `cmd/server/main.go` builds and returns health check 200
+- [x] `internal/platform/config/` — config loads from `LEARN_` env vars with tests
+- [x] `internal/platform/database/` — pgx pool wrapper with tests
+- [x] `internal/platform/cache/` — go-redis wrapper with tests
+- [x] `internal/ai/` — Provider interface, MockProvider, OpenAI, Anthropic, Google, Ollama, OpenRouter, Router with tests
+- [x] `docker-compose.yml` — Postgres 17, Dragonfly, NATS, app, optional Ollama
+- [x] `migrations/001_initial.up.sql` — tenants, users, conversations, messages, learning_progress, events
+- [x] `Makefile`, `.env.example`, `.github/workflows/ci.yml`
+- [x] `go test ./...` passes with zero failures
 
-**Progress:** Foundation | 3 packages (config, database, cache, ai) | Docker Compose | CI
+**Progress:** Foundation | 4 packages (config, database, cache, ai) | Docker Compose | CI
+
+---
+
+## Developer Onboarding — Getting Ready for Day 1
+
+All Day 0 code is committed. Before starting Day 1 tasks, every engineer must set up their local environment and verify everything works.
+
+### Prerequisites
+
+```bash
+# Go 1.22+ (backend)
+go version   # Expected: go1.22.x or higher
+
+# Docker + Docker Compose (infrastructure)
+docker --version && docker compose version
+
+# golangci-lint (Go linter — required for make test-all)
+golangci-lint --version   # Expected: ≥1.55
+# Install: brew install golangci-lint  (macOS)
+#          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Optional: Air (hot reload for local development)
+go install github.com/air-verse/air@latest
+```
+
+### Local Setup (5 minutes)
+
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/p-n-ai/pai-bot.git
+cd pai-bot
+
+# 2. First-time setup (copies .env.example → .env, downloads Go modules)
+make setup
+
+# 3. Edit .env — add your Telegram bot token and at least one AI provider key
+#    Required:
+#      LEARN_TELEGRAM_BOT_TOKEN=<your-token>
+#    At least one AI provider:
+#      LEARN_AI_OPENAI_API_KEY=<key>
+#      LEARN_AI_ANTHROPIC_API_KEY=<key>
+#      LEARN_AI_OLLAMA_ENABLED=true    (free, self-hosted)
+#      LEARN_AI_OPENROUTER_API_KEY=<key>
+
+# 4. Verify all tests pass (45+ tests, should take <5 seconds)
+make test
+
+# 5. Start infrastructure (Postgres, Dragonfly, NATS)
+docker compose up -d postgres dragonfly nats
+
+# 6. Apply the database migration
+docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+
+# 7. Verify the server starts and health check works
+go run ./cmd/server &
+curl http://localhost:8080/healthz   # → {"status":"ok"}
+kill %1
+
+# 8. Stop infrastructure when done
+docker compose down
+```
+
+### What Already Exists (Day 0 deliverables)
+
+| Package | Key Files | What It Does |
+|---------|-----------|--------------|
+| `cmd/server/` | `main.go`, `main_test.go` | HTTP server with `/healthz` + `/readyz`, graceful shutdown |
+| `internal/platform/config/` | `config.go`, `config_test.go` | Loads `LEARN_` env vars into nested config structs |
+| `internal/platform/database/` | `database.go`, `database_test.go` | `DB` struct wrapping `pgxpool.Pool` |
+| `internal/platform/cache/` | `cache.go`, `cache_test.go` | `Cache` struct wrapping `redis.Client` |
+| `internal/ai/` | `gateway.go`, `router.go`, `mock.go`, `budget.go`, 6 provider files + tests | `Provider` interface, `Router` with fallback, `MockProvider`, `BudgetChecker` |
+| `internal/agent/` | `doc.go` | Skeleton — Day 1 task |
+| `internal/chat/` | `doc.go` | Skeleton — Day 1 task |
+| `internal/curriculum/` | `doc.go` | Skeleton — Day 1 task |
+
+### Day 1 Task Distribution (4 engineers)
+
+Day 1 has 5 tasks. Tasks 1.1–1.4 can be developed in parallel on feature branches; task 1.5 integrates them.
+
+| Task ID | Task | Engineer | Dependencies |
+|---------|------|----------|--------------|
+| `P-W1D1-1` | Chat Gateway — `internal/chat/gateway.go` | Engineer A | None (defines types other tasks use) |
+| `P-W1D1-2` | Telegram Adapter — `internal/chat/telegram.go` | Engineer A | Uses types from 1.1 |
+| `P-W1D1-3` | Agent Engine — `internal/agent/engine.go` | Engineer B | Uses `ai.Provider` interface from Day 0 |
+| `P-W1D1-4` | Curriculum Loader — `internal/curriculum/loader.go` | Engineer C | None (independent) |
+| `P-W1D1-5` | Wire `main.go` — connect all components | Engineer D (lead) | After 1.1–1.4 are merged |
+
+**Parallel workflow:**
+1. Engineers A, B, C create feature branches and work on their tasks simultaneously
+2. Each engineer follows TDD: write `_test.go` first → RED → implement → GREEN → `make test-all`
+3. After all PRs pass tests and are merged, Engineer D wires everything in `main.go`
+4. Final validation: bot responds on Telegram with curriculum context
+
+**See the detailed code templates, test specs, and validation commands for each task below in § Day 1.**
 
 ---
 
@@ -1780,7 +1876,7 @@ docker compose down
 
 ### Day 1 (Mon) — Wire Telegram → AI → Student
 
-**Entry criteria:** Day 0 complete. `go test ./...` passes. `docker compose up` starts infrastructure. Migration applied.
+**Entry criteria:** Day 0 complete. `go test ./...` passes. `docker compose up` starts infrastructure. Migration applied. All engineers have completed the Developer Onboarding steps above.
 
 #### Tasks
 
@@ -4887,7 +4983,7 @@ echo ""
 | `internal/platform/config` | Day 0 | `config.go` | Environment variable loading with `LEARN_` prefix |
 | `internal/platform/database` | Day 0 | `database.go` | PostgreSQL connection pool (pgx) |
 | `internal/platform/cache` | Day 0 | `cache.go` | Dragonfly/Redis client (go-redis) |
-| `internal/ai` | Day 0 | `gateway.go`, `router.go`, `mock.go`, `provider_openai.go`, `provider_anthropic.go`, `provider_ollama.go` | AI Gateway with provider-agnostic routing |
+| `internal/ai` | Day 0 | `gateway.go`, `router.go`, `mock.go`, `budget.go`, `provider_openai.go`, `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter.go` | AI Gateway with provider-agnostic routing, 6 providers, fallback chain, budget tracking |
 | `internal/chat` | Day 1 | `gateway.go`, `telegram.go` | Unified chat interface, Telegram adapter |
 | `internal/agent` | Day 1-11 | `engine.go`, `store.go`, `events.go`, `topics.go`, `session.go`, `users.go`, `quiz.go`, `scheduler.go`, `goals.go`, `challenge.go` | Conversation engine, quiz, challenges, scheduling |
 | `internal/curriculum` | Day 1 | `loader.go`, `types.go` | YAML curriculum loader |
@@ -4954,7 +5050,7 @@ echo ""
 
 | Day | Packages | Tests | Bot Commands | Students | Key Feature |
 |-----|----------|-------|-------------|----------|-------------|
-| 0 | 4 | ✅ | — | 0 | Foundation + Docker + CI |
+| 0 | 4 | ✅ 45+ tests | — | 0 | Foundation + Docker + CI ✅ |
 | 1 | 7 | ✅ | /start | 0 | Bot responds on Telegram |
 | 2 | 7 | ✅ | /start | 0 | Message persistence + topic detection |
 | 3 | 7 | ✅ | /start | 3 | Deployed + first students |
