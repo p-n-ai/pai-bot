@@ -217,10 +217,11 @@ pai-bot/
 │   │   ├── gateway.go               # Provider-agnostic interface
 │   │   ├── router.go                # Model routing + fallback chains
 │   │   ├── budget.go                # Token budget tracking + enforcement
-│   │   ├── provider_openai.go       # OpenAI implementation
+│   │   ├── provider_openai.go       # OpenAI + compatible APIs (DeepSeek, etc.)
 │   │   ├── provider_anthropic.go
-│   │   ├── provider_ollama.go       # Self-hosted models
-│   │   └── provider_openrouter.go
+│   │   ├── provider_google.go       # Google Gemini
+│   │   ├── provider_ollama.go       # Self-hosted (Llama, DeepSeek, Qwen)
+│   │   └── provider_openrouter.go   # 100+ models (Qwen, Kimi, etc.)
 │   ├── agent/                       # Agent Engine
 │   │   ├── engine.go                # Conversation state machine
 │   │   ├── scheduler.go             # Proactive nudges via NATS
@@ -289,16 +290,20 @@ P&AI is not locked to any AI model. Configure one or more providers:
 
 | Provider | Models | Cost | Setup |
 |----------|--------|------|-------|
-| **OpenAI** | GPT-4o, GPT-4o-mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` |
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-5 Nano | Paid API | Set `LEARN_AI_OPENAI_API_KEY` |
 | **Anthropic** | Claude Sonnet, Claude Haiku | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` |
-| **Ollama** | Llama 3, Mistral, Gemma, Phi-3 | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` |
-| **OpenRouter** | 100+ models | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` |
+| **DeepSeek** | DeepSeek V3, Reasoner | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` |
+| **Google Gemini** | Gemini 2.5 Flash, Pro | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` |
+| **Ollama** | Llama 3, DeepSeek, Qwen, Mistral | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` |
+| **OpenRouter** | 100+ models (Qwen, Kimi, etc.) | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` |
+
+DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
 
 The AI Gateway automatically routes by task type:
 
-- **Teaching** (complex explanations) → Best available model (Claude Sonnet, GPT-4o)
-- **Grading** (quick JSON responses) → Fast/cheap model (GPT-4o-mini, Haiku)
-- **Question generation** (dynamic quiz/exam-style) → Fast/cheap model (GPT-4o-mini, Haiku)
+- **Teaching** (complex explanations) → Best available model (Claude Sonnet, GPT-4o, Gemini Pro)
+- **Grading** (quick JSON responses) → Cheapest model (DeepSeek V3, GPT-4o-mini, Gemini Flash)
+- **Question generation** (dynamic quiz/exam-style) → Cheapest model (DeepSeek V3, GPT-4o-mini)
 - **Nudges** (short messages) → Any available model
 - **Fallback** → Self-hosted Ollama (always free)
 
@@ -379,6 +384,8 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 | `LEARN_NATS_URL` | No | `nats://localhost:4222` | NATS messaging server |
 | `LEARN_AI_OPENAI_API_KEY` | No* | — | OpenAI API key |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | — | Anthropic API key |
+| `LEARN_AI_DEEPSEEK_API_KEY` | No* | — | DeepSeek API key (OpenAI-compatible) |
+| `LEARN_AI_GOOGLE_API_KEY` | No* | — | Google Gemini API key |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama server URL |
 | `LEARN_AUTH_JWT_SECRET` | No | Auto-generated | JWT signing secret |

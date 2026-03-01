@@ -87,17 +87,21 @@ The AI Gateway is a provider-agnostic abstraction that routes AI inference reque
 
 | Provider | Models | Use Case | Cost |
 |----------|--------|----------|------|
-| **OpenAI** | GPT-4o, GPT-4o-mini | Teaching (complex), Grading (fast) | Paid API |
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-5 Nano | Teaching (complex), Grading (fast) | Paid API |
 | **Anthropic** | Claude Sonnet, Claude Haiku | Teaching (nuanced pedagogy), Analysis | Paid API |
-| **Ollama** | Llama 3, Mistral, Gemma, Phi-3 | Fallback (always free), Privacy-sensitive deployments | Free (self-hosted) |
-| **OpenRouter** | 100+ models | Access to any model via single API | Varies |
+| **DeepSeek** | DeepSeek V3, DeepSeek Reasoner | Grading (cheapest), Question generation | Paid API (OpenAI-compatible) |
+| **Google Gemini** | Gemini 2.5 Flash, Gemini 2.5 Pro | Teaching, Grading (competitive pricing) | Paid API |
+| **Ollama** | Llama 3, DeepSeek, Qwen, Mistral, Gemma | Fallback (always free), Privacy-sensitive deployments | Free (self-hosted) |
+| **OpenRouter** | 100+ models (Qwen, Kimi, etc.) | Access to any model via single API | Varies |
+
+**DeepSeek uses the OpenAI-compatible API format.** The `provider_openai.go` implementation supports a configurable base URL, so DeepSeek (and any other OpenAI-compatible provider like Groq, Together AI) requires no new code — just a different `LEARN_AI_DEEPSEEK_API_KEY` and base URL (`https://api.deepseek.com`). Qwen and Kimi are accessible via OpenRouter or self-hosted via Ollama.
 
 **Routing logic:**
 
 ```
-Teaching (complex explanations)  → Best available (Claude Sonnet, GPT-4o)
-Grading (quick JSON responses)   → Fast/cheap (GPT-4o-mini, Haiku)
-Question generation (quiz/exam)  → Fast/cheap (GPT-4o-mini, Haiku) via CompleteJSON
+Teaching (complex explanations)  → Best available (Claude Sonnet, GPT-4o, Gemini 2.5 Pro)
+Grading (quick JSON responses)   → Cheapest (DeepSeek V3, GPT-4o-mini, Gemini Flash)
+Question generation (quiz/exam)  → Cheapest (DeepSeek V3, GPT-4o-mini) via CompleteJSON
 Nudges (short messages)          → Any available model
 Budget exhausted                 → Automatic fallback to Ollama (free)
 ```
@@ -233,10 +237,11 @@ pai-bot/
 │   │   ├── gateway.go               # Provider-agnostic interface + router
 │   │   ├── router.go                # Model routing + fallback chains
 │   │   ├── budget.go                # Token budget tracking + enforcement
-│   │   ├── provider_openai.go       # OpenAI implementation
+│   │   ├── provider_openai.go       # OpenAI + OpenAI-compatible APIs (DeepSeek, Groq, etc.)
 │   │   ├── provider_anthropic.go    # Anthropic implementation
-│   │   ├── provider_ollama.go       # Self-hosted models
-│   │   └── provider_openrouter.go   # OpenRouter implementation
+│   │   ├── provider_google.go       # Google Gemini implementation
+│   │   ├── provider_ollama.go       # Self-hosted models (Llama, DeepSeek, Qwen, Mistral)
+│   │   └── provider_openrouter.go   # OpenRouter (100+ models: Qwen, Kimi, etc.)
 │   ├── agent/                       # Agent Engine (core domain)
 │   │   ├── engine.go                # Conversation state machine
 │   │   ├── scheduler.go             # Proactive nudges via NATS

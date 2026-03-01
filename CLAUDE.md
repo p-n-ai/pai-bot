@@ -170,7 +170,11 @@ This project follows a **test-first development workflow**. Every feature must h
 
 ### AI Gateway
 - Provider-agnostic: all AI calls go through the gateway interface
-- Task-based routing: teaching → best model, grading → cheapest, question generation → cheapest, nudges → any
+- **6 providers:** OpenAI (+ DeepSeek via configurable base URL), Anthropic, Google Gemini, Ollama, OpenRouter
+- DeepSeek uses OpenAI-compatible API — same `provider_openai.go` with different base URL and API key
+- Google Gemini has its own provider file (`provider_google.go`) — different API format
+- Qwen, Kimi, and other models accessible via OpenRouter or self-hosted via Ollama
+- Task-based routing: teaching → best model (Claude Sonnet, GPT-4o, Gemini Pro), grading/question generation → cheapest (DeepSeek V3, GPT-4o-mini, Gemini Flash), nudges → any
 - Automatic fallback chain: paid providers → self-hosted Ollama
 - Token budget enforcement per tenant/student
 - Never cut off a student — degrade to free models when budget runs out
@@ -221,6 +225,8 @@ All prefixed with `LEARN_`. Key ones:
 | `LEARN_NATS_URL` | No | NATS server URL |
 | `LEARN_AI_OPENAI_API_KEY` | No* | OpenAI API key |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | Anthropic API key |
+| `LEARN_AI_DEEPSEEK_API_KEY` | No* | DeepSeek API key (OpenAI-compatible) |
+| `LEARN_AI_GOOGLE_API_KEY` | No* | Google Gemini API key |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
 | `LEARN_AUTH_JWT_SECRET` | No | JWT signing secret |
 | `LEARN_TENANT_MODE` | No | `single` or `multi` |

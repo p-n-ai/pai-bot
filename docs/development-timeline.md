@@ -23,7 +23,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) | 🤖 Claude Code | 1hr |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, app) + multi-stage Dockerfile | 🤖 Claude Code | 30min |
 | `P-D0-5` | Create `migrations/001_initial.up.sql` — users, conversations, messages, learning_progress, events tables | 🤖 Claude Code | 30min |
-| `P-D0-6` | Create AI gateway: Provider interface + OpenAI implementation + Ollama implementation + router with fallback chain | 🤖 Claude Code | 1hr |
+| `P-D0-6` | Create AI gateway: Provider interface + OpenAI implementation (configurable base URL — supports DeepSeek and other OpenAI-compatible APIs) + Google Gemini implementation + Ollama implementation + OpenRouter implementation + router with fallback chain | 🤖 Claude Code | 1.5hr |
 | `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 Claude Code | 30min |
 | `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 Human | 15min |
 
