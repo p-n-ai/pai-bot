@@ -97,6 +97,7 @@ The AI Gateway is a provider-agnostic abstraction that routes AI inference reque
 ```
 Teaching (complex explanations)  → Best available (Claude Sonnet, GPT-4o)
 Grading (quick JSON responses)   → Fast/cheap (GPT-4o-mini, Haiku)
+Question generation (quiz/exam)  → Fast/cheap (GPT-4o-mini, Haiku) via CompleteJSON
 Nudges (short messages)          → Any available model
 Budget exhausted                 → Automatic fallback to Ollama (free)
 ```
@@ -154,7 +155,59 @@ Each channel adapter normalizes platform-specific message formats into a common 
 - **School Admin** — Multi-class management, token budget allocation, data export
 - **Platform Admin** — Multi-tenant management, AI provider configuration, usage analytics
 
-### 2.6 Algorithms
+### 2.6 Pedagogical Prompt Strategies
+
+The Agent Engine uses structured prompt patterns to ensure consistent, high-quality teaching. These are implemented in `internal/agent/prompts.go` as system prompt templates — no additional infrastructure required.
+
+Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reasoning architecture, adapted for chat-based K-12 math tutoring.
+
+#### 2.6.1 Dual-Loop Problem Solving
+
+When a student asks a math question, the system prompt instructs the AI to follow a structured 5-step pattern:
+
+```
+1. UNDERSTAND — Restate the problem. Identify what is given and what is asked.
+2. PLAN     — Choose a strategy. Explain why this approach works.
+3. SOLVE    — Execute step-by-step with intermediate checks.
+4. VERIFY   — Check the answer. Does it make sense? Try a different method.
+5. CONNECT  — Link to the curriculum topic. Preview what comes next.
+```
+
+This mirrors DeepTutor's dual-loop architecture (Analysis Loop → Solve Loop) but is implemented purely as a prompt pattern. The AI is required to show its reasoning at each step, teaching students *how to think* rather than just giving answers.
+
+#### 2.6.2 Curriculum Citation
+
+Every AI explanation must reference the specific curriculum source:
+
+```
+"📖 KSSM Form 1 > Algebra > Linear Equations > Section 2.3"
+```
+
+The prompt builder injects the curriculum path (`{syllabus} > {subject} > {topic}`) into the system prompt. This helps students locate content in their textbooks and gives teachers/parents confidence that the bot follows the official syllabus.
+
+#### 2.6.3 Adaptive Explanation Depth
+
+The system prompt adjusts explanation complexity based on the student's mastery level for the current topic:
+
+| Mastery Level | Prompt Behavior |
+|---------------|----------------|
+| **< 0.3** (Beginner) | Use simple everyday language. More concrete examples. Break into smaller steps. Avoid formal notation until the concept clicks. |
+| **0.3 – 0.6** (Developing) | Standard explanations. Introduce formal mathematical notation gradually. Mix worked examples with guided practice. |
+| **> 0.6** (Proficient) | More concise. Focus on edge cases, common mistakes, and connections between topics. Challenge with harder variants. |
+
+Mastery score is read from the `progress` table and injected into the system prompt alongside the student's progress context ("mastered X, working on Y, struggles with Z").
+
+#### 2.6.4 Dynamic Question Generation
+
+When the curriculum YAML has fewer than 5 assessment questions for a topic, the quiz engine generates additional questions dynamically using the AI gateway's `CompleteJSON` fast-path (cheapest model). The generation prompt includes:
+
+- The topic's teaching notes as source material
+- The difficulty level appropriate for the student's mastery
+- 2–3 real PT3/SPM exam exemplar questions (stored in `assessments.yaml`) as style references
+
+This "exam mimicry" approach ensures AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
+
+### 2.7 Algorithms
 
 | Algorithm | Purpose | Implementation |
 |-----------|---------|----------------|
@@ -162,6 +215,9 @@ Each channel adapter normalizes platform-specific message formats into a common 
 | **Mastery Scoring** | Determines per-topic mastery level (0.0–1.0) | Weighted combination of assessment accuracy, consistency, and recency. Threshold at 0.75 for mastery. |
 | **Token Budget Tracking** | Allocates and enforces AI credit budgets per school/class/student | `internal/ai/budget.go`. Real-time tracking in Dragonfly with periodic PostgreSQL sync. |
 | **Model Routing** | Selects optimal AI provider per request | Cost-aware routing with circuit breaker pattern. Falls back through provider chain on failure. |
+| **Dual-Loop Problem Solving** | Structured step-by-step teaching for math questions | `internal/agent/prompts.go`. System prompt pattern: Understand → Plan → Solve → Verify → Connect. |
+| **Adaptive Explanation Depth** | Adjusts explanation complexity per student | `internal/agent/prompts.go`. Mastery-based prompt selection: beginner / developing / proficient. |
+| **Dynamic Question Generation** | Generates quiz questions when curriculum has insufficient assessments | `internal/agent/quiz.go`. AI generates questions from teaching notes with exam-style mimicry using PT3/SPM exemplars. |
 
 ---
 

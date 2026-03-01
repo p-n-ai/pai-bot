@@ -37,7 +37,11 @@ Built on [Pandai](https://pandai.org)'s years of proven engagement mechanics tha
 |---------|------------------|--------------|----------|
 | Answers questions | ✅ | ✅ | ✅ |
 | Follows a curriculum | ❌ | ✅ | ✅ |
+| Structured step-by-step solving | ❌ | Partial | ✅ |
+| Adapts explanation to mastery level | ❌ | ❌ | ✅ |
+| Cites curriculum source in responses | ❌ | ❌ | ✅ |
 | Tracks mastery per topic | ❌ | ✅ | ✅ |
+| Generates exam-style practice questions | ❌ | ❌ | ✅ |
 | Proactive — initiates sessions | ❌ | ❌ | ✅ |
 | Spaced repetition scheduling | ❌ | ❌ | ✅ |
 | Battles, streaks, leaderboards | ❌ | ❌ | ✅ |
@@ -111,9 +115,13 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 ### 🎓 For Students
 
 - **AI Tutor on Telegram** — Learn any topic through natural chat conversation. The AI uses Socratic method, scaffolding, and growth mindset pedagogy.
+- **Step-by-Step Problem Solving** — Every math question is answered with a structured approach: Understand → Plan → Solve → Verify → Connect. Teaches students *how to think*, not just the answer.
+- **Adaptive Explanations** — The AI adjusts explanation complexity based on your mastery level. Beginners get simpler language and more examples; proficient students get concise explanations with harder challenges.
+- **Curriculum-Cited Responses** — Every explanation references the exact curriculum source (e.g., "KSSM Form 1 > Algebra > Linear Equations"), so students can find it in their textbook.
 - **Proactive Study Sessions** — The agent initiates conversations when it's time to review. Spaced repetition ensures long-term retention.
 - **Progress Tracking** — See mastery per topic, XP earned, streak length, and progress toward personal goals.
-- **Quizzes & Assessments** — Take quizzes in chat with AI-graded free-text answers, hints, and detailed feedback.
+- **Quizzes & Assessments** — Take quizzes in chat with AI-graded free-text answers, hints, and detailed feedback. When the question bank runs low, the AI generates new questions dynamically from curriculum content.
+- **Exam-Style Practice** — AI-generated questions match the format and difficulty of real PT3/SPM exams, so students practice with questions that feel like the real thing.
 - **Peer Challenges** — Battle classmates on the same set of questions. Learn together, compete for fun.
 - **Goals & Streaks** — Set a learning goal ("Master algebra by April") and track daily streaks.
 
@@ -290,6 +298,7 @@ The AI Gateway automatically routes by task type:
 
 - **Teaching** (complex explanations) → Best available model (Claude Sonnet, GPT-4o)
 - **Grading** (quick JSON responses) → Fast/cheap model (GPT-4o-mini, Haiku)
+- **Question generation** (dynamic quiz/exam-style) → Fast/cheap model (GPT-4o-mini, Haiku)
 - **Nudges** (short messages) → Any available model
 - **Fallback** → Self-hosted Ollama (always free)
 

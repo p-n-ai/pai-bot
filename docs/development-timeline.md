@@ -53,7 +53,8 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | 🤖 |
 | `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | 🤖 |
 | `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | 🤖 |
-| `P-W1D2-5` | 🧑 Test 30 conversation scenarios, log every bad response, rewrite system prompt v2 | 🧑 Human |
+| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | 🤖 |
+| `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | 🧑 Human |
 
 ### Day 3 (Wed) — Deploy + First Students
 
@@ -72,7 +73,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users | 🤖 |
 | `P-W1D4-2` | Session management: new conversation after 30min silence, summarize previous session for context | 🤖 |
 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event | 🤖 |
-| `P-W1D4-4` | 🧑 Read ALL pilot conversations, categorize issues, rewrite system prompt v3 with KSSM-specific instructions | 🧑 Human |
+| `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | 🧑 Human |
 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | 🧑 Human |
 
 ### Day 5 (Fri) — Week 1 Retro
@@ -83,7 +84,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-W1D5-2` | 🧑 1hr retro: demo, review conversations, identify top 3 problems for Week 2 | 🧑 Team |
 | `P-W1D5-3` | 🧑 Call top 3 and bottom 3 students — 10min each | 🧑 Human |
 
-**Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+.
+**Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
 
 ---
 
@@ -96,17 +97,18 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-W2D6-1` | Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
 | `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
 | `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
-| `P-W2D6-4` | Progress context in system prompt: "Student mastered X, working on Y, struggles with Z" | 🤖 |
+| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
 ### Day 7 (Tue) — Quiz Engine
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end | 🤖 |
+| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end. **Dynamic quiz generation fallback:** if a topic has <5 questions in assessments.yaml, use AI to generate additional questions from the topic's teaching notes via `CompleteJSON` (cheap model). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s question generation | 🤖 |
 | `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge), route to appropriate handler | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment (use cheapest model) | 🤖 |
-| `P-W2D7-4` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality | 🧑 Human |
+| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | 🤖 |
+| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | 🤖 |
+| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | 🧑 Human |
 
 ### Day 8 (Wed) — Proactive Nudges + Streaks
 
@@ -133,7 +135,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
 | `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
 
-**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%.
+**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
 
 ---
 
@@ -316,10 +318,10 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | Week | 🤖 Claude Code | 🧑 Human | Total |
 |------|----------------|----------|-------|
 | 0 | 8 | 0 | 8 |
-| 1 | 17 | 8 | 25 |
-| 2 | 15 | 6 | 21 |
+| 1 | 18 | 8 | 26 |
+| 2 | 17 | 6 | 23 |
 | 3 | 11 | 5 | 16 |
 | 4 | 11 | 5 | 16 |
 | 5 | 9 | 5 | 14 |
 | 6 | 6 | 6 | 12 |
-| **Total** | **77** | **35** | **112** |
+| **Total** | **80** | **35** | **115** |

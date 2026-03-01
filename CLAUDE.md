@@ -51,7 +51,7 @@ The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specificall
 
 Key domains:
 - `internal/ai/` — AI Gateway: provider-agnostic interface, model routing, token budget tracking
-- `internal/agent/` — Agent Engine: conversation state machine, proactive scheduler, pedagogical prompts, quiz engine, peer challenges
+- `internal/agent/` — Agent Engine: conversation state machine, proactive scheduler, pedagogical prompts (dual-loop problem solving, adaptive explanation depth, curriculum citations), quiz engine (static + dynamic question generation with exam-style mimicry), peer challenges
 - `internal/chat/` — Chat Gateway: unified interface for Telegram, WhatsApp, WebSocket
 - `internal/curriculum/` — Curriculum Service: loads YAML from OSS repository
 - `internal/progress/` — Progress Tracker: mastery scoring, SM-2 spaced repetition, streaks/XP
@@ -170,10 +170,17 @@ This project follows a **test-first development workflow**. Every feature must h
 
 ### AI Gateway
 - Provider-agnostic: all AI calls go through the gateway interface
-- Task-based routing: teaching → best model, grading → cheapest, nudges → any
+- Task-based routing: teaching → best model, grading → cheapest, question generation → cheapest, nudges → any
 - Automatic fallback chain: paid providers → self-hosted Ollama
 - Token budget enforcement per tenant/student
 - Never cut off a student — degrade to free models when budget runs out
+
+### Pedagogical Prompt Patterns
+- **Dual-loop problem solving:** Every math question follows Understand → Plan → Solve → Verify → Connect. Implemented as system prompt instructions in `internal/agent/prompts.go`
+- **Curriculum citations:** Every explanation must reference the curriculum source path (e.g., "KSSM Form 1 > Algebra > Linear Equations"). The prompt builder injects `{syllabus} > {subject} > {topic}` into the system prompt
+- **Adaptive explanation depth:** System prompt adjusts based on mastery level — beginner (<0.3): simple language, more examples; developing (0.3–0.6): standard with gradual notation; proficient (>0.6): concise, edge cases, cross-topic connections
+- **Dynamic question generation:** When assessments.yaml has <5 questions for a topic, quiz engine generates additional questions from teaching notes via `CompleteJSON` (cheap model)
+- **Exam-style mimicry:** AI-generated questions use 2–3 real PT3/SPM exemplar questions as style references to match real exam format and difficulty
 
 ### Security
 - JWT with 15-min access tokens + 7-day refresh tokens
@@ -231,6 +238,9 @@ All prefixed with `LEARN_`. Key ones:
 - **Mastery Scoring:** Weighted accuracy/consistency/recency, threshold 0.75 for mastery
 - **Token Budget:** Real-time tracking in Dragonfly, periodic PostgreSQL sync
 - **Model Routing:** Cost-aware with circuit breaker, automatic fallback chain
+- **Dual-Loop Problem Solving:** Structured prompt pattern (Understand → Plan → Solve → Verify → Connect) in `internal/agent/prompts.go`
+- **Adaptive Explanation Depth:** Mastery-based prompt adjustment (beginner/developing/proficient) in `internal/agent/prompts.go`
+- **Dynamic Question Generation:** AI generates quiz questions from teaching notes with exam-style mimicry in `internal/agent/quiz.go`
 
 ## Documentation
 
