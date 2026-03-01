@@ -180,6 +180,7 @@ This project follows a **test-first development workflow**. Every feature must h
 - Never cut off a student — degrade to free models when budget runs out
 
 ### Pedagogical Prompt Patterns
+Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reasoning architecture, adapted for chat-based K-12 tutoring as prompt-level patterns (no extra infrastructure).
 - **Dual-loop problem solving:** Every math question follows Understand → Plan → Solve → Verify → Connect. Implemented as system prompt instructions in `internal/agent/prompts.go`
 - **Curriculum citations:** Every explanation must reference the curriculum source path (e.g., "KSSM Form 1 > Algebra > Linear Equations"). The prompt builder injects `{syllabus} > {subject} > {topic}` into the system prompt
 - **Adaptive explanation depth:** System prompt adjusts based on mastery level — beginner (<0.3): simple language, more examples; developing (0.3–0.6): standard with gradual notation; proficient (>0.6): concise, edge cases, cross-topic connections
@@ -227,6 +228,7 @@ All prefixed with `LEARN_`. Key ones:
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | Anthropic API key |
 | `LEARN_AI_DEEPSEEK_API_KEY` | No* | DeepSeek API key (OpenAI-compatible) |
 | `LEARN_AI_GOOGLE_API_KEY` | No* | Google Gemini API key |
+| `LEARN_AI_OPENROUTER_API_KEY` | No* | OpenRouter API key (access to 100+ models) |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
 | `LEARN_AUTH_JWT_SECRET` | No | JWT signing secret |
 | `LEARN_TENANT_MODE` | No | `single` or `multi` |

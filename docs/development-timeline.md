@@ -12,9 +12,11 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 
 **Curriculum scope (first 6 months):** KSSM Matematik only — Form 1, Form 2, Form 3. Algebra topics are the primary validation target because they are sequential (clear prerequisites), assessable (right/wrong answers), and high-demand (students struggle most here).
 
+**TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
+
 ---
 
-## DAY 0 — SETUP (4 hours)
+## DAY 0 — SETUP (4.5 hours)
 
 | Task ID | Task | Owner | Time |
 |---------|------|-------|------|
@@ -22,12 +24,12 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-D0-2` | Create `internal/platform/config/config.go` — all env vars with `LEARN_` prefix | 🤖 Claude Code | 30min |
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) | 🤖 Claude Code | 1hr |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, app) + multi-stage Dockerfile | 🤖 Claude Code | 30min |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` — users, conversations, messages, learning_progress, events tables | 🤖 Claude Code | 30min |
-| `P-D0-6` | Create AI gateway: Provider interface + OpenAI implementation (configurable base URL — supports DeepSeek and other OpenAI-compatible APIs) + Google Gemini implementation + Ollama implementation + OpenRouter implementation + router with fallback chain | 🤖 Claude Code | 1.5hr |
+| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, progress, conversations (with messages as JSONB column), assessments, streaks, token_budgets, events tables. Schema per technical-plan.md §4 | 🤖 Claude Code | 30min |
+| `P-D0-6` | Create AI gateway: Provider interface + OpenAI implementation (configurable base URL — supports DeepSeek and other OpenAI-compatible APIs) + Google Gemini implementation + Ollama implementation + OpenRouter implementation + router with fallback chain. Note: DeepSeek reuses `provider_openai.go` with different base URL — no separate file | 🤖 Claude Code | 2hr |
 | `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 Claude Code | 30min |
 | `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 Human | 15min |
 
-**Exit:** `docker compose up` runs, health check returns 200, AI gateway compiles.
+**Exit:** `docker compose up` runs, health check returns 200, `make test` passes (unit tests for config, gateway, providers), AI gateway compiles with all 5 provider files, GitHub Actions CI workflow committed.
 
 ---
 

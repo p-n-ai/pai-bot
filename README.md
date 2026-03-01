@@ -386,6 +386,7 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | — | Anthropic API key |
 | `LEARN_AI_DEEPSEEK_API_KEY` | No* | — | DeepSeek API key (OpenAI-compatible) |
 | `LEARN_AI_GOOGLE_API_KEY` | No* | — | Google Gemini API key |
+| `LEARN_AI_OPENROUTER_API_KEY` | No* | — | OpenRouter API key (100+ models) |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama server URL |
 | `LEARN_AUTH_JWT_SECRET` | No | Auto-generated | JWT signing secret |
