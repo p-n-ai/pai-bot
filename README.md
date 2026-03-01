@@ -27,7 +27,7 @@
 
 P&AI (Practice & AI) is a proactive AI learning agent that teaches students through chat. It doesn't wait for students to ask — it initiates study sessions, tracks mastery, schedules reviews, and keeps students motivated with battles, streaks, leaderboards, and purpose-driven progress.
 
-Built on [Pandai](https://pandai.app)'s years of proven engagement mechanics that have made learning fun for millions of students across Southeast Asia.
+Built on [Pandai](https://pandai.org)'s years of proven engagement mechanics that have made learning fun for millions of students across Southeast Asia.
 
 **Content is commodity. Motivation is the moat.**
 
@@ -473,12 +473,12 @@ You are free to use, modify, and distribute this software. Self-host it for your
 
 ## Acknowledgments
 
-P&AI is built on the shoulders of [Pandai](https://pandai.app) — years of making learning fun for millions of students through gamification, battles, leaderboards, and purpose-driven progress. The secret sauce has always been motivation, not content.
+P&AI is built on the shoulders of [Pandai](https://pandai.org) — years of making learning fun for millions of students through gamification, battles, leaderboards, and purpose-driven progress. The secret sauce has always been motivation, not content.
 
 ---
 
 <p align="center">
   <strong>Every student deserves a patient, always-available learning companion.</strong>
   <br>
-  Built with ❤️ by the <a href="https://pandai.app">Pandai</a> team and contributors worldwide.
+  A <a href="https://pandai.org">Pandai</a> initiative. Built with ❤️ by educators and AI, for everyone.
 </p>

@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-P&AI Bot is an open-source, self-hostable AI learning agent that teaches students through chat. Built on [Pandai](https://pandai.app)'s proven engagement mechanics — battles, streaks, leaderboards, and purpose-driven progress — it transforms any messaging platform into a patient, always-available tutor that initiates study sessions, tracks mastery, and keeps students motivated.
+P&AI Bot is an open-source, self-hostable AI learning agent that teaches students through chat. Built on [Pandai](https://pandai.org)'s proven engagement mechanics — battles, streaks, leaderboards, and purpose-driven progress — it transforms any messaging platform into a patient, always-available tutor that initiates study sessions, tracks mastery, and keeps students motivated.
 
 The core bet: **content is commodity, motivation is the moat.** Every AI can explain quadratic equations. P&AI is the only one that texts you at 3pm to review them, celebrates your 7-day streak, and lets you battle your classmate on the same questions.
 
@@ -283,7 +283,7 @@ The self-improving flywheel: more students → more data → better OSS curricul
 
 ## Team
 
-P&AI is built by the [Pandai](https://pandai.app) team — years of experience making learning fun for millions of students across Southeast Asia.
+P&AI is built by the [Pandai](https://pandai.org) team — years of experience making learning fun for millions of students across Southeast Asia.
 
 **Core execution team:**
 - **Founder/Lead:** Product strategy, user research, school partnerships, go/no-go decisions

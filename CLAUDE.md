@@ -6,7 +6,7 @@ This file provides context for Claude Code (and other AI coding assistants) work
 
 P&AI Bot is a **proactive AI learning agent** that teaches students through chat (Telegram, WhatsApp, Web). It doesn't wait for students to ask — it initiates study sessions, tracks mastery via spaced repetition, and motivates through battles, streaks, leaderboards, and goals.
 
-Built by the [Pandai](https://pandai.app) team. Licensed under Apache 2.0.
+Built by the [Pandai](https://pandai.org) team. Licensed under Apache 2.0.
 
 **Core philosophy:** Content is commodity. Motivation is the moat.
 

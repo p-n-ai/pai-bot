@@ -1,0 +1,57 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+/bin/
+/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Vendor (optional — uncomment if not vendoring)
+# vendor/
+
+# Next.js (admin panel)
+admin/node_modules/
+admin/.next/
+admin/out/
+admin/.env*.local
+
+# Node
+node_modules/
+
+# Docker
+docker-compose.override.yml
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+terraform/.terraform.lock.hcl
+
+# Logs
+*.log
+
+# Secrets
+*.pem
+*.key
