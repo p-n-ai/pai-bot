@@ -1,0 +1,19 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/pai-server"
+  cmd = "go build -o ./tmp/pai-server ./cmd/server"
+  delay = 1000
+  exclude_dir = ["tmp", "vendor", "node_modules", "admin", ".git"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go", "yaml", "md"]
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+
+[misc]
+  clean_on_exit = true
+
+[log]
+  time = false

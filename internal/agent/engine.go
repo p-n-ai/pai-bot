@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
+
+const maxHistoryMessages = 20
 
 // EngineConfig holds dependencies for the agent engine.
 type EngineConfig struct {
@@ -18,12 +21,15 @@ type EngineConfig struct {
 // Engine is the core conversation processor.
 type Engine struct {
 	aiRouter *ai.Router
+	history  map[string][]ai.Message // keyed by UserID
+	mu       sync.RWMutex
 }
 
 // NewEngine creates a new agent engine.
 func NewEngine(cfg EngineConfig) *Engine {
 	return &Engine{
 		aiRouter: cfg.AIRouter,
+		history:  make(map[string][]ai.Message),
 	}
 }
 
@@ -40,15 +46,17 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return e.handleCommand(ctx, msg)
 	}
 
-	// Build system prompt
+	// Record user message in history.
+	e.appendHistory(msg.UserID, ai.Message{Role: "user", Content: msg.Text})
+
+	// Build messages: system prompt + conversation history.
 	systemPrompt := e.buildSystemPrompt(msg)
+	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
+	messages = append(messages, e.getHistory(msg.UserID)...)
 
 	// Call AI
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
-		Messages: []ai.Message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: msg.Text},
-		},
+		Messages:  messages,
 		Task:      ai.TaskTeaching,
 		MaxTokens: 1024,
 	})
@@ -57,7 +65,32 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
 
+	// Record assistant response in history.
+	e.appendHistory(msg.UserID, ai.Message{Role: "assistant", Content: resp.Content})
+
 	return resp.Content, nil
+}
+
+func (e *Engine) appendHistory(userID string, msg ai.Message) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.history[userID] = append(e.history[userID], msg)
+
+	// Trim to last N messages.
+	if len(e.history[userID]) > maxHistoryMessages {
+		e.history[userID] = e.history[userID][len(e.history[userID])-maxHistoryMessages:]
+	}
+}
+
+func (e *Engine) getHistory(userID string) []ai.Message {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	h := e.history[userID]
+	out := make([]ai.Message, len(h))
+	copy(out, h)
+	return out
 }
 
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
@@ -65,6 +98,10 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 
 	switch cmd {
 	case "/start":
+		// Clear history on /start.
+		e.mu.Lock()
+		delete(e.history, msg.UserID)
+		e.mu.Unlock()
 		return e.handleStart(msg)
 	default:
 		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula.", cmd), nil

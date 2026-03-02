@@ -17,6 +17,7 @@ Thumbs.db
 # Go
 /bin/
 /tmp/
+/server
 *.exe
 *.exe~
 *.dll
