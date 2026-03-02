@@ -37,7 +37,7 @@ func TestTelegramChannelSyncCommands(t *testing.T) {
 	if gotCommands == "" {
 		t.Fatal("commands payload is empty")
 	}
-	if !(containsString(gotCommands, `"start"`) && containsString(gotCommands, `"clear"`)) {
+	if !containsString(gotCommands, `"start"`) || !containsString(gotCommands, `"clear"`) {
 		t.Fatalf("commands payload = %q, expected start and clear", gotCommands)
 	}
 }
