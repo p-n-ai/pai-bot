@@ -20,6 +20,7 @@ const (
 type EngineConfig struct {
 	AIRouter              *ai.Router
 	Store                 ConversationStore
+	EventLogger           EventLogger
 	CompactThreshold      int // messages before compaction triggers (default 20)
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
 	KeepRecent            int // recent messages to keep after compaction (default 6)
@@ -29,6 +30,7 @@ type EngineConfig struct {
 type Engine struct {
 	aiRouter              *ai.Router
 	store                 ConversationStore
+	eventLogger           EventLogger
 	compactThreshold      int
 	compactTokenThreshold int
 	keepRecent            int
@@ -52,9 +54,14 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if keepRecent == 0 {
 		keepRecent = defaultKeepRecent
 	}
+	eventLogger := cfg.EventLogger
+	if eventLogger == nil {
+		eventLogger = NopEventLogger{}
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
+		eventLogger:           eventLogger,
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
@@ -94,6 +101,17 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}); err != nil {
 		slog.Error("failed to store user message", "error", err)
 	}
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         msg.UserID,
+		EventType:      "message_sent",
+		Data: map[string]any{
+			"channel":   msg.Channel,
+			"text_len":  len(msg.Text),
+			"has_reply": msg.ReplyToText != "",
+			"source":    "chat",
+		},
+	})
 
 	// Refresh conversation to get latest messages.
 	conv, _ = e.store.GetConversation(conv.ID)
@@ -127,6 +145,18 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}); err != nil {
 		slog.Error("failed to store assistant message", "error", err)
 	}
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         msg.UserID,
+		EventType:      "ai_response",
+		Data: map[string]any{
+			"channel":       msg.Channel,
+			"model":         resp.Model,
+			"input_tokens":  resp.InputTokens,
+			"output_tokens": resp.OutputTokens,
+			"text_len":      len(resp.Content),
+		},
+	})
 
 	return resp.Content, nil
 }
@@ -247,7 +277,32 @@ func (e *Engine) getOrCreateConversation(userID string) (*Conversation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return e.store.GetConversation(id)
+	conv, err = e.store.GetConversation(id)
+	if err != nil {
+		return nil, err
+	}
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         userID,
+		EventType:      "session_started",
+		Data: map[string]any{
+			"state": conv.State,
+		},
+	})
+	return conv, nil
+}
+
+func (e *Engine) logEventAsync(event Event) {
+	go func() {
+		if err := e.eventLogger.LogEvent(event); err != nil {
+			slog.Warn("failed to log event",
+				"event_type", event.EventType,
+				"conversation_id", event.ConversationID,
+				"user_id", event.UserID,
+				"error", err,
+			)
+		}
+	}()
 }
 
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
