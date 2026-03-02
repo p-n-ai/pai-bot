@@ -28,13 +28,13 @@ func TestAnthropicProvider_Complete(t *testing.T) {
 		}
 
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		if body["model"] != "claude-sonnet-4-6" {
 			t.Errorf("model = %v, want claude-sonnet-4-6", body["model"])
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": "Claude response"},
 			},
@@ -74,9 +74,9 @@ func TestAnthropicProvider_Complete_SystemMessage(t *testing.T) {
 	var receivedBody map[string]interface{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": "ok"},
 			},
@@ -114,7 +114,7 @@ func TestAnthropicProvider_Complete_SystemMessage(t *testing.T) {
 func TestAnthropicProvider_Complete_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": {"message": "invalid api key"}}`))
+		_, _ = w.Write([]byte(`{"error": {"message": "invalid api key"}}`))
 	}))
 	defer server.Close()
 
@@ -146,7 +146,7 @@ func TestAnthropicProvider_HealthCheck(t *testing.T) {
 					w.WriteHeader(tt.statusCode)
 					return
 				}
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"content": []map[string]string{
 						{"type": "text", "text": "pong"},
 					},

@@ -104,8 +104,8 @@ func TestInMemoryBudget_IsolatedUsers(t *testing.T) {
 	b.SetBudget("tenant1", "user1", 100)
 	b.SetBudget("tenant1", "user2", 200)
 
-	b.Record("tenant1", "user1", 90)
-	b.Record("tenant1", "user2", 50)
+	_ = b.Record("tenant1", "user1", 90)
+	_ = b.Record("tenant1", "user2", 50)
 
 	ok1, _ := b.Check("tenant1", "user1")
 	ok2, _ := b.Check("tenant1", "user2")
