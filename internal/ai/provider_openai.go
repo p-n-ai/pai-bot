@@ -88,7 +88,17 @@ type openaiRequest struct {
 
 type openaiMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
+}
+
+type openaiContentPart struct {
+	Type     string           `json:"type"`
+	Text     string           `json:"text,omitempty"`
+	ImageURL *openaiImagePart `json:"image_url,omitempty"`
+}
+
+type openaiImagePart struct {
+	URL string `json:"url"`
 }
 
 // openaiResponse is the response from the OpenAI chat completions API.
@@ -111,14 +121,9 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		model = "gpt-4o-mini" // sensible default
 	}
 
-	messages := make([]openaiMessage, len(req.Messages))
-	for i, m := range req.Messages {
-		messages[i] = openaiMessage(m)
-	}
-
 	oaiReq := openaiRequest{
 		Model:    model,
-		Messages: messages,
+		Messages: buildOpenAIMessages(req.Messages),
 	}
 	if req.MaxTokens > 0 {
 		oaiReq.MaxTokens = req.MaxTokens
@@ -170,6 +175,44 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		InputTokens:  oaiResp.Usage.PromptTokens,
 		OutputTokens: oaiResp.Usage.CompletionTokens,
 	}, nil
+}
+
+func buildOpenAIMessages(messages []Message) []openaiMessage {
+	out := make([]openaiMessage, 0, len(messages))
+	for _, m := range messages {
+		if len(m.ImageURLs) == 0 {
+			out = append(out, openaiMessage{
+				Role:    m.Role,
+				Content: m.Content,
+			})
+			continue
+		}
+
+		parts := make([]openaiContentPart, 0, 1+len(m.ImageURLs))
+		if m.Content != "" {
+			parts = append(parts, openaiContentPart{
+				Type: "text",
+				Text: m.Content,
+			})
+		}
+		for _, imageURL := range m.ImageURLs {
+			if imageURL == "" {
+				continue
+			}
+			parts = append(parts, openaiContentPart{
+				Type: "image_url",
+				ImageURL: &openaiImagePart{
+					URL: imageURL,
+				},
+			})
+		}
+
+		out = append(out, openaiMessage{
+			Role:    m.Role,
+			Content: parts,
+		})
+	}
+	return out
 }
 
 func (p *OpenAIProvider) StreamComplete(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {

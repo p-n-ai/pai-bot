@@ -2,12 +2,14 @@ package chat
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +95,9 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 }
 
 func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
+	if err := t.syncCommands(); err != nil {
+		slog.Warn("failed to sync Telegram commands", "error", err)
+	}
 	go t.pollLoop(ctx, handler)
 	return nil
 }
@@ -120,22 +125,17 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 
 			for _, u := range updates {
 				t.offset = u.UpdateID + 1
-				if u.Message == nil || u.Message.Text == "" {
+				msg, ok := mapTelegramInbound(u)
+				if !ok {
 					continue
 				}
-
-				msg := InboundMessage{
-					Channel:    "telegram",
-					UserID:     strconv.FormatInt(u.Message.Chat.ID, 10),
-					ExternalID: strconv.FormatInt(u.Message.From.ID, 10),
-					Text:       u.Message.Text,
-					Username:   u.Message.From.Username,
-					FirstName:  u.Message.From.FirstName,
-					LastName:   u.Message.From.LastName,
-					Language:   u.Message.From.LanguageCode,
-				}
-				if u.Message.ReplyToMessage != nil && u.Message.ReplyToMessage.Text != "" {
-					msg.ReplyToText = u.Message.ReplyToMessage.Text
+				if msg.HasImage && msg.ImageFileID != "" {
+					dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
+					if err != nil {
+						slog.Warn("failed to fetch telegram image", "error", err)
+					} else {
+						msg.ImageDataURL = dataURL
+					}
 				}
 
 				go handler(msg)
@@ -188,10 +188,24 @@ type tgUpdate struct {
 }
 
 type tgMessage struct {
-	Text           string     `json:"text"`
-	Chat           tgChat     `json:"chat"`
-	From           tgUser     `json:"from"`
-	ReplyToMessage *tgMessage `json:"reply_to_message,omitempty"`
+	Text           string      `json:"text"`
+	Caption        string      `json:"caption"`
+	Photo          []tgPhoto   `json:"photo,omitempty"`
+	Document       *tgDocument `json:"document,omitempty"`
+	Chat           tgChat      `json:"chat"`
+	From           tgUser      `json:"from"`
+	ReplyToMessage *tgMessage  `json:"reply_to_message,omitempty"`
+}
+
+type tgPhoto struct {
+	FileID string `json:"file_id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type tgDocument struct {
+	FileID   string `json:"file_id"`
+	MimeType string `json:"mime_type,omitempty"`
 }
 
 type tgChat struct {
@@ -232,4 +246,176 @@ func SplitMessage(text string, maxLen int) []string {
 		text = text[cutAt:]
 	}
 	return parts
+}
+
+func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
+	if u.Message == nil {
+		return InboundMessage{}, false
+	}
+
+	text := strings.TrimSpace(u.Message.Text)
+	caption := strings.TrimSpace(u.Message.Caption)
+	if text == "" && caption != "" {
+		text = caption
+	}
+
+	imageFileID := pickImageFileID(u.Message)
+	hasImage := imageFileID != ""
+	if text == "" && !hasImage {
+		return InboundMessage{}, false
+	}
+
+	msg := InboundMessage{
+		Channel:    "telegram",
+		UserID:     strconv.FormatInt(u.Message.Chat.ID, 10),
+		ExternalID: strconv.FormatInt(u.Message.From.ID, 10),
+		Text:       text,
+		Caption:    caption,
+		HasImage:   hasImage,
+		Username:   u.Message.From.Username,
+		FirstName:  u.Message.From.FirstName,
+		LastName:   u.Message.From.LastName,
+		Language:   u.Message.From.LanguageCode,
+	}
+	if hasImage {
+		msg.ImageFileID = imageFileID
+	}
+	if u.Message.ReplyToMessage != nil {
+		if u.Message.ReplyToMessage.Text != "" {
+			msg.ReplyToText = u.Message.ReplyToMessage.Text
+		} else if u.Message.ReplyToMessage.Caption != "" {
+			msg.ReplyToText = u.Message.ReplyToMessage.Caption
+		}
+		// If this message is a reply to media and the current message has no media,
+		// carry the replied image forward so AI can answer follow-up questions.
+		if msg.ImageFileID == "" {
+			if replyImageFileID := pickImageFileID(u.Message.ReplyToMessage); replyImageFileID != "" {
+				msg.HasImage = true
+				msg.ImageFileID = replyImageFileID
+			}
+		}
+	}
+
+	return msg, true
+}
+
+func pickImageFileID(m *tgMessage) string {
+	if m == nil {
+		return ""
+	}
+	if len(m.Photo) > 0 {
+		// Telegram sends photos in ascending size order. Keep the largest (last).
+		return m.Photo[len(m.Photo)-1].FileID
+	}
+	if m.Document != nil && strings.HasPrefix(strings.ToLower(m.Document.MimeType), "image/") {
+		return m.Document.FileID
+	}
+	return ""
+}
+
+func (t *TelegramChannel) getImageDataURL(ctx context.Context, fileID string) (string, error) {
+	filePath, err := t.getFilePath(ctx, fileID)
+	if err != nil {
+		return "", err
+	}
+
+	downloadURL := "https://api.telegram.org/file/bot" + t.token + "/" + filePath
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("create file download request: %w", err)
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("download telegram file: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("telegram file download error %d: %s", resp.StatusCode, string(body))
+	}
+
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read telegram file: %w", err)
+	}
+	if len(content) == 0 {
+		return "", fmt.Errorf("telegram file is empty")
+	}
+
+	mimeType := detectTelegramMIME(content, filePath)
+	encoded := base64.StdEncoding.EncodeToString(content)
+	return "data:" + mimeType + ";base64," + encoded, nil
+}
+
+func (t *TelegramChannel) getFilePath(ctx context.Context, fileID string) (string, error) {
+	params := url.Values{"file_id": {fileID}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL+"/getFile?"+params.Encode(), nil)
+	if err != nil {
+		return "", fmt.Errorf("create getFile request: %w", err)
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("telegram getFile request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read getFile response: %w", err)
+	}
+
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			FilePath string `json:"file_path"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("parse getFile response: %w", err)
+	}
+	if !result.OK || result.Result.FilePath == "" {
+		return "", fmt.Errorf("telegram getFile failed")
+	}
+	return result.Result.FilePath, nil
+}
+
+func detectTelegramMIME(content []byte, filePath string) string {
+	if detected := strings.ToLower(http.DetectContentType(content)); strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	default:
+		// Telegram photo payloads are JPEG by default.
+		return "image/jpeg"
+	}
+}
+
+func (t *TelegramChannel) syncCommands() error {
+	commandsJSON := `[{"command":"start","description":"Mulakan sesi pembelajaran"},{"command":"clear","description":"Reset perbualan semasa"}]`
+	params := url.Values{
+		"commands": {commandsJSON},
+	}
+
+	resp, err := t.client.PostForm(t.baseURL+"/setMyCommands", params)
+	if err != nil {
+		return fmt.Errorf("setMyCommands request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("setMyCommands api error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return nil
 }
