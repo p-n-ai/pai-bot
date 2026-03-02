@@ -86,3 +86,59 @@ func TestMapTelegramInbound_EmptyMessage(t *testing.T) {
 		t.Fatal("expected empty message to be ignored")
 	}
 }
+
+func TestMapTelegramInbound_ReplyToPhotoCarriesImage(t *testing.T) {
+	msg, ok := mapTelegramInbound(tgUpdate{
+		UpdateID: 5,
+		Message: &tgMessage{
+			Text: "what color is it",
+			Chat: tgChat{ID: 123},
+			From: tgUser{ID: 456},
+			ReplyToMessage: &tgMessage{
+				Caption: "whats this",
+				Photo: []tgPhoto{
+					{FileID: "small"},
+					{FileID: "large"},
+				},
+			},
+		},
+	})
+	if !ok {
+		t.Fatal("expected reply text update to map")
+	}
+	if !msg.HasImage {
+		t.Fatalf("HasImage = false, want true")
+	}
+	if msg.ImageFileID != "large" {
+		t.Fatalf("ImageFileID = %q, want large", msg.ImageFileID)
+	}
+	if msg.ReplyToText != "whats this" {
+		t.Fatalf("ReplyToText = %q, want whats this", msg.ReplyToText)
+	}
+}
+
+func TestMapTelegramInbound_ReplyToImageDocumentCarriesImage(t *testing.T) {
+	msg, ok := mapTelegramInbound(tgUpdate{
+		UpdateID: 6,
+		Message: &tgMessage{
+			Text: "what is this",
+			Chat: tgChat{ID: 123},
+			From: tgUser{ID: 456},
+			ReplyToMessage: &tgMessage{
+				Document: &tgDocument{
+					FileID:   "doc-image",
+					MimeType: "image/png",
+				},
+			},
+		},
+	})
+	if !ok {
+		t.Fatal("expected reply text update to map")
+	}
+	if !msg.HasImage {
+		t.Fatalf("HasImage = false, want true")
+	}
+	if msg.ImageFileID != "doc-image" {
+		t.Fatalf("ImageFileID = %q, want doc-image", msg.ImageFileID)
+	}
+}

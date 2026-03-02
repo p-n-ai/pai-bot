@@ -95,6 +95,9 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 }
 
 func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
+	if err := t.syncCommands(); err != nil {
+		slog.Warn("failed to sync Telegram commands", "error", err)
+	}
 	go t.pollLoop(ctx, handler)
 	return nil
 }
@@ -185,18 +188,24 @@ type tgUpdate struct {
 }
 
 type tgMessage struct {
-	Text           string     `json:"text"`
-	Caption        string     `json:"caption"`
-	Photo          []tgPhoto  `json:"photo,omitempty"`
-	Chat           tgChat     `json:"chat"`
-	From           tgUser     `json:"from"`
-	ReplyToMessage *tgMessage `json:"reply_to_message,omitempty"`
+	Text           string      `json:"text"`
+	Caption        string      `json:"caption"`
+	Photo          []tgPhoto   `json:"photo,omitempty"`
+	Document       *tgDocument `json:"document,omitempty"`
+	Chat           tgChat      `json:"chat"`
+	From           tgUser      `json:"from"`
+	ReplyToMessage *tgMessage  `json:"reply_to_message,omitempty"`
 }
 
 type tgPhoto struct {
 	FileID string `json:"file_id"`
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
+}
+
+type tgDocument struct {
+	FileID   string `json:"file_id"`
+	MimeType string `json:"mime_type,omitempty"`
 }
 
 type tgChat struct {
@@ -250,7 +259,8 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 		text = caption
 	}
 
-	hasImage := len(u.Message.Photo) > 0
+	imageFileID := pickImageFileID(u.Message)
+	hasImage := imageFileID != ""
 	if text == "" && !hasImage {
 		return InboundMessage{}, false
 	}
@@ -268,8 +278,7 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 		Language:   u.Message.From.LanguageCode,
 	}
 	if hasImage {
-		// Telegram sends photos in ascending size order. Keep the largest (last).
-		msg.ImageFileID = u.Message.Photo[len(u.Message.Photo)-1].FileID
+		msg.ImageFileID = imageFileID
 	}
 	if u.Message.ReplyToMessage != nil {
 		if u.Message.ReplyToMessage.Text != "" {
@@ -277,9 +286,31 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 		} else if u.Message.ReplyToMessage.Caption != "" {
 			msg.ReplyToText = u.Message.ReplyToMessage.Caption
 		}
+		// If this message is a reply to media and the current message has no media,
+		// carry the replied image forward so AI can answer follow-up questions.
+		if msg.ImageFileID == "" {
+			if replyImageFileID := pickImageFileID(u.Message.ReplyToMessage); replyImageFileID != "" {
+				msg.HasImage = true
+				msg.ImageFileID = replyImageFileID
+			}
+		}
 	}
 
 	return msg, true
+}
+
+func pickImageFileID(m *tgMessage) string {
+	if m == nil {
+		return ""
+	}
+	if len(m.Photo) > 0 {
+		// Telegram sends photos in ascending size order. Keep the largest (last).
+		return m.Photo[len(m.Photo)-1].FileID
+	}
+	if m.Document != nil && strings.HasPrefix(strings.ToLower(m.Document.MimeType), "image/") {
+		return m.Document.FileID
+	}
+	return ""
 }
 
 func (t *TelegramChannel) getImageDataURL(ctx context.Context, fileID string) (string, error) {
@@ -313,7 +344,7 @@ func (t *TelegramChannel) getImageDataURL(ctx context.Context, fileID string) (s
 		return "", fmt.Errorf("telegram file is empty")
 	}
 
-	mimeType := detectTelegramMIME(filePath)
+	mimeType := detectTelegramMIME(content, filePath)
 	encoded := base64.StdEncoding.EncodeToString(content)
 	return "data:" + mimeType + ";base64," + encoded, nil
 }
@@ -351,7 +382,11 @@ func (t *TelegramChannel) getFilePath(ctx context.Context, fileID string) (strin
 	return result.Result.FilePath, nil
 }
 
-func detectTelegramMIME(filePath string) string {
+func detectTelegramMIME(content []byte, filePath string) string {
+	if detected := strings.ToLower(http.DetectContentType(content)); strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+
 	switch strings.ToLower(filepath.Ext(filePath)) {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
@@ -360,6 +395,27 @@ func detectTelegramMIME(filePath string) string {
 	case ".webp":
 		return "image/webp"
 	default:
-		return "application/octet-stream"
+		// Telegram photo payloads are JPEG by default.
+		return "image/jpeg"
 	}
+}
+
+func (t *TelegramChannel) syncCommands() error {
+	commandsJSON := `[{"command":"start","description":"Mulakan sesi pembelajaran"},{"command":"clear","description":"Reset perbualan semasa"}]`
+	params := url.Values{
+		"commands": {commandsJSON},
+	}
+
+	resp, err := t.client.PostForm(t.baseURL+"/setMyCommands", params)
+	if err != nil {
+		return fmt.Errorf("setMyCommands request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("setMyCommands api error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return nil
 }

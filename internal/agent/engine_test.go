@@ -209,6 +209,82 @@ func TestEngine_StartClearsHistory(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_ClearCommand(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "123",
+		Text:    "/clear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "dikosongkan") {
+		t.Fatalf("unexpected /clear response: %q", resp)
+	}
+}
+
+func TestEngine_SystemPrompt_HasImageFollowUpReplyGuidance(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-system-prompt",
+		Text:    "what is 2x + 1 = 5?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if mockAI.LastRequest == nil || len(mockAI.LastRequest.Messages) == 0 {
+		t.Fatal("expected request messages to be sent to AI")
+	}
+	systemPrompt := mockAI.LastRequest.Messages[0]
+	if systemPrompt.Role != "system" {
+		t.Fatalf("first message role = %q, want system", systemPrompt.Role)
+	}
+	if !contains(systemPrompt.Content, "did not reply to that image") {
+		t.Fatalf("system prompt missing image follow-up reply guidance")
+	}
+}
+
+func TestEngine_ClearClearsHistory(t *testing.T) {
+	mockAI := ai.NewMockProvider("Response")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	// Build some history
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "123", Text: "Hello",
+	})
+
+	// /clear should clear it
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "123", Text: "/clear",
+	})
+
+	// Next message should have only system + this user message (no old history)
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "123", Text: "Fresh start",
+	})
+
+	msgs := mockAI.LastRequest.Messages
+	if len(msgs) != 2 {
+		t.Errorf("Expected 2 messages after /clear, got %d", len(msgs))
+	}
+}
+
 func TestEngine_ProcessMessage_ReplyToText(t *testing.T) {
 	mockAI := ai.NewMockProvider("Let me explain that step again.")
 
@@ -487,6 +563,39 @@ func TestEngine_ProcessMessage_EventLoggingNonBlocking(t *testing.T) {
 	}
 
 	close(blockingLogger.release)
+}
+
+func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
+	mockAI := ai.NewMockProvider("image response")
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	imageDataURL := "data:image/jpeg;base64,AAAAABBBBBCCCCCDDDDDEEEEE"
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:      "telegram",
+		UserID:       "img-user",
+		Text:         "whats this",
+		HasImage:     true,
+		ImageDataURL: imageDataURL,
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	conv, found := store.GetActiveConversation("img-user")
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+
+	for _, m := range conv.Messages {
+		if contains(m.Content, "data:image") || contains(m.Content, "base64,") {
+			t.Fatalf("stored message should not contain raw image data URL, got: %q", m.Content)
+		}
+	}
 }
 
 // callTracker wraps a provider to record all requests.

@@ -338,15 +338,21 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 
 	switch cmd {
 	case "/start":
-		// End any active conversation.
-		if conv, found := e.store.GetActiveConversation(msg.UserID); found {
-			if err := e.store.EndConversation(conv.ID); err != nil {
-				slog.Error("failed to end conversation", "error", err)
-			}
-		}
+		e.endActiveConversation(msg.UserID)
 		return e.handleStart(msg)
+	case "/clear":
+		e.endActiveConversation(msg.UserID)
+		return "Sejarah perbualan telah dikosongkan. Hantar soalan baru untuk mula semula.", nil
 	default:
-		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula.", cmd), nil
+		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula atau /clear untuk reset perbualan.", cmd), nil
+	}
+}
+
+func (e *Engine) endActiveConversation(userID string) {
+	if conv, found := e.store.GetActiveConversation(userID); found {
+		if err := e.store.EndConversation(conv.ID); err != nil {
+			slog.Error("failed to end conversation", "error", err)
+		}
 	}
 }
 
@@ -394,6 +400,7 @@ RULES:
 - If unsure of the student's level, ask a diagnostic question
 - If an image is attached, analyze the image content first before answering.
 - Only say you cannot identify an image when it is genuinely unreadable; in that case ask for a clearer retake.
+- If the student asks a follow-up about an earlier image but did not reply to that image (or reattach it), ask them to reply directly to the image message.
 - Be patient and never condescending`
 }
 
