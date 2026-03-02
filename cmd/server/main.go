@@ -15,6 +15,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/database"
 )
 
 func main() {
@@ -39,6 +40,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize PostgreSQL-backed conversation store.
+	db, err := database.New(context.Background(), cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
+	if err != nil {
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	store, err := agent.NewPostgresStore(context.Background(), db.Pool)
+	if err != nil {
+		slog.Error("failed to initialize conversation store", "error", err)
+		os.Exit(1)
+	}
+
 	// Load curriculum (warn if unavailable, don't fail).
 	loader, err := curriculum.NewLoader(cfg.CurriculumPath)
 	if err != nil {
@@ -49,8 +64,11 @@ func main() {
 	}
 
 	// Create agent engine.
+	eventLogger := agent.NewPostgresEventLogger(db.Pool)
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter: router,
+		AIRouter:    router,
+		Store:       store,
+		EventLogger: eventLogger,
 	})
 
 	// Create Telegram channel + chat gateway.

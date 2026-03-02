@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -347,8 +348,8 @@ func TestEngine_Compaction_LongMessages(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:              mockRouter(mockAI),
 		Store:                 store,
-		CompactThreshold:      100,  // high message threshold — won't trigger by count
-		CompactTokenThreshold: 200,  // low token threshold — triggers by content size
+		CompactThreshold:      100, // high message threshold — won't trigger by count
+		CompactTokenThreshold: 200, // low token threshold — triggers by content size
 		KeepRecent:            2,
 	})
 
@@ -403,6 +404,91 @@ func TestEngine_NoCompaction_UnderThreshold(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_LogsCoreEvents(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	eventLogger := agent.NewMemoryEventLogger()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(mockAI),
+		EventLogger: eventLogger,
+		Store:       agent.NewMemoryStore(),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-1",
+		Text:    "Explain linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for len(eventLogger.Events()) < 3 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	events := eventLogger.Events()
+	if len(events) != 3 {
+		t.Fatalf("len(events) = %d, want 3", len(events))
+	}
+
+	var sessionStarted, messageSent, aiResponse bool
+	for _, e := range events {
+		switch e.EventType {
+		case "session_started":
+			sessionStarted = true
+		case "message_sent":
+			messageSent = true
+		case "ai_response":
+			aiResponse = true
+		}
+	}
+
+	if !sessionStarted || !messageSent || !aiResponse {
+		t.Fatalf("missing expected events: session_started=%v message_sent=%v ai_response=%v", sessionStarted, messageSent, aiResponse)
+	}
+}
+
+func TestEngine_ProcessMessage_EventLoggingNonBlocking(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	blockingLogger := &blockingEventLogger{
+		started: make(chan struct{}, 8),
+		release: make(chan struct{}),
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(mockAI),
+		EventLogger: blockingLogger,
+		Store:       agent.NewMemoryStore(),
+	})
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+			Channel: "telegram",
+			UserID:  "u-2",
+			Text:    "What is algebra?",
+		})
+		close(done)
+	}()
+
+	select {
+	case <-blockingLogger.started:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected event logger to be called")
+	}
+
+	select {
+	case <-done:
+		// expected: ProcessMessage should return even while logger is blocked.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("ProcessMessage should not block on event logger")
+	}
+
+	close(blockingLogger.release)
+}
+
 // callTracker wraps a provider to record all requests.
 type callTracker struct {
 	provider ai.Provider
@@ -444,4 +530,18 @@ func containsSubstr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+type blockingEventLogger struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (l *blockingEventLogger) LogEvent(_ agent.Event) error {
+	select {
+	case l.started <- struct{}{}:
+	default:
+	}
+	<-l.release
+	return nil
 }
