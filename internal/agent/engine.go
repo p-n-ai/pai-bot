@@ -82,10 +82,12 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	// Record user message.
-	e.store.AddMessage(conv.ID, StoredMessage{
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
 		Content: msg.Text,
-	})
+	}); err != nil {
+		slog.Error("failed to store user message", "error", err)
+	}
 
 	// Refresh conversation to get latest messages.
 	conv, _ = e.store.GetConversation(conv.ID)
@@ -110,13 +112,15 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	// Record assistant response with token metadata.
-	e.store.AddMessage(conv.ID, StoredMessage{
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:         "assistant",
 		Content:      resp.Content,
 		Model:        resp.Model,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
-	})
+	}); err != nil {
+		slog.Error("failed to store assistant message", "error", err)
+	}
 
 	return resp.Content, nil
 }
@@ -247,7 +251,9 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 	case "/start":
 		// End any active conversation.
 		if conv, found := e.store.GetActiveConversation(msg.UserID); found {
-			e.store.EndConversation(conv.ID)
+			if err := e.store.EndConversation(conv.ID); err != nil {
+				slog.Error("failed to end conversation", "error", err)
+			}
 		}
 		return e.handleStart(msg)
 	default:

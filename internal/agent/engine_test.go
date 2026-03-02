@@ -139,7 +139,7 @@ func TestEngine_ConversationHistory(t *testing.T) {
 
 	// First message
 	mockAI.Response = "Response 1"
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",
 		UserID:  "123",
 		Text:    "What is x?",
@@ -147,7 +147,7 @@ func TestEngine_ConversationHistory(t *testing.T) {
 
 	// Second message — should include history
 	mockAI.Response = "Response 2"
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",
 		UserID:  "123",
 		Text:    "What about y?",
@@ -187,17 +187,17 @@ func TestEngine_StartClearsHistory(t *testing.T) {
 	})
 
 	// Build some history
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "Hello",
 	})
 
 	// /start should clear it
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "/start",
 	})
 
 	// Next message should have only system + this user message (no old history)
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "Fresh start",
 	})
 
@@ -222,7 +222,7 @@ func TestEngine_Compaction(t *testing.T) {
 	// Send 4 exchanges (8 messages total, exceeds threshold of 6)
 	for i := 0; i < 4; i++ {
 		mockAI.Response = fmt.Sprintf("response %d", i)
-		engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 			Channel: "telegram", UserID: "123", Text: fmt.Sprintf("question %d", i),
 		})
 	}
@@ -230,7 +230,7 @@ func TestEngine_Compaction(t *testing.T) {
 	// The summarization AI call should have happened.
 	// Next message should get: system + summary + recent messages (not all 8).
 	mockAI.Response = "final response"
-	engine.ProcessMessage(context.Background(), chat.InboundMessage{
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "another question",
 	})
 
@@ -270,7 +270,7 @@ func TestEngine_Compaction_NoRecompressEveryTurn(t *testing.T) {
 	// Send 4 exchanges (8 messages) — should trigger ONE compaction.
 	for i := 0; i < 4; i++ {
 		mockAI.Response = fmt.Sprintf("response %d", i)
-		engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 			Channel: "telegram", UserID: "123", Text: fmt.Sprintf("q%d", i),
 		})
 	}
@@ -288,7 +288,7 @@ func TestEngine_Compaction_NoRecompressEveryTurn(t *testing.T) {
 	// because we haven't accumulated enough new messages past the threshold.
 	for i := 0; i < 2; i++ {
 		mockAI.Response = fmt.Sprintf("more response %d", i)
-		engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 			Channel: "telegram", UserID: "123", Text: fmt.Sprintf("more q%d", i),
 		})
 	}
@@ -325,7 +325,7 @@ func TestEngine_Compaction_LongMessages(t *testing.T) {
 	}
 	for i := 0; i < 3; i++ {
 		mockAI.Response = longText
-		engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 			Channel: "telegram", UserID: "token-user", Text: longText,
 		})
 	}
@@ -355,7 +355,7 @@ func TestEngine_NoCompaction_UnderThreshold(t *testing.T) {
 	// Send 3 messages — well under threshold.
 	for i := 0; i < 3; i++ {
 		mockAI.Response = fmt.Sprintf("response %d", i)
-		engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 			Channel: "telegram", UserID: "123", Text: fmt.Sprintf("q%d", i),
 		})
 	}

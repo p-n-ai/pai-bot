@@ -133,6 +133,6 @@ func (s *MemoryStore) EndConversation(id string) error {
 
 func generateID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return fmt.Sprintf("%x", b)
 }

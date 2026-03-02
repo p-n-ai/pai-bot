@@ -101,9 +101,9 @@ func TestConversationStore_MultipleMessages(t *testing.T) {
 		State:  "teaching",
 	})
 
-	store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "Hello"})
-	store.AddMessage(id, agent.StoredMessage{Role: "assistant", Content: "Hi!"})
-	store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "What is x?"})
+	_ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "Hello"})
+	_ = store.AddMessage(id, agent.StoredMessage{Role: "assistant", Content: "Hi!"})
+	_ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "What is x?"})
 
 	got, _ := store.GetConversation(id)
 	if len(got.Messages) != 3 {
