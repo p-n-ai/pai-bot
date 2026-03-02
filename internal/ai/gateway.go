@@ -30,8 +30,9 @@ func (t TaskType) String() string {
 
 // Message represents a chat message.
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string   `json:"role"`
+	Content   string   `json:"content"`
+	ImageURLs []string `json:"image_urls,omitempty"`
 }
 
 // CompletionRequest is the input to an AI completion.

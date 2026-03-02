@@ -14,6 +14,10 @@ type InboundMessage struct {
 	UserID       string
 	ExternalID   string
 	Text         string
+	Caption      string
+	HasImage     bool
+	ImageFileID  string
+	ImageDataURL string
 	ReplyToText  string // text of the message being replied to (if any)
 	Username     string
 	FirstName    string

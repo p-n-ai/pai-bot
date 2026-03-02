@@ -232,3 +232,49 @@ func TestOpenAIProvider_DefaultModel(t *testing.T) {
 		t.Errorf("default model = %q, want %q", receivedModel, "gpt-4o-mini")
 	}
 }
+
+func TestOpenAIProvider_Complete_WithImageURL(t *testing.T) {
+	var capturedContent any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req openaiRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Messages) != 1 {
+			t.Fatalf("messages len = %d, want 1", len(req.Messages))
+		}
+		capturedContent = req.Messages[0].Content
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: "ok"}},
+			},
+			Model: "gpt-4o-mini",
+		})
+	}))
+	defer server.Close()
+
+	provider := NewOpenAIProvider("test-key", WithBaseURL(server.URL))
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"data:image/jpeg;base64,abc123"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	parts, ok := capturedContent.([]any)
+	if !ok {
+		t.Fatalf("content type = %T, want []any", capturedContent)
+	}
+	if len(parts) < 2 {
+		t.Fatalf("content parts len = %d, want >= 2", len(parts))
+	}
+}

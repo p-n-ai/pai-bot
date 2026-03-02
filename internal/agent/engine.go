@@ -90,8 +90,14 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 
 	// Build user content — include replied message as context if present.
 	userContent := msg.Text
+	if msg.HasImage {
+		if userContent == "" {
+			userContent = "Please analyze the attached image and help me solve it step by step."
+		}
+		userContent = "[Student attached an image]\nAnalyze the image content first, then answer the student's request.\n\n" + userContent
+	}
 	if msg.ReplyToText != "" {
-		userContent = fmt.Sprintf("[Replying to: \"%s\"]\n\n%s", msg.ReplyToText, msg.Text)
+		userContent = fmt.Sprintf("[Replying to: \"%s\"]\n\n%s", msg.ReplyToText, userContent)
 	}
 
 	// Record user message.
@@ -109,6 +115,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"channel":   msg.Channel,
 			"text_len":  len(msg.Text),
 			"has_reply": msg.ReplyToText != "",
+			"has_image": msg.HasImage,
 			"source":    "chat",
 		},
 	})
@@ -123,10 +130,27 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	systemPrompt := e.buildSystemPrompt(msg)
 	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, e.buildContextMessages(conv)...)
+	if msg.HasImage && msg.ImageDataURL == "" {
+		return "Saya terima gambar anda, tapi gagal memproses fail gambar itu. Cuba hantar semula gambar yang lebih jelas.", nil
+	}
+	if msg.ImageDataURL != "" {
+		messages = append(messages, ai.Message{
+			Role:      "user",
+			Content:   "Attached image from the student. Analyze this image directly and answer based on what you see. If unreadable, say exactly what is unclear and how to retake it.",
+			ImageURLs: []string{msg.ImageDataURL},
+		})
+	}
+
+	reqModel := ""
+	if msg.ImageDataURL != "" {
+		// Prefer a vision-capable model for image understanding.
+		reqModel = "gpt-4o"
+	}
 
 	// Call AI
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
 		Messages:  messages,
+		Model:     reqModel,
 		Task:      ai.TaskTeaching,
 		MaxTokens: 1024,
 	})
@@ -135,10 +159,13 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
 
+	// Telegram does not render LaTeX blocks; keep equations plain.
+	plainContent := normalizeEquationFormatting(resp.Content)
+
 	// Record assistant response with token metadata.
 	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:         "assistant",
-		Content:      resp.Content,
+		Content:      plainContent,
 		Model:        resp.Model,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
@@ -155,10 +182,11 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"input_tokens":  resp.InputTokens,
 			"output_tokens": resp.OutputTokens,
 			"text_len":      len(resp.Content),
+			"has_image":     msg.HasImage,
 		},
 	})
 
-	return resp.Content, nil
+	return plainContent, nil
 }
 
 // buildContextMessages returns the conversation messages for the AI prompt.
@@ -357,11 +385,32 @@ TEACHING STYLE:
 - Celebrate small wins ("Bagus!", "Betul!")
 - If the student is stuck, give a hint before the answer
 - Use mathematical notation where needed
+- Write equations in plain text (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
 - Keep responses concise — this is a chat, not a textbook
 
 RULES:
 - Never give answers without explanation
 - Always check if the student understood before moving on
 - If unsure of the student's level, ask a diagnostic question
+- If an image is attached, analyze the image content first before answering.
+- Only say you cannot identify an image when it is genuinely unreadable; in that case ask for a clearer retake.
 - Be patient and never condescending`
+}
+
+func normalizeEquationFormatting(content string) string {
+	replacer := strings.NewReplacer(
+		`\\[`, "",
+		`\\]`, "",
+		`\\(`, "",
+		`\\)`, "",
+		`$$`, "",
+		`\[`, "",
+		`\]`, "",
+		`\(`, "",
+		`\)`, "",
+		`\times`, "x",
+		`\cdot`, "*",
+		`\div`, "/",
+	)
+	return replacer.Replace(content)
 }

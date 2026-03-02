@@ -45,14 +45,9 @@ func (p *OllamaProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		model = "llama3:8b"
 	}
 
-	messages := make([]openaiMessage, len(req.Messages))
-	for i, m := range req.Messages {
-		messages[i] = openaiMessage(m)
-	}
-
 	oaiReq := openaiRequest{
 		Model:    model,
-		Messages: messages,
+		Messages: buildOpenAIMessages(req.Messages),
 	}
 	if req.MaxTokens > 0 {
 		oaiReq.MaxTokens = req.MaxTokens

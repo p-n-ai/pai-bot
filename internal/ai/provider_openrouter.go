@@ -56,14 +56,9 @@ func (p *OpenRouterProvider) Complete(ctx context.Context, req CompletionRequest
 		model = "qwen/qwen-2.5-72b-instruct"
 	}
 
-	messages := make([]openaiMessage, len(req.Messages))
-	for i, m := range req.Messages {
-		messages[i] = openaiMessage(m)
-	}
-
 	oaiReq := openaiRequest{
 		Model:    model,
-		Messages: messages,
+		Messages: buildOpenAIMessages(req.Messages),
 	}
 	if req.MaxTokens > 0 {
 		oaiReq.MaxTokens = req.MaxTokens
