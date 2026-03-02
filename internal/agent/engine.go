@@ -5,31 +5,59 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
-const maxHistoryMessages = 20
+const (
+	defaultCompactThreshold      = 20
+	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
+	defaultKeepRecent            = 6
+)
 
 // EngineConfig holds dependencies for the agent engine.
 type EngineConfig struct {
-	AIRouter *ai.Router
+	AIRouter              *ai.Router
+	Store                 ConversationStore
+	CompactThreshold      int // messages before compaction triggers (default 20)
+	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
+	KeepRecent            int // recent messages to keep after compaction (default 6)
 }
 
 // Engine is the core conversation processor.
 type Engine struct {
-	aiRouter *ai.Router
-	history  map[string][]ai.Message // keyed by UserID
-	mu       sync.RWMutex
+	aiRouter              *ai.Router
+	store                 ConversationStore
+	compactThreshold      int
+	compactTokenThreshold int
+	keepRecent            int
 }
 
 // NewEngine creates a new agent engine.
 func NewEngine(cfg EngineConfig) *Engine {
+	store := cfg.Store
+	if store == nil {
+		store = NewMemoryStore()
+	}
+	threshold := cfg.CompactThreshold
+	if threshold == 0 {
+		threshold = defaultCompactThreshold
+	}
+	tokenThreshold := cfg.CompactTokenThreshold
+	if tokenThreshold == 0 {
+		tokenThreshold = defaultCompactTokenThreshold
+	}
+	keepRecent := cfg.KeepRecent
+	if keepRecent == 0 {
+		keepRecent = defaultKeepRecent
+	}
 	return &Engine{
-		aiRouter: cfg.AIRouter,
-		history:  make(map[string][]ai.Message),
+		aiRouter:              cfg.AIRouter,
+		store:                 store,
+		compactThreshold:      threshold,
+		compactTokenThreshold: tokenThreshold,
+		keepRecent:            keepRecent,
 	}
 }
 
@@ -46,13 +74,29 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return e.handleCommand(ctx, msg)
 	}
 
-	// Record user message in history.
-	e.appendHistory(msg.UserID, ai.Message{Role: "user", Content: msg.Text})
+	// Get or create active conversation.
+	conv, err := e.getOrCreateConversation(msg.UserID)
+	if err != nil {
+		slog.Error("failed to get conversation", "error", err)
+		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
+	}
 
-	// Build messages: system prompt + conversation history.
+	// Record user message.
+	e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "user",
+		Content: msg.Text,
+	})
+
+	// Refresh conversation to get latest messages.
+	conv, _ = e.store.GetConversation(conv.ID)
+
+	// Compact if needed (summarize older messages).
+	e.maybeCompact(ctx, conv)
+
+	// Build messages: system prompt + (optional summary) + recent messages.
 	systemPrompt := e.buildSystemPrompt(msg)
 	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
-	messages = append(messages, e.getHistory(msg.UserID)...)
+	messages = append(messages, e.buildContextMessages(conv)...)
 
 	// Call AI
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
@@ -65,32 +109,135 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
 
-	// Record assistant response in history.
-	e.appendHistory(msg.UserID, ai.Message{Role: "assistant", Content: resp.Content})
+	// Record assistant response with token metadata.
+	e.store.AddMessage(conv.ID, StoredMessage{
+		Role:         "assistant",
+		Content:      resp.Content,
+		Model:        resp.Model,
+		InputTokens:  resp.InputTokens,
+		OutputTokens: resp.OutputTokens,
+	})
 
 	return resp.Content, nil
 }
 
-func (e *Engine) appendHistory(userID string, msg ai.Message) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+// buildContextMessages returns the conversation messages for the AI prompt.
+// If a summary exists, it prepends it and only includes messages after compaction point.
+func (e *Engine) buildContextMessages(conv *Conversation) []ai.Message {
+	var messages []ai.Message
 
-	e.history[userID] = append(e.history[userID], msg)
-
-	// Trim to last N messages.
-	if len(e.history[userID]) > maxHistoryMessages {
-		e.history[userID] = e.history[userID][len(e.history[userID])-maxHistoryMessages:]
+	if conv.Summary != "" {
+		messages = append(messages, ai.Message{
+			Role:    "user",
+			Content: "Previous conversation summary:\n" + conv.Summary,
+		})
+		messages = append(messages, ai.Message{
+			Role:    "assistant",
+			Content: "Understood, I'll continue based on our previous conversation.",
+		})
+		// Only include messages after the compaction point.
+		for _, m := range conv.Messages[conv.CompactedAt:] {
+			messages = append(messages, ai.Message{Role: m.Role, Content: m.Content})
+		}
+	} else {
+		for _, m := range conv.Messages {
+			messages = append(messages, ai.Message{Role: m.Role, Content: m.Content})
+		}
 	}
+
+	return messages
 }
 
-func (e *Engine) getHistory(userID string) []ai.Message {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
+// estimateTokens gives a rough token count for messages (1 token ≈ 4 chars).
+func estimateTokens(messages []StoredMessage) int {
+	total := 0
+	for _, m := range messages {
+		total += len(m.Content) / 4
+	}
+	return total
+}
 
-	h := e.history[userID]
-	out := make([]ai.Message, len(h))
-	copy(out, h)
-	return out
+// maybeCompact checks if the conversation needs compaction and summarizes if so.
+// Triggers when message count OR estimated token count exceeds thresholds.
+// Only considers messages since the last compaction to avoid re-compressing.
+func (e *Engine) maybeCompact(ctx context.Context, conv *Conversation) {
+	uncompacted := conv.Messages[conv.CompactedAt:]
+	messagesSinceCompact := len(uncompacted)
+	tokensSinceCompact := estimateTokens(uncompacted)
+
+	if messagesSinceCompact <= e.compactThreshold && tokensSinceCompact <= e.compactTokenThreshold {
+		return
+	}
+
+	// Summarize everything except the most recent messages.
+	compactUpTo := len(conv.Messages) - e.keepRecent
+	if compactUpTo <= conv.CompactedAt {
+		return
+	}
+
+	toSummarize := conv.Messages[conv.CompactedAt:compactUpTo]
+
+	// Build the summarization prompt.
+	var content strings.Builder
+	if conv.Summary != "" {
+		content.WriteString("Previous summary:\n")
+		content.WriteString(conv.Summary)
+		content.WriteString("\n\nNew messages to incorporate:\n")
+	}
+	for _, m := range toSummarize {
+		role := "Student"
+		if m.Role == "assistant" {
+			role = "Tutor"
+		}
+		content.WriteString(fmt.Sprintf("%s: %s\n", role, m.Content))
+	}
+
+	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
+		Messages: []ai.Message{
+			{Role: "system", Content: `Summarize this tutoring conversation concisely. Capture:
+- Topics discussed and key concepts
+- What the student understood or struggled with
+- Any examples or problems worked through
+Keep the summary under 150 words. Write in the same language used in the conversation.`},
+			{Role: "user", Content: content.String()},
+		},
+		Task:      ai.TaskAnalysis,
+		MaxTokens: 256,
+	})
+	if err != nil {
+		slog.Warn("compaction failed, continuing without summary", "error", err)
+		return
+	}
+
+	if err := e.store.SetSummary(conv.ID, resp.Content, compactUpTo); err != nil {
+		slog.Warn("failed to save summary", "error", err)
+		return
+	}
+
+	// Update the in-memory conv so buildContextMessages uses the new summary.
+	conv.Summary = resp.Content
+	conv.CompactedAt = compactUpTo
+
+	slog.Info("conversation compacted",
+		"conversation_id", conv.ID,
+		"compacted_messages", compactUpTo,
+		"remaining_messages", len(conv.Messages)-compactUpTo,
+	)
+}
+
+func (e *Engine) getOrCreateConversation(userID string) (*Conversation, error) {
+	conv, found := e.store.GetActiveConversation(userID)
+	if found {
+		return conv, nil
+	}
+	id, err := e.store.CreateConversation(Conversation{
+		UserID: userID,
+		State:  "teaching",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return e.store.GetConversation(id)
 }
 
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
@@ -98,10 +245,10 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 
 	switch cmd {
 	case "/start":
-		// Clear history on /start.
-		e.mu.Lock()
-		delete(e.history, msg.UserID)
-		e.mu.Unlock()
+		// End any active conversation.
+		if conv, found := e.store.GetActiveConversation(msg.UserID); found {
+			e.store.EndConversation(conv.ID)
+		}
 		return e.handleStart(msg)
 	default:
 		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula.", cmd), nil
