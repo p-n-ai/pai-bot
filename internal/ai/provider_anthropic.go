@@ -31,7 +31,7 @@ func WithAnthropicBaseURL(url string) AnthropicOption {
 // NewAnthropicProvider creates a new Anthropic provider.
 func NewAnthropicProvider(apiKey string, opts ...AnthropicOption) (*AnthropicProvider, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("Anthropic API key is required")
+		return nil, fmt.Errorf("anthropic API key is required")
 	}
 	p := &AnthropicProvider{
 		apiKey:  apiKey,
@@ -95,9 +95,9 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return CompletionResponse{}, fmt.Errorf("Anthropic API call: %w", err)
+		return CompletionResponse{}, fmt.Errorf("anthropic API call: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -105,7 +105,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return CompletionResponse{}, fmt.Errorf("Anthropic API error %d: %s", resp.StatusCode, string(respBody))
+		return CompletionResponse{}, fmt.Errorf("anthropic API error %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var result struct {
@@ -123,7 +123,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 	}
 
 	if len(result.Content) == 0 {
-		return CompletionResponse{}, fmt.Errorf("Anthropic returned no content")
+		return CompletionResponse{}, fmt.Errorf("anthropic returned no content")
 	}
 
 	return CompletionResponse{
