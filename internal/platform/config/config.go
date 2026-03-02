@@ -11,16 +11,17 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Cache    CacheConfig
-	NATS     NATSConfig
-	AI       AIConfig
-	Telegram TelegramConfig
-	WhatsApp WhatsAppConfig
-	Auth     AuthConfig
-	Tenant   TenantConfig
-	Log      LogConfig
+	Server         ServerConfig
+	Database       DatabaseConfig
+	Cache          CacheConfig
+	NATS           NATSConfig
+	AI             AIConfig
+	Telegram       TelegramConfig
+	WhatsApp       WhatsAppConfig
+	Auth           AuthConfig
+	Tenant         TenantConfig
+	Log            LogConfig
+	CurriculumPath string
 }
 
 // ServerConfig holds HTTP server settings.
@@ -178,6 +179,7 @@ func Load() (*Config, error) {
 			Level:  envStr("LEARN_LOG_LEVEL", "info"),
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
 		},
+		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),
 	}
 
 	return cfg, nil

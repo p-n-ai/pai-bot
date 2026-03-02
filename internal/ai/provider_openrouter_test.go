@@ -17,7 +17,7 @@ func TestOpenRouterProvider_Complete(t *testing.T) {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
 
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -60,7 +60,7 @@ func TestOpenRouterProvider_ExtraHeaders(t *testing.T) {
 		gotReferer = r.Header.Get("HTTP-Referer")
 		gotTitle = r.Header.Get("X-Title")
 
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -94,7 +94,7 @@ func TestOpenRouterProvider_ExtraHeaders(t *testing.T) {
 func TestOpenRouterProvider_Complete_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"error": "rate limited"}`))
+		_, _ = w.Write([]byte(`{"error": "rate limited"}`))
 	}))
 	defer server.Close()
 

@@ -20,13 +20,13 @@ func TestGoogleProvider_Complete(t *testing.T) {
 		}
 
 		var req geminiRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if len(req.Contents) == 0 {
 			t.Error("no contents in request")
 		}
 
-		json.NewEncoder(w).Encode(geminiResponse{
+		_ = json.NewEncoder(w).Encode(geminiResponse{
 			Candidates: []struct {
 				Content struct {
 					Parts []struct {
@@ -72,10 +72,10 @@ func TestGoogleProvider_Complete_RoleMappings(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req geminiRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		receivedContents = req.Contents
 
-		json.NewEncoder(w).Encode(geminiResponse{
+		_ = json.NewEncoder(w).Encode(geminiResponse{
 			Candidates: []struct {
 				Content struct {
 					Parts []struct {
@@ -122,7 +122,7 @@ func TestGoogleProvider_Complete_RoleMappings(t *testing.T) {
 func TestGoogleProvider_Complete_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error": "forbidden"}`))
+		_, _ = w.Write([]byte(`{"error": "forbidden"}`))
 	}))
 	defer server.Close()
 

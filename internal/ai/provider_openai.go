@@ -113,7 +113,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 
 	messages := make([]openaiMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		messages[i] = openaiMessage{Role: m.Role, Content: m.Content}
+		messages[i] = openaiMessage(m)
 	}
 
 	oaiReq := openaiRequest{
@@ -144,7 +144,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -206,7 +206,7 @@ func (p *OpenAIProvider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check returned status %d", resp.StatusCode)

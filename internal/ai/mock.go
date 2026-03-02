@@ -4,8 +4,9 @@ import "context"
 
 // MockProvider is a test double for AI providers.
 type MockProvider struct {
-	Response string
-	Err      error
+	Response    string
+	Err         error
+	LastRequest *CompletionRequest // captures the last request for inspection
 }
 
 // NewMockProvider creates a MockProvider that returns the given response.
@@ -13,7 +14,8 @@ func NewMockProvider(response string) *MockProvider {
 	return &MockProvider{Response: response}
 }
 
-func (m *MockProvider) Complete(_ context.Context, _ CompletionRequest) (CompletionResponse, error) {
+func (m *MockProvider) Complete(_ context.Context, req CompletionRequest) (CompletionResponse, error) {
+	m.LastRequest = &req
 	if m.Err != nil {
 		return CompletionResponse{}, m.Err
 	}

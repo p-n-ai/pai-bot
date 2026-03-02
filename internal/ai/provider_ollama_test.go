@@ -19,9 +19,9 @@ func TestOllamaProvider_Complete(t *testing.T) {
 		}
 
 		var req openaiRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -60,7 +60,7 @@ func TestOllamaProvider_Complete(t *testing.T) {
 func TestOllamaProvider_Complete_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("model not found"))
+		_, _ = w.Write([]byte("model not found"))
 	}))
 	defer server.Close()
 

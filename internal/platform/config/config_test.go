@@ -33,7 +33,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_LOG_FORMAT",
 	}
 	for _, v := range envVars {
-		os.Unsetenv(v)
+		_ = os.Unsetenv(v)
 	}
 }
 

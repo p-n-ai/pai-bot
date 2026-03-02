@@ -21,7 +21,7 @@ func TestOpenAIProvider_Complete(t *testing.T) {
 		}
 
 		var req openaiRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Model != "gpt-4o" {
 			t.Errorf("model = %q, want %q", req.Model, "gpt-4o")
@@ -30,7 +30,7 @@ func TestOpenAIProvider_Complete(t *testing.T) {
 			t.Errorf("unexpected messages: %+v", req.Messages)
 		}
 
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -73,7 +73,7 @@ func TestOpenAIProvider_Complete(t *testing.T) {
 func TestOpenAIProvider_Complete_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"error": "rate limited"}`))
+		_, _ = w.Write([]byte(`{"error": "rate limited"}`))
 	}))
 	defer server.Close()
 
@@ -90,7 +90,7 @@ func TestOpenAIProvider_Complete_APIError(t *testing.T) {
 
 func TestOpenAIProvider_Complete_EmptyChoices(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(openaiResponse{Choices: nil})
+		_ = json.NewEncoder(w).Encode(openaiResponse{Choices: nil})
 	}))
 	defer server.Close()
 
@@ -109,7 +109,7 @@ func TestDeepSeekProvider_UsesCorrectBaseURL(t *testing.T) {
 	var receivedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedPath = r.URL.Path
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -200,10 +200,10 @@ func TestOpenAIProvider_DefaultModel(t *testing.T) {
 	var receivedModel string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req openaiRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		receivedModel = req.Model
 
-		json.NewEncoder(w).Encode(openaiResponse{
+		_ = json.NewEncoder(w).Encode(openaiResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
