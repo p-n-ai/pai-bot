@@ -11,45 +11,45 @@
 P&AI Bot is a **modular monolith** — a single deployable Go binary with internally clean domain boundaries that can be split into microservices when specific domains need independent scaling. This gives early-stage development speed (fast iteration, one deployment, easy debugging) while maintaining the option to decompose later.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Chat Channels                                                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                        │
-│  │ Telegram │ │ WhatsApp │ │ WebSocket│                        │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘                        │
-│       └─────────────┼───────────┘                               │
-│                     ▼                                           │
-│              Chat Gateway (internal/chat)                       │
-│                     │                                           │
-│                     ▼                                           │
-│  ┌──────────────────────────────────────────────────┐           │
-│  │           Agent Engine (internal/agent)           │           │
-│  │  ┌─────────────┐  ┌──────────────────┐           │           │
-│  │  │ Conversation │  │ Proactive        │           │           │
-│  │  │ State Machine│  │ Scheduler (NATS) │           │           │
-│  │  └─────────────┘  └──────────────────┘           │           │
-│  │  ┌─────────────┐  ┌──────────────────┐           │           │
-│  │  │ Progress    │  │ Pedagogical      │           │           │
-│  │  │ Tracker     │  │ Prompt Builder   │           │           │
-│  │  └─────────────┘  └──────────────────┘           │           │
-│  └──────────────────────┬───────────────────────────┘           │
-│                         │                                       │
-│              ┌──────────┼──────────┐                            │
-│              ▼          ▼          ▼                             │
-│  ┌──────────────┐ ┌──────────┐ ┌───────────────┐               │
-│  │  AI Gateway  │ │Curriculum│ │  PostgreSQL   │               │
-│  │  ┌────────┐  │ │ Service  │ │  + Dragonfly  │               │
-│  │  │OpenAI  │  │ │  (OSS)   │ │               │               │
-│  │  │Anthropic│  │ └──────────┘ └───────────────┘               │
-│  │  │Ollama  │  │                                               │
-│  │  │Custom  │  │                                               │
-│  │  └────────┘  │                                               │
-│  └──────────────┘                                               │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────┐           │
-│  │  Admin Panel (Next.js + Refine)                  │           │
-│  │  Teacher Dashboard · Parent View · School Admin  │           │
-│  └──────────────────────────────────────────────────┘           │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Chat Channels                                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐                      │
+│  │ Telegram │ │ WhatsApp │ │ WebSocket│                      │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘                      │
+│       └─────────────┼───────────┘                            │
+│                     ▼                                        │
+│              Chat Gateway (internal/chat)                    │
+│                     │                                        │
+│                     ▼                                        │
+│  ┌──────────────────────────────────────────────────┐        │
+│  │           Agent Engine (internal/agent)          │        │
+│  │  ┌──────────────┐  ┌──────────────────┐          │        │
+│  │  │ Conversation │  │ Proactive        │          │        │
+│  │  │ State Machine│  │ Scheduler (NATS) │          │        │
+│  │  └──────────────┘  └──────────────────┘          │        │
+│  │  ┌──────────────┐  ┌──────────────────┐          │        │
+│  │  │ Progress     │  │ Pedagogical      │          │        │
+│  │  │ Tracker      │  │ Prompt Builder   │          │        │
+│  │  └──────────────┘  └──────────────────┘          │        │
+│  └──────────────────────┬───────────────────────────┘        │
+│                         │                                    │
+│              ┌──────────┼────────────┐                       │
+│              ▼          ▼            ▼                       │
+│  ┌───────────────┐ ┌──────────┐ ┌───────────────┐            │
+│  │  AI Gateway   │ │Curriculum│ │  PostgreSQL   │            │
+│  │  ┌─────────┐  │ │ Service  │ │  + Dragonfly  │            │
+│  │  │OpenAI   │  │ │  (OSS)   │ │               │            │
+│  │  │Anthropic│  │ └──────────┘ └───────────────┘            │
+│  │  │Ollama   │  │                                           │
+│  │  │Custom   │  │                                           │
+│  │  └─────────┘  │                                           │
+│  └───────────────┘                                           │
+│                                                              │
+│  ┌──────────────────────────────────────────────────┐        │
+│  │  Admin Panel (Next.js + Refine)                  │        │
+│  │  Teacher Dashboard · Parent View · School Admin  │        │
+│  └──────────────────────────────────────────────────┘        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
