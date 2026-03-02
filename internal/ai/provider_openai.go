@@ -113,7 +113,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 
 	messages := make([]openaiMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		messages[i] = openaiMessage{Role: m.Role, Content: m.Content}
+		messages[i] = openaiMessage(m)
 	}
 
 	oaiReq := openaiRequest{

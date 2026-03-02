@@ -81,10 +81,16 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
 
+	// Build user content — include replied message as context if present.
+	userContent := msg.Text
+	if msg.ReplyToText != "" {
+		userContent = fmt.Sprintf("[Replying to: \"%s\"]\n\n%s", msg.ReplyToText, msg.Text)
+	}
+
 	// Record user message.
 	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
-		Content: msg.Text,
+		Content: userContent,
 	}); err != nil {
 		slog.Error("failed to store user message", "error", err)
 	}

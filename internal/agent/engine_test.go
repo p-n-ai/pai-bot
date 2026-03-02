@@ -208,6 +208,40 @@ func TestEngine_StartClearsHistory(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_ReplyToText(t *testing.T) {
+	mockAI := ai.NewMockProvider("Let me explain that step again.")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:     "telegram",
+		UserID:      "123",
+		Text:        "I don't understand this part",
+		ReplyToText: "Step 2: Move x to the left side of the equation",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	// The user message sent to AI should include the replied text as context.
+	msgs := mockAI.LastRequest.Messages
+	lastUserMsg := msgs[len(msgs)-1]
+	if lastUserMsg.Role != "user" {
+		t.Fatalf("last message role = %q, want user", lastUserMsg.Role)
+	}
+	if !contains(lastUserMsg.Content, "Replying to") {
+		t.Errorf("user message should contain reply context, got: %s", lastUserMsg.Content)
+	}
+	if !contains(lastUserMsg.Content, "Step 2") {
+		t.Errorf("user message should contain original text, got: %s", lastUserMsg.Content)
+	}
+	if !contains(lastUserMsg.Content, "I don't understand") {
+		t.Errorf("user message should contain user's text, got: %s", lastUserMsg.Content)
+	}
+}
+
 func TestEngine_Compaction(t *testing.T) {
 	mockAI := ai.NewMockProvider("response")
 

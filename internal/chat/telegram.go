@@ -27,7 +27,7 @@ type TelegramChannel struct {
 // NewTelegramChannel creates a Telegram channel adapter.
 func NewTelegramChannel(token string) (*TelegramChannel, error) {
 	if token == "" {
-		return nil, fmt.Errorf("Telegram bot token is required (LEARN_TELEGRAM_BOT_TOKEN)")
+		return nil, fmt.Errorf("telegram bot token is required (LEARN_TELEGRAM_BOT_TOKEN)")
 	}
 	return &TelegramChannel{
 		token:   token,
@@ -48,7 +48,7 @@ func (t *TelegramChannel) SendTyping(_ context.Context, userID string) error {
 	if err != nil {
 		return fmt.Errorf("sending typing indicator: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return nil
 }
 
@@ -68,7 +68,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 		if err != nil {
 			return fmt.Errorf("sending Telegram message: %w", err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			// If Markdown parsing fails, retry without parse mode
@@ -79,13 +79,13 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 				if retryErr != nil {
 					return fmt.Errorf("sending Telegram message (retry): %w", retryErr)
 				}
-				retryResp.Body.Close()
+				_ = retryResp.Body.Close()
 				if retryResp.StatusCode != http.StatusOK {
-					return fmt.Errorf("Telegram API error %d on retry", retryResp.StatusCode)
+					return fmt.Errorf("telegram API error %d on retry", retryResp.StatusCode)
 				}
 				continue
 			}
-			return fmt.Errorf("Telegram API error %d", resp.StatusCode)
+			return fmt.Errorf("telegram API error %d", resp.StatusCode)
 		}
 	}
 
@@ -134,6 +134,9 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 					LastName:   u.Message.From.LastName,
 					Language:   u.Message.From.LanguageCode,
 				}
+				if u.Message.ReplyToMessage != nil && u.Message.ReplyToMessage.Text != "" {
+					msg.ReplyToText = u.Message.ReplyToMessage.Text
+				}
 
 				go handler(msg)
 			}
@@ -172,7 +175,7 @@ func (t *TelegramChannel) getUpdates(ctx context.Context) ([]tgUpdate, error) {
 	}
 
 	if !result.OK {
-		return nil, fmt.Errorf("Telegram API returned ok=false")
+		return nil, fmt.Errorf("telegram API returned ok=false")
 	}
 
 	return result.Result, nil
@@ -185,9 +188,10 @@ type tgUpdate struct {
 }
 
 type tgMessage struct {
-	Text string `json:"text"`
-	Chat tgChat `json:"chat"`
-	From tgUser `json:"from"`
+	Text           string     `json:"text"`
+	Chat           tgChat     `json:"chat"`
+	From           tgUser     `json:"from"`
+	ReplyToMessage *tgMessage `json:"reply_to_message,omitempty"`
 }
 
 type tgChat struct {

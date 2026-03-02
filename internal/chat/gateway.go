@@ -10,14 +10,15 @@ import (
 
 // InboundMessage is a message received from any channel.
 type InboundMessage struct {
-	Channel    string
-	UserID     string
-	ExternalID string
-	Text       string
-	Username   string
-	FirstName  string
-	LastName   string
-	Language   string
+	Channel      string
+	UserID       string
+	ExternalID   string
+	Text         string
+	ReplyToText  string // text of the message being replied to (if any)
+	Username     string
+	FirstName    string
+	LastName     string
+	Language     string
 }
 
 // OutboundMessage is a message to send via any channel.

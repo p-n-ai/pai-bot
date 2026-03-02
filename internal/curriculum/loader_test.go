@@ -75,7 +75,7 @@ func TestLoader_SkipsNonTopicYAML(t *testing.T) {
 
 	// Add a non-topic YAML (assessments)
 	topicsDir := filepath.Join(dir, "curricula", "malaysia", "kssm", "topics", "algebra")
-	os.WriteFile(filepath.Join(topicsDir, "01-variables.assessments.yaml"), []byte(`
+	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.assessments.yaml"), []byte(`
 topic_id: F1-01
 questions:
   - id: Q1
@@ -112,10 +112,10 @@ func TestLoader_TeachingNotesWithoutYAML(t *testing.T) {
 	dir := t.TempDir()
 
 	topicsDir := filepath.Join(dir, "topics")
-	os.MkdirAll(topicsDir, 0o755)
+	_ = os.MkdirAll(topicsDir, 0o755)
 
 	// Teaching notes with no matching YAML
-	os.WriteFile(filepath.Join(topicsDir, "orphan.teaching.md"), []byte("# Orphan notes"), 0o644)
+	_ = os.WriteFile(filepath.Join(topicsDir, "orphan.teaching.md"), []byte("# Orphan notes"), 0o644)
 
 	loader, err := curriculum.NewLoader(dir)
 	if err != nil {
@@ -133,10 +133,10 @@ func setupTestCurriculum(t *testing.T) string {
 	dir := t.TempDir()
 
 	topicsDir := filepath.Join(dir, "curricula", "malaysia", "kssm", "topics", "algebra")
-	os.MkdirAll(topicsDir, 0o755)
+	_ = os.MkdirAll(topicsDir, 0o755)
 
 	// Topic YAML
-	os.WriteFile(filepath.Join(topicsDir, "01-variables.yaml"), []byte(`
+	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.yaml"), []byte(`
 id: F1-01
 name: "Variables & Algebraic Expressions"
 subject_id: algebra
@@ -156,7 +156,7 @@ provenance: human
 `), 0o644)
 
 	// Teaching notes markdown
-	os.WriteFile(filepath.Join(topicsDir, "01-variables.teaching.md"), []byte(`# Variables & Algebraic Expressions — Teaching Notes
+	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.teaching.md"), []byte(`# Variables & Algebraic Expressions — Teaching Notes
 
 ## Overview
 This topic introduces the concept of using letters to represent unknown values.
