@@ -16,6 +16,10 @@ const (
 	defaultCompactThreshold      = 20
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
+	ratingPromptEveryReplies     = 5
+	ratingPromptText             = "Sebelum kita teruskan, boleh beri rating 1-5 untuk bantuan setakat ini? (1=tak membantu, 5=sangat membantu)"
+	ratingRetryText              = "Saya terima nombor itu, tapi rating perlu 1 hingga 5. Boleh balas 1, 2, 3, 4, atau 5."
+	ratingThanksText             = "Terima kasih atas rating anda. Jom kita sambung."
 )
 
 // EngineConfig holds dependencies for the agent engine.
@@ -117,6 +121,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if conv.State == "onboarding" {
 		return e.handleOnboardingSelection(ctx, msg, conv), nil
 	}
+	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
+		return response, nil
+	}
 
 	// Build user content — include replied message as context if present.
 	userContent := msg.Text
@@ -194,10 +201,17 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := normalizeEquationFormatting(resp.Content)
 
+	finalContent := plainContent
+	replyCount := countTutoringReplies(conv.Messages) + 1
+	promptRequested := shouldRequestRatingAfterReply(replyCount)
+	if promptRequested {
+		finalContent = plainContent + "\n\n" + ratingPromptText
+	}
+
 	// Record assistant response with token metadata.
 	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:         "assistant",
-		Content:      plainContent,
+		Content:      finalContent,
 		Model:        resp.Model,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
@@ -213,12 +227,23 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"model":         resp.Model,
 			"input_tokens":  resp.InputTokens,
 			"output_tokens": resp.OutputTokens,
-			"text_len":      len(resp.Content),
+			"text_len":      len(finalContent),
 			"has_image":     msg.HasImage,
 		},
 	})
+	if promptRequested {
+		e.logEventAsync(Event{
+			ConversationID: conv.ID,
+			UserID:         msg.UserID,
+			EventType:      "answer_rating_requested",
+			Data: map[string]any{
+				"channel":                 msg.Channel,
+				"after_tutoring_replies": replyCount,
+			},
+		})
+	}
 
-	return plainContent, nil
+	return finalContent, nil
 }
 
 // buildContextMessages returns the conversation messages for the AI prompt.
@@ -556,6 +581,104 @@ func hasAnyToken(text string, tokens []string) bool {
 		}
 	}
 	return false
+}
+
+var ratingPattern = regexp.MustCompile(`^\s*([1-5])\s*$`)
+var numericPattern = regexp.MustCompile(`^\s*([0-9]+)\s*$`)
+
+func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversation) (string, bool) {
+	if !isAwaitingRating(conv) {
+		return "", false
+	}
+
+	rating, valid, numeric := parseRatingResponse(msg.Text)
+	if !valid && !numeric {
+		return "", false
+	}
+
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "user",
+		Content: msg.Text,
+	}); err != nil {
+		slog.Error("failed to store rating user message", "error", err)
+	}
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         msg.UserID,
+		EventType:      "message_sent",
+		Data: map[string]any{
+			"channel":   msg.Channel,
+			"text_len":  len(msg.Text),
+			"has_reply": false,
+			"has_image": false,
+			"source":    "rating_prompt",
+		},
+	})
+
+	if !valid {
+		if err := e.store.AddMessage(conv.ID, StoredMessage{
+			Role:    "assistant",
+			Content: ratingRetryText,
+		}); err != nil {
+			slog.Error("failed to store rating retry response", "error", err)
+		}
+		return ratingRetryText, true
+	}
+
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         msg.UserID,
+		EventType:      "answer_rating_submitted",
+		Data: map[string]any{
+			"channel": msg.Channel,
+			"rating":  rating,
+		},
+	})
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "assistant",
+		Content: ratingThanksText,
+	}); err != nil {
+		slog.Error("failed to store rating thanks response", "error", err)
+	}
+
+	return ratingThanksText, true
+}
+
+func isAwaitingRating(conv *Conversation) bool {
+	if conv == nil || len(conv.Messages) == 0 {
+		return false
+	}
+	last := conv.Messages[len(conv.Messages)-1]
+	if last.Role != "assistant" {
+		return false
+	}
+	trimmed := strings.TrimSpace(last.Content)
+	return trimmed == ratingRetryText || strings.Contains(trimmed, ratingPromptText)
+}
+
+func parseRatingResponse(text string) (int, bool, bool) {
+	matches := ratingPattern.FindStringSubmatch(text)
+	if len(matches) == 2 {
+		return int(matches[1][0] - '0'), true, true
+	}
+	if numericPattern.MatchString(text) {
+		return 0, false, true
+	}
+	return 0, false, false
+}
+
+func countTutoringReplies(messages []StoredMessage) int {
+	count := 0
+	for _, msg := range messages {
+		if msg.Role == "assistant" && msg.Model != "" {
+			count++
+		}
+	}
+	return count
+}
+
+func shouldRequestRatingAfterReply(replyCount int) bool {
+	return replyCount > 0 && replyCount%ratingPromptEveryReplies == 0
 }
 
 func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, topic *curriculum.Topic, teachingNotes string) string {
