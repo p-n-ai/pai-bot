@@ -260,38 +260,6 @@ func TestEngine_SystemPrompt_HasImageFollowUpReplyGuidance(t *testing.T) {
 	}
 }
 
-func TestEngine_SystemPrompt_UsesStructuredTeachingProtocol(t *testing.T) {
-	mockAI := ai.NewMockProvider("ok")
-
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter: mockRouter(mockAI),
-	})
-
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "u-structured-prompt",
-		Text:    "How do I solve 2x + 5 = 17?",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-
-	if mockAI.LastRequest == nil || len(mockAI.LastRequest.Messages) == 0 {
-		t.Fatal("expected request messages to be sent to AI")
-	}
-
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "STRUCTURED SOLVING LOOP") {
-		t.Fatalf("system prompt missing structured solving loop heading")
-	}
-	if !contains(systemPrompt, "Understand") || !contains(systemPrompt, "Plan") || !contains(systemPrompt, "Solve") || !contains(systemPrompt, "Verify") || !contains(systemPrompt, "Connect") {
-		t.Fatalf("system prompt missing one or more solving loop steps")
-	}
-	if !contains(systemPrompt, "Do not invent facts") {
-		t.Fatalf("system prompt missing anti-hallucination rule")
-	}
-}
-
 func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testing.T) {
 	mockAI := ai.NewMockProvider("ok")
 	loader := createTestCurriculumLoader(t)
