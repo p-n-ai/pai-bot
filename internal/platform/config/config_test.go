@@ -31,6 +31,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_WHATSAPP_ENABLED",
 		"LEARN_LOG_LEVEL",
 		"LEARN_LOG_FORMAT",
+		"LEARN_CURRICULUM_PATH",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
@@ -72,6 +73,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Auth.RefreshTokenTTL != 7 {
 		t.Errorf("Auth.RefreshTokenTTL = %d, want 7", cfg.Auth.RefreshTokenTTL)
 	}
+	if cfg.CurriculumPath != "./oss" {
+		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
+	}
 }
 
 func TestLoad_FromEnv(t *testing.T) {
@@ -84,6 +88,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
 	t.Setenv("LEARN_AUTH_JWT_SECRET", "super-secret")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
+	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
 
 	cfg, err := Load()
 	if err != nil {
@@ -110,6 +115,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Tenant.Mode != "multi" {
 		t.Errorf("Tenant.Mode = %q, want multi", cfg.Tenant.Mode)
+	}
+	if cfg.CurriculumPath != "/tmp/oss" {
+		t.Errorf("CurriculumPath = %q, want /tmp/oss", cfg.CurriculumPath)
 	}
 }
 

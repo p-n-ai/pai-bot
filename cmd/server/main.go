@@ -66,9 +66,10 @@ func main() {
 	// Create agent engine.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:    router,
-		Store:       store,
-		EventLogger: eventLogger,
+		AIRouter:         router,
+		Store:            store,
+		EventLogger:      eventLogger,
+		CurriculumLoader: loader,
 	})
 
 	// Create Telegram channel + chat gateway.
