@@ -73,6 +73,30 @@ func TestConversationStore_GetActiveForUser_NotFound(t *testing.T) {
 	}
 }
 
+func TestConversationStore_UserExists(t *testing.T) {
+	store := agent.NewMemoryStore()
+
+	_, err := store.CreateConversation(agent.Conversation{
+		UserID: "u-100",
+		State:  "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+
+	if !store.UserExists("u-100") {
+		t.Fatal("UserExists() = false, want true")
+	}
+}
+
+func TestConversationStore_UserExists_NotFound(t *testing.T) {
+	store := agent.NewMemoryStore()
+
+	if store.UserExists("missing-user") {
+		t.Fatal("UserExists() = true, want false")
+	}
+}
+
 func TestConversationStore_EndConversation(t *testing.T) {
 	store := agent.NewMemoryStore()
 

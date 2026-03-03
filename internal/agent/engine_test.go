@@ -121,6 +121,71 @@ func TestEngine_ProcessMessage_StartCommand_CreatesOnboardingConversation(t *tes
 	}
 }
 
+func TestEngine_ProcessMessage_AutoStartForNewUser(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := newAutoStartStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:   "telegram",
+		UserID:    "new-user-1",
+		Text:      "Hi tutor",
+		FirstName: "Aina",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Tingkatan berapa") {
+		t.Fatalf("expected onboarding prompt, got: %q", resp)
+	}
+
+	conv, found := store.GetActiveConversation("new-user-1")
+	if !found {
+		t.Fatal("expected active conversation after auto-start")
+	}
+	if conv.State != "onboarding" {
+		t.Fatalf("conversation state = %q, want onboarding", conv.State)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when auto-start onboarding is triggered")
+	}
+}
+
+func TestEngine_ProcessMessage_ExistingUserDoesNotAutoStart(t *testing.T) {
+	mockAI := ai.NewMockProvider("teaching response")
+	store := newAutoStartStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	_, err := store.CreateConversation(agent.Conversation{
+		UserID: "existing-user-1",
+		State:  "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "existing-user-1",
+		Text:    "Explain linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if contains(resp, "Tingkatan berapa") {
+		t.Fatalf("should not auto-start onboarding for existing user, got: %q", resp)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("AI should be called for existing user teaching flow")
+	}
+}
+
 func TestEngine_ProcessMessage_UnknownCommand(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter: mockRouter(ai.NewMockProvider("")),
@@ -996,6 +1061,30 @@ func (l *blockingEventLogger) LogEvent(_ agent.Event) error {
 	}
 	<-l.release
 	return nil
+}
+
+type autoStartStore struct {
+	*agent.MemoryStore
+	known map[string]bool
+}
+
+func newAutoStartStore() *autoStartStore {
+	return &autoStartStore{
+		MemoryStore: agent.NewMemoryStore(),
+		known:       map[string]bool{},
+	}
+}
+
+func (s *autoStartStore) UserExists(userID string) bool {
+	return s.known[userID]
+}
+
+func (s *autoStartStore) CreateConversation(conv agent.Conversation) (string, error) {
+	id, err := s.MemoryStore.CreateConversation(conv)
+	if err == nil {
+		s.known[conv.UserID] = true
+	}
+	return id, err
 }
 
 type flakyProvider struct {

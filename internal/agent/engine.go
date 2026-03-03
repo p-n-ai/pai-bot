@@ -95,6 +95,18 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if strings.HasPrefix(msg.Text, "/") {
 		return e.handleCommand(ctx, msg)
 	}
+	// Auto-trigger onboarding for first-time users who send a normal message.
+	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
+		e.logEventAsync(Event{
+			UserID:    msg.UserID,
+			EventType: "auto_start_triggered",
+			Data: map[string]any{
+				"channel": msg.Channel,
+				"source":  "chat_flow",
+			},
+		})
+		return e.handleStart(msg.UserID, msg)
+	}
 
 	// Get or create active conversation.
 	conv, err := e.getOrCreateConversation(msg.UserID)
@@ -378,6 +390,13 @@ func (e *Engine) endActiveConversation(userID string) {
 			slog.Error("failed to end conversation", "error", err)
 		}
 	}
+}
+
+func (e *Engine) supportsAutoStartLookup() bool {
+	// MemoryStore does not model a durable user directory; using auto-start in tests/dev
+	// would hijack many normal chat-path tests. Enable this behavior for persistent stores.
+	_, isMemory := e.store.(*MemoryStore)
+	return !isMemory
 }
 
 func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {

@@ -24,6 +24,28 @@ type PostgresStore struct {
 	channel  string
 }
 
+func (s *PostgresStore) UserExists(externalID string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM users
+			WHERE tenant_id = $1::uuid
+			  AND channel = $2
+			  AND external_id = $3
+		)`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&exists)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
 // NewPostgresStore creates a PostgreSQL-backed conversation store for the default tenant.
 func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, error) {
 	if pool == nil {
