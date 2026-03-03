@@ -336,6 +336,8 @@ To sync to the latest `oss` commit from its default branch:
 git submodule update --remote oss
 ```
 
+Note: the submodule wiring is currently a bootstrap stub for upcoming curriculum sync work, not a finalized end-user feature.
+
 ---
 
 ## Deployment
