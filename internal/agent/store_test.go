@@ -142,6 +142,35 @@ func TestConversationStore_SetSummary_NotFound(t *testing.T) {
 	}
 }
 
+func TestConversationStore_UpdateConversationState(t *testing.T) {
+	store := agent.NewMemoryStore()
+	id, _ := store.CreateConversation(agent.Conversation{
+		UserID: "123",
+		State:  "onboarding",
+	})
+
+	if err := store.UpdateConversationState(id, "teaching"); err != nil {
+		t.Fatalf("UpdateConversationState() error = %v", err)
+	}
+
+	got, err := store.GetConversation(id)
+	if err != nil {
+		t.Fatalf("GetConversation() error = %v", err)
+	}
+	if got.State != "teaching" {
+		t.Fatalf("State = %q, want teaching", got.State)
+	}
+}
+
+func TestConversationStore_UpdateConversationState_NotFound(t *testing.T) {
+	store := agent.NewMemoryStore()
+
+	err := store.UpdateConversationState("nonexistent", "teaching")
+	if err == nil {
+		t.Error("UpdateConversationState() should error for non-existent conversation")
+	}
+}
+
 func TestConversationStore_AddMessage_NotFound(t *testing.T) {
 	store := agent.NewMemoryStore()
 

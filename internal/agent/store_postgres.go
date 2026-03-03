@@ -249,6 +249,31 @@ func (s *PostgresStore) SetSummary(conversationID string, summary string, compac
 	return nil
 }
 
+func (s *PostgresStore) UpdateConversationState(conversationID string, state string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+	)
+	if err != nil {
+		return fmt.Errorf("update conversation state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
 func (s *PostgresStore) EndConversation(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()

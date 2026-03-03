@@ -93,6 +93,31 @@ func TestEngine_ProcessMessage_StartCommand_FallbackName(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_StartCommand_CreatesOnboardingConversation(t *testing.T) {
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+		Store:    store,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-start-1",
+		Text:    "/start",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	conv, found := store.GetActiveConversation("u-start-1")
+	if !found {
+		t.Fatal("expected active conversation after /start")
+	}
+	if conv.State != "onboarding" {
+		t.Fatalf("conversation state = %q, want onboarding", conv.State)
+	}
+}
+
 func TestEngine_ProcessMessage_UnknownCommand(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter: mockRouter(ai.NewMockProvider("")),
@@ -128,6 +153,58 @@ func TestEngine_ProcessMessage_AIError(t *testing.T) {
 	}
 	if resp == "" {
 		t.Error("Should return a fallback message when AI fails")
+	}
+}
+
+func TestEngine_ProcessMessage_RetryThenSuccess(t *testing.T) {
+	flaky := &flakyProvider{
+		failuresBeforeSuccess: 2,
+		response:              "Recovered after retries",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(flaky),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "retry-user",
+		Text:    "Explain x + 2 = 5",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if resp != "Recovered after retries" {
+		t.Fatalf("unexpected response: %q", resp)
+	}
+	if flaky.calls != 3 {
+		t.Fatalf("calls = %d, want 3", flaky.calls)
+	}
+}
+
+func TestEngine_ProcessMessage_RetryExhausted(t *testing.T) {
+	flaky := &flakyProvider{
+		failuresBeforeSuccess: 99,
+		response:              "should not happen",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(flaky),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "retry-fail-user",
+		Text:    "Explain x + 2 = 5",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() should not return error, got: %v", err)
+	}
+	if !contains(resp, "masalah teknikal") {
+		t.Fatalf("expected friendly fallback message, got: %q", resp)
+	}
+	if flaky.calls != 4 {
+		t.Fatalf("calls = %d, want 4", flaky.calls)
 	}
 }
 
@@ -197,15 +274,141 @@ func TestEngine_StartClearsHistory(t *testing.T) {
 		Channel: "telegram", UserID: "123", Text: "/start",
 	})
 
-	// Next message should have only system + this user message (no old history)
+	// Complete onboarding first.
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "123", Text: "1",
+	})
+
+	// Next teaching message should not include old pre-/start history.
 	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "Fresh start",
 	})
 
 	msgs := mockAI.LastRequest.Messages
-	// system + user("Fresh start") = 2 messages (no old history)
-	if len(msgs) != 2 {
-		t.Errorf("Expected 2 messages after /start, got %d", len(msgs))
+	for _, m := range msgs {
+		if m.Content == "Hello" {
+			t.Errorf("Expected old history to be cleared after /start, but found message %q", m.Content)
+		}
+	}
+}
+
+func TestEngine_Onboarding_InvalidSelection_AsksClarification(t *testing.T) {
+	mockAI := ai.NewMockProvider("unknown")
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    agent.NewMemoryStore(),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user", Text: "/start",
+	})
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user", Text: "saya tak pasti",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Boleh jawab bebas") {
+		t.Fatalf("unexpected onboarding invalid response: %q", resp)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("expected AI classification attempt for ambiguous onboarding answer")
+	}
+}
+
+func TestEngine_Onboarding_SelectionTransitionsToTeaching(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI teaching response")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-2", Text: "/start",
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-2", Text: "Tingkatan 2",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Tingkatan 2") {
+		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when selecting onboarding form")
+	}
+
+	conv, found := store.GetActiveConversation("onboard-user-2")
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "teaching" {
+		t.Fatalf("conversation state = %q, want teaching", conv.State)
+	}
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-2", Text: "Apa itu algebra?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("expected AI to be called after onboarding completes")
+	}
+}
+
+func TestEngine_Onboarding_FreeTextSelection_ParsesRuleBased(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI teaching response")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-3", Text: "/start",
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-3", Text: "I am in form two",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Tingkatan 2") {
+		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when free-text can be parsed by rules")
+	}
+}
+
+func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.T) {
+	mockAI := ai.NewMockProvider("2")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-4", Text: "/start",
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-4", Text: "middle school level",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Tingkatan 2") {
+		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("expected AI fallback classification call")
 	}
 }
 
@@ -623,7 +826,11 @@ func (c *callTracker) HealthCheck(ctx context.Context) error {
 
 // mockRouter creates an AI router with a single mock provider.
 func mockRouter(provider ai.Provider) *ai.Router {
-	r := ai.NewRouter()
+	r := ai.NewRouterWithConfig(ai.RouterConfig{
+		RetryBackoff:            []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond},
+		BreakerFailureThreshold: 3,
+		BreakerCooldown:         10 * time.Millisecond,
+	})
 	r.Register("mock", provider)
 	return r
 }
@@ -652,5 +859,36 @@ func (l *blockingEventLogger) LogEvent(_ agent.Event) error {
 	default:
 	}
 	<-l.release
+	return nil
+}
+
+type flakyProvider struct {
+	failuresBeforeSuccess int
+	calls                 int
+	response              string
+}
+
+func (f *flakyProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
+	f.calls++
+	if f.calls <= f.failuresBeforeSuccess {
+		return ai.CompletionResponse{}, fmt.Errorf("transient provider error")
+	}
+	return ai.CompletionResponse{
+		Content:      f.response,
+		Model:        "flaky",
+		InputTokens:  1,
+		OutputTokens: len(f.response),
+	}, nil
+}
+
+func (f *flakyProvider) StreamComplete(_ context.Context, _ ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *flakyProvider) Models() []ai.ModelInfo {
+	return []ai.ModelInfo{{ID: "flaky", Name: "Flaky", MaxTokens: 1024}}
+}
+
+func (f *flakyProvider) HealthCheck(_ context.Context) error {
 	return nil
 }
