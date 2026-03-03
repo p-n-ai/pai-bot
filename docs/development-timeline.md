@@ -118,10 +118,10 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W1D1-1` | `internal/chat/gateway.go` — InboundMessage, OutboundMessage, Channel interface, Gateway router | 🤖 |
-| `P-W1D1-2` | `internal/chat/telegram.go` — Telegram Bot API adapter with long polling, /start handler, markdown message splitting | 🤖 |
-| `P-W1D1-3` | `internal/agent/engine.go` — ProcessMessage: load state → build prompt → call AI → save state → return response | 🤖 |
-| `P-W1D1-4` | `internal/curriculum/loader.go` — Load topic YAML + teaching notes markdown from filesystem | 🤖 |
+| `P-W1D1-1` | `internal/chat/gateway.go` — InboundMessage, OutboundMessage, Channel interface, Gateway router ✅ | 🤖 |
+| `P-W1D1-2` | `internal/chat/telegram.go` — Telegram Bot API adapter with long polling, /start handler, markdown message splitting ✅ | 🤖 |
+| `P-W1D1-3` | `internal/agent/engine.go` — ProcessMessage: load state → build prompt → call AI → save state → return response ✅ | 🤖 |
+| `P-W1D1-4` | `internal/curriculum/loader.go` — Load topic YAML + teaching notes markdown from filesystem ✅ | 🤖 |
 | `P-W1D1-5` | Wire `cmd/server/main.go`: config → db → cache → AI → curriculum → agent → chat → Telegram → start | 🤖 |
 
 **End of Day 1:** Team members can chat with the bot on Telegram. AI responds using curriculum context.
@@ -130,9 +130,9 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens | 🤖 |
-| `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | 🤖 |
-| `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | 🤖 |
+| `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens ✅ | 🤖 |
+| `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) ✅ | 🤖 |
+| `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing ✅ | 🤖 |
 | `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | 🤖 |
 | `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | 🤖 |
 | `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | 🧑 Human |
@@ -142,9 +142,9 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W1D3-1` | Deploy script: SSH → pull → build → restart → tail logs | 🤖 |
-| `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | 🤖 |
+| `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study ✅ | 🤖 |
 | `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | 🤖 |
-| `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | 🤖 |
+| `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages ✅ | 🤖 |
 | `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | 🧑 Human |
 
 ### Day 4 (Thu) — Iterate on Real Feedback
@@ -152,12 +152,14 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users | 🤖 |
-| `P-W1D4-2` | Session management: new conversation after 30min silence, summarize previous session for context | 🤖 |
+| `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split ✅ | 🤖 |
 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event | 🤖 |
 | `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | 🧑 Human |
 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | 🧑 Human |
 
 ### Day 5 (Fri) — Week 1 Retro
+
+**Implementation note (Day 4 decision):** The team intentionally chose not to enforce a hard 30-minute session boundary. Context continuity is handled via rolling conversation compaction and summary in the agent engine.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
