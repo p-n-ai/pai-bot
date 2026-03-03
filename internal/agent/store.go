@@ -37,6 +37,7 @@ type ConversationStore interface {
 	GetActiveConversation(userID string) (*Conversation, bool)
 	AddMessage(conversationID string, msg StoredMessage) error
 	SetSummary(conversationID string, summary string, compactedAt int) error
+	UpdateConversationState(conversationID string, state string) error
 	EndConversation(id string) error
 }
 
@@ -115,6 +116,21 @@ func (s *MemoryStore) SetSummary(conversationID string, summary string, compacte
 	}
 	conv.Summary = summary
 	conv.CompactedAt = compactedAt
+	return nil
+}
+
+func (s *MemoryStore) UpdateConversationState(conversationID string, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
 	return nil
 }
 

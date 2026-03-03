@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -100,6 +101,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if err != nil {
 		slog.Error("failed to get conversation", "error", err)
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
+	}
+	if conv.State == "onboarding" {
+		return e.handleOnboardingSelection(ctx, msg, conv), nil
 	}
 
 	// Build user content — include replied message as context if present.
@@ -314,14 +318,18 @@ func (e *Engine) getOrCreateConversation(userID string) (*Conversation, error) {
 	if found {
 		return conv, nil
 	}
+	return e.createConversation(userID, "teaching")
+}
+
+func (e *Engine) createConversation(userID, state string) (*Conversation, error) {
 	id, err := e.store.CreateConversation(Conversation{
 		UserID: userID,
-		State:  "teaching",
+		State:  state,
 	})
 	if err != nil {
 		return nil, err
 	}
-	conv, err = e.store.GetConversation(id)
+	conv, err := e.store.GetConversation(id)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +363,7 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 	switch cmd {
 	case "/start":
 		e.endActiveConversation(msg.UserID)
-		return e.handleStart(msg)
+		return e.handleStart(msg.UserID, msg)
 	case "/clear":
 		e.endActiveConversation(msg.UserID)
 		return "Sejarah perbualan telah dikosongkan. Hantar soalan baru untuk mula semula.", nil
@@ -372,7 +380,14 @@ func (e *Engine) endActiveConversation(userID string) {
 	}
 }
 
-func (e *Engine) handleStart(msg chat.InboundMessage) (string, error) {
+func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {
+	// Explicitly create an onboarding conversation on /start. In Postgres-backed
+	// deployments this also guarantees the user record exists before first question.
+	if _, err := e.createConversation(userID, "onboarding"); err != nil {
+		slog.Error("failed to create onboarding conversation", "user_id", userID, "error", err)
+		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
+	}
+
 	name := msg.FirstName
 	if name == "" {
 		name = msg.Username
@@ -390,7 +405,138 @@ Saya boleh membantu anda dengan KSSM Matematik:
 - Tingkatan 2
 - Tingkatan 3
 
-Apa yang anda ingin belajar hari ini?`, name), nil
+Tingkatan berapa anda sekarang?
+Balas dengan: 1, 2, atau 3.`, name), nil
+}
+
+func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.InboundMessage, conv *Conversation) string {
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "user",
+		Content: msg.Text,
+	}); err != nil {
+		slog.Error("failed to store onboarding user message", "error", err)
+	}
+
+	form, ok := parseFormSelection(msg.Text)
+	if !ok {
+		form, ok = e.classifyFormSelectionWithAI(ctx, msg.Text)
+	}
+	if !ok {
+		response := "Saya belum pasti tingkatan anda. Boleh jawab bebas (contoh: saya tingkatan 2 / form two), atau balas terus 1, 2, atau 3."
+		if err := e.store.AddMessage(conv.ID, StoredMessage{
+			Role:    "assistant",
+			Content: response,
+		}); err != nil {
+			slog.Error("failed to store onboarding assistant message", "error", err)
+		}
+		return response
+	}
+
+	if err := e.store.UpdateConversationState(conv.ID, "teaching"); err != nil {
+		slog.Error("failed to update conversation state", "conversation_id", conv.ID, "error", err)
+		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar."
+	}
+
+	response := fmt.Sprintf("Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.", form)
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "assistant",
+		Content: response,
+	}); err != nil {
+		slog.Error("failed to store onboarding assistant message", "error", err)
+	}
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         msg.UserID,
+		EventType:      "onboarding_completed",
+		Data: map[string]any{
+			"selected_form": form,
+		},
+	})
+	return response
+}
+
+func (e *Engine) classifyFormSelectionWithAI(ctx context.Context, answer string) (int, bool) {
+	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
+		Messages: []ai.Message{
+			{
+				Role: "system",
+				Content: `Classify the student's form level from their answer.
+Return exactly one token only: 1, 2, 3, or unknown.
+No extra words.`,
+			},
+			{
+				Role:    "user",
+				Content: answer,
+			},
+		},
+		Task:      ai.TaskAnalysis,
+		MaxTokens: 8,
+	})
+	if err != nil {
+		slog.Warn("onboarding form classification failed", "error", err)
+		return 0, false
+	}
+
+	switch strings.TrimSpace(strings.ToLower(resp.Content)) {
+	case "1":
+		return 1, true
+	case "2":
+		return 2, true
+	case "3":
+		return 3, true
+	default:
+		return 0, false
+	}
+}
+
+var formSelectionPattern = regexp.MustCompile(`(?i)^\s*(tingkatan|form|f)?\s*([123])\s*$`)
+
+var singleDigitPattern = regexp.MustCompile(`^\s*([123])\s*$`)
+
+func parseFormSelection(text string) (int, bool) {
+	trimmed := strings.TrimSpace(text)
+	if singleDigitPattern.MatchString(trimmed) {
+		return int(trimmed[0] - '0'), true
+	}
+
+	m := formSelectionPattern.FindStringSubmatch(trimmed)
+	if len(m) >= 3 {
+		return int(m[2][0] - '0'), true
+	}
+
+	lower := strings.ToLower(trimmed)
+	hasContext := strings.Contains(lower, "tingkatan") || strings.Contains(lower, "form")
+
+	if hasContext {
+		if hasAnyToken(lower, []string{"1", "satu", "one", "first", "pertama"}) {
+			return 1, true
+		}
+		if hasAnyToken(lower, []string{"2", "dua", "two", "second", "kedua"}) {
+			return 2, true
+		}
+		if hasAnyToken(lower, []string{"3", "tiga", "three", "third", "ketiga"}) {
+			return 3, true
+		}
+	}
+
+	switch lower {
+	case "satu", "one", "first", "pertama":
+		return 1, true
+	case "dua", "two", "second", "kedua":
+		return 2, true
+	case "tiga", "three", "third", "ketiga":
+		return 3, true
+	}
+	return 0, false
+}
+
+func hasAnyToken(text string, tokens []string) bool {
+	for _, token := range tokens {
+		if strings.Contains(text, token) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, topic *curriculum.Topic, teachingNotes string) string {

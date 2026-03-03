@@ -100,9 +100,10 @@ func main() {
 		}
 
 		if err := gw.Send(ctx, chat.OutboundMessage{
-			Channel: msg.Channel,
-			UserID:  msg.UserID,
-			Text:    resp,
+			Channel:   msg.Channel,
+			UserID:    msg.UserID,
+			Text:      chat.NormalizeTelegramMarkdown(resp),
+			ParseMode: "Markdown",
 		}); err != nil {
 			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
 		}
