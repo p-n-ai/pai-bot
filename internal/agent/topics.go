@@ -9,16 +9,17 @@ import (
 // DetectTopic scans user text for keywords matching loaded topics.
 // Returns the best matching topic ID and true, or empty string and false.
 func DetectTopic(text string, topics []curriculum.Topic) (string, bool) {
-	normalizedText := normalizeMatchText(text)
-	if normalizedText == "" {
+	normalizedTokens := tokenize(text)
+	if len(normalizedTokens) == 0 {
 		return "", false
 	}
+	tokenSet := makeTokenSet(normalizedTokens)
 
 	bestID := ""
 	bestScore := 0
 
 	for _, topic := range topics {
-		score := topicMatchScore(normalizedText, topic)
+		score := topicMatchScore(tokenSet, topic)
 		if score > bestScore || (score == bestScore && score > 0 && (bestID == "" || topic.ID < bestID)) {
 			bestScore = score
 			bestID = topic.ID
@@ -31,7 +32,7 @@ func DetectTopic(text string, topics []curriculum.Topic) (string, bool) {
 	return bestID, true
 }
 
-func topicMatchScore(normalizedText string, topic curriculum.Topic) int {
+func topicMatchScore(tokenSet map[string]struct{}, topic curriculum.Topic) int {
 	score := 0
 
 	// Topic name words are the strongest hints.
@@ -39,7 +40,7 @@ func topicMatchScore(normalizedText string, topic curriculum.Topic) int {
 		if len(word) < 3 || isStopWord(word) {
 			continue
 		}
-		if strings.Contains(normalizedText, word) {
+		if _, ok := tokenSet[word]; ok {
 			score += 2
 		}
 	}
@@ -50,7 +51,7 @@ func topicMatchScore(normalizedText string, topic curriculum.Topic) int {
 			if len(word) < 4 || isStopWord(word) {
 				continue
 			}
-			if strings.Contains(normalizedText, word) {
+			if _, ok := tokenSet[word]; ok {
 				score++
 			}
 		}
@@ -59,8 +60,12 @@ func topicMatchScore(normalizedText string, topic curriculum.Topic) int {
 	return score
 }
 
-func normalizeMatchText(text string) string {
-	return strings.Join(tokenize(text), " ")
+func makeTokenSet(tokens []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(tokens))
+	for _, token := range tokens {
+		set[token] = struct{}{}
+	}
+	return set
 }
 
 func tokenize(text string) []string {

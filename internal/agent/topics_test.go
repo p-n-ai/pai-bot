@@ -49,6 +49,18 @@ func TestDetectTopic(t *testing.T) {
 			wantID: "",
 			wantOK: false,
 		},
+		{
+			name:   "does not match topic word inside larger token",
+			text:   "Can you explain nonlinear patterns?",
+			wantID: "",
+			wantOK: false,
+		},
+		{
+			name:   "does not match learning objective word inside larger token",
+			text:   "I am confused about invariable costs",
+			wantID: "",
+			wantOK: false,
+		},
 	}
 
 	for _, tt := range tests {
