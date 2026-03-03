@@ -33,6 +33,8 @@ type Conversation struct {
 // ConversationStore persists conversation state and message history.
 type ConversationStore interface {
 	UserExists(userID string) bool
+	GetUserPreferredLanguage(userID string) (string, bool)
+	SetUserPreferredLanguage(userID, lang string) error
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
@@ -45,6 +47,7 @@ type ConversationStore interface {
 // MemoryStore is an in-memory implementation of ConversationStore.
 type MemoryStore struct {
 	conversations map[string]*Conversation
+	userLang      map[string]string
 	mu            sync.RWMutex
 }
 
@@ -52,6 +55,7 @@ type MemoryStore struct {
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		conversations: make(map[string]*Conversation),
+		userLang:      make(map[string]string),
 	}
 }
 
@@ -78,6 +82,27 @@ func (s *MemoryStore) UserExists(userID string) bool {
 		}
 	}
 	return false
+}
+
+func (s *MemoryStore) GetUserPreferredLanguage(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	lang, ok := s.userLang[userID]
+	return lang, ok
+}
+
+func (s *MemoryStore) SetUserPreferredLanguage(userID, lang string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if lang == "" {
+		delete(s.userLang, userID)
+		return nil
+	}
+	s.userLang[userID] = lang
+	return nil
 }
 
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {

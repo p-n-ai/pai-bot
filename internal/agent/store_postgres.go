@@ -46,6 +46,66 @@ func (s *PostgresStore) UserExists(externalID string) bool {
 	return exists
 }
 
+func (s *PostgresStore) GetUserPreferredLanguage(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var lang *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT config->>'preferred_language'
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&lang)
+	if err != nil || lang == nil || *lang == "" {
+		return "", false
+	}
+	return *lang, true
+}
+
+func (s *PostgresStore) SetUserPreferredLanguage(externalID, lang string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if externalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+	if lang == "" {
+		return nil
+	}
+
+	_, err := s.resolveOrCreateUser(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE users
+		 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_language}', to_jsonb($4::text), true),
+		     updated_at = NOW()
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3`,
+		s.tenantID,
+		s.channel,
+		externalID,
+		lang,
+	)
+	if err != nil {
+		return fmt.Errorf("set preferred language: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: %s", externalID)
+	}
+	return nil
+}
+
 // NewPostgresStore creates a PostgreSQL-backed conversation store for the default tenant.
 func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, error) {
 	if pool == nil {

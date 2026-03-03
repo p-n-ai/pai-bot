@@ -21,7 +21,14 @@ type Config struct {
 	Auth           AuthConfig
 	Tenant         TenantConfig
 	Log            LogConfig
+	Features       FeatureConfig
 	CurriculumPath string
+}
+
+// FeatureConfig holds toggle-able product features.
+type FeatureConfig struct {
+	DisableMultiLanguage bool
+	RatingPromptEvery    int
 }
 
 // ServerConfig holds HTTP server settings.
@@ -178,6 +185,10 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  envStr("LEARN_LOG_LEVEL", "info"),
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
+		},
+		Features: FeatureConfig{
+			DisableMultiLanguage: envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
+			RatingPromptEvery:    envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
 		},
 		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),
 	}

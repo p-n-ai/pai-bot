@@ -57,7 +57,7 @@ func (t *TelegramChannel) SendTyping(_ context.Context, userID string) error {
 func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg OutboundMessage) error {
 	parts := SplitMessage(msg.Text, telegramMaxMessageLen)
 
-	for _, part := range parts {
+	for i, part := range parts {
 		params := url.Values{
 			"chat_id": {userID},
 			"text":    {part},
@@ -65,11 +65,36 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 		if msg.ParseMode != "" {
 			params.Set("parse_mode", msg.ParseMode)
 		}
+		if i == len(parts)-1 && len(msg.InlineKeyboard) > 0 {
+			type tgInlineButton struct {
+				Text         string `json:"text"`
+				CallbackData string `json:"callback_data"`
+			}
+			inlineKeyboard := make([][]tgInlineButton, 0, len(msg.InlineKeyboard))
+			for _, row := range msg.InlineKeyboard {
+				inlineRow := make([]tgInlineButton, 0, len(row))
+				for _, btn := range row {
+					inlineRow = append(inlineRow, tgInlineButton{
+						Text:         btn.Text,
+						CallbackData: btn.CallbackData,
+					})
+				}
+				inlineKeyboard = append(inlineKeyboard, inlineRow)
+			}
+			replyMarkup := map[string]any{
+				"inline_keyboard": inlineKeyboard,
+			}
+			b, err := json.Marshal(replyMarkup)
+			if err != nil {
+				return fmt.Errorf("marshal telegram inline reply markup: %w", err)
+			}
+			params.Set("reply_markup", string(b))
+		}
 		if len(msg.ReplyKeyboard) > 0 {
 			replyMarkup := map[string]any{
-				"keyboard":          msg.ReplyKeyboard,
-				"resize_keyboard":   true,
-				"one_time_keyboard": true,
+				"keyboard":        msg.ReplyKeyboard,
+				"resize_keyboard": true,
+				"is_persistent":   true,
 			}
 			b, err := json.Marshal(replyMarkup)
 			if err != nil {
@@ -149,6 +174,18 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 						msg.ImageDataURL = dataURL
 					}
 				}
+				if msg.CallbackQueryID != "" {
+					if err := t.answerCallbackQuery(ctx, msg.CallbackQueryID); err != nil {
+						slog.Warn("failed to answer callback query", "error", err)
+					}
+					if msg.CallbackMessageID > 0 {
+						if selected, ok := parseRatingCallbackData(msg.Text); ok {
+							if err := t.markSelectedRatingInlineKeyboard(ctx, msg.UserID, msg.CallbackMessageID, selected); err != nil {
+								slog.Warn("failed to mark selected rating inline keyboard", "error", err)
+							}
+						}
+					}
+				}
 
 				go handler(msg)
 			}
@@ -195,11 +232,13 @@ func (t *TelegramChannel) getUpdates(ctx context.Context) ([]tgUpdate, error) {
 
 // Telegram API types (minimal)
 type tgUpdate struct {
-	UpdateID int        `json:"update_id"`
-	Message  *tgMessage `json:"message"`
+	UpdateID      int              `json:"update_id"`
+	Message       *tgMessage       `json:"message"`
+	CallbackQuery *tgCallbackQuery `json:"callback_query,omitempty"`
 }
 
 type tgMessage struct {
+	MessageID      int         `json:"message_id"`
 	Text           string      `json:"text"`
 	Caption        string      `json:"caption"`
 	Photo          []tgPhoto   `json:"photo,omitempty"`
@@ -232,6 +271,13 @@ type tgUser struct {
 	LanguageCode string `json:"language_code"`
 }
 
+type tgCallbackQuery struct {
+	ID      string     `json:"id"`
+	From    tgUser     `json:"from"`
+	Data    string     `json:"data"`
+	Message *tgMessage `json:"message,omitempty"`
+}
+
 // SplitMessage splits text into chunks that fit Telegram's max message length.
 func SplitMessage(text string, maxLen int) []string {
 	if text == "" {
@@ -261,6 +307,29 @@ func SplitMessage(text string, maxLen int) []string {
 }
 
 func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
+	if u.CallbackQuery != nil {
+		cb := u.CallbackQuery
+		if cb.Message == nil {
+			return InboundMessage{}, false
+		}
+		data := strings.TrimSpace(cb.Data)
+		if data == "" {
+			return InboundMessage{}, false
+		}
+		return InboundMessage{
+			Channel:         "telegram",
+			UserID:          strconv.FormatInt(cb.Message.Chat.ID, 10),
+			ExternalID:      strconv.FormatInt(cb.From.ID, 10),
+			Text:            data,
+			Username:        cb.From.Username,
+			FirstName:       cb.From.FirstName,
+			LastName:        cb.From.LastName,
+			Language:        cb.From.LanguageCode,
+			CallbackQueryID: cb.ID,
+			CallbackMessageID: cb.Message.MessageID,
+		}, true
+	}
+
 	if u.Message == nil {
 		return InboundMessage{}, false
 	}
@@ -309,6 +378,74 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 	}
 
 	return msg, true
+}
+
+func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQueryID string) error {
+	params := url.Values{
+		"callback_query_id": {callbackQueryID},
+	}
+	resp, err := t.client.PostForm(t.baseURL+"/answerCallbackQuery", params)
+	if err != nil {
+		return fmt.Errorf("answer callback query: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram answerCallbackQuery error %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, chatID string, messageID, selected int) error {
+	type tgInlineButton struct {
+		Text         string `json:"text"`
+		CallbackData string `json:"callback_data"`
+	}
+	row := make([]tgInlineButton, 0, 5)
+	for i := 1; i <= 5; i++ {
+		text := fmt.Sprintf("%d⭐", i)
+		if i == selected {
+			text = fmt.Sprintf("✅ %d⭐", i)
+		}
+		row = append(row, tgInlineButton{
+			Text:         text,
+			CallbackData: strconv.Itoa(i),
+		})
+	}
+	replyMarkup := map[string]any{
+		"inline_keyboard": [][]tgInlineButton{row},
+	}
+	b, err := json.Marshal(replyMarkup)
+	if err != nil {
+		return fmt.Errorf("marshal selected rating inline reply markup: %w", err)
+	}
+
+	params := url.Values{
+		"chat_id":      {chatID},
+		"message_id":   {strconv.Itoa(messageID)},
+		"reply_markup": {string(b)},
+	}
+	resp, err := t.client.PostForm(t.baseURL+"/editMessageReplyMarkup", params)
+	if err != nil {
+		return fmt.Errorf("mark selected rating inline keyboard: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram editMessageReplyMarkup error %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func parseRatingCallbackData(data string) (int, bool) {
+	trimmed := strings.TrimSpace(data)
+	if strings.HasPrefix(trimmed, "rating:") {
+		trimmed = strings.TrimPrefix(trimmed, "rating:")
+	}
+	switch trimmed {
+	case "1", "2", "3", "4", "5":
+		return int(trimmed[0] - '0'), true
+	default:
+		return 0, false
+	}
 }
 
 func pickImageFileID(m *tgMessage) string {
@@ -412,8 +549,22 @@ func detectTelegramMIME(content []byte, filePath string) string {
 	}
 }
 
+// MapTelegramInboundForTest helps tests build update payloads without depending
+// on unexported Telegram transport structs.
+func MapTelegramInboundForTest(update map[string]any) (InboundMessage, bool) {
+	b, err := json.Marshal(update)
+	if err != nil {
+		return InboundMessage{}, false
+	}
+	var u tgUpdate
+	if err := json.Unmarshal(b, &u); err != nil {
+		return InboundMessage{}, false
+	}
+	return mapTelegramInbound(u)
+}
+
 func (t *TelegramChannel) syncCommands() error {
-	commandsJSON := `[{"command":"start","description":"Mulakan sesi pembelajaran"},{"command":"clear","description":"Reset perbualan semasa"}]`
+	commandsJSON := `[{"command":"start","description":"Mulakan sesi pembelajaran"},{"command":"clear","description":"Reset perbualan semasa"},{"command":"language","description":"Tukar bahasa (English/BM/中文)"}]`
 	params := url.Values{
 		"commands": {commandsJSON},
 	}

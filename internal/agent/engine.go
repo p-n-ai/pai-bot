@@ -16,10 +16,14 @@ const (
 	defaultCompactThreshold      = 20
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
-	ratingPromptEveryReplies     = 5
+	defaultRatingPromptEvery     = 5
 	ratingPromptText             = "Sebelum kita teruskan, boleh beri rating 1-5 untuk bantuan setakat ini? (1=tak membantu, 5=sangat membantu)"
-	ratingRetryText              = "Saya terima nombor itu, tapi rating perlu 1 hingga 5. Boleh balas 1, 2, 3, 4, atau 5."
 	ratingThanksText             = "Terima kasih atas rating anda. Jom kita sambung."
+	// ReviewActionCode is a control marker emitted by AI to trigger rating UI/actions.
+	ReviewActionCode = "[[PAI_REVIEW]]"
+	langPrefCodeEN  = "[[PAI_PREF_LANG:en]]"
+	langPrefCodeMS  = "[[PAI_PREF_LANG:ms]]"
+	langPrefCodeZH  = "[[PAI_PREF_LANG:zh]]"
 )
 
 // EngineConfig holds dependencies for the agent engine.
@@ -32,6 +36,8 @@ type EngineConfig struct {
 	CompactThreshold      int // messages before compaction triggers (default 20)
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
 	KeepRecent            int // recent messages to keep after compaction (default 6)
+	DisableMultiLanguage  bool
+	RatingPromptEvery     int // ask for rating every N tutoring replies (default 5)
 }
 
 // Engine is the core conversation processor.
@@ -43,6 +49,8 @@ type Engine struct {
 	compactThreshold      int
 	compactTokenThreshold int
 	keepRecent            int
+	disableMultiLanguage  bool
+	ratingPromptEvery     int
 }
 
 // NewEngine creates a new agent engine.
@@ -62,6 +70,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	keepRecent := cfg.KeepRecent
 	if keepRecent == 0 {
 		keepRecent = defaultKeepRecent
+	}
+	ratingEvery := cfg.RatingPromptEvery
+	if ratingEvery <= 0 {
+		ratingEvery = defaultRatingPromptEvery
 	}
 	eventLogger := cfg.EventLogger
 	if eventLogger == nil {
@@ -84,6 +96,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
+		disableMultiLanguage:  cfg.DisableMultiLanguage,
+		ratingPromptEvery:     ratingEvery,
 	}
 }
 
@@ -118,7 +132,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		slog.Error("failed to get conversation", "error", err)
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
-	if conv.State == "onboarding" {
+	if strings.HasPrefix(conv.State, "onboarding") {
 		return e.handleOnboardingSelection(ctx, msg, conv), nil
 	}
 	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
@@ -164,9 +178,11 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	e.maybeCompact(ctx, conv)
 
 	matchedTopic, teachingNotes := e.contextResolver.Resolve(msg.Text)
+	replyCount := countTutoringReplies(conv.Messages) + 1
+	promptRequested := shouldRequestRatingAfterReply(replyCount, e.ratingPromptEvery)
 
 	// Build messages: system prompt + (optional summary) + recent messages.
-	systemPrompt := e.buildSystemPrompt(msg, matchedTopic, teachingNotes)
+	systemPrompt := e.buildSystemPrompt(msg, conv, matchedTopic, teachingNotes)
 	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, e.buildContextMessages(conv)...)
 	if msg.HasImage && msg.ImageDataURL == "" {
@@ -177,6 +193,12 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			Role:      "user",
 			Content:   "Attached image from the student. Analyze this image directly and answer based on what you see. If unreadable, say exactly what is unclear and how to retake it.",
 			ImageURLs: []string{msg.ImageDataURL},
+		})
+	}
+	if promptRequested {
+		messages = append(messages, ai.Message{
+			Role: "user",
+			Content: "At the end of your response, ask for a quick 1-5 rating in one short sentence and include the exact control token [[PAI_REVIEW]] once.",
 		})
 	}
 
@@ -200,12 +222,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := normalizeEquationFormatting(resp.Content)
-
 	finalContent := plainContent
-	replyCount := countTutoringReplies(conv.Messages) + 1
-	promptRequested := shouldRequestRatingAfterReply(replyCount)
-	if promptRequested {
-		finalContent = plainContent + "\n\n" + ratingPromptText
+	if promptRequested && !strings.Contains(finalContent, ReviewActionCode) {
+		finalContent = strings.TrimSpace(finalContent) + "\n\n" + ReviewActionCode
 	}
 
 	// Record assistant response with token metadata.
@@ -262,11 +281,19 @@ func (e *Engine) buildContextMessages(conv *Conversation) []ai.Message {
 		})
 		// Only include messages after the compaction point.
 		for _, m := range conv.Messages[conv.CompactedAt:] {
-			messages = append(messages, ai.Message{Role: m.Role, Content: m.Content})
+			cleanContent := sanitizeControlContent(m.Content)
+			if cleanContent == "" {
+				continue
+			}
+			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
 		}
 	} else {
 		for _, m := range conv.Messages {
-			messages = append(messages, ai.Message{Role: m.Role, Content: m.Content})
+			cleanContent := sanitizeControlContent(m.Content)
+			if cleanContent == "" {
+				continue
+			}
+			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
 		}
 	}
 
@@ -395,7 +422,8 @@ func (e *Engine) logEventAsync(event Event) {
 }
 
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
-	cmd := strings.Split(msg.Text, " ")[0]
+	fields := strings.Fields(msg.Text)
+	cmd := fields[0]
 
 	switch cmd {
 	case "/start":
@@ -404,8 +432,59 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 	case "/clear":
 		e.endActiveConversation(msg.UserID)
 		return "Sejarah perbualan telah dikosongkan. Hantar soalan baru untuk mula semula.", nil
+	case "/language":
+		return e.handleLanguageCommand(msg.UserID, fields[1:])
 	default:
-		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula atau /clear untuk reset perbualan.", cmd), nil
+		return fmt.Sprintf("Arahan tidak diketahui: %s\nGuna /start untuk bermula, /clear untuk reset perbualan, atau /language untuk tukar bahasa.", cmd), nil
+	}
+}
+
+func (e *Engine) handleLanguageCommand(userID string, args []string) (string, error) {
+	if e.disableMultiLanguage {
+		return "Ciri multi-bahasa dimatikan oleh konfigurasi pelayan.", nil
+	}
+	conv, err := e.getOrCreateConversation(userID)
+	if err != nil {
+		slog.Error("failed to get conversation for /language", "user_id", userID, "error", err)
+		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
+	}
+
+	if len(args) == 0 {
+		return "Bahasa pilihan anda?\nChoose your language:\n- English\n- Bahasa Melayu\n- 中文", nil
+	}
+
+	lang, ok := parseLanguagePreference(strings.Join(args, " "))
+	if !ok {
+		return "Format tidak sah. Guna /language en, /language ms, atau /language zh.", nil
+	}
+
+	if err := e.store.AddMessage(conv.ID, StoredMessage{
+		Role:    "assistant",
+		Content: languagePreferenceControlCode(lang),
+	}); err != nil {
+		slog.Error("failed to store language preference marker", "conversation_id", conv.ID, "error", err)
+	}
+	if err := e.store.SetUserPreferredLanguage(userID, lang); err != nil {
+		slog.Error("failed to persist user preferred language", "user_id", userID, "error", err)
+	}
+
+	e.logEventAsync(Event{
+		ConversationID: conv.ID,
+		UserID:         userID,
+		EventType:      "language_changed",
+		Data: map[string]any{
+			"preferred_language": lang,
+			"source":             "command",
+		},
+	})
+
+	switch lang {
+	case "en":
+		return "Language updated to English.", nil
+	case "zh":
+		return "语言已切换为中文。", nil
+	default:
+		return "Bahasa telah ditukar ke Bahasa Melayu.", nil
 	}
 }
 
@@ -427,7 +506,11 @@ func (e *Engine) supportsAutoStartLookup() bool {
 func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {
 	// Explicitly create an onboarding conversation on /start. In Postgres-backed
 	// deployments this also guarantees the user record exists before first question.
-	if _, err := e.createConversation(userID, "onboarding"); err != nil {
+	initialState := "onboarding_language"
+	if e.disableMultiLanguage {
+		initialState = "onboarding_form"
+	}
+	if _, err := e.createConversation(userID, initialState); err != nil {
 		slog.Error("failed to create onboarding conversation", "user_id", userID, "error", err)
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.", nil
 	}
@@ -440,7 +523,8 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 		name = "pelajar"
 	}
 
-	return fmt.Sprintf(`Hai %s!
+	if e.disableMultiLanguage {
+		return fmt.Sprintf(`Hai %s!
 
 Saya P&AI Bot — tutor matematik peribadi anda!
 
@@ -451,6 +535,18 @@ Saya boleh membantu anda dengan KSSM Matematik:
 
 Tingkatan berapa anda sekarang?
 Balas dengan: 1, 2, atau 3.`, name), nil
+	}
+
+	return fmt.Sprintf(`Hai %s!
+
+Saya P&AI Bot — tutor matematik peribadi anda.
+
+Bahasa pilihan anda untuk sesi ini?
+- English
+- Bahasa Melayu
+- 中文
+
+Anda boleh jawab bebas (contoh: English / BM / Chinese).`, name), nil
 }
 
 func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.InboundMessage, conv *Conversation) string {
@@ -461,6 +557,44 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		slog.Error("failed to store onboarding user message", "error", err)
 	}
 
+	if !e.disableMultiLanguage && conv.State == "onboarding_language" {
+		lang, ok := parseLanguagePreference(msg.Text)
+		if !ok {
+			response := "Saya belum pasti bahasa pilihan anda. Boleh jawab: English, Bahasa Melayu, atau 中文."
+			if err := e.store.AddMessage(conv.ID, StoredMessage{
+				Role:    "assistant",
+				Content: response,
+			}); err != nil {
+				slog.Error("failed to store onboarding assistant message", "error", err)
+			}
+			return response
+		}
+
+		if err := e.store.AddMessage(conv.ID, StoredMessage{
+			Role:    "assistant",
+			Content: languagePreferenceControlCode(lang),
+		}); err != nil {
+			slog.Error("failed to store language preference marker", "error", err)
+		}
+		if err := e.store.SetUserPreferredLanguage(msg.UserID, lang); err != nil {
+			slog.Error("failed to persist user preferred language", "user_id", msg.UserID, "error", err)
+		}
+		if err := e.store.UpdateConversationState(conv.ID, "onboarding_form"); err != nil {
+			slog.Error("failed to update conversation state", "conversation_id", conv.ID, "error", err)
+			return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar."
+		}
+
+		response := onboardingFormPrompt(lang)
+		if err := e.store.AddMessage(conv.ID, StoredMessage{
+			Role:    "assistant",
+			Content: response,
+		}); err != nil {
+			slog.Error("failed to store onboarding assistant message", "error", err)
+		}
+		return response
+	}
+
+	// Legacy fallback: old onboarding state behaves like form-selection step.
 	form, ok := parseFormSelection(msg.Text)
 	if !ok {
 		form, ok = e.classifyFormSelectionWithAI(ctx, msg.Text)
@@ -481,7 +615,11 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		return "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar."
 	}
 
-	response := fmt.Sprintf("Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.", form)
+	lang, hasLangPref := e.preferredLanguageForConversation(conv)
+	if !hasLangPref {
+		lang = "ms"
+	}
+	response := onboardingCompletionMessage(lang, form)
 	if err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "assistant",
 		Content: response,
@@ -494,6 +632,7 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		EventType:      "onboarding_completed",
 		Data: map[string]any{
 			"selected_form": form,
+			"preferred_language": lang,
 		},
 	})
 	return response
@@ -583,46 +722,124 @@ func hasAnyToken(text string, tokens []string) bool {
 	return false
 }
 
+func parseLanguagePreference(text string) (string, bool) {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return "", false
+	}
+	if strings.HasPrefix(lower, "lang:") {
+		switch strings.TrimPrefix(lower, "lang:") {
+		case "en":
+			return "en", true
+		case "ms", "bm":
+			return "ms", true
+		case "zh":
+			return "zh", true
+		}
+	}
+
+	switch {
+	case strings.Contains(lower, "english"), strings.Contains(lower, "inggeris"), lower == "en":
+		return "en", true
+	case strings.Contains(lower, "bahasa melayu"), strings.Contains(lower, "bahasa malaysia"), lower == "bm", lower == "ms", strings.Contains(lower, "melayu"), strings.Contains(lower, "malay"):
+		return "ms", true
+	case strings.Contains(lower, "chinese"), strings.Contains(lower, "mandarin"), strings.Contains(lower, "cina"), strings.Contains(text, "中文"), strings.Contains(text, "华文"), strings.Contains(text, "汉语"):
+		return "zh", true
+	default:
+		return "", false
+	}
+}
+
+func languagePreferenceControlCode(lang string) string {
+	switch lang {
+	case "en":
+		return langPrefCodeEN
+	case "zh":
+		return langPrefCodeZH
+	default:
+		return langPrefCodeMS
+	}
+}
+
+func preferredLanguageFromMessages(messages []StoredMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		content := strings.TrimSpace(messages[i].Content)
+		switch content {
+		case langPrefCodeEN:
+			return "en"
+		case langPrefCodeMS:
+			return "ms"
+		case langPrefCodeZH:
+			return "zh"
+		}
+	}
+	return ""
+}
+
+func (e *Engine) preferredLanguageForConversation(conv *Conversation) (string, bool) {
+	if e.disableMultiLanguage {
+		return "ms", true
+	}
+	if conv != nil {
+		if lang, ok := e.store.GetUserPreferredLanguage(conv.UserID); ok && lang != "" {
+			return lang, true
+		}
+		lang := preferredLanguageFromMessages(conv.Messages)
+		if lang != "" {
+			return lang, true
+		}
+	}
+	return "", false
+}
+
+func onboardingFormPrompt(lang string) string {
+	switch lang {
+	case "en":
+		return "Great. Which form are you in now? Reply freely (example: form 2 / tingkatan 2), or just 1, 2, or 3."
+	case "zh":
+		return "好的。你现在是几年级（中学）？你可以自由回答（例如：Form 2 / Tingkatan 2），或直接回复 1、2、3。"
+	default:
+		return "Baik. Tingkatan berapa anda sekarang? Boleh jawab bebas (contoh: tingkatan 2 / form two), atau balas 1, 2, atau 3."
+	}
+}
+
+func onboardingCompletionMessage(lang string, form int) string {
+	switch lang {
+	case "en":
+		return fmt.Sprintf("Great, you are Form %d. Send any math topic or question you want to learn now.", form)
+	case "zh":
+		return fmt.Sprintf("好的，你现在是 Form %d。现在发你想学的数学题目或主题。", form)
+	default:
+		return fmt.Sprintf("Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.", form)
+	}
+}
+
 var ratingPattern = regexp.MustCompile(`^\s*([1-5])\s*$`)
 var numericPattern = regexp.MustCompile(`^\s*([0-9]+)\s*$`)
 
 func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversation) (string, bool) {
-	if !isAwaitingRating(conv) {
+	awaitingRating := isAwaitingRating(conv)
+	fromInlineCallback := msg.Channel == "telegram" && msg.CallbackQueryID != ""
+	if !awaitingRating && !fromInlineCallback {
 		return "", false
 	}
 
-	rating, valid, numeric := parseRatingResponse(msg.Text)
-	if !valid && !numeric {
-		return "", false
-	}
-
-	if err := e.store.AddMessage(conv.ID, StoredMessage{
-		Role:    "user",
-		Content: msg.Text,
-	}); err != nil {
-		slog.Error("failed to store rating user message", "error", err)
-	}
-	e.logEventAsync(Event{
-		ConversationID: conv.ID,
-		UserID:         msg.UserID,
-		EventType:      "message_sent",
-		Data: map[string]any{
-			"channel":   msg.Channel,
-			"text_len":  len(msg.Text),
-			"has_reply": false,
-			"has_image": false,
-			"source":    "rating_prompt",
-		},
-	})
-
+	rating, valid, inputKind := parseRatingResponse(msg.Text)
 	if !valid {
-		if err := e.store.AddMessage(conv.ID, StoredMessage{
-			Role:    "assistant",
-			Content: ratingRetryText,
-		}); err != nil {
-			slog.Error("failed to store rating retry response", "error", err)
+		if !awaitingRating {
+			return "", false
 		}
-		return ratingRetryText, true
+		e.logEventAsync(Event{
+			ConversationID: conv.ID,
+			UserID:         msg.UserID,
+			EventType:      "answer_rating_skipped",
+			Data: map[string]any{
+				"channel":           msg.Channel,
+				"rating_input_kind": inputKind,
+				"text_len":          len(msg.Text),
+			},
+		})
+		return "", false
 	}
 
 	e.logEventAsync(Event{
@@ -630,8 +847,10 @@ func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversat
 		UserID:         msg.UserID,
 		EventType:      "answer_rating_submitted",
 		Data: map[string]any{
-			"channel": msg.Channel,
-			"rating":  rating,
+			"channel":        msg.Channel,
+			"rating":         rating,
+			"source":         map[bool]string{true: "telegram_inline_button", false: "text"}[fromInlineCallback],
+			"delayed_submit": !awaitingRating,
 		},
 	})
 	if err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -653,18 +872,18 @@ func isAwaitingRating(conv *Conversation) bool {
 		return false
 	}
 	trimmed := strings.TrimSpace(last.Content)
-	return trimmed == ratingRetryText || strings.Contains(trimmed, ratingPromptText)
+	return strings.Contains(trimmed, ReviewActionCode)
 }
 
-func parseRatingResponse(text string) (int, bool, bool) {
+func parseRatingResponse(text string) (int, bool, string) {
 	matches := ratingPattern.FindStringSubmatch(text)
 	if len(matches) == 2 {
-		return int(matches[1][0] - '0'), true, true
+		return int(matches[1][0] - '0'), true, "valid_rating"
 	}
 	if numericPattern.MatchString(text) {
-		return 0, false, true
+		return 0, false, "numeric_out_of_range"
 	}
-	return 0, false, false
+	return 0, false, "non_rating_text"
 }
 
 func countTutoringReplies(messages []StoredMessage) int {
@@ -677,20 +896,31 @@ func countTutoringReplies(messages []StoredMessage) int {
 	return count
 }
 
-func shouldRequestRatingAfterReply(replyCount int) bool {
-	return replyCount > 0 && replyCount%ratingPromptEveryReplies == 0
+func shouldRequestRatingAfterReply(replyCount, every int) bool {
+	if every <= 0 {
+		every = defaultRatingPromptEvery
+	}
+	return replyCount > 0 && replyCount%every == 0
 }
 
-func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, topic *curriculum.Topic, teachingNotes string) string {
+func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
+	languageBlock := ""
+	if lang, hasLangPref := e.preferredLanguageForConversation(conv); hasLangPref {
+		langInstruction := "Prefer responding in Bahasa Melayu. If the student's latest message is clearly in another language, follow the student's language for that reply."
+		switch lang {
+		case "en":
+			langInstruction = "Prefer responding in English. If the student's latest message is clearly in another language, follow the student's language for that reply."
+		case "zh":
+			langInstruction = "Prefer responding in Chinese (Simplified). If the student's latest message is clearly in another language, follow the student's language for that reply."
+		}
+		languageBlock = "LANGUAGE:\n" + langInstruction + "\n\n"
+	}
 	base := `You are P&AI Bot, a supportive mathematics tutor for Malaysian secondary students (KSSM Form 1-3, Algebra-first).
 
 PRIMARY GOAL:
 Help the student understand and solve the problem independently, not just get a final answer.
 
-LANGUAGE:
-Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
-
-STRUCTURED SOLVING LOOP (follow in order):
+` + languageBlock + `STRUCTURED SOLVING LOOP (follow in order):
 1. Understand: Restate the student's question briefly and identify what is asked.
 2. Plan: Give a short plan (1-3 steps) before calculating.
 3. Solve: Show steps clearly, with plain-text equations.
@@ -756,6 +986,17 @@ Do not format replies using Markdown (no headings, bold, italic, code blocks, or
 	b.WriteString(topic.Name)
 	b.WriteString("\".\n")
 	return b.String()
+}
+
+func sanitizeControlContent(content string) string {
+	clean := strings.ReplaceAll(content, ReviewActionCode, "")
+	clean = strings.TrimSpace(clean)
+	switch clean {
+	case langPrefCodeEN, langPrefCodeMS, langPrefCodeZH:
+		return ""
+	default:
+		return clean
+	}
 }
 
 func normalizeEquationFormatting(content string) string {
