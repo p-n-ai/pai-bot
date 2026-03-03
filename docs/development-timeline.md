@@ -154,7 +154,7 @@ Engineer mapping:
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users | ⬜ | 🤖 |
+| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users | ✅ | 🤖 |
 | `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split | ✅ | 🤖 |
 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event (`answer_rating_submitted` with `data.rating`) | ✅ | 🤖 |
 | `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ⬜ | 🧑 Human |

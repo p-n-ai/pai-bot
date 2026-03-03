@@ -57,4 +57,4 @@ ollama-pull:
 
 # Analytics
 analytics:
-	@echo "Analytics script — implemented Day 4"
+	./scripts/analytics.sh
