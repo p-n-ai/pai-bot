@@ -116,8 +116,8 @@ func TestEngine_ProcessMessage_StartCommand_CreatesOnboardingConversation(t *tes
 	if !found {
 		t.Fatal("expected active conversation after /start")
 	}
-	if conv.State != "onboarding" {
-		t.Fatalf("conversation state = %q, want onboarding", conv.State)
+	if conv.State != "onboarding_language" {
+		t.Fatalf("conversation state = %q, want onboarding_language", conv.State)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestEngine_ProcessMessage_AutoStartForNewUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Tingkatan berapa") {
+	if !contains(resp, "Bahasa pilihan anda") {
 		t.Fatalf("expected onboarding prompt, got: %q", resp)
 	}
 
@@ -146,8 +146,8 @@ func TestEngine_ProcessMessage_AutoStartForNewUser(t *testing.T) {
 	if !found {
 		t.Fatal("expected active conversation after auto-start")
 	}
-	if conv.State != "onboarding" {
-		t.Fatalf("conversation state = %q, want onboarding", conv.State)
+	if conv.State != "onboarding_language" {
+		t.Fatalf("conversation state = %q, want onboarding_language", conv.State)
 	}
 	if mockAI.LastRequest != nil {
 		t.Fatal("AI should not be called when auto-start onboarding is triggered")
@@ -344,6 +344,9 @@ func TestEngine_StartClearsHistory(t *testing.T) {
 
 	// Complete onboarding first.
 	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "123", Text: "English",
+	})
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "123", Text: "1",
 	})
 
@@ -376,11 +379,11 @@ func TestEngine_Onboarding_InvalidSelection_AsksClarification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Boleh jawab bebas") {
+	if !contains(resp, "Bahasa Melayu") {
 		t.Fatalf("unexpected onboarding invalid response: %q", resp)
 	}
-	if mockAI.LastRequest == nil {
-		t.Fatal("expected AI classification attempt for ambiguous onboarding answer")
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called for onboarding language clarification")
 	}
 }
 
@@ -395,6 +398,13 @@ func TestEngine_Onboarding_SelectionTransitionsToTeaching(t *testing.T) {
 	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "onboard-user-2", Text: "/start",
 	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-2", Text: "Bahasa Melayu",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
 
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "onboard-user-2", Text: "Tingkatan 2",
@@ -440,13 +450,20 @@ func TestEngine_Onboarding_FreeTextSelection_ParsesRuleBased(t *testing.T) {
 		Channel: "telegram", UserID: "onboard-user-3", Text: "/start",
 	})
 
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-3", Text: "English",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "onboard-user-3", Text: "I am in form two",
 	})
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Tingkatan 2") {
+	if !contains(resp, "Form 2") {
 		t.Fatalf("unexpected onboarding completion response: %q", resp)
 	}
 	if mockAI.LastRequest != nil {
@@ -466,17 +483,176 @@ func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.
 		Channel: "telegram", UserID: "onboard-user-4", Text: "/start",
 	})
 
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-4", Text: "English",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "onboard-user-4", Text: "middle school level",
 	})
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Tingkatan 2") {
+	if !contains(resp, "Form 2") {
 		t.Fatalf("unexpected onboarding completion response: %q", resp)
 	}
 	if mockAI.LastRequest == nil {
 		t.Fatal("expected AI fallback classification call")
+	}
+}
+
+func TestEngine_LanguageCommand_InteractiveSelection_SendsConfirmation(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI teaching response")
+	tracker := &callTracker{provider: mockAI}
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(tracker),
+		Store:    store,
+	})
+
+	userID := "lang-cmd-user"
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "Explain linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if len(tracker.requests) != 1 {
+		t.Fatalf("AI requests = %d, want 1", len(tracker.requests))
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "/language",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Choose your language") {
+		t.Fatalf("expected language chooser response, got: %q", resp)
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "language_selection" {
+		t.Fatalf("conversation state = %q, want language_selection", conv.State)
+	}
+
+	resp, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          userID,
+		Text:            "lang:en",
+		CallbackQueryID: "cb-lang-1",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Language updated to English.") {
+		t.Fatalf("expected language changed confirmation, got: %q", resp)
+	}
+	if len(tracker.requests) != 1 {
+		t.Fatalf("AI should not be called for language callback; requests = %d, want 1", len(tracker.requests))
+	}
+
+	conv, found = store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "teaching" {
+		t.Fatalf("conversation state = %q, want teaching", conv.State)
+	}
+}
+
+func TestEngine_OnboardingLanguageSelection_IncludesConfirmation(t *testing.T) {
+	mockAI := ai.NewMockProvider("unused")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	userID := "lang-onboarding-user"
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "/start",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "English",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Language updated to English.") {
+		t.Fatalf("expected language changed confirmation, got: %q", resp)
+	}
+	if !contains(resp, "Which form are you in now?") {
+		t.Fatalf("expected onboarding form prompt, got: %q", resp)
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "onboarding_form" {
+		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
+	}
+}
+
+func TestEngine_OnboardingLanguageCommandWithArgs_ContinuesToFormStep(t *testing.T) {
+	mockAI := ai.NewMockProvider("unused")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	userID := "lang-onboarding-user-command"
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "/start",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "/language en",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Language updated to English.") {
+		t.Fatalf("expected language changed confirmation, got: %q", resp)
+	}
+	if !contains(resp, "Which form are you in now?") {
+		t.Fatalf("expected onboarding form prompt, got: %q", resp)
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "onboarding_form" {
+		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
 	}
 }
 
@@ -976,9 +1152,10 @@ func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T
 	store := agent.NewMemoryStore()
 
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:    mockRouter(tracker),
-		EventLogger: eventLogger,
-		Store:       store,
+		AIRouter:          mockRouter(tracker),
+		EventLogger:       eventLogger,
+		Store:             store,
+		RatingPromptEvery: 1,
 	})
 
 	userID := "u-rating-prompt"
@@ -990,7 +1167,7 @@ func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "rating 1-5") {
+	if !contains(resp, "[[PAI_REVIEW:") {
 		t.Fatalf("expected rating prompt on first tutoring reply, got: %q", resp)
 	}
 	if len(tracker.requests) != 1 {
@@ -1005,7 +1182,7 @@ func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T
 		t.Fatal("expected stored messages")
 	}
 	last := conv.Messages[len(conv.Messages)-1]
-	if last.Role != "assistant" || !contains(last.Content, "rating 1-5") {
+	if last.Role != "assistant" || !contains(last.Content, agent.ReviewActionCode) {
 		t.Fatalf("expected final message to be rating prompt, got role=%q content=%q", last.Role, last.Content)
 	}
 	if last.Model == "" {
@@ -1258,6 +1435,14 @@ func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICal
 			Text:    fmt.Sprintf("question %d", i),
 		})
 	}
+	conv, found := store.GetActiveConversation(userID)
+	if !found || len(conv.Messages) == 0 {
+		t.Fatal("expected active conversation with messages")
+	}
+	ratedMessageID := conv.Messages[len(conv.Messages)-1].ID
+	if ratedMessageID == "" {
+		t.Fatal("expected rating prompt message to have ID")
+	}
 
 	// User continues chatting first; this should consume the rating prompt and call AI.
 	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
@@ -1273,7 +1458,7 @@ func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICal
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel:         "telegram",
 		UserID:          userID,
-		Text:            "4",
+		Text:            fmt.Sprintf("rating:%s:4", ratedMessageID),
 		CallbackQueryID: "cb-delayed-1",
 	})
 	if err != nil {
@@ -1308,6 +1493,9 @@ func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICal
 	}
 	if got, ok := submitted.Data["delayed_submit"].(bool); !ok || !got {
 		t.Fatalf("submitted payload = %#v, want delayed_submit=true", submitted.Data)
+	}
+	if got, ok := submitted.Data["rated_message_id"].(string); !ok || got != ratedMessageID {
+		t.Fatalf("submitted payload = %#v, want rated_message_id=%s", submitted.Data, ratedMessageID)
 	}
 }
 

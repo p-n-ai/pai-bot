@@ -9,6 +9,7 @@ import (
 
 // StoredMessage represents a single message in a conversation.
 type StoredMessage struct {
+	ID           string    `json:"id,omitempty"`
 	Role         string    `json:"role"`
 	Content      string    `json:"content"`
 	Model        string    `json:"model,omitempty"`
@@ -38,7 +39,7 @@ type ConversationStore interface {
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
-	AddMessage(conversationID string, msg StoredMessage) error
+	AddMessage(conversationID string, msg StoredMessage) (string, error)
 	SetSummary(conversationID string, summary string, compactedAt int) error
 	UpdateConversationState(conversationID string, state string) error
 	EndConversation(id string) error
@@ -128,19 +129,22 @@ func (s *MemoryStore) GetActiveConversation(userID string) (*Conversation, bool)
 	return nil, false
 }
 
-func (s *MemoryStore) AddMessage(conversationID string, msg StoredMessage) error {
+func (s *MemoryStore) AddMessage(conversationID string, msg StoredMessage) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	conv, ok := s.conversations[conversationID]
 	if !ok {
-		return fmt.Errorf("conversation not found: %s", conversationID)
+		return "", fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if msg.ID == "" {
+		msg.ID = generateID()
 	}
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
 	conv.Messages = append(conv.Messages, msg)
-	return nil
+	return msg.ID, nil
 }
 
 func (s *MemoryStore) SetSummary(conversationID string, summary string, compactedAt int) error {

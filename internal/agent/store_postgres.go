@@ -167,7 +167,7 @@ func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	}
 
 	for _, msg := range conv.Messages {
-		if err := s.AddMessage(id, msg); err != nil {
+		if _, err := s.AddMessage(id, msg); err != nil {
 			return "", fmt.Errorf("save initial messages: %w", err)
 		}
 	}
@@ -193,7 +193,7 @@ func (s *PostgresStore) GetConversation(id string) (*Conversation, error) {
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT role, content, model, input_tokens, output_tokens, created_at
+		`SELECT id::text, role, content, model, input_tokens, output_tokens, created_at
 		 FROM messages
 		 WHERE conversation_id = $1::uuid
 		 ORDER BY created_at ASC`,
@@ -210,6 +210,7 @@ func (s *PostgresStore) GetConversation(id string) (*Conversation, error) {
 		var inputTokens *int
 		var outputTokens *int
 		if err := rows.Scan(
+			&msg.ID,
 			&msg.Role,
 			&msg.Content,
 			&model,
@@ -265,7 +266,7 @@ func (s *PostgresStore) GetActiveConversation(userID string) (*Conversation, boo
 	return conv, true
 }
 
-func (s *PostgresStore) AddMessage(conversationID string, msg StoredMessage) error {
+func (s *PostgresStore) AddMessage(conversationID string, msg StoredMessage) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -275,17 +276,19 @@ func (s *PostgresStore) AddMessage(conversationID string, msg StoredMessage) err
 	}
 
 	if msg.Role == "" {
-		return fmt.Errorf("message role is required")
+		return "", fmt.Errorf("message role is required")
 	}
 	if msg.Content == "" {
-		return fmt.Errorf("message content is required")
+		return "", fmt.Errorf("message content is required")
 	}
 
-	cmd, err := s.pool.Exec(ctx,
+	var id string
+	err := s.pool.QueryRow(ctx,
 		`INSERT INTO messages (conversation_id, tenant_id, role, content, model, input_tokens, output_tokens, created_at)
 		 SELECT $1::uuid, c.tenant_id, $2, $3, $4, $5, $6, $7
 		 FROM conversations c
-		 WHERE c.id = $1::uuid`,
+		 WHERE c.id = $1::uuid
+		 RETURNING id::text`,
 		conversationID,
 		msg.Role,
 		msg.Content,
@@ -293,15 +296,15 @@ func (s *PostgresStore) AddMessage(conversationID string, msg StoredMessage) err
 		nullIfZero(msg.InputTokens),
 		nullIfZero(msg.OutputTokens),
 		createdAt,
-	)
+	).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("insert message: %w", err)
-	}
-	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("conversation not found: %s", conversationID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("conversation not found: %s", conversationID)
+		}
+		return "", fmt.Errorf("insert message: %w", err)
 	}
 
-	return nil
+	return id, nil
 }
 
 func (s *PostgresStore) SetSummary(conversationID string, summary string, compactedAt int) error {

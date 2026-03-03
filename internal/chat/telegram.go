@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,9 @@ type TelegramChannel struct {
 	client  *http.Client
 	offset  int
 	stop    chan struct{}
+
+	mu                    sync.Mutex
+	answeredRatingPrompts map[string]struct{}
 }
 
 // NewTelegramChannel creates a Telegram channel adapter.
@@ -37,7 +41,8 @@ func NewTelegramChannel(token string) (*TelegramChannel, error) {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		stop: make(chan struct{}),
+		stop:                  make(chan struct{}),
+		answeredRatingPrompts: make(map[string]struct{}),
 	}, nil
 }
 
@@ -74,10 +79,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			for _, row := range msg.InlineKeyboard {
 				inlineRow := make([]tgInlineButton, 0, len(row))
 				for _, btn := range row {
-					inlineRow = append(inlineRow, tgInlineButton{
-						Text:         btn.Text,
-						CallbackData: btn.CallbackData,
-					})
+					inlineRow = append(inlineRow, tgInlineButton(btn))
 				}
 				inlineKeyboard = append(inlineKeyboard, inlineRow)
 			}
@@ -179,8 +181,12 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 						slog.Warn("failed to answer callback query", "error", err)
 					}
 					if msg.CallbackMessageID > 0 {
-						if selected, ok := parseRatingCallbackData(msg.Text); ok {
-							if err := t.markSelectedRatingInlineKeyboard(ctx, msg.UserID, msg.CallbackMessageID, selected); err != nil {
+						if _, selected, ok := parseRatingCallbackData(msg.Text); ok {
+							promptKey := ratingPromptKey(msg.UserID, msg.CallbackMessageID)
+							if !t.markRatingPromptAnswered(promptKey) {
+								continue
+							}
+							if err := t.markSelectedRatingInlineKeyboard(ctx, msg.UserID, msg.CallbackMessageID, selected, msg.Text); err != nil {
 								slog.Warn("failed to mark selected rating inline keyboard", "error", err)
 							}
 						}
@@ -191,6 +197,21 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 			}
 		}
 	}
+}
+
+func ratingPromptKey(chatID string, messageID int) string {
+	return chatID + ":" + strconv.Itoa(messageID)
+}
+
+func (t *TelegramChannel) markRatingPromptAnswered(key string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if _, exists := t.answeredRatingPrompts[key]; exists {
+		return false
+	}
+	t.answeredRatingPrompts[key] = struct{}{}
+	return true
 }
 
 func (t *TelegramChannel) getUpdates(ctx context.Context) ([]tgUpdate, error) {
@@ -317,15 +338,15 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 			return InboundMessage{}, false
 		}
 		return InboundMessage{
-			Channel:         "telegram",
-			UserID:          strconv.FormatInt(cb.Message.Chat.ID, 10),
-			ExternalID:      strconv.FormatInt(cb.From.ID, 10),
-			Text:            data,
-			Username:        cb.From.Username,
-			FirstName:       cb.From.FirstName,
-			LastName:        cb.From.LastName,
-			Language:        cb.From.LanguageCode,
-			CallbackQueryID: cb.ID,
+			Channel:           "telegram",
+			UserID:            strconv.FormatInt(cb.Message.Chat.ID, 10),
+			ExternalID:        strconv.FormatInt(cb.From.ID, 10),
+			Text:              data,
+			Username:          cb.From.Username,
+			FirstName:         cb.From.FirstName,
+			LastName:          cb.From.LastName,
+			Language:          cb.From.LanguageCode,
+			CallbackQueryID:   cb.ID,
 			CallbackMessageID: cb.Message.MessageID,
 		}, true
 	}
@@ -395,17 +416,20 @@ func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQuery
 	return nil
 }
 
-func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, chatID string, messageID, selected int) error {
+func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, chatID string, messageID, selected int, callbackData string) error {
 	type tgInlineButton struct {
 		Text         string `json:"text"`
 		CallbackData string `json:"callback_data"`
+	}
+	if callbackData == "" {
+		callbackData = strconv.Itoa(selected)
 	}
 	replyMarkup := map[string]any{
 		"inline_keyboard": [][]tgInlineButton{
 			{
 				{
 					Text:         fmt.Sprintf("%d⭐", selected),
-					CallbackData: strconv.Itoa(selected),
+					CallbackData: callbackData,
 				},
 			},
 		},
@@ -426,21 +450,37 @@ func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram editMessageReplyMarkup error %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		bodyText := strings.ToLower(string(body))
+		// Harmless if keyboard was already in the selected single-star state.
+		if resp.StatusCode == http.StatusBadRequest && strings.Contains(bodyText, "message is not modified") {
+			return nil
+		}
+		return fmt.Errorf("telegram editMessageReplyMarkup error %d: %s", resp.StatusCode, string(body))
 	}
 	return nil
 }
 
-func parseRatingCallbackData(data string) (int, bool) {
+func parseRatingCallbackData(data string) (string, int, bool) {
 	trimmed := strings.TrimSpace(data)
 	if strings.HasPrefix(trimmed, "rating:") {
-		trimmed = strings.TrimPrefix(trimmed, "rating:")
+		parts := strings.Split(trimmed, ":")
+		if len(parts) != 3 {
+			return "", 0, false
+		}
+		ratedMessageID := strings.TrimSpace(parts[1])
+		switch parts[2] {
+		case "1", "2", "3", "4", "5":
+			return ratedMessageID, int(parts[2][0] - '0'), true
+		default:
+			return "", 0, false
+		}
 	}
 	switch trimmed {
 	case "1", "2", "3", "4", "5":
-		return int(trimmed[0] - '0'), true
+		return "", int(trimmed[0] - '0'), true
 	default:
-		return 0, false
+		return "", 0, false
 	}
 }
 

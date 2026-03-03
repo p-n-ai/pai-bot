@@ -1,6 +1,12 @@
 package chat
 
-import "strings"
+import (
+	"strconv"
+	"regexp"
+	"strings"
+)
+
+var reviewActionPattern = regexp.MustCompile(`\[\[PAI_REVIEW(?::([A-Za-z0-9-]+))?\]\]`)
 
 // BuildTelegramInlineKeyboard returns inline keyboard rows inferred from the
 // outgoing message text. Returns nil when no inline keyboard is needed.
@@ -8,15 +14,27 @@ func BuildTelegramInlineKeyboard(text string) [][]InlineButton {
 	lower := strings.ToLower(text)
 	hasLegacyPrompt := strings.Contains(lower, "nilai penerangan saya (1-5)")
 	hasGenericPrompt := strings.Contains(lower, "rating 1-5")
-	hasReviewCode := strings.Contains(text, "[[PAI_REVIEW]]")
-	if hasLegacyPrompt || hasGenericPrompt || hasReviewCode {
+
+	reviewMatch := reviewActionPattern.FindStringSubmatch(text)
+	hasReviewCode := len(reviewMatch) > 0
+	reviewMessageID := ""
+	if len(reviewMatch) > 1 {
+		reviewMessageID = strings.TrimSpace(reviewMatch[1])
+	}
+	if hasReviewCode || hasLegacyPrompt || hasGenericPrompt {
+		callbackData := func(score int) string {
+			if hasReviewCode && reviewMessageID != "" {
+				return "rating:" + reviewMessageID + ":" + strconv.Itoa(score)
+			}
+			return strconv.Itoa(score)
+		}
 		return [][]InlineButton{
 			{
-				{Text: "1⭐", CallbackData: "1"},
-				{Text: "2⭐", CallbackData: "2"},
-				{Text: "3⭐", CallbackData: "3"},
-				{Text: "4⭐", CallbackData: "4"},
-				{Text: "5⭐", CallbackData: "5"},
+				{Text: "1⭐", CallbackData: callbackData(1)},
+				{Text: "2⭐", CallbackData: callbackData(2)},
+				{Text: "3⭐", CallbackData: callbackData(3)},
+				{Text: "4⭐", CallbackData: callbackData(4)},
+				{Text: "5⭐", CallbackData: callbackData(5)},
 			},
 		}
 	}
@@ -36,4 +54,9 @@ func BuildTelegramInlineKeyboard(text string) [][]InlineButton {
 	}
 
 	return nil
+}
+
+// StripReviewActionCodes removes review control tokens from outgoing text.
+func StripReviewActionCodes(text string) string {
+	return strings.TrimSpace(reviewActionPattern.ReplaceAllString(text, ""))
 }

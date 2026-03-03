@@ -154,18 +154,22 @@ Engineer mapping:
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users | ✅ | 🤖 |
+| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users, and rating summary (count/avg/source) | ✅ | 🤖 |
 | `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split | ✅ | 🤖 |
-| `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, `answer_rating_requested/submitted/skipped` events, and configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | ✅ | 🤖 |
+| `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, and dedupe per rated assistant message (`messages.id`). Events: `answer_rating_requested/submitted/skipped` with `rated_message_id` + `rating`; configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | ✅ | 🤖 |
 | `P-W1D4-6` | Additional feature: onboarding language selection (English/BM/中文), `/language` command + Telegram command autocomplete, persist preference in `users.config.preferred_language`, and feature flag `LEARN_DISABLE_MULTI_LANGUAGE` | ✅ | 🤖 |
 | `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ⬜ | 🧑 Human |
 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ⬜ | 🧑 Human |
 
 #### Additional Tasks (Out of Initial Plan)
 
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
 | Additional ID | Task | Status | Owner |
 |---------------|------|--------|-------|
 | `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | ✅ | 🤖 |
+| `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | ✅ | 🤖 |
 
 ### Day 5 (Fri) — Week 1 Retro
 

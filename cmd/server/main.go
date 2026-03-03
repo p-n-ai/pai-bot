@@ -112,8 +112,10 @@ func main() {
 			out.ParseMode = "Markdown"
 			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
 			out.InlineKeyboard = chat.BuildTelegramInlineKeyboard(resp)
-			out.Text = strings.ReplaceAll(out.Text, agent.ReviewActionCode, "")
-			out.Text = strings.TrimSpace(out.Text)
+			out.Text = chat.StripReviewActionCodes(out.Text)
+		}
+		if strings.TrimSpace(out.Text) == "" {
+			return
 		}
 
 		if err := gw.Send(ctx, out); err != nil {

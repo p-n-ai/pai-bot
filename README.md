@@ -452,6 +452,15 @@ make analytics    # Print quick metrics from the database
 make ollama-pull  # Download a free AI model for Ollama
 ```
 
+### Rating Analytics Contract
+
+- Rating callbacks use internal assistant message IDs in callback data: `rating:{messages.id}:{score}`.
+- Submitted ratings are logged in `events` as `answer_rating_submitted` with:
+  - `data.rating` (1-5)
+  - `data.rated_message_id` (assistant `messages.id` being rated)
+  - `data.source`, `data.channel`, `data.delayed_submit`
+- Deduplication is enforced per rated assistant message (`rated_message_id`) to prevent duplicate submissions for the same prompt.
+
 ---
 
 ## Contributing

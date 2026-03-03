@@ -32,6 +32,10 @@ func (NopEventLogger) LogEvent(Event) error {
 	return nil
 }
 
+func (NopEventLogger) HasRatingSubmission(_ string, _ string) bool {
+	return false
+}
+
 // MemoryEventLogger stores events in memory for tests.
 type MemoryEventLogger struct {
 	mu     sync.Mutex
@@ -63,6 +67,24 @@ func (l *MemoryEventLogger) Events() []Event {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return append([]Event{}, l.events...)
+}
+
+func (l *MemoryEventLogger) HasRatingSubmission(conversationID, ratedMessageID string) bool {
+	if ratedMessageID == "" {
+		return false
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, e := range l.events {
+		if e.ConversationID != conversationID || e.EventType != "answer_rating_submitted" {
+			continue
+		}
+		if got, ok := e.Data["rated_message_id"].(string); ok && got == ratedMessageID {
+			return true
+		}
+	}
+	return false
 }
 
 // PostgresEventLogger inserts events into the events table.
@@ -125,4 +147,31 @@ func (l *PostgresEventLogger) LogEvent(event Event) error {
 		"user_id", event.UserID,
 	)
 	return nil
+}
+
+func (l *PostgresEventLogger) HasRatingSubmission(conversationID, ratedMessageID string) bool {
+	if l == nil || l.pool == nil || conversationID == "" || ratedMessageID == "" {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var exists bool
+	err := l.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1
+			FROM events e
+			JOIN conversations c ON c.user_id = e.user_id AND c.tenant_id = e.tenant_id
+			WHERE c.id = $1::uuid
+			  AND e.event_type = 'answer_rating_submitted'
+			  AND e.data->>'rated_message_id' = $2
+		)`,
+		conversationID,
+		ratedMessageID,
+	).Scan(&exists)
+	if err != nil {
+		return false
+	}
+	return exists
 }

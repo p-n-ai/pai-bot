@@ -150,3 +150,49 @@ SELECT
   END AS returning_rate_percent
 FROM summary;
 "
+echo
+
+echo "=== Ratings ==="
+run_sql "
+WITH ratings AS (
+  SELECT
+    e.id::text AS event_id,
+    (e.data->>'rating')::int AS rating,
+    NULLIF(e.data->>'rated_message_id', '') AS rated_message_id,
+    COALESCE(NULLIF(e.data->>'source', ''), 'unknown') AS source
+  FROM events e
+  WHERE e.event_type = 'answer_rating_submitted'
+    AND e.created_at >= NOW() - INTERVAL '${DAYS} days'
+),
+summary AS (
+  SELECT
+    COUNT(*) AS ratings_submitted,
+    COUNT(DISTINCT COALESCE(rated_message_id, event_id)) AS unique_rated_messages,
+    ROUND(AVG(rating)::numeric, 2) AS avg_rating
+  FROM ratings
+)
+SELECT
+  ratings_submitted,
+  unique_rated_messages,
+  avg_rating
+FROM summary;
+"
+echo
+
+echo "=== Ratings By Source ==="
+run_sql "
+SELECT
+  source,
+  COUNT(*) AS submissions,
+  ROUND(AVG(rating)::numeric, 2) AS avg_rating
+FROM (
+  SELECT
+    COALESCE(NULLIF(e.data->>'source', ''), 'unknown') AS source,
+    (e.data->>'rating')::int AS rating
+  FROM events e
+  WHERE e.event_type = 'answer_rating_submitted'
+    AND e.created_at >= NOW() - INTERVAL '${DAYS} days'
+) r
+GROUP BY source
+ORDER BY submissions DESC, source ASC;
+"
