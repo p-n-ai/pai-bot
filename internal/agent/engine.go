@@ -9,6 +9,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
 const (
@@ -22,6 +23,8 @@ type EngineConfig struct {
 	AIRouter              *ai.Router
 	Store                 ConversationStore
 	EventLogger           EventLogger
+	CurriculumLoader      *curriculum.Loader
+	ContextResolver       ContextResolver
 	CompactThreshold      int // messages before compaction triggers (default 20)
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
 	KeepRecent            int // recent messages to keep after compaction (default 6)
@@ -32,6 +35,7 @@ type Engine struct {
 	aiRouter              *ai.Router
 	store                 ConversationStore
 	eventLogger           EventLogger
+	contextResolver       ContextResolver
 	compactThreshold      int
 	compactTokenThreshold int
 	keepRecent            int
@@ -59,10 +63,20 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if eventLogger == nil {
 		eventLogger = NopEventLogger{}
 	}
+
+	contextResolver := cfg.ContextResolver
+	if contextResolver == nil {
+		if cfg.CurriculumLoader != nil {
+			contextResolver = NewCurriculumContextResolver(cfg.CurriculumLoader)
+		} else {
+			contextResolver = NoopContextResolver{}
+		}
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
 		eventLogger:           eventLogger,
+		contextResolver:       contextResolver,
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
@@ -130,8 +144,10 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	// Compact if needed (summarize older messages).
 	e.maybeCompact(ctx, conv)
 
+	matchedTopic, teachingNotes := e.contextResolver.Resolve(msg.Text)
+
 	// Build messages: system prompt + (optional summary) + recent messages.
-	systemPrompt := e.buildSystemPrompt(msg)
+	systemPrompt := e.buildSystemPrompt(msg, matchedTopic, teachingNotes)
 	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, e.buildContextMessages(conv)...)
 	if msg.HasImage && msg.ImageDataURL == "" {
@@ -261,7 +277,7 @@ func (e *Engine) maybeCompact(ctx context.Context, conv *Conversation) {
 		if m.Role == "assistant" {
 			role = "Tutor"
 		}
-		content.WriteString(fmt.Sprintf("%s: %s\n", role, m.Content))
+		fmt.Fprintf(&content, "%s: %s\n", role, m.Content)
 	}
 
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
@@ -523,31 +539,81 @@ func hasAnyToken(text string, tokens []string) bool {
 	return false
 }
 
-func (e *Engine) buildSystemPrompt(_ chat.InboundMessage) string {
-	return `You are P&AI Bot, a friendly and encouraging mathematics tutor for Malaysian secondary school students.
+func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, topic *curriculum.Topic, teachingNotes string) string {
+	base := `You are P&AI Bot, a supportive mathematics tutor for Malaysian secondary students (KSSM Form 1-3, Algebra-first).
 
-CURRICULUM: KSSM Matematik (Form 1, 2, 3) — focus on Algebra topics.
+PRIMARY GOAL:
+Help the student understand and solve the problem independently, not just get a final answer.
 
-LANGUAGE: Respond in the same language the student uses. Most students use Bahasa Melayu or English. Mix both if the student does.
+LANGUAGE:
+Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
 
-TEACHING STYLE:
-- Start with what the student knows, build from there
-- Use simple, relatable examples (Malaysian context: ringgit, kopitiam, school scenarios)
-- Break complex problems into small steps
-- Celebrate small wins ("Bagus!", "Betul!")
-- If the student is stuck, give a hint before the answer
-- Use mathematical notation where needed
-- Write equations in plain text (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
-- Keep responses concise — this is a chat, not a textbook
+STRUCTURED SOLVING LOOP (follow in order):
+1. Understand: Restate the student's question briefly and identify what is asked.
+2. Plan: Give a short plan (1-3 steps) before calculating.
+3. Solve: Show steps clearly, with plain-text equations.
+4. Verify: Check the result quickly (substitute or sanity-check).
+5. Connect: Link to the underlying concept and when to use it again.
 
-RULES:
-- Never give answers without explanation
-- Always check if the student understood before moving on
-- If unsure of the student's level, ask a diagnostic question
-- If an image is attached, analyze the image content first before answering.
-- Only say you cannot identify an image when it is genuinely unreadable; in that case ask for a clearer retake.
-- If the student asks a follow-up about an earlier image but did not reply to that image (or reattach it), ask them to reply directly to the image message.
-- Be patient and never condescending`
+TEACHING RULES:
+1. Keep answers concise and chat-friendly.
+2. Use simple, relatable examples (ringgit, school, daily life) when helpful.
+3. If the student is stuck, give a hint first; reveal full answer after effort.
+4. Ask one quick check-for-understanding question when appropriate.
+5. Never be condescending.
+
+SAFETY + ACCURACY:
+1. Do not invent facts, formulas, or curriculum references.
+2. If context is missing, ask a clarifying question before solving.
+3. If uncertain, state what is uncertain and propose the next step.
+
+IMAGE HANDLING:
+1. If an image is attached, analyze it first, then answer.
+2. If image text is unclear, state what is unclear and ask for a clearer retake.
+3. If the student asks a follow-up about an earlier image but did not reply to that image (or reattach it), ask them to reply directly to the image message.
+
+FORMAT CONSTRAINT:
+Use plain-text math only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
+Do not format replies using Markdown (no headings, bold, italic, code blocks, or Markdown lists). Use plain chat text with simple line breaks only.`
+
+	if topic == nil {
+		return base
+	}
+
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString("\n\nTOPIC CONTEXT:\n")
+	fmt.Fprintf(&b, "- Matched topic ID: %s\n", topic.ID)
+	fmt.Fprintf(&b, "- Matched topic name: %s\n", topic.Name)
+	if topic.SyllabusID != "" {
+		fmt.Fprintf(&b, "- Matched syllabus: %s\n", topic.SyllabusID)
+	}
+	if topic.SubjectID != "" {
+		fmt.Fprintf(&b, "- Matched subject: %s\n", topic.SubjectID)
+	}
+	if len(topic.LearningObjectives) > 0 {
+		b.WriteString("- Learning objectives:\n")
+		for i, lo := range topic.LearningObjectives {
+			if i >= 3 {
+				break
+			}
+			fmt.Fprintf(&b, "  - %s\n", lo.Text)
+		}
+	}
+	if teachingNotes != "" {
+		b.WriteString("\nTEACHING NOTES (use as guidance):\n")
+		b.WriteString(truncateForPrompt(teachingNotes, 2500))
+		b.WriteString("\n")
+	}
+	b.WriteString("\nINSTRUCTIONS FOR THIS REPLY:\n")
+	b.WriteString("- Prioritize the matched topic context and teaching notes.\n")
+	b.WriteString("- Include one short curriculum citation in this format: ")
+	b.WriteString("\"")
+	b.WriteString(topic.SyllabusID)
+	b.WriteString(" > ")
+	b.WriteString(topic.Name)
+	b.WriteString("\".\n")
+	return b.String()
 }
 
 func normalizeEquationFormatting(content string) string {
@@ -565,5 +631,90 @@ func normalizeEquationFormatting(content string) string {
 		`\cdot`, "*",
 		`\div`, "/",
 	)
-	return replacer.Replace(content)
+	return stripMarkdownFormatting(replacer.Replace(content))
+}
+
+func stripMarkdownFormatting(content string) string {
+	if content == "" {
+		return content
+	}
+
+	// Remove common markdown styling tokens while preserving sentence text.
+	content = strings.NewReplacer(
+		"```", "",
+		"`", "",
+		"**", "",
+		"__", "",
+		"~~", "",
+	).Replace(content)
+
+	lines := strings.Split(content, "\n")
+	cleaned := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Strip markdown heading prefixes.
+		for strings.HasPrefix(trimmed, "#") {
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+		}
+
+		// Strip blockquote prefix.
+		if strings.HasPrefix(trimmed, ">") {
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
+		}
+
+		// Strip markdown list prefixes.
+		switch {
+		case strings.HasPrefix(trimmed, "- "),
+			strings.HasPrefix(trimmed, "* "),
+			strings.HasPrefix(trimmed, "+ "):
+			trimmed = strings.TrimSpace(trimmed[2:])
+		default:
+			trimmed = trimOrderedListPrefix(trimmed)
+		}
+
+		cleaned = append(cleaned, trimmed)
+	}
+
+	// Keep at most one consecutive blank line.
+	var b strings.Builder
+	lastBlank := false
+	for _, line := range cleaned {
+		if line == "" {
+			if lastBlank {
+				continue
+			}
+			lastBlank = true
+		} else {
+			lastBlank = false
+		}
+
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(line)
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func trimOrderedListPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 || i >= len(s) {
+		return s
+	}
+	if (s[i] == '.' || s[i] == ')') && i+1 < len(s) && s[i+1] == ' ' {
+		return strings.TrimSpace(s[i+2:])
+	}
+	return s
+}
+
+func truncateForPrompt(text string, max int) string {
+	if max <= 0 || len(text) <= max {
+		return text
+	}
+	return text[:max] + "\n...[truncated]"
 }

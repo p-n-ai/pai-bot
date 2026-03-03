@@ -3,12 +3,15 @@ package agent_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
 func TestEngine_ProcessMessage(t *testing.T) {
@@ -460,6 +463,109 @@ func TestEngine_SystemPrompt_HasImageFollowUpReplyGuidance(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	loader := createTestCurriculumLoader(t)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		CurriculumLoader: loader,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-curriculum",
+		Text:    "Please teach me linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if !contains(systemPrompt, "TOPIC CONTEXT") {
+		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "F1-02") {
+		t.Fatalf("expected topic ID in system prompt, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "subtract 5 on both sides") {
+		t.Fatalf("expected teaching notes in system prompt, got: %s", systemPrompt)
+	}
+}
+
+func TestEngine_ProcessMessage_NoCurriculumContextWhenNoTopicMatch(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	loader := createTestCurriculumLoader(t)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		CurriculumLoader: loader,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-curriculum-no-match",
+		Text:    "What is your favorite color?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if contains(systemPrompt, "TOPIC CONTEXT") {
+		t.Fatalf("did not expect TOPIC CONTEXT in system prompt when no topic matches, got: %s", systemPrompt)
+	}
+}
+
+func TestEngine_ProcessMessage_UsesConfiguredContextResolver(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "X-01",
+			Name:       "Custom Interface Topic",
+			SubjectID:  "math",
+			SyllabusID: "custom-syllabus",
+			LearningObjectives: []curriculum.LearningObjective{
+				{ID: "LO1", Text: "Explain variables in simple terms"},
+			},
+		},
+		notes: "Use a scale analogy and isolate one variable first.",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		ContextResolver:  resolver,
+		CurriculumLoader: nil,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-context-resolver",
+		Text:    "hello there",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if !resolver.called {
+		t.Fatal("expected configured context resolver to be called")
+	}
+	if resolver.lastText != "hello there" {
+		t.Fatalf("resolver.lastText = %q, want %q", resolver.lastText, "hello there")
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if !contains(systemPrompt, "TOPIC CONTEXT") {
+		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "X-01") {
+		t.Fatalf("expected resolver topic ID in system prompt, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "scale analogy") {
+		t.Fatalf("expected resolver notes in system prompt, got: %s", systemPrompt)
+	}
+}
+
 func TestEngine_ClearClearsHistory(t *testing.T) {
 	mockAI := ai.NewMockProvider("Response")
 
@@ -519,6 +625,36 @@ func TestEngine_ProcessMessage_ReplyToText(t *testing.T) {
 	}
 	if !contains(lastUserMsg.Content, "I don't understand") {
 		t.Errorf("user message should contain user's text, got: %s", lastUserMsg.Content)
+	}
+}
+
+func TestEngine_ProcessMessage_StripsMarkdownFormattingFromAIResponse(t *testing.T) {
+	mockAI := ai.NewMockProvider("1. **Faham**: Ini konsep asas.\n2. **Rancangan**: Cuba selesaikan langkah demi langkah.\n- **Tip**: Semak jawapan.\n`x = 6`")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-no-markdown",
+		Text:    "Tolong ajar persamaan linear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if contains(resp, "**") || contains(resp, "`") {
+		t.Fatalf("response should not contain markdown formatting, got: %q", resp)
+	}
+	if contains(resp, "1. ") || contains(resp, "- ") {
+		t.Fatalf("response should not keep markdown list markers, got: %q", resp)
+	}
+	if !contains(resp, "Faham: Ini konsep asas.") {
+		t.Fatalf("response should preserve content text, got: %q", resp)
+	}
+	if !contains(resp, "Tip: Semak jawapan.") {
+		t.Fatalf("response should preserve bullet text, got: %q", resp)
 	}
 }
 
@@ -891,4 +1027,54 @@ func (f *flakyProvider) Models() []ai.ModelInfo {
 
 func (f *flakyProvider) HealthCheck(_ context.Context) error {
 	return nil
+}
+
+type stubContextResolver struct {
+	topic    *curriculum.Topic
+	notes    string
+	called   bool
+	lastText string
+}
+
+func (r *stubContextResolver) Resolve(text string) (*curriculum.Topic, string) {
+	r.called = true
+	r.lastText = text
+	return r.topic, r.notes
+}
+
+func createTestCurriculumLoader(t *testing.T) *curriculum.Loader {
+	t.Helper()
+
+	dir := t.TempDir()
+	topicsDir := filepath.Join(dir, "curricula", "malaysia", "kssm", "topics", "algebra")
+	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	yamlPath := filepath.Join(topicsDir, "01-linear-equations.yaml")
+	yamlData := `id: F1-02
+name: Linear Equations
+subject_id: math
+syllabus_id: kssm-f1
+difficulty: beginner
+learning_objectives:
+  - id: LO1
+    text: Solve linear equations in one variable
+    bloom: apply
+`
+	if err := os.WriteFile(yamlPath, []byte(yamlData), 0o644); err != nil {
+		t.Fatalf("WriteFile(yaml) error = %v", err)
+	}
+
+	notesPath := filepath.Join(topicsDir, "01-linear-equations.teaching.md")
+	notes := "# Linear Equations Teaching Notes\nUse balance method and subtract 5 on both sides."
+	if err := os.WriteFile(notesPath, []byte(notes), 0o644); err != nil {
+		t.Fatalf("WriteFile(notes) error = %v", err)
+	}
+
+	loader, err := curriculum.NewLoader(dir)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	return loader
 }
