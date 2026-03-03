@@ -8,6 +8,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
 const (
@@ -21,6 +22,8 @@ type EngineConfig struct {
 	AIRouter              *ai.Router
 	Store                 ConversationStore
 	EventLogger           EventLogger
+	CurriculumLoader      *curriculum.Loader
+	ContextResolver       ContextResolver
 	CompactThreshold      int // messages before compaction triggers (default 20)
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
 	KeepRecent            int // recent messages to keep after compaction (default 6)
@@ -31,6 +34,7 @@ type Engine struct {
 	aiRouter              *ai.Router
 	store                 ConversationStore
 	eventLogger           EventLogger
+	contextResolver       ContextResolver
 	compactThreshold      int
 	compactTokenThreshold int
 	keepRecent            int
@@ -58,10 +62,20 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if eventLogger == nil {
 		eventLogger = NopEventLogger{}
 	}
+
+	contextResolver := cfg.ContextResolver
+	if contextResolver == nil {
+		if cfg.CurriculumLoader != nil {
+			contextResolver = NewCurriculumContextResolver(cfg.CurriculumLoader)
+		} else {
+			contextResolver = NoopContextResolver{}
+		}
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
 		eventLogger:           eventLogger,
+		contextResolver:       contextResolver,
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
@@ -126,8 +140,10 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	// Compact if needed (summarize older messages).
 	e.maybeCompact(ctx, conv)
 
+	matchedTopic, teachingNotes := e.contextResolver.Resolve(msg.Text)
+
 	// Build messages: system prompt + (optional summary) + recent messages.
-	systemPrompt := e.buildSystemPrompt(msg)
+	systemPrompt := e.buildSystemPrompt(msg, matchedTopic, teachingNotes)
 	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, e.buildContextMessages(conv)...)
 	if msg.HasImage && msg.ImageDataURL == "" {
@@ -257,7 +273,7 @@ func (e *Engine) maybeCompact(ctx context.Context, conv *Conversation) {
 		if m.Role == "assistant" {
 			role = "Tutor"
 		}
-		content.WriteString(fmt.Sprintf("%s: %s\n", role, m.Content))
+		fmt.Fprintf(&content, "%s: %s\n", role, m.Content)
 	}
 
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
@@ -377,8 +393,8 @@ Saya boleh membantu anda dengan KSSM Matematik:
 Apa yang anda ingin belajar hari ini?`, name), nil
 }
 
-func (e *Engine) buildSystemPrompt(_ chat.InboundMessage) string {
-	return `You are P&AI Bot, a friendly and encouraging mathematics tutor for Malaysian secondary school students.
+func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, topic *curriculum.Topic, teachingNotes string) string {
+	base := `You are P&AI Bot, a friendly and encouraging mathematics tutor for Malaysian secondary school students.
 
 CURRICULUM: KSSM Matematik (Form 1, 2, 3) — focus on Algebra topics.
 
@@ -402,6 +418,45 @@ RULES:
 - Only say you cannot identify an image when it is genuinely unreadable; in that case ask for a clearer retake.
 - If the student asks a follow-up about an earlier image but did not reply to that image (or reattach it), ask them to reply directly to the image message.
 - Be patient and never condescending`
+
+	if topic == nil {
+		return base
+	}
+
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString("\n\nTOPIC CONTEXT:\n")
+	fmt.Fprintf(&b, "- Matched topic ID: %s\n", topic.ID)
+	fmt.Fprintf(&b, "- Matched topic name: %s\n", topic.Name)
+	if topic.SyllabusID != "" {
+		fmt.Fprintf(&b, "- Matched syllabus: %s\n", topic.SyllabusID)
+	}
+	if topic.SubjectID != "" {
+		fmt.Fprintf(&b, "- Matched subject: %s\n", topic.SubjectID)
+	}
+	if len(topic.LearningObjectives) > 0 {
+		b.WriteString("- Learning objectives:\n")
+		for i, lo := range topic.LearningObjectives {
+			if i >= 3 {
+				break
+			}
+			fmt.Fprintf(&b, "  - %s\n", lo.Text)
+		}
+	}
+	if teachingNotes != "" {
+		b.WriteString("\nTEACHING NOTES (use as guidance):\n")
+		b.WriteString(truncateForPrompt(teachingNotes, 2500))
+		b.WriteString("\n")
+	}
+	b.WriteString("\nINSTRUCTIONS FOR THIS REPLY:\n")
+	b.WriteString("- Prioritize the matched topic context and teaching notes.\n")
+	b.WriteString("- Include one short curriculum citation in this format: ")
+	b.WriteString("\"")
+	b.WriteString(topic.SyllabusID)
+	b.WriteString(" > ")
+	b.WriteString(topic.Name)
+	b.WriteString("\".\n")
+	return b.String()
 }
 
 func normalizeEquationFormatting(content string) string {
@@ -420,4 +475,11 @@ func normalizeEquationFormatting(content string) string {
 		`\div`, "/",
 	)
 	return replacer.Replace(content)
+}
+
+func truncateForPrompt(text string, max int) string {
+	if max <= 0 || len(text) <= max {
+		return text
+	}
+	return text[:max] + "\n...[truncated]"
 }
