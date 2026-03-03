@@ -427,7 +427,8 @@ IMAGE HANDLING:
 3. If the student asks a follow-up about an earlier image but did not reply to that image (or reattach it), ask them to reply directly to the image message.
 
 FORMAT CONSTRAINT:
-Use plain-text math only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.`
+Use plain-text math only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
+Do not format replies using Markdown (no headings, bold, italic, code blocks, or Markdown lists). Use plain chat text with simple line breaks only.`
 
 	if topic == nil {
 		return base
@@ -484,7 +485,85 @@ func normalizeEquationFormatting(content string) string {
 		`\cdot`, "*",
 		`\div`, "/",
 	)
-	return replacer.Replace(content)
+	return stripMarkdownFormatting(replacer.Replace(content))
+}
+
+func stripMarkdownFormatting(content string) string {
+	if content == "" {
+		return content
+	}
+
+	// Remove common markdown styling tokens while preserving sentence text.
+	content = strings.NewReplacer(
+		"```", "",
+		"`", "",
+		"**", "",
+		"__", "",
+		"~~", "",
+	).Replace(content)
+
+	lines := strings.Split(content, "\n")
+	cleaned := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Strip markdown heading prefixes.
+		for strings.HasPrefix(trimmed, "#") {
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+		}
+
+		// Strip blockquote prefix.
+		if strings.HasPrefix(trimmed, ">") {
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
+		}
+
+		// Strip markdown list prefixes.
+		switch {
+		case strings.HasPrefix(trimmed, "- "),
+			strings.HasPrefix(trimmed, "* "),
+			strings.HasPrefix(trimmed, "+ "):
+			trimmed = strings.TrimSpace(trimmed[2:])
+		default:
+			trimmed = trimOrderedListPrefix(trimmed)
+		}
+
+		cleaned = append(cleaned, trimmed)
+	}
+
+	// Keep at most one consecutive blank line.
+	var b strings.Builder
+	lastBlank := false
+	for _, line := range cleaned {
+		if line == "" {
+			if lastBlank {
+				continue
+			}
+			lastBlank = true
+		} else {
+			lastBlank = false
+		}
+
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(line)
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func trimOrderedListPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 || i >= len(s) {
+		return s
+	}
+	if (s[i] == '.' || s[i] == ')') && i+1 < len(s) && s[i+1] == ' ' {
+		return strings.TrimSpace(s[i+2:])
+	}
+	return s
 }
 
 func truncateForPrompt(text string, max int) string {

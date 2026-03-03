@@ -425,6 +425,36 @@ func TestEngine_ProcessMessage_ReplyToText(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_StripsMarkdownFormattingFromAIResponse(t *testing.T) {
+	mockAI := ai.NewMockProvider("1. **Faham**: Ini konsep asas.\n2. **Rancangan**: Cuba selesaikan langkah demi langkah.\n- **Tip**: Semak jawapan.\n`x = 6`")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-no-markdown",
+		Text:    "Tolong ajar persamaan linear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if contains(resp, "**") || contains(resp, "`") {
+		t.Fatalf("response should not contain markdown formatting, got: %q", resp)
+	}
+	if contains(resp, "1. ") || contains(resp, "- ") {
+		t.Fatalf("response should not keep markdown list markers, got: %q", resp)
+	}
+	if !contains(resp, "Faham: Ini konsep asas.") {
+		t.Fatalf("response should preserve content text, got: %q", resp)
+	}
+	if !contains(resp, "Tip: Semak jawapan.") {
+		t.Fatalf("response should preserve bullet text, got: %q", resp)
+	}
+}
+
 func TestEngine_Compaction(t *testing.T) {
 	mockAI := ai.NewMockProvider("response")
 
