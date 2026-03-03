@@ -32,6 +32,7 @@ type Conversation struct {
 
 // ConversationStore persists conversation state and message history.
 type ConversationStore interface {
+	UserExists(userID string) bool
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
@@ -66,6 +67,17 @@ func (s *MemoryStore) CreateConversation(conv Conversation) (string, error) {
 	}
 	s.conversations[id] = &conv
 	return id, nil
+}
+
+func (s *MemoryStore) UserExists(userID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, conv := range s.conversations {
+		if conv.UserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
