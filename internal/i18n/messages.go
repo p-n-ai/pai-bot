@@ -61,7 +61,12 @@ Bahasa pilihan anda untuk sesi ini?
 Anda boleh jawab bebas (contoh: English / BM / Chinese).`,
 		MsgLanguageUnclear:       "Saya belum pasti bahasa pilihan anda. Boleh jawab: English, Bahasa Melayu, atau 中文.",
 		MsgOnboardingFormUnclear: "Saya belum pasti tingkatan anda. Boleh jawab bebas (contoh: saya tingkatan 2 / form two), atau balas terus 1, 2, atau 3.",
-		MsgOnboardingFormPrompt:  "Baik. Tingkatan berapa anda sekarang? Boleh jawab bebas (contoh: tingkatan 2 / form two), atau balas 1, 2, atau 3.",
+		MsgOnboardingFormPrompt: `Baik. Saya boleh bantu untuk:
+- Tingkatan 1
+- Tingkatan 2
+- Tingkatan 3
+
+Tingkatan berapa anda sekarang?`,
 		MsgOnboardingCompleted:   "Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.",
 		MsgLanguageChanged:       "Bahasa telah ditukar ke Bahasa Melayu.",
 		MsgRatingThanks:          "Terima kasih atas rating anda. Jom kita sambung.",
@@ -98,7 +103,12 @@ Choose your preferred session language:
 You can answer freely (example: English / BM / Chinese).`,
 		MsgLanguageUnclear:       "I couldn't determine your preferred language. Please reply with: English, Bahasa Melayu, or 中文.",
 		MsgOnboardingFormUnclear: "I couldn't determine your form. You can reply freely (for example: form 2 / tingkatan 2), or just 1, 2, or 3.",
-		MsgOnboardingFormPrompt:  "Great. Which form are you in now? Reply freely (example: form 2 / tingkatan 2), or just 1, 2, or 3.",
+		MsgOnboardingFormPrompt: `Great. I can help with:
+- Form 1
+- Form 2
+- Form 3
+
+Which form are you in now?`,
 		MsgOnboardingCompleted:   "Great, you are Form %d. Send any math topic or question you want to learn now.",
 		MsgLanguageChanged:       "Language updated to English.",
 		MsgRatingThanks:          "Thanks for your rating. Let's continue.",
@@ -135,7 +145,12 @@ You can answer freely (example: English / BM / Chinese).`,
 你可以自由输入（例如：English / BM / Chinese）。`,
 		MsgLanguageUnclear:       "我还不能确定你的语言偏好。请回复：English、Bahasa Melayu 或 中文。",
 		MsgOnboardingFormUnclear: "我还不能确定你的年级。你可以自由回答（例如：Form 2 / Tingkatan 2），或直接回复 1、2、3。",
-		MsgOnboardingFormPrompt:  "好的。你现在是几年级（中学）？你可以自由回答（例如：Form 2 / Tingkatan 2），或直接回复 1、2、3。",
+		MsgOnboardingFormPrompt: `好的。我可以帮助你学习：
+- Form 1
+- Form 2
+- Form 3
+
+你现在是几年级（中学）？`,
 		MsgOnboardingCompleted:   "好的，你现在是 Form %d。现在发你想学的数学题目或主题。",
 		MsgLanguageChanged:       "语言已切换为中文。",
 		MsgRatingThanks:          "谢谢你的评分。我们继续。",
