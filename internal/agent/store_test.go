@@ -25,12 +25,15 @@ func TestConversationStore_Interface(t *testing.T) {
 	}
 
 	// Add a message
-	err = store.AddMessage(id, agent.StoredMessage{
+	msgID, err := store.AddMessage(id, agent.StoredMessage{
 		Role:    "user",
 		Content: "What is algebra?",
 	})
 	if err != nil {
 		t.Fatalf("AddMessage() error = %v", err)
+	}
+	if msgID == "" {
+		t.Fatal("AddMessage() returned empty message ID")
 	}
 
 	// Get conversation
@@ -125,9 +128,9 @@ func TestConversationStore_MultipleMessages(t *testing.T) {
 		State:  "teaching",
 	})
 
-	_ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "Hello"})
-	_ = store.AddMessage(id, agent.StoredMessage{Role: "assistant", Content: "Hi!"})
-	_ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "What is x?"})
+	_, _ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "Hello"})
+	_, _ = store.AddMessage(id, agent.StoredMessage{Role: "assistant", Content: "Hi!"})
+	_, _ = store.AddMessage(id, agent.StoredMessage{Role: "user", Content: "What is x?"})
 
 	got, _ := store.GetConversation(id)
 	if len(got.Messages) != 3 {
@@ -198,7 +201,7 @@ func TestConversationStore_UpdateConversationState_NotFound(t *testing.T) {
 func TestConversationStore_AddMessage_NotFound(t *testing.T) {
 	store := agent.NewMemoryStore()
 
-	err := store.AddMessage("nonexistent", agent.StoredMessage{Role: "user", Content: "Hello"})
+	_, err := store.AddMessage("nonexistent", agent.StoredMessage{Role: "user", Content: "Hello"})
 	if err == nil {
 		t.Error("AddMessage() should error for non-existent conversation")
 	}

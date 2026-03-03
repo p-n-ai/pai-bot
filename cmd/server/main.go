@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -70,6 +71,8 @@ func main() {
 		Store:            store,
 		EventLogger:      eventLogger,
 		CurriculumLoader: loader,
+		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
+		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
 	})
 
 	// Create Telegram channel + chat gateway.
@@ -99,12 +102,23 @@ func main() {
 			return
 		}
 
-		if err := gw.Send(ctx, chat.OutboundMessage{
-			Channel:   msg.Channel,
-			UserID:    msg.UserID,
-			Text:      chat.NormalizeTelegramMarkdown(resp),
-			ParseMode: "Markdown",
-		}); err != nil {
+		out := chat.OutboundMessage{
+			Channel: msg.Channel,
+			UserID:  msg.UserID,
+			Text:    resp,
+		}
+		if msg.Channel == "telegram" {
+			out.Text = chat.NormalizeTelegramMarkdown(resp)
+			out.ParseMode = "Markdown"
+			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
+			out.InlineKeyboard = chat.BuildTelegramInlineKeyboard(resp)
+			out.Text = chat.StripReviewActionCodes(out.Text)
+		}
+		if strings.TrimSpace(out.Text) == "" {
+			return
+		}
+
+		if err := gw.Send(ctx, out); err != nil {
 			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
 		}
 	})

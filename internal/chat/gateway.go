@@ -23,6 +23,15 @@ type InboundMessage struct {
 	FirstName    string
 	LastName     string
 	Language     string
+	// CallbackQueryID is populated for Telegram inline-button callbacks.
+	CallbackQueryID string
+	// CallbackMessageID is the Telegram message ID that contains the clicked inline button.
+	CallbackMessageID int
+}
+
+type InlineButton struct {
+	Text         string
+	CallbackData string
 }
 
 // OutboundMessage is a message to send via any channel.
@@ -31,6 +40,10 @@ type OutboundMessage struct {
 	UserID    string
 	Text      string
 	ParseMode string // "Markdown", "HTML", or ""
+	// ReplyKeyboard is Telegram-style keyboard rows. Other channels may ignore it.
+	ReplyKeyboard [][]string
+	// InlineKeyboard is Telegram inline keyboard rows. Other channels may ignore it.
+	InlineKeyboard [][]InlineButton
 }
 
 // Channel is the interface each messaging platform must implement.

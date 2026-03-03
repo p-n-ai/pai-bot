@@ -9,6 +9,7 @@ import (
 
 // StoredMessage represents a single message in a conversation.
 type StoredMessage struct {
+	ID           string    `json:"id,omitempty"`
 	Role         string    `json:"role"`
 	Content      string    `json:"content"`
 	Model        string    `json:"model,omitempty"`
@@ -33,10 +34,12 @@ type Conversation struct {
 // ConversationStore persists conversation state and message history.
 type ConversationStore interface {
 	UserExists(userID string) bool
+	GetUserPreferredLanguage(userID string) (string, bool)
+	SetUserPreferredLanguage(userID, lang string) error
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
-	AddMessage(conversationID string, msg StoredMessage) error
+	AddMessage(conversationID string, msg StoredMessage) (string, error)
 	SetSummary(conversationID string, summary string, compactedAt int) error
 	UpdateConversationState(conversationID string, state string) error
 	EndConversation(id string) error
@@ -45,6 +48,7 @@ type ConversationStore interface {
 // MemoryStore is an in-memory implementation of ConversationStore.
 type MemoryStore struct {
 	conversations map[string]*Conversation
+	userLang      map[string]string
 	mu            sync.RWMutex
 }
 
@@ -52,6 +56,7 @@ type MemoryStore struct {
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		conversations: make(map[string]*Conversation),
+		userLang:      make(map[string]string),
 	}
 }
 
@@ -80,6 +85,27 @@ func (s *MemoryStore) UserExists(userID string) bool {
 	return false
 }
 
+func (s *MemoryStore) GetUserPreferredLanguage(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	lang, ok := s.userLang[userID]
+	return lang, ok
+}
+
+func (s *MemoryStore) SetUserPreferredLanguage(userID, lang string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if lang == "" {
+		delete(s.userLang, userID)
+		return nil
+	}
+	s.userLang[userID] = lang
+	return nil
+}
+
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -103,19 +129,22 @@ func (s *MemoryStore) GetActiveConversation(userID string) (*Conversation, bool)
 	return nil, false
 }
 
-func (s *MemoryStore) AddMessage(conversationID string, msg StoredMessage) error {
+func (s *MemoryStore) AddMessage(conversationID string, msg StoredMessage) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	conv, ok := s.conversations[conversationID]
 	if !ok {
-		return fmt.Errorf("conversation not found: %s", conversationID)
+		return "", fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if msg.ID == "" {
+		msg.ID = generateID()
 	}
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
 	conv.Messages = append(conv.Messages, msg)
-	return nil
+	return msg.ID, nil
 }
 
 func (s *MemoryStore) SetSummary(conversationID string, summary string, compactedAt int) error {

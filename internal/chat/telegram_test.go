@@ -57,3 +57,41 @@ func TestNewTelegramChannel_ValidToken(t *testing.T) {
 		t.Error("NewTelegramChannel() returned nil")
 	}
 }
+
+func TestMapTelegramInbound_CallbackQuery(t *testing.T) {
+	update := map[string]any{
+		"update_id": 1001,
+		"callback_query": map[string]any{
+			"id":   "cb-1",
+			"data": "4",
+			"from": map[string]any{
+				"id":         777,
+				"username":   "u",
+				"first_name": "A",
+				"last_name":  "B",
+			},
+			"message": map[string]any{
+				"message_id": 88,
+				"chat": map[string]any{
+					"id": 123456,
+				},
+			},
+		},
+	}
+	msg, ok := chat.MapTelegramInboundForTest(update)
+	if !ok {
+		t.Fatal("expected callback query to map as inbound")
+	}
+	if msg.Text != "4" {
+		t.Fatalf("Text = %q, want 4", msg.Text)
+	}
+	if msg.CallbackQueryID != "cb-1" {
+		t.Fatalf("CallbackQueryID = %q, want cb-1", msg.CallbackQueryID)
+	}
+	if msg.CallbackMessageID != 88 {
+		t.Fatalf("CallbackMessageID = %d, want 88", msg.CallbackMessageID)
+	}
+	if msg.UserID != "123456" {
+		t.Fatalf("UserID = %q, want 123456", msg.UserID)
+	}
+}

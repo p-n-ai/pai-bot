@@ -31,3 +31,38 @@ func TestNormalizeTelegramMarkdown_ConvertsHeadingToBold(t *testing.T) {
 		t.Fatalf("NormalizeTelegramMarkdown() = %q, want %q", out, want)
 	}
 }
+
+func TestNormalizeTelegramMarkdown_WrapsInlineMathWithCode(t *testing.T) {
+	in := "Penyelesaian: 2 * 2 = 4"
+	out := chat.NormalizeTelegramMarkdown(in)
+	want := "Penyelesaian: `2 * 2 = 4`"
+	if out != want {
+		t.Fatalf("NormalizeTelegramMarkdown() = %q, want %q", out, want)
+	}
+}
+
+func TestNormalizeTelegramMarkdown_WrapsEquationWithPlus(t *testing.T) {
+	in := "Semuanya: 2 + 2 = 4"
+	out := chat.NormalizeTelegramMarkdown(in)
+	want := "Semuanya: 2 + 2 = 4"
+	if out != want {
+		t.Fatalf("NormalizeTelegramMarkdown() = %q, want %q", out, want)
+	}
+}
+
+func TestNormalizeTelegramMarkdown_WrapsMultiplicationWithVariable(t *testing.T) {
+	in := "Contoh: 2*x = 8"
+	out := chat.NormalizeTelegramMarkdown(in)
+	want := "Contoh: `2*x = 8`"
+	if out != want {
+		t.Fatalf("NormalizeTelegramMarkdown() = %q, want %q", out, want)
+	}
+}
+
+func TestNormalizeTelegramMarkdown_DoesNotDoubleWrapExistingCode(t *testing.T) {
+	in := "Sudah code: `2 * 2 = 4`"
+	out := chat.NormalizeTelegramMarkdown(in)
+	if out != in {
+		t.Fatalf("NormalizeTelegramMarkdown() = %q, want unchanged %q", out, in)
+	}
+}
