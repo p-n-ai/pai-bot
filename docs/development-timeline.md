@@ -136,8 +136,8 @@ Engineer mapping:
 | `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens | ✅ | 🤖 |
 | `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | ✅ | 🤖 |
 | `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | ✅ | 🤖 |
-| `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | ⬜ | 🤖 |
-| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | ⬜ | 🤖 |
+| `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | ✅ | 🤖 |
+| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | ✅ | 🤖 |
 | `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | ⬜ | 🧑 Human |
 
 ### Day 3 (Wed) — Deploy + First Students

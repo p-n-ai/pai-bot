@@ -2879,7 +2879,7 @@ go build ./cmd/server
 
 - [ ] `internal/chat/gateway.go` + tests — unified message routing
 - [ ] `internal/chat/telegram.go` + tests — Telegram long-polling adapter
-- [ ] `internal/agent/engine.go` + tests — ProcessMessage pipeline with /start handler
+- [x] `internal/agent/engine.go` + tests — ProcessMessage pipeline with /start handler
 - [ ] `internal/curriculum/loader.go` + tests — loads YAML topics + teaching notes
 - [ ] `cmd/server/main.go` wires everything together
 - [ ] Team members can chat with the bot on Telegram. AI responds using curriculum context.
@@ -3291,9 +3291,9 @@ make test-all
 
 - [ ] `internal/agent/store.go` + tests — ConversationStore with MemoryStore implementation
 - [ ] `internal/agent/events.go` + tests — EventLogger with MemoryEventLogger
-- [ ] `internal/agent/topics.go` + tests — keyword-based topic detection
-- [ ] AI router updated with task-based routing preferences
-- [ ] System prompt includes curriculum context when topic is detected
+- [x] `internal/agent/topics.go` + tests — keyword-based topic detection
+- [x] AI router updated with task-based routing preferences
+- [x] System prompt includes curriculum context when topic is detected
 - [ ] 🧑 Human tested 30 conversation scenarios, system prompt v2 applied
 - [ ] `make test-all` passes with zero failures
 
@@ -3470,9 +3470,9 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 #### Day 3 Exit Criteria
 
 - [ ] `scripts/deploy.sh` — automated deployment script
-- [ ] `/start` creates user record, sends welcome message with form selection
-- [ ] Auto-lookup user by telegram_id on every message, auto-trigger /start for new users
-- [ ] AI router retries with backoff, falls back through provider chain
+- [x] `/start` creates user record, sends welcome message with form selection
+- [x] Auto-lookup user by telegram_id on every message, auto-trigger /start for new users
+- [x] AI router retries with backoff, falls back through provider chain
 - [ ] 🧑 Deployed to AWS, 3 pilot students onboarded and chatting
 - [ ] `make test-all` passes
 
