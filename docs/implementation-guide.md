@@ -3488,7 +3488,7 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 |---|---------|------|-------|---------------|
 | 4.1 | `P-W1D4-1` | Analytics script: DAU, messages/session, AI latency, tokens by model | 🤖 | `scripts/analytics.sh` |
 | 4.2 | `P-W1D4-2` | Session management: new conversation after 30min silence, summarize previous | 🤖 | Update `internal/agent/engine.go` |
-| 4.3 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event | 🤖 | Update `internal/agent/engine.go` |
+| 4.3 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event (`answer_rating_submitted` with `data.rating`) | 🤖 | Update `internal/agent/engine.go` |
 | 4.4 | `P-W1D4-4` | 🧑 Read ALL pilot conversations, categorize issues, rewrite system prompt v3 | 🧑 | Manual |
 | 4.5 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10) | 🧑 | Manual |
 
@@ -3599,7 +3599,7 @@ func SummarizeMessages(messages []StoredMessage, maxMessages int) string {
 
 - [ ] `scripts/analytics.sh` — queries events table for key metrics
 - [ ] Session auto-expires after 30min, new session gets context summary
-- [ ] In-chat rating prompt every 5th response, logged as event
+- [x] In-chat rating prompt every 5th response, logged as event (`answer_rating_submitted` with `data.rating` in `events` table)
 - [ ] 🧑 System prompt v3 applied based on pilot conversation review
 - [ ] 🧑 10 pilot students onboarded
 - [ ] `make test-all` passes

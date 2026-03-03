@@ -969,6 +969,245 @@ func TestEngine_ProcessMessage_EventLoggingNonBlocking(t *testing.T) {
 	close(blockingLogger.release)
 }
 
+func TestEngine_ProcessMessage_PromptsForRatingOnFifthTutoringReply(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	tracker := &callTracker{provider: mockAI}
+	eventLogger := agent.NewMemoryEventLogger()
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(tracker),
+		EventLogger: eventLogger,
+		Store:       store,
+	})
+
+	userID := "u-rating-prompt"
+	responses := make([]string, 0, 5)
+	for i := 1; i <= 5; i++ {
+		resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+			Channel: "telegram",
+			UserID:  userID,
+			Text:    fmt.Sprintf("question %d", i),
+		})
+		if err != nil {
+			t.Fatalf("ProcessMessage() error = %v", err)
+		}
+		responses = append(responses, resp)
+	}
+
+	for i := 0; i < 4; i++ {
+		if contains(responses[i], "rating 1-5") {
+			t.Fatalf("did not expect rating prompt before 5th reply, got: %q", responses[i])
+		}
+	}
+	if !contains(responses[4], "rating 1-5") {
+		t.Fatalf("expected rating prompt on 5th reply, got: %q", responses[4])
+	}
+	if len(tracker.requests) != 5 {
+		t.Fatalf("AI request count = %d, want 5", len(tracker.requests))
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if len(conv.Messages) == 0 {
+		t.Fatal("expected stored messages")
+	}
+	last := conv.Messages[len(conv.Messages)-1]
+	if last.Role != "assistant" || !contains(last.Content, "rating 1-5") {
+		t.Fatalf("expected final message to be rating prompt, got role=%q content=%q", last.Role, last.Content)
+	}
+	if last.Model == "" {
+		t.Fatalf("assistant tutoring reply should retain model metadata")
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	var promptLogged bool
+	for time.Now().Before(deadline) {
+		events := eventLogger.Events()
+		for _, e := range events {
+			if e.EventType == "answer_rating_requested" {
+				promptLogged = true
+				break
+			}
+		}
+		if promptLogged {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !promptLogged {
+		t.Fatal("expected answer_rating_requested event")
+	}
+}
+
+func TestEngine_ProcessMessage_ConsumesValidRatingWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	tracker := &callTracker{provider: mockAI}
+	eventLogger := agent.NewMemoryEventLogger()
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(tracker),
+		EventLogger: eventLogger,
+		Store:       store,
+	})
+
+	userID := "u-rating-submit"
+	for i := 1; i <= 5; i++ {
+		_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+			Channel: "telegram",
+			UserID:  userID,
+			Text:    fmt.Sprintf("question %d", i),
+		})
+		if err != nil {
+			t.Fatalf("ProcessMessage() error = %v", err)
+		}
+	}
+	beforeCalls := len(tracker.requests)
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "4",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Terima kasih") {
+		t.Fatalf("expected thank-you response for rating, got: %q", resp)
+	}
+	if len(tracker.requests) != beforeCalls {
+		t.Fatalf("AI should not be called for valid rating; calls = %d, want %d", len(tracker.requests), beforeCalls)
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	last := conv.Messages[len(conv.Messages)-1]
+	if last.Role != "assistant" || !contains(last.Content, "Terima kasih") {
+		t.Fatalf("expected assistant thank-you stored, got role=%q content=%q", last.Role, last.Content)
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	var submitted *agent.Event
+	for time.Now().Before(deadline) {
+		for _, e := range eventLogger.Events() {
+			if e.EventType == "answer_rating_submitted" {
+				eventCopy := e
+				submitted = &eventCopy
+				break
+			}
+		}
+		if submitted != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if submitted == nil {
+		t.Fatal("expected answer_rating_submitted event")
+	}
+	if got, ok := submitted.Data["rating"].(int); !ok || got != 4 {
+		t.Fatalf("rating event payload = %#v, want rating=4", submitted.Data)
+	}
+}
+
+func TestEngine_ProcessMessage_InvalidNumericRating_AsksRetry(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	tracker := &callTracker{provider: mockAI}
+	eventLogger := agent.NewMemoryEventLogger()
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(tracker),
+		EventLogger: eventLogger,
+		Store:       store,
+	})
+
+	userID := "u-rating-invalid"
+	for i := 1; i <= 5; i++ {
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+			Channel: "telegram",
+			UserID:  userID,
+			Text:    fmt.Sprintf("question %d", i),
+		})
+	}
+	beforeCalls := len(tracker.requests)
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "7",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "1 hingga 5") {
+		t.Fatalf("expected retry guidance for invalid rating, got: %q", resp)
+	}
+	if len(tracker.requests) != beforeCalls {
+		t.Fatalf("AI should not be called for invalid numeric rating; calls = %d, want %d", len(tracker.requests), beforeCalls)
+	}
+}
+
+func TestEngine_ProcessMessage_NonRatingAfterPrompt_FallsBackToTutoring(t *testing.T) {
+	mockAI := ai.NewMockProvider("AI response")
+	tracker := &callTracker{provider: mockAI}
+	eventLogger := agent.NewMemoryEventLogger()
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:    mockRouter(tracker),
+		EventLogger: eventLogger,
+		Store:       store,
+	})
+
+	userID := "u-rating-normal-chat"
+	for i := 1; i <= 5; i++ {
+		_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+			Channel: "telegram",
+			UserID:  userID,
+			Text:    fmt.Sprintf("question %d", i),
+		})
+	}
+	beforeCalls := len(tracker.requests)
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "boleh teruskan topik ini?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if contains(resp, "Terima kasih atas rating anda") {
+		t.Fatalf("expected normal tutoring response for non-rating text, got: %q", resp)
+	}
+	if len(tracker.requests) != beforeCalls+1 {
+		t.Fatalf("AI should be called for non-rating text; calls = %d, want %d", len(tracker.requests), beforeCalls+1)
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	var submitted bool
+	for time.Now().Before(deadline) {
+		for _, e := range eventLogger.Events() {
+			if e.EventType == "answer_rating_submitted" {
+				submitted = true
+				break
+			}
+		}
+		if submitted {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if submitted {
+		t.Fatal("did not expect answer_rating_submitted event for non-rating text")
+	}
+}
+
 func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 	mockAI := ai.NewMockProvider("image response")
 	store := agent.NewMemoryStore()
