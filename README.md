@@ -65,8 +65,9 @@ Get P&AI running in under 5 minutes.
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/p-n-ai/pai-bot.git
+git clone --recurse-submodules https://github.com/p-n-ai/pai-bot.git
 cd pai-bot
+git submodule update --init --recursive
 cp .env.example .env
 ```
 
@@ -326,6 +327,14 @@ Currently supported:
 | *More coming — contributions welcome!* | | |
 
 Adding a new curriculum doesn't require code changes — just add YAML files to the OSS repository and P&AI picks them up automatically. See the [OSS contribution guide](https://github.com/p-n-ai/oss/blob/main/CONTRIBUTING.md).
+
+### Updating OSS Submodule Pointer
+
+To sync to the latest `oss` commit from its default branch:
+
+```bash
+git submodule update --remote oss
+```
 
 ---
 
