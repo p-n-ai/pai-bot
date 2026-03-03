@@ -400,19 +400,15 @@ func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, 
 		Text         string `json:"text"`
 		CallbackData string `json:"callback_data"`
 	}
-	row := make([]tgInlineButton, 0, 5)
-	for i := 1; i <= 5; i++ {
-		text := fmt.Sprintf("%d⭐", i)
-		if i == selected {
-			text = fmt.Sprintf("✅ %d⭐", i)
-		}
-		row = append(row, tgInlineButton{
-			Text:         text,
-			CallbackData: strconv.Itoa(i),
-		})
-	}
 	replyMarkup := map[string]any{
-		"inline_keyboard": [][]tgInlineButton{row},
+		"inline_keyboard": [][]tgInlineButton{
+			{
+				{
+					Text:         fmt.Sprintf("%d⭐", selected),
+					CallbackData: strconv.Itoa(selected),
+				},
+			},
+		},
 	}
 	b, err := json.Marshal(replyMarkup)
 	if err != nil {

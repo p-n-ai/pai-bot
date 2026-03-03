@@ -161,6 +161,12 @@ Engineer mapping:
 | `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ⬜ | 🧑 Human |
 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ⬜ | 🧑 Human |
 
+#### Additional Tasks (Out of Initial Plan)
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | ✅ | 🤖 |
+
 ### Day 5 (Fri) — Week 1 Retro
 
 **Implementation note (Day 4 decision):** The team intentionally chose not to enforce a hard 30-minute session boundary. Context continuity is handled via rolling conversation compaction and summary in the agent engine.
