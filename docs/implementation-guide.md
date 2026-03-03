@@ -3599,7 +3599,7 @@ func SummarizeMessages(messages []StoredMessage, maxMessages int) string {
 
 - [ ] `scripts/analytics.sh` — queries events table for key metrics
 - [ ] Session auto-expires after 30min, new session gets context summary
-- [ ] In-chat rating prompt every 5th response, logged as event (`answer_rating_submitted` with `data.rating` in `events` table)
+- [x] In-chat rating prompt every 5th response, logged as event (`answer_rating_submitted` with `data.rating` in `events` table)
 - [ ] 🧑 System prompt v3 applied based on pilot conversation review
 - [ ] 🧑 10 pilot students onboarded
 - [ ] `make test-all` passes
