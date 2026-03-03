@@ -65,6 +65,18 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 		if msg.ParseMode != "" {
 			params.Set("parse_mode", msg.ParseMode)
 		}
+		if len(msg.ReplyKeyboard) > 0 {
+			replyMarkup := map[string]any{
+				"keyboard":          msg.ReplyKeyboard,
+				"resize_keyboard":   true,
+				"one_time_keyboard": true,
+			}
+			b, err := json.Marshal(replyMarkup)
+			if err != nil {
+				return fmt.Errorf("marshal telegram reply markup: %w", err)
+			}
+			params.Set("reply_markup", string(b))
+		}
 
 		resp, err := t.client.PostForm(t.baseURL+"/sendMessage", params)
 		if err != nil {

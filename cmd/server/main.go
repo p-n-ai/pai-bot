@@ -99,12 +99,18 @@ func main() {
 			return
 		}
 
-		if err := gw.Send(ctx, chat.OutboundMessage{
-			Channel:   msg.Channel,
-			UserID:    msg.UserID,
-			Text:      chat.NormalizeTelegramMarkdown(resp),
-			ParseMode: "Markdown",
-		}); err != nil {
+		out := chat.OutboundMessage{
+			Channel: msg.Channel,
+			UserID:  msg.UserID,
+			Text:    resp,
+		}
+		if msg.Channel == "telegram" {
+			out.Text = chat.NormalizeTelegramMarkdown(resp)
+			out.ParseMode = "Markdown"
+			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
+		}
+
+		if err := gw.Send(ctx, out); err != nil {
 			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
 		}
 	})

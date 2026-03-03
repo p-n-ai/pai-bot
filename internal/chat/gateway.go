@@ -31,6 +31,8 @@ type OutboundMessage struct {
 	UserID    string
 	Text      string
 	ParseMode string // "Markdown", "HTML", or ""
+	// ReplyKeyboard is Telegram-style keyboard rows. Other channels may ignore it.
+	ReplyKeyboard [][]string
 }
 
 // Channel is the interface each messaging platform must implement.
