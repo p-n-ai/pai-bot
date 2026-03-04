@@ -7,10 +7,13 @@ import (
 	"regexp"
 	"strings"
 
+	"strconv"
+
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 const (
@@ -38,6 +41,7 @@ type EngineConfig struct {
 	KeepRecent            int // recent messages to keep after compaction (default 6)
 	DisableMultiLanguage  bool
 	RatingPromptEvery     int // ask for rating every N tutoring replies (default 5)
+	Tracker               progress.Tracker
 }
 
 // Engine is the core conversation processor.
@@ -51,6 +55,7 @@ type Engine struct {
 	keepRecent            int
 	disableMultiLanguage  bool
 	ratingPromptEvery     int
+	tracker               progress.Tracker
 }
 
 // NewEngine creates a new agent engine.
@@ -98,6 +103,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		keepRecent:            keepRecent,
 		disableMultiLanguage:  cfg.DisableMultiLanguage,
 		ratingPromptEvery:     ratingEvery,
+		tracker:               cfg.Tracker,
 	}
 }
 
@@ -254,6 +260,8 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"has_image":     msg.HasImage,
 		},
 	})
+	e.assessMasteryAsync(ctx, msg.UserID, matchedTopic, userContent, plainContent)
+
 	if promptRequested {
 		e.logEventAsync(Event{
 			ConversationID: conv.ID,
@@ -425,6 +433,44 @@ func (e *Engine) logEventAsync(event Event) {
 				"user_id", event.UserID,
 				"error", err,
 			)
+		}
+	}()
+}
+
+func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *curriculum.Topic, userMessage, aiResponse string) {
+	if e.tracker == nil || topic == nil {
+		return
+	}
+	go func() {
+		prompt := fmt.Sprintf(
+			"Rate how well the student demonstrated understanding of %q in this exchange.\n\nStudent: %s\n\nTutor: %s\n\nReturn ONLY a single decimal number between 0.0 and 1.0.",
+			topic.Name,
+			truncateForPrompt(userMessage, 500),
+			truncateForPrompt(aiResponse, 500),
+		)
+		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
+			Messages: []ai.Message{
+				{Role: "system", Content: "You are a grading assistant. Return ONLY a single float between 0.0 and 1.0. No other text."},
+				{Role: "user", Content: prompt},
+			},
+			Task:      ai.TaskGrading,
+			MaxTokens: 8,
+		})
+		if err != nil {
+			slog.Warn("mastery assessment AI call failed", "user_id", userID, "topic", topic.ID, "error", err)
+			return
+		}
+		delta, err := strconv.ParseFloat(strings.TrimSpace(resp.Content), 64)
+		if err != nil {
+			slog.Warn("mastery assessment parse failed", "user_id", userID, "topic", topic.ID, "response", resp.Content, "error", err)
+			return
+		}
+		syllabusID := topic.SyllabusID
+		if syllabusID == "" {
+			syllabusID = "default"
+		}
+		if err := e.tracker.UpdateMastery(userID, syllabusID, topic.ID, delta); err != nil {
+			slog.Warn("mastery update failed", "user_id", userID, "topic", topic.ID, "error", err)
 		}
 	}()
 }

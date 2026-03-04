@@ -12,6 +12,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 func TestEngine_ProcessMessage(t *testing.T) {
@@ -1566,6 +1567,77 @@ func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 		if contains(m.Content, "data:image") || contains(m.Content, "base64,") {
 			t.Fatalf("stored message should not contain raw image data URL, got: %q", m.Content)
 		}
+	}
+}
+
+func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
+	mockAI := ai.NewMockProvider("0.7")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+			SubjectID:  "algebra",
+		},
+		notes: "Solve for x",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "mastery-user",
+		Text:    "What is 2x + 3 = 7?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	// assessMasteryAsync runs in a goroutine; give it time to complete.
+	time.Sleep(100 * time.Millisecond)
+
+	score, err := progressTracker.GetMastery("mastery-user", "kssm-form1", "algebra-linear-eq")
+	if err != nil {
+		t.Fatalf("GetMastery() error = %v", err)
+	}
+	if score <= 0 {
+		t.Errorf("expected mastery score > 0 after topic-matched message, got %f", score)
+	}
+}
+
+func TestEngine_ProcessMessage_NoMasteryUpdateWithoutTopic(t *testing.T) {
+	mockAI := ai.NewMockProvider("some response")
+	progressTracker := progress.NewMemoryTracker()
+
+	// No context resolver → no topic match → no mastery update.
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Tracker:  progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "no-topic-user",
+		Text:    "Hello!",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	items, err := progressTracker.GetAllProgress("no-topic-user")
+	if err != nil {
+		t.Fatalf("GetAllProgress() error = %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 progress items without topic match, got %d", len(items))
 	}
 }
 
