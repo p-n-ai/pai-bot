@@ -36,7 +36,7 @@ jobs:
         run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
 
       - name: Save Docker image
-        run: docker save pai-bot:latest | gzip > /tmp/pai-bot.tar.gz
+        run: docker save pai-bot:latest | gzip > pai-bot.tar.gz
 
       - name: Copy image and compose files to server
         uses: appleboy/scp-action@v1
@@ -44,7 +44,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "/tmp/pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml"
+          source: "pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
@@ -83,8 +83,8 @@ jobs:
             ENVEOF
 
             echo "--- Loading Docker image ---"
-            docker load < /tmp/pai-bot.tar.gz
-            rm /tmp/pai-bot.tar.gz
+            docker load < pai-bot.tar.gz
+            rm pai-bot.tar.gz
 
             echo "--- Starting services ---"
             export POSTGRES_PASSWORD=$POSTGRES_PASSWORD
