@@ -81,7 +81,7 @@ func main() {
 
 	// Create agent engine.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
-	tracker := progress.NewMemoryTracker()
+	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
