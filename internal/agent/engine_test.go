@@ -1611,6 +1611,67 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
+	// Mock AI returns "0.8" for both the teaching response and the grading call.
+	mockAI := ai.NewMockProvider("0.8")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+			SubjectID:  "algebra",
+		},
+		notes: "Solve for x",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "sm2-user",
+		Text:    "Solve 3x = 9",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	items, err := progressTracker.GetAllProgress("sm2-user")
+	if err != nil {
+		t.Fatalf("GetAllProgress() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 progress item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.EaseFactor < 1.3 {
+		t.Errorf("EaseFactor should be >= 1.3, got %f", item.EaseFactor)
+	}
+	if item.IntervalDays < 1 {
+		t.Errorf("IntervalDays should be >= 1, got %d", item.IntervalDays)
+	}
+	if item.Repetitions < 1 {
+		t.Errorf("Repetitions should be >= 1, got %d", item.Repetitions)
+	}
+	if !item.NextReviewAt.After(item.LastStudied) {
+		t.Errorf("NextReviewAt (%v) should be after LastStudied (%v)", item.NextReviewAt, item.LastStudied)
+	}
+	if item.TopicID != "algebra-linear-eq" {
+		t.Errorf("expected TopicID 'algebra-linear-eq', got %q", item.TopicID)
+	}
+	if item.SyllabusID != "kssm-form1" {
+		t.Errorf("expected SyllabusID 'kssm-form1', got %q", item.SyllabusID)
+	}
+}
+
 func TestEngine_ProcessMessage_NoMasteryUpdateWithoutTopic(t *testing.T) {
 	mockAI := ai.NewMockProvider("some response")
 	progressTracker := progress.NewMemoryTracker()
