@@ -1,0 +1,103 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -short -count=1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+
+    steps:
+      - name: Write .env file
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,LEARN_AUTH_JWT_SECRET,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD
+          script: |
+            cat > $DEPLOY_DIR/.env << 'ENVEOF'
+            LEARN_SERVER_PORT=8080
+            LEARN_DATABASE_URL=postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable
+            LEARN_DATABASE_MAX_CONNS=25
+            LEARN_CACHE_URL=redis://dragonfly:6379
+            LEARN_NATS_URL=nats://nats:4222
+            LEARN_TELEGRAM_BOT_TOKEN=${LEARN_TELEGRAM_BOT_TOKEN}
+            LEARN_AUTH_JWT_SECRET=${LEARN_AUTH_JWT_SECRET}
+            LEARN_AI_OPENAI_API_KEY=${LEARN_AI_OPENAI_API_KEY}
+            LEARN_AI_ANTHROPIC_API_KEY=${LEARN_AI_ANTHROPIC_API_KEY}
+            LEARN_AI_DEEPSEEK_API_KEY=${LEARN_AI_DEEPSEEK_API_KEY}
+            LEARN_AI_GOOGLE_API_KEY=${LEARN_AI_GOOGLE_API_KEY}
+            LEARN_AI_OPENROUTER_API_KEY=${LEARN_AI_OPENROUTER_API_KEY}
+            LEARN_AI_OLLAMA_ENABLED=false
+            LEARN_TENANT_MODE=single
+            LEARN_CURRICULUM_PATH=./oss
+            LEARN_DISABLE_MULTI_LANGUAGE=false
+            LEARN_RATING_PROMPT_EVERY_REPLIES=5
+            LEARN_LOG_LEVEL=info
+            LEARN_LOG_FORMAT=json
+            ENVEOF
+        env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          LEARN_TELEGRAM_BOT_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
+          LEARN_AUTH_JWT_SECRET: ${{ secrets.LEARN_AUTH_JWT_SECRET }}
+          LEARN_AI_OPENAI_API_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
+          LEARN_AI_ANTHROPIC_API_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
+          LEARN_AI_DEEPSEEK_API_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
+          LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
+          LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+
+      - name: Deploy app
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: DEPLOY_DIR,POSTGRES_PASSWORD
+          script: |
+            set -euo pipefail
+            cd $DEPLOY_DIR
+            export POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+
+            echo "--- Pulling latest code ---"
+            git pull origin main
+
+            echo "--- Building app ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml build app
+
+            echo "--- Restarting services ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+            echo "--- Waiting for app ---"
+            sleep 5
+
+            echo "--- Health check ---"
+            curl -sf --max-time 10 http://localhost:8080/healthz
+
+            echo "--- Container status ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+        env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
