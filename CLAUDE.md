@@ -95,6 +95,8 @@ This project follows a **test-first development workflow**. Every feature must h
 
 **MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
+**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` to mark the task status as ✅. Never consider a task done until the timeline is updated.**
+
 ### The cycle for every task
 
 1. **Write tests first** — Define the expected behavior as unit tests before writing any implementation
