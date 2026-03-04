@@ -489,6 +489,8 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 		return i18n.S(locale, i18n.MsgHistoryCleared), nil
 	case "/language":
 		return e.handleLanguageCommand(msg, fields[1:])
+	case "/progress":
+		return e.handleProgressCommand(msg)
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -562,6 +564,21 @@ func (e *Engine) handleLanguageCommand(msg chat.InboundMessage, args []string) (
 		return languageChangedMessage(lang) + "\n\n" + onboardingFormPrompt(lang), nil
 	}
 	return languageChangedMessage(lang), nil
+}
+
+func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) {
+	if e.tracker == nil {
+		return "Progress tracking is not enabled.", nil
+	}
+
+	items, err := e.tracker.GetAllProgress(msg.UserID)
+	if err != nil {
+		slog.Error("failed to get progress", "user_id", msg.UserID, "error", err)
+		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+
+	// XP and streak tracking not yet implemented; use placeholders.
+	return progress.FormatProgressReport(items, 0, 0), nil
 }
 
 func (e *Engine) endActiveConversation(userID string) {

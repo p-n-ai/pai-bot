@@ -1672,6 +1672,91 @@ func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
 	}
 }
 
+func TestEngine_ProgressCommand_ShowsTopics(t *testing.T) {
+	mockAI := ai.NewMockProvider("0.8")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+		},
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	// First, send a message to create progress.
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "progress-user",
+		Text:    "Solve x + 1 = 3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Now call /progress.
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "progress-user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "algebra-linear-eq") {
+		t.Errorf("expected progress report to contain topic ID, got: %s", resp)
+	}
+	if !contains(resp, "Progress") {
+		t.Errorf("expected progress report header, got: %s", resp)
+	}
+}
+
+func TestEngine_ProgressCommand_EmptyProgress(t *testing.T) {
+	progressTracker := progress.NewMemoryTracker()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+		Tracker:  progressTracker,
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "new-user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "mula belajar") {
+		t.Errorf("expected encouragement for empty progress, got: %s", resp)
+	}
+}
+
+func TestEngine_ProgressCommand_NoTracker(t *testing.T) {
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "not enabled") {
+		t.Errorf("expected disabled message, got: %s", resp)
+	}
+}
+
 func TestEngine_ProcessMessage_NoMasteryUpdateWithoutTopic(t *testing.T) {
 	mockAI := ai.NewMockProvider("some response")
 	progressTracker := progress.NewMemoryTracker()
