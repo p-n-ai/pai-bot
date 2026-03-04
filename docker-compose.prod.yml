@@ -30,6 +30,7 @@ services:
   app:
     image: pai-bot:latest
     build: !reset null
+    dns: !reset []
     ports:
       - "127.0.0.1:8080:8080"
     restart: always
