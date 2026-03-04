@@ -170,6 +170,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 |---------------|------|--------|-------|
 | `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | ✅ | 🤖 |
 | `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | ✅ | 🤖 |
+| `A-W1D4-AI-LIVE-1` | OpenAI live conversation regression suite: `//go:build integration` test reads 30 scripted YAML conversations (2-10 turns) and validates real `agent.Engine.ProcessMessage` behavior (continuity, language profile, structured solving, concept connection, rating flows). CI explicitly skips these live tests via environment detection. | ✅ | 🤖 |
 
 ### Day 5 (Fri) — Week 1 Retro
 

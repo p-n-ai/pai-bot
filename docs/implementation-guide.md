@@ -3489,6 +3489,7 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 | 4.1 | `P-W1D4-1` | Analytics script: DAU, messages/session, AI latency, tokens by model | 🤖 | `scripts/analytics.sh` |
 | 4.2 | `P-W1D4-2` | Session management: new conversation after 30min silence, summarize previous | 🤖 | Update `internal/agent/engine.go` |
 | 4.3 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event (`answer_rating_submitted` with `data.rating` and `data.rated_message_id`). Deduplicate by rated assistant message id. | 🤖 | Update `internal/agent/engine.go` |
+| 4.6 | `A-W1D4-AI-LIVE-1` | Additional (implemented): OpenAI live conversation regression suite using YAML fixtures (30 scenarios, 2-10 turns), run with `-tags=integration` against real provider, with explicit CI skip guard for live calls. | 🤖 | `internal/agent/engine_openai_integration_test.go`, `internal/agent/testdata/openai_live_conversations.yaml` |
 | 4.4 | `P-W1D4-4` | 🧑 Read ALL pilot conversations, categorize issues, rewrite system prompt v3 | 🧑 | Manual |
 | 4.5 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10) | 🧑 | Manual |
 
@@ -3595,11 +3596,36 @@ func SummarizeMessages(messages []StoredMessage, maxMessages int) string {
 }
 ```
 
+#### 4.6 — OpenAI Live Conversation Integration Suite (TDD, Additional Implemented)
+
+This additional implemented item adds a fixture-driven live AI regression suite for the real OpenAI provider.
+
+- Test file: `internal/agent/engine_openai_integration_test.go` with `//go:build integration`
+- Fixture source of truth: `internal/agent/testdata/openai_live_conversations.yaml`
+- Coverage: 30 scripted conversation scenarios, each 2-10 turns
+- Harness behavior: for each scenario, instantiate a fresh `agent.Engine`, call `ProcessMessage` turn-by-turn, and assert behavior rubrics (continuity, language profile, structured solving, concept connection, rating flow behavior, and plain-text formatting constraints)
+- Environment controls:
+  - required: `LEARN_AI_OPENAI_API_KEY` (otherwise test skips)
+  - optional: `LEARN_AI_LIVE_TIMEOUT_SECONDS` (default 45)
+  - optional: `LEARN_AI_LIVE_MAX_CASES` (default 30)
+- CI policy: live test is explicitly skipped when running in CI (`CI`/`GITHUB_ACTIONS` environment detection), so CI does not depend on paid external API calls.
+
+Validation commands:
+
+```bash
+# local live run (requires LEARN_AI_OPENAI_API_KEY)
+go test -tags=integration ./internal/agent -run OpenAILive -v -timeout 30m
+
+# verify CI skip path
+CI=true go test -tags=integration ./internal/agent -run OpenAILive -v
+```
+
 #### Day 4 Exit Criteria
 
 - [ ] `scripts/analytics.sh` — queries events table for key metrics
 - [ ] Session auto-expires after 30min, new session gets context summary
 - [x] In-chat rating prompt every 5th response, logged as event (`answer_rating_submitted` with `data.rating` + `data.rated_message_id` in `events` table), deduped per rated assistant message
+- [x] Additional: OpenAI live conversation regression suite implemented with YAML fixtures + explicit CI skip guard
 - [ ] 🧑 System prompt v3 applied based on pilot conversation review
 - [ ] 🧑 10 pilot students onboarded
 - [ ] `make test-all` passes
