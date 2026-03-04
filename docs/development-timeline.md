@@ -1,425 +1,298 @@
-# pai-bot — Daily Development Timeline
+# oss — Daily Development Timeline
 
-> **Repository:** `p-n-ai/pai-bot`
+> **Repository:** `p-n-ai/oss`
 > **Focus:** KSSM Matematik (Form 1, 2, 3) — Algebra first
 > **Duration:** 6 weeks (Day 0 → Day 30)
 
 ---
 
-## Scope for pai-bot
+## Scope for oss
 
-pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapter, agent engine, progress tracking, motivation features, and Next.js admin panel. Everything a student interacts with flows through this repo.
+oss owns the **curriculum data**: YAML topic files, Markdown teaching notes, assessment questions, JSON Schemas, and validation CI. No runtime code — purely content + structure.
 
-**Curriculum scope (first 6 months):** KSSM Matematik only — Form 1, Form 2, Form 3. Algebra topics are the primary validation target because they are sequential (clear prerequisites), assessable (right/wrong answers), and high-demand (students struggle most here).
+**First 6 months curriculum scope (aligned to official DSKP):**
 
-**TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
+| Form | Algebra Topics (Primary) | DSKP Chapters | Other Subjects (Backfill later) |
+|------|-------------------------|---------------|-------------------------------|
+| **Form 1** | Ungkapan Algebra, Persamaan Linear, Ketaksamaan Linear | Bab 5, 6, 7 | Nombor Nisbah, Faktor & Gandaan, Nisbah/Kadar/Kadaran, etc. |
+| **Form 2** | Pola dan Jujukan, Pemfaktoran dan Pecahan Algebra, Rumus Algebra | Bab 1, 2, 3 | Poligon, Bulatan, Koordinat, Graf Fungsi, etc. |
+| **Form 3** | Indeks, Garis Lurus | Bab 1, 9 | Bentuk Piawai, Matematik Pengguna, Trigonometri, etc. |
 
----
-
-## DAY 0 — SETUP (4.5 hours) ✅ COMPLETE
-
-| Task ID | Task | Owner | Status |
-|---------|------|-------|--------|
-| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, `Makefile`, `.env.example` | 🤖 | ✅ |
-| `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
-| `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
-| `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
-| `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
-| `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
-| `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
-
-**What was built (45+ unit tests, all passing):**
-- Config: nested structs (`ServerConfig`, `DatabaseConfig`, `AIConfig`, etc.) with `Load()` and `Validate()`
-- Database: `DB` struct wrapping `pgxpool.Pool` with `ParseURL`, `New`, `Close`, `HealthCheck`
-- Cache: `Cache` struct wrapping `redis.Client` with `ParseURL`, `New`, `Close`, `HealthCheck`
-- AI Gateway: `Provider` interface, `Router` (fallback chain), `MockProvider`, `BudgetChecker` interface
-- 6 AI providers: OpenAI, DeepSeek (via OpenAI base URL), Anthropic, Google Gemini, Ollama, OpenRouter
-- Docker Compose: Postgres 17, Dragonfly, NATS 2.10 (JetStream), app, Ollama (optional `--profile ollama`)
-- Dockerfile: Go 1.22 builder → Alpine 3.20 runtime (~25MB)
-- HTTP server: `/healthz` + `/readyz` endpoints, graceful SIGTERM shutdown
+**Note:** Topic IDs follow DSKP chapter numbering (e.g., F1-05 = Form 1 Bab 5). Algebra topics are built first (Weeks 1-3), other topics backfilled (Weeks 4-6).
 
 ---
 
-## Developer Onboarding — Getting Ready for Day 1
+## KSSM Algebra Topic Map (DSKP-Aligned)
 
-All Day 0 code is committed. Before starting Day 1 tasks, every engineer must set up their local environment.
+Topic IDs follow DSKP chapter numbering: `F{form}-{chapter}`.
 
-### Prerequisites
+```
+Form 1 Algebra (3 topics — DSKP Bab 5, 6, 7)
+├── F1-05 Ungkapan Algebra (Algebraic Expressions)
+├── F1-06 Persamaan Linear (Linear Equations)
+└── F1-07 Ketaksamaan Linear (Linear Inequalities)
 
-```bash
-# Go 1.22+ (backend)
-go version   # Expected: go1.22.x or higher
+Form 2 Algebra (3 topics — DSKP Bab 1, 2, 3)
+├── F2-01 Pola dan Jujukan (Patterns & Sequences)
+├── F2-02 Pemfaktoran dan Pecahan Algebra (Factorisation & Algebraic Fractions)
+└── F2-03 Rumus Algebra (Algebraic Formulae)
 
-# Docker + Docker Compose
-docker --version && docker compose version
-
-# golangci-lint (linter)
-golangci-lint --version   # Expected: ≥1.55
-# Install if missing: brew install golangci-lint
-
-# Optional but recommended: Air (hot reload)
-go install github.com/air-verse/air@latest
+Form 3 Algebra (2 topics — DSKP Bab 1, 9)
+├── F3-01 Indeks (Indices)
+└── F3-09 Garis Lurus (Straight Lines)
 ```
 
-### Setup Steps
-
-```bash
-# 1. Clone and enter the repo
-git clone https://github.com/p-n-ai/pai-bot.git
-cd pai-bot
-
-# 2. First-time setup (copies .env.example → .env, downloads Go modules)
-make setup
-
-# 3. Edit .env — add your Telegram bot token and at least one AI provider key
-#    LEARN_TELEGRAM_BOT_TOKEN=<your-token>
-#    LEARN_AI_OPENAI_API_KEY=<key>   (or any other provider)
-
-# 4. Verify all tests pass
-make test
-
-# 5. Start infrastructure (Postgres, Dragonfly, NATS)
-docker compose up -d postgres dragonfly nats
-
-# 6. Apply the database migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
-
-# 7. Verify the server runs and health check works
-go run ./cmd/server &
-curl http://localhost:8080/healthz   # → {"status":"ok"}
-kill %1
-
-# 8. Stop infrastructure when done
-docker compose down
-```
-
-### Day 1 Task Distribution (4 engineers)
-
-Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates them all.
-
-| Task ID | Task | Assigned To | Dependencies |
-|---------|------|-------------|--------------|
-| `P-W1D1-1` | Chat Gateway — `internal/chat/gateway.go` (types + interface + router) | Engineer A | None |
-| `P-W1D1-2` | Telegram Adapter — `internal/chat/telegram.go` (long polling, /start, markdown splitting) | Engineer A | Uses types from 1.1 |
-| `P-W1D1-3` | Agent Engine — `internal/agent/engine.go` (ProcessMessage pipeline) | Engineer B | Uses `ai.Provider` from Day 0 |
-| `P-W1D1-4` | Curriculum Loader — `internal/curriculum/loader.go` (load YAML + teaching notes) | Engineer C | None |
-| `P-W1D1-5` | Wire main.go — connect all components, start polling | Engineer D (lead) | After 1.1–1.4 merge |
-
-Engineer mapping:
-- Engineer A = @djakajaya89
-
-**Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
-
-**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `make test-all`. Never commit until the full suite passes.
+**Total Algebra topics: 8** — the primary validation set.
 
 ---
 
-## WEEK 1 — THE TALKING SKELETON
+## DAY 0 — SETUP ✅
 
-### Day 1 (Mon) — Wire Telegram → AI → Student
+| Task ID | Task | Owner | Time | Status |
+|---------|------|-------|------|--------|
+| `O-D0-1` | Initialize repo: `curricula/`, `schema/`, `concepts/`, `taxonomy/`, `scripts/`, `.github/workflows/` | 🤖 Claude Code | 30min | ✅ Done |
+| `O-D0-2` | Create 4 schemas: `topic`, `assessments`, `syllabus`, `subject` (JSON Schema Draft 2020-12). Remaining schemas (`examples`, `concept`, `taxonomy`) are created as their content types are first introduced. | 🤖 Claude Code | 1hr | ✅ Done |
+| `O-D0-3` | Create `curricula/malaysia/kssm/matematik-tingkatan1/syllabus.yaml` with board metadata | 🤖 Claude Code | 30min | ✅ Done |
+| `O-D0-4` | 🧑 Choose first 5 Algebra topics against official DSKP (Form 1: 3 topics + Form 2: 2 topics) | 🧑 Education Lead | 30min | ✅ Done |
 
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D1-1` | `internal/chat/gateway.go` — InboundMessage, OutboundMessage, Channel interface, Gateway router | ✅ | 🤖 |
-| `P-W1D1-2` | `internal/chat/telegram.go` — Telegram Bot API adapter with long polling, /start handler, markdown message splitting | ✅ | 🤖 |
-| `P-W1D1-3` | `internal/agent/engine.go` — ProcessMessage: load state → build prompt → call AI → save state → return response | ✅ | 🤖 |
-| `P-W1D1-4` | `internal/curriculum/loader.go` — Load topic YAML + teaching notes markdown from filesystem | ✅ | 🤖 |
-| `P-W1D1-5` | Wire `cmd/server/main.go`: config → db → cache → AI → curriculum → agent → chat → Telegram → start | ✅ | 🤖 |
-
-**End of Day 1:** Team members can chat with the bot on Telegram. AI responds using curriculum context.
-
-### Day 2 (Tue) — Logging + Quality
-
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens | ✅ | 🤖 |
-| `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | ✅ | 🤖 |
-| `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | ✅ | 🤖 |
-| `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | ✅ | 🤖 |
-| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | ✅ | 🤖 |
-| `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | ⬜ | 🧑 Human |
-
-### Day 3 (Wed) — Deploy + First Students
-
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D3-1` | Deploy script: SSH → pull → build → restart → tail logs | ✅ | 🤖 |
-| `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | ✅ | 🤖 |
-| `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | ✅ | 🤖 |
-| `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | ✅ | 🤖 |
-| `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | ⬜ | 🧑 Human |
-
-### Day 4 (Thu) — Iterate on Real Feedback
-
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users, and rating summary (count/avg/source) | ✅ | 🤖 |
-| `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split | ✅ | 🤖 |
-| `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, and dedupe per rated assistant message (`messages.id`). Events: `answer_rating_requested/submitted/skipped` with `rated_message_id` + `rating`; configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | ✅ | 🤖 |
-| `P-W1D4-6` | Additional feature: onboarding language selection (English/BM/中文), `/language` command + Telegram command autocomplete, persist preference in `users.config.preferred_language`, and feature flag `LEARN_DISABLE_MULTI_LANGUAGE` | ✅ | 🤖 |
-| `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ⬜ | 🧑 Human |
-| `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ⬜ | 🧑 Human |
-
-#### Additional Tasks (Out of Initial Plan)
-
-Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
-When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
-
-| Additional ID | Task | Status | Owner |
-|---------------|------|--------|-------|
-| `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | ✅ | 🤖 |
-| `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | ✅ | 🤖 |
-| `A-W1D4-AI-LIVE-1` | OpenAI live conversation regression suite: `//go:build integration` test reads 30 scripted YAML conversations (2-10 turns) and validates real `agent.Engine.ProcessMessage` behavior (continuity, language profile, structured solving, concept connection, rating flows). CI explicitly skips these live tests via environment detection. | ✅ | 🤖 |
-
-### Day 5 (Fri) — Week 1 Retro
-
-**Implementation note (Day 4 decision):** The team intentionally chose not to enforce a hard 30-minute session boundary. Context continuity is handled via rolling conversation compaction and summary in the agent engine.
-
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D5-1` | 🧑 Run analytics, compile Week 1 numbers | ⬜ | 🧑 Human |
-| `P-W1D5-2` | 🧑 1hr retro: demo, review conversations, identify top 3 problems for Week 2 | ⬜ | 🧑 Team |
-| `P-W1D5-3` | 🧑 Call top 3 and bottom 3 students — 10min each | ⬜ | 🧑 Human |
-
-**Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
+**Exit:** Repo exists with schema files and syllabus structure for KSSM Matematik Form 1. ✅ **Completed**
 
 ---
 
-## WEEK 2 — PROGRESS + ASSESSMENT + 50 STUDENTS
+## WEEK 1 — FORM 1 ALGEBRA CONTENT
 
-### Day 6 (Mon) — Mastery Tracking
+### Day 1 (Mon) — Form 1 Algebra Topics (3 topics)
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D6-1` | Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
-| `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
-| `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
-| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
-| `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
+| Task ID | Task | Owner | Time | Status |
+|---------|------|-------|------|--------|
+| `O-W1D1-1` | Create `curricula/malaysia/kssm/matematik-tingkatan1/subjects/algebra.yaml` — subject metadata | 🤖 | 15min | ✅ Done |
+| `O-W1D1-2` | Create topic YAML stubs for F1-05, F1-06, F1-07: id, name, prerequisites, learning_objectives, difficulty, bloom_levels | 🤖 | 30min | ✅ Done |
+| `O-W1D1-3` | 🧑 Write F1-05 teaching notes (`05-ungkapan-algebra.teaching.md`) — real teacher quality, conversational, KSSM-aligned | 🧑 Education Lead | 2hr | ✅ Done |
+| `O-W1D1-4` | 🧑🤖 AI-draft teaching notes for F1-06 and F1-07, Education Lead reviews and edits | Collaborative | 2hr | ✅ Done |
 
-### Day 7 (Tue) — Quiz Engine
+### Day 2 (Tue) — Assessments for Form 1 Algebra
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end. **Dynamic quiz generation fallback:** if a topic has <5 questions in assessments.yaml, use AI to generate additional questions from the topic's teaching notes via `CompleteJSON` (cheap model). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s question generation | 🤖 |
-| `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge), route to appropriate handler | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | 🧑 Human |
+| Task ID | Task | Owner | Time | Status |
+|---------|------|-------|------|--------|
+| `O-W1D2-1` | 🧑 Write 10 assessment questions for F1-05 (Ungkapan Algebra): answers, rubrics, hints, difficulty spread | 🧑 Education Lead | 2hr | ✅ Done |
+| `O-W1D2-2` | 🤖 AI-generate assessments for F1-06 (15 questions), Education Lead reviews and expands | Collaborative | 2hr | ✅ Done |
+| `O-W1D2-3` | 🤖 AI-generate assessments for F1-07 (10 questions), Education Lead reviews | Collaborative | 2hr | ✅ Done |
+| `O-W1D2-4` | Create `.yamllint.yml` with formatting rules | 🤖 | 15min | ✅ Done |
 
-### Day 8 (Wed) — Proactive Nudges + Streaks
+### Day 3 (Wed) — Validation Pipeline
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | 🤖 |
-| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | 🤖 |
-| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | 🤖 |
-| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human |
+| `O-W1D3-1` | GitHub Actions workflow `validate.yml`: yamllint + ajv-cli validation of all YAML against schemas | 🤖 |
+| `O-W1D3-2` | `scripts/validate.sh` — run all schema validations locally | 🤖 |
+| `O-W1D3-3` | Validate all existing content passes CI | 🤖 |
 
-### Day 9 (Thu) — Topic Navigation
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
-| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
-| `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
-| `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
-
-### Day 10 (Fri) — Week 2 Retro
+### Day 4 (Thu) — Form 2 Algebra Begins (3 topics)
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
-| `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
+| `O-W1D4-1` | Create `curricula/malaysia/kssm/matematik-tingkatan2/syllabus.yaml` + `subjects/algebra.yaml` | 🤖 |
+| `O-W1D4-2` | Create topic YAML stubs for F2-01, F2-02, F2-03 with prerequisites linking to Form 1 | 🤖 |
+| `O-W1D4-3` | 🧑 Write F2-02 teaching notes (Pemfaktoran dan Pecahan Algebra) — key topic, highest misconception rate | 🧑 Education Lead (2hr) |
+| `O-W1D4-4` | 🧑🤖 AI-draft teaching notes for F2-01 and F2-03 | Collaborative |
 
-**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
+### Day 5 (Fri) — Quality Check
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W1D5-1` | 🧑 Review all Week 1 content for KSSM accuracy: correct terminology (BM & English), correct scope per form | 🧑 Education Lead (2hr) |
+| `O-W1D5-2` | Fix any schema validation failures | 🤖 |
+
+**Week 1 Output:** 6 topic YAMLs (F1: 3, F2: 3), 6 teaching notes, 15+ assessment questions. All pass CI.
 
 ---
 
-## WEEK 3 — MOTIVATION ENGINE
+## WEEK 2 — FORM 2 & 3 ALGEBRA + ASSESSMENTS
 
-### Day 11 (Mon) — Goals + Challenges
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 |
-| `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 |
-| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
-| `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
-
-### Day 12 (Tue) — Groups + Leaderboards
+### Day 6 (Mon) — Form 2 Assessments
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 |
-| `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 |
-| `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 |
-| `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human |
+| `O-W2D6-1` | 🧑 Write assessments for F2-01, F2-02, F2-03 (5 questions each, Algebra focus) | 🧑 Education Lead (3hr) |
+| `O-W2D6-2` | 🧑🤖 AI-draft additional assessment questions for all F2 topics | Collaborative |
 
-### Day 13 (Wed) — A/B Test + Social Features
+### Day 7 (Tue) — Form 3 Algebra Structure
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 |
-| `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 |
-| `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 |
-| `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human |
+| `O-W2D7-1` | Create `curricula/malaysia/kssm/matematik-tingkatan3/syllabus.yaml` + `subjects/algebra.yaml` | 🤖 |
+| `O-W2D7-2` | Create topic YAML stubs for F3-01 and F3-09 with prerequisites linking to Form 2 | 🤖 |
+| `O-W2D7-3` | 🧑 Write F3-01 teaching notes (Indeks — Indices) | 🧑 Education Lead (2hr) |
+| `O-W2D7-4` | 🧑🤖 AI-draft teaching notes for F3-09 (Garis Lurus) | Collaborative |
 
-### Day 14 (Thu) — Analytics Dashboard
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W3D14-1` | Analytics HTML page at `/admin/metrics`: DAU chart, retention cohort, A/B comparison, token costs, nudge rate | 🤖 |
-| `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, XP, leaderboard rank in nudge context | 🤖 |
-| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human |
-
-### Day 15 (Fri) — Week 3 Retro
+### Day 8 (Wed) — Form 3 Assessments
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D15-1` | 🧑 Week 3 metrics. A/B test early signal? Battle participation? Leaderboard engagement? | 🧑 Human |
-| `P-W3D15-2` | 🧑 Retro + go/no-go for admin panel. Any negative signals from competitive features? | 🧑 Team |
+| `O-W2D8-1` | 🧑 Write assessments for F3-01 and F3-09 (5 questions each) | 🧑 Education Lead (2hr) |
+| `O-W2D8-2` | 🧑🤖 AI-draft additional assessment questions for F3 topics | Collaborative |
 
-**Week 3 Targets:** Goals, challenges, leaderboards live. ≥1 school group active. Challenge participation ≥20%. 80+ students active.
+### Day 9 (Thu) — Cross-Form Prerequisites + Concepts
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W2D9-1` | `scripts/check-prerequisites.py` — detect cycles in prerequisite graph across all 3 forms | 🤖 |
+| `O-W2D9-2` | `scripts/check-references.py` — verify all topic_id and syllabus_id references are valid | 🤖 |
+| `O-W2D9-3` | Create `concepts/mathematics/linear-equation.yaml` bridging F1→F2→F3 linear equations | 🤖 |
+| `O-W2D9-4` | Create `concepts/mathematics/algebraic-expression.yaml` bridging expansion/factorisation across forms | 🤖 |
+| `O-W2D9-5` | 🧑 Verify prerequisite chain: can a Form 1 student's mastery correctly unlock Form 2 topics? | 🧑 Education Lead |
+
+### Day 10 (Fri) — Quality Audit
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W2D10-1` | `scripts/assess-quality.py` — auto-assess quality levels for all topics | 🤖 |
+| `O-W2D10-2` | Add quality report to CI (runs on merge to main) | 🤖 |
+| `O-W2D10-3` | 🧑 Full quality audit: are all 8 Algebra topics at Level 3 (Teachable)? Fix any that aren't. | 🧑 Education Lead |
+
+**Week 2 Output:** All 8 Algebra topics complete (F1:3 + F2:3 + F3:2). 40+ assessment questions. Prerequisite chain validated across 3 forms. Quality Level ≥3 for all topics.
 
 ---
 
-## WEEK 4 — ADMIN PANEL + FORM SELECTION
+## WEEK 3 — WORKED EXAMPLES + MALAY TRANSLATIONS
 
-### Day 16 (Mon) — Scaffold Admin Panel
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. JWT auth, sidebar layout. | 🤖 |
-| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 |
-| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 |
-| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human |
-
-### Day 17 (Tue) — API Endpoints + Parent View
+### Day 11 (Mon) — Examples Schema + Form 1 Examples
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 |
-| `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 |
-| `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 |
-| `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human |
+| `O-W3D11-1` | Create `schema/examples.schema.json` | 🤖 |
+| `O-W3D11-2` | 🧑🤖 Create worked examples for F1-05, F1-06, F1-07 (3 examples each, progressive difficulty) | Collaborative (3hr) |
 
-### Day 18 (Wed) — Deploy Admin + Class Management
+### Day 12 (Tue) — Form 2 & 3 Examples
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* → Go, /* → Next.js) | 🤖 |
-| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 |
-| `P-W4D18-3` | 🧑 Test all 3 Forms (F1, F2, F3) with bot — does content switch correctly? | 🧑 Human |
+| `O-W3D12-1` | 🧑🤖 Create worked examples for F2-01, F2-02, F2-03 | Collaborative (3hr) |
+| `O-W3D12-2` | 🧑🤖 Create worked examples for F3-01 and F3-09 | Collaborative (2hr) |
 
-### Day 19 (Thu) — Reports + Budget Tracking
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 |
-| `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | 🤖 |
-| `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human |
-
-### Day 20 (Fri) — Week 4 Retro
+### Day 13 (Wed) — Malay Translation Structure
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D20-1` | 🧑 Week 4 metrics: Day-14 retention, A/B test results (10 days), teacher dashboard usage | 🧑 Human |
-| `P-W4D20-2` | 🧑 Retro. Big decision: ready for open-source prep? | 🧑 Team |
+| `O-W3D13-1` | Create `locales/ms/` directory structure mirroring all 3 forms | 🤖 |
+| `O-W3D13-2` | 🧑🤖 Translate Form 1 topic names, learning objectives, misconceptions to Bahasa Melayu | Collaborative |
+| `O-W3D13-3` | 🧑🤖 Translate Form 1 teaching notes to BM (since KSSM students learn in Malay) | Collaborative |
 
-**Week 4 Targets:** Admin panel live. All 3 Forms working. 2+ teachers using dashboard. 100+ students active. Day-14 retention ≥30%.
+### Day 14 (Thu) — Form 2 & 3 Translations
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W3D14-1` | 🧑🤖 Translate Form 2 topics + teaching notes to BM | Collaborative |
+| `O-W3D14-2` | 🧑🤖 Translate Form 3 topics + teaching notes to BM | Collaborative |
+| `O-W3D14-3` | 🧑 Native speaker review of all BM translations — correct mathematical terminology | 🧑 Education Lead |
+
+### Day 15 (Fri) — Taxonomy + Documentation
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W3D15-1` | Create `taxonomy/mathematics/algebra.yaml` — classification tree for KSSM algebra | 🤖 |
+| `O-W3D15-2` | Write CONTRIBUTING.md: 3 contribution paths (teacher, developer, AI), YAML format guide with examples | 🤖 |
+| `O-W3D15-3` | Write comprehensive README.md: what it is, structure, how to consume, how to contribute | 🤖 |
+
+**Week 3 Output:** 24 worked examples. Malay translations for all 8 Algebra topics. Taxonomy defined. Docs complete.
 
 ---
 
-## WEEK 5 — SELF-HOSTABLE + OPEN SOURCE PREP
+## WEEK 4 — NON-ALGEBRA TOPIC STUBS + QUALITY
 
-### Day 21-22 (Mon-Tue) — Cleanup + Documentation
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W5D21-1` | Codebase cleanup: remove hardcoded values, Go doc comments, copyright headers, golangci-lint fixes, .env.example | 🤖 |
-| `P-W5D21-2` | Write docs: setup.md, architecture.md, ai-providers.md, curriculum.md, deployment.md | 🤖 |
-| `P-W5D21-3` | Comprehensive README.md: hero, quick start (5 steps), features, architecture diagram, providers table, curricula table | 🤖 |
-| `P-W5D21-4` | `scripts/setup.sh`: check prereqs → copy .env → prompt for tokens → docker compose up → migrate → seed demo school | 🤖 |
-| `P-W5D21-5` | 🧑 Write launch blog post (1500 words) | 🧑 Human |
-| `P-W5D21-6` | 🧑 Record 3-min demo video | 🧑 Human |
-
-### Day 23 (Wed) — Self-Host Testing
+### Day 16-17 (Mon-Tue) — Form 1 Non-Algebra Topics
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W5D23-1` | Multi-tenancy: LEARN_TENANT_MODE single/multi, auto-create default tenant in single mode | 🤖 |
-| `P-W5D23-2` | Helm chart: Deployment, StatefulSet (PG, Dragonfly), ConfigMap, Secret, Service, Ingress | 🤖 |
-| `P-W5D23-3` | 🧑 Fresh machine test: new AWS instance, follow README only, deploy from scratch, fix every issue | 🧑 Human |
+| `O-W4D16-1` | Create non-algebra subjects for Form 1: `numbers.yaml`, `measurement.yaml`, `statistics.yaml` | 🤖 |
+| `O-W4D16-2` | Create Level 0-1 topic stubs for Form 1 non-algebra (8-10 topics): id, name, LOs, prerequisites, difficulty | 🤖 |
+| `O-W4D16-3` | 🧑🤖 Elevate 3 high-priority Form 1 non-algebra topics to Level 2 (add misconceptions, teaching sequence) | Collaborative |
 
-### Day 24-25 (Thu-Fri) — Security + WhatsApp + Data Export
+### Day 18 (Wed) — Form 2 & 3 Non-Algebra Topics
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 |
-| `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 |
-| `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 |
-| `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human |
-| `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human |
+| `O-W4D18-1` | Create Level 0-1 stubs for Form 2 non-algebra (8-10 topics) | 🤖 |
+| `O-W4D18-2` | Create Level 0-1 stubs for Form 3 non-algebra (8-10 topics) | 🤖 |
+| `O-W4D18-3` | 🧑 Verify all prerequisite links across Algebra and non-Algebra topics are correct | 🧑 Education Lead |
 
-**Week 5 Targets:** Fresh `docker compose up` works in <10min. README + docs complete. Helm chart exists. Security audit done. 150+ students active.
+### Day 19-20 (Thu-Fri) — More Assessments + Quality
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W4D19-1` | 🧑 Add 5 MORE assessment questions per Algebra topic (bringing total to 10/topic = 80 total) | 🧑 Education Lead |
+| `O-W4D19-2` | 🧑 Add harder "exam-style" questions for Form 3 topics (PT3 exam format) | 🧑 Education Lead |
+| `O-W4D20-1` | Run full quality report: how many topics at each level? | 🤖 |
+| `O-W4D20-2` | 🧑 Ensure ALL 8 Algebra topics are at Quality Level 3+ (Teachable) | 🧑 Education Lead |
+
+**Week 4 Output:** ~25 non-algebra topic stubs. 80+ algebra assessment questions. Full quality report.
 
 ---
 
-## WEEK 6 — LAUNCH + SCALE
+## WEEK 5 — OPEN SOURCE PREP
+
+### Day 21-22 (Mon-Tue) — Documentation + Cleanup
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W5D21-1` | Create "good first issues" for community: add teaching notes for stub topics, translate to Chinese, improve an assessment | 🤖 |
+| `O-W5D21-2` | Create CODEOWNERS: Education Lead auto-assigned on all content PRs | 🤖 |
+| `O-W5D21-3` | Create issue templates: new-topic, improve-content, translation, bug-report | 🤖 |
+| `O-W5D22-1` | `scripts/export-sqlite.py` — generate SQLite export of all curriculum data for offline apps | 🤖 |
+| `O-W5D22-2` | Add SQLite export to release workflow: tagged release generates downloadable oss.sqlite | 🤖 |
+
+### Day 23 (Wed) — Final Validation
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W5D23-1` | Run full CI: all YAML validates, no prerequisite cycles, all references valid, quality report clean | 🤖 |
+| `O-W5D23-2` | 🧑 Final read-through of every teaching note and assessment for KSSM accuracy | 🧑 Education Lead |
+
+### Day 24-25 (Thu-Fri) — Pre-Launch
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `O-W5D24-1` | Tag v0.1.0: first public release (8 Algebra topics at Level 3+, 25+ non-algebra stubs) | 🤖 |
+| `O-W5D25-1` | 🧑 Prepare curriculum section of launch blog: "Open School Syllabus — covering KSSM F1-F3 Matematik" | 🧑 Human |
+
+**Week 5 Output:** Repo public-ready. v0.1.0 tagged. 10+ good first issues. SQLite export available.
+
+---
+
+## WEEK 6 — LAUNCH + COMMUNITY
 
 ### Day 26 (Mon) — LAUNCH DAY
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D26-1` | Landing page at `/`: static HTML (Tailwind CDN), "Try on Telegram" + "Self-host" buttons | 🤖 |
-| `P-W6D26-2` | K8s health probes: /healthz, /readyz, graceful shutdown on SIGTERM | 🤖 |
-| `P-W6D26-3` | 🧑 Publish blog, HN submission, Twitter/LinkedIn/Reddit, 50 personal emails | 🧑 Human |
-| `P-W6D26-4` | 🧑 Monitor server + conversations all day | 🧑 Team |
+| `O-W6D26-1` | 🧑 Publish repo publicly. Announce alongside pai-bot. | 🧑 Human |
+| `O-W6D26-2` | 🧑 Post in Malaysian teacher communities: Telegram groups, Facebook groups for Guru Matematik | 🧑 Human |
 
-### Day 27 (Tue) — Respond + Onboard
+### Day 27-28 (Tue-Wed) — Community Response
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D27-1` | Fix top 5 bugs from launch day | 🤖 |
-| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers | 🤖 |
-| `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team |
+| `O-W6D27-1` | 🧑 Respond to every issue and PR within 24 hours | 🧑 Team |
+| `O-W6D28-1` | 🧑 Based on feedback, identify most-requested additional content (Chinese/Tamil translations? Science?) | 🧑 Human |
 
-### Day 28 (Wed) — i18n + Scale
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 |
-| `P-W6D28-2` | 🧑 3-day post-launch metrics. Identify most-requested features. | 🧑 Human |
-
-### Day 29 (Thu) — Analytics API
+### Day 29-30 (Thu-Fri) — First Community Contributions
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 |
-| `P-W6D29-2` | 🧑 Review community PRs. Plan next 6 weeks. | 🧑 Team |
+| `O-W6D29-1` | 🧑 Review and merge first community PRs. Be generous with praise. | 🧑 Education Lead |
+| `O-W6D30-1` | 🧑 Write curriculum section of 6-week report: coverage stats, quality levels, community contributions | 🧑 Human |
 
-### Day 30 (Fri) — 6-Week Report
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W6D30-1` | 🧑 Compile 6-week report: metrics, learnings, unit economics, next steps | 🧑 Human |
-| `P-W6D30-2` | 🧑 Final retro. Top 3 priorities for next quarter. | 🧑 Team |
-
-**Week 6 Targets:** Public launch. 500+ GitHub stars. 10+ schools. 500-1,000 students. A/B test conclusive.
+**Week 6 Output:** Public repo with community engagement. First external contributions. 5+ external contributors.
 
 ---
 
-## Task Count Summary
+## Content Delivery Summary
 
-| Week | 🤖 Claude Code | 🧑 Human | Total |
-|------|----------------|----------|-------|
-| 0 | 8 | 0 | 8 |
-| 1 | 18 | 8 | 26 |
-| 2 | 17 | 6 | 23 |
-| 3 | 11 | 5 | 16 |
-| 4 | 11 | 5 | 16 |
-| 5 | 9 | 5 | 14 |
-| 6 | 6 | 6 | 12 |
-| **Total** | **80** | **35** | **115** |
+| Milestone | Algebra Topics | Non-Algebra Topics | Assessment Qs | Teaching Notes | Translations |
+|-----------|---------------|--------------------|--------------|--------------|-|
+| End Week 1 | 6 (F1:3, F2:3) | 0 | 15+ | 6 (BM & EN) | 0 |
+| End Week 2 | 8 (all) | 0 | 40+ | 8 (all) | 0 |
+| End Week 3 | 8 | 0 | 40+ | 8 | 8 (Malay) |
+| End Week 4 | 8 | ~25 stubs | 80+ | 8+ | 8 |
+| End Week 5 | 8 | ~25 | 80+ | 8+ | 8 |
+| End Week 6 | 8 | ~25+ | 80+ | 8+ | 8+ |
