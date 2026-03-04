@@ -80,14 +80,15 @@ jobs:
             LEARN_RATING_PROMPT_EVERY_REPLIES=5
             LEARN_LOG_LEVEL=info
             LEARN_LOG_FORMAT=json
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             ENVEOF
 
             echo "--- Loading Docker image ---"
             docker load < pai-bot.tar.gz
             rm pai-bot.tar.gz
 
-            echo "--- Starting services ---"
-            export POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+            echo "--- Restarting services ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
