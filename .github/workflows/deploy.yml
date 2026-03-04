@@ -1,0 +1,120 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -short -count=1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
+
+      - name: Save Docker image
+        run: docker save pai-bot:latest | gzip > pai-bot.tar.gz
+
+      - name: Copy image and compose files to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          source: "pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml,migrations"
+          target: ${{ secrets.DEPLOY_DIR }}
+          strip_components: 0
+
+      - name: Write .env and deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,LEARN_AUTH_JWT_SECRET,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD
+          script: |
+            set -euo pipefail
+            cd $DEPLOY_DIR
+
+            echo "--- Writing .env ---"
+            cat > .env << ENVEOF
+            LEARN_SERVER_PORT=8080
+            LEARN_DATABASE_URL=postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable
+            LEARN_DATABASE_MAX_CONNS=25
+            LEARN_CACHE_URL=redis://dragonfly:6379
+            LEARN_NATS_URL=nats://nats:4222
+            LEARN_TELEGRAM_BOT_TOKEN=${LEARN_TELEGRAM_BOT_TOKEN}
+            LEARN_AUTH_JWT_SECRET=${LEARN_AUTH_JWT_SECRET}
+            LEARN_AI_OPENAI_API_KEY=${LEARN_AI_OPENAI_API_KEY}
+            LEARN_AI_ANTHROPIC_API_KEY=${LEARN_AI_ANTHROPIC_API_KEY}
+            LEARN_AI_DEEPSEEK_API_KEY=${LEARN_AI_DEEPSEEK_API_KEY}
+            LEARN_AI_GOOGLE_API_KEY=${LEARN_AI_GOOGLE_API_KEY}
+            LEARN_AI_OPENROUTER_API_KEY=${LEARN_AI_OPENROUTER_API_KEY}
+            LEARN_AI_OLLAMA_ENABLED=false
+            LEARN_TENANT_MODE=single
+            LEARN_CURRICULUM_PATH=./oss
+            LEARN_DISABLE_MULTI_LANGUAGE=false
+            LEARN_RATING_PROMPT_EVERY_REPLIES=5
+            LEARN_LOG_LEVEL=info
+            LEARN_LOG_FORMAT=json
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            ENVEOF
+
+            echo "--- Loading Docker image ---"
+            docker load < pai-bot.tar.gz
+            rm pai-bot.tar.gz
+
+            echo "--- Restarting services ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
+
+            echo "--- Running migrations ---"
+            sleep 3
+            for f in migrations/*.up.sql; do
+              docker exec -i pai-bot-postgres-1 psql -U pai -d pai < "$f" 2>&1 || true
+            done
+
+            echo "--- Starting app ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+            echo "--- Waiting for app ---"
+            sleep 5
+
+            echo "--- Health check ---"
+            curl -sf --max-time 10 http://localhost:8080/healthz
+
+            echo "--- Container status ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+        env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          LEARN_TELEGRAM_BOT_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
+          LEARN_AUTH_JWT_SECRET: ${{ secrets.LEARN_AUTH_JWT_SECRET }}
+          LEARN_AI_OPENAI_API_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
+          LEARN_AI_ANTHROPIC_API_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
+          LEARN_AI_DEEPSEEK_API_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
+          LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
+          LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}

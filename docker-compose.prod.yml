@@ -1,0 +1,45 @@
+# Production overrides for single-server deployment
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_USER: pai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: pai
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  dragonfly:
+    ports: !reset []
+    command: ["--maxmemory", "256mb", "--proactor_threads", "1"]
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+
+  nats:
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  app:
+    image: pai-bot:latest
+    build: !reset null
+    dns: !reset []
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
