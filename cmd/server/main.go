@@ -56,7 +56,7 @@ func main() {
 		if err != nil {
 			slog.Warn("cache not connected", "error", err)
 		} else {
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			slog.Info("cache connected")
 		}
 	} else {
