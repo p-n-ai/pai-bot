@@ -73,15 +73,17 @@ func (m *MemoryTracker) UpdateMastery(userID, syllabusID, topicID string, delta 
 
 	if !exists {
 		// Seed on first update: set score directly to delta.
+		quality := DeltaToQuality(delta)
+		sm2 := SM2Calculate(quality, 0, 2.5, 1)
 		m.items[key] = &ProgressItem{
 			UserID:       userID,
 			SyllabusID:   syllabusID,
 			TopicID:      topicID,
 			MasteryScore: delta,
-			EaseFactor:   2.5,
-			IntervalDays: 1,
-			Repetitions:  1,
-			NextReviewAt: now.Add(24 * time.Hour),
+			EaseFactor:   sm2.EaseFactor,
+			IntervalDays: sm2.IntervalDays,
+			Repetitions:  sm2.Repetitions,
+			NextReviewAt: now.Add(time.Duration(sm2.IntervalDays*24) * time.Hour),
 			LastStudied:  now,
 		}
 		return nil
@@ -89,9 +91,14 @@ func (m *MemoryTracker) UpdateMastery(userID, syllabusID, topicID string, delta 
 
 	// Weighted blend on subsequent updates.
 	item.MasteryScore = clamp(item.MasteryScore*0.7+delta*0.3, 0.0, 1.0)
-	item.Repetitions++
+
+	quality := DeltaToQuality(delta)
+	sm2 := SM2Calculate(quality, item.Repetitions, item.EaseFactor, item.IntervalDays)
+	item.EaseFactor = sm2.EaseFactor
+	item.IntervalDays = sm2.IntervalDays
+	item.Repetitions = sm2.Repetitions
 	item.LastStudied = now
-	item.NextReviewAt = now.Add(time.Duration(item.IntervalDays*24) * time.Hour)
+	item.NextReviewAt = now.Add(time.Duration(sm2.IntervalDays*24) * time.Hour)
 
 	return nil
 }
