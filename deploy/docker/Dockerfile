@@ -10,5 +10,6 @@ RUN CGO_ENABLED=0 go build -o /pai-server ./cmd/server
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /pai-server /pai-server
+COPY --from=builder /app/oss /oss
 EXPOSE 8080
 ENTRYPOINT ["/pai-server"]
