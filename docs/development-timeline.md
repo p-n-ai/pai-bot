@@ -125,7 +125,7 @@ Engineer mapping:
 | `P-W1D1-2` | `internal/chat/telegram.go` — Telegram Bot API adapter with long polling, /start handler, markdown message splitting | ✅ | 🤖 |
 | `P-W1D1-3` | `internal/agent/engine.go` — ProcessMessage: load state → build prompt → call AI → save state → return response | ✅ | 🤖 |
 | `P-W1D1-4` | `internal/curriculum/loader.go` — Load topic YAML + teaching notes markdown from filesystem | ✅ | 🤖 |
-| `P-W1D1-5` | Wire `cmd/server/main.go`: config → db → cache → AI → curriculum → agent → chat → Telegram → start | ⬜ | 🤖 |
+| `P-W1D1-5` | Wire `cmd/server/main.go`: config → db → cache → AI → curriculum → agent → chat → Telegram → start | ✅ | 🤖 |
 
 **End of Day 1:** Team members can chat with the bot on Telegram. AI responds using curriculum context.
 

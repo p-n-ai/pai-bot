@@ -15,6 +15,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
 )
@@ -48,6 +49,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// Initialize cache (warn if unavailable, don't fail).
+	if cfg.Cache.URL != "" {
+		c, err := cache.New(context.Background(), cfg.Cache.URL)
+		if err != nil {
+			slog.Warn("cache not connected", "error", err)
+		} else {
+			defer c.Close()
+			slog.Info("cache connected")
+		}
+	} else {
+		slog.Warn("cache not configured, running without cache")
+	}
 
 	store, err := agent.NewPostgresStore(context.Background(), db.Pool)
 	if err != nil {
