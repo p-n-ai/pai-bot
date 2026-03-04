@@ -31,10 +31,10 @@ func SM2Calculate(quality, repetitions int, easeFactor float64, intervalDays int
 	var newInterval int
 	newReps := repetitions + 1
 
-	switch {
-	case repetitions == 0:
+	switch repetitions {
+	case 0:
 		newInterval = 1
-	case repetitions == 1:
+	case 1:
 		newInterval = 6
 	default:
 		newInterval = int(math.Round(float64(intervalDays) * newEF))
