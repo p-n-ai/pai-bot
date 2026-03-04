@@ -436,9 +436,20 @@ cd admin && npm install && npm run dev
 
 ```bash
 make test         # Run all Go tests
+make test-integration  # Run integration tests (requires -tags=integration tests)
 make test-cover   # Run tests with coverage report
 make lint         # Run golangci-lint
 ```
+
+OpenAI live conversation integration suite:
+
+- Fixture source: `internal/agent/testdata/openai_live_conversations.yaml` (30 scripted conversations, 2-10 turns each)
+- Test harness: `internal/agent/engine_openai_integration_test.go` (`//go:build integration`)
+- Required env for live run: `LEARN_AI_OPENAI_API_KEY`
+- Optional env:
+  - `LEARN_AI_LIVE_TIMEOUT_SECONDS` (default `45`)
+  - `LEARN_AI_LIVE_MAX_CASES` (default `30`)
+- CI behavior: the live OpenAI suite is explicitly skipped in CI (`CI`/`GITHUB_ACTIONS` detection) to avoid external paid API calls in pipeline runs.
 
 ### Useful Commands
 

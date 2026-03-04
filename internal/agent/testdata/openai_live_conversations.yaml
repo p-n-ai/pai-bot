@@ -1,0 +1,559 @@
+version: 1
+provider: openai
+conversations:
+  - id: C01
+    title: BM linear equation follow-up
+    tags: [bm, algebra, followup]
+    turns:
+      - user: "Saya pelajar Tingkatan 1. Tolong ajar 2x + 4 = 10."
+      - user: "Kenapa kita tolak 4 dahulu?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C02
+    title: BM bracket equation and verification
+    tags: [bm, algebra]
+    turns:
+      - user: "Macam mana selesaikan 3(x - 2) = 9?"
+      - user: "Boleh semak jawapan sekali?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C03
+    title: BM fractional linear equation
+    tags: [bm, algebra, fraction]
+    turns:
+      - user: "Tolong ajar x/3 + 5 = 9."
+      - user: "Ada cara lain yang setara tak?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C04
+    title: Word problem to equation (money)
+    tags: [bm, word-problem]
+    turns:
+      - user: "Saya ada RM50. Lepas beli buku, baki RM26. Harga buku berapa?"
+      - user: "Tulis dulu bentuk persamaan dia."
+      - user: "Sekarang selesaikan sampai dapat jawapan."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C05
+    title: Rectangle perimeter variable
+    tags: [bm, geometry, algebra]
+    turns:
+      - user: "Perimeter segi empat tepat ialah 30. Panjang = x, lebar = 5. Cari x."
+      - user: "Kenapa guna formula 2(l + w)?"
+      - user: "Boleh ringkaskan langkah penting je?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C06
+    title: Mistake correction without condescension
+    tags: [bm, correction]
+    turns:
+      - user: "Saya cuba 2x - 7 = 5."
+      - user: "Saya dapat x = 12. Betul ke?"
+      - user: "Di mana silap saya sebenarnya?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C07
+    title: Inequality explanation
+    tags: [bm, inequality]
+    turns:
+      - user: "Macam mana selesaikan 3x + 2 > 11?"
+      - user: "Apa maksud jawapan ni atas garis nombor?"
+      - user: "Bagi contoh kehidupan harian satu."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C08
+    title: Index laws with common mistakes
+    tags: [bm, indices]
+    turns:
+      - user: "Permudahkan a^3 x a^2."
+      - user: "Kalau a^-2 maksud dia apa?"
+      - user: "Apa kesalahan biasa pelajar buat untuk indeks?"
+      - user: "Boleh bagi semakan cepat untuk jawapan?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C09
+    title: Expand and factor bridge
+    tags: [bm, algebra, factor]
+    turns:
+      - user: "Kembangkan (x + 3)(x - 2)."
+      - user: "Sekarang songsangkan semula jadi bentuk faktor."
+      - user: "Kenapa terma tengah jadi +x?"
+      - user: "Boleh semak guna nilai x = 4?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C10
+    title: Ratio converted to equation
+    tags: [bm, ratio]
+    turns:
+      - user: "Nisbah Ali:Bala = 3:5, jumlah umur 32. Cari umur Ali."
+      - user: "Tulis persamaan dia dulu."
+      - user: "Adakah ini hubungan berkadar terus?"
+      - user: "Bagi satu soalan serupa untuk saya cuba."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C11
+    title: Fraction equation with LCD
+    tags: [bm, fraction, algebra]
+    turns:
+      - user: "Selesaikan (x/2) + (x/3) = 10."
+      - user: "Kenapa kita darab semua dengan 6?"
+      - user: "Apa perangkap biasa untuk soalan macam ni?"
+      - user: "Semak jawapan akhir sekali."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C12
+    title: Discount percentage equation
+    tags: [bm, percentage]
+    turns:
+      - user: "Harga asal RM80, diskaun 15%. Harga akhir berapa?"
+      - user: "Bina persamaan ringkas dulu."
+      - user: "Ada shortcut kiraan mental tak?"
+      - user: "Bagi satu latihan tambahan."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C13
+    title: Mixed BM-English continuity
+    tags: [mixed-language, algebra]
+    turns:
+      - user: "Teach me equation 4x + 1 = 17 in simple BM please."
+      - user: "Kenapa divide by 4 at the end?"
+      - user: "Can you verify quickly?"
+      - user: "Bagi one similar question."
+      - user: "I try x = 3, betul ke?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C14
+    title: User asks only final answer repeatedly
+    tags: [bm, pedagogy]
+    turns:
+      - user: "Bagi jawapan terus: 5x - 10 = 0"
+      - user: "Tak perlu penerangan panjang, just answer."
+      - user: "Okay now explain sikit kenapa."
+      - user: "Semak cepat je."
+      - user: "Konsep ni guna bila?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C15
+    title: Variable concept for beginner
+    tags: [bm, beginner]
+    turns:
+      - user: "Saya keliru apa maksud pemboleh ubah x."
+      - user: "Boleh guna contoh duit atau sekolah?"
+      - user: "Macam mana kaitkan dengan 2x + 3 = 11?"
+      - user: "Bagi saya check soalan pendek."
+      - user: "Saya cuba x = 4, tolong semak."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C16
+    title: Compare two equation methods
+    tags: [bm, method-selection]
+    turns:
+      - user: "Selesaikan 2(x + 1) = 14."
+      - user: "Kalau expand dulu vs bahagi dulu, mana lebih sesuai?"
+      - user: "Tunjuk dua cara yang setara."
+      - user: "Mana lebih selamat dalam exam?"
+      - user: "Ringkaskan rule pemilihan kaedah."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C17
+    title: Rating flow with valid score
+    tags: [bm, rating, deterministic]
+    turns:
+      - user: "Ajar saya 2x + 1 = 9."
+      - user: "Kenapa tolak 1 dulu?"
+      - user: "Bagi contoh lain serupa."
+      - user: "Saya cuba 3x = 12, apa x?"
+      - user: "Boleh semak semua langkah sekali?"
+      - user: "4"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: false
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+      require_rating_prompt: true
+      require_rating_thanks: true
+
+  - id: C18
+    title: Rating flow with invalid score
+    tags: [bm, rating, deterministic]
+    turns:
+      - user: "Tolong ajar 4x - 3 = 13."
+      - user: "Kenapa tambah 3 dahulu?"
+      - user: "Bagi satu soalan latihan pendek."
+      - user: "Saya jawab x = 5, betul?"
+      - user: "Semak dan ringkaskan kaedah ni."
+      - user: "7"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: false
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+      require_rating_prompt: true
+      require_rating_retry: true
+
+  - id: C19
+    title: KSSM-style tutoring continuity
+    tags: [bm, kssm]
+    turns:
+      - user: "Saya Tingkatan 1. Ajar persamaan linear satu pemboleh ubah."
+      - user: "Fokus pada langkah asas dulu."
+      - user: "Sekarang tambah cabaran sikit."
+      - user: "Apa kesalahan biasa?"
+      - user: "Semak pemahaman saya dengan satu soalan."
+      - user: "Terangkan semula konsep teras dengan ringkas."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C20
+    title: English-first student flow
+    tags: [english, algebra]
+    turns:
+      - user: "I am Form 2. Please teach me linear equations with 3x + 7 = 22."
+      - user: "Why do we subtract 7 first?"
+      - user: "Can you verify by substitution?"
+      - user: "Give one similar practice question."
+      - user: "My attempt: x = 5. Is that correct?"
+      - user: "When should I use this method again?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: en_or_mixed
+
+  - id: C21
+    title: Multi-step with brackets and fractions
+    tags: [bm, algebra, multi-step]
+    turns:
+      - user: "Selesaikan 2(x - 3) + x/2 = 7."
+      - user: "Kenapa pilih kaedah tu dulu?"
+      - user: "Boleh tunjuk susunan langkah yang kemas?"
+      - user: "Saya keliru masa buang pecahan."
+      - user: "Semak jawapan akhir dengan substitute."
+      - user: "Bagi rule ringkas untuk soalan campuran."
+      - user: "Saya cuba sendiri satu lagi selepas ni."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C22
+    title: Simultaneous equations substitution
+    tags: [bm, simultaneous]
+    turns:
+      - user: "Selesaikan serentak: x + y = 9 dan x - y = 1."
+      - user: "Kenapa guna substitution berbanding elimination?"
+      - user: "Boleh tunjuk elimination juga?"
+      - user: "Bandingkan kelebihan dua kaedah."
+      - user: "Semak jawapan pasangan (x, y)."
+      - user: "Bagi soalan latihan serupa."
+      - user: "Terangkan konsep teras sistem serentak."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C23
+    title: Quadratic factorization bridge
+    tags: [bm, quadratic]
+    turns:
+      - user: "Faktorkan x^2 - 5x + 6."
+      - user: "Dari faktor tu, akar dia apa?"
+      - user: "Kenapa dua jawapan untuk x?"
+      - user: "Semak dengan gantian setiap akar."
+      - user: "Bila guna faktor, bila guna formula kuadratik?"
+      - user: "Bagi satu soalan tahap sama."
+      - user: "Ringkaskan konsep kuadratik ni."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C24
+    title: Slope-intercept from table
+    tags: [bm, linear-graph]
+    turns:
+      - user: "Daripada titik (1,3) dan (3,7), cari persamaan garis."
+      - user: "Macam mana dapat kecerunan m?"
+      - user: "Lepas tu cari c pula."
+      - user: "Semak guna dua titik tadi."
+      - user: "Apa maksud m dan c dalam konteks sebenar?"
+      - user: "Bagi latihan garis lain."
+      - user: "Ringkaskan bila guna bentuk y = mx + c."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C25
+    title: Exam-style word problem sequence
+    tags: [bm, exam-style]
+    turns:
+      - user: "Dalam ujian, jumlah dua nombor ialah 26 dan beza ialah 4. Cari nombor."
+      - user: "Definisikan pemboleh ubah dulu."
+      - user: "Bina dua persamaan."
+      - user: "Selesaikan langkah demi langkah."
+      - user: "Semak kedua-dua syarat dipenuhi."
+      - user: "Apa format jawapan kemas untuk exam?"
+      - user: "Bagi soalan latihan hampir sama."
+      - user: "Ringkaskan strategi untuk soalan jenis ni."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C26
+    title: Iterative mistake correction session
+    tags: [bm, correction, session]
+    turns:
+      - user: "Saya cuba 5x + 2 = 27, saya dapat x = 4."
+      - user: "Oops kiraan saya mungkin salah, tolong semak."
+      - user: "Sekarang 3(x + 2) = 18, saya dapat x = 8."
+      - user: "Semak lagi mana silap."
+      - user: "Bagi saya petua elak silap aritmetik."
+      - user: "Bagi satu check-list sebelum hantar jawapan."
+      - user: "Saya cuba lagi: 2x - 9 = 7."
+      - user: "Semak jawapan akhir saya."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C27
+    title: PT3-style algebra coaching
+    tags: [bm, pt3, exam-style]
+    turns:
+      - user: "Berikan bimbingan gaya PT3 untuk 4x - 5 = 19."
+      - user: "Saya mahu format jawapan macam kertas peperiksaan."
+      - user: "Apa markah biasanya diberi per langkah?"
+      - user: "Bagi versi soalan yang sedikit lebih sukar."
+      - user: "Saya jawab x = 7, semak."
+      - user: "Apa kesalahan pelajar PT3 paling kerap?"
+      - user: "Bagaimana semak jawapan secara cepat?"
+      - user: "Ringkaskan strategi akhir untuk exam."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C28
+    title: Anxiety-aware coaching session
+    tags: [bm, motivation]
+    turns:
+      - user: "Saya rasa saya lemah matematik."
+      - user: "Boleh ajar perlahan-lahan guna 2x + 6 = 14?"
+      - user: "Saya takut salah kira."
+      - user: "Tolong bagi hint dulu, jangan jawapan terus."
+      - user: "Okay sekarang saya cuba, x = 4."
+      - user: "Betul ke?"
+      - user: "Bagi semangat dan satu latihan mudah lagi."
+      - user: "Saya dah jawab, tolong semak."
+      - user: "Apa konsep paling penting yang saya kena ingat?"
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C29
+    title: 10-turn revision progression
+    tags: [bm, revision, long]
+    turns:
+      - user: "Kita buat ulangkaji persamaan linear."
+      - user: "Mulakan dengan 2x + 3 = 11."
+      - user: "Sekarang 5x - 10 = 0."
+      - user: "Kenapa langkah pertama berubah ikut soalan?"
+      - user: "Bagi saya satu soalan untuk cuba sendiri."
+      - user: "Jawapan saya: x = 6."
+      - user: "Semak dan terangkan jika salah."
+      - user: "Bagi lagi satu soalan sederhana."
+      - user: "Saya cuba lagi, semak jawapan kedua."
+      - user: "Ringkaskan semua rule penting hari ni."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
+
+  - id: C30
+    title: 10-turn mixed-topic recap
+    tags: [bm, recap, long]
+    turns:
+      - user: "Saya mahu recap topik algebra Tingkatan 1 hingga 3."
+      - user: "Mulakan dengan linear equation paling asas."
+      - user: "Kemudian sentuh inequality secara ringkas."
+      - user: "Lepas tu kaitkan dengan graf garis lurus."
+      - user: "Bagi satu soalan contoh linear."
+      - user: "Bagi satu soalan contoh inequality."
+      - user: "Saya jawab linear dulu, semak."
+      - user: "Sekarang semak jawapan inequality saya."
+      - user: "Apa pola kesilapan saya setakat ni?"
+      - user: "Akhiri dengan pelan ulangkaji 1 minggu."
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      require_continuity_on_followup: true
+      require_structured_solving: true
+      require_concept_connection: true
+      expected_language: bm_or_mixed
