@@ -28,6 +28,8 @@ services:
           memory: 128M
 
   app:
+    image: pai-bot:latest
+    build: !reset null
     ports:
       - "127.0.0.1:8080:8080"
     restart: always

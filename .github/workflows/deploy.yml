@@ -30,7 +30,25 @@ jobs:
     environment: production
 
     steps:
-      - name: Write .env file
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
+
+      - name: Save Docker image
+        run: docker save pai-bot:latest | gzip > /tmp/pai-bot.tar.gz
+
+      - name: Copy image and compose files to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          source: "/tmp/pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml"
+          target: ${{ secrets.DEPLOY_DIR }}
+          strip_components: 0
+
+      - name: Write .env and deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -38,7 +56,11 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,LEARN_AUTH_JWT_SECRET,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD
           script: |
-            cat > $DEPLOY_DIR/.env << 'ENVEOF'
+            set -euo pipefail
+            cd $DEPLOY_DIR
+
+            echo "--- Writing .env ---"
+            cat > .env << ENVEOF
             LEARN_SERVER_PORT=8080
             LEARN_DATABASE_URL=postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable
             LEARN_DATABASE_MAX_CONNS=25
@@ -59,36 +81,13 @@ jobs:
             LEARN_LOG_LEVEL=info
             LEARN_LOG_FORMAT=json
             ENVEOF
-        env:
-          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          LEARN_TELEGRAM_BOT_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
-          LEARN_AUTH_JWT_SECRET: ${{ secrets.LEARN_AUTH_JWT_SECRET }}
-          LEARN_AI_OPENAI_API_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
-          LEARN_AI_ANTHROPIC_API_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
-          LEARN_AI_DEEPSEEK_API_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
-          LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
-          LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
 
-      - name: Deploy app
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,POSTGRES_PASSWORD
-          script: |
-            set -euo pipefail
-            cd $DEPLOY_DIR
+            echo "--- Loading Docker image ---"
+            docker load < /tmp/pai-bot.tar.gz
+            rm /tmp/pai-bot.tar.gz
+
+            echo "--- Starting services ---"
             export POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-
-            echo "--- Pulling latest code ---"
-            git pull origin main
-
-            echo "--- Building app ---"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml build app
-
-            echo "--- Restarting services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
@@ -101,4 +100,11 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          LEARN_TELEGRAM_BOT_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
+          LEARN_AUTH_JWT_SECRET: ${{ secrets.LEARN_AUTH_JWT_SECRET }}
+          LEARN_AI_OPENAI_API_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
+          LEARN_AI_ANTHROPIC_API_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
+          LEARN_AI_DEEPSEEK_API_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
+          LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
+          LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
