@@ -44,7 +44,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml"
+          source: "pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml,migrations"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
@@ -89,6 +89,15 @@ jobs:
 
             echo "--- Restarting services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
+
+            echo "--- Running migrations ---"
+            sleep 3
+            for f in migrations/*.up.sql; do
+              docker exec -i pai-bot-postgres-1 psql -U pai -d pai < "$f" 2>&1 || true
+            done
+
+            echo "--- Starting app ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
