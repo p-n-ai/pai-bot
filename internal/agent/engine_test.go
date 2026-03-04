@@ -704,6 +704,43 @@ func TestEngine_SystemPrompt_HasImageFollowUpReplyGuidance(t *testing.T) {
 	}
 }
 
+func TestEngine_SystemPrompt_EnforcesLanguageAndOutputContract(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-system-contract",
+		Text:    "saya perlukan bantuan persamaan linear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if mockAI.LastRequest == nil || len(mockAI.LastRequest.Messages) == 0 {
+		t.Fatal("expected request messages to be sent to AI")
+	}
+	systemPrompt := mockAI.LastRequest.Messages[0]
+	if systemPrompt.Role != "system" {
+		t.Fatalf("first message role = %q, want system", systemPrompt.Role)
+	}
+	if !contains(systemPrompt.Content, "If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu") {
+		t.Fatalf("system prompt missing explicit BM-first language contract")
+	}
+	if !contains(systemPrompt.Content, "Use these exact plain-text labels in order") {
+		t.Fatalf("system prompt missing explicit output labels contract")
+	}
+	if !contains(systemPrompt.Content, "Semak/Verify") {
+		t.Fatalf("system prompt missing Semak/Verify output label requirement")
+	}
+	if !contains(systemPrompt.Content, "Konsep/Connect") {
+		t.Fatalf("system prompt missing Konsep/Connect output label requirement")
+	}
+}
+
 func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testing.T) {
 	mockAI := ai.NewMockProvider("ok")
 	loader := createTestCurriculumLoader(t)

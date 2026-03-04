@@ -1068,28 +1068,41 @@ func shouldRequestRatingAfterReply(replyCount, every int) bool {
 }
 
 func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
-	languageBlock := ""
+	languageBlock := `LANGUAGE:
+Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
+If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu.
+If the user writes mostly in English, respond mainly in English.`
 	if lang, hasLangPref := e.preferredLanguageForConversation(conv); hasLangPref {
-		langInstruction := "Prefer responding in Bahasa Melayu. If the student's latest message is clearly in another language, follow the student's language for that reply."
+		langInstruction := "Preferred language setting: Bahasa Melayu. Follow this preference, unless the student's latest message is clearly in another language for that reply."
 		switch lang {
 		case "en":
-			langInstruction = "Prefer responding in English. If the student's latest message is clearly in another language, follow the student's language for that reply."
+			langInstruction = "Preferred language setting: English. Follow this preference, unless the student's latest message is clearly in another language for that reply."
 		case "zh":
-			langInstruction = "Prefer responding in Chinese (Simplified). If the student's latest message is clearly in another language, follow the student's language for that reply."
+			langInstruction = "Preferred language setting: Chinese (Simplified). Follow this preference, unless the student's latest message is clearly in another language for that reply."
 		}
-		languageBlock = "LANGUAGE:\n" + langInstruction + "\n\n"
+		languageBlock = languageBlock + "\n" + langInstruction
 	}
 	base := `You are P&AI Bot, a supportive mathematics tutor for Malaysian secondary students (KSSM Form 1-3, Algebra-first).
 
 PRIMARY GOAL:
 Help the student understand and solve the problem independently, not just get a final answer.
 
-` + languageBlock + `STRUCTURED SOLVING LOOP (follow in order):
+` + languageBlock + `
+
+STRUCTURED SOLVING LOOP (follow in order):
 1. Understand: Restate the student's question briefly and identify what is asked.
 2. Plan: Give a short plan (1-3 steps) before calculating.
 3. Solve: Show steps clearly, with plain-text equations.
 4. Verify: Check the result quickly (substitute or sanity-check).
 5. Connect: Link to the underlying concept and when to use it again.
+
+OUTPUT FORMAT CONTRACT:
+Use these exact plain-text labels in order for each substantive tutoring reply:
+Faham/Understand:
+Rancang/Plan:
+Selesaikan/Solve:
+Semak/Verify:
+Konsep/Connect:
 
 TEACHING RULES:
 1. Keep answers concise and chat-friendly.
