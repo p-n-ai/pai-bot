@@ -11,13 +11,9 @@ var testStructuredSchema = json.RawMessage(`{"type":"object","properties":{"fina
 func assertJSONSchemaResponseFormat(t *testing.T, captured map[string]any) {
 	t.Helper()
 
-	raw, ok := captured["response_format"]
+	rf, ok := captured["response_format"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected request to include response_format, got keys: %v", captured)
-	}
-	rf, ok := raw.(map[string]any)
-	if !ok {
-		t.Fatalf("response_format type = %T, want map[string]any", raw)
+		t.Fatalf("response_format missing or invalid: %#v", captured["response_format"])
 	}
 	if rf["type"] != "json_schema" {
 		t.Fatalf("response_format.type = %#v, want json_schema", rf["type"])
@@ -26,11 +22,8 @@ func assertJSONSchemaResponseFormat(t *testing.T, captured map[string]any) {
 	if !ok {
 		t.Fatalf("response_format.json_schema type = %T, want map[string]any", rf["json_schema"])
 	}
-	if jsonSchema["name"] != "tutor_response" {
-		t.Fatalf("response_format.json_schema.name = %#v, want tutor_response", jsonSchema["name"])
-	}
-	if strict, ok := jsonSchema["strict"].(bool); !ok || !strict {
-		t.Fatalf("response_format.json_schema.strict = %#v, want true", jsonSchema["strict"])
+	if jsonSchema["name"] != "tutor_response" || jsonSchema["strict"] != true {
+		t.Fatalf("unexpected response_format.json_schema metadata: %#v", jsonSchema)
 	}
 	if _, ok := jsonSchema["schema"]; !ok {
 		t.Fatalf("response_format.json_schema.schema missing")
@@ -45,20 +38,18 @@ func writeOpenAITextResponse(
 ) {
 	t.Helper()
 
-	resp := openaiResponse{
-		Choices: []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		}{
-			{Message: struct {
-				Content string `json:"content"`
-			}{Content: content}},
+	resp := map[string]any{
+		"choices": []any{
+			map[string]any{
+				"message": map[string]any{"content": content},
+			},
 		},
-		Model: model,
+		"model": model,
+		"usage": map[string]int{
+			"prompt_tokens":     promptTokens,
+			"completion_tokens": completionTokens,
+		},
 	}
-	resp.Usage.PromptTokens = promptTokens
-	resp.Usage.CompletionTokens = completionTokens
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		t.Fatalf("encode response: %v", err)

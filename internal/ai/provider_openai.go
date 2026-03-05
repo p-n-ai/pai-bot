@@ -128,8 +128,23 @@ type openaiResponse struct {
 }
 
 func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
-	oaiReq, err := buildOpenAIRequest(req, "gpt-4o-mini")
-	if err != nil {
+	model := req.Model
+	if model == "" {
+		model = "gpt-4o-mini" // sensible default
+	}
+
+	oaiReq := openaiRequest{
+		Model:    model,
+		Messages: buildOpenAIMessages(req.Messages),
+	}
+	if req.MaxTokens > 0 {
+		oaiReq.MaxTokens = req.MaxTokens
+	}
+	if req.Temperature > 0 {
+		temp := req.Temperature
+		oaiReq.Temperature = &temp
+	}
+	if err := applyOpenAIStructuredOutput(&oaiReq, req.StructuredOutput); err != nil {
 		return CompletionResponse{}, err
 	}
 
@@ -169,10 +184,8 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		return CompletionResponse{}, fmt.Errorf("no choices in response")
 	}
 
-	content := oaiResp.Choices[0].Message.Content
-
 	return CompletionResponse{
-		Content:      content,
+		Content:      oaiResp.Choices[0].Message.Content,
 		Model:        oaiResp.Model,
 		InputTokens:  oaiResp.Usage.PromptTokens,
 		OutputTokens: oaiResp.Usage.CompletionTokens,
@@ -198,29 +211,6 @@ func applyOpenAIStructuredOutput(oaiReq *openaiRequest, spec *StructuredOutputSp
 		},
 	}
 	return nil
-}
-
-func buildOpenAIRequest(req CompletionRequest, defaultModel string) (openaiRequest, error) {
-	model := req.Model
-	if model == "" {
-		model = defaultModel
-	}
-
-	oaiReq := openaiRequest{
-		Model:    model,
-		Messages: buildOpenAIMessages(req.Messages),
-	}
-	if req.MaxTokens > 0 {
-		oaiReq.MaxTokens = req.MaxTokens
-	}
-	if req.Temperature > 0 {
-		temp := req.Temperature
-		oaiReq.Temperature = &temp
-	}
-	if err := applyOpenAIStructuredOutput(&oaiReq, req.StructuredOutput); err != nil {
-		return openaiRequest{}, err
-	}
-	return oaiReq, nil
 }
 
 func buildOpenAIMessages(messages []Message) []openaiMessage {
