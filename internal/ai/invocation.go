@@ -88,23 +88,18 @@ func WithResponseSchema(name string, schema map[string]any, strict bool) CallOpt
 	}
 }
 
-// ToCompletionRequest converts invocation requests to the existing completion contract.
-func (req InvocationRequest) ToCompletionRequest() CompletionRequest {
-	return CompletionRequest{
-		Messages:    cloneMessages(req.Messages),
-		Model:       req.Model,
-		MaxTokens:   req.MaxTokens,
-		Temperature: req.Temperature,
-		Task:        req.Task,
-	}
-}
-
 // Invoke executes an invocation request while keeping legacy completion behavior.
 func (r *Router) Invoke(ctx context.Context, req InvocationRequest) (CompletionResponse, error) {
 	if req.ResponseFormat == ResponseFormatJSONSchema {
 		return r.completeStructured(ctx, req)
 	}
-	return r.Complete(ctx, req.ToCompletionRequest())
+	return r.Complete(ctx, CompletionRequest{
+		Messages:    cloneMessages(req.Messages),
+		Model:       req.Model,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+		Task:        req.Task,
+	})
 }
 
 // Call provides SDK-style invocation ergonomics with options.

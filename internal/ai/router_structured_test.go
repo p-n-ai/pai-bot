@@ -18,7 +18,6 @@ func TestRouterInvoke_StructuredRouting(t *testing.T) {
 		wantSelectedStructured int
 		wantOpenAIStructured   int
 		wantErrIsUnavailable   bool
-		wantErrType            bool
 	}{
 		{
 			name: "selected provider supports structured",
@@ -52,7 +51,6 @@ func TestRouterInvoke_StructuredRouting(t *testing.T) {
 				return nil, nil
 			},
 			wantErrIsUnavailable: true,
-			wantErrType:          true,
 		},
 	}
 

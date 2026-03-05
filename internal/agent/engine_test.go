@@ -471,7 +471,7 @@ func TestEngine_Onboarding_FreeTextSelection_ParsesRuleBased(t *testing.T) {
 	}
 }
 
-func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.T) {
+func TestEngine_Onboarding_AIFallbackSelection_StructuredRouteUnavailableAsksClarification(t *testing.T) {
 	mockAI := ai.NewMockProvider("2")
 	store := agent.NewMemoryStore()
 	engine := agent.NewEngine(agent.EngineConfig{
@@ -496,18 +496,25 @@ func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Form 2") {
-		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	if !contains(resp, "couldn't determine your form") {
+		t.Fatalf("unexpected onboarding clarification response: %q", resp)
 	}
-	if mockAI.LastRequest == nil {
-		t.Fatal("expected AI fallback classification call")
+	if mockAI.LastRequest != nil {
+		t.Fatal("legacy complete path should not be called when structured route is unavailable")
+	}
+
+	conv, found := store.GetActiveConversation("onboard-user-4")
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "onboarding_form" {
+		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
 	}
 }
 
 func TestEngine_Onboarding_AIFallbackSelection_UsesStructuredSchemaFirst(t *testing.T) {
 	provider := &structuredOnboardingProvider{
 		structuredResponse: `{"form":"2"}`,
-		completeResponse:   "3",
 	}
 	store := agent.NewMemoryStore()
 	engine := agent.NewEngine(agent.EngineConfig{
@@ -538,9 +545,6 @@ func TestEngine_Onboarding_AIFallbackSelection_UsesStructuredSchemaFirst(t *test
 	if provider.structuredCalls != 1 {
 		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
 	}
-	if provider.completeCalls != 0 {
-		t.Fatalf("legacy completion calls = %d, want 0", provider.completeCalls)
-	}
 	if provider.lastStructuredReq == nil {
 		t.Fatal("expected structured invocation request capture")
 	}
@@ -552,10 +556,9 @@ func TestEngine_Onboarding_AIFallbackSelection_UsesStructuredSchemaFirst(t *test
 	}
 }
 
-func TestEngine_Onboarding_AIFallbackSelection_SchemaMismatchFallsBackToLegacy(t *testing.T) {
+func TestEngine_Onboarding_AIFallbackSelection_SchemaMismatchAsksClarification(t *testing.T) {
 	provider := &structuredOnboardingProvider{
 		structuredResponse: `{"unknown":"2"}`,
-		completeResponse:   "3",
 	}
 	store := agent.NewMemoryStore()
 	engine := agent.NewEngine(agent.EngineConfig{
@@ -580,14 +583,19 @@ func TestEngine_Onboarding_AIFallbackSelection_SchemaMismatchFallsBackToLegacy(t
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Form 3") {
-		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	if !contains(resp, "couldn't determine your form") {
+		t.Fatalf("unexpected onboarding clarification response: %q", resp)
 	}
 	if provider.structuredCalls != 1 {
 		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
 	}
-	if provider.completeCalls != 1 {
-		t.Fatalf("legacy completion calls = %d, want 1", provider.completeCalls)
+
+	conv, found := store.GetActiveConversation("onboard-user-structured-2")
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "onboarding_form" {
+		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
 	}
 }
 
@@ -1750,23 +1758,13 @@ type flakyProvider struct {
 type structuredOnboardingProvider struct {
 	structuredResponse string
 	structuredErr      error
-	completeResponse   string
-	completeErr        error
 	structuredCalls    int
-	completeCalls      int
 	lastStructuredReq  *ai.InvocationRequest
-	lastCompleteReq    *ai.CompletionRequest
 }
 
-func (p *structuredOnboardingProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
-	p.completeCalls++
-	reqCopy := req
-	p.lastCompleteReq = &reqCopy
-	if p.completeErr != nil {
-		return ai.CompletionResponse{}, p.completeErr
-	}
+func (p *structuredOnboardingProvider) Complete(_ context.Context, _ ai.CompletionRequest) (ai.CompletionResponse, error) {
 	return ai.CompletionResponse{
-		Content: p.completeResponse,
+		Content: "unused",
 		Model:   "structured-onboarding-complete",
 	}, nil
 }

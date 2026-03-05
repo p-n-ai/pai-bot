@@ -726,50 +726,16 @@ Return a JSON object with one field:
 		ai.WithMaxTokens(32),
 		ai.WithResponseSchema("onboarding_form_selection", onboardingFormSelectionSchema, true),
 	)
-	if err == nil {
-		if form, ok := parseStructuredFormSelection(resp.Content); ok {
-			return form, true
-		}
-		slog.Warn("onboarding structured form classification invalid response shape; using legacy fallback")
-	} else {
-		slog.Warn("onboarding structured form classification failed; using legacy fallback", "error", err)
-	}
-
-	return e.classifyFormSelectionWithAILegacy(ctx, answer)
-}
-
-func (e *Engine) classifyFormSelectionWithAILegacy(ctx context.Context, answer string) (int, bool) {
-	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
-		Messages: []ai.Message{
-			{
-				Role: "system",
-				Content: `Classify the student's form level from their answer.
-Return exactly one token only: 1, 2, 3, or unknown.
-No extra words.`,
-			},
-			{
-				Role:    "user",
-				Content: answer,
-			},
-		},
-		Task:      ai.TaskAnalysis,
-		MaxTokens: 8,
-	})
 	if err != nil {
-		slog.Warn("onboarding form classification failed", "error", err)
+		slog.Warn("onboarding structured form classification failed", "error", err)
 		return 0, false
 	}
 
-	switch strings.TrimSpace(strings.ToLower(resp.Content)) {
-	case "1":
-		return 1, true
-	case "2":
-		return 2, true
-	case "3":
-		return 3, true
-	default:
-		return 0, false
+	if form, ok := parseStructuredFormSelection(resp.Content); ok {
+		return form, true
 	}
+	slog.Warn("onboarding structured form classification invalid response shape")
+	return 0, false
 }
 
 var onboardingFormSelectionSchema = map[string]any{
