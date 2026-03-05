@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,11 @@ import (
 const (
 	defaultOpenAIBaseURL   = "https://api.openai.com/v1"
 	defaultDeepSeekBaseURL = "https://api.deepseek.com"
+)
+
+var (
+	errOpenAIStructuredFormatRequired = errors.New("openai structured request requires json_schema response format")
+	errOpenAIStructuredSchemaRequired = errors.New("openai structured request requires non-empty schema")
 )
 
 // OpenAIProvider implements Provider for OpenAI and OpenAI-compatible APIs
@@ -80,15 +86,27 @@ func NewDeepSeekProvider(apiKey string, opts ...OpenAIOption) *OpenAIProvider {
 
 // openaiRequest is the request body for the OpenAI chat completions API.
 type openaiRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openaiMessage `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Temperature *float64        `json:"temperature,omitempty"`
+	Model          string                `json:"model"`
+	Messages       []openaiMessage       `json:"messages"`
+	MaxTokens      int                   `json:"max_tokens,omitempty"`
+	Temperature    *float64              `json:"temperature,omitempty"`
+	ResponseFormat *openaiResponseFormat `json:"response_format,omitempty"`
 }
 
 type openaiMessage struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
+}
+
+type openaiResponseFormat struct {
+	Type       string            `json:"type"`
+	JSONSchema *openaiJSONSchema `json:"json_schema,omitempty"`
+}
+
+type openaiJSONSchema struct {
+	Name   string         `json:"name"`
+	Schema map[string]any `json:"schema"`
+	Strict bool           `json:"strict"`
 }
 
 type openaiContentPart struct {
@@ -133,6 +151,47 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		oaiReq.Temperature = &temp
 	}
 
+	return p.completeWithRequest(ctx, oaiReq)
+}
+
+// CompleteStructured executes a provider-native OpenAI JSON-schema response request.
+func (p *OpenAIProvider) CompleteStructured(ctx context.Context, req InvocationRequest) (CompletionResponse, error) {
+	if req.ResponseFormat != ResponseFormatJSONSchema {
+		return CompletionResponse{}, fmt.Errorf("%w: got %q", errOpenAIStructuredFormatRequired, req.ResponseFormat)
+	}
+	if req.Schema == nil || req.Schema.Name == "" || len(req.Schema.Schema) == 0 {
+		return CompletionResponse{}, errOpenAIStructuredSchemaRequired
+	}
+
+	model := req.Model
+	if model == "" {
+		model = "gpt-4o-mini" // sensible default
+	}
+
+	oaiReq := openaiRequest{
+		Model:    model,
+		Messages: buildOpenAIMessages(req.Messages),
+		ResponseFormat: &openaiResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &openaiJSONSchema{
+				Name:   req.Schema.Name,
+				Schema: cloneSchema(req.Schema.Schema),
+				Strict: req.Schema.Strict,
+			},
+		},
+	}
+	if req.MaxTokens > 0 {
+		oaiReq.MaxTokens = req.MaxTokens
+	}
+	if req.Temperature > 0 {
+		temp := req.Temperature
+		oaiReq.Temperature = &temp
+	}
+
+	return p.completeWithRequest(ctx, oaiReq)
+}
+
+func (p *OpenAIProvider) completeWithRequest(ctx context.Context, oaiReq openaiRequest) (CompletionResponse, error) {
 	body, err := json.Marshal(oaiReq)
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("marshal request: %w", err)

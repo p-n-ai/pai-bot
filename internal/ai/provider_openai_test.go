@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -276,5 +277,149 @@ func TestOpenAIProvider_Complete_WithImageURL(t *testing.T) {
 	}
 	if len(parts) < 2 {
 		t.Fatalf("content parts len = %d, want >= 2", len(parts))
+	}
+}
+
+func TestOpenAIProvider_CompleteStructured_UsesNativeJSONSchemaFormat(t *testing.T) {
+	var capturedReq openaiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: `{"score":0.95}`}},
+			},
+			Model: "gpt-4o-mini",
+			Usage: struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+			}{PromptTokens: 12, CompletionTokens: 8},
+		})
+	}))
+	defer server.Close()
+
+	provider := NewOpenAIProvider("test-key", WithBaseURL(server.URL))
+	resp, err := provider.CompleteStructured(context.Background(), InvocationRequest{
+		Messages:       []Message{{Role: "user", Content: "grade this answer"}},
+		Task:           TaskGrading,
+		ResponseFormat: ResponseFormatJSONSchema,
+		Schema: &ResponseSchema{
+			Name: "grading_result",
+			Schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"score": map[string]any{
+						"type": "number",
+					},
+				},
+				"required": []any{"score"},
+			},
+			Strict: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompleteStructured() error = %v", err)
+	}
+
+	if capturedReq.ResponseFormat == nil {
+		t.Fatal("response_format = nil, want json_schema payload")
+	}
+	if capturedReq.ResponseFormat.Type != "json_schema" {
+		t.Fatalf("response_format.type = %q, want %q", capturedReq.ResponseFormat.Type, "json_schema")
+	}
+	if capturedReq.ResponseFormat.JSONSchema == nil {
+		t.Fatal("response_format.json_schema = nil, want non-nil")
+	}
+	if capturedReq.ResponseFormat.JSONSchema.Name != "grading_result" {
+		t.Fatalf("json_schema.name = %q, want grading_result", capturedReq.ResponseFormat.JSONSchema.Name)
+	}
+	if capturedReq.ResponseFormat.JSONSchema.Strict != true {
+		t.Fatalf("json_schema.strict = %v, want true", capturedReq.ResponseFormat.JSONSchema.Strict)
+	}
+	if capturedReq.ResponseFormat.JSONSchema.Schema["type"] != "object" {
+		t.Fatalf("json_schema.schema[type] = %#v, want object", capturedReq.ResponseFormat.JSONSchema.Schema["type"])
+	}
+	if resp.Content != `{"score":0.95}` {
+		t.Fatalf("response content = %q, want JSON payload", resp.Content)
+	}
+}
+
+func TestOpenAIProvider_CompleteStructured_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		req   InvocationRequest
+		errIs error
+	}{
+		{
+			name: "requires json schema response format",
+			req: InvocationRequest{
+				Messages:       []Message{{Role: "user", Content: "grade this"}},
+				ResponseFormat: ResponseFormatText,
+				Schema: &ResponseSchema{
+					Name: "grading_result",
+					Schema: map[string]any{
+						"type": "object",
+					},
+				},
+			},
+			errIs: errOpenAIStructuredFormatRequired,
+		},
+		{
+			name: "requires schema",
+			req: InvocationRequest{
+				Messages:       []Message{{Role: "user", Content: "grade this"}},
+				ResponseFormat: ResponseFormatJSONSchema,
+				Schema:         nil,
+			},
+			errIs: errOpenAIStructuredSchemaRequired,
+		},
+		{
+			name: "requires schema name",
+			req: InvocationRequest{
+				Messages:       []Message{{Role: "user", Content: "grade this"}},
+				ResponseFormat: ResponseFormatJSONSchema,
+				Schema: &ResponseSchema{
+					Name:   "",
+					Schema: map[string]any{"type": "object"},
+				},
+			},
+			errIs: errOpenAIStructuredSchemaRequired,
+		},
+		{
+			name: "requires schema body",
+			req: InvocationRequest{
+				Messages:       []Message{{Role: "user", Content: "grade this"}},
+				ResponseFormat: ResponseFormatJSONSchema,
+				Schema: &ResponseSchema{
+					Name:   "grading_result",
+					Schema: nil,
+				},
+			},
+			errIs: errOpenAIStructuredSchemaRequired,
+		},
+	}
+
+	provider := NewOpenAIProvider("test-key")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := provider.CompleteStructured(context.Background(), tt.req)
+			if err == nil {
+				t.Fatal("CompleteStructured() error = nil, want error")
+			}
+			if !errors.Is(err, tt.errIs) {
+				t.Fatalf("errors.Is(err, target) = false, err=%v target=%v", err, tt.errIs)
+			}
+		})
 	}
 }
