@@ -504,6 +504,93 @@ func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.
 	}
 }
 
+func TestEngine_Onboarding_AIFallbackSelection_UsesStructuredSchemaFirst(t *testing.T) {
+	provider := &structuredOnboardingProvider{
+		structuredResponse: `{"form":"2"}`,
+		completeResponse:   "3",
+	}
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(provider),
+		Store:    store,
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "/start",
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "English",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "middle school level",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Form 2") {
+		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	}
+	if provider.structuredCalls != 1 {
+		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
+	}
+	if provider.completeCalls != 0 {
+		t.Fatalf("legacy completion calls = %d, want 0", provider.completeCalls)
+	}
+	if provider.lastStructuredReq == nil {
+		t.Fatal("expected structured invocation request capture")
+	}
+	if provider.lastStructuredReq.ResponseFormat != ai.ResponseFormatJSONSchema {
+		t.Fatalf("response format = %q, want %q", provider.lastStructuredReq.ResponseFormat, ai.ResponseFormatJSONSchema)
+	}
+	if provider.lastStructuredReq.Schema == nil || provider.lastStructuredReq.Schema.Name == "" {
+		t.Fatal("expected structured invocation schema metadata")
+	}
+}
+
+func TestEngine_Onboarding_AIFallbackSelection_SchemaMismatchFallsBackToLegacy(t *testing.T) {
+	provider := &structuredOnboardingProvider{
+		structuredResponse: `{"unknown":"2"}`,
+		completeResponse:   "3",
+	}
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(provider),
+		Store:    store,
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "/start",
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "English",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "middle school level",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Form 3") {
+		t.Fatalf("unexpected onboarding completion response: %q", resp)
+	}
+	if provider.structuredCalls != 1 {
+		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
+	}
+	if provider.completeCalls != 1 {
+		t.Fatalf("legacy completion calls = %d, want 1", provider.completeCalls)
+	}
+}
+
 func TestEngine_LanguageCommand_InteractiveSelection_SendsConfirmation(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI teaching response")
 	tracker := &callTracker{provider: mockAI}
@@ -1658,6 +1745,55 @@ type flakyProvider struct {
 	failuresBeforeSuccess int
 	calls                 int
 	response              string
+}
+
+type structuredOnboardingProvider struct {
+	structuredResponse string
+	structuredErr      error
+	completeResponse   string
+	completeErr        error
+	structuredCalls    int
+	completeCalls      int
+	lastStructuredReq  *ai.InvocationRequest
+	lastCompleteReq    *ai.CompletionRequest
+}
+
+func (p *structuredOnboardingProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
+	p.completeCalls++
+	reqCopy := req
+	p.lastCompleteReq = &reqCopy
+	if p.completeErr != nil {
+		return ai.CompletionResponse{}, p.completeErr
+	}
+	return ai.CompletionResponse{
+		Content: p.completeResponse,
+		Model:   "structured-onboarding-complete",
+	}, nil
+}
+
+func (p *structuredOnboardingProvider) CompleteStructured(_ context.Context, req ai.InvocationRequest) (ai.CompletionResponse, error) {
+	p.structuredCalls++
+	reqCopy := req
+	p.lastStructuredReq = &reqCopy
+	if p.structuredErr != nil {
+		return ai.CompletionResponse{}, p.structuredErr
+	}
+	return ai.CompletionResponse{
+		Content: p.structuredResponse,
+		Model:   "structured-onboarding-structured",
+	}, nil
+}
+
+func (p *structuredOnboardingProvider) StreamComplete(_ context.Context, _ ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (p *structuredOnboardingProvider) Models() []ai.ModelInfo {
+	return nil
+}
+
+func (p *structuredOnboardingProvider) HealthCheck(_ context.Context) error {
+	return nil
 }
 
 func (f *flakyProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {

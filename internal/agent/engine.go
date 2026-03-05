@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -705,6 +706,39 @@ func (e *Engine) handleLanguageSelection(msg chat.InboundMessage, conv *Conversa
 }
 
 func (e *Engine) classifyFormSelectionWithAI(ctx context.Context, answer string) (int, bool) {
+	messages := []ai.Message{
+		{
+			Role: "system",
+			Content: `Classify the student's form level from their answer.
+Return a JSON object with one field:
+- form: one of "1", "2", "3", or "unknown".`,
+		},
+		{
+			Role:    "user",
+			Content: answer,
+		},
+	}
+
+	resp, err := e.aiRouter.Call(
+		ctx,
+		messages,
+		ai.WithTask(ai.TaskAnalysis),
+		ai.WithMaxTokens(32),
+		ai.WithResponseSchema("onboarding_form_selection", onboardingFormSelectionSchema, true),
+	)
+	if err == nil {
+		if form, ok := parseStructuredFormSelection(resp.Content); ok {
+			return form, true
+		}
+		slog.Warn("onboarding structured form classification invalid response shape; using legacy fallback")
+	} else {
+		slog.Warn("onboarding structured form classification failed; using legacy fallback", "error", err)
+	}
+
+	return e.classifyFormSelectionWithAILegacy(ctx, answer)
+}
+
+func (e *Engine) classifyFormSelectionWithAILegacy(ctx context.Context, answer string) (int, bool) {
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
 		Messages: []ai.Message{
 			{
@@ -727,6 +761,40 @@ No extra words.`,
 	}
 
 	switch strings.TrimSpace(strings.ToLower(resp.Content)) {
+	case "1":
+		return 1, true
+	case "2":
+		return 2, true
+	case "3":
+		return 3, true
+	default:
+		return 0, false
+	}
+}
+
+var onboardingFormSelectionSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"form": map[string]any{
+			"type": "string",
+			"enum": []string{"1", "2", "3", "unknown"},
+		},
+	},
+	"required":             []string{"form"},
+	"additionalProperties": false,
+}
+
+type structuredFormSelection struct {
+	Form string `json:"form"`
+}
+
+func parseStructuredFormSelection(content string) (int, bool) {
+	var parsed structuredFormSelection
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		return 0, false
+	}
+
+	switch strings.TrimSpace(strings.ToLower(parsed.Form)) {
 	case "1":
 		return 1, true
 	case "2":
