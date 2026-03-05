@@ -11,13 +11,14 @@ import (
 
 // Router selects the best provider based on task type and availability.
 type Router struct {
-	providers                 map[string]Provider
-	fallback                  []string // ordered fallback chain
-	retryBackoff              []time.Duration
-	breakerFailureThreshold   int
-	breakerCooldown           time.Duration
-	breakerStateByProvider    map[string]breakerState
-	mu                        sync.RWMutex
+	providers               map[string]Provider
+	capabilitiesByProvider  map[string]ProviderCapabilities
+	fallback                []string // ordered fallback chain
+	retryBackoff            []time.Duration
+	breakerFailureThreshold int
+	breakerCooldown         time.Duration
+	breakerStateByProvider  map[string]breakerState
+	mu                      sync.RWMutex
 }
 
 type breakerState struct {
@@ -53,6 +54,7 @@ func NewRouterWithConfig(cfg RouterConfig) *Router {
 	}
 	return &Router{
 		providers:               make(map[string]Provider),
+		capabilitiesByProvider:  make(map[string]ProviderCapabilities),
 		retryBackoff:            retryBackoff,
 		breakerFailureThreshold: breakerThreshold,
 		breakerCooldown:         breakerCooldown,
@@ -65,6 +67,7 @@ func (r *Router) Register(name string, provider Provider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.providers[name] = provider
+	r.capabilitiesByProvider[name] = detectProviderCapabilities(provider)
 	r.fallback = append(r.fallback, name)
 	if _, ok := r.breakerStateByProvider[name]; !ok {
 		r.breakerStateByProvider[name] = breakerState{}
@@ -132,12 +135,128 @@ func (r *Router) snapshotProviders() (map[string]Provider, []string) {
 	return providers, order
 }
 
+func (r *Router) snapshotProvidersWithCapabilities() (map[string]Provider, map[string]ProviderCapabilities, []string) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	providers := make(map[string]Provider, len(r.providers))
+	for name, provider := range r.providers {
+		providers[name] = provider
+	}
+
+	caps := make(map[string]ProviderCapabilities, len(r.capabilitiesByProvider))
+	for name, capability := range r.capabilitiesByProvider {
+		caps[name] = capability
+	}
+
+	order := append([]string(nil), r.fallback...)
+	return providers, caps, order
+}
+
+func detectProviderCapabilities(provider Provider) ProviderCapabilities {
+	_, structured := provider.(StructuredProvider)
+	return ProviderCapabilities{
+		StructuredOutput: structured,
+	}
+}
+
 func (r *Router) completeWithRetry(ctx context.Context, provider Provider, req CompletionRequest) (CompletionResponse, error) {
 	var lastErr error
 	attempts := 1 + len(r.retryBackoff)
 
 	for attempt := 1; attempt <= attempts; attempt++ {
 		resp, err := provider.Complete(ctx, req)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if attempt == attempts {
+			break
+		}
+
+		delay := r.retryBackoff[attempt-1]
+		select {
+		case <-ctx.Done():
+			return CompletionResponse{}, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+
+	return CompletionResponse{}, lastErr
+}
+
+func (r *Router) completeStructured(ctx context.Context, req InvocationRequest) (CompletionResponse, error) {
+	providers, capabilities, order := r.snapshotProvidersWithCapabilities()
+	if len(order) == 0 {
+		return CompletionResponse{}, &StructuredRouteError{}
+	}
+
+	selectedProviderName := ""
+	var selectedProvider Provider
+	selectedCapabilities := ProviderCapabilities{}
+	for _, name := range order {
+		provider := providers[name]
+		if provider == nil {
+			continue
+		}
+		selectedProviderName = name
+		selectedProvider = provider
+		selectedCapabilities = capabilities[name]
+		break
+	}
+	if selectedProvider == nil {
+		return CompletionResponse{}, &StructuredRouteError{}
+	}
+
+	targetProviderName := selectedProviderName
+	targetProvider := selectedProvider
+	targetCapabilities := selectedCapabilities
+
+	if !selectedCapabilities.StructuredOutput {
+		openaiProvider, openaiExists := providers["openai"]
+		openaiCapabilities := capabilities["openai"]
+		if !openaiExists || !openaiCapabilities.StructuredOutput || openaiProvider == nil {
+			return CompletionResponse{}, &StructuredRouteError{
+				SelectedProvider:         selectedProviderName,
+				OpenAIFallbackConfigured: openaiExists,
+				OpenAIFallbackStructured: openaiCapabilities.StructuredOutput,
+			}
+		}
+
+		targetProviderName = "openai"
+		targetProvider = openaiProvider
+		targetCapabilities = openaiCapabilities
+	}
+
+	structuredProvider, ok := targetProvider.(StructuredProvider)
+	if !ok || !targetCapabilities.StructuredOutput {
+		return CompletionResponse{}, &StructuredRouteError{
+			SelectedProvider:         selectedProviderName,
+			OpenAIFallbackConfigured: providers["openai"] != nil,
+			OpenAIFallbackStructured: capabilities["openai"].StructuredOutput,
+		}
+	}
+
+	if r.isCircuitOpen(targetProviderName) {
+		return CompletionResponse{}, fmt.Errorf("%s: circuit open", targetProviderName)
+	}
+
+	resp, err := r.completeStructuredWithRetry(ctx, structuredProvider, req)
+	if err != nil {
+		r.markFailure(targetProviderName)
+		return CompletionResponse{}, err
+	}
+
+	r.markSuccess(targetProviderName)
+	return resp, nil
+}
+
+func (r *Router) completeStructuredWithRetry(ctx context.Context, provider StructuredProvider, req InvocationRequest) (CompletionResponse, error) {
+	var lastErr error
+	attempts := 1 + len(r.retryBackoff)
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		resp, err := provider.CompleteStructured(ctx, req)
 		if err == nil {
 			return resp, nil
 		}

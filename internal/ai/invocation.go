@@ -101,6 +101,9 @@ func (req InvocationRequest) ToCompletionRequest() CompletionRequest {
 
 // Invoke executes an invocation request while keeping legacy completion behavior.
 func (r *Router) Invoke(ctx context.Context, req InvocationRequest) (CompletionResponse, error) {
+	if req.ResponseFormat == ResponseFormatJSONSchema {
+		return r.completeStructured(ctx, req)
+	}
 	return r.Complete(ctx, req.ToCompletionRequest())
 }
 
