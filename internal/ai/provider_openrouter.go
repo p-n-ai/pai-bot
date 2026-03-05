@@ -51,21 +51,9 @@ func NewOpenRouterProvider(apiKey string, opts ...OpenRouterOption) *OpenRouterP
 }
 
 func (p *OpenRouterProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
-	model := req.Model
-	if model == "" {
-		model = "qwen/qwen-2.5-72b-instruct"
-	}
-
-	oaiReq := openaiRequest{
-		Model:    model,
-		Messages: buildOpenAIMessages(req.Messages),
-	}
-	if req.MaxTokens > 0 {
-		oaiReq.MaxTokens = req.MaxTokens
-	}
-	if req.Temperature > 0 {
-		temp := req.Temperature
-		oaiReq.Temperature = &temp
+	oaiReq, err := buildOpenAIRequest(req, "qwen/qwen-2.5-72b-instruct")
+	if err != nil {
+		return CompletionResponse{}, err
 	}
 
 	body, err := json.Marshal(oaiReq)
@@ -106,8 +94,10 @@ func (p *OpenRouterProvider) Complete(ctx context.Context, req CompletionRequest
 		return CompletionResponse{}, fmt.Errorf("no choices in response")
 	}
 
+	content := oaiResp.Choices[0].Message.Content
+
 	return CompletionResponse{
-		Content:      oaiResp.Choices[0].Message.Content,
+		Content:      content,
 		Model:        oaiResp.Model,
 		InputTokens:  oaiResp.Usage.PromptTokens,
 		OutputTokens: oaiResp.Usage.CompletionTokens,

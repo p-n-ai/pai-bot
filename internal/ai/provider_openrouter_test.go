@@ -17,22 +17,7 @@ func TestOpenRouterProvider_Complete(t *testing.T) {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
 
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "OpenRouter response"}},
-			},
-			Model: "qwen/qwen-2.5-72b-instruct",
-			Usage: struct {
-				PromptTokens     int `json:"prompt_tokens"`
-				CompletionTokens int `json:"completion_tokens"`
-			}{PromptTokens: 7, CompletionTokens: 15},
-		})
+		writeOpenAITextResponse(t, w, "OpenRouter response", "qwen/qwen-2.5-72b-instruct", 7, 15)
 	}))
 	defer server.Close()
 
@@ -53,6 +38,36 @@ func TestOpenRouterProvider_Complete(t *testing.T) {
 	}
 }
 
+func TestOpenRouterProvider_Complete_StructuredOutput_AddsResponseFormat(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+
+		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "qwen/qwen-2.5-72b-instruct", 7, 15)
+	}))
+	defer server.Close()
+
+	provider := NewOpenRouterProvider("test-or-key", WithOpenRouterBaseURL(server.URL))
+
+	resp, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	assertJSONSchemaResponseFormat(t, captured)
+
+	if resp.Content != `{"final_answer":"ok"}` {
+		t.Fatalf("content = %q, want %q", resp.Content, `{"final_answer":"ok"}`)
+	}
+}
+
 func TestOpenRouterProvider_ExtraHeaders(t *testing.T) {
 	var gotReferer, gotTitle string
 
@@ -60,17 +75,7 @@ func TestOpenRouterProvider_ExtraHeaders(t *testing.T) {
 		gotReferer = r.Header.Get("HTTP-Referer")
 		gotTitle = r.Header.Get("X-Title")
 
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "ok"}},
-			},
-		})
+		writeOpenAITextResponse(t, w, "ok", "", 0, 0)
 	}))
 	defer server.Close()
 
