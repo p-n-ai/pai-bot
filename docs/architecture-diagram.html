@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P&AI Bot — Architecture Diagram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fb; color: #1a1a2e; overflow-x: hidden; }
+
+  .header { text-align: center; padding: 32px 20px 16px; }
+  .header h1 { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #2563eb, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header p { color: #64748b; font-size: 14px; margin-top: 6px; }
+
+  .tabs { display: flex; justify-content: center; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; padding: 0 16px; }
+  .tab { padding: 8px 20px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; cursor: pointer; font-size: 13px; color: #64748b; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  .tab:hover { border-color: #2563eb; color: #1e40af; }
+  .tab.active { background: #eff6ff; border-color: #2563eb; color: #2563eb; font-weight: 600; }
+
+  .diagram-container { max-width: 1200px; margin: 0 auto; padding: 0 20px 40px; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* SVG diagram styles */
+  svg { width: 100%; height: auto; }
+  svg text { font-family: 'Inter', -apple-system, sans-serif; }
+
+  .node { cursor: pointer; transition: transform 0.2s, filter 0.2s; }
+  .node:hover { filter: brightness(0.95); }
+
+  .box { rx: 10; ry: 10; stroke-width: 1.5; }
+  .box-chat { fill: #e0f2fe; stroke: #3b82f6; }
+  .box-agent { fill: #dcfce7; stroke: #22c55e; }
+  .box-ai { fill: #f3e8ff; stroke: #a855f7; }
+  .box-data { fill: #fef9c3; stroke: #ca8a04; }
+  .box-infra { fill: #e0f7fa; stroke: #0891b2; }
+  .box-admin { fill: #fff1e6; stroke: #ea580c; }
+  .box-curriculum { fill: #ede9fe; stroke: #7c3aed; }
+
+  .label { fill: #1e293b; font-size: 13px; font-weight: 600; }
+  .sublabel { fill: #64748b; font-size: 10px; }
+  .icon-label { fill: #1d4ed8; font-size: 11px; font-weight: 500; }
+  .provider-label { fill: #7c3aed; font-size: 10px; }
+  .arrow { stroke: #94a3b8; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+  .arrow-highlight { stroke: #2563eb; stroke-width: 2; }
+  .arrow-data { stroke: #ca8a04; stroke-dasharray: 5,5; }
+
+  .section-title { fill: #1e40af; font-size: 15px; font-weight: 700; letter-spacing: 0.5px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 20px; padding: 16px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; }
+  .legend-color { width: 14px; height: 14px; border-radius: 4px; border: 1px solid; }
+
+  .detail-panel { margin-top: 20px; padding: 20px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: none; }
+  .detail-panel.show { display: block; }
+  .detail-panel h3 { color: #1e40af; margin-bottom: 10px; font-size: 16px; }
+  .detail-panel p { color: #475569; font-size: 13px; line-height: 1.6; }
+  .detail-panel .file-path { color: #7c3aed; font-family: 'Fira Code', monospace; font-size: 12px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  .detail-panel ul { list-style: none; margin-top: 8px; }
+  .detail-panel li { color: #334155; font-size: 13px; padding: 3px 0; }
+  .detail-panel li::before { content: "→ "; color: #2563eb; }
+
+  .close-btn { float: right; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1; }
+  .close-btn:hover { color: #1e293b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>P&AI Bot — System Architecture</h1>
+  <p>Proactive AI Learning Agent · Modular Monolith in Go · Click components for details</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchView('system')">System Overview</div>
+  <div class="tab" onclick="switchView('ai')">AI Architecture (Deep Dive)</div>
+  <div class="tab" onclick="switchView('data')">Data Flow</div>
+  <div class="tab" onclick="switchView('infra')">Infrastructure</div>
+</div>
+
+<div class="diagram-container">
+
+  <!-- ===== VIEW 1: SYSTEM OVERVIEW ===== -->
+  <div class="view active" id="view-system">
+    <svg viewBox="0 0 1100 820" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+        </marker>
+        <marker id="arrowhead-dim" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/>
+        </marker>
+        <marker id="arrowhead-data" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#ca8a04"/>
+        </marker>
+      </defs>
+
+      <!-- Title -->
+      <text x="550" y="30" text-anchor="middle" class="section-title">SYSTEM OVERVIEW — Modular Monolith (Single Go Binary)</text>
+
+      <!-- ===== CHAT CHANNELS (top) ===== -->
+      <g class="node" onclick="showDetail('telegram')">
+        <rect x="120" y="50" width="160" height="60" class="box box-chat"/>
+        <text x="200" y="75" text-anchor="middle" class="label">📱 Telegram</text>
+        <text x="200" y="93" text-anchor="middle" class="sublabel">Long Polling · Bot API</text>
+      </g>
+      <g class="node" onclick="showDetail('whatsapp')">
+        <rect x="320" y="50" width="160" height="60" class="box box-chat"/>
+        <text x="400" y="75" text-anchor="middle" class="label">💬 WhatsApp</text>
+        <text x="400" y="93" text-anchor="middle" class="sublabel">Cloud API · Webhooks</text>
+      </g>
+      <g class="node" onclick="showDetail('websocket')">
+        <rect x="520" y="50" width="160" height="60" class="box box-chat"/>
+        <text x="600" y="75" text-anchor="middle" class="label">🌐 WebSocket</text>
+        <text x="600" y="93" text-anchor="middle" class="sublabel">nhooyr.io/websocket</text>
+      </g>
+      <g class="node" onclick="showDetail('admin-panel')">
+        <rect x="760" y="50" width="200" height="60" class="box box-admin"/>
+        <text x="860" y="75" text-anchor="middle" class="label">🖥️ Admin Panel</text>
+        <text x="860" y="93" text-anchor="middle" class="sublabel">Next.js 14 · Refine · shadcn/ui</text>
+      </g>
+
+      <!-- Arrows from channels to Chat Gateway -->
+      <line x1="200" y1="110" x2="400" y2="155" class="arrow"/>
+      <line x1="400" y1="110" x2="400" y2="155" class="arrow"/>
+      <line x1="600" y1="110" x2="400" y2="155" class="arrow"/>
+
+      <!-- ===== CHAT GATEWAY ===== -->
+      <g class="node" onclick="showDetail('chat-gateway')">
+        <rect x="250" y="155" width="300" height="55" class="box box-chat"/>
+        <text x="400" y="178" text-anchor="middle" class="label">Chat Gateway</text>
+        <text x="400" y="196" text-anchor="middle" class="sublabel">internal/chat · Channel interface · Message normalization</text>
+      </g>
+
+      <!-- Arrow to Agent Engine -->
+      <line x1="400" y1="210" x2="400" y2="250" class="arrow arrow-highlight"/>
+
+      <!-- ===== AGENT ENGINE (central hub) ===== -->
+      <g class="node" onclick="showDetail('agent-engine')">
+        <rect x="150" y="250" width="500" height="190" class="box box-agent" style="stroke-width:2;"/>
+
+        <text x="400" y="275" text-anchor="middle" class="label" style="font-size:15px;">🧠 Agent Engine</text>
+        <text x="400" y="293" text-anchor="middle" class="sublabel">internal/agent · Core domain logic</text>
+
+        <!-- Sub-components inside Agent Engine -->
+        <rect x="170" y="305" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="242" y="325" text-anchor="middle" class="icon-label">Conversation</text>
+        <text x="242" y="340" text-anchor="middle" class="sublabel">State Machine</text>
+
+        <rect x="330" y="305" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="402" y="325" text-anchor="middle" class="icon-label">Prompt Builder</text>
+        <text x="402" y="340" text-anchor="middle" class="sublabel">Dual-Loop · Adaptive</text>
+
+        <rect x="490" y="305" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="562" y="325" text-anchor="middle" class="icon-label">Context Resolver</text>
+        <text x="562" y="340" text-anchor="middle" class="sublabel">Topic Detection</text>
+
+        <rect x="170" y="370" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="242" y="390" text-anchor="middle" class="icon-label">Event Logger</text>
+        <text x="242" y="405" text-anchor="middle" class="sublabel">Non-blocking</text>
+
+        <rect x="330" y="370" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="402" y="390" text-anchor="middle" class="icon-label">Rating System</text>
+        <text x="402" y="405" text-anchor="middle" class="sublabel">In-chat feedback</text>
+
+        <rect x="490" y="370" width="145" height="50" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80" stroke-width="1"/>
+        <text x="562" y="390" text-anchor="middle" class="icon-label">Compaction</text>
+        <text x="562" y="405" text-anchor="middle" class="sublabel">Rolling summary</text>
+      </g>
+
+      <!-- ===== CONNECTIONS FROM AGENT ENGINE ===== -->
+
+      <!-- Arrow to AI Gateway -->
+      <line x1="250" y1="440" x2="170" y2="505" class="arrow arrow-highlight"/>
+
+      <!-- Arrow to Curriculum -->
+      <line x1="400" y1="440" x2="530" y2="505" class="arrow"/>
+
+      <!-- Arrow to Progress (future) -->
+      <line x1="550" y1="440" x2="770" y2="505" class="arrow arrow-data" style="marker-end:url(#arrowhead-data)"/>
+
+      <!-- ===== AI GATEWAY ===== -->
+      <g class="node" onclick="showDetail('ai-gateway')">
+        <rect x="30" y="505" width="300" height="180" class="box box-ai" style="stroke-width:2;"/>
+
+        <text x="180" y="530" text-anchor="middle" class="label" style="font-size:14px;">🤖 AI Gateway</text>
+        <text x="180" y="547" text-anchor="middle" class="sublabel">internal/ai · Provider-agnostic</text>
+
+        <!-- Provider boxes -->
+        <rect x="50" y="558" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="90" y="575" text-anchor="middle" class="provider-label">OpenAI</text>
+        <text x="90" y="586" text-anchor="middle" class="sublabel" style="font-size:8px;">GPT-4o · 4o-mini</text>
+
+        <rect x="140" y="558" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="180" y="575" text-anchor="middle" class="provider-label">Anthropic</text>
+        <text x="180" y="586" text-anchor="middle" class="sublabel" style="font-size:8px;">Sonnet · Haiku</text>
+
+        <rect x="230" y="558" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="270" y="575" text-anchor="middle" class="provider-label">DeepSeek</text>
+        <text x="270" y="586" text-anchor="middle" class="sublabel" style="font-size:8px;">V3 · Reasoner</text>
+
+        <rect x="50" y="602" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="90" y="619" text-anchor="middle" class="provider-label">Gemini</text>
+        <text x="90" y="630" text-anchor="middle" class="sublabel" style="font-size:8px;">Flash · Pro</text>
+
+        <rect x="140" y="602" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="180" y="619" text-anchor="middle" class="provider-label">Ollama</text>
+        <text x="180" y="630" text-anchor="middle" class="sublabel" style="font-size:8px;">Llama · Qwen</text>
+
+        <rect x="230" y="602" width="80" height="35" rx="5" ry="5" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+        <text x="270" y="619" text-anchor="middle" class="provider-label">OpenRouter</text>
+        <text x="270" y="630" text-anchor="middle" class="sublabel" style="font-size:8px;">100+ models</text>
+
+        <!-- Router + Budget labels -->
+        <text x="180" y="665" text-anchor="middle" class="sublabel" style="fill:#7c3aed;">Router (fallback chain + circuit breaker) · Budget Tracker</text>
+      </g>
+
+      <!-- ===== CURRICULUM SERVICE ===== -->
+      <g class="node" onclick="showDetail('curriculum')">
+        <rect x="380" y="505" width="300" height="105" class="box box-curriculum"/>
+        <text x="530" y="530" text-anchor="middle" class="label">📚 Curriculum Service</text>
+        <text x="530" y="548" text-anchor="middle" class="sublabel">internal/curriculum · YAML from OSS repo</text>
+
+        <rect x="400" y="560" width="120" height="32" rx="5" ry="5" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1"/>
+        <text x="460" y="580" text-anchor="middle" class="icon-label" style="font-size:10px;">KSSM Matematik</text>
+
+        <rect x="535" y="560" width="120" height="32" rx="5" ry="5" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1"/>
+        <text x="595" y="580" text-anchor="middle" class="icon-label" style="font-size:10px;">Teaching Notes</text>
+      </g>
+
+      <!-- ===== PROGRESS & MOTIVATION (future) ===== -->
+      <g class="node" onclick="showDetail('progress')">
+        <rect x="710" y="505" width="230" height="105" class="box box-data" style="stroke-dasharray:5,5;"/>
+        <text x="825" y="530" text-anchor="middle" class="label">📊 Progress Tracker</text>
+        <text x="825" y="548" text-anchor="middle" class="sublabel">internal/progress (Week 2+)</text>
+
+        <text x="825" y="570" text-anchor="middle" class="sublabel">SM-2 Spaced Repetition</text>
+        <text x="825" y="585" text-anchor="middle" class="sublabel">Mastery Scoring · Streaks · XP</text>
+        <text x="825" y="600" text-anchor="middle" class="sublabel">Leaderboards · Challenges</text>
+      </g>
+
+      <!-- ===== DATA LAYER ===== -->
+      <text x="550" y="660" text-anchor="middle" class="section-title" style="font-size:13px;">DATA LAYER</text>
+
+      <g class="node" onclick="showDetail('postgres')">
+        <rect x="80" y="675" width="200" height="55" class="box box-data"/>
+        <text x="180" y="698" text-anchor="middle" class="label">🐘 PostgreSQL 17</text>
+        <text x="180" y="716" text-anchor="middle" class="sublabel">pgx/v5 · Users · Progress · Messages</text>
+      </g>
+
+      <g class="node" onclick="showDetail('dragonfly')">
+        <rect x="320" y="675" width="200" height="55" class="box box-data"/>
+        <text x="420" y="698" text-anchor="middle" class="label">🐉 Dragonfly</text>
+        <text x="420" y="716" text-anchor="middle" class="sublabel">Redis-compat · Sessions · Rate Limit</text>
+      </g>
+
+      <g class="node" onclick="showDetail('nats')">
+        <rect x="560" y="675" width="200" height="55" class="box box-data"/>
+        <text x="660" y="698" text-anchor="middle" class="label">⚡ NATS JetStream</text>
+        <text x="660" y="716" text-anchor="middle" class="sublabel">Nudge Scheduler · Events</text>
+      </g>
+
+      <g class="node" onclick="showDetail('storage')">
+        <rect x="800" y="675" width="200" height="55" class="box box-data"/>
+        <text x="900" y="698" text-anchor="middle" class="label">📦 Object Storage</text>
+        <text x="900" y="716" text-anchor="middle" class="sublabel">S3-compatible · Exports</text>
+      </g>
+
+      <!-- Data connections -->
+      <line x1="180" y1="640" x2="180" y2="675" class="arrow arrow-data" style="marker-end:url(#arrowhead-data)"/>
+      <line x1="420" y1="640" x2="420" y2="675" class="arrow arrow-data" style="marker-end:url(#arrowhead-data)"/>
+      <line x1="660" y1="640" x2="660" y2="675" class="arrow arrow-data" style="marker-end:url(#arrowhead-data)"/>
+
+      <!-- Admin API arrow -->
+      <line x1="860" y1="110" x2="860" y2="250" class="arrow" style="stroke-dasharray:4,4;"/>
+      <text x="875" y="185" class="sublabel" style="font-size:9px;">REST API</text>
+
+      <!-- Auth + Tenant boxes -->
+      <g class="node" onclick="showDetail('auth')">
+        <rect x="700" y="280" width="140" height="45" class="box box-infra"/>
+        <text x="770" y="300" text-anchor="middle" class="label" style="font-size:12px;">🔐 Auth</text>
+        <text x="770" y="315" text-anchor="middle" class="sublabel">JWT · RBAC</text>
+      </g>
+      <g class="node" onclick="showDetail('tenant')">
+        <rect x="860" y="280" width="140" height="45" class="box box-infra"/>
+        <text x="930" y="300" text-anchor="middle" class="label" style="font-size:12px;">🏢 Tenant</text>
+        <text x="930" y="315" text-anchor="middle" class="sublabel">Multi-tenancy</text>
+      </g>
+
+      <!-- Platform / Health -->
+      <g class="node" onclick="showDetail('platform')">
+        <rect x="700" y="340" width="300" height="45" class="box box-infra"/>
+        <text x="850" y="360" text-anchor="middle" class="label" style="font-size:12px;">⚙️ Platform Services</text>
+        <text x="850" y="375" text-anchor="middle" class="sublabel">Config · Health · Telemetry (OTel) · Logging (slog)</text>
+      </g>
+
+      <!-- OSS repo callout -->
+      <g class="node" onclick="showDetail('oss')">
+        <rect x="380" y="630" width="300" height="30" rx="15" ry="15" fill="#ffffff" stroke="#8b5cf6" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="530" y="650" text-anchor="middle" class="sublabel" style="fill:#7c3aed;">Git Submodule → p-n-ai/oss (Open School Syllabus)</text>
+      </g>
+    </svg>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-color" style="background:#e0f2fe;border-color:#3b82f6;"></div>Chat Layer</div>
+      <div class="legend-item"><div class="legend-color" style="background:#dcfce7;border-color:#22c55e;"></div>Agent Engine (Core)</div>
+      <div class="legend-item"><div class="legend-color" style="background:#f3e8ff;border-color:#a855f7;"></div>AI Gateway</div>
+      <div class="legend-item"><div class="legend-color" style="background:#ede9fe;border-color:#7c3aed;"></div>Curriculum</div>
+      <div class="legend-item"><div class="legend-color" style="background:#fef9c3;border-color:#ca8a04;"></div>Data Layer</div>
+      <div class="legend-item"><div class="legend-color" style="background:#e0f7fa;border-color:#0891b2;"></div>Infrastructure</div>
+      <div class="legend-item"><div class="legend-color" style="background:#fff1e6;border-color:#ea580c;"></div>Admin Panel</div>
+      <div class="legend-item" style="color:#2563eb;">━━▶ Request flow</div>
+      <div class="legend-item" style="color:#ca8a04;">╌╌▶ Data flow</div>
+    </div>
+  </div>
+
+  <!-- ===== VIEW 2: AI ARCHITECTURE DEEP DIVE ===== -->
+  <div class="view" id="view-ai">
+    <svg viewBox="0 0 1100 1050" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+        </marker>
+        <marker id="ah2-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#7c3aed"/>
+        </marker>
+        <marker id="ah2-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+        </marker>
+        <marker id="ah2-yellow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#d97706"/>
+        </marker>
+        <linearGradient id="grad-ai" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#f3e8ff;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#ede9fe;stop-opacity:1"/>
+        </linearGradient>
+      </defs>
+
+      <text x="550" y="30" text-anchor="middle" class="section-title">AI ARCHITECTURE — Deep Dive</text>
+
+      <!-- ===== INCOMING REQUEST ===== -->
+      <rect x="380" y="50" width="340" height="48" rx="24" ry="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="550" y="72" text-anchor="middle" class="label" style="font-size:12px;">Student Message → Agent Engine → AI Gateway</text>
+      <text x="550" y="86" text-anchor="middle" class="sublabel">CompletionRequest { Messages, Task, Model, MaxTokens }</text>
+
+      <line x1="550" y1="98" x2="550" y2="125" stroke="#2563eb" stroke-width="2" marker-end="url(#ah2)"/>
+
+      <!-- ===== TASK-BASED ROUTING ===== -->
+      <rect x="200" y="125" width="700" height="155" rx="10" ry="10" fill="url(#grad-ai)" stroke="#a855f7" stroke-width="2"/>
+      <text x="550" y="150" text-anchor="middle" class="label" style="font-size:15px;">🧭 Task-Based Router</text>
+      <text x="550" y="167" text-anchor="middle" class="sublabel">internal/ai/router.go · Selects provider by task type + availability + budget</text>
+
+      <!-- Task type boxes -->
+      <rect x="220" y="180" width="150" height="45" rx="6" ry="6" fill="#faf5ff" stroke="#c084fc"/>
+      <text x="295" y="200" text-anchor="middle" class="provider-label" style="font-size:12px;">TaskTeaching</text>
+      <text x="295" y="215" text-anchor="middle" class="sublabel">Best models (complex)</text>
+
+      <rect x="390" y="180" width="150" height="45" rx="6" ry="6" fill="#faf5ff" stroke="#c084fc"/>
+      <text x="465" y="200" text-anchor="middle" class="provider-label" style="font-size:12px;">TaskGrading</text>
+      <text x="465" y="215" text-anchor="middle" class="sublabel">Cheapest (fast JSON)</text>
+
+      <rect x="560" y="180" width="150" height="45" rx="6" ry="6" fill="#faf5ff" stroke="#c084fc"/>
+      <text x="635" y="200" text-anchor="middle" class="provider-label" style="font-size:12px;">TaskNudge</text>
+      <text x="635" y="215" text-anchor="middle" class="sublabel">Any available</text>
+
+      <rect x="730" y="180" width="150" height="45" rx="6" ry="6" fill="#faf5ff" stroke="#c084fc"/>
+      <text x="805" y="200" text-anchor="middle" class="provider-label" style="font-size:12px;">TaskAnalysis</text>
+      <text x="805" y="215" text-anchor="middle" class="sublabel">Mastery assessment</text>
+
+      <!-- Router internals -->
+      <text x="550" y="258" text-anchor="middle" class="sublabel" style="fill:#7c3aed;font-size:11px;">
+        Fallback Chain · Retry w/ Backoff (1s→2s→4s) · Circuit Breaker (3 failures → 30s cooldown)
+      </text>
+
+      <!-- Arrows from Router to providers -->
+      <line x1="295" y1="280" x2="135" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+      <line x1="380" y1="280" x2="335" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+      <line x1="465" y1="280" x2="535" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+      <line x1="635" y1="280" x2="735" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+      <line x1="805" y1="280" x2="885" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+      <line x1="900" y1="280" x2="985" y2="330" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#ah2-purple)"/>
+
+      <!-- ===== PROVIDER BOXES ===== -->
+      <!-- OpenAI -->
+      <rect x="50" y="330" width="170" height="100" rx="8" ry="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+      <text x="135" y="352" text-anchor="middle" class="label" style="font-size:13px;">OpenAI</text>
+      <text x="135" y="368" text-anchor="middle" class="sublabel">provider_openai.go</text>
+      <text x="135" y="388" text-anchor="middle" class="provider-label">GPT-4o (teaching)</text>
+      <text x="135" y="403" text-anchor="middle" class="provider-label">GPT-4o-mini (grading)</text>
+      <text x="135" y="418" text-anchor="middle" class="sublabel">Configurable base URL</text>
+
+      <!-- Anthropic -->
+      <rect x="240" y="330" width="170" height="100" rx="8" ry="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+      <text x="325" y="352" text-anchor="middle" class="label" style="font-size:13px;">Anthropic</text>
+      <text x="325" y="368" text-anchor="middle" class="sublabel">provider_anthropic.go</text>
+      <text x="325" y="388" text-anchor="middle" class="provider-label">Claude Sonnet (teaching)</text>
+      <text x="325" y="403" text-anchor="middle" class="provider-label">Claude Haiku (grading)</text>
+      <text x="325" y="418" text-anchor="middle" class="sublabel">Messages API format</text>
+
+      <!-- DeepSeek -->
+      <rect x="440" y="330" width="170" height="100" rx="8" ry="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+      <text x="525" y="352" text-anchor="middle" class="label" style="font-size:13px;">DeepSeek</text>
+      <text x="525" y="368" text-anchor="middle" class="sublabel">via provider_openai.go</text>
+      <text x="525" y="388" text-anchor="middle" class="provider-label">V3 (cheapest grading)</text>
+      <text x="525" y="403" text-anchor="middle" class="provider-label">Reasoner (analysis)</text>
+      <text x="525" y="418" text-anchor="middle" class="sublabel">OpenAI-compatible API</text>
+
+      <!-- Gemini -->
+      <rect x="640" y="330" width="170" height="100" rx="8" ry="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+      <text x="725" y="352" text-anchor="middle" class="label" style="font-size:13px;">Google Gemini</text>
+      <text x="725" y="368" text-anchor="middle" class="sublabel">provider_google.go</text>
+      <text x="725" y="388" text-anchor="middle" class="provider-label">2.5 Pro (teaching)</text>
+      <text x="725" y="403" text-anchor="middle" class="provider-label">2.5 Flash (grading)</text>
+      <text x="725" y="418" text-anchor="middle" class="sublabel">Unique API format</text>
+
+      <!-- Ollama -->
+      <rect x="830" y="330" width="120" height="100" rx="8" ry="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="890" y="352" text-anchor="middle" class="label" style="font-size:13px;">Ollama</text>
+      <text x="890" y="368" text-anchor="middle" class="sublabel">provider_ollama.go</text>
+      <text x="890" y="388" text-anchor="middle" class="provider-label">Llama 3, Qwen</text>
+      <text x="890" y="403" text-anchor="middle" class="provider-label">Mistral, Gemma</text>
+      <text x="890" y="418" text-anchor="middle" class="sublabel" style="fill:#16a34a;">FREE · Self-hosted</text>
+
+      <!-- OpenRouter -->
+      <rect x="960" y="330" width="120" height="100" rx="8" ry="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.5"/>
+      <text x="1020" y="352" text-anchor="middle" class="label" style="font-size:13px;">OpenRouter</text>
+      <text x="1020" y="368" text-anchor="middle" class="sublabel">provider_openrouter.go</text>
+      <text x="1020" y="388" text-anchor="middle" class="provider-label">100+ models</text>
+      <text x="1020" y="403" text-anchor="middle" class="provider-label">Qwen, Kimi, etc.</text>
+      <text x="1020" y="418" text-anchor="middle" class="sublabel">Single API key</text>
+
+      <!-- ===== BUDGET SYSTEM ===== -->
+      <line x1="550" y1="430" x2="550" y2="470" stroke="#d97706" stroke-width="2" marker-end="url(#ah2-yellow)"/>
+
+      <rect x="300" y="470" width="500" height="80" rx="10" ry="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+      <text x="550" y="495" text-anchor="middle" class="label">💰 Token Budget Tracker</text>
+      <text x="550" y="512" text-anchor="middle" class="sublabel">internal/ai/budget.go · BudgetChecker interface</text>
+      <text x="550" y="532" text-anchor="middle" class="sublabel" style="fill:#b45309;">
+        Check(tenant, user) → Record(tokens) → Usage() · Dragonfly (real-time) + PostgreSQL (sync)
+      </text>
+
+      <!-- ===== DEGRADATION STRATEGY ===== -->
+      <line x1="550" y1="550" x2="550" y2="580" stroke="#d97706" stroke-width="1.5" marker-end="url(#ah2-yellow)"/>
+
+      <rect x="200" y="580" width="700" height="50" rx="25" ry="25" fill="#ffffff" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="550" y="602" text-anchor="middle" class="label" style="font-size:12px;">Graceful Degradation: Premium Models → Cheap Models → Ollama (FREE)</text>
+      <text x="550" y="618" text-anchor="middle" class="sublabel">"No student is ever cut off from learning" — budget exhausted → auto-fallback to self-hosted</text>
+
+      <!-- ===== PEDAGOGICAL PROMPT SYSTEM ===== -->
+      <text x="550" y="665" text-anchor="middle" class="section-title" style="font-size:14px;">PEDAGOGICAL PROMPT SYSTEM</text>
+
+      <!-- Prompt Builder -->
+      <rect x="50" y="685" width="500" height="195" rx="10" ry="10" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+      <text x="300" y="710" text-anchor="middle" class="label" style="font-size:14px;">📝 System Prompt Builder</text>
+      <text x="300" y="727" text-anchor="middle" class="sublabel">Constructs system prompt from multiple signals</text>
+
+      <!-- Dual-loop -->
+      <rect x="70" y="740" width="220" height="55" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="180" y="758" text-anchor="middle" class="icon-label">Dual-Loop Problem Solving</text>
+      <text x="180" y="773" text-anchor="middle" class="sublabel" style="font-size:9px;">Understand → Plan → Solve → Verify → Connect</text>
+      <text x="180" y="785" text-anchor="middle" class="sublabel" style="font-size:8px;">Inspired by DeepTutor's dual-loop architecture</text>
+
+      <!-- Adaptive depth -->
+      <rect x="310" y="740" width="220" height="55" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="420" y="758" text-anchor="middle" class="icon-label">Adaptive Explanation Depth</text>
+      <text x="420" y="773" text-anchor="middle" class="sublabel" style="font-size:9px;">&lt;0.3 Beginner · 0.3-0.6 Developing · &gt;0.6 Proficient</text>
+      <text x="420" y="785" text-anchor="middle" class="sublabel" style="font-size:8px;">Mastery-based prompt selection</text>
+
+      <!-- Curriculum citation -->
+      <rect x="70" y="805" width="220" height="55" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="180" y="823" text-anchor="middle" class="icon-label">Curriculum Citation</text>
+      <text x="180" y="838" text-anchor="middle" class="sublabel" style="font-size:9px;">"KSSM Form 1 > Algebra > Linear Equations"</text>
+      <text x="180" y="850" text-anchor="middle" class="sublabel" style="font-size:8px;">{syllabus} > {subject} > {topic} injected</text>
+
+      <!-- Language + Context -->
+      <rect x="310" y="805" width="220" height="55" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="420" y="823" text-anchor="middle" class="icon-label">Language & Context</text>
+      <text x="420" y="838" text-anchor="middle" class="sublabel" style="font-size:9px;">EN / BM / 中文 · Student progress injected</text>
+      <text x="420" y="850" text-anchor="middle" class="sublabel" style="font-size:8px;">"Mastered X, working on Y, struggles with Z"</text>
+
+      <!-- Quiz & Question Gen -->
+      <rect x="590" y="685" width="460" height="195" rx="10" ry="10" fill="#fff1e6" stroke="#ea580c" stroke-width="2"/>
+      <text x="820" y="710" text-anchor="middle" class="label" style="font-size:14px;">🎯 Quiz & Question Generation</text>
+      <text x="820" y="727" text-anchor="middle" class="sublabel">internal/agent/quiz.go</text>
+
+      <rect x="610" y="740" width="200" height="55" rx="6" ry="6" fill="#fff7ed" stroke="#f97316"/>
+      <text x="710" y="758" text-anchor="middle" class="icon-label">Static Questions</text>
+      <text x="710" y="773" text-anchor="middle" class="sublabel" style="font-size:9px;">assessments.yaml from OSS repo</text>
+      <text x="710" y="785" text-anchor="middle" class="sublabel" style="font-size:8px;">Pre-authored per topic</text>
+
+      <rect x="830" y="740" width="200" height="55" rx="6" ry="6" fill="#fff7ed" stroke="#f97316"/>
+      <text x="930" y="758" text-anchor="middle" class="icon-label">Dynamic Generation</text>
+      <text x="930" y="773" text-anchor="middle" class="sublabel" style="font-size:9px;">AI generates when &lt;5 questions exist</text>
+      <text x="930" y="785" text-anchor="middle" class="sublabel" style="font-size:8px;">CompleteJSON (cheapest model)</text>
+
+      <rect x="610" y="805" width="200" height="55" rx="6" ry="6" fill="#fff7ed" stroke="#f97316"/>
+      <text x="710" y="823" text-anchor="middle" class="icon-label">Exam-Style Mimicry</text>
+      <text x="710" y="838" text-anchor="middle" class="sublabel" style="font-size:9px;">PT3/SPM exemplars as style refs</text>
+      <text x="710" y="850" text-anchor="middle" class="sublabel" style="font-size:8px;">Matches real exam format/difficulty</text>
+
+      <rect x="830" y="805" width="200" height="55" rx="6" ry="6" fill="#fff7ed" stroke="#f97316"/>
+      <text x="930" y="823" text-anchor="middle" class="icon-label">AI Grading</text>
+      <text x="930" y="838" text-anchor="middle" class="sublabel" style="font-size:9px;">Free-text answer evaluation</text>
+      <text x="930" y="850" text-anchor="middle" class="sublabel" style="font-size:8px;">Hints on wrong answers</text>
+
+      <!-- ===== PROVIDER INTERFACE ===== -->
+      <rect x="150" y="920" width="800" height="105" rx="10" ry="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="550" y="945" text-anchor="middle" class="label">Go Interface: Provider</text>
+      <text x="550" y="965" text-anchor="middle" class="sublabel" style="font-family:'Fira Code',monospace;font-size:11px;fill:#7c3aed;">
+        Complete(ctx, CompletionRequest) → (CompletionResponse, error)
+      </text>
+      <text x="550" y="983" text-anchor="middle" class="sublabel" style="font-family:'Fira Code',monospace;font-size:11px;fill:#7c3aed;">
+        StreamComplete(ctx, CompletionRequest) → (chan StreamChunk, error)
+      </text>
+      <text x="550" y="1001" text-anchor="middle" class="sublabel" style="font-family:'Fira Code',monospace;font-size:11px;fill:#7c3aed;">
+        Models() → []ModelInfo  ·  HealthCheck(ctx) → error
+      </text>
+      <text x="550" y="1018" text-anchor="middle" class="sublabel" style="font-size:10px;fill:#64748b;">
+        All 6 providers implement this interface · MockProvider for testing
+      </text>
+    </svg>
+  </div>
+
+  <!-- ===== VIEW 3: DATA FLOW ===== -->
+  <div class="view" id="view-data">
+    <svg viewBox="0 0 1100 780" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+        </marker>
+        <marker id="ah3-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+        </marker>
+      </defs>
+
+      <text x="550" y="30" text-anchor="middle" class="section-title">DATA FLOW — Student Message Lifecycle</text>
+
+      <!-- Step 1: Student sends message -->
+      <rect x="400" y="50" width="300" height="45" rx="22" ry="22" fill="#e0f2fe" stroke="#3b82f6"/>
+      <text x="550" y="72" text-anchor="middle" class="label" style="font-size:12px;">1️⃣ Student sends message via Telegram</text>
+      <text x="550" y="86" text-anchor="middle" class="sublabel">Long polling receives Update</text>
+      <line x1="550" y1="95" x2="550" y2="115" stroke="#2563eb" stroke-width="2" marker-end="url(#ah3)"/>
+
+      <!-- Step 2: Chat Gateway normalizes -->
+      <rect x="350" y="115" width="400" height="45" rx="8" ry="8" fill="#e0f2fe" stroke="#3b82f6"/>
+      <text x="550" y="137" text-anchor="middle" class="label" style="font-size:12px;">2️⃣ Chat Gateway normalizes → InboundMessage</text>
+      <text x="550" y="151" text-anchor="middle" class="sublabel">User lookup by telegram_id · Auto /start if new user</text>
+      <line x1="550" y1="160" x2="550" y2="180" stroke="#2563eb" stroke-width="2" marker-end="url(#ah3)"/>
+
+      <!-- Step 3: Agent Engine processes -->
+      <rect x="200" y="180" width="700" height="160" rx="10" ry="10" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="550" y="205" text-anchor="middle" class="label">3️⃣ Agent Engine — ProcessMessage Pipeline</text>
+
+      <!-- Sub-steps -->
+      <rect x="220" y="218" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="297" y="237" text-anchor="middle" class="icon-label" style="font-size:10px;">Load Conversation</text>
+      <text x="297" y="250" text-anchor="middle" class="sublabel" style="font-size:8px;">Store.Get(userID)</text>
+
+      <text x="385" y="242" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="395" y="218" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="472" y="237" text-anchor="middle" class="icon-label" style="font-size:10px;">Resolve Context</text>
+      <text x="472" y="250" text-anchor="middle" class="sublabel" style="font-size:8px;">Topic detection + curriculum</text>
+
+      <text x="560" y="242" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="570" y="218" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="647" y="237" text-anchor="middle" class="icon-label" style="font-size:10px;">Build System Prompt</text>
+      <text x="647" y="250" text-anchor="middle" class="sublabel" style="font-size:8px;">Dual-loop + adaptive depth</text>
+
+      <text x="735" y="242" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="745" y="218" width="135" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="812" y="237" text-anchor="middle" class="icon-label" style="font-size:10px;">Call AI Gateway</text>
+      <text x="812" y="250" text-anchor="middle" class="sublabel" style="font-size:8px;">Router.Complete(req)</text>
+
+      <!-- Second row -->
+      <rect x="220" y="275" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="297" y="294" text-anchor="middle" class="icon-label" style="font-size:10px;">Save Response</text>
+      <text x="297" y="307" text-anchor="middle" class="sublabel" style="font-size:8px;">Store.Save(conversation)</text>
+
+      <text x="385" y="299" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="395" y="275" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="472" y="294" text-anchor="middle" class="icon-label" style="font-size:10px;">Log Events</text>
+      <text x="472" y="307" text-anchor="middle" class="sublabel" style="font-size:8px;">Non-blocking goroutine</text>
+
+      <text x="560" y="299" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="570" y="275" width="155" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="647" y="294" text-anchor="middle" class="icon-label" style="font-size:10px;">Maybe Compact</text>
+      <text x="647" y="307" text-anchor="middle" class="sublabel" style="font-size:8px;">If &gt;20 msgs or &gt;20k tokens</text>
+
+      <text x="735" y="299" text-anchor="middle" class="sublabel" style="fill:#2563eb;">→</text>
+
+      <rect x="745" y="275" width="135" height="40" rx="6" ry="6" fill="#f0fdf4" stroke="#4ade80"/>
+      <text x="812" y="294" text-anchor="middle" class="icon-label" style="font-size:10px;">Maybe Rate</text>
+      <text x="812" y="307" text-anchor="middle" class="sublabel" style="font-size:8px;">Every N replies ask 1-5</text>
+
+      <line x1="550" y1="340" x2="550" y2="365" stroke="#2563eb" stroke-width="2" marker-end="url(#ah3)"/>
+
+      <!-- Step 4: Response -->
+      <rect x="350" y="365" width="400" height="45" rx="8" ry="8" fill="#e0f2fe" stroke="#3b82f6"/>
+      <text x="550" y="387" text-anchor="middle" class="label" style="font-size:12px;">4️⃣ Chat Gateway sends response → Telegram</text>
+      <text x="550" y="401" text-anchor="middle" class="sublabel">Markdown split if &gt;4096 chars · Format for Telegram</text>
+
+      <!-- ===== Parallel data flows ===== -->
+      <text x="550" y="445" text-anchor="middle" class="section-title" style="font-size:13px;">PARALLEL DATA FLOWS</text>
+
+      <!-- PostgreSQL -->
+      <rect x="50" y="465" width="300" height="140" rx="10" ry="10" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="200" y="490" text-anchor="middle" class="label">🐘 PostgreSQL 17</text>
+
+      <text x="70" y="515" class="sublabel" style="fill:#b45309;font-size:10px;">tenants</text>
+      <text x="200" y="515" class="sublabel" style="font-size:10px;">Multi-tenant isolation</text>
+      <text x="70" y="532" class="sublabel" style="fill:#b45309;font-size:10px;">users</text>
+      <text x="200" y="532" class="sublabel" style="font-size:10px;">Students, teachers, parents (external_id = telegram_id)</text>
+      <text x="70" y="549" class="sublabel" style="fill:#b45309;font-size:10px;">conversations</text>
+      <text x="200" y="549" class="sublabel" style="font-size:10px;">State machine state + JSONB messages</text>
+      <text x="70" y="566" class="sublabel" style="fill:#b45309;font-size:10px;">messages</text>
+      <text x="200" y="566" class="sublabel" style="font-size:10px;">Every exchange (model, tokens, rated_message_id)</text>
+      <text x="70" y="583" class="sublabel" style="fill:#b45309;font-size:10px;">events</text>
+      <text x="200" y="583" class="sublabel" style="font-size:10px;">session_started, message_sent, ai_response, ratings</text>
+      <text x="70" y="600" class="sublabel" style="fill:#b45309;font-size:10px;">learning_progress</text>
+      <text x="200" y="600" class="sublabel" style="font-size:10px;">SM-2 fields: mastery_score, ease_factor, interval_days</text>
+
+      <!-- Dragonfly -->
+      <rect x="400" y="465" width="300" height="140" rx="10" ry="10" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="550" y="490" text-anchor="middle" class="label">🐉 Dragonfly (Redis-compat)</text>
+
+      <text x="420" y="515" class="sublabel" style="fill:#b45309;font-size:10px;">session:{user_id}</text>
+      <text x="550" y="515" class="sublabel" style="font-size:10px;">Active conversation cache</text>
+      <text x="420" y="535" class="sublabel" style="fill:#b45309;font-size:10px;">rate:{user_id}</text>
+      <text x="550" y="535" class="sublabel" style="font-size:10px;">Per-user rate limiting</text>
+      <text x="420" y="555" class="sublabel" style="fill:#b45309;font-size:10px;">budget:{tenant}:{user}</text>
+      <text x="550" y="555" class="sublabel" style="font-size:10px;">Real-time token tracking</text>
+      <text x="420" y="575" class="sublabel" style="fill:#b45309;font-size:10px;">curriculum:*</text>
+      <text x="550" y="575" class="sublabel" style="font-size:10px;">Parsed curriculum cache</text>
+      <text x="420" y="595" class="sublabel" style="fill:#b45309;font-size:10px;">leaderboard:*</text>
+      <text x="550" y="595" class="sublabel" style="font-size:10px;">Sorted sets for weekly rankings</text>
+
+      <!-- NATS -->
+      <rect x="750" y="465" width="300" height="140" rx="10" ry="10" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="900" y="490" text-anchor="middle" class="label">⚡ NATS JetStream</text>
+
+      <text x="770" y="515" class="sublabel" style="fill:#b45309;font-size:10px;">nudge.schedule</text>
+      <text x="900" y="515" class="sublabel" style="font-size:10px;">Proactive study reminders</text>
+      <text x="770" y="535" class="sublabel" style="fill:#b45309;font-size:10px;">event.log</text>
+      <text x="900" y="535" class="sublabel" style="font-size:10px;">Analytics event stream</text>
+      <text x="770" y="555" class="sublabel" style="fill:#b45309;font-size:10px;">report.generate</text>
+      <text x="900" y="555" class="sublabel" style="font-size:10px;">Weekly parent reports</text>
+      <text x="770" y="575" class="sublabel" style="fill:#b45309;font-size:10px;">review.schedule</text>
+      <text x="900" y="575" class="sublabel" style="font-size:10px;">SM-2 spaced repetition triggers</text>
+      <text x="770" y="595" class="sublabel" style="fill:#b45309;font-size:10px;">leaderboard.update</text>
+      <text x="900" y="595" class="sublabel" style="font-size:10px;">Weekly leaderboard computation</text>
+
+      <!-- Conversation compaction detail -->
+      <rect x="100" y="640" width="900" height="120" rx="10" ry="10" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="550" y="665" text-anchor="middle" class="label">🔄 Conversation Compaction (Rolling Summary)</text>
+      <text x="550" y="685" text-anchor="middle" class="sublabel" style="font-size:11px;">No hard session boundaries — continuous conversation with intelligent compaction</text>
+
+      <text x="150" y="710" class="sublabel" style="fill:#2563eb;font-size:10px;">Trigger:</text>
+      <text x="210" y="710" class="sublabel" style="font-size:10px;">&gt;20 messages OR &gt;20,000 estimated tokens</text>
+
+      <text x="150" y="730" class="sublabel" style="fill:#2563eb;font-size:10px;">Strategy:</text>
+      <text x="210" y="730" class="sublabel" style="font-size:10px;">AI summarizes older messages → keeps 6 most recent + summary as context</text>
+
+      <text x="150" y="750" class="sublabel" style="fill:#2563eb;font-size:10px;">Result:</text>
+      <text x="210" y="750" class="sublabel" style="font-size:10px;">Unbounded conversations with bounded token cost. Student never loses context.</text>
+    </svg>
+  </div>
+
+  <!-- ===== VIEW 4: INFRASTRUCTURE ===== -->
+  <div class="view" id="view-infra">
+    <svg viewBox="0 0 1100 720" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah4" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+        </marker>
+      </defs>
+
+      <text x="550" y="30" text-anchor="middle" class="section-title">INFRASTRUCTURE & DEPLOYMENT</text>
+
+      <!-- Two deployment options -->
+      <!-- Option A -->
+      <rect x="50" y="55" width="480" height="290" rx="10" ry="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="290" y="80" text-anchor="middle" class="label" style="font-size:14px;">Option A: Single Server (Docker Compose)</text>
+      <text x="290" y="97" text-anchor="middle" class="sublabel">VPS with 2GB+ RAM · ~$20/month · 100-500 students</text>
+
+      <rect x="70" y="115" width="200" height="38" rx="6" ry="6" fill="#dcfce7" stroke="#22c55e"/>
+      <text x="170" y="139" text-anchor="middle" class="icon-label">pai-server (Go binary)</text>
+
+      <rect x="290" y="115" width="200" height="38" rx="6" ry="6" fill="#fff1e6" stroke="#ea580c"/>
+      <text x="390" y="139" text-anchor="middle" class="icon-label">admin (Next.js)</text>
+
+      <rect x="70" y="168" width="130" height="38" rx="6" ry="6" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="135" y="192" text-anchor="middle" class="icon-label">PostgreSQL 17</text>
+
+      <rect x="215" y="168" width="130" height="38" rx="6" ry="6" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="280" y="192" text-anchor="middle" class="icon-label">Dragonfly</text>
+
+      <rect x="360" y="168" width="130" height="38" rx="6" ry="6" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="425" y="192" text-anchor="middle" class="icon-label">NATS JetStream</text>
+
+      <rect x="70" y="220" width="200" height="38" rx="6" ry="6" fill="#f0fdf4" stroke="#22c55e" stroke-dasharray="4,3"/>
+      <text x="170" y="244" text-anchor="middle" class="icon-label">Ollama (optional)</text>
+
+      <rect x="290" y="220" width="200" height="38" rx="6" ry="6" fill="#e0f2fe" stroke="#3b82f6" stroke-dasharray="4,3"/>
+      <text x="390" y="244" text-anchor="middle" class="icon-label">nginx (reverse proxy)</text>
+
+      <text x="290" y="285" text-anchor="middle" class="sublabel" style="font-family:'Fira Code',monospace;font-size:11px;fill:#2563eb;">docker compose up -d</text>
+      <text x="290" y="303" text-anchor="middle" class="sublabel">Multi-stage Dockerfile → ~25MB image (scratch base)</text>
+      <text x="290" y="320" text-anchor="middle" class="sublabel">Cold start &lt;100ms · Go binary boots instantly</text>
+
+      <!-- Option B -->
+      <rect x="570" y="55" width="480" height="290" rx="10" ry="10" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/>
+      <text x="810" y="80" text-anchor="middle" class="label" style="font-size:14px;">Option B: Kubernetes (Helm)</text>
+      <text x="810" y="97" text-anchor="middle" class="sublabel">EKS/GKE/AKS · Millions of students · Multi-school</text>
+
+      <rect x="590" y="115" width="120" height="38" rx="6" ry="6" fill="#dcfce7" stroke="#22c55e"/>
+      <text x="650" y="139" text-anchor="middle" class="icon-label">Deployment</text>
+
+      <rect x="720" y="115" width="120" height="38" rx="6" ry="6" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="780" y="139" text-anchor="middle" class="icon-label">StatefulSet</text>
+
+      <rect x="850" y="115" width="120" height="38" rx="6" ry="6" fill="#e0f7fa" stroke="#0891b2"/>
+      <text x="910" y="139" text-anchor="middle" class="icon-label">Ingress</text>
+
+      <rect x="590" y="168" width="120" height="38" rx="6" ry="6" fill="#e0f7fa" stroke="#0891b2"/>
+      <text x="650" y="192" text-anchor="middle" class="icon-label">ConfigMap</text>
+
+      <rect x="720" y="168" width="120" height="38" rx="6" ry="6" fill="#e0f7fa" stroke="#0891b2"/>
+      <text x="780" y="192" text-anchor="middle" class="icon-label">Secret (ESO)</text>
+
+      <rect x="850" y="168" width="120" height="38" rx="6" ry="6" fill="#e0f7fa" stroke="#0891b2"/>
+      <text x="910" y="192" text-anchor="middle" class="icon-label">Service</text>
+
+      <text x="810" y="235" text-anchor="middle" class="sublabel" style="font-size:11px;">Horizontal scaling · Each school = namespace</text>
+      <text x="810" y="255" text-anchor="middle" class="sublabel" style="font-size:11px;">Rolling updates · Zero downtime · Auto-rollback</text>
+
+      <text x="810" y="285" text-anchor="middle" class="sublabel" style="font-family:'Fira Code',monospace;font-size:11px;fill:#2563eb;">helm install pai pai/pai-bot</text>
+      <text x="810" y="303" text-anchor="middle" class="sublabel">Terraform for cloud IaC (AWS primary, cloud-agnostic)</text>
+      <text x="810" y="320" text-anchor="middle" class="sublabel">100K concurrent connections per Go instance</text>
+
+      <!-- CI/CD Pipeline -->
+      <rect x="50" y="380" width="1000" height="130" rx="10" ry="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="550" y="405" text-anchor="middle" class="label" style="font-size:14px;">CI/CD Pipeline</text>
+
+      <rect x="80" y="420" width="140" height="40" rx="20" ry="20" fill="#e0f2fe" stroke="#3b82f6"/>
+      <text x="150" y="445" text-anchor="middle" class="icon-label">Git Push / PR</text>
+
+      <line x1="220" y1="440" x2="250" y2="440" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah4)"/>
+
+      <rect x="250" y="420" width="260" height="40" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e"/>
+      <text x="380" y="445" text-anchor="middle" class="icon-label">GitHub Actions: test · lint · build · docker</text>
+
+      <line x1="510" y1="440" x2="540" y2="440" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah4)"/>
+
+      <rect x="540" y="420" width="180" height="40" rx="8" ry="8" fill="#f3e8ff" stroke="#a855f7"/>
+      <text x="630" y="445" text-anchor="middle" class="icon-label">Push image → ECR/GHCR</text>
+
+      <line x1="720" y1="440" x2="750" y2="440" stroke="#2563eb" stroke-width="1.5" marker-end="url(#ah4)"/>
+
+      <rect x="750" y="420" width="260" height="40" rx="8" ry="8" fill="#e0f7fa" stroke="#0891b2"/>
+      <text x="880" y="445" text-anchor="middle" class="icon-label">ArgoCD: detect → apply → rolling update</text>
+
+      <text x="550" y="490" text-anchor="middle" class="sublabel">TDD enforced: make test-all must pass before merge · golangci-lint · Zero-downtime rolling deploys</text>
+
+      <!-- Observability -->
+      <rect x="50" y="540" width="1000" height="150" rx="10" ry="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="550" y="565" text-anchor="middle" class="label" style="font-size:14px;">📊 Observability Stack</text>
+
+      <rect x="80" y="585" width="200" height="50" rx="8" ry="8" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="180" y="607" text-anchor="middle" class="icon-label">Prometheus</text>
+      <text x="180" y="624" text-anchor="middle" class="sublabel">Metrics (OTel SDK)</text>
+
+      <rect x="310" y="585" width="200" height="50" rx="8" ry="8" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="410" y="607" text-anchor="middle" class="icon-label">Loki</text>
+      <text x="410" y="624" text-anchor="middle" class="sublabel">Logs (slog JSON)</text>
+
+      <rect x="540" y="585" width="200" height="50" rx="8" ry="8" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="640" y="607" text-anchor="middle" class="icon-label">Tempo</text>
+      <text x="640" y="624" text-anchor="middle" class="sublabel">Traces (OTel SDK)</text>
+
+      <rect x="770" y="585" width="200" height="50" rx="8" ry="8" fill="#fff1e6" stroke="#ea580c"/>
+      <text x="870" y="607" text-anchor="middle" class="icon-label">Grafana</text>
+      <text x="870" y="624" text-anchor="middle" class="sublabel">Dashboards + Alerting</text>
+
+      <text x="550" y="670" text-anchor="middle" class="sublabel">All telemetry via OpenTelemetry SDK · Grafana stack runs inside K8s cluster · S3 storage backend</text>
+
+      <!-- Security summary -->
+      <rect x="50" y="700" width="1000" height="18" rx="9" ry="9" fill="#ffffff" stroke="#cbd5e1"/>
+      <text x="550" y="714" text-anchor="middle" class="sublabel" style="font-size:10px;">
+        🔐 JWT (15min access + 7d refresh) · RBAC (student/teacher/parent/admin) · Tenant isolation · Rate limiting · TLS everywhere · COPPA/PDPA compliant
+      </text>
+    </svg>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" id="detail-panel">
+    <span class="close-btn" onclick="hideDetail()">✕</span>
+    <h3 id="detail-title"></h3>
+    <p id="detail-content"></p>
+  </div>
+</div>
+
+<script>
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  event.target.classList.add('active');
+  hideDetail();
+}
+
+const details = {
+  'telegram': {
+    title: '📱 Telegram Bot Adapter',
+    content: `<span class="file-path">internal/chat/telegram.go</span><br><br>
+    Primary chat channel. Uses Telegram Bot API with long polling for message retrieval. Features:<ul>
+    <li>/start handler with user onboarding flow</li>
+    <li>Form/syllabus selection (Form 1, 2, 3)</li>
+    <li>Language selection (EN / BM / 中文)</li>
+    <li>Inline keyboards for rating and quizzes</li>
+    <li>Markdown message splitting (4096 char limit)</li>
+    <li>Command autocomplete registration</li>
+    </ul>Works on $50 phones over 2G. Zero-rated in many countries.`
+  },
+  'whatsapp': {
+    title: '💬 WhatsApp Cloud API Adapter',
+    content: `<span class="file-path">internal/chat/whatsapp.go</span> (Week 5)<br><br>
+    Behind <code>LEARN_WHATSAPP_ENABLED</code> feature flag. Uses WhatsApp Cloud API with webhooks. Second priority channel — dominant in SEA, Africa, Latin America.`
+  },
+  'websocket': {
+    title: '🌐 WebSocket Adapter',
+    content: `<span class="file-path">internal/chat/websocket.go</span><br><br>
+    Uses <code>nhooyr.io/websocket</code>. For web-based admin panel chat testing and future web client. Supports hundreds of thousands of persistent connections per Go instance.`
+  },
+  'chat-gateway': {
+    title: 'Chat Gateway',
+    content: `<span class="file-path">internal/chat/gateway.go</span><br><br>
+    Unified message routing. Defines the <code>Channel</code> interface that all adapters implement:<ul>
+    <li><code>SendMessage(ctx, userID, msg)</code></li>
+    <li><code>SendQuiz(ctx, userID, quiz)</code></li>
+    <li><code>ReceiveMessages(ctx)</code> → chan InboundMessage</li>
+    </ul>Normalizes platform-specific formats into common <code>Message</code> structs.`
+  },
+  'agent-engine': {
+    title: '🧠 Agent Engine',
+    content: `<span class="file-path">internal/agent/engine.go</span><br><br>
+    Core domain logic. The <code>ProcessMessage</code> pipeline:<ul>
+    <li>Load conversation state from Store</li>
+    <li>Resolve context (topic detection via keywords)</li>
+    <li>Build system prompt (dual-loop + adaptive depth + curriculum citation)</li>
+    <li>Call AI Gateway via Router</li>
+    <li>Save updated conversation</li>
+    <li>Log events asynchronously</li>
+    <li>Rolling compaction when >20 msgs or >20k tokens</li>
+    <li>Rating prompt every N tutoring replies</li>
+    </ul>Conversation state machine: idle → teaching → quizzing → reviewing.`
+  },
+  'ai-gateway': {
+    title: '🤖 AI Gateway',
+    content: `<span class="file-path">internal/ai/</span><br><br>
+    Provider-agnostic abstraction with 6 providers implementing the <code>Provider</code> interface:<ul>
+    <li><b>OpenAI</b> — GPT-4o (teaching), GPT-4o-mini (grading)</li>
+    <li><b>Anthropic</b> — Claude Sonnet (teaching), Haiku (grading)</li>
+    <li><b>DeepSeek</b> — V3 (cheapest grading), Reasoner. Uses OpenAI-compatible API</li>
+    <li><b>Google Gemini</b> — Pro (teaching), Flash (grading). Unique API format</li>
+    <li><b>Ollama</b> — Llama 3, Qwen, Mistral. FREE self-hosted fallback</li>
+    <li><b>OpenRouter</b> — 100+ models via single API key</li>
+    </ul>
+    Router features: fallback chain, retry with backoff (1s→2s→4s), circuit breaker (3 failures → 30s cooldown). Budget tracker enforces per-tenant/user token limits.`
+  },
+  'curriculum': {
+    title: '📚 Curriculum Service',
+    content: `<span class="file-path">internal/curriculum/</span><br><br>
+    Loads structured YAML from the Open School Syllabus (OSS) repository (Git submodule):<ul>
+    <li><code>loader.go</code> — Reads topic YAML + teaching notes markdown</li>
+    <li><code>types.go</code> — Go structs: Syllabus, Subject, Topic, Assessment, TeachingNotes</li>
+    <li><code>cache.go</code> — In-memory + Dragonfly curriculum cache</li>
+    </ul>
+    First target: KSSM Matematik (Form 1, 2, 3) — Algebra topics first. Hot reload on filesystem changes.`
+  },
+  'progress': {
+    title: '📊 Progress Tracker (Week 2+)',
+    content: `<span class="file-path">internal/progress/</span><br><br>
+    <ul>
+    <li><b>SM-2 Spaced Repetition</b> — <code>spaced_rep.go</code>: next review interval based on ease factor, repetition count, response quality</li>
+    <li><b>Mastery Scoring</b> — Weighted accuracy + consistency + recency. Threshold 0.75 for mastery</li>
+    <li><b>Streaks + XP</b> — Consecutive days, milestones (3/7/14/30), session/quiz/mastery/streak XP</li>
+    <li><b>Leaderboards</b> — Weekly mastery gain rankings within class groups</li>
+    <li><b>Challenges</b> — Peer battles with 5-question simultaneous quiz</li>
+    </ul>`
+  },
+  'postgres': {
+    title: '🐘 PostgreSQL 17',
+    content: `<span class="file-path">internal/platform/database/</span><br><br>
+    Primary data store. Uses <code>pgx/v5</code> (fastest PG driver). Tables: tenants, users, conversations, messages, events, learning_progress, assessments, streaks, token_budgets, goals, challenges, groups.<br><br>
+    All tables include <code>tenant_id</code> for multi-tenancy. UUID primary keys. JSONB for flexible fields. Parameterized queries only.`
+  },
+  'dragonfly': {
+    title: '🐉 Dragonfly',
+    content: `<span class="file-path">internal/platform/cache/</span><br><br>
+    Drop-in Redis replacement (~80% less memory). Uses <code>go-redis/v9</code>. Stores: session state, rate limiting, token budget (real-time), curriculum cache, leaderboard sorted sets, spaced repetition scheduling queues.`
+  },
+  'nats': {
+    title: '⚡ NATS JetStream',
+    content: `<span class="file-path">internal/platform/messaging/</span><br><br>
+    Lightweight message queue (single binary, Go-native). Handles: proactive nudge scheduling, background event processing, weekly report generation, SM-2 review triggers, leaderboard computation.`
+  },
+  'auth': {
+    title: '🔐 Authentication',
+    content: `<span class="file-path">internal/auth/</span><br><br>
+    JWT with 15-minute access tokens + 7-day refresh token rotation. RBAC roles: student, teacher, parent, admin, platform_admin. Middleware validates JWT on every request with zero database calls.`
+  },
+  'tenant': {
+    title: '🏢 Multi-Tenancy',
+    content: `<span class="file-path">internal/tenant/</span><br><br>
+    Tenant resolution from JWT claims or subdomain. Row-level security via tenant_id on every table. LEARN_TENANT_MODE: single (auto-create default) or multi.`
+  },
+  'admin-panel': {
+    title: '🖥️ Admin Panel',
+    content: `<span class="file-path">admin/</span><br><br>
+    Next.js 14 (App Router) + TypeScript + Refine v4 + shadcn/ui + Tailwind CSS.<br><br>
+    Views: Teacher Dashboard (mastery heatmap, nudge controls), Student Detail (radar chart, activity grid), Parent View (weekly stats), School Admin (class management, budget), Platform Admin (usage analytics).`
+  },
+  'platform': {
+    title: '⚙️ Platform Services',
+    content: `<span class="file-path">internal/platform/</span><br><br>
+    Shared infrastructure:<ul>
+    <li><b>config/</b> — Environment vars with LEARN_ prefix, nested structs, Validate()</li>
+    <li><b>health/</b> — /healthz + /readyz endpoints</li>
+    <li><b>telemetry/</b> — OpenTelemetry SDK (metrics → Prometheus, traces → Tempo)</li>
+    <li><b>storage/</b> — S3-compatible object storage interface</li>
+    </ul>Structured JSON logging via slog.`
+  },
+  'oss': {
+    title: 'Open School Syllabus (OSS)',
+    content: `<span class="file-path">github.com/p-n-ai/oss</span><br><br>
+    Structured curriculum YAML consumed as Git submodule at <code>curriculum/</code>. Community-contributed. Currently: KSSM Matematik (Form 1-3, Algebra). Schema: Syllabus → Subject → Topic → Assessment + TeachingNotes.`
+  },
+  'storage': {
+    title: '📦 Object Storage',
+    content: `<span class="file-path">internal/platform/storage/</span><br><br>
+    S3-compatible interface. Used for data exports (CSV/JSON), report storage, and as backend for Loki/Tempo in the Grafana stack. Abstracted in code — works with S3, GCS, Azure Blob, MinIO.`
+  }
+};
+
+function showDetail(key) {
+  const d = details[key];
+  if (!d) return;
+  document.getElementById('detail-title').textContent = d.title;
+  document.getElementById('detail-content').innerHTML = d.content;
+  document.getElementById('detail-panel').classList.add('show');
+}
+
+function hideDetail() {
+  document.getElementById('detail-panel').classList.remove('show');
+}
+</script>
+
+</body>
+</html>

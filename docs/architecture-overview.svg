@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 880" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <!-- Background -->
+  <rect width="1060" height="880" fill="#f8f9fb" rx="12"/>
+
+  <!-- Title -->
+  <text x="530" y="32" text-anchor="middle" font-size="17" font-weight="700" fill="#1e293b">P&amp;AI Bot — System Architecture (Modular Monolith)</text>
+
+  <!-- ════════════ CHAT CHANNELS ════════════ -->
+  <rect x="100" y="52" width="148" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="174" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">Telegram</text>
+  <text x="174" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">Bot API · Long Polling</text>
+
+  <rect x="268" y="52" width="148" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="342" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">WhatsApp</text>
+  <text x="342" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">Cloud API · Webhooks</text>
+
+  <rect x="436" y="52" width="148" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="510" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">WebSocket</text>
+  <text x="510" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">nhooyr.io/websocket</text>
+
+  <!-- Admin Panel (right) -->
+  <rect x="760" y="52" width="240" height="48" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="1.4"/>
+  <text x="880" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#9a3412">Admin Panel</text>
+  <text x="880" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">Next.js 14 · Refine · shadcn/ui</text>
+
+  <!-- Arrows: channels → gateway -->
+  <line x1="174" y1="100" x2="366" y2="122" stroke="#93c5fd" stroke-width="1.4" marker-end="url(#arr-blue)"/>
+  <line x1="342" y1="100" x2="366" y2="122" stroke="#93c5fd" stroke-width="1.4" marker-end="url(#arr-blue)"/>
+  <line x1="510" y1="100" x2="366" y2="122" stroke="#93c5fd" stroke-width="1.4" marker-end="url(#arr-blue)"/>
+
+  <!-- ════════════ CHAT GATEWAY ════════════ -->
+  <rect x="226" y="122" width="280" height="42" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="366" y="142" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">Chat Gateway</text>
+  <text x="366" y="155" text-anchor="middle" font-size="8.5" fill="#64748b">internal/chat · Channel interface · Message normalization</text>
+
+  <line x1="366" y1="164" x2="366" y2="188" stroke="#3b82f6" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+
+  <!-- ════════════ AGENT ENGINE ════════════ -->
+  <rect x="106" y="188" width="520" height="178" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="1.8"/>
+  <text x="366" y="210" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">Agent Engine</text>
+  <text x="366" y="224" text-anchor="middle" font-size="8.5" fill="#64748b">internal/agent · Core domain logic</text>
+
+  <!-- Sub-components row 1 -->
+  <rect x="122" y="236" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="182" y="254" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Conversation</text>
+  <text x="182" y="266" text-anchor="middle" font-size="7.5" fill="#64748b">State Machine</text>
+
+  <rect x="254" y="236" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="314" y="254" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Prompt Builder</text>
+  <text x="314" y="266" text-anchor="middle" font-size="7.5" fill="#64748b">Dual-Loop · Adaptive</text>
+
+  <rect x="386" y="236" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="446" y="254" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Context Resolver</text>
+  <text x="446" y="266" text-anchor="middle" font-size="7.5" fill="#64748b">Topic Detection</text>
+
+  <!-- Sub-components row 2 -->
+  <rect x="122" y="286" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="182" y="304" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Event Logger</text>
+  <text x="182" y="316" text-anchor="middle" font-size="7.5" fill="#64748b">Non-blocking async</text>
+
+  <rect x="254" y="286" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="314" y="304" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Quiz Engine</text>
+  <text x="314" y="316" text-anchor="middle" font-size="7.5" fill="#64748b">Static + Dynamic Gen</text>
+
+  <rect x="386" y="286" width="120" height="40" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="446" y="304" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Compaction</text>
+  <text x="446" y="316" text-anchor="middle" font-size="7.5" fill="#64748b">Rolling summary</text>
+
+  <rect x="518" y="236" width="94" height="90" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="565" y="270" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">Rating</text>
+  <text x="565" y="282" text-anchor="middle" font-size="9" font-weight="600" fill="#166534">System</text>
+  <text x="565" y="296" text-anchor="middle" font-size="7.5" fill="#64748b">In-chat 1-5</text>
+
+  <!-- ═══ Arrows from Agent Engine to downstream ═══ -->
+  <line x1="220" y1="366" x2="160" y2="408" stroke="#3b82f6" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+  <line x1="366" y1="366" x2="470" y2="408" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#arr-purple)"/>
+  <line x1="520" y1="366" x2="730" y2="408" stroke="#ca8a04" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+
+  <!-- ════════════ AI GATEWAY ════════════ -->
+  <rect x="30" y="408" width="290" height="220" rx="10" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.8"/>
+  <text x="175" y="430" text-anchor="middle" font-size="13" font-weight="700" fill="#6b21a8">AI Gateway</text>
+  <text x="175" y="443" text-anchor="middle" font-size="8.5" fill="#64748b">internal/ai · Provider-agnostic · 6 providers</text>
+
+  <!-- Provider grid -->
+  <rect x="46" y="454" width="82" height="38" rx="5" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="87" y="470" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7c3aed">OpenAI</text>
+  <text x="87" y="484" text-anchor="middle" font-size="7" fill="#64748b">GPT-4o · 4o-mini</text>
+
+  <rect x="136" y="454" width="82" height="38" rx="5" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="177" y="470" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7c3aed">Anthropic</text>
+  <text x="177" y="484" text-anchor="middle" font-size="7" fill="#64748b">Sonnet · Haiku</text>
+
+  <rect x="226" y="454" width="82" height="38" rx="5" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="267" y="470" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7c3aed">DeepSeek</text>
+  <text x="267" y="484" text-anchor="middle" font-size="7" fill="#64748b">V3 · Reasoner</text>
+
+  <rect x="46" y="500" width="82" height="38" rx="5" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="87" y="516" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7c3aed">Gemini</text>
+  <text x="87" y="530" text-anchor="middle" font-size="7" fill="#64748b">Flash · Pro</text>
+
+  <rect x="136" y="500" width="82" height="38" rx="5" fill="#ecfdf5" stroke="#34d399"/>
+  <text x="177" y="516" text-anchor="middle" font-size="8.5" font-weight="600" fill="#166534">Ollama</text>
+  <text x="177" y="530" text-anchor="middle" font-size="7" fill="#166534">FREE self-hosted</text>
+
+  <rect x="226" y="500" width="82" height="38" rx="5" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="267" y="516" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7c3aed">OpenRouter</text>
+  <text x="267" y="530" text-anchor="middle" font-size="7" fill="#64748b">100+ models</text>
+
+  <!-- Router + Budget -->
+  <rect x="46" y="548" width="262" height="32" rx="6" fill="#ede9fe" stroke="#a78bfa" stroke-dasharray="3,2"/>
+  <text x="177" y="562" text-anchor="middle" font-size="8" font-weight="600" fill="#6b21a8">Router: fallback chain · retry (1s→2s→4s) · circuit breaker</text>
+  <text x="177" y="573" text-anchor="middle" font-size="7.5" fill="#64748b">Budget Tracker: per-tenant/user token limits</text>
+
+  <!-- Degradation note -->
+  <rect x="46" y="590" width="262" height="24" rx="12" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="177" y="606" text-anchor="middle" font-size="7.5" font-weight="500" fill="#166534">Graceful Degradation: Premium → Cheap → Ollama (free)</text>
+
+  <!-- ════════════ CURRICULUM SERVICE ════════════ -->
+  <rect x="348" y="408" width="260" height="108" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4"/>
+  <text x="478" y="430" text-anchor="middle" font-size="12" font-weight="700" fill="#5b21b6">Curriculum Service</text>
+  <text x="478" y="443" text-anchor="middle" font-size="8.5" fill="#64748b">internal/curriculum · YAML from OSS repo</text>
+
+  <rect x="362" y="454" width="108" height="32" rx="5" fill="#f5f3ff" stroke="#a78bfa"/>
+  <text x="416" y="474" text-anchor="middle" font-size="8" font-weight="500" fill="#6b21a8">KSSM Matematik</text>
+
+  <rect x="480" y="454" width="108" height="32" rx="5" fill="#f5f3ff" stroke="#a78bfa"/>
+  <text x="534" y="474" text-anchor="middle" font-size="8" font-weight="500" fill="#6b21a8">Teaching Notes</text>
+
+  <rect x="362" y="492" width="226" height="18" rx="9" fill="#f5f3ff" stroke="#a78bfa" stroke-dasharray="3,2"/>
+  <text x="475" y="505" text-anchor="middle" font-size="7.5" fill="#7c3aed">Git submodule → p-n-ai/oss (Open School Syllabus)</text>
+
+  <!-- ════════════ PROGRESS TRACKER ════════════ -->
+  <rect x="640" y="408" width="220" height="108" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.4" stroke-dasharray="5,3"/>
+  <text x="750" y="430" text-anchor="middle" font-size="12" font-weight="700" fill="#854d0e">Progress Tracker</text>
+  <text x="750" y="443" text-anchor="middle" font-size="8.5" fill="#64748b">internal/progress (Week 2+)</text>
+
+  <text x="750" y="462" text-anchor="middle" font-size="8.5" fill="#78716c">SM-2 Spaced Repetition</text>
+  <text x="750" y="476" text-anchor="middle" font-size="8.5" fill="#78716c">Mastery Scoring (0.0 → 1.0)</text>
+  <text x="750" y="490" text-anchor="middle" font-size="8.5" fill="#78716c">Streaks · XP · Leaderboards</text>
+  <text x="750" y="504" text-anchor="middle" font-size="8.5" fill="#78716c">Peer Challenges (Battles)</text>
+
+  <!-- ════════════ AUTH + TENANT (right side) ════════════ -->
+  <rect x="660" y="210" width="130" height="40" rx="7" fill="#e0f2fe" stroke="#0891b2" stroke-width="1.2"/>
+  <text x="725" y="228" text-anchor="middle" font-size="10" font-weight="600" fill="#155e75">Auth (JWT)</text>
+  <text x="725" y="242" text-anchor="middle" font-size="7.5" fill="#64748b">RBAC · 15min access</text>
+
+  <rect x="810" y="210" width="130" height="40" rx="7" fill="#e0f2fe" stroke="#0891b2" stroke-width="1.2"/>
+  <text x="875" y="228" text-anchor="middle" font-size="10" font-weight="600" fill="#155e75">Tenant</text>
+  <text x="875" y="242" text-anchor="middle" font-size="7.5" fill="#64748b">Multi-tenancy isolation</text>
+
+  <rect x="660" y="262" width="280" height="40" rx="7" fill="#e0f2fe" stroke="#0891b2" stroke-width="1.2"/>
+  <text x="800" y="280" text-anchor="middle" font-size="10" font-weight="600" fill="#155e75">Platform Services</text>
+  <text x="800" y="294" text-anchor="middle" font-size="7.5" fill="#64748b">Config · Health · Telemetry (OTel) · Logging (slog)</text>
+
+  <!-- Admin API arrow -->
+  <line x1="880" y1="100" x2="880" y2="206" stroke="#ea580c" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr-orange)"/>
+  <text x="896" y="156" font-size="7.5" fill="#ea580c">REST API</text>
+
+  <!-- ════════════ DATA LAYER ════════════ -->
+  <text x="530" y="638" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af" letter-spacing="1">DATA LAYER</text>
+
+  <rect x="30" y="652" width="230" height="52" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.4"/>
+  <text x="145" y="672" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">PostgreSQL 17</text>
+  <text x="145" y="688" text-anchor="middle" font-size="8" fill="#64748b">pgx/v5 · Users · Progress · Messages · Events</text>
+
+  <rect x="280" y="652" width="230" height="52" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.4"/>
+  <text x="395" y="672" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">Dragonfly</text>
+  <text x="395" y="688" text-anchor="middle" font-size="8" fill="#64748b">Redis-compat · Sessions · Rate Limit · Budget</text>
+
+  <rect x="530" y="652" width="230" height="52" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.4"/>
+  <text x="645" y="672" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">NATS JetStream</text>
+  <text x="645" y="688" text-anchor="middle" font-size="8" fill="#64748b">Nudge Scheduler · Events · Reports</text>
+
+  <rect x="780" y="652" width="230" height="52" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.4"/>
+  <text x="895" y="672" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">Object Storage</text>
+  <text x="895" y="688" text-anchor="middle" font-size="8" fill="#64748b">S3-compatible · Data Exports</text>
+
+  <!-- ════════════ INFRA / DEPLOY ════════════ -->
+  <text x="530" y="740" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af" letter-spacing="1">INFRASTRUCTURE</text>
+
+  <rect x="30" y="754" width="310" height="50" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="185" y="774" text-anchor="middle" font-size="10" font-weight="600" fill="#1e40af">Option A: Docker Compose</text>
+  <text x="185" y="790" text-anchor="middle" font-size="8" fill="#64748b">Single server · 2GB RAM · ~$20/mo · 100-500 students</text>
+
+  <rect x="360" y="754" width="310" height="50" rx="8" fill="#e0f7fa" stroke="#0891b2" stroke-width="1.2"/>
+  <text x="515" y="774" text-anchor="middle" font-size="10" font-weight="600" fill="#155e75">Option B: Kubernetes (Helm)</text>
+  <text x="515" y="790" text-anchor="middle" font-size="8" fill="#64748b">EKS/GKE/AKS · Millions of students · Multi-school</text>
+
+  <rect x="690" y="754" width="310" height="50" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.2"/>
+  <text x="845" y="774" text-anchor="middle" font-size="10" font-weight="600" fill="#854d0e">Observability</text>
+  <text x="845" y="790" text-anchor="middle" font-size="8" fill="#64748b">Prometheus · Loki · Tempo · Grafana (OTel SDK)</text>
+
+  <!-- CI/CD bar -->
+  <rect x="30" y="820" width="970" height="36" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="530" y="837" text-anchor="middle" font-size="9" font-weight="600" fill="#475569">CI/CD: Git Push → GitHub Actions (test · lint · build · docker) → Push ECR/GHCR → ArgoCD (rolling update · zero downtime)</text>
+  <text x="530" y="850" text-anchor="middle" font-size="8" fill="#94a3b8">TDD enforced: make test-all must pass · JWT (15min) · RBAC · tenant isolation · TLS · COPPA/PDPA · &lt;25MB image · &lt;100ms cold start</text>
+
+  <!-- ════════════ ARROW MARKERS ════════════ -->
+  <defs>
+    <marker id="arr-blue" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#3b82f6"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#7c3aed"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#ca8a04"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <!-- ════════════ LEGEND ════════════ -->
+  <rect x="30" y="56" width="10" height="10" rx="2" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="44" y="65" font-size="7.5" fill="#64748b">Chat</text>
+  <rect x="30" y="70" width="10" height="10" rx="2" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="44" y="79" font-size="7.5" fill="#64748b">Agent</text>
+  <rect x="30" y="84" width="10" height="10" rx="2" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="44" y="93" font-size="7.5" fill="#64748b">AI</text>
+</svg>
