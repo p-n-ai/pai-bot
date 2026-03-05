@@ -4084,7 +4084,23 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 | 7.1 | `P-W2D7-1` | `/quiz` command: load questions, present sequentially, AI-grade, hints, summary | 🤖 | `internal/agent/quiz.go` |
 | 7.2 | `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge) | 🤖 | Update `internal/agent/engine.go` |
 | 7.3 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway for structured grading responses | 🤖 | Update `internal/ai/gateway.go` |
-| 7.4 | `P-W2D7-4` | 🧑 Review all KSSM Algebra assessments for accuracy | 🧑 | Manual |
+| 7.4 | `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic; dynamic generation prompt must match exemplar style/format/difficulty | 🤖 | `internal/agent/quiz.go`, assessments YAML |
+| 7.5 | `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality; source exemplar questions | 🧑 | Manual |
+
+#### Additional Implemented Work (Day 7 SDK Track, Current State)
+
+Current shipped work for this wave is the schema-first SDK track below. These are additional implemented items and do **not** imply planned `P-W2D7-*` quiz features are complete.
+
+| Additional ID | Delivered behavior | Status | Owner | Dependencies / Sequencing | Files Touched |
+|---------------|--------------------|--------|-------|---------------------------|---------------|
+| `A-W2D7-SDK-1` | Schema-first internal AI invocation surface (`InvocationRequest`, `Router.Call`, `WithResponseSchema`). | ✅ | 🤖 | Starts SDK track | `internal/ai/invocation.go`, `internal/ai/invocation_test.go` |
+| `A-W2D7-SDK-2` | OpenAI native structured schema execution (`response_format.type=json_schema`) with deterministic validation errors. | ✅ | 🤖 | After `A-W2D7-SDK-1` | `internal/ai/provider_openai.go`, `internal/ai/provider_openai_test.go` |
+| `A-W2D7-SDK-3` | Structured capability routing with OpenAI fallback and typed `ErrStructuredRouteUnavailable` semantics. | ✅ | 🤖 | After `A-W2D7-SDK-1`; converges with `A-W2D7-SDK-2` | `internal/ai/capability.go`, `internal/ai/router.go`, `internal/ai/router_structured_test.go`, `internal/ai/invocation.go` |
+| `A-W2D7-SDK-4` | One high-value flow migrated to schema-first (`Engine` onboarding form selection classification) with compatibility fallback. | ✅ | 🤖 | After `A-W2D7-SDK-2` and `A-W2D7-SDK-3` | `internal/agent/engine.go`, `internal/agent/engine_test.go` |
+| `A-W2D7-SDK-5` | Day 7 timeline + implementation docs aligned to shipped SDK behavior (this task). | ✅ | 🤖 | After `A-W2D7-SDK-1..4` | `docs/development-timeline.md`, `docs/implementation-guide.md` |
+| `A-W2D7-SDK-6` | Razor diff compaction pass (pending). | ⬜ | 🤖 | After `A-W2D7-SDK-5` | TBD |
+
+**Shipped SDK dependency sequence:** `A-W2D7-SDK-1` → (`A-W2D7-SDK-2` + `A-W2D7-SDK-3`) → `A-W2D7-SDK-4` → `A-W2D7-SDK-5`.
 
 #### 7.1 — Quiz Engine (TDD)
 
@@ -4323,8 +4339,14 @@ func (s *QuizSession) IsComplete() bool {
 - [ ] Session mode routing: chat vs quiz vs challenge
 - [ ] `CompleteJSON` added to AI gateway for structured grading
 - [ ] `/quiz` command loads questions and presents sequentially
+- [ ] Exam-style mimic-mode question generation configured with PT3/SPM exemplars
 - [ ] 🧑 KSSM Algebra assessments reviewed for accuracy
 - [ ] `make test-all` passes
+- [x] Additional shipped: `A-W2D7-SDK-1` schema-first internal invocation interface
+- [x] Additional shipped: `A-W2D7-SDK-2` OpenAI native structured schema execution path
+- [x] Additional shipped: `A-W2D7-SDK-3` structured capability routing with OpenAI fallback
+- [x] Additional shipped: `A-W2D7-SDK-4` one high-value `engine.go` flow migrated to schema-first calls
+- [x] Additional shipped: `A-W2D7-SDK-5` Day 7 timeline + implementation docs aligned to shipped behavior
 
 ---
 

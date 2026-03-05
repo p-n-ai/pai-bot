@@ -208,6 +208,22 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | 🤖 |
 | `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | 🧑 Human |
 
+#### Additional Tasks (Day 7, Implemented)
+
+These additional tasks are **current shipped work** and are separate from the planned Quiz Engine items above.
+Planned `P-W2D7-*` quiz features remain planned unless explicitly marked complete elsewhere.
+
+| Additional ID | Task | Status | Owner | Dependencies / Sequencing |
+|---------------|------|--------|-------|---------------------------|
+| `A-W2D7-SDK-1` | Define schema-first internal AI invocation interface (`InvocationRequest`, `Router.Call`, schema options). | ✅ | 🤖 | Starts Day 7 SDK track |
+| `A-W2D7-SDK-2` | Implement OpenAI native structured schema execution path (`response_format.type=json_schema`). | ✅ | 🤖 | After `A-W2D7-SDK-1` |
+| `A-W2D7-SDK-3` | Add structured capability routing with OpenAI fallback and typed unavailable errors. | ✅ | 🤖 | After `A-W2D7-SDK-1`; converges with `A-W2D7-SDK-2` |
+| `A-W2D7-SDK-4` | Migrate one high-value `internal/agent/engine.go` flow to schema-first calls with compatibility fallback. | ✅ | 🤖 | After `A-W2D7-SDK-2` and `A-W2D7-SDK-3` |
+| `A-W2D7-SDK-5` | Align `docs/development-timeline.md` and `docs/implementation-guide.md` with shipped SDK behavior. | ✅ | 🤖 | After `A-W2D7-SDK-1..4` |
+| `A-W2D7-SDK-6` | Razor diff compaction pass. | ⬜ | 🤖 | After `A-W2D7-SDK-5` |
+
+**Shipped Day 7 SDK sequence:** `A-W2D7-SDK-1` → (`A-W2D7-SDK-2` + `A-W2D7-SDK-3`) → `A-W2D7-SDK-4` → `A-W2D7-SDK-5`.
+
 ### Day 8 (Wed) — Proactive Nudges + Streaks
 
 | Task ID | Task | Owner |
