@@ -471,7 +471,7 @@ func TestEngine_Onboarding_FreeTextSelection_ParsesRuleBased(t *testing.T) {
 	}
 }
 
-func TestEngine_Onboarding_AIFallbackSelection_StructuredRouteUnavailableAsksClarification(t *testing.T) {
+func TestEngine_Onboarding_AIFallbackSelection_TransitionsToTeaching(t *testing.T) {
 	mockAI := ai.NewMockProvider("2")
 	store := agent.NewMemoryStore()
 	engine := agent.NewEngine(agent.EngineConfig{
@@ -496,106 +496,11 @@ func TestEngine_Onboarding_AIFallbackSelection_StructuredRouteUnavailableAsksCla
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "couldn't determine your form") {
-		t.Fatalf("unexpected onboarding clarification response: %q", resp)
-	}
-	if mockAI.LastRequest != nil {
-		t.Fatal("legacy complete path should not be called when structured route is unavailable")
-	}
-
-	conv, found := store.GetActiveConversation("onboard-user-4")
-	if !found {
-		t.Fatal("expected active conversation")
-	}
-	if conv.State != "onboarding_form" {
-		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
-	}
-}
-
-func TestEngine_Onboarding_AIFallbackSelection_UsesStructuredSchemaFirst(t *testing.T) {
-	provider := &structuredOnboardingProvider{
-		structuredResponse: `{"form":"2"}`,
-	}
-	store := agent.NewMemoryStore()
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter: mockRouter(provider),
-		Store:    store,
-	})
-
-	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "/start",
-	})
-
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "English",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-
-	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-1", Text: "middle school level",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
 	if !contains(resp, "Form 2") {
 		t.Fatalf("unexpected onboarding completion response: %q", resp)
 	}
-	if provider.structuredCalls != 1 {
-		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
-	}
-	if provider.lastStructuredReq == nil {
-		t.Fatal("expected structured invocation request capture")
-	}
-	if provider.lastStructuredReq.ResponseFormat != ai.ResponseFormatJSONSchema {
-		t.Fatalf("response format = %q, want %q", provider.lastStructuredReq.ResponseFormat, ai.ResponseFormatJSONSchema)
-	}
-	if provider.lastStructuredReq.Schema == nil || provider.lastStructuredReq.Schema.Name == "" {
-		t.Fatal("expected structured invocation schema metadata")
-	}
-}
-
-func TestEngine_Onboarding_AIFallbackSelection_SchemaMismatchAsksClarification(t *testing.T) {
-	provider := &structuredOnboardingProvider{
-		structuredResponse: `{"unknown":"2"}`,
-	}
-	store := agent.NewMemoryStore()
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter: mockRouter(provider),
-		Store:    store,
-	})
-
-	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "/start",
-	})
-
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "English",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-
-	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram", UserID: "onboard-user-structured-2", Text: "middle school level",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-	if !contains(resp, "couldn't determine your form") {
-		t.Fatalf("unexpected onboarding clarification response: %q", resp)
-	}
-	if provider.structuredCalls != 1 {
-		t.Fatalf("structured calls = %d, want 1", provider.structuredCalls)
-	}
-
-	conv, found := store.GetActiveConversation("onboard-user-structured-2")
-	if !found {
-		t.Fatal("expected active conversation")
-	}
-	if conv.State != "onboarding_form" {
-		t.Fatalf("conversation state = %q, want onboarding_form", conv.State)
+	if mockAI.LastRequest == nil {
+		t.Fatal("expected AI fallback classification call")
 	}
 }
 
@@ -1753,45 +1658,6 @@ type flakyProvider struct {
 	failuresBeforeSuccess int
 	calls                 int
 	response              string
-}
-
-type structuredOnboardingProvider struct {
-	structuredResponse string
-	structuredErr      error
-	structuredCalls    int
-	lastStructuredReq  *ai.InvocationRequest
-}
-
-func (p *structuredOnboardingProvider) Complete(_ context.Context, _ ai.CompletionRequest) (ai.CompletionResponse, error) {
-	return ai.CompletionResponse{
-		Content: "unused",
-		Model:   "structured-onboarding-complete",
-	}, nil
-}
-
-func (p *structuredOnboardingProvider) CompleteStructured(_ context.Context, req ai.InvocationRequest) (ai.CompletionResponse, error) {
-	p.structuredCalls++
-	reqCopy := req
-	p.lastStructuredReq = &reqCopy
-	if p.structuredErr != nil {
-		return ai.CompletionResponse{}, p.structuredErr
-	}
-	return ai.CompletionResponse{
-		Content: p.structuredResponse,
-		Model:   "structured-onboarding-structured",
-	}, nil
-}
-
-func (p *structuredOnboardingProvider) StreamComplete(_ context.Context, _ ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (p *structuredOnboardingProvider) Models() []ai.ModelInfo {
-	return nil
-}
-
-func (p *structuredOnboardingProvider) HealthCheck(_ context.Context) error {
-	return nil
 }
 
 func (f *flakyProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
