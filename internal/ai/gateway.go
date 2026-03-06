@@ -1,7 +1,10 @@
 // Package ai provides a provider-agnostic AI gateway with task-based routing.
 package ai
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // TaskType defines the kind of AI task for routing purposes.
 type TaskType int
@@ -35,21 +38,31 @@ type Message struct {
 	ImageURLs []string `json:"image_urls,omitempty"`
 }
 
+// StructuredOutputSpec requests a structured response conforming to a JSON schema.
+// Providers may enforce this natively (preferred) or best-effort via instructions.
+type StructuredOutputSpec struct {
+	Name       string          `json:"name"`
+	JSONSchema json.RawMessage `json:"json_schema"`
+	Strict     bool            `json:"strict,omitempty"`
+}
+
 // CompletionRequest is the input to an AI completion.
 type CompletionRequest struct {
-	Messages    []Message `json:"messages"`
-	Model       string    `json:"model,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
-	Task        TaskType  `json:"task,omitempty"`
+	Messages         []Message             `json:"messages"`
+	StructuredOutput *StructuredOutputSpec `json:"structured_output,omitempty"`
+	Model            string                `json:"model,omitempty"`
+	MaxTokens        int                   `json:"max_tokens,omitempty"`
+	Temperature      float64               `json:"temperature,omitempty"`
+	Task             TaskType              `json:"task,omitempty"`
 }
 
 // CompletionResponse is the output from an AI completion.
 type CompletionResponse struct {
-	Content      string `json:"content"`
-	Model        string `json:"model"`
-	InputTokens  int    `json:"input_tokens"`
-	OutputTokens int    `json:"output_tokens"`
+	Content          string          `json:"content"`
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
+	Model            string          `json:"model"`
+	InputTokens      int             `json:"input_tokens"`
+	OutputTokens     int             `json:"output_tokens"`
 }
 
 // TotalTokens returns the sum of input and output tokens.

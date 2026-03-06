@@ -30,22 +30,7 @@ func TestOpenAIProvider_Complete(t *testing.T) {
 			t.Errorf("unexpected messages: %+v", req.Messages)
 		}
 
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "Hi there!"}},
-			},
-			Model: "gpt-4o",
-			Usage: struct {
-				PromptTokens     int `json:"prompt_tokens"`
-				CompletionTokens int `json:"completion_tokens"`
-			}{PromptTokens: 10, CompletionTokens: 5},
-		})
+		writeOpenAITextResponse(t, w, "Hi there!", "gpt-4o", 10, 5)
 	}))
 	defer server.Close()
 
@@ -67,6 +52,37 @@ func TestOpenAIProvider_Complete(t *testing.T) {
 	}
 	if resp.OutputTokens != 5 {
 		t.Errorf("output_tokens = %d, want 5", resp.OutputTokens)
+	}
+}
+
+func TestOpenAIProvider_Complete_StructuredOutput_AddsResponseFormat(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+
+		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "gpt-4o", 10, 5)
+	}))
+	defer server.Close()
+
+	provider := NewOpenAIProvider("test-key", WithBaseURL(server.URL))
+
+	resp, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		Model:    "gpt-4o",
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	assertJSONSchemaResponseFormat(t, captured)
+
+	if resp.Content != `{"final_answer":"ok"}` {
+		t.Fatalf("content = %q, want %q", resp.Content, `{"final_answer":"ok"}`)
 	}
 }
 
@@ -109,18 +125,7 @@ func TestDeepSeekProvider_UsesCorrectBaseURL(t *testing.T) {
 	var receivedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedPath = r.URL.Path
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "deepseek response"}},
-			},
-			Model: "deepseek-chat",
-		})
+		writeOpenAITextResponse(t, w, "deepseek response", "deepseek-chat", 0, 0)
 	}))
 	defer server.Close()
 
@@ -138,6 +143,38 @@ func TestDeepSeekProvider_UsesCorrectBaseURL(t *testing.T) {
 	}
 	if resp.Content != "deepseek response" {
 		t.Errorf("content = %q, want %q", resp.Content, "deepseek response")
+	}
+}
+
+func TestDeepSeekProvider_Complete_StructuredOutput_UsesJSONObjectMode(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+
+		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "deepseek-chat", 10, 5)
+	}))
+	defer server.Close()
+
+	provider := NewDeepSeekProvider("ds-key", WithBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	rf, ok := captured["response_format"].(map[string]any)
+	if !ok {
+		t.Fatalf("response_format missing or invalid: %#v", captured["response_format"])
+	}
+	if rf["type"] != "json_object" {
+		t.Fatalf("response_format.type = %#v, want json_object", rf["type"])
 	}
 }
 
@@ -203,18 +240,7 @@ func TestOpenAIProvider_DefaultModel(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		receivedModel = req.Model
 
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "ok"}},
-			},
-			Model: req.Model,
-		})
+		writeOpenAITextResponse(t, w, "ok", req.Model, 0, 0)
 	}))
 	defer server.Close()
 
@@ -243,18 +269,7 @@ func TestOpenAIProvider_Complete_WithImageURL(t *testing.T) {
 		}
 		capturedContent = req.Messages[0].Content
 
-		_ = json.NewEncoder(w).Encode(openaiResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "ok"}},
-			},
-			Model: "gpt-4o-mini",
-		})
+		writeOpenAITextResponse(t, w, "ok", "gpt-4o-mini", 0, 0)
 	}))
 	defer server.Close()
 

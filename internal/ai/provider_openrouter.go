@@ -67,6 +67,9 @@ func (p *OpenRouterProvider) Complete(ctx context.Context, req CompletionRequest
 		temp := req.Temperature
 		oaiReq.Temperature = &temp
 	}
+	if err := applyOpenAIStructuredOutput("openrouter", &oaiReq, req.StructuredOutput); err != nil {
+		return CompletionResponse{}, err
+	}
 
 	body, err := json.Marshal(oaiReq)
 	if err != nil {

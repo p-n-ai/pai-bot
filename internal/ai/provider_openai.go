@@ -80,15 +80,27 @@ func NewDeepSeekProvider(apiKey string, opts ...OpenAIOption) *OpenAIProvider {
 
 // openaiRequest is the request body for the OpenAI chat completions API.
 type openaiRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openaiMessage `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Temperature *float64        `json:"temperature,omitempty"`
+	Model          string                `json:"model"`
+	Messages       []openaiMessage       `json:"messages"`
+	ResponseFormat *openaiResponseFormat `json:"response_format,omitempty"`
+	MaxTokens      int                   `json:"max_tokens,omitempty"`
+	Temperature    *float64              `json:"temperature,omitempty"`
 }
 
 type openaiMessage struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
+}
+
+type openaiResponseFormat struct {
+	Type       string                      `json:"type"`
+	JSONSchema *openaiResponseFormatSchema `json:"json_schema,omitempty"`
+}
+
+type openaiResponseFormatSchema struct {
+	Name   string          `json:"name"`
+	Schema json.RawMessage `json:"schema"`
+	Strict bool            `json:"strict,omitempty"`
 }
 
 type openaiContentPart struct {
@@ -131,6 +143,9 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 	if req.Temperature > 0 {
 		temp := req.Temperature
 		oaiReq.Temperature = &temp
+	}
+	if err := applyOpenAIStructuredOutput(p.name, &oaiReq, req.StructuredOutput); err != nil {
+		return CompletionResponse{}, err
 	}
 
 	body, err := json.Marshal(oaiReq)
@@ -175,6 +190,37 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		InputTokens:  oaiResp.Usage.PromptTokens,
 		OutputTokens: oaiResp.Usage.CompletionTokens,
 	}, nil
+}
+
+func applyOpenAIStructuredOutput(providerName string, oaiReq *openaiRequest, spec *StructuredOutputSpec) error {
+	if spec == nil {
+		return nil
+	}
+	if spec.Name == "" {
+		return fmt.Errorf("structured output name is required")
+	}
+	if len(spec.JSONSchema) == 0 {
+		return fmt.Errorf("structured output JSON schema is required")
+	}
+
+	if providerName == "deepseek" {
+		oaiReq.ResponseFormat = &openaiResponseFormat{Type: "json_object"}
+		oaiReq.Messages = append([]openaiMessage{{
+			Role:    "system",
+			Content: fmt.Sprintf("Return a JSON object only that matches this schema: %s", string(spec.JSONSchema)),
+		}}, oaiReq.Messages...)
+		return nil
+	}
+
+	oaiReq.ResponseFormat = &openaiResponseFormat{
+		Type: "json_schema",
+		JSONSchema: &openaiResponseFormatSchema{
+			Name:   spec.Name,
+			Schema: spec.JSONSchema,
+			Strict: spec.Strict,
+		},
+	}
+	return nil
 }
 
 func buildOpenAIMessages(messages []Message) []openaiMessage {

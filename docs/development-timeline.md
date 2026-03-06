@@ -184,6 +184,15 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 **Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
 
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W1D5-AI-1` | Pulled forward Week 2 AI gateway groundwork for quiz/assessment flows: added `Router.CompleteJSON` with structured-output validation, cheapest-model defaulting, provider fallback on invalid structured responses, and provider-side structured-output support for OpenAI/OpenRouter. This unblocks planned `P-W2D7-3`, but `/quiz`, quiz state management, and assessment content are still pending. | ✅ | 🤖 |
+
 ---
 
 ## WEEK 2 — PROGRESS + ASSESSMENT + 50 STUDENTS
@@ -199,6 +208,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
 ### Day 7 (Tue) — Quiz Engine
+
+**Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
