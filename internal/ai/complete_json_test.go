@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 )
@@ -88,5 +89,69 @@ func TestRouter_CompleteJSON_FallsBackWhenProviderReturnsInvalidJSON(t *testing.
 	}
 	if valid.LastRequest == nil || valid.LastRequest.Model != "llama3:8b" {
 		t.Fatalf("fallback provider should receive cheap Ollama model, got %#v", valid.LastRequest)
+	}
+}
+
+func TestRouter_CompleteJSON_FallsBackWhenProviderReturnsSchemaInvalidJSON(t *testing.T) {
+	router := newTestRouter()
+	invalid := ai.NewMockProvider(`{}`)
+	valid := ai.NewMockProvider(`{"final_answer":"fallback"}`)
+	router.Register("openai", invalid)
+	router.Register("ollama", valid)
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+			Strict:     true,
+		},
+	}, &out)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+
+	if out.FinalAnswer != "fallback" {
+		t.Fatalf("parsed output = %#v, want fallback response", out)
+	}
+}
+
+func TestRouter_CompleteJSON_InvalidJSONDoesNotOpenCircuitForComplete(t *testing.T) {
+	router := ai.NewRouterWithConfig(ai.RouterConfig{
+		RetryBackoff:            []time.Duration{1 * time.Millisecond},
+		BreakerFailureThreshold: 1,
+		BreakerCooldown:         50 * time.Millisecond,
+	})
+
+	primary := ai.NewMockProvider("not json")
+	secondary := ai.NewMockProvider(`{"final_answer":"fallback"}`)
+	router.Register("openai", primary)
+	router.Register("ollama", secondary)
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}, &out)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+
+	primary.Response = "primary text"
+	secondary.Response = "secondary text"
+
+	resp, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "plain text"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if resp.Content != "primary text" {
+		t.Fatalf("plain response = %q, want primary provider to remain available", resp.Content)
 	}
 }

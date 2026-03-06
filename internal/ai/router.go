@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // Router selects the best provider based on task type and availability.
@@ -140,31 +142,41 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 
 		providerReq := structuredProviderRequest(name, req)
 		resp, err := r.completeWithRetry(ctx, provider, providerReq)
-		if err == nil {
-			raw, payloadErr := completeJSONPayload(resp)
-			if payloadErr == nil {
-				payloadErr = unmarshalStructuredOutput(raw, out)
-			}
-			if payloadErr == nil {
-				r.markSuccess(name)
-				resp.StructuredOutput = raw
-				slog.Debug("AI structured request completed",
-					"provider", name,
-					"model", resp.Model,
-					"input_tokens", resp.InputTokens,
-					"output_tokens", resp.OutputTokens,
-				)
-				return resp, nil
-			}
-			err = payloadErr
+		if err != nil {
+			r.markFailure(name)
+			slog.Warn("AI provider failed structured request, trying next",
+				"provider", name,
+				"error", err,
+			)
+			failures = append(failures, fmt.Sprintf("%s: %v", name, err))
+			continue
 		}
 
-		r.markFailure(name)
-		slog.Warn("AI provider failed structured request, trying next",
+		r.markSuccess(name)
+
+		raw, payloadErr := completeJSONPayload(resp)
+		if payloadErr == nil {
+			payloadErr = validateStructuredJSONPayload(raw, providerReq.StructuredOutput)
+		}
+		if payloadErr == nil {
+			payloadErr = unmarshalStructuredOutput(raw, out)
+		}
+		if payloadErr == nil {
+			resp.StructuredOutput = raw
+			slog.Debug("AI structured request completed",
+				"provider", name,
+				"model", resp.Model,
+				"input_tokens", resp.InputTokens,
+				"output_tokens", resp.OutputTokens,
+			)
+			return resp, nil
+		}
+
+		slog.Warn("AI provider returned invalid structured payload, trying next",
 			"provider", name,
-			"error", err,
+			"error", payloadErr,
 		)
-		failures = append(failures, fmt.Sprintf("%s: %v", name, err))
+		failures = append(failures, fmt.Sprintf("%s: %v", name, payloadErr))
 	}
 
 	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
@@ -308,6 +320,29 @@ func completeJSONPayload(resp CompletionResponse) (json.RawMessage, error) {
 		return nil, fmt.Errorf("provider returned invalid JSON")
 	}
 	return raw, nil
+}
+
+func validateStructuredJSONPayload(raw json.RawMessage, spec *StructuredOutputSpec) error {
+	if spec == nil {
+		return nil
+	}
+
+	result, err := gojsonschema.Validate(
+		gojsonschema.NewBytesLoader(spec.JSONSchema),
+		gojsonschema.NewBytesLoader(raw),
+	)
+	if err != nil {
+		return fmt.Errorf("validate structured output schema: %w", err)
+	}
+	if result.Valid() {
+		return nil
+	}
+
+	errors := result.Errors()
+	if len(errors) == 0 {
+		return fmt.Errorf("structured output does not match schema")
+	}
+	return fmt.Errorf("structured output does not match schema: %s", errors[0])
 }
 
 func unmarshalStructuredOutput(raw json.RawMessage, out any) error {
