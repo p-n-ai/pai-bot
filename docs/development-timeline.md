@@ -1,8 +1,8 @@
-# pai-bot — Daily Development Timeline
+﻿# pai-bot â€” Daily Development Timeline
 
 > **Repository:** `p-n-ai/pai-bot`
-> **Focus:** KSSM Matematik (Form 1, 2, 3) — Algebra first
-> **Duration:** 6 weeks (Day 0 → Day 30)
+> **Focus:** KSSM Matematik (Form 1, 2, 3) â€” Algebra first
+> **Duration:** 6 weeks (Day 0 â†’ Day 30)
 
 ---
 
@@ -10,24 +10,24 @@
 
 pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapter, agent engine, progress tracking, motivation features, and Next.js admin panel. Everything a student interacts with flows through this repo.
 
-**Curriculum scope (first 6 months):** KSSM Matematik only — Form 1, Form 2, Form 3. Algebra topics are the primary validation target because they are sequential (clear prerequisites), assessable (right/wrong answers), and high-demand (students struggle most here).
+**Curriculum scope (first 6 months):** KSSM Matematik only â€” Form 1, Form 2, Form 3. Algebra topics are the primary validation target because they are sequential (clear prerequisites), assessable (right/wrong answers), and high-demand (students struggle most here).
 
-**TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
+**TDD note:** All ðŸ¤– tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task â€” it is embedded in each feature task.
 
 ---
 
-## DAY 0 — SETUP (4.5 hours) ✅ COMPLETE
+## DAY 0 â€” SETUP (4.5 hours) âœ… COMPLETE
 
 | Task ID | Task | Owner | Status |
 |---------|------|-------|--------|
-| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, `Makefile`, `.env.example` | 🤖 | ✅ |
-| `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
-| `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
-| `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
-| `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
-| `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
-| `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
+| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, `Makefile`, `.env.example` | ðŸ¤– | âœ… |
+| `P-D0-2` | Create `internal/platform/config/config.go` â€” nested config structs, `LEARN_` prefix, `Validate()` | ðŸ¤– | âœ… |
+| `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | ðŸ¤– | âœ… |
+| `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | ðŸ¤– | âœ… |
+| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` â€” tenants, users, conversations, messages, learning_progress, events + default tenant seed | ðŸ¤– | âœ… |
+| `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | ðŸ¤– | âœ… |
+| `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | ðŸ¤– | âœ… |
+| `P-D0-8` | Create Telegram bot via @BotFather, save token | ðŸ§‘ | âœ… |
 
 **What was built (45+ unit tests, all passing):**
 - Config: nested structs (`ServerConfig`, `DatabaseConfig`, `AIConfig`, etc.) with `Load()` and `Validate()`
@@ -36,12 +36,12 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 - AI Gateway: `Provider` interface, `Router` (fallback chain), `MockProvider`, `BudgetChecker` interface
 - 6 AI providers: OpenAI, DeepSeek (via OpenAI base URL), Anthropic, Google Gemini, Ollama, OpenRouter
 - Docker Compose: Postgres 17, Dragonfly, NATS 2.10 (JetStream), app, Ollama (optional `--profile ollama`)
-- Dockerfile: Go 1.22 builder → Alpine 3.20 runtime (~25MB)
+- Dockerfile: Go 1.22 builder â†’ Alpine 3.20 runtime (~25MB)
 - HTTP server: `/healthz` + `/readyz` endpoints, graceful SIGTERM shutdown
 
 ---
 
-## Developer Onboarding — Getting Ready for Day 1
+## Developer Onboarding â€” Getting Ready for Day 1
 
 All Day 0 code is committed. Before starting Day 1 tasks, every engineer must set up their local environment.
 
@@ -55,7 +55,7 @@ go version   # Expected: go1.22.x or higher
 docker --version && docker compose version
 
 # golangci-lint (linter)
-golangci-lint --version   # Expected: ≥1.55
+golangci-lint --version   # Expected: â‰¥1.55
 # Install if missing: brew install golangci-lint
 
 # Optional but recommended: Air (hot reload)
@@ -69,10 +69,10 @@ go install github.com/air-verse/air@latest
 git clone https://github.com/p-n-ai/pai-bot.git
 cd pai-bot
 
-# 2. First-time setup (copies .env.example → .env, downloads Go modules)
+# 2. First-time setup (copies .env.example â†’ .env, downloads Go modules)
 make setup
 
-# 3. Edit .env — add your Telegram bot token and at least one AI provider key
+# 3. Edit .env â€” add your Telegram bot token and at least one AI provider key
 #    LEARN_TELEGRAM_BOT_TOKEN=<your-token>
 #    LEARN_AI_OPENAI_API_KEY=<key>   (or any other provider)
 
@@ -87,7 +87,7 @@ docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001
 
 # 7. Verify the server runs and health check works
 go run ./cmd/server &
-curl http://localhost:8080/healthz   # → {"status":"ok"}
+curl http://localhost:8080/healthz   # â†’ {"status":"ok"}
 kill %1
 
 # 8. Stop infrastructure when done
@@ -96,70 +96,70 @@ docker compose down
 
 ### Day 1 Task Distribution (4 engineers)
 
-Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates them all.
+Day 1 has 5 tasks. Tasks 1.1â€“1.4 can be built in parallel; task 1.5 integrates them all.
 
 | Task ID | Task | Assigned To | Dependencies |
 |---------|------|-------------|--------------|
-| `P-W1D1-1` | Chat Gateway — `internal/chat/gateway.go` (types + interface + router) | Engineer A | None |
-| `P-W1D1-2` | Telegram Adapter — `internal/chat/telegram.go` (long polling, /start, markdown splitting) | Engineer A | Uses types from 1.1 |
-| `P-W1D1-3` | Agent Engine — `internal/agent/engine.go` (ProcessMessage pipeline) | Engineer B | Uses `ai.Provider` from Day 0 |
-| `P-W1D1-4` | Curriculum Loader — `internal/curriculum/loader.go` (load YAML + teaching notes) | Engineer C | None |
-| `P-W1D1-5` | Wire main.go — connect all components, start polling | Engineer D (lead) | After 1.1–1.4 merge |
+| `P-W1D1-1` | Chat Gateway â€” `internal/chat/gateway.go` (types + interface + router) | Engineer A | None |
+| `P-W1D1-2` | Telegram Adapter â€” `internal/chat/telegram.go` (long polling, /start, markdown splitting) | Engineer A | Uses types from 1.1 |
+| `P-W1D1-3` | Agent Engine â€” `internal/agent/engine.go` (ProcessMessage pipeline) | Engineer B | Uses `ai.Provider` from Day 0 |
+| `P-W1D1-4` | Curriculum Loader â€” `internal/curriculum/loader.go` (load YAML + teaching notes) | Engineer C | None |
+| `P-W1D1-5` | Wire main.go â€” connect all components, start polling | Engineer D (lead) | After 1.1â€“1.4 merge |
 
 Engineer mapping:
 - Engineer A = @djakajaya89
 
-**Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
+**Refer to `docs/implementation-guide.md` Â§ Day 1 for exact code templates, test specs, and validation commands for each task.**
 
-**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `make test-all`. Never commit until the full suite passes.
+**Reminder:** Follow TDD â€” write `_test.go` first â†’ confirm RED â†’ implement â†’ confirm GREEN â†’ run `make test-all`. Never commit until the full suite passes.
 
 ---
 
-## WEEK 1 — THE TALKING SKELETON
+## WEEK 1 â€” THE TALKING SKELETON
 
-### Day 1 (Mon) — Wire Telegram → AI → Student
+### Day 1 (Mon) â€” Wire Telegram â†’ AI â†’ Student
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D1-1` | `internal/chat/gateway.go` — InboundMessage, OutboundMessage, Channel interface, Gateway router | ✅ | 🤖 |
-| `P-W1D1-2` | `internal/chat/telegram.go` — Telegram Bot API adapter with long polling, /start handler, markdown message splitting | ✅ | 🤖 |
-| `P-W1D1-3` | `internal/agent/engine.go` — ProcessMessage: load state → build prompt → call AI → save state → return response | ✅ | 🤖 |
-| `P-W1D1-4` | `internal/curriculum/loader.go` — Load topic YAML + teaching notes markdown from filesystem | ✅ | 🤖 |
-| `P-W1D1-5` | Wire `cmd/server/main.go`: config → db → cache → AI → curriculum → agent → chat → Telegram → start | ✅ | 🤖 |
+| `P-W1D1-1` | `internal/chat/gateway.go` â€” InboundMessage, OutboundMessage, Channel interface, Gateway router | âœ… | ðŸ¤– |
+| `P-W1D1-2` | `internal/chat/telegram.go` â€” Telegram Bot API adapter with long polling, /start handler, markdown message splitting | âœ… | ðŸ¤– |
+| `P-W1D1-3` | `internal/agent/engine.go` â€” ProcessMessage: load state â†’ build prompt â†’ call AI â†’ save state â†’ return response | âœ… | ðŸ¤– |
+| `P-W1D1-4` | `internal/curriculum/loader.go` â€” Load topic YAML + teaching notes markdown from filesystem | âœ… | ðŸ¤– |
+| `P-W1D1-5` | Wire `cmd/server/main.go`: config â†’ db â†’ cache â†’ AI â†’ curriculum â†’ agent â†’ chat â†’ Telegram â†’ start | âœ… | ðŸ¤– |
 
 **End of Day 1:** Team members can chat with the bot on Telegram. AI responds using curriculum context.
 
-### Day 2 (Tue) — Logging + Quality
+### Day 2 (Tue) â€” Logging + Quality
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens | ✅ | 🤖 |
-| `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | ✅ | 🤖 |
-| `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | ✅ | 🤖 |
-| `P-W1D2-4` | Topic detection: keyword scan → load matching topic's teaching notes into system prompt | ✅ | 🤖 |
-| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | ✅ | 🤖 |
-| `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | ✅ | 🧑 Human |
+| `P-W1D2-1` | Message persistence: save every exchange to `messages` table with conversation_id, model, tokens | âœ… | ðŸ¤– |
+| `P-W1D2-2` | Event logging: `events` table, log session_started, message_sent, ai_response (non-blocking goroutine) | âœ… | ðŸ¤– |
+| `P-W1D2-3` | Anthropic provider: Claude Messages API implementation, update router for task-based routing | âœ… | ðŸ¤– |
+| `P-W1D2-4` | Topic detection: keyword scan â†’ load matching topic's teaching notes into system prompt | âœ… | ðŸ¤– |
+| `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand â†’ Plan â†’ Solve â†’ Verify â†’ Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | âœ… | ðŸ¤– |
+| `P-W1D2-6` | ðŸ§‘ Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | âœ… | ðŸ§‘ Human |
 
-### Day 3 (Wed) — Deploy + First Students
-
-| Task ID | Task | Status | Owner |
-|---------|------|--------|-------|
-| `P-W1D3-1` | Deploy script: SSH → pull → build → restart → tail logs | ✅ | 🤖 |
-| `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | ✅ | 🤖 |
-| `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | ✅ | 🤖 |
-| `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | ✅ | 🤖 |
-| `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | ⬜ | 🧑 Human |
-
-### Day 4 (Thu) — Iterate on Real Feedback
+### Day 3 (Wed) â€” Deploy + First Students
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D4-1` | `scripts/analytics.sh` — DAU, messages/session, AI latency, tokens by model, returning users, and rating summary (count/avg/source) | ✅ | 🤖 |
-| `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split | ✅ | 🤖 |
-| `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, and dedupe per rated assistant message (`messages.id`). Events: `answer_rating_requested/submitted/skipped` with `rated_message_id` + `rating`; configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | ✅ | 🤖 |
-| `P-W1D4-6` | Additional feature: onboarding language selection (English/BM/中文), `/language` command + Telegram command autocomplete, persist preference in `users.config.preferred_language`, and feature flag `LEARN_DISABLE_MULTI_LANGUAGE` | ✅ | 🤖 |
-| `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ✅ | 🧑 Human |
-| `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ⬜ | 🧑 Human |
+| `P-W1D3-1` | Deploy script: SSH â†’ pull â†’ build â†’ restart â†’ tail logs | âœ… | ðŸ¤– |
+| `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | âœ… | ðŸ¤– |
+| `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | âœ… | ðŸ¤– |
+| `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | âœ… | ðŸ¤– |
+| `P-W1D3-5` | ðŸ§‘ Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | â¬œ | ðŸ§‘ Human |
+
+### Day 4 (Thu) â€” Iterate on Real Feedback
+
+| Task ID | Task | Status | Owner |
+|---------|------|--------|-------|
+| `P-W1D4-1` | `scripts/analytics.sh` â€” DAU, messages/session, AI latency, tokens by model, returning users, and rating summary (count/avg/source) | âœ… | ðŸ¤– |
+| `P-W1D4-2` | Session management (team decision): use rolling compaction + summary for context continuity instead of fixed 30min session split | âœ… | ðŸ¤– |
+| `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, and dedupe per rated assistant message (`messages.id`). Events: `answer_rating_requested/submitted/skipped` with `rated_message_id` + `rating`; configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | âœ… | ðŸ¤– |
+| `P-W1D4-6` | Additional feature: onboarding language selection (English/BM/ä¸­æ–‡), `/language` command + Telegram command autocomplete, persist preference in `users.config.preferred_language`, and feature flag `LEARN_DISABLE_MULTI_LANGUAGE` | âœ… | ðŸ¤– |
+| `P-W1D4-4` | ðŸ§‘ Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand â†’ Plan â†’ Solve â†’ Verify â†’ Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | âœ… | ðŸ§‘ Human |
+| `P-W1D4-5` | ðŸ§‘ Onboard remaining 7 pilot students (total 10 across Form 1-3) | â¬œ | ðŸ§‘ Human |
 
 #### Additional Tasks (Out of Initial Plan)
 
@@ -168,21 +168,21 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Additional ID | Task | Status | Owner |
 |---------------|------|--------|-------|
-| `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | ✅ | 🤖 |
-| `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | ✅ | 🤖 |
-| `A-W1D4-AI-LIVE-1` | OpenAI live conversation regression suite: `//go:build integration` test reads 30 scripted YAML conversations (2-10 turns) and validates real `agent.Engine.ProcessMessage` behavior (continuity, language profile, structured solving, concept connection, rating flows). CI explicitly skips these live tests via environment detection. | ✅ | 🤖 |
+| `A-W1D4-LANG-1` | Language preference persistence decision: keep `preferred_language` in `users.config` (no new table), and continue using `/language` + onboarding selector as write paths | âœ… | ðŸ¤– |
+| `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | âœ… | ðŸ¤– |
+| `A-W1D4-AI-LIVE-1` | OpenAI live conversation regression suite: `//go:build integration` test reads 30 scripted YAML conversations (2-10 turns) and validates real `agent.Engine.ProcessMessage` behavior (continuity, language profile, structured solving, concept connection, rating flows). CI explicitly skips these live tests via environment detection. | âœ… | ðŸ¤– |
 
-### Day 5 (Fri) — Week 1 Retro
+### Day 5 (Fri) â€” Week 1 Retro
 
 **Implementation note (Day 4 decision):** The team intentionally chose not to enforce a hard 30-minute session boundary. Context continuity is handled via rolling conversation compaction and summary in the agent engine.
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D5-1` | 🧑 Run analytics, compile Week 1 numbers | ⬜ | 🧑 Human |
-| `P-W1D5-2` | 🧑 1hr retro: demo, review conversations, identify top 3 problems for Week 2 | ⬜ | 🧑 Team |
-| `P-W1D5-3` | 🧑 Call top 3 and bottom 3 students — 10min each | ⬜ | 🧑 Human |
+| `P-W1D5-1` | ðŸ§‘ Run analytics, compile Week 1 numbers | â¬œ | ðŸ§‘ Human |
+| `P-W1D5-2` | ðŸ§‘ 1hr retro: demo, review conversations, identify top 3 problems for Week 2 | â¬œ | ðŸ§‘ Team |
+| `P-W1D5-3` | ðŸ§‘ Call top 3 and bottom 3 students â€” 10min each | â¬œ | ðŸ§‘ Human |
 
-**Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
+**Week 1 Targets:** 10 students used bot, â‰¥7 returned, avg session â‰¥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
 
 #### Additional Tasks (Out of Initial Plan)
 
@@ -191,232 +191,232 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Additional ID | Task | Status | Owner |
 |---------------|------|--------|-------|
-| `A-W1D5-AI-1` | Pulled forward Week 2 AI gateway groundwork for quiz/assessment flows: added `Router.CompleteJSON` with structured-output validation, cheapest-model defaulting, provider fallback on invalid structured responses, and provider-side structured-output support for OpenAI/OpenRouter. This unblocks planned `P-W2D7-3`, but `/quiz`, quiz state management, and assessment content are still pending. | ✅ | 🤖 |
+| `A-W1D5-AI-1` | Pulled forward Week 2 AI gateway groundwork for quiz/assessment flows: added `Router.CompleteJSON` with structured-output validation, cheapest-model defaulting, provider fallback on invalid structured responses, and provider-side structured-output support for OpenAI/OpenRouter. This unblocks planned `P-W2D7-3`, but `/quiz`, quiz state management, and assessment content are still pending. | âœ… | ðŸ¤– |
 
 ---
 
-## WEEK 2 — PROGRESS + ASSESSMENT + 50 STUDENTS
+## WEEK 2 â€” PROGRESS + ASSESSMENT + 50 STUDENTS
 
-### Day 6 (Mon) — Mastery Tracking
+### Day 6 (Mon) â€” Mastery Tracking
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D6-1` | Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
-| `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
-| `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
-| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
-| `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
+| `P-W2D6-1` | Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | ðŸ¤– |
+| `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | ðŸ¤– |
+| `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | ðŸ¤– |
+| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 â†’ simple language, more examples, smaller steps; mastery 0.3â€“0.6 â†’ standard explanations, introduce formal notation gradually; mastery >0.6 â†’ concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | ðŸ¤– |
+| `P-W2D6-5` | ðŸ§‘ Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | ðŸ§‘ Human |
 
-### Day 7 (Tue) — Quiz Engine
+### Day 7 (Tue) â€” Quiz Engine
 
 **Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end. **Dynamic quiz generation fallback:** if a topic has <5 questions in assessments.yaml, use AI to generate additional questions from the topic's teaching notes via `CompleteJSON` (cheap model). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s question generation | 🤖 |
-| `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge), route to appropriate handler | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | 🧑 Human |
+| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end. **Dynamic quiz generation fallback:** if a topic has <5 questions in assessments.yaml, use AI to generate additional questions from the topic's teaching notes via `CompleteJSON` (cheap model). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s question generation | ðŸ¤– |
+| `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge), route to appropriate handler | ðŸ¤– |
+| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | ðŸ¤– |
+| `P-W2D7-4` | Exam-style question mimicry: include 2â€“3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | ðŸ¤– |
+| `P-W2D7-5` | ðŸ§‘ Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2â€“3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ðŸ§‘ Human |
 
-### Day 8 (Wed) — Proactive Nudges + Streaks
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | 🤖 |
-| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | 🤖 |
-| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | 🤖 |
-| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human |
-
-### Day 9 (Thu) — Topic Navigation
+### Day 8 (Wed) â€” Proactive Nudges + Streaks
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
-| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
-| `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
-| `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
+| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | ðŸ¤– |
+| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | ðŸ¤– |
+| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | ðŸ¤– |
+| `P-W2D8-4` | ðŸ§‘ Check metrics: how many of 50 students active? Message inactive ones directly | ðŸ§‘ Human |
 
-### Day 10 (Fri) — Week 2 Retro
+### Day 9 (Thu) â€” Topic Navigation
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
-| `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
+| `P-W2D9-1` | Topic unlocking: when mastery â‰¥0.8, check prerequisite graph, notify student of newly unlocked topics | ðŸ¤– |
+| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | ðŸ¤– |
+| `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | ðŸ¤– |
+| `P-W2D9-4` | ðŸ§‘ Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | ðŸ§‘ Human |
 
-**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
+### Day 10 (Fri) â€” Week 2 Retro
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W2D10-1` | ðŸ§‘ Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | ðŸ§‘ Human |
+| `P-W2D10-2` | ðŸ§‘ 1hr retro. Decision: ready for motivation features or iterate on core teaching? | ðŸ§‘ Team |
+
+**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response â‰¥25%, Day-7 retention â‰¥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
 
 ---
 
-## WEEK 3 — MOTIVATION ENGINE
+## WEEK 3 â€” MOTIVATION ENGINE
 
-### Day 11 (Mon) — Goals + Challenges
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 |
-| `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 |
-| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
-| `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
-
-### Day 12 (Tue) — Groups + Leaderboards
+### Day 11 (Mon) â€” Goals + Challenges
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 |
-| `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 |
-| `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 |
-| `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human |
+| `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | ðŸ¤– |
+| `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | ðŸ¤– |
+| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | ðŸ¤– |
+| `P-W3D11-4` | ðŸ§‘ Design battle question sets for all KSSM Algebra topics, standardized per difficulty | ðŸ§‘ Human |
 
-### Day 13 (Wed) — A/B Test + Social Features
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 |
-| `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 |
-| `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 |
-| `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human |
-
-### Day 14 (Thu) — Analytics Dashboard
+### Day 12 (Tue) â€” Groups + Leaderboards
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D14-1` | Analytics HTML page at `/admin/metrics`: DAU chart, retention cohort, A/B comparison, token costs, nudge rate | 🤖 |
-| `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, XP, leaderboard rank in nudge context | 🤖 |
-| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human |
+| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | ðŸ¤– |
+| `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | ðŸ¤– |
+| `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | ðŸ¤– |
+| `P-W3D12-4` | ðŸ§‘ Set up 2 test groups: pilot school group + Pandai beta group | ðŸ§‘ Human |
 
-### Day 15 (Fri) — Week 3 Retro
+### Day 13 (Wed) â€” A/B Test + Social Features
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W3D15-1` | 🧑 Week 3 metrics. A/B test early signal? Battle participation? Leaderboard engagement? | 🧑 Human |
-| `P-W3D15-2` | 🧑 Retro + go/no-go for admin panel. Any negative signals from competitive features? | 🧑 Team |
+| `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | ðŸ¤– |
+| `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | ðŸ¤– |
+| `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete â€” rich Telegram formatting | ðŸ¤– |
+| `P-W3D13-4` | ðŸ§‘ Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | ðŸ§‘ Human |
 
-**Week 3 Targets:** Goals, challenges, leaderboards live. ≥1 school group active. Challenge participation ≥20%. 80+ students active.
+### Day 14 (Thu) â€” Analytics Dashboard
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W3D14-1` | Analytics HTML page at `/admin/metrics`: DAU chart, retention cohort, A/B comparison, token costs, nudge rate | ðŸ¤– |
+| `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, XP, leaderboard rank in nudge context | ðŸ¤– |
+| `P-W3D14-3` | ðŸ§‘ Observe school group: are students challenging each other? Call teacher for feedback | ðŸ§‘ Human |
+
+### Day 15 (Fri) â€” Week 3 Retro
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W3D15-1` | ðŸ§‘ Week 3 metrics. A/B test early signal? Battle participation? Leaderboard engagement? | ðŸ§‘ Human |
+| `P-W3D15-2` | ðŸ§‘ Retro + go/no-go for admin panel. Any negative signals from competitive features? | ðŸ§‘ Team |
+
+**Week 3 Targets:** Goals, challenges, leaderboards live. â‰¥1 school group active. Challenge participation â‰¥20%. 80+ students active.
 
 ---
 
-## WEEK 4 — ADMIN PANEL + FORM SELECTION
+## WEEK 4 â€” ADMIN PANEL + FORM SELECTION
 
-### Day 16 (Mon) — Scaffold Admin Panel
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. JWT auth, sidebar layout. | 🤖 |
-| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 |
-| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 |
-| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human |
-
-### Day 17 (Tue) — API Endpoints + Parent View
+### Day 16 (Mon) â€” Scaffold Admin Panel
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 |
-| `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 |
-| `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 |
-| `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. JWT auth, sidebar layout. | ðŸ¤– |
+| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students Ã— topics), color-coded, "Nudge" button per student | ðŸ¤– |
+| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | ðŸ¤– |
+| `P-W4D16-4` | ðŸ§‘ Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | ðŸ§‘ Human |
 
-### Day 18 (Wed) — Deploy Admin + Class Management
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* → Go, /* → Next.js) | 🤖 |
-| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 |
-| `P-W4D18-3` | 🧑 Test all 3 Forms (F1, F2, F3) with bot — does content switch correctly? | 🧑 Human |
-
-### Day 19 (Thu) — Reports + Budget Tracking
+### Day 17 (Tue) â€” API Endpoints + Parent View
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 |
-| `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | 🤖 |
-| `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human |
+| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | ðŸ¤– |
+| `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | ðŸ¤– |
+| `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1ï¸âƒ£ Form 1, 2ï¸âƒ£ Form 2, 3ï¸âƒ£ Form 3" â€” load correct curriculum | ðŸ¤– |
+| `P-W4D17-4` | ðŸ§‘ Show admin panel to 2 pilot teachers via screen share, collect feedback | ðŸ§‘ Human |
 
-### Day 20 (Fri) — Week 4 Retro
+### Day 18 (Wed) â€” Deploy Admin + Class Management
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W4D20-1` | 🧑 Week 4 metrics: Day-14 retention, A/B test results (10 days), teacher dashboard usage | 🧑 Human |
-| `P-W4D20-2` | 🧑 Retro. Big decision: ready for open-source prep? | 🧑 Team |
+| `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* â†’ Go, /* â†’ Next.js) | ðŸ¤– |
+| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | ðŸ¤– |
+| `P-W4D18-3` | ðŸ§‘ Test all 3 Forms (F1, F2, F3) with bot â€” does content switch correctly? | ðŸ§‘ Human |
 
-**Week 4 Targets:** Admin panel live. All 3 Forms working. 2+ teachers using dashboard. 100+ students active. Day-14 retention ≥30%.
+### Day 19 (Thu) â€” Reports + Budget Tracking
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | ðŸ¤– |
+| `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | ðŸ¤– |
+| `P-W4D19-3` | ðŸ§‘ Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | ðŸ§‘ Human |
+
+### Day 20 (Fri) â€” Week 4 Retro
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W4D20-1` | ðŸ§‘ Week 4 metrics: Day-14 retention, A/B test results (10 days), teacher dashboard usage | ðŸ§‘ Human |
+| `P-W4D20-2` | ðŸ§‘ Retro. Big decision: ready for open-source prep? | ðŸ§‘ Team |
+
+**Week 4 Targets:** Admin panel live. All 3 Forms working. 2+ teachers using dashboard. 100+ students active. Day-14 retention â‰¥30%.
 
 ---
 
-## WEEK 5 — SELF-HOSTABLE + OPEN SOURCE PREP
+## WEEK 5 â€” SELF-HOSTABLE + OPEN SOURCE PREP
 
-### Day 21-22 (Mon-Tue) — Cleanup + Documentation
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W5D21-1` | Codebase cleanup: remove hardcoded values, Go doc comments, copyright headers, golangci-lint fixes, .env.example | 🤖 |
-| `P-W5D21-2` | Write docs: setup.md, architecture.md, ai-providers.md, curriculum.md, deployment.md | 🤖 |
-| `P-W5D21-3` | Comprehensive README.md: hero, quick start (5 steps), features, architecture diagram, providers table, curricula table | 🤖 |
-| `P-W5D21-4` | `scripts/setup.sh`: check prereqs → copy .env → prompt for tokens → docker compose up → migrate → seed demo school | 🤖 |
-| `P-W5D21-5` | 🧑 Write launch blog post (1500 words) | 🧑 Human |
-| `P-W5D21-6` | 🧑 Record 3-min demo video | 🧑 Human |
-
-### Day 23 (Wed) — Self-Host Testing
+### Day 21-22 (Mon-Tue) â€” Cleanup + Documentation
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W5D23-1` | Multi-tenancy: LEARN_TENANT_MODE single/multi, auto-create default tenant in single mode | 🤖 |
-| `P-W5D23-2` | Helm chart: Deployment, StatefulSet (PG, Dragonfly), ConfigMap, Secret, Service, Ingress | 🤖 |
-| `P-W5D23-3` | 🧑 Fresh machine test: new AWS instance, follow README only, deploy from scratch, fix every issue | 🧑 Human |
+| `P-W5D21-1` | Codebase cleanup: remove hardcoded values, Go doc comments, copyright headers, golangci-lint fixes, .env.example | ðŸ¤– |
+| `P-W5D21-2` | Write docs: setup.md, architecture.md, ai-providers.md, curriculum.md, deployment.md | ðŸ¤– |
+| `P-W5D21-3` | Comprehensive README.md: hero, quick start (5 steps), features, architecture diagram, providers table, curricula table | ðŸ¤– |
+| `P-W5D21-4` | `scripts/setup.sh`: check prereqs â†’ copy .env â†’ prompt for tokens â†’ docker compose up â†’ migrate â†’ seed demo school | ðŸ¤– |
+| `P-W5D21-5` | ðŸ§‘ Write launch blog post (1500 words) | ðŸ§‘ Human |
+| `P-W5D21-6` | ðŸ§‘ Record 3-min demo video | ðŸ§‘ Human |
 
-### Day 24-25 (Thu-Fri) — Security + WhatsApp + Data Export
+### Day 23 (Wed) â€” Self-Host Testing
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 |
-| `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 |
-| `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 |
-| `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human |
-| `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human |
+| `P-W5D23-1` | Multi-tenancy: LEARN_TENANT_MODE single/multi, auto-create default tenant in single mode | ðŸ¤– |
+| `P-W5D23-2` | Helm chart: Deployment, StatefulSet (PG, Dragonfly), ConfigMap, Secret, Service, Ingress | ðŸ¤– |
+| `P-W5D23-3` | ðŸ§‘ Fresh machine test: new AWS instance, follow README only, deploy from scratch, fix every issue | ðŸ§‘ Human |
+
+### Day 24-25 (Thu-Fri) â€” Security + WhatsApp + Data Export
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | ðŸ¤– |
+| `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | ðŸ¤– |
+| `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | ðŸ¤– |
+| `P-W5D24-4` | ðŸ§‘ Final curriculum QA for all KSSM Algebra topics across F1-F3 | ðŸ§‘ Human |
+| `P-W5D24-5` | ðŸ§‘ Gather testimonials from 5 students + 2 teachers | ðŸ§‘ Human |
 
 **Week 5 Targets:** Fresh `docker compose up` works in <10min. README + docs complete. Helm chart exists. Security audit done. 150+ students active.
 
 ---
 
-## WEEK 6 — LAUNCH + SCALE
+## WEEK 6 â€” LAUNCH + SCALE
 
-### Day 26 (Mon) — LAUNCH DAY
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W6D26-1` | Landing page at `/`: static HTML (Tailwind CDN), "Try on Telegram" + "Self-host" buttons | 🤖 |
-| `P-W6D26-2` | K8s health probes: /healthz, /readyz, graceful shutdown on SIGTERM | 🤖 |
-| `P-W6D26-3` | 🧑 Publish blog, HN submission, Twitter/LinkedIn/Reddit, 50 personal emails | 🧑 Human |
-| `P-W6D26-4` | 🧑 Monitor server + conversations all day | 🧑 Team |
-
-### Day 27 (Tue) — Respond + Onboard
+### Day 26 (Mon) â€” LAUNCH DAY
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D27-1` | Fix top 5 bugs from launch day | 🤖 |
-| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers | 🤖 |
-| `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team |
+| `P-W6D26-1` | Landing page at `/`: static HTML (Tailwind CDN), "Try on Telegram" + "Self-host" buttons | ðŸ¤– |
+| `P-W6D26-2` | K8s health probes: /healthz, /readyz, graceful shutdown on SIGTERM | ðŸ¤– |
+| `P-W6D26-3` | ðŸ§‘ Publish blog, HN submission, Twitter/LinkedIn/Reddit, 50 personal emails | ðŸ§‘ Human |
+| `P-W6D26-4` | ðŸ§‘ Monitor server + conversations all day | ðŸ§‘ Team |
 
-### Day 28 (Wed) — i18n + Scale
-
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 |
-| `P-W6D28-2` | 🧑 3-day post-launch metrics. Identify most-requested features. | 🧑 Human |
-
-### Day 29 (Thu) — Analytics API
+### Day 27 (Tue) â€” Respond + Onboard
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 |
-| `P-W6D29-2` | 🧑 Review community PRs. Plan next 6 weeks. | 🧑 Team |
+| `P-W6D27-1` | Fix top 5 bugs from launch day | ðŸ¤– |
+| `P-W6D27-2` | School onboarding wizard in admin: name â†’ syllabus â†’ bot setup â†’ create class â†’ invite teachers | ðŸ¤– |
+| `P-W6D27-3` | ðŸ§‘ Respond to every GitHub issue/star/PR. Onboard schools signing up. | ðŸ§‘ Team |
 
-### Day 30 (Fri) — 6-Week Report
+### Day 28 (Wed) â€” i18n + Scale
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W6D30-1` | 🧑 Compile 6-week report: metrics, learnings, unit economics, next steps | 🧑 Human |
-| `P-W6D30-2` | 🧑 Final retro. Top 3 priorities for next quarter. | 🧑 Team |
+| `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | ðŸ¤– |
+| `P-W6D28-2` | ðŸ§‘ 3-day post-launch metrics. Identify most-requested features. | ðŸ§‘ Human |
+
+### Day 29 (Thu) â€” Analytics API
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report â€” all 6-week metrics in one endpoint | ðŸ¤– |
+| `P-W6D29-2` | ðŸ§‘ Review community PRs. Plan next 6 weeks. | ðŸ§‘ Team |
+
+### Day 30 (Fri) â€” 6-Week Report
+
+| Task ID | Task | Owner |
+|---------|------|-------|
+| `P-W6D30-1` | ðŸ§‘ Compile 6-week report: metrics, learnings, unit economics, next steps | ðŸ§‘ Human |
+| `P-W6D30-2` | ðŸ§‘ Final retro. Top 3 priorities for next quarter. | ðŸ§‘ Team |
 
 **Week 6 Targets:** Public launch. 500+ GitHub stars. 10+ schools. 500-1,000 students. A/B test conclusive.
 
@@ -424,7 +424,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ## Task Count Summary
 
-| Week | 🤖 Claude Code | 🧑 Human | Total |
+| Week | ðŸ¤– Claude Code | ðŸ§‘ Human | Total |
 |------|----------------|----------|-------|
 | 0 | 8 | 0 | 8 |
 | 1 | 18 | 8 | 26 |
@@ -434,3 +434,4 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | 5 | 9 | 5 | 14 |
 | 6 | 6 | 6 | 12 |
 | **Total** | **80** | **35** | **115** |
+
