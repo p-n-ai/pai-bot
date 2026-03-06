@@ -2,8 +2,10 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -11,13 +13,13 @@ import (
 
 // Router selects the best provider based on task type and availability.
 type Router struct {
-	providers                 map[string]Provider
-	fallback                  []string // ordered fallback chain
-	retryBackoff              []time.Duration
-	breakerFailureThreshold   int
-	breakerCooldown           time.Duration
-	breakerStateByProvider    map[string]breakerState
-	mu                        sync.RWMutex
+	providers               map[string]Provider
+	fallback                []string // ordered fallback chain
+	retryBackoff            []time.Duration
+	breakerFailureThreshold int
+	breakerCooldown         time.Duration
+	breakerStateByProvider  map[string]breakerState
+	mu                      sync.RWMutex
 }
 
 type breakerState struct {
@@ -113,6 +115,61 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
 }
 
+// CompleteJSON requests structured JSON output and unmarshals it into out.
+// If no model is specified, it prefers a cheap default per provider.
+func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out any) (CompletionResponse, error) {
+	if err := validateCompleteJSONRequest(req, out); err != nil {
+		return CompletionResponse{}, err
+	}
+
+	providers, order := r.snapshotProviders()
+	if len(order) == 0 {
+		return CompletionResponse{}, fmt.Errorf("all AI providers failed (no providers registered)")
+	}
+
+	var failures []string
+	for _, name := range order {
+		provider := providers[name]
+		if provider == nil {
+			continue
+		}
+		if r.isCircuitOpen(name) {
+			failures = append(failures, fmt.Sprintf("%s: circuit open", name))
+			continue
+		}
+
+		providerReq := structuredProviderRequest(name, req)
+		resp, err := r.completeWithRetry(ctx, provider, providerReq)
+		if err == nil {
+			raw, payloadErr := completeJSONPayload(resp)
+			if payloadErr == nil {
+				payloadErr = unmarshalStructuredOutput(raw, out)
+			}
+			if payloadErr == nil {
+				r.markSuccess(name)
+				resp.StructuredOutput = raw
+				slog.Debug("AI structured request completed",
+					"provider", name,
+					"model", resp.Model,
+					"input_tokens", resp.InputTokens,
+					"output_tokens", resp.OutputTokens,
+				)
+				return resp, nil
+			}
+			err = payloadErr
+		}
+
+		r.markFailure(name)
+		slog.Warn("AI provider failed structured request, trying next",
+			"provider", name,
+			"error", err,
+		)
+		failures = append(failures, fmt.Sprintf("%s: %v", name, err))
+	}
+
+	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
+}
+
 // HasProvider returns true if at least one provider is registered.
 func (r *Router) HasProvider() bool {
 	r.mu.RLock()
@@ -188,4 +245,81 @@ func (r *Router) markSuccess(providerName string) {
 	state.consecutiveFailures = 0
 	state.openUntil = time.Time{}
 	r.breakerStateByProvider[providerName] = state
+}
+
+func validateCompleteJSONRequest(req CompletionRequest, out any) error {
+	if req.StructuredOutput == nil {
+		return fmt.Errorf("structured output spec is required")
+	}
+	if req.StructuredOutput.Name == "" {
+		return fmt.Errorf("structured output name is required")
+	}
+	if len(req.StructuredOutput.JSONSchema) == 0 {
+		return fmt.Errorf("structured output JSON schema is required")
+	}
+
+	target := reflect.ValueOf(out)
+	if !target.IsValid() || target.Kind() != reflect.Ptr || target.IsNil() {
+		return fmt.Errorf("output target must be a non-nil pointer")
+	}
+
+	return nil
+}
+
+func structuredProviderRequest(providerName string, req CompletionRequest) CompletionRequest {
+	if req.Model != "" {
+		return req
+	}
+
+	req.Model = defaultStructuredModelForProvider(providerName)
+	return req
+}
+
+func defaultStructuredModelForProvider(providerName string) string {
+	switch providerName {
+	case "openai":
+		return "gpt-4o-mini"
+	case "anthropic":
+		return "claude-haiku-4-5-20251001"
+	case "deepseek":
+		return "deepseek-chat"
+	case "google":
+		return "gemini-2.5-flash"
+	case "ollama":
+		return "llama3:8b"
+	case "openrouter":
+		return "qwen/qwen-2.5-72b-instruct"
+	default:
+		return ""
+	}
+}
+
+func completeJSONPayload(resp CompletionResponse) (json.RawMessage, error) {
+	if len(resp.StructuredOutput) > 0 {
+		raw := json.RawMessage(bytesTrimSpace(resp.StructuredOutput))
+		if !json.Valid(raw) {
+			return nil, fmt.Errorf("provider returned invalid structured JSON")
+		}
+		return raw, nil
+	}
+
+	raw := json.RawMessage(bytesTrimSpace([]byte(resp.Content)))
+	if !json.Valid(raw) {
+		return nil, fmt.Errorf("provider returned invalid JSON")
+	}
+	return raw, nil
+}
+
+func unmarshalStructuredOutput(raw json.RawMessage, out any) error {
+	target := reflect.ValueOf(out)
+	temp := reflect.New(target.Elem().Type())
+	if err := json.Unmarshal(raw, temp.Interface()); err != nil {
+		return fmt.Errorf("unmarshal structured output: %w", err)
+	}
+	target.Elem().Set(temp.Elem())
+	return nil
+}
+
+func bytesTrimSpace(raw []byte) []byte {
+	return []byte(strings.TrimSpace(string(raw)))
 }
