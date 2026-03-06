@@ -21,6 +21,7 @@ type Router struct {
 	breakerFailureThreshold int
 	breakerCooldown         time.Duration
 	breakerStateByProvider  map[string]breakerState
+	structuredBreakerState  map[string]breakerState
 	mu                      sync.RWMutex
 }
 
@@ -61,6 +62,7 @@ func NewRouterWithConfig(cfg RouterConfig) *Router {
 		breakerFailureThreshold: breakerThreshold,
 		breakerCooldown:         breakerCooldown,
 		breakerStateByProvider:  make(map[string]breakerState),
+		structuredBreakerState:  make(map[string]breakerState),
 	}
 }
 
@@ -72,6 +74,9 @@ func (r *Router) Register(name string, provider Provider) {
 	r.fallback = append(r.fallback, name)
 	if _, ok := r.breakerStateByProvider[name]; !ok {
 		r.breakerStateByProvider[name] = breakerState{}
+	}
+	if _, ok := r.structuredBreakerState[name]; !ok {
+		r.structuredBreakerState[name] = breakerState{}
 	}
 }
 
@@ -135,12 +140,20 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		if provider == nil {
 			continue
 		}
+		providerReq, ok := structuredProviderRequest(name, req)
+		if !ok {
+			failures = append(failures, fmt.Sprintf("%s: structured output unsupported", name))
+			continue
+		}
 		if r.isCircuitOpen(name) {
 			failures = append(failures, fmt.Sprintf("%s: circuit open", name))
 			continue
 		}
+		if r.isStructuredCircuitOpen(name) {
+			failures = append(failures, fmt.Sprintf("%s: structured circuit open", name))
+			continue
+		}
 
-		providerReq := structuredProviderRequest(name, req)
 		resp, err := r.completeWithRetry(ctx, provider, providerReq)
 		if err != nil {
 			r.markFailure(name)
@@ -152,8 +165,6 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 			continue
 		}
 
-		r.markSuccess(name)
-
 		raw, payloadErr := completeJSONPayload(resp)
 		if payloadErr == nil {
 			payloadErr = validateStructuredJSONPayload(raw, providerReq.StructuredOutput)
@@ -161,22 +172,26 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		if payloadErr == nil {
 			payloadErr = unmarshalStructuredOutput(raw, out)
 		}
-		if payloadErr == nil {
-			resp.StructuredOutput = raw
-			slog.Debug("AI structured request completed",
+		if payloadErr != nil {
+			r.markStructuredFailure(name)
+			slog.Warn("AI provider returned invalid structured payload, trying next",
 				"provider", name,
-				"model", resp.Model,
-				"input_tokens", resp.InputTokens,
-				"output_tokens", resp.OutputTokens,
+				"error", payloadErr,
 			)
-			return resp, nil
+			failures = append(failures, fmt.Sprintf("%s: %v", name, payloadErr))
+			continue
 		}
 
-		slog.Warn("AI provider returned invalid structured payload, trying next",
+		r.markSuccess(name)
+		r.markStructuredSuccess(name)
+		resp.StructuredOutput = raw
+		slog.Debug("AI structured request completed",
 			"provider", name,
-			"error", payloadErr,
+			"model", resp.Model,
+			"input_tokens", resp.InputTokens,
+			"output_tokens", resp.OutputTokens,
 		)
-		failures = append(failures, fmt.Sprintf("%s: %v", name, payloadErr))
+		return resp, nil
 	}
 
 	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
@@ -233,6 +248,13 @@ func (r *Router) isCircuitOpen(providerName string) bool {
 	return time.Now().Before(state.openUntil)
 }
 
+func (r *Router) isStructuredCircuitOpen(providerName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	state := r.structuredBreakerState[providerName]
+	return time.Now().Before(state.openUntil)
+}
+
 func (r *Router) markFailure(providerName string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -259,6 +281,32 @@ func (r *Router) markSuccess(providerName string) {
 	r.breakerStateByProvider[providerName] = state
 }
 
+func (r *Router) markStructuredFailure(providerName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state := r.structuredBreakerState[providerName]
+	state.consecutiveFailures++
+	if state.consecutiveFailures >= r.breakerFailureThreshold {
+		state.openUntil = time.Now().Add(r.breakerCooldown)
+		state.consecutiveFailures = 0
+		slog.Warn("AI provider structured-output circuit opened",
+			"provider", providerName,
+			"cooldown_seconds", int(r.breakerCooldown.Seconds()),
+		)
+	}
+	r.structuredBreakerState[providerName] = state
+}
+
+func (r *Router) markStructuredSuccess(providerName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.structuredBreakerState[providerName]
+	state.consecutiveFailures = 0
+	state.openUntil = time.Time{}
+	r.structuredBreakerState[providerName] = state
+}
+
 func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 	if req.StructuredOutput == nil {
 		return fmt.Errorf("structured output spec is required")
@@ -278,27 +326,33 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 	return nil
 }
 
-func structuredProviderRequest(providerName string, req CompletionRequest) CompletionRequest {
+func structuredProviderRequest(providerName string, req CompletionRequest) (CompletionRequest, bool) {
+	if !supportsStructuredOutput(providerName) {
+		return CompletionRequest{}, false
+	}
 	if req.Model != "" {
-		return req
+		return req, true
 	}
 
 	req.Model = defaultStructuredModelForProvider(providerName)
-	return req
+	return req, true
+}
+
+func supportsStructuredOutput(providerName string) bool {
+	switch providerName {
+	case "openai", "deepseek", "openrouter":
+		return true
+	default:
+		return false
+	}
 }
 
 func defaultStructuredModelForProvider(providerName string) string {
 	switch providerName {
 	case "openai":
 		return "gpt-4o-mini"
-	case "anthropic":
-		return "claude-haiku-4-5-20251001"
 	case "deepseek":
 		return "deepseek-chat"
-	case "google":
-		return "gemini-2.5-flash"
-	case "ollama":
-		return "llama3:8b"
 	case "openrouter":
 		return "qwen/qwen-2.5-72b-instruct"
 	default:

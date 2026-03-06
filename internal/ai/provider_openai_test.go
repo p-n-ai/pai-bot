@@ -146,6 +146,38 @@ func TestDeepSeekProvider_UsesCorrectBaseURL(t *testing.T) {
 	}
 }
 
+func TestDeepSeekProvider_Complete_StructuredOutput_UsesJSONObjectMode(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+
+		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "deepseek-chat", 10, 5)
+	}))
+	defer server.Close()
+
+	provider := NewDeepSeekProvider("ds-key", WithBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	rf, ok := captured["response_format"].(map[string]any)
+	if !ok {
+		t.Fatalf("response_format missing or invalid: %#v", captured["response_format"])
+	}
+	if rf["type"] != "json_object" {
+		t.Fatalf("response_format.type = %#v, want json_object", rf["type"])
+	}
+}
+
 func TestOpenAIProvider_HealthCheck(t *testing.T) {
 	tests := []struct {
 		name       string

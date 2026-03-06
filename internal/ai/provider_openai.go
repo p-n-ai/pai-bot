@@ -144,7 +144,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		temp := req.Temperature
 		oaiReq.Temperature = &temp
 	}
-	if err := applyOpenAIStructuredOutput(&oaiReq, req.StructuredOutput); err != nil {
+	if err := applyOpenAIStructuredOutput(p.name, &oaiReq, req.StructuredOutput); err != nil {
 		return CompletionResponse{}, err
 	}
 
@@ -192,7 +192,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 	}, nil
 }
 
-func applyOpenAIStructuredOutput(oaiReq *openaiRequest, spec *StructuredOutputSpec) error {
+func applyOpenAIStructuredOutput(providerName string, oaiReq *openaiRequest, spec *StructuredOutputSpec) error {
 	if spec == nil {
 		return nil
 	}
@@ -202,6 +202,16 @@ func applyOpenAIStructuredOutput(oaiReq *openaiRequest, spec *StructuredOutputSp
 	if len(spec.JSONSchema) == 0 {
 		return fmt.Errorf("structured output JSON schema is required")
 	}
+
+	if providerName == "deepseek" {
+		oaiReq.ResponseFormat = &openaiResponseFormat{Type: "json_object"}
+		oaiReq.Messages = append([]openaiMessage{{
+			Role:    "system",
+			Content: fmt.Sprintf("Return a JSON object only that matches this schema: %s", string(spec.JSONSchema)),
+		}}, oaiReq.Messages...)
+		return nil
+	}
+
 	oaiReq.ResponseFormat = &openaiResponseFormat{
 		Type: "json_schema",
 		JSONSchema: &openaiResponseFormatSchema{
