@@ -3,10 +3,12 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 const defaultAnthropicBaseURL = "https://api.anthropic.com/v1"
@@ -20,6 +22,42 @@ type AnthropicProvider struct {
 
 // AnthropicOption configures an AnthropicProvider.
 type AnthropicOption func(*AnthropicProvider)
+
+type anthropicMessage struct {
+	Role    string                  `json:"role"`
+	Content []anthropicContentBlock `json:"content"`
+}
+
+type anthropicRequest struct {
+	Model        string                 `json:"model"`
+	MaxTokens    int                    `json:"max_tokens"`
+	Messages     []anthropicMessage     `json:"messages"`
+	System       string                 `json:"system,omitempty"`
+	Temperature  *float64               `json:"temperature,omitempty"`
+	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
+}
+
+type anthropicOutputConfig struct {
+	Format anthropicOutputFormat `json:"format"`
+}
+
+type anthropicOutputFormat struct {
+	Type   string          `json:"type"`
+	Schema json.RawMessage `json:"schema"`
+}
+
+type anthropicContentBlock struct {
+	Type   string                `json:"type"`
+	Text   string                `json:"text,omitempty"`
+	Source *anthropicImageSource `json:"source,omitempty"`
+}
+
+type anthropicImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type,omitempty"`
+	Data      string `json:"data,omitempty"`
+	URL       string `json:"url,omitempty"`
+}
 
 // WithAnthropicBaseURL sets the base URL (for testing).
 func WithAnthropicBaseURL(url string) AnthropicOption {
@@ -55,29 +93,67 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 	}
 
 	// Separate system message from user/assistant messages.
-	var systemPrompt string
-	var messages []map[string]string
+	var systemPrompts []string
+	var messages []anthropicMessage
 	for _, m := range req.Messages {
 		if m.Role == "system" {
-			systemPrompt = m.Content
+			if m.Content != "" {
+				systemPrompts = append(systemPrompts, m.Content)
+			}
 			continue
 		}
-		messages = append(messages, map[string]string{
-			"role":    m.Role,
-			"content": m.Content,
+
+		content := make([]anthropicContentBlock, 0, 1+len(m.ImageURLs))
+		if m.Content != "" {
+			content = append(content, anthropicContentBlock{
+				Type: "text",
+				Text: m.Content,
+			})
+		}
+		for _, rawImage := range m.ImageURLs {
+			image, err := normalizeImageInput(rawImage)
+			if err != nil {
+				return CompletionResponse{}, fmt.Errorf("normalize image for Anthropic: %w", err)
+			}
+
+			block := anthropicContentBlock{Type: "image"}
+			if image.URL != "" {
+				block.Source = &anthropicImageSource{
+					Type: "url",
+					URL:  image.URL,
+				}
+			} else {
+				block.Source = &anthropicImageSource{
+					Type:      "base64",
+					MediaType: image.MIMEType,
+					Data:      base64.StdEncoding.EncodeToString(image.Data),
+				}
+			}
+			content = append(content, block)
+		}
+		if len(content) == 0 {
+			continue
+		}
+		messages = append(messages, anthropicMessage{
+			Role:    m.Role,
+			Content: content,
 		})
 	}
 
-	body := map[string]interface{}{
-		"model":      model,
-		"max_tokens": maxTokens,
-		"messages":   messages,
+	body := anthropicRequest{
+		Model:     model,
+		MaxTokens: maxTokens,
+		Messages:  messages,
 	}
-	if systemPrompt != "" {
-		body["system"] = systemPrompt
+	if len(systemPrompts) > 0 {
+		body.System = strings.Join(systemPrompts, "\n\n")
 	}
 	if req.Temperature > 0 {
-		body["temperature"] = req.Temperature
+		temp := req.Temperature
+		body.Temperature = &temp
+	}
+	if err := applyAnthropicStructuredOutput(&body, req.StructuredOutput); err != nil {
+		return CompletionResponse{}, err
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -132,6 +208,26 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 		InputTokens:  result.Usage.InputTokens,
 		OutputTokens: result.Usage.OutputTokens,
 	}, nil
+}
+
+func applyAnthropicStructuredOutput(body *anthropicRequest, spec *StructuredOutputSpec) error {
+	if spec == nil {
+		return nil
+	}
+	if spec.Name == "" {
+		return fmt.Errorf("structured output name is required")
+	}
+	if len(spec.JSONSchema) == 0 {
+		return fmt.Errorf("structured output JSON schema is required")
+	}
+
+	body.OutputConfig = &anthropicOutputConfig{
+		Format: anthropicOutputFormat{
+			Type:   "json_schema",
+			Schema: spec.JSONSchema,
+		},
+	}
+	return nil
 }
 
 func (p *AnthropicProvider) StreamComplete(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {

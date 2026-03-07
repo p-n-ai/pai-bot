@@ -2,9 +2,11 @@ package ai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -104,10 +106,243 @@ func TestAnthropicProvider_Complete_SystemMessage(t *testing.T) {
 		t.Errorf("system = %v, want 'You are a math tutor.'", receivedBody["system"])
 	}
 
-	// Messages should NOT include the system message.
+	// Messages should NOT include the system message and should use content blocks.
 	messages := receivedBody["messages"].([]interface{})
 	if len(messages) != 1 {
 		t.Fatalf("got %d messages, want 1 (system should be extracted)", len(messages))
+	}
+	firstMessage, ok := messages[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first message invalid: %#v", messages[0])
+	}
+	content, ok := firstMessage["content"].([]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("content = %#v, want one text block", firstMessage["content"])
+	}
+	firstBlock, ok := content[0].(map[string]any)
+	if !ok || firstBlock["type"] != "text" || firstBlock["text"] != "hello" {
+		t.Fatalf("first block = %#v, want hello text block", content[0])
+	}
+}
+
+func TestAnthropicProvider_Complete_StructuredOutput_UsesStableOutputConfigWithoutBetaHeader(t *testing.T) {
+	var receivedBody map[string]any
+	var receivedBeta string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBeta = r.Header.Get("anthropic-beta")
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]string{
+				{"type": "text", "text": `{"final_answer":"ok"}`},
+			},
+			"model": "claude-sonnet-4-6",
+			"usage": map[string]int{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer server.Close()
+
+	provider, _ := NewAnthropicProvider("test-key", WithAnthropicBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if receivedBeta != "" {
+		t.Fatalf("anthropic-beta = %q, want empty", receivedBeta)
+	}
+
+	outputConfig, ok := receivedBody["output_config"].(map[string]any)
+	if !ok {
+		t.Fatalf("output_config missing or invalid: %#v", receivedBody["output_config"])
+	}
+	format, ok := outputConfig["format"].(map[string]any)
+	if !ok {
+		t.Fatalf("output_config.format missing or invalid: %#v", outputConfig["format"])
+	}
+	if format["type"] != "json_schema" {
+		t.Fatalf("output_config.format.type = %#v, want json_schema", format["type"])
+	}
+	schema, ok := format["schema"].(map[string]any)
+	if !ok {
+		t.Fatalf("output_config.format.schema missing or invalid: %#v", format["schema"])
+	}
+	if schema["type"] != "object" {
+		t.Fatalf("schema.type = %#v, want object", schema["type"])
+	}
+}
+
+func TestAnthropicProvider_Complete_PlainTextRequestOmitsBetaHeader(t *testing.T) {
+	var receivedBeta string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBeta = r.Header.Get("anthropic-beta")
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]string{
+				{"type": "text", "text": "ok"},
+			},
+			"model": "claude-sonnet-4-6",
+			"usage": map[string]int{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer server.Close()
+
+	provider, _ := NewAnthropicProvider("test-key", WithAnthropicBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if receivedBeta != "" {
+		t.Fatalf("anthropic-beta = %q, want empty", receivedBeta)
+	}
+}
+
+func TestAnthropicProvider_Complete_WithDataURLImageUsesImageBlock(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]string{
+				{"type": "text", "text": "ok"},
+			},
+			"model": "claude-sonnet-4-6",
+			"usage": map[string]int{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer server.Close()
+
+	provider, _ := NewAnthropicProvider("test-key", WithAnthropicBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"data:image/png;base64,AAEC"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	messages, ok := receivedBody["messages"].([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one message", receivedBody["messages"])
+	}
+	firstMessage, ok := messages[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first message invalid: %#v", messages[0])
+	}
+	content, ok := firstMessage["content"].([]any)
+	if !ok || len(content) != 2 {
+		t.Fatalf("content = %#v, want text + image blocks", firstMessage["content"])
+	}
+	imageBlock, ok := content[1].(map[string]any)
+	if !ok {
+		t.Fatalf("image block invalid: %#v", content[1])
+	}
+	source, ok := imageBlock["source"].(map[string]any)
+	if !ok {
+		t.Fatalf("image source invalid: %#v", imageBlock["source"])
+	}
+	if source["type"] != "base64" {
+		t.Fatalf("source.type = %#v, want base64", source["type"])
+	}
+	if source["media_type"] != "image/png" {
+		t.Fatalf("source.media_type = %#v, want image/png", source["media_type"])
+	}
+	if source["data"] != base64.StdEncoding.EncodeToString([]byte{0x00, 0x01, 0x02}) {
+		t.Fatalf("source.data = %#v, want base64 payload", source["data"])
+	}
+}
+
+func TestAnthropicProvider_Complete_WithRemoteImageURLUsesURLSource(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]string{
+				{"type": "text", "text": "ok"},
+			},
+			"model": "claude-sonnet-4-6",
+			"usage": map[string]int{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer server.Close()
+
+	provider, _ := NewAnthropicProvider("test-key", WithAnthropicBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"https://example.com/image.png"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	messages, ok := receivedBody["messages"].([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one message", receivedBody["messages"])
+	}
+	firstMessage, ok := messages[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first message invalid: %#v", messages[0])
+	}
+	content, ok := firstMessage["content"].([]any)
+	if !ok || len(content) != 2 {
+		t.Fatalf("content = %#v, want text + image blocks", firstMessage["content"])
+	}
+	imageBlock, ok := content[1].(map[string]any)
+	if !ok {
+		t.Fatalf("image block invalid: %#v", content[1])
+	}
+	source, ok := imageBlock["source"].(map[string]any)
+	if !ok {
+		t.Fatalf("image source invalid: %#v", imageBlock["source"])
+	}
+	if source["type"] != "url" {
+		t.Fatalf("source.type = %#v, want url", source["type"])
+	}
+	if source["url"] != "https://example.com/image.png" {
+		t.Fatalf("source.url = %#v, want https URL", source["url"])
+	}
+}
+
+func TestAnthropicProvider_Complete_RejectsUnsupportedImageInput(t *testing.T) {
+	provider, _ := NewAnthropicProvider("test-key", WithAnthropicBaseURL("http://example.com"))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"ftp://example.com/image.png"},
+		}},
+	})
+	if err == nil {
+		t.Fatal("Complete() should reject unsupported image scheme")
+	}
+	if !strings.Contains(err.Error(), "unsupported image") {
+		t.Fatalf("error = %v, want unsupported image error", err)
 	}
 }
 
