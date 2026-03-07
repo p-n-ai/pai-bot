@@ -51,8 +51,9 @@ func NewGoogleProvider(apiKey string, opts ...GoogleOption) *GoogleProvider {
 
 // geminiRequest is the request body for the Gemini generateContent API.
 type geminiRequest struct {
-	Contents         []geminiContent         `json:"contents"`
-	GenerationConfig *geminiGenerationConfig `json:"generationConfig,omitempty"`
+	SystemInstruction *geminiInstruction      `json:"systemInstruction,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 }
 
 type geminiContent struct {
@@ -60,13 +61,25 @@ type geminiContent struct {
 	Parts []geminiPart `json:"parts"`
 }
 
+type geminiInstruction struct {
+	Parts []geminiPart `json:"parts"`
+}
+
 type geminiPart struct {
-	Text string `json:"text"`
+	Text       string            `json:"text,omitempty"`
+	InlineData *geminiInlineData `json:"inlineData,omitempty"`
+}
+
+type geminiInlineData struct {
+	MIMEType string `json:"mimeType"`
+	Data     []byte `json:"data"`
 }
 
 type geminiGenerationConfig struct {
-	MaxOutputTokens int      `json:"maxOutputTokens,omitempty"`
-	Temperature     *float64 `json:"temperature,omitempty"`
+	MaxOutputTokens    int             `json:"maxOutputTokens,omitempty"`
+	Temperature        *float64        `json:"temperature,omitempty"`
+	ResponseMIMEType   string          `json:"responseMimeType,omitempty"`
+	ResponseJSONSchema json.RawMessage `json:"responseJsonSchema,omitempty"`
 }
 
 // geminiResponse is the response from the Gemini API.
@@ -90,6 +103,7 @@ func (p *GoogleProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		model = "gemini-2.5-flash"
 	}
 
+	var systemParts []geminiPart
 	contents := make([]geminiContent, 0, len(req.Messages))
 	for _, m := range req.Messages {
 		role := m.Role
@@ -97,17 +111,48 @@ func (p *GoogleProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		if role == "assistant" {
 			role = "model"
 		}
-		// Gemini doesn't support "system" as a content role; prepend to first user message.
 		if role == "system" {
+			if m.Content != "" {
+				systemParts = append(systemParts, geminiPart{Text: m.Content})
+			}
+			continue
+		}
+
+		parts := make([]geminiPart, 0, 1+len(m.ImageURLs))
+		if m.Content != "" {
+			parts = append(parts, geminiPart{Text: m.Content})
+		}
+		for _, rawImage := range m.ImageURLs {
+			image, err := normalizeImageInput(rawImage)
+			if err != nil {
+				return CompletionResponse{}, fmt.Errorf("normalize image for Gemini: %w", err)
+			}
+			if image.URL != "" {
+				image, err = fetchImageBytes(ctx, p.client, image.URL)
+				if err != nil {
+					return CompletionResponse{}, fmt.Errorf("fetch image for Gemini: %w", err)
+				}
+			}
+			parts = append(parts, geminiPart{
+				InlineData: &geminiInlineData{
+					MIMEType: image.MIMEType,
+					Data:     image.Data,
+				},
+			})
+		}
+		if len(parts) == 0 {
 			continue
 		}
 		contents = append(contents, geminiContent{
 			Role:  role,
-			Parts: []geminiPart{{Text: m.Content}},
+			Parts: parts,
 		})
 	}
 
 	gemReq := geminiRequest{Contents: contents}
+	if len(systemParts) > 0 {
+		gemReq.SystemInstruction = &geminiInstruction{Parts: systemParts}
+	}
 	if req.MaxTokens > 0 || req.Temperature > 0 {
 		config := &geminiGenerationConfig{}
 		if req.MaxTokens > 0 {
@@ -118,6 +163,9 @@ func (p *GoogleProvider) Complete(ctx context.Context, req CompletionRequest) (C
 			config.Temperature = &temp
 		}
 		gemReq.GenerationConfig = config
+	}
+	if err := applyGeminiStructuredOutput(&gemReq, req.StructuredOutput); err != nil {
+		return CompletionResponse{}, err
 	}
 
 	body, err := json.Marshal(gemReq)
@@ -162,6 +210,25 @@ func (p *GoogleProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		InputTokens:  gemResp.UsageMetadata.PromptTokenCount,
 		OutputTokens: gemResp.UsageMetadata.CandidatesTokenCount,
 	}, nil
+}
+
+func applyGeminiStructuredOutput(gemReq *geminiRequest, spec *StructuredOutputSpec) error {
+	if spec == nil {
+		return nil
+	}
+	if spec.Name == "" {
+		return fmt.Errorf("structured output name is required")
+	}
+	if len(spec.JSONSchema) == 0 {
+		return fmt.Errorf("structured output JSON schema is required")
+	}
+
+	if gemReq.GenerationConfig == nil {
+		gemReq.GenerationConfig = &geminiGenerationConfig{}
+	}
+	gemReq.GenerationConfig.ResponseMIMEType = "application/json"
+	gemReq.GenerationConfig.ResponseJSONSchema = spec.JSONSchema
+	return nil
 }
 
 func (p *GoogleProvider) StreamComplete(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {

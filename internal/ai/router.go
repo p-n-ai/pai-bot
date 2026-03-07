@@ -317,6 +317,9 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 	if len(req.StructuredOutput.JSONSchema) == 0 {
 		return fmt.Errorf("structured output JSON schema is required")
 	}
+	if _, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(req.StructuredOutput.JSONSchema)); err != nil {
+		return fmt.Errorf("invalid structured output JSON schema: %w", err)
+	}
 
 	target := reflect.ValueOf(out)
 	if !target.IsValid() || target.Kind() != reflect.Ptr || target.IsNil() {
@@ -327,7 +330,14 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 }
 
 func structuredProviderRequest(providerName string, req CompletionRequest) (CompletionRequest, bool) {
-	if !supportsStructuredOutput(providerName) {
+	capabilities, ok := structuredProviderCapabilities(providerName)
+	if !ok || !capabilities.StructuredOutput {
+		return CompletionRequest{}, false
+	}
+	if requestNeedsSystemPrompt(req) && !capabilities.SystemMessages {
+		return CompletionRequest{}, false
+	}
+	if requestNeedsImageInputs(req) && !capabilities.ImageInputs {
 		return CompletionRequest{}, false
 	}
 	if req.Model != "" {
@@ -338,13 +348,41 @@ func structuredProviderRequest(providerName string, req CompletionRequest) (Comp
 	return req, true
 }
 
-func supportsStructuredOutput(providerName string) bool {
+type providerStructuredCapabilities struct {
+	StructuredOutput bool
+	SystemMessages   bool
+	ImageInputs      bool
+}
+
+func structuredProviderCapabilities(providerName string) (providerStructuredCapabilities, bool) {
 	switch providerName {
-	case "openai", "deepseek", "openrouter":
-		return true
+	case "openai", "deepseek", "openrouter", "google", "anthropic":
+		return providerStructuredCapabilities{
+			StructuredOutput: true,
+			SystemMessages:   true,
+			ImageInputs:      true,
+		}, true
 	default:
-		return false
+		return providerStructuredCapabilities{}, false
 	}
+}
+
+func requestNeedsSystemPrompt(req CompletionRequest) bool {
+	for _, message := range req.Messages {
+		if message.Role == "system" && message.Content != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func requestNeedsImageInputs(req CompletionRequest) bool {
+	for _, message := range req.Messages {
+		if len(message.ImageURLs) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultStructuredModelForProvider(providerName string) string {
@@ -355,6 +393,10 @@ func defaultStructuredModelForProvider(providerName string) string {
 		return "deepseek-chat"
 	case "openrouter":
 		return "qwen/qwen-2.5-72b-instruct"
+	case "google":
+		return "gemini-2.5-flash"
+	case "anthropic":
+		return "claude-haiku-4-5-20251001"
 	default:
 		return ""
 	}

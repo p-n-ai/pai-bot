@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,12 +69,10 @@ func TestGoogleProvider_Complete(t *testing.T) {
 }
 
 func TestGoogleProvider_Complete_RoleMappings(t *testing.T) {
-	var receivedContents []geminiContent
+	var receivedBody map[string]any
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req geminiRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		receivedContents = req.Contents
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 
 		_ = json.NewEncoder(w).Encode(geminiResponse{
 			Candidates: []struct {
@@ -110,12 +109,248 @@ func TestGoogleProvider_Complete_RoleMappings(t *testing.T) {
 		t.Fatalf("Complete() error = %v", err)
 	}
 
-	// System messages should be skipped, assistant mapped to "model".
-	if len(receivedContents) != 3 {
-		t.Fatalf("got %d contents, want 3 (system should be skipped)", len(receivedContents))
+	systemInstruction, ok := receivedBody["systemInstruction"].(map[string]any)
+	if !ok {
+		t.Fatalf("systemInstruction missing or invalid: %#v", receivedBody["systemInstruction"])
 	}
-	if receivedContents[1].Role != "model" {
-		t.Errorf("assistant role mapped to %q, want %q", receivedContents[1].Role, "model")
+	systemParts, ok := systemInstruction["parts"].([]any)
+	if !ok || len(systemParts) != 1 {
+		t.Fatalf("systemInstruction.parts = %#v, want one part", systemInstruction["parts"])
+	}
+	firstSystemPart, ok := systemParts[0].(map[string]any)
+	if !ok || firstSystemPart["text"] != "You are a tutor." {
+		t.Fatalf("systemInstruction first part = %#v, want tutor text", systemParts[0])
+	}
+
+	receivedContents, ok := receivedBody["contents"].([]any)
+	if !ok {
+		t.Fatalf("contents missing or invalid: %#v", receivedBody["contents"])
+	}
+	if len(receivedContents) != 3 {
+		t.Fatalf("got %d contents, want 3", len(receivedContents))
+	}
+	secondContent, ok := receivedContents[1].(map[string]any)
+	if !ok {
+		t.Fatalf("second content invalid: %#v", receivedContents[1])
+	}
+	if secondContent["role"] != "model" {
+		t.Errorf("assistant role mapped to %q, want %q", secondContent["role"], "model")
+	}
+}
+
+func TestGoogleProvider_Complete_WithDataURLImageUsesInlineData(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+
+		_ = json.NewEncoder(w).Encode(geminiResponse{
+			Candidates: []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			}{
+				{Content: struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				}{Parts: []struct {
+					Text string `json:"text"`
+				}{{Text: "ok"}}}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	provider := NewGoogleProvider("test-key", WithGoogleBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"data:image/png;base64,AAEC"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	contents, ok := receivedBody["contents"].([]any)
+	if !ok || len(contents) != 1 {
+		t.Fatalf("contents = %#v, want one entry", receivedBody["contents"])
+	}
+	content, ok := contents[0].(map[string]any)
+	if !ok {
+		t.Fatalf("content invalid: %#v", contents[0])
+	}
+	parts, ok := content["parts"].([]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("parts = %#v, want text + image", content["parts"])
+	}
+	imagePart, ok := parts[1].(map[string]any)
+	if !ok {
+		t.Fatalf("image part invalid: %#v", parts[1])
+	}
+	inlineData, ok := imagePart["inlineData"].(map[string]any)
+	if !ok {
+		t.Fatalf("inlineData missing or invalid: %#v", imagePart["inlineData"])
+	}
+	if inlineData["mimeType"] != "image/png" {
+		t.Fatalf("inlineData.mimeType = %#v, want image/png", inlineData["mimeType"])
+	}
+	if inlineData["data"] != base64.StdEncoding.EncodeToString([]byte{0x00, 0x01, 0x02}) {
+		t.Fatalf("inlineData.data = %#v, want base64 payload", inlineData["data"])
+	}
+}
+
+func TestGoogleProvider_Complete_WithRemoteImageURLDownloadsToInlineData(t *testing.T) {
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte{0x00, 0x01, 0x02})
+	}))
+	defer imageServer.Close()
+
+	var receivedBody map[string]any
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+
+		_ = json.NewEncoder(w).Encode(geminiResponse{
+			Candidates: []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			}{
+				{Content: struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				}{Parts: []struct {
+					Text string `json:"text"`
+				}{{Text: "ok"}}}},
+			},
+		})
+	}))
+	defer apiServer.Close()
+
+	provider := NewGoogleProvider("test-key", WithGoogleBaseURL(apiServer.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{imageServer.URL + "/image.png"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	contents, ok := receivedBody["contents"].([]any)
+	if !ok || len(contents) != 1 {
+		t.Fatalf("contents = %#v, want one entry", receivedBody["contents"])
+	}
+	content, ok := contents[0].(map[string]any)
+	if !ok {
+		t.Fatalf("content invalid: %#v", contents[0])
+	}
+	parts, ok := content["parts"].([]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("parts = %#v, want text + image", content["parts"])
+	}
+	imagePart, ok := parts[1].(map[string]any)
+	if !ok {
+		t.Fatalf("image part invalid: %#v", parts[1])
+	}
+	inlineData, ok := imagePart["inlineData"].(map[string]any)
+	if !ok {
+		t.Fatalf("inlineData missing or invalid: %#v", imagePart["inlineData"])
+	}
+	if inlineData["mimeType"] != "image/png" {
+		t.Fatalf("inlineData.mimeType = %#v, want image/png", inlineData["mimeType"])
+	}
+	if inlineData["data"] != base64.StdEncoding.EncodeToString([]byte{0x00, 0x01, 0x02}) {
+		t.Fatalf("inlineData.data = %#v, want base64 payload", inlineData["data"])
+	}
+}
+
+func TestGoogleProvider_Complete_RejectsUnsupportedImageInput(t *testing.T) {
+	provider := NewGoogleProvider("test-key", WithGoogleBaseURL("http://example.com"))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{
+			Role:      "user",
+			Content:   "what is in this image?",
+			ImageURLs: []string{"ftp://example.com/image.png"},
+		}},
+	})
+	if err == nil {
+		t.Fatal("Complete() should reject unsupported image scheme")
+	}
+	if !strings.Contains(err.Error(), "unsupported image") {
+		t.Fatalf("error = %v, want unsupported image error", err)
+	}
+}
+
+func TestGoogleProvider_Complete_StructuredOutput_AddsJSONSchemaConfig(t *testing.T) {
+	var captured geminiRequest
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+
+		_ = json.NewEncoder(w).Encode(geminiResponse{
+			Candidates: []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			}{
+				{Content: struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				}{Parts: []struct {
+					Text string `json:"text"`
+				}{{Text: `{"final_answer":"ok"}`}}}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	provider := NewGoogleProvider("test-key", WithGoogleBaseURL(server.URL))
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutput: &StructuredOutputSpec{
+			Name:       "tutor_response",
+			JSONSchema: testStructuredSchema,
+			Strict:     true,
+		},
+		MaxTokens:   123,
+		Temperature: 0.4,
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if captured.GenerationConfig == nil {
+		t.Fatal("GenerationConfig should be set for structured output")
+	}
+	if captured.GenerationConfig.ResponseMIMEType != "application/json" {
+		t.Fatalf("ResponseMIMEType = %q, want application/json", captured.GenerationConfig.ResponseMIMEType)
+	}
+	if string(captured.GenerationConfig.ResponseJSONSchema) != string(testStructuredSchema) {
+		t.Fatalf("ResponseJSONSchema = %s, want %s", string(captured.GenerationConfig.ResponseJSONSchema), string(testStructuredSchema))
+	}
+	if captured.GenerationConfig.MaxOutputTokens != 123 {
+		t.Fatalf("MaxOutputTokens = %d, want 123", captured.GenerationConfig.MaxOutputTokens)
+	}
+	if captured.GenerationConfig.Temperature == nil || *captured.GenerationConfig.Temperature != 0.4 {
+		t.Fatalf("Temperature = %#v, want 0.4", captured.GenerationConfig.Temperature)
 	}
 }
 
