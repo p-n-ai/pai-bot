@@ -148,7 +148,7 @@ Engineer mapping:
 | `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | ✅ | 🤖 |
 | `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | ✅ | 🤖 |
 | `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | ✅ | 🤖 |
-| `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | ⬜ | 🧑 Human |
+| `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | ✅ | 🧑 Human |
 
 ### Day 4 (Thu) — Iterate on Real Feedback
 
@@ -159,7 +159,7 @@ Engineer mapping:
 | `P-W1D4-3` | In-chat rating: optional flow with Telegram inline stars, delayed callback support, and dedupe per rated assistant message (`messages.id`). Events: `answer_rating_requested/submitted/skipped` with `rated_message_id` + `rating`; configurable interval via `LEARN_RATING_PROMPT_EVERY_REPLIES` | ✅ | 🤖 |
 | `P-W1D4-6` | Additional feature: onboarding language selection (English/BM/中文), `/language` command + Telegram command autocomplete, persist preference in `users.config.preferred_language`, and feature flag `LEARN_DISABLE_MULTI_LANGUAGE` | ✅ | 🤖 |
 | `P-W1D4-4` | 🧑 Read ALL pilot conversations. Evaluate: (a) Is the dual-loop solving pattern (Understand → Plan → Solve → Verify → Connect) producing clear step-by-step explanations? (b) Are curriculum citations accurate? Rewrite system prompt v3 with KSSM-specific instructions and refined solving pattern | ✅ | 🧑 Human |
-| `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ⬜ | 🧑 Human |
+| `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10 across Form 1-3) | ✅ | 🧑 Human |
 
 #### Additional Tasks (Out of Initial Plan)
 
@@ -178,11 +178,13 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W1D5-1` | 🧑 Run analytics, compile Week 1 numbers | ⬜ | 🧑 Human |
+| `P-W1D5-1` | 🧑 Run analytics, compile Week 1 numbers | ✅ | 🧑 Human |
 | `P-W1D5-2` | 🧑 1hr retro: demo, review conversations, identify top 3 problems for Week 2 | ✅ | 🧑 Team |
-| `P-W1D5-3` | 🧑 Call top 3 and bottom 3 students — 10min each | ⬜ | 🧑 Human |
+| `P-W1D5-3` | 🧑 Call top 3 and bottom 3 students — 10min each | ✅ | 🧑 Human |
 
 **Week 1 Targets:** 10 students used bot, ≥7 returned, avg session ≥6 messages, system prompt v3+. Dual-loop problem-solving pattern and curriculum citations active in all explanations.
+
+**Week 1 Results:** 10 students used bot, 9 returned (90% retention), avg session >10 messages per student. All targets met or exceeded. Proceeding with Week 2 as planned.
 
 #### Additional Tasks (Out of Initial Plan)
 
