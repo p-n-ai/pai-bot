@@ -12,6 +12,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 func TestEngine_ProcessMessage(t *testing.T) {
@@ -1566,6 +1567,223 @@ func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 		if contains(m.Content, "data:image") || contains(m.Content, "base64,") {
 			t.Fatalf("stored message should not contain raw image data URL, got: %q", m.Content)
 		}
+	}
+}
+
+func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
+	mockAI := ai.NewMockProvider("0.7")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+			SubjectID:  "algebra",
+		},
+		notes: "Solve for x",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "mastery-user",
+		Text:    "What is 2x + 3 = 7?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	// assessMasteryAsync runs in a goroutine; give it time to complete.
+	time.Sleep(100 * time.Millisecond)
+
+	score, err := progressTracker.GetMastery("mastery-user", "kssm-form1", "algebra-linear-eq")
+	if err != nil {
+		t.Fatalf("GetMastery() error = %v", err)
+	}
+	if score <= 0 {
+		t.Errorf("expected mastery score > 0 after topic-matched message, got %f", score)
+	}
+}
+
+func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
+	// Mock AI returns "0.8" for both the teaching response and the grading call.
+	mockAI := ai.NewMockProvider("0.8")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+			SubjectID:  "algebra",
+		},
+		notes: "Solve for x",
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "sm2-user",
+		Text:    "Solve 3x = 9",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	items, err := progressTracker.GetAllProgress("sm2-user")
+	if err != nil {
+		t.Fatalf("GetAllProgress() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 progress item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.EaseFactor < 1.3 {
+		t.Errorf("EaseFactor should be >= 1.3, got %f", item.EaseFactor)
+	}
+	if item.IntervalDays < 1 {
+		t.Errorf("IntervalDays should be >= 1, got %d", item.IntervalDays)
+	}
+	if item.Repetitions < 1 {
+		t.Errorf("Repetitions should be >= 1, got %d", item.Repetitions)
+	}
+	if !item.NextReviewAt.After(item.LastStudied) {
+		t.Errorf("NextReviewAt (%v) should be after LastStudied (%v)", item.NextReviewAt, item.LastStudied)
+	}
+	if item.TopicID != "algebra-linear-eq" {
+		t.Errorf("expected TopicID 'algebra-linear-eq', got %q", item.TopicID)
+	}
+	if item.SyllabusID != "kssm-form1" {
+		t.Errorf("expected SyllabusID 'kssm-form1', got %q", item.SyllabusID)
+	}
+}
+
+func TestEngine_ProgressCommand_ShowsTopics(t *testing.T) {
+	mockAI := ai.NewMockProvider("0.8")
+	progressTracker := progress.NewMemoryTracker()
+
+	resolver := &stubContextResolver{
+		topic: &curriculum.Topic{
+			ID:         "algebra-linear-eq",
+			Name:       "Linear Equations",
+			SyllabusID: "kssm-form1",
+		},
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:        mockRouter(mockAI),
+		ContextResolver: resolver,
+		Tracker:         progressTracker,
+	})
+
+	// First, send a message to create progress.
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "progress-user",
+		Text:    "Solve x + 1 = 3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Now call /progress.
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "progress-user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "algebra-linear-eq") {
+		t.Errorf("expected progress report to contain topic ID, got: %s", resp)
+	}
+	if !contains(resp, "Progress") {
+		t.Errorf("expected progress report header, got: %s", resp)
+	}
+}
+
+func TestEngine_ProgressCommand_EmptyProgress(t *testing.T) {
+	progressTracker := progress.NewMemoryTracker()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+		Tracker:  progressTracker,
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "new-user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "mula belajar") {
+		t.Errorf("expected encouragement for empty progress, got: %s", resp)
+	}
+}
+
+func TestEngine_ProgressCommand_NoTracker(t *testing.T) {
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "user",
+		Text:    "/progress",
+	})
+	if err != nil {
+		t.Fatalf("/progress error = %v", err)
+	}
+	if !contains(resp, "not enabled") {
+		t.Errorf("expected disabled message, got: %s", resp)
+	}
+}
+
+func TestEngine_ProcessMessage_NoMasteryUpdateWithoutTopic(t *testing.T) {
+	mockAI := ai.NewMockProvider("some response")
+	progressTracker := progress.NewMemoryTracker()
+
+	// No context resolver → no topic match → no mastery update.
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Tracker:  progressTracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "no-topic-user",
+		Text:    "Hello!",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	items, err := progressTracker.GetAllProgress("no-topic-user")
+	if err != nil {
+		t.Fatalf("GetAllProgress() error = %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 progress items without topic match, got %d", len(items))
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 func main() {
@@ -80,13 +81,15 @@ func main() {
 
 	// Create agent engine.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
+	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:         router,
-		Store:            store,
-		EventLogger:      eventLogger,
-		CurriculumLoader: loader,
+		AIRouter:             router,
+		Store:                store,
+		EventLogger:          eventLogger,
+		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
+		Tracker:              tracker,
 	})
 
 	// Create Telegram channel + chat gateway.

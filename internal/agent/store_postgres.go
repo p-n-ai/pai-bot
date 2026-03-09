@@ -127,6 +127,9 @@ func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, 
 	}, nil
 }
 
+// TenantID returns the resolved tenant UUID for this store.
+func (s *PostgresStore) TenantID() string { return s.tenantID }
+
 func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
