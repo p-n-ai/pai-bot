@@ -41,6 +41,10 @@ type XPTracker interface {
 	GetTotal(userID string) (int, error)
 }
 
+// TODO: Wire XPSourceQuiz awards into the real quiz flow once `/quiz` session handling
+// persists answers and grading outcomes. Right now the tracker exists, but quiz gameplay
+// does not yet call Award for correct answers.
+
 // MemoryXPTracker is an in-memory implementation for testing.
 type MemoryXPTracker struct {
 	mu      sync.RWMutex
