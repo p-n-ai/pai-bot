@@ -90,7 +90,7 @@ func (t *MemoryNudgeTracker) NudgeCountToday(userID string) (int, error) {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	count := 0
 	for _, ts := range times {
-		if ts.UTC().Truncate(24*time.Hour) == today {
+		if ts.UTC().Truncate(24*time.Hour).Equal(today) {
 			count++
 		}
 	}
