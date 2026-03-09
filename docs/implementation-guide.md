@@ -4560,9 +4560,9 @@ func IsStreakMilestone(days int) bool {
 
 #### Day 8-10 Exit Criteria
 
-- [ ] Scheduler checks due reviews, respects quiet hours, max 3 nudges/day
-- [ ] Streak tracking with milestones and celebrations
-- [ ] XP system: session, quiz, mastery, streak XP
+- [x] Scheduler checks due reviews, respects quiet hours, max 3 nudges/day
+- [x] Streak tracking with milestones and celebrations
+- [x] XP system: session, quiz, mastery, streak XP
 - [ ] Topic unlocking when mastery ≥0.8
 - [ ] `/learn [topic]` command sets current topic
 - [ ] Daily summary computed at 22:00
@@ -4573,7 +4573,7 @@ func IsStreakMilestone(days int) bool {
 - [ ] Nudge response ≥25%
 - [ ] Day-7 retention ≥35%
 
-**Week 2 Progress:** 8 packages | Progress tracking + quizzes + streaks + scheduler | 50 students
+**Week 2 Progress:** 8 packages | Progress tracking + quizzes + streaks + scheduler + Postgres-backed nudge tracking | 50 students
 
 ---
 

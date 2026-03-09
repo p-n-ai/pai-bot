@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"strconv"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
@@ -42,6 +43,8 @@ type EngineConfig struct {
 	DisableMultiLanguage  bool
 	RatingPromptEvery     int // ask for rating every N tutoring replies (default 5)
 	Tracker               progress.Tracker
+	Streaks               progress.StreakTracker
+	XP                    progress.XPTracker
 }
 
 // Engine is the core conversation processor.
@@ -56,6 +59,8 @@ type Engine struct {
 	disableMultiLanguage  bool
 	ratingPromptEvery     int
 	tracker               progress.Tracker
+	streaks               progress.StreakTracker
+	xp                    progress.XPTracker
 }
 
 // NewEngine creates a new agent engine.
@@ -104,6 +109,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		disableMultiLanguage:  cfg.DisableMultiLanguage,
 		ratingPromptEvery:     ratingEvery,
 		tracker:               cfg.Tracker,
+		streaks:               cfg.Streaks,
+		xp:                    cfg.XP,
 	}
 }
 
@@ -261,6 +268,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		},
 	})
 	e.assessMasteryAsync(ctx, msg.UserID, matchedTopic, userContent, plainContent)
+	e.recordActivityAsync(msg.UserID)
 
 	if promptRequested {
 		e.logEventAsync(Event{
@@ -475,6 +483,33 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 	}()
 }
 
+// recordActivityAsync records streak activity and awards session XP in a goroutine.
+func (e *Engine) recordActivityAsync(userID string) {
+	go func() {
+		now := time.Now()
+
+		// Record streak activity.
+		if e.streaks != nil {
+			if err := e.streaks.RecordActivity(userID, now); err != nil {
+				slog.Warn("streak record failed", "user_id", userID, "error", err)
+			} else {
+				// Check for milestone celebration.
+				s, _ := e.streaks.GetStreak(userID)
+				if progress.IsStreakMilestone(s.CurrentStreak) && e.xp != nil {
+					_ = e.xp.Award(userID, progress.XPSourceStreak, progress.XPStreakMilestone, map[string]any{
+						"streak_days": s.CurrentStreak,
+					})
+				}
+			}
+		}
+
+		// Award session XP.
+		if e.xp != nil {
+			_ = e.xp.Award(userID, progress.XPSourceSession, progress.XPSession, nil)
+		}
+	}()
+}
+
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
 	fields := strings.Fields(msg.Text)
 	cmd := fields[0]
@@ -577,8 +612,16 @@ func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) 
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
 	}
 
-	// XP and streak tracking not yet implemented; use placeholders.
-	return progress.FormatProgressReport(items, 0, 0), nil
+	var totalXP int
+	if e.xp != nil {
+		totalXP, _ = e.xp.GetTotal(msg.UserID)
+	}
+	var streak int
+	if e.streaks != nil {
+		s, _ := e.streaks.GetStreak(msg.UserID)
+		streak = s.CurrentStreak
+	}
+	return progress.FormatProgressReport(items, totalXP, streak), nil
 }
 
 func (e *Engine) endActiveConversation(userID string) {

@@ -1,4 +1,4 @@
-.PHONY: setup dev test test-integration test-cover lint test-all migrate build docker start stop logs analytics ollama-pull
+.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate build docker start stop logs analytics ollama-pull
 
 # First-time setup
 setup:
@@ -9,6 +9,12 @@ setup:
 # Development
 dev:
 	go run ./cmd/server
+
+chat-terminal:
+	docker compose run --rm --entrypoint /pai-terminal-chat app
+
+nudge-terminal:
+	docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id $(USER_ID)
 
 # Testing
 test:
@@ -31,7 +37,10 @@ test-cover:
 
 # Database
 migrate:
-	@echo "Run: docker exec -i $$(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql"
+	@for f in $$(ls migrations/*.up.sql | sort); do \
+		echo "Applying $$f"; \
+		docker exec -i $$(docker compose ps -q postgres) psql -U pai -d pai < $$f || exit 1; \
+	done
 
 # Build
 build:

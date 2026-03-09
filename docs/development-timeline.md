@@ -223,12 +223,12 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 8 (Wed) — Proactive Nudges + Streaks
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | 🤖 |
-| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | 🤖 |
-| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | 🤖 |
-| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human |
+| Task ID | Task | Status | Owner |
+|---------|------|--------|-------|
+| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | ✅ | 🤖 |
+| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | ✅ | 🤖 |
+| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | ✅ | 🤖 |
+| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | | 🧑 Human |
 
 ### Day 9 (Thu) — Topic Navigation
 

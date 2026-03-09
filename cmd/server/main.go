@@ -79,9 +79,11 @@ func main() {
 		slog.Info("curriculum ready", "topics", len(topics))
 	}
 
-	// Create agent engine.
+	// Create agent engine with streaks and XP tracking.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
 	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
+	streakTracker := progress.NewMemoryStreakTracker()
+	xpTracker := progress.NewMemoryXPTracker()
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -90,6 +92,8 @@ func main() {
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
 		Tracker:              tracker,
+		Streaks:              streakTracker,
+		XP:                   xpTracker,
 	})
 
 	// Create Telegram channel + chat gateway.
@@ -102,9 +106,30 @@ func main() {
 	gw := chat.NewGateway()
 	gw.Register("telegram", tg)
 
+	// Start proactive scheduler (nudges for due reviews).
+	nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
+	scheduler := agent.NewScheduler(
+		agent.SchedulerConfig{
+			CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
+			MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
+			AIPersonalizedNudgesEnabled: cfg.Features.AIPersonalizedNudgesEnabled,
+		},
+		tracker,
+		streakTracker,
+		xpTracker,
+		nudgeTracker,
+		gw,
+		router,
+		store,
+	)
+
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	// Scheduler runs in background; user list is empty initially — will be populated
+	// when we add user enumeration from the database.
+	go scheduler.Start(ctx, []string{})
 
 	// Start long-polling with message handler.
 	err = gw.StartAll(ctx, func(msg chat.InboundMessage) {
