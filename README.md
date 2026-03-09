@@ -400,6 +400,7 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 | `LEARN_AI_OPENROUTER_API_KEY` | No* | — | OpenRouter API key (100+ models) |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama server URL |
+| `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
 | `LEARN_AUTH_JWT_SECRET` | No | Auto-generated | JWT signing secret |
 | `LEARN_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
@@ -451,6 +452,28 @@ OpenAI live conversation integration suite:
   - `LEARN_AI_LIVE_MAX_CASES` (default `30`)
 - CI behavior: the live OpenAI suite is explicitly skipped in CI (`CI`/`GITHUB_ACTIONS` detection) to avoid external paid API calls in pipeline runs.
 
+Terminal chat workflow:
+
+```bash
+make chat-terminal
+# or:
+docker compose run --rm --entrypoint /pai-terminal-chat app --user-id demo-user --lang en
+# for an ephemeral local-only session:
+docker compose run --rm --entrypoint /pai-terminal-chat app --memory
+```
+
+The terminal chat uses the same `agent.Engine` and AI router as the app. By default it uses PostgreSQL-backed conversation state for production parity; pass `--memory` for an ephemeral local-only session.
+
+Terminal nudge workflow:
+
+```bash
+make nudge-terminal USER_ID=demo-user
+# or:
+docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id demo-user
+```
+
+The terminal nudge command triggers the real scheduler path for one user and prints any generated nudge message to stdout.
+
 ### Useful Commands
 
 ```bash
@@ -461,6 +484,8 @@ make logs         # Tail application logs
 make migrate      # Run database migrations
 make analytics    # Print quick metrics from the database
 make ollama-pull  # Download a free AI model for Ollama
+make chat-terminal  # Open a local terminal chat session
+make nudge-terminal USER_ID=<user-id>  # Trigger a due-review nudge for one user
 ```
 
 ### Rating Analytics Contract

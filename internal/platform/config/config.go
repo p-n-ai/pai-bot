@@ -27,8 +27,9 @@ type Config struct {
 
 // FeatureConfig holds toggle-able product features.
 type FeatureConfig struct {
-	DisableMultiLanguage bool
-	RatingPromptEvery    int
+	DisableMultiLanguage        bool
+	RatingPromptEvery           int
+	AIPersonalizedNudgesEnabled bool
 }
 
 // ServerConfig holds HTTP server settings.
@@ -187,8 +188,9 @@ func Load() (*Config, error) {
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
 		},
 		Features: FeatureConfig{
-			DisableMultiLanguage: envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
-			RatingPromptEvery:    envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
+			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
+			RatingPromptEvery:           envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
+			AIPersonalizedNudgesEnabled: envBoolWithFallback("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "LEARN_AI_NUDGES_ENABLED", true),
 		},
 		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),
 	}
@@ -241,6 +243,16 @@ func envInt(key string, fallback int) int {
 
 func envBool(key string, fallback bool) bool {
 	if v := os.Getenv(key); v != "" {
+		return strings.EqualFold(v, "true") || v == "1"
+	}
+	return fallback
+}
+
+func envBoolWithFallback(primaryKey, fallbackKey string, fallback bool) bool {
+	if v := os.Getenv(primaryKey); v != "" {
+		return strings.EqualFold(v, "true") || v == "1"
+	}
+	if v := os.Getenv(fallbackKey); v != "" {
 		return strings.EqualFold(v, "true") || v == "1"
 	}
 	return fallback
