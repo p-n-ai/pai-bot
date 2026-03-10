@@ -25,9 +25,9 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 	sb.WriteString("📊 Your Progress\n\n")
 
 	if streak > 0 {
-		sb.WriteString(fmt.Sprintf("🔥 Streak: %d days\n", streak))
+		fmt.Fprintf(&sb, "🔥 Streak: %d days\n", streak)
 	}
-	sb.WriteString(fmt.Sprintf("⭐ XP: %d\n\n", totalXP))
+	fmt.Fprintf(&sb, "⭐ XP: %d\n\n", totalXP)
 
 	for _, item := range items {
 		bar := FormatProgressBar(item.MasteryScore, 10)
@@ -36,7 +36,7 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 		if IsMastered(item.MasteryScore) {
 			status = "✅"
 		}
-		sb.WriteString(fmt.Sprintf("%s %s %s %d%%\n", status, item.TopicID, bar, pct))
+		fmt.Fprintf(&sb, "%s %s %s %d%%\n", status, item.TopicID, bar, pct)
 	}
 
 	if len(items) == 0 {

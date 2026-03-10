@@ -1,4 +1,4 @@
-.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate build docker start stop logs analytics ollama-pull
+.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
 
 # First-time setup
 setup:
@@ -67,3 +67,9 @@ ollama-pull:
 # Analytics
 analytics:
 	./scripts/analytics.sh
+
+analytics-xlsx:
+	./scripts/analytics.sh --xlsx output/spreadsheet/pai-analytics.xlsx
+
+analytics-example:
+	./scripts/analytics.sh --example-xlsx output/spreadsheet/pai-analytics-example.xlsx
