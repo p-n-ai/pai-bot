@@ -440,6 +440,7 @@ make test         # Run all Go tests
 make test-integration  # Run integration tests (requires -tags=integration tests)
 make test-cover   # Run tests with coverage report
 make lint         # Run golangci-lint
+make test-all     # Lint + Go tests
 ```
 
 OpenAI live conversation integration suite:
@@ -483,10 +484,19 @@ make stop         # Stop all services
 make logs         # Tail application logs
 make migrate      # Run database migrations
 make analytics    # Print quick metrics from the database
+make analytics-xlsx   # Export a styled Excel workbook to output/spreadsheet/
+make analytics-example  # Generate a sample Excel workbook without a database
 make ollama-pull  # Download a free AI model for Ollama
 make chat-terminal  # Open a local terminal chat session
 make nudge-terminal USER_ID=<user-id>  # Trigger a due-review nudge for one user
 ```
+
+Excel export notes:
+
+- `scripts/analytics.sh --xlsx output/spreadsheet/pai-analytics.xlsx` keeps the terminal report and also writes a formatted workbook.
+- `scripts/analytics.sh --example-xlsx output/spreadsheet/pai-analytics-example.xlsx` creates a sample workbook for layout review without touching the database.
+- The analytics script loads `.env` automatically when present. When `PAI_DB_URL` is unset, it falls back to `LEARN_DATABASE_URL` from the app environment before using Docker Compose PostgreSQL.
+- The workbook builder now runs through `go run ./cmd/analyticsxlsx`, so there is no separate Python runtime or spreadsheet dependency to install.
 
 ### Rating Analytics Contract
 

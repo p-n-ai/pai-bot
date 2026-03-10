@@ -53,6 +53,9 @@ terraform/.terraform.lock.hcl
 # Logs
 *.log
 
+# Generated reports
+output/
+
 # Secrets
 *.pem
 *.key

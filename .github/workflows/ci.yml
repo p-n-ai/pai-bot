@@ -24,7 +24,7 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./... -short -count=1
+        run: go test ./... -count=1
 
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v7

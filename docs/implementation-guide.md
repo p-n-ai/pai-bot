@@ -1594,12 +1594,12 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: go test ./...
+        run: go test ./... -count=1
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.4.0
 
   build:
     runs-on: ubuntu-latest
@@ -1624,7 +1624,7 @@ jobs:
 **File:** `Makefile`
 
 ```makefile
-.PHONY: setup dev test test-integration lint test-all migrate build docker start stop logs analytics
+.PHONY: setup dev test test-integration lint test-all migrate build docker start stop logs analytics analytics-xlsx analytics-example
 
 # First-time setup
 setup:
@@ -1683,7 +1683,13 @@ ollama-pull:
 
 # Analytics
 analytics:
-	@echo "Analytics script — implemented Day 4"
+	./scripts/analytics.sh
+
+analytics-xlsx:
+	./scripts/analytics.sh --xlsx output/spreadsheet/pai-analytics.xlsx
+
+analytics-example:
+	./scripts/analytics.sh --example-xlsx output/spreadsheet/pai-analytics-example.xlsx
 ```
 
 **File:** `.env.example`
