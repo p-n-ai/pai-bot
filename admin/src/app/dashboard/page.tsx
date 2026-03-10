@@ -51,17 +51,17 @@ export default function DashboardPage() {
     : 0;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8fcff_0%,#eef8f7_100%)] px-6 py-8 lg:px-10">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f8fcff_0%,#eef8f7_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:grid-cols-[1.3fr_0.7fr]">
+        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Teacher cockpit</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Class mastery at a glance</h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Class mastery at a glance</h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
               This screen stays useful before the backend admin API is complete by falling back to typed mock data.
             </p>
           </div>
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white">
+          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Average mastery</p>
               <p className="mt-2 text-4xl font-semibold">{averageMastery}%</p>
@@ -79,39 +79,45 @@ export default function DashboardPage() {
           <StatCard title="Nudges" value="Ready" note="UI action stubbed" />
         </section>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)]">
+        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>
               <CardTitle className="text-xl tracking-tight">Mastery heatmap</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">Students by topic with direct navigation into detail views.</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Students by topic with direct navigation into detail views.</p>
             </div>
-            <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900">
+            <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
               Back home
             </Link>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-slate-500">Loading dashboard...</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loading dashboard...</p>
             ) : data ? (
               <div className="space-y-5">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] border-separate border-spacing-y-2">
                     <thead>
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Student</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Student</th>
                         {data.topic_ids.map((topicId) => (
-                          <th key={topicId} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          <th
+                            key={topicId}
+                            className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"
+                          >
                             {TOPIC_LABELS[topicId] ?? topicId}
                           </th>
                         ))}
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Action</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.students.map((student) => (
                         <tr key={student.id}>
-                          <td className="rounded-l-2xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-900">
-                            <Link href={`/students/${student.id}`} className="inline-flex items-center gap-2 hover:text-sky-700">
+                          <td className="rounded-l-2xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/80 dark:text-slate-100">
+                            <Link
+                              href={`/students/${student.id}`}
+                              className="inline-flex items-center gap-2 hover:text-sky-700 dark:hover:text-sky-300"
+                            >
                               {student.name}
                               <ChevronRight className="size-4" />
                             </Link>
@@ -119,14 +125,14 @@ export default function DashboardPage() {
                           {data.topic_ids.map((topicId) => {
                             const score = student.topics[topicId] ?? 0;
                             return (
-                              <td key={`${student.id}-${topicId}`} className="bg-slate-50 px-3 py-3">
+                              <td key={`${student.id}-${topicId}`} className="bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
                                 <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
                                   {Math.round(score * 100)}%
                                 </span>
                               </td>
                             );
                           })}
-                          <td className="rounded-r-2xl bg-slate-50 px-3 py-3">
+                          <td className="rounded-r-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
                             <Button
                               size="sm"
                               className="gap-2"
@@ -141,7 +147,7 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-                {nudgeMessage ? <p className="text-sm text-slate-600">{nudgeMessage}</p> : null}
+                {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
               </div>
             ) : (
               <p className="text-sm text-rose-600">Failed to load class data.</p>
@@ -155,11 +161,11 @@ export default function DashboardPage() {
 
 function StatCard({ title, value, note }: { title: string; value: string; note: string }) {
   return (
-    <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
+    <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_50px_rgba(2,8,23,0.35)]">
       <CardHeader>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{title}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{title}</p>
         <CardTitle className="text-3xl tracking-tight">{value}</CardTitle>
-        <p className="text-sm text-slate-500">{note}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{note}</p>
       </CardHeader>
     </Card>
   );

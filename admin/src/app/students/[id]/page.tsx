@@ -41,19 +41,19 @@ export default function StudentPage() {
   const struggleAreas = detail?.progress.filter((item) => item.mastery_score < 0.6) ?? [];
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#fcfffd_0%,#f3f8ff_100%)] px-6 py-8 lg:px-10">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#fcfffd_0%,#f3f8ff_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] lg:grid-cols-[1.15fr_0.85fr]">
+        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-3">
-            <Link href="/dashboard" className="text-sm font-medium text-sky-700 hover:text-sky-900">
+            <Link href="/dashboard" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
               Back to dashboard
             </Link>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{detail?.student.name ?? "Loading student..."}</h1>
-            <p className="text-sm text-slate-600">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">{detail?.student.name ?? "Loading student..."}</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               {detail ? `${detail.student.form} | ${detail.student.channel} | ${detail.student.external_id}` : "Fetching student record"}
             </p>
           </div>
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white sm:grid-cols-3 lg:grid-cols-1">
+          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90 sm:grid-cols-3 lg:grid-cols-1">
             <Metric label="Current streak" value={detail ? `${detail.streak.current} days` : "-"} />
             <Metric label="Longest streak" value={detail ? `${detail.streak.longest} days` : "-"} />
             <Metric label="Total XP" value={detail ? String(detail.streak.total_xp) : "-"} />
@@ -61,7 +61,7 @@ export default function StudentPage() {
         </header>
 
         <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)]">
+          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
             <CardHeader>
               <CardTitle className="text-xl tracking-tight">Mastery radar</CardTitle>
             </CardHeader>
@@ -77,7 +77,7 @@ export default function StudentPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)]">
+          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
             <CardHeader>
               <CardTitle className="text-xl tracking-tight">Struggle areas</CardTitle>
             </CardHeader>
@@ -85,12 +85,15 @@ export default function StudentPage() {
               <div className="flex flex-wrap gap-2">
                 {struggleAreas.length ? (
                   struggleAreas.map((item) => (
-                    <Badge key={item.topic_id} className="rounded-full bg-amber-100 px-3 py-1 text-amber-900 hover:bg-amber-100">
+                    <Badge
+                      key={item.topic_id}
+                      className="rounded-full bg-amber-100 px-3 py-1 text-amber-900 hover:bg-amber-100 dark:bg-amber-300/15 dark:text-amber-100 dark:hover:bg-amber-300/15"
+                    >
                       {TOPIC_LABELS[item.topic_id] ?? item.topic_id} {Math.round(item.mastery_score * 100)}%
                     </Badge>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">No active struggle areas.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No active struggle areas.</p>
                 )}
               </div>
               <div className="grid grid-cols-7 gap-2">
@@ -100,7 +103,7 @@ export default function StudentPage() {
                     return (
                       <div
                         key={`${item.topic_id}-${index}-${block}`}
-                        className="h-9 rounded-xl border border-white/60 bg-sky-500"
+                        className="h-9 rounded-xl border border-white/60 bg-sky-500 dark:border-white/10"
                         style={{ opacity }}
                       />
                     );
@@ -111,7 +114,7 @@ export default function StudentPage() {
           </Card>
         </section>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)]">
+        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
           <CardHeader>
             <CardTitle className="text-xl tracking-tight">Recent conversations</CardTitle>
           </CardHeader>
@@ -119,13 +122,17 @@ export default function StudentPage() {
             {conversations.map((item) => (
               <div
                 key={item.id}
-                className={`rounded-2xl border p-4 ${item.role === "student" ? "bg-slate-50" : "bg-sky-50"}`}
+                className={`rounded-2xl border p-4 ${
+                  item.role === "student"
+                    ? "bg-slate-50 dark:border-white/10 dark:bg-slate-900/80"
+                    : "bg-sky-50 dark:border-sky-400/20 dark:bg-sky-400/10"
+                }`}
               >
-                <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                   <span>{item.role}</span>
                   <span>{new Date(item.timestamp).toLocaleString()}</span>
                 </div>
-                <p className="text-sm leading-6 text-slate-700">{item.text}</p>
+                <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">{item.text}</p>
               </div>
             ))}
           </CardContent>
