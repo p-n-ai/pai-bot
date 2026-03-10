@@ -189,6 +189,26 @@ func TestRunWritesExampleWorkbook(t *testing.T) {
 	}
 }
 
+func TestWriteWorkbookCreatesMissingParentDirectories(t *testing.T) {
+	exports := analyticsxlsx.BuildExampleExports()
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "nested", "reports", "analytics.xlsx")
+
+	err := analyticsxlsx.WriteWorkbook(
+		exports,
+		outputPath,
+		7,
+		time.Date(2026, 3, 10, 1, 2, 3, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("WriteWorkbook() error = %v", err)
+	}
+
+	if _, err := os.Stat(outputPath); err != nil {
+		t.Fatalf("os.Stat(%q) error = %v", outputPath, err)
+	}
+}
+
 func assertCellValue(t *testing.T, workbook *excelize.File, sheet string, cell string, want string) {
 	t.Helper()
 

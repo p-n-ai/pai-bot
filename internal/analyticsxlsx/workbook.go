@@ -375,6 +375,10 @@ func WriteWorkbook(exports ExportSet, outputPath string, days int, generatedAt t
 		return err
 	}
 
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return fmt.Errorf("create workbook output directory: %w", err)
+	}
+
 	return file.SaveAs(outputPath)
 }
 
