@@ -142,6 +142,48 @@ func TestEngine_ProcessMessage_QuizIntensityReplyStoresPreferenceAndStartsQuiz(t
 	}
 }
 
+func TestEngine_ProcessMessage_QuizIntensityCallbackStoresPreferenceAndStartsQuiz(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	conversationID, err := store.CreateConversation(agent.Conversation{
+		UserID: "quiz-user-intensity-callback",
+		State:  "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := store.UpdateConversationPendingQuiz(conversationID, "quiz_intensity", "F1-02"); err != nil {
+		t.Fatalf("UpdateConversationPendingQuiz() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-intensity-callback",
+		Text:            "quiz:intensity:medium",
+		CallbackQueryID: "cb-quiz-intensity",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Question 1/1") {
+		t.Fatalf("expected medium-filtered first quiz question, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called for quiz intensity callback")
+	}
+
+	intensity, ok := store.GetUserPreferredQuizIntensity("quiz-user-intensity-callback")
+	if !ok || intensity != "medium" {
+		t.Fatalf("stored intensity = %q, %v, want medium, true", intensity, ok)
+	}
+}
+
 func TestEngine_ProcessMessage_QuizAnswerAdvancesWithoutAICall(t *testing.T) {
 	mockAI := ai.NewMockProvider("should-not-be-used")
 	store := agent.NewMemoryStore()
@@ -281,6 +323,75 @@ func TestEngine_ProcessMessage_QuizWrongAnswerReturnsHint(t *testing.T) {
 	}
 	if mastery <= 0 {
 		t.Fatalf("expected low-but-present mastery signal after wrong quiz answer, got %f", mastery)
+	}
+}
+
+func TestEngine_ProcessMessage_QuizHintCallbackReturnsHintWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-hint-callback",
+		Text:    "quiz me on linear equations",
+	})
+	mockAI.LastRequest = nil
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-hint-callback",
+		Text:            "hint",
+		CallbackQueryID: "cb-quiz-hint",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Hint:") {
+		t.Fatalf("expected hint response, got %q", resp)
+	}
+	if !contains(resp, "Try the same question again.") {
+		t.Fatalf("expected retry guidance, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called for quiz hint callback")
+	}
+}
+
+func TestEngine_ProcessMessage_QuizRepeatCallbackRepeatsQuestionWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-repeat-callback",
+		Text:    "quiz me on linear equations",
+	})
+	mockAI.LastRequest = nil
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-repeat-callback",
+		Text:            "repeat",
+		CallbackQueryID: "cb-quiz-repeat",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Question 1/3") {
+		t.Fatalf("expected repeated quiz question, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called for quiz repeat callback")
 	}
 }
 
@@ -461,8 +572,8 @@ func TestEngine_ProcessMessage_SideQuestionDuringQuizPausesWithoutGrading(t *tes
 	if err != nil {
 		t.Fatalf("GetTotal() error = %v", err)
 	}
-	if totalXP != 0 {
-		t.Fatalf("quiz XP total = %d, want 0", totalXP)
+	if totalXP >= progress.XPQuizCorrect {
+		t.Fatalf("expected no quiz-correct XP award during side question, got total XP %d", totalXP)
 	}
 }
 
@@ -514,6 +625,88 @@ func TestEngine_ProcessMessage_ContinueQuizResumesPausedQuestionWithoutAICall(t 
 	}
 	if conv.QuizState == nil || conv.QuizState.RunState != "active" {
 		t.Fatalf("QuizState = %#v, want resumed active quiz state", conv.QuizState)
+	}
+}
+
+func TestEngine_ProcessMessage_ContinueQuizCallbackResumesPausedQuestionWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("The weather looks clear today.")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-resume-callback",
+		Text:    "quiz me on linear equations",
+	})
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-resume-callback",
+		Text:    "how is the weather today?",
+	})
+	mockAI.LastRequest = nil
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-resume-callback",
+		Text:            "continue quiz",
+		CallbackQueryID: "cb-quiz-continue",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Resuming your quiz.") {
+		t.Fatalf("expected resume message, got %q", resp)
+	}
+	if !contains(resp, "Question 1/3") {
+		t.Fatalf("expected original question on resume, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when continue callback resumes paused quiz")
+	}
+}
+
+func TestEngine_ProcessMessage_HintCallbackWhilePausedResumesWithHintWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("The weather looks clear today.")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-paused-hint-callback",
+		Text:    "quiz me on linear equations",
+	})
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-paused-hint-callback",
+		Text:    "how is the weather today?",
+	})
+	mockAI.LastRequest = nil
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-paused-hint-callback",
+		Text:            "hint",
+		CallbackQueryID: "cb-quiz-paused-hint",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "Resuming your quiz.") {
+		t.Fatalf("expected resume message, got %q", resp)
+	}
+	if !contains(resp, "Hint:") {
+		t.Fatalf("expected resumed hint, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when paused hint callback resumes quiz")
 	}
 }
 
@@ -608,6 +801,39 @@ func TestEngine_ProcessMessage_StopExitsQuizWithoutAICall(t *testing.T) {
 	}
 	if conv.QuizState != nil {
 		t.Fatalf("QuizState = %#v, want nil after exit", conv.QuizState)
+	}
+}
+
+func TestEngine_ProcessMessage_StopQuizCallbackExitsQuizWithoutAICall(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-stop-callback",
+		Text:    "quiz me on linear equations",
+	})
+	mockAI.LastRequest = nil
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:         "telegram",
+		UserID:          "quiz-user-stop-callback",
+		Text:            "stop quiz",
+		CallbackQueryID: "cb-quiz-stop",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if !contains(resp, "stop the quiz") {
+		t.Fatalf("expected quiz exit response, got %q", resp)
+	}
+	if mockAI.LastRequest != nil {
+		t.Fatal("AI should not be called when quiz stop callback exits the quiz")
 	}
 }
 

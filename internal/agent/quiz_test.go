@@ -91,6 +91,65 @@ func TestQuizSession_SubmitAnswer_FreeTextRejectsLongerExpressionSuperstring(t *
 	}
 }
 
+func TestQuizSession_SubmitAnswer_StructuredAnswersAllowEquivalentFormatting(t *testing.T) {
+	tests := []struct {
+		name       string
+		answerType string
+		expected   string
+		actual     string
+	}{
+		{
+			name:       "indices prompt accepts unlabeled ordered parts",
+			answerType: "exact",
+			expected:   "5^4; base = 5; index = 4",
+			actual:     "5^4, 5, 4",
+		},
+		{
+			name:       "gradient prompt accepts symbolic labels",
+			answerType: "exact",
+			expected:   "gradient = 3; y-intercept = -4",
+			actual:     "m=3, c=-4",
+		},
+		{
+			name:       "subjective free text accepts equivalent expression formatting",
+			answerType: "free_text",
+			expected:   "(a) 1500x + 700y\n(b) 800x + 1600y",
+			actual:     "1500x+700y and 800x+1600y",
+		},
+		{
+			name:       "multi part exact accepts answers on separate lines",
+			answerType: "exact",
+			expected:   "(i) x + 5  (ii) 11",
+			actual:     "x + 5\n11",
+		},
+		{
+			name:       "ordinal range prompt accepts ordered lines without labels",
+			answerType: "exact",
+			expected:   "(i) -1 <= x <= 3, (ii) 1 <= x < 3, (iii) -1 < x < 3",
+			actual:     "-1 <= x <= 3\n1 <= x < 3\n-1 < x < 3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
+				{
+					ID:         "Q1",
+					Text:       "Structured answer",
+					AnswerType: tt.answerType,
+					Answer:     tt.expected,
+					Marks:      1,
+				},
+			})
+
+			result := session.SubmitAnswer(tt.actual)
+			if !result.Correct {
+				t.Fatalf("SubmitAnswer() should accept %q for %q", tt.actual, tt.expected)
+			}
+		})
+	}
+}
+
 func TestQuizSession_SubmitAnswer_WrongKeepsCurrentQuestion(t *testing.T) {
 	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
 		{
