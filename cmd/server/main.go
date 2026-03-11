@@ -153,7 +153,7 @@ func main() {
 			out.Text = chat.NormalizeTelegramMarkdown(resp)
 			out.ParseMode = "Markdown"
 			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
-			out.InlineKeyboard = chat.BuildTelegramInlineKeyboard(resp)
+			out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
 			out.Text = chat.StripReviewActionCodes(out.Text)
 		}
 		if strings.TrimSpace(out.Text) == "" {
@@ -199,6 +199,23 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
+	conv, found := store.GetActiveConversation(userID)
+	if !found || conv == nil {
+		return chat.TelegramInlineKeyboardContext{}
+	}
+
+	ctx := chat.TelegramInlineKeyboardContext{
+		QuizIntensityPending: conv.State == "quiz_intensity",
+		QuizActive:           conv.State == "quiz_active",
+	}
+	if conv.QuizState != nil && conv.QuizState.RunState == "paused" {
+		ctx.QuizPaused = true
+		ctx.QuizActive = false
+	}
+	return ctx
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
