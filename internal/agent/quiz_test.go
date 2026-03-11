@@ -150,6 +150,40 @@ func TestQuizSession_SubmitAnswer_StructuredAnswersAllowEquivalentFormatting(t *
 	}
 }
 
+func TestQuizSession_SubmitAnswer_StructuredAnswersRejectContradictoryExtraParts(t *testing.T) {
+	session := NewQuizSession("user-1", "F3-09", []QuizQuestion{
+		{
+			ID:         "Q1",
+			Text:       "State the gradient and y-intercept.",
+			AnswerType: "exact",
+			Answer:     "gradient = 3; y-intercept = -4",
+			Marks:      2,
+		},
+	})
+
+	result := session.SubmitAnswer("gradient = 0, gradient = 3, y-intercept = -4")
+	if result.Correct {
+		t.Fatal("SubmitAnswer() should reject structured answers with contradictory extra parts")
+	}
+}
+
+func TestQuizSession_SubmitAnswer_StructuredAnswersRejectWrongAssignmentLabels(t *testing.T) {
+	session := NewQuizSession("user-1", "F3-09", []QuizQuestion{
+		{
+			ID:         "Q1",
+			Text:       "State the gradient and y-intercept.",
+			AnswerType: "exact",
+			Answer:     "gradient = 3; y-intercept = -4",
+			Marks:      2,
+		},
+	})
+
+	result := session.SubmitAnswer("x=3, y=-4")
+	if result.Correct {
+		t.Fatal("SubmitAnswer() should reject unrelated assignment labels for structured answers")
+	}
+}
+
 func TestQuizSession_SubmitAnswer_WrongKeepsCurrentQuestion(t *testing.T) {
 	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
 		{
