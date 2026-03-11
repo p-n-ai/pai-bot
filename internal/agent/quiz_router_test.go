@@ -367,6 +367,44 @@ func TestEngine_ProcessMessage_QuizIntentWithExplicitIntensityStoresPreference(t
 	}
 }
 
+func TestEngine_ProcessMessage_MentionsQuizWithoutStartIntentStaysInTeaching(t *testing.T) {
+	mockAI := ai.NewMockProvider("Let me explain that quiz question step by step.")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	conversationID, err := store.CreateConversation(agent.Conversation{
+		UserID: "quiz-user-mention",
+		State:  "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if _, err := store.AddMessage(conversationID, agent.StoredMessage{
+		Role:    "assistant",
+		Content: "We are learning linear equations today.",
+	}); err != nil {
+		t.Fatalf("AddMessage() error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-user-mention",
+		Text:    "Can you explain this quiz question about linear equations?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if contains(resp, "Question 1/") {
+		t.Fatalf("did not expect quiz mode to start, got %q", resp)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("AI should be called for tutoring requests that merely mention quizzes")
+	}
+}
 func TestEngine_ProcessMessage_SideQuestionDuringQuizPausesWithoutGrading(t *testing.T) {
 	mockAI := ai.NewMockProvider("The weather looks clear today. Want to continue your quiz after this?")
 	store := agent.NewMemoryStore()

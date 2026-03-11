@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -134,6 +135,8 @@ func (s *QuizSession) Summary() QuizSummary {
 	}
 }
 
+var freeTextTokenPattern = regexp.MustCompile(`[a-z0-9+\-*/=^]+`)
+
 func gradeQuizAnswer(question QuizQuestion, answer string) bool {
 	expected := normalizeQuizAnswer(question.Answer)
 	actual := normalizeQuizAnswer(answer)
@@ -143,7 +146,7 @@ func gradeQuizAnswer(question QuizQuestion, answer string) bool {
 
 	switch question.AnswerType {
 	case "free_text":
-		return strings.Contains(actual, expected) || strings.Contains(expected, actual)
+		return gradeQuizFreeText(question.Answer, answer)
 	case "range":
 		return actual == expected
 	case "multiple_choice":
@@ -161,6 +164,89 @@ func matchingDistractorFeedback(question QuizQuestion, answer string) string {
 		}
 	}
 	return ""
+}
+
+func gradeQuizFreeText(expected, answer string) bool {
+	expectedTokens := tokenizeQuizFreeText(expected)
+	actualTokens := tokenizeQuizFreeText(answer)
+	if len(expectedTokens) == 0 || len(actualTokens) == 0 {
+		return false
+	}
+
+	matchIndex := containsTokenSequence(actualTokens, expectedTokens)
+	if matchIndex < 0 {
+		return false
+	}
+
+	return !hasFreeTextNegation(actualTokens, matchIndex)
+}
+
+func tokenizeQuizFreeText(value string) []string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.NewReplacer(
+		"’", "",
+		"'", "",
+		"−", "-",
+		"–", "-",
+	).Replace(normalized)
+	return freeTextTokenPattern.FindAllString(normalized, -1)
+}
+
+func containsTokenSequence(tokens, sequence []string) int {
+	if len(sequence) == 0 || len(tokens) < len(sequence) {
+		return -1
+	}
+	for start := 0; start <= len(tokens)-len(sequence); start++ {
+		matched := true
+		for i := range sequence {
+			if tokens[start+i] != sequence[i] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return start
+		}
+	}
+	return -1
+}
+
+func hasFreeTextNegation(tokens []string, matchIndex int) bool {
+	if matchIndex <= 0 {
+		return false
+	}
+
+	negations := map[string]struct{}{
+		"no":     {},
+		"not":    {},
+		"never":  {},
+		"tak":    {},
+		"takkan": {},
+		"tidak":  {},
+		"bukan":  {},
+		"jangan": {},
+		"aint":   {},
+		"isnt":   {},
+		"arent":  {},
+		"dont":   {},
+		"doesnt": {},
+		"didnt":  {},
+		"cannot": {},
+		"cant":   {},
+		"wont":   {},
+		"wrong":  {},
+	}
+
+	start := matchIndex - 2
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < matchIndex; i++ {
+		if _, found := negations[tokens[i]]; found {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeQuizAnswer(value string) string {

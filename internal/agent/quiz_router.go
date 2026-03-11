@@ -466,20 +466,74 @@ func detectQuizIntent(text string) bool {
 	if normalized == "" {
 		return false
 	}
+	switch normalized {
+	case "quiz", "kuiz", "latihan":
+		return true
+	}
 	phrases := []string{
 		"quiz me",
 		"give me a quiz",
 		"start a quiz",
+		"start quiz",
+		"can you quiz me",
+		"lets do a quiz",
+		"let's do a quiz",
+		"another quiz",
+		"new quiz",
 		"practice questions",
+		"give me practice questions",
+		"give me some practice questions",
 		"test me",
-		"kuiz",
-		"quiz",
+		"test me on",
+		"give me a test",
+		"start a test",
+		"kuiz saya",
+		"beri saya kuiz",
+		"bagi saya kuiz",
+		"bagi saya quiz",
 		"uji saya",
-		"latihan",
+		"uji saya tentang",
 		"soalan latihan",
+		"beri saya latihan",
+		"bagi saya latihan",
 	}
 	for _, phrase := range phrases {
 		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	if containsAny(normalized, "quiz", "kuiz") && containsAny(normalized,
+		"give me",
+		"another",
+		"new",
+		"lets do",
+		"let's do",
+		"bagi saya",
+		"beri saya",
+		"nak",
+		"mahu",
+		"mau",
+		"uji saya",
+		"test me",
+	) {
+		return true
+	}
+	if strings.Contains(normalized, "latihan") && containsAny(normalized,
+		"beri saya",
+		"bagi saya",
+		"soalan",
+		"nak",
+		"mahu",
+		"mau",
+	) {
+		return true
+	}
+	return false
+}
+
+func containsAny(text string, parts ...string) bool {
+	for _, part := range parts {
+		if strings.Contains(text, part) {
 			return true
 		}
 	}

@@ -140,27 +140,39 @@ func (s *PostgresStore) SetUserForm(externalID, form string) error {
 		return fmt.Errorf("external_id is required")
 	}
 	form = strings.TrimSpace(form)
-	if form == "" {
-		return nil
-	}
 
 	_, err := s.resolveOrCreateUser(ctx, externalID)
 	if err != nil {
 		return err
 	}
 
-	cmd, err := s.pool.Exec(ctx,
-		`UPDATE users
-		 SET form = $4,
-		     updated_at = NOW()
-		 WHERE tenant_id = $1::uuid
-		   AND channel = $2
-		   AND external_id = $3`,
-		s.tenantID,
-		s.channel,
-		externalID,
-		form,
-	)
+	var cmd pgconn.CommandTag
+	if form == "" {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET form = NULL,
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET form = $4,
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			form,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("set user form: %w", err)
 	}
@@ -200,27 +212,39 @@ func (s *PostgresStore) SetUserPreferredLanguage(externalID, lang string) error 
 	if externalID == "" {
 		return fmt.Errorf("external_id is required")
 	}
-	if lang == "" {
-		return nil
-	}
 
 	_, err := s.resolveOrCreateUser(ctx, externalID)
 	if err != nil {
 		return err
 	}
 
-	cmd, err := s.pool.Exec(ctx,
-		`UPDATE users
-		 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_language}', to_jsonb($4::text), true),
-		     updated_at = NOW()
-		 WHERE tenant_id = $1::uuid
-		   AND channel = $2
-		   AND external_id = $3`,
-		s.tenantID,
-		s.channel,
-		externalID,
-		lang,
-	)
+	var cmd pgconn.CommandTag
+	if lang == "" {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = COALESCE(config, '{}'::jsonb) - 'preferred_language',
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_language}', to_jsonb($4::text), true),
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			lang,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("set preferred language: %w", err)
 	}
