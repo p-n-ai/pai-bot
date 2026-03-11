@@ -28,7 +28,7 @@ func TestStreakTracker_FirstActivity(t *testing.T) {
 
 func TestStreakTracker_SameDayNoop(t *testing.T) {
 	tracker := progress.NewMemoryStreakTracker()
-	now := time.Now()
+	now := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
 
 	_ = tracker.RecordActivity("user1", now)
 	_ = tracker.RecordActivity("user1", now.Add(2*time.Hour))

@@ -26,6 +26,7 @@ const (
 	MsgOnboardingCompleted   Key = "onboarding_completed"
 	MsgLanguageChanged       Key = "language_changed"
 	MsgRatingThanks          Key = "rating_thanks"
+	MsgProfileReset          Key = "profile_reset"
 )
 
 var catalog = map[string]map[Key]string{
@@ -67,9 +68,10 @@ Anda boleh jawab bebas (contoh: English / BM / Chinese).`,
 - Tingkatan 3
 
 Tingkatan berapa anda sekarang?`,
-		MsgOnboardingCompleted:   "Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.",
-		MsgLanguageChanged:       "Bahasa telah ditukar ke Bahasa Melayu.",
-		MsgRatingThanks:          "Terima kasih atas rating anda. Jom kita sambung.",
+		MsgOnboardingCompleted: "Bagus, anda Tingkatan %d. Sekarang hantar topik atau soalan matematik yang anda mahu belajar.",
+		MsgLanguageChanged:     "Bahasa telah ditukar ke Bahasa Melayu.",
+		MsgRatingThanks:        "Terima kasih atas rating anda. Jom kita sambung.",
+		MsgProfileReset:        "Profil pembelajaran anda telah direset. Mari tetapkan semula.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -109,9 +111,10 @@ You can answer freely (example: English / BM / Chinese).`,
 - Form 3
 
 Which form are you in now?`,
-		MsgOnboardingCompleted:   "Great, you are Form %d. Send any math topic or question you want to learn now.",
-		MsgLanguageChanged:       "Language updated to English.",
-		MsgRatingThanks:          "Thanks for your rating. Let's continue.",
+		MsgOnboardingCompleted: "Great, you are Form %d. Send any math topic or question you want to learn now.",
+		MsgLanguageChanged:     "Language updated to English.",
+		MsgRatingThanks:        "Thanks for your rating. Let's continue.",
+		MsgProfileReset:        "Your learner profile has been reset. Let's set it up again.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -151,9 +154,10 @@ Which form are you in now?`,
 - Form 3
 
 你现在是几年级（中学）？`,
-		MsgOnboardingCompleted:   "好的，你现在是 Form %d。现在发你想学的数学题目或主题。",
-		MsgLanguageChanged:       "语言已切换为中文。",
-		MsgRatingThanks:          "谢谢你的评分。我们继续。",
+		MsgOnboardingCompleted: "好的，你现在是 Form %d。现在发你想学的数学题目或主题。",
+		MsgLanguageChanged:     "语言已切换为中文。",
+		MsgRatingThanks:        "谢谢你的评分。我们继续。",
+		MsgProfileReset:        "你的学习档案已重置。我们重新设置一次。",
 	},
 }
 

@@ -42,3 +42,48 @@ type Subject struct {
 	Name     string   `yaml:"name"`
 	TopicIDs []string `yaml:"topic_ids"`
 }
+
+// Assessment groups quiz questions for a topic.
+type Assessment struct {
+	TopicID    string               `yaml:"topic_id"`
+	Questions  []AssessmentQuestion `yaml:"questions"`
+	Provenance string               `yaml:"provenance"`
+}
+
+// AssessmentQuestion represents a single assessment item from OSS.
+type AssessmentQuestion struct {
+	ID                string                 `yaml:"id"`
+	Text              string                 `yaml:"text"`
+	Difficulty        string                 `yaml:"difficulty"`
+	LearningObjective string                 `yaml:"learning_objective"`
+	Answer            AssessmentAnswer       `yaml:"answer"`
+	Marks             int                    `yaml:"marks"`
+	Rubric            []AssessmentRubricItem `yaml:"rubric"`
+	Hints             []AssessmentHint       `yaml:"hints"`
+	Distractors       []AssessmentDistractor `yaml:"distractors"`
+}
+
+// AssessmentAnswer describes the expected answer format.
+type AssessmentAnswer struct {
+	Type    string `yaml:"type"`
+	Value   string `yaml:"value"`
+	Working string `yaml:"working"`
+}
+
+// AssessmentRubricItem describes one rubric line.
+type AssessmentRubricItem struct {
+	Marks    int    `yaml:"marks"`
+	Criteria string `yaml:"criteria"`
+}
+
+// AssessmentHint is a progressive hint.
+type AssessmentHint struct {
+	Level int    `yaml:"level"`
+	Text  string `yaml:"text"`
+}
+
+// AssessmentDistractor is an incorrect option with targeted feedback.
+type AssessmentDistractor struct {
+	Value    string `yaml:"value"`
+	Feedback string `yaml:"feedback"`
+}

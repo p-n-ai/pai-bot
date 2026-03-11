@@ -15,6 +15,7 @@ import (
 type Loader struct {
 	rootDir       string
 	topics        map[string]Topic
+	assessments   map[string]Assessment
 	teachingNotes map[string]string
 	mu            sync.RWMutex
 }
@@ -24,6 +25,7 @@ func NewLoader(rootDir string) (*Loader, error) {
 	l := &Loader{
 		rootDir:       rootDir,
 		topics:        make(map[string]Topic),
+		assessments:   make(map[string]Assessment),
 		teachingNotes: make(map[string]string),
 	}
 
@@ -51,6 +53,14 @@ func (l *Loader) GetTeachingNotes(id string) (string, bool) {
 	return n, ok
 }
 
+// GetAssessment returns an assessment by topic ID.
+func (l *Loader) GetAssessment(topicID string) (Assessment, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	assessment, ok := l.assessments[topicID]
+	return assessment, ok
+}
+
 // AllTopics returns all loaded topics.
 func (l *Loader) AllTopics() []Topic {
 	l.mu.RLock()
@@ -71,14 +81,20 @@ func (l *Loader) loadAll() error {
 		switch {
 		case strings.HasSuffix(path, ".teaching.md"):
 			return l.loadTeachingNotes(path)
+		case isAssessmentPath(path):
+			return l.loadAssessment(path)
 		case strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"):
-			if strings.HasSuffix(path, ".assessments.yaml") || strings.HasSuffix(path, ".examples.yaml") {
+			if strings.HasSuffix(path, ".examples.yaml") {
 				return nil // Skip non-topic YAML
 			}
 			return l.loadTopic(path)
 		}
 		return nil
 	})
+}
+
+func isAssessmentPath(path string) bool {
+	return strings.HasSuffix(path, ".assessments.yaml") || strings.HasSuffix(path, ".assessments.yml")
 }
 
 func (l *Loader) loadTopic(path string) error {
@@ -128,5 +144,27 @@ func (l *Loader) loadTeachingNotes(path string) error {
 	l.teachingNotes[partial.ID] = string(data)
 	l.mu.Unlock()
 
+	return nil
+}
+
+func (l *Loader) loadAssessment(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var assessment Assessment
+	if err := yaml.Unmarshal(data, &assessment); err != nil {
+		slog.Warn("skipping invalid assessment YAML", "path", path, "error", err)
+		return nil
+	}
+
+	if assessment.TopicID == "" || len(assessment.Questions) == 0 {
+		return nil
+	}
+
+	l.mu.Lock()
+	l.assessments[assessment.TopicID] = assessment
+	l.mu.Unlock()
 	return nil
 }

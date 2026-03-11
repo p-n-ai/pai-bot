@@ -79,6 +79,29 @@ func TestEngine_ProcessMessage_StartCommand_UsesFirstName(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_PersistsIncomingName(t *testing.T) {
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+		Store:    store,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:   "telegram",
+		UserID:    "u-profile-name",
+		Text:      "/start",
+		FirstName: "Aina",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	name, ok := store.GetUserName("u-profile-name")
+	if !ok || name != "Aina" {
+		t.Fatalf("GetUserName() = %q, %v, want Aina, true", name, ok)
+	}
+}
+
 func TestEngine_ProcessMessage_StartCommand_FallbackName(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter: mockRouter(ai.NewMockProvider("")),
@@ -428,6 +451,11 @@ func TestEngine_Onboarding_SelectionTransitionsToTeaching(t *testing.T) {
 		t.Fatalf("conversation state = %q, want teaching", conv.State)
 	}
 
+	form, ok := store.GetUserForm("onboard-user-2")
+	if !ok || form != "2" {
+		t.Fatalf("GetUserForm() = %q, %v, want 2, true", form, ok)
+	}
+
 	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram", UserID: "onboard-user-2", Text: "Apa itu algebra?",
 	})
@@ -677,6 +705,111 @@ func TestEngine_ProcessMessage_ClearCommand(t *testing.T) {
 	}
 }
 
+func TestEngine_ClearRefreshesQuizIntensityState(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	if err := store.SetUserForm("clear-quiz-user", "2"); err != nil {
+		t.Fatalf("SetUserForm() error = %v", err)
+	}
+	if err := store.SetUserPreferredQuizIntensity("clear-quiz-user", "hard"); err != nil {
+		t.Fatalf("SetUserPreferredQuizIntensity() error = %v", err)
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "clear-quiz-user",
+		Text:    "/clear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/clear) error = %v", err)
+	}
+
+	if intensity, ok := store.GetUserPreferredQuizIntensity("clear-quiz-user"); ok || intensity != "" {
+		t.Fatalf("GetUserPreferredQuizIntensity() = %q, %v, want empty, false", intensity, ok)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "clear-quiz-user",
+		Text:    "quiz me on linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(quiz) error = %v", err)
+	}
+	if !contains(resp, "Question 1/3") {
+		t.Fatalf("expected quiz to restart immediately after /clear, got %q", resp)
+	}
+	form, ok := store.GetUserForm("clear-quiz-user")
+	if !ok || form != "2" {
+		t.Fatalf("GetUserForm() = %q, %v, want 2, true", form, ok)
+	}
+}
+
+func TestEngine_ResetProfileClearsLearnerManagedFieldsAndRestartsOnboarding(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	if err := store.SetUserName("reset-profile-user", "Aina"); err != nil {
+		t.Fatalf("SetUserName() error = %v", err)
+	}
+	if err := store.SetUserForm("reset-profile-user", "2"); err != nil {
+		t.Fatalf("SetUserForm() error = %v", err)
+	}
+	if err := store.SetUserPreferredLanguage("reset-profile-user", "en"); err != nil {
+		t.Fatalf("SetUserPreferredLanguage() error = %v", err)
+	}
+	if err := store.SetUserPreferredQuizIntensity("reset-profile-user", "hard"); err != nil {
+		t.Fatalf("SetUserPreferredQuizIntensity() error = %v", err)
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:   "telegram",
+		UserID:    "reset-profile-user",
+		Text:      "/reset-profile",
+		FirstName: "Aina",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/reset-profile) error = %v", err)
+	}
+	if !contains(resp, "profile has been reset") {
+		t.Fatalf("expected reset confirmation, got %q", resp)
+	}
+	if !contains(resp, "Bahasa pilihan anda") {
+		t.Fatalf("expected onboarding restart, got %q", resp)
+	}
+	if form, ok := store.GetUserForm("reset-profile-user"); ok || form != "" {
+		t.Fatalf("GetUserForm() = %q, %v, want empty, false", form, ok)
+	}
+	if lang, ok := store.GetUserPreferredLanguage("reset-profile-user"); ok || lang != "" {
+		t.Fatalf("GetUserPreferredLanguage() = %q, %v, want empty, false", lang, ok)
+	}
+	if intensity, ok := store.GetUserPreferredQuizIntensity("reset-profile-user"); ok || intensity != "" {
+		t.Fatalf("GetUserPreferredQuizIntensity() = %q, %v, want empty, false", intensity, ok)
+	}
+	name, ok := store.GetUserName("reset-profile-user")
+	if !ok || name != "Aina" {
+		t.Fatalf("GetUserName() = %q, %v, want Aina, true", name, ok)
+	}
+	conv, found := store.GetActiveConversation("reset-profile-user")
+	if !found {
+		t.Fatal("expected active onboarding conversation")
+	}
+	if conv.State != "onboarding_language" {
+		t.Fatalf("conversation state = %q, want onboarding_language", conv.State)
+	}
+}
+
 func TestEngine_SystemPrompt_HasImageFollowUpReplyGuidance(t *testing.T) {
 	mockAI := ai.NewMockProvider("ok")
 
@@ -767,7 +900,7 @@ func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testi
 	if !contains(systemPrompt, "F1-02") {
 		t.Fatalf("expected topic ID in system prompt, got: %s", systemPrompt)
 	}
-	if !contains(systemPrompt, "subtract 5 on both sides") {
+	if !contains(systemPrompt, "Treat the equation like a balance") {
 		t.Fatalf("expected teaching notes in system prompt, got: %s", systemPrompt)
 	}
 }
@@ -1941,9 +2074,63 @@ learning_objectives:
 	}
 
 	notesPath := filepath.Join(topicsDir, "01-linear-equations.teaching.md")
-	notes := "# Linear Equations Teaching Notes\nUse balance method and subtract 5 on both sides."
+	notes := `# Linear Equations Teaching Notes
+
+## Core idea
+Treat the equation like a balance. Whatever you do on one side, do the same on the other side.
+
+## First move
+Undo addition or subtraction before you undo multiplication or division.
+
+## Common check
+Always substitute the final value back into the original equation to verify it.`
 	if err := os.WriteFile(notesPath, []byte(notes), 0o644); err != nil {
 		t.Fatalf("WriteFile(notes) error = %v", err)
+	}
+
+	assessmentPath := filepath.Join(topicsDir, "01-linear-equations.assessments.yaml")
+	assessment := `topic_id: F1-02
+provenance: human
+questions:
+  - id: Q1
+    text: "Solve the equation x + 3 = 7. What value of x makes the statement true? Reply with the number only."
+    difficulty: easy
+    learning_objective: LO1
+    answer:
+      type: exact
+      value: "4"
+      working: "Subtract 3 from both sides so that x = 7 - 3, which gives x = 4."
+    marks: 1
+    hints:
+      - level: 1
+        text: "Undo the +3 first by subtracting 3 from both sides."
+  - id: Q2
+    text: "A classmate says x = 4 solves x + 3 = 7. Explain briefly why that is correct by substituting the value back into the equation."
+    difficulty: medium
+    learning_objective: LO1
+    answer:
+      type: free_text
+      value: "4+3=7"
+      working: "Substitute x = 4 into the original equation. You get 4 + 3 = 7, so the statement is true."
+    marks: 2
+    hints:
+      - level: 1
+        text: "Replace x with 4 and check whether the left-hand side becomes 7."
+  - id: Q3
+    text: "Solve the linear equation: (2x - 3) / 5 = 7. Work through the inverse operations carefully and reply with the value of x."
+    difficulty: hard
+    learning_objective: LO1
+    answer:
+      type: exact
+      value: "19"
+      working: "Multiply both sides by 5 to get 2x - 3 = 35, add 3 to get 2x = 38, then divide by 2 to get x = 19."
+    marks: 3
+    hints:
+      - level: 1
+        text: "Clear the denominator first by multiplying both sides by 5."
+`
+	if err := os.WriteFile(assessmentPath, []byte(assessment), 0o644); err != nil {
+		t.Fatalf("WriteFile(assessment) error = %v", err)
 	}
 
 	loader, err := curriculum.NewLoader(dir)

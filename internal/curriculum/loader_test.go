@@ -70,6 +70,29 @@ func TestLoader_GetTeachingNotes(t *testing.T) {
 	}
 }
 
+func TestLoader_GetAssessment(t *testing.T) {
+	dir := setupTestCurriculum(t)
+
+	loader, err := curriculum.NewLoader(dir)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+
+	assessment, found := loader.GetAssessment("F1-01")
+	if !found {
+		t.Fatal("GetAssessment(F1-01) not found")
+	}
+	if assessment.TopicID != "F1-01" {
+		t.Fatalf("assessment.TopicID = %q, want F1-01", assessment.TopicID)
+	}
+	if len(assessment.Questions) != 2 {
+		t.Fatalf("len(assessment.Questions) = %d, want 2", len(assessment.Questions))
+	}
+	if assessment.Questions[0].Answer.Type != "exact" {
+		t.Fatalf("assessment.Questions[0].Answer.Type = %q, want exact", assessment.Questions[0].Answer.Type)
+	}
+}
+
 func TestLoader_SkipsNonTopicYAML(t *testing.T) {
 	dir := setupTestCurriculum(t)
 
@@ -91,6 +114,14 @@ questions:
 	topics := loader.AllTopics()
 	if len(topics) != 1 {
 		t.Errorf("AllTopics() = %d topics, want 1 (assessment YAML should be skipped)", len(topics))
+	}
+
+	assessment, found := loader.GetAssessment("F1-01")
+	if !found {
+		t.Fatal("assessment should still be loaded")
+	}
+	if len(assessment.Questions) != 1 {
+		t.Fatalf("len(assessment.Questions) = %d, want 1", len(assessment.Questions))
 	}
 }
 
@@ -170,6 +201,42 @@ This topic introduces the concept of using letters to represent unknown values.
 | Misconception | Remediation |
 |---|---|
 | 3x means "3 and x" not "3 times x" | Use multiplication sign explicitly first |
+`), 0o644)
+
+	// Assessment YAML
+	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.assessments.yaml"), []byte(`
+topic_id: F1-01
+provenance: human
+questions:
+  - id: Q1
+    text: "Evaluate the expression 3x when x = 2. Reply with the final value only."
+    difficulty: easy
+    learning_objective: LO1
+    answer:
+      type: exact
+      value: "6"
+      working: "Substitute x = 2, then multiply 3 by 2 to get 6."
+    marks: 1
+    hints:
+      - level: 1
+        text: "Replace x with 2 before you do the multiplication."
+  - id: Q2
+    text: "Is the value of x fixed or can it vary? Explain briefly in one sentence."
+    difficulty: medium
+    learning_objective: LO2
+    answer:
+      type: free_text
+      value: "varied"
+      working: "The value can change depending on the situation or problem being described."
+    marks: 2
+    rubric:
+      - marks: 1
+        criteria: "States that the value is varied."
+      - marks: 1
+        criteria: "Gives a brief valid explanation."
+    hints:
+      - level: 1
+        text: "Think about whether a variable must keep one value forever."
 `), 0o644)
 
 	return dir

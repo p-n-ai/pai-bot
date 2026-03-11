@@ -4083,12 +4083,18 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 
 **Entry criteria:** Day 6 complete. Progress tracking works. `make test-all` passes.
 
+**Current code note (March 11, 2026):** natural-language quiz start is already implemented in code and no longer requires `/quiz`. Current runtime starts the first quiz immediately with a default mixed intensity instead of blocking on an intensity prompt, persists explicit per-user quiz intensity preferences, feeds quiz outcomes into the existing progress/XP trackers instead of treating quiz as a separate side flow, and now pauses/resumes quiz state cleanly when the learner temporarily detours into normal conversation or asks for teaching help first.
+
+Profile reset note: `/clear` resets conversation/runtime state only. `/reset-profile` clears learner-managed profile fields (`form`, preferred language, preferred quiz intensity) and restarts onboarding.
+
+For the runtime explanation and design rationale, see [quiz-mode.md](quiz-mode.md).
+
 #### Tasks
 
 | # | Task ID | Task | Owner | Files Created |
 |---|---------|------|-------|---------------|
-| 7.1 | `P-W2D7-1` | `/quiz` command: load questions, present sequentially, AI-grade, hints, summary | 🤖 | `internal/agent/quiz.go` |
-| 7.2 | `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge) | 🤖 | Update `internal/agent/engine.go` |
+| 7.1 | `P-W2D7-1` | Natural-language or button-driven quiz entry: load OSS-backed questions, present sequentially, deterministic grade/hint/summary loop | 🤖 | `internal/agent/quiz.go` |
+| 7.2 | `P-W2D7-2` | Quiz state routing: persisted conversation mode routes turns to chat vs quiz before tutor AI | 🤖 | Update `internal/agent/engine.go` |
 | 7.3 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway for structured grading responses | 🤖 | Update `internal/ai/gateway.go` |
 | 7.4 | `P-W2D7-4` | 🧑 Review all KSSM Algebra assessments for accuracy | 🧑 | Manual |
 
@@ -4328,7 +4334,7 @@ func (s *QuizSession) IsComplete() bool {
 - [ ] `internal/agent/quiz.go` + tests — quiz engine with questions, answers, hints, distractors
 - [ ] Session mode routing: chat vs quiz vs challenge
 - [ ] `CompleteJSON` added to AI gateway for structured grading
-- [ ] `/quiz` command loads questions and presents sequentially
+- [ ] Quiz can start from natural-language intent or button callback without requiring `/quiz`
 - [ ] 🧑 KSSM Algebra assessments reviewed for accuracy
 - [ ] `make test-all` passes
 
@@ -5089,9 +5095,9 @@ echo ""
 | 4 | 7 | ✅ | /start | 10 | Session management + ratings |
 | 5 | 7 | ✅ | /start | 10 | Week 1 retro |
 | 6 | 8 | ✅ | /start, /progress | 50 | Mastery tracking + SM-2 |
-| 7 | 8 | ✅ | /start, /progress, /quiz | 50 | Quiz engine |
-| 8 | 8 | ✅ | /start, /progress, /quiz | 50 | Streaks + XP + nudges |
-| 9 | 8 | ✅ | /start, /progress, /quiz, /learn | 50 | Topic navigation |
+| 7 | 8 | ✅ | /start, /progress, natural quiz entry | 50 | Quiz engine |
+| 8 | 8 | ✅ | /start, /progress, natural quiz entry | 50 | Streaks + XP + nudges |
+| 9 | 8 | ✅ | /start, /progress, natural quiz entry, /learn | 50 | Topic navigation |
 | 10 | 8 | ✅ | all Week 2 | 50 | Week 2 retro |
 | 11 | 8 | ✅ | + /goal, /challenge | 80 | Goals + peer battles |
 | 12 | 8 | ✅ | + /join, /leaderboard | 80 | Groups + leaderboards |

@@ -10,6 +10,8 @@
 
 P&AI Bot is a **modular monolith** — a single deployable Go binary with internally clean domain boundaries that can be split into microservices when specific domains need independent scaling. This gives early-stage development speed (fast iteration, one deployment, easy debugging) while maintaining the option to decompose later.
 
+For the current quiz runtime design and the OpenClaw-inspired rationale behind it, see [quiz-mode.md](quiz-mode.md).
+
 ### System Architecture Diagram
 
 ![System Architecture](architecture-overview.svg)

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 
-	"strconv"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -52,6 +52,7 @@ type Engine struct {
 	aiRouter              *ai.Router
 	store                 ConversationStore
 	eventLogger           EventLogger
+	curriculumLoader      *curriculum.Loader
 	contextResolver       ContextResolver
 	compactThreshold      int
 	compactTokenThreshold int
@@ -102,6 +103,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
 		eventLogger:           eventLogger,
+		curriculumLoader:      cfg.CurriculumLoader,
 		contextResolver:       contextResolver,
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
@@ -121,6 +123,8 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		"user_id", msg.UserID,
 		"text_len", len(msg.Text),
 	)
+
+	e.maybePersistUserProfile(msg)
 
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
@@ -152,6 +156,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return e.handleLanguageSelection(msg, conv), nil
 	}
 	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
+		return response, nil
+	}
+	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
 		return response, nil
 	}
 
@@ -520,8 +527,15 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 		e.endActiveConversation(msg.UserID)
 		return e.handleStart(msg.UserID, msg)
 	case "/clear":
-		e.endActiveConversation(msg.UserID)
+		e.clearUserRuntimeState(msg.UserID)
 		return i18n.S(locale, i18n.MsgHistoryCleared), nil
+	case "/reset-profile":
+		e.resetLearnerProfile(msg.UserID)
+		onboarding, err := e.handleStart(msg.UserID, msg)
+		if err != nil {
+			return "", err
+		}
+		return i18n.S(locale, i18n.MsgProfileReset) + "\n\n" + onboarding, nil
 	case "/language":
 		return e.handleLanguageCommand(msg, fields[1:])
 	case "/progress":
@@ -632,6 +646,26 @@ func (e *Engine) endActiveConversation(userID string) {
 	}
 }
 
+func (e *Engine) clearUserRuntimeState(userID string) {
+	e.endActiveConversation(userID)
+	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
+		slog.Error("failed to clear quiz intensity preference", "user_id", userID, "error", err)
+	}
+}
+
+func (e *Engine) resetLearnerProfile(userID string) {
+	e.endActiveConversation(userID)
+	if err := e.store.SetUserForm(userID, ""); err != nil {
+		slog.Error("failed to clear learner form", "user_id", userID, "error", err)
+	}
+	if err := e.store.SetUserPreferredLanguage(userID, ""); err != nil {
+		slog.Error("failed to clear learner language", "user_id", userID, "error", err)
+	}
+	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
+		slog.Error("failed to clear learner quiz intensity", "user_id", userID, "error", err)
+	}
+}
+
 func (e *Engine) supportsAutoStartLookup() bool {
 	// MemoryStore does not model a durable user directory; using auto-start in tests/dev
 	// would hijack many normal chat-path tests. Enable this behavior for persistent stores.
@@ -665,6 +699,26 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 	}
 
 	return i18n.S(locale, i18n.MsgStartOnboardingLang, name), nil
+}
+
+func (e *Engine) maybePersistUserProfile(msg chat.InboundMessage) {
+	if msg.UserID == "" {
+		return
+	}
+	name := preferredIncomingName(msg)
+	if name != "" {
+		if err := e.store.SetUserName(msg.UserID, name); err != nil {
+			slog.Error("failed to persist user name", "user_id", msg.UserID, "error", err)
+		}
+	}
+}
+
+func preferredIncomingName(msg chat.InboundMessage) string {
+	name := strings.TrimSpace(msg.FirstName)
+	if name != "" {
+		return name
+	}
+	return strings.TrimSpace(msg.Username)
 }
 
 func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.InboundMessage, conv *Conversation) string {
@@ -730,6 +784,10 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 
 	if err := e.store.UpdateConversationState(conv.ID, "teaching"); err != nil {
 		slog.Error("failed to update conversation state", "conversation_id", conv.ID, "error", err)
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
+	if err := e.store.SetUserForm(msg.UserID, strconv.Itoa(form)); err != nil {
+		slog.Error("failed to persist user form", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
 
@@ -1000,6 +1058,9 @@ var reviewActionPattern = regexp.MustCompile(`\[\[PAI_REVIEW(?::([A-Za-z0-9-]+))
 func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversation) (string, bool) {
 	awaitingRating := isAwaitingRating(conv)
 	fromInlineCallback := msg.Channel == "telegram" && msg.CallbackQueryID != ""
+	if fromInlineCallback && !looksLikeRatingCallback(msg.Text) {
+		return "", false
+	}
 	if !awaitingRating && !fromInlineCallback {
 		return "", false
 	}
@@ -1050,6 +1111,14 @@ func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversat
 	}
 
 	return thanksText, true
+}
+
+func looksLikeRatingCallback(text string) bool {
+	if strings.HasPrefix(strings.TrimSpace(text), "rating:") {
+		return true
+	}
+	_, _, ok := parseRatingCallbackDataForEngine(text)
+	return ok
 }
 
 func isAwaitingRating(conv *Conversation) bool {
