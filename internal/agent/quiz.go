@@ -135,7 +135,20 @@ func (s *QuizSession) Summary() QuizSummary {
 	}
 }
 
-var freeTextTokenPattern = regexp.MustCompile(`[a-z0-9+\-*/=^]+`)
+var (
+	freeTextTokenPattern            = regexp.MustCompile(`[a-z0-9+\-*/=^]+`)
+	structuredOrdinalLabelPattern   = regexp.MustCompile(`(?i)\(([ivx]+|[a-z])\)`)
+	structuredOrdinalPrefixPattern  = regexp.MustCompile(`(?i)^\s*\(?([ivx]+|[a-z])\)?[.)]\s*`)
+	structuredAndSeparatorPattern   = regexp.MustCompile(`(?i)\s+\band\b\s+`)
+	structuredAssignmentPattern     = regexp.MustCompile(`(?i)^\s*([a-z])\s*=\s*`)
+	structuredAssignmentListPattern = regexp.MustCompile(`(?i)\b[a-z]\s*=\s*[^,;\n]+,\s*[a-z]\s*=`)
+	structuredNamedFieldPattern     = regexp.MustCompile(`(?i)^\s*(base|index|gradient|y[\s-]?intercept|intercept)\s*(?:is|=|:)?\s*`)
+)
+
+type structuredQuizFragment struct {
+	label string
+	value string
+}
 
 func gradeQuizAnswer(question QuizQuestion, answer string) bool {
 	expected := normalizeQuizAnswer(question.Answer)
@@ -143,13 +156,24 @@ func gradeQuizAnswer(question QuizQuestion, answer string) bool {
 	if expected == "" || actual == "" {
 		return false
 	}
+	if actual == expected {
+		return true
+	}
 
 	switch question.AnswerType {
 	case "free_text":
+		if gradeStructuredQuizAnswer(question.Answer, answer) {
+			return true
+		}
 		return gradeQuizFreeText(question.Answer, answer)
 	case "range":
 		return actual == expected
 	case "multiple_choice":
+		return actual == expected
+	case "exact":
+		if gradeStructuredQuizAnswer(question.Answer, answer) {
+			return true
+		}
 		return actual == expected
 	default:
 		return actual == expected
@@ -260,6 +284,181 @@ func normalizeQuizAnswer(value string) string {
 		"=", "",
 	)
 	return replacer.Replace(normalized)
+}
+
+func gradeStructuredQuizAnswer(expected, answer string) bool {
+	if !looksStructuredQuizAnswer(expected) {
+		return false
+	}
+
+	expectedParts := splitStructuredQuizAnswer(expected)
+	actualParts := splitStructuredQuizAnswer(answer)
+	if len(expectedParts) < 2 || len(actualParts) != len(expectedParts) {
+		return false
+	}
+
+	for i := range expectedParts {
+		if !structuredQuizFragmentMatches(expectedParts[i], actualParts[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func looksStructuredQuizAnswer(value string) bool {
+	normalized := strings.ToLower(value)
+	if strings.Contains(normalized, ";") || strings.Contains(normalized, "\n") {
+		return true
+	}
+	if structuredOrdinalLabelPattern.MatchString(normalized) {
+		return true
+	}
+	if strings.Contains(normalized, "base") || strings.Contains(normalized, "index") ||
+		strings.Contains(normalized, "gradient") || strings.Contains(normalized, "intercept") {
+		return true
+	}
+	return structuredAssignmentListPattern.MatchString(normalized)
+}
+
+func splitStructuredQuizAnswer(value string) []structuredQuizFragment {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	if labeled := splitStructuredQuizAnswerByLabels(value); len(labeled) >= 2 {
+		return labeled
+	}
+
+	normalized := strings.ReplaceAll(value, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\n", ";")
+	normalized = structuredAndSeparatorPattern.ReplaceAllString(normalized, ";")
+
+	if structuredAssignmentListPattern.MatchString(normalized) {
+		normalized = strings.ReplaceAll(normalized, ",", ";")
+	}
+
+	rawParts := strings.Split(normalized, ";")
+	parts := make([]structuredQuizFragment, 0, len(rawParts))
+	for _, raw := range rawParts {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if strings.Contains(raw, ",") && !strings.ContainsAny(raw, "()") {
+			for _, nested := range strings.Split(raw, ",") {
+				appendStructuredQuizPart(&parts, nested)
+			}
+			continue
+		}
+		appendStructuredQuizPart(&parts, raw)
+	}
+	return parts
+}
+
+func splitStructuredQuizAnswerByLabels(value string) []structuredQuizFragment {
+	matches := structuredOrdinalLabelPattern.FindAllStringIndex(value, -1)
+	if len(matches) < 2 {
+		return nil
+	}
+
+	parts := make([]structuredQuizFragment, 0, len(matches))
+	for i, match := range matches {
+		start := match[1]
+		end := len(value)
+		if i+1 < len(matches) {
+			end = matches[i+1][0]
+		}
+		appendStructuredQuizPart(&parts, value[start:end])
+	}
+	return parts
+}
+
+func appendStructuredQuizPart(parts *[]structuredQuizFragment, raw string) {
+	part := parseStructuredQuizFragment(raw)
+	if part.value != "" {
+		*parts = append(*parts, part)
+	}
+}
+
+func parseStructuredQuizFragment(value string) structuredQuizFragment {
+	value = strings.TrimSpace(value)
+	value = strings.Trim(value, ";,")
+	value = structuredOrdinalPrefixPattern.ReplaceAllString(value, "")
+
+	label := ""
+	if matches := structuredNamedFieldPattern.FindStringSubmatch(value); len(matches) > 1 {
+		label = canonicalStructuredQuizLabel(matches[1])
+		value = value[len(matches[0]):]
+	} else if matches := structuredAssignmentPattern.FindStringSubmatch(value); len(matches) > 1 {
+		label = canonicalStructuredQuizAssignmentLabel(matches[1])
+		value = value[len(matches[0]):]
+	}
+
+	value = strings.TrimSpace(value)
+	value = strings.Trim(value, "[]()")
+	value = normalizeStructuredQuizValue(value)
+	if value == "" {
+		return structuredQuizFragment{}
+	}
+	return structuredQuizFragment{
+		label: label,
+		value: value,
+	}
+}
+
+func canonicalStructuredQuizLabel(label string) string {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "gradient":
+		return "gradient"
+	case "base":
+		return "base"
+	case "index":
+		return "index"
+	case "intercept", "y-intercept", "y intercept":
+		return "intercept"
+	default:
+		return strings.ToLower(strings.TrimSpace(label))
+	}
+}
+
+func canonicalStructuredQuizAssignmentLabel(label string) string {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "m":
+		return "gradient"
+	case "c":
+		return "intercept"
+	default:
+		return strings.ToLower(strings.TrimSpace(label))
+	}
+}
+
+func normalizeStructuredQuizValue(value string) string {
+	replacer := strings.NewReplacer(
+		" ", "",
+		"\n", "",
+		"\t", "",
+		"=", "",
+		":", "",
+		"−", "-",
+		"–", "-",
+		"≤", "<=",
+		"≥", ">=",
+		"\\leq", "<=",
+		"\\geq", ">=",
+	)
+	return strings.ToLower(replacer.Replace(value))
+}
+
+func structuredQuizFragmentMatches(expected, actual structuredQuizFragment) bool {
+	if expected.value != actual.value {
+		return false
+	}
+	if expected.label == "" {
+		return actual.label == ""
+	}
+	return actual.label == "" || actual.label == expected.label
 }
 
 func questionsFromAssessment(assessment curriculum.Assessment) []QuizQuestion {

@@ -244,6 +244,7 @@ That means:
 - wrong answers keep the learner on the same question
 - hints come from assessment data
 - completion summary is generated without an LLM
+- structured multi-part OSS answers can be matched across common equivalent formats instead of one exact phrasing
 
 This is cheaper, faster, and more stable than using the tutor model for every quiz turn.
 
