@@ -102,9 +102,7 @@ jobs:
 
             echo "--- Running migrations ---"
             sleep 3
-            for f in migrations/*.up.sql; do
-              docker exec -i pai-bot-postgres-1 psql -U pai -d pai < "$f" 2>&1 || true
-            done
+            docker exec pai-bot-app-1 migrate -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up
 
             echo "--- Starting all services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
