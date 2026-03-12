@@ -59,3 +59,4 @@ output/
 # Secrets
 *.pem
 *.key
+.env.secret

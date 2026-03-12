@@ -56,6 +56,35 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  admin:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.admin
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    depends_on:
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    env_file:
+      - .env
+    depends_on:
+      - app
+      - admin
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -69,4 +98,6 @@ volumes:
   postgres-data:
   dragonfly-data:
   nats-data:
+  caddy_data:
+  caddy_config:
   ollama-data:
