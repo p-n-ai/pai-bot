@@ -113,7 +113,7 @@ jobs:
             sleep 5
 
             echo "--- Health check ---"
-            curl -sf --max-time 10 http://localhost:8080/healthz
+            curl -sf --max-time 10 http://localhost/healthz
 
             echo "--- Container status ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
