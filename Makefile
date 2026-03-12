@@ -1,4 +1,4 @@
-.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
+.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate seed seed-docker build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
 
 # First-time setup
 setup:
@@ -41,6 +41,12 @@ migrate:
 		echo "Applying $$f"; \
 		docker exec -i $$(docker compose ps -q postgres) psql -U pai -d pai < $$f || exit 1; \
 	done
+
+seed:
+	go run ./cmd/seed
+
+seed-docker:
+	docker compose exec app /pai-seed
 
 # Build
 build:

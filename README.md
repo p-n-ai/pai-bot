@@ -93,6 +93,20 @@ docker compose up -d
 
 This starts: PostgreSQL, Dragonfly (cache), NATS (messaging), the Go server, and the admin panel.
 
+If you want demo rows in PostgreSQL for local testing, run:
+
+```bash
+make seed
+```
+
+If the app is running in Docker, seed through the app container instead:
+
+```bash
+make seed-docker
+```
+
+When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`.
+
 ### 3. Pull a free AI model (optional)
 
 If using Ollama for free self-hosted AI:
@@ -426,6 +440,12 @@ docker compose up -d postgres dragonfly nats ollama
 # Run database migrations
 make migrate
 
+# Seed demo data (optional)
+make seed
+
+# Or, if the app itself is running in Docker
+make seed-docker
+
 # Start the Go server with hot reload
 make dev
 
@@ -483,6 +503,8 @@ make start        # Start all services via Docker Compose
 make stop         # Stop all services
 make logs         # Tail application logs
 make migrate      # Run database migrations
+make seed         # Seed demo tenant/users/messages/progress/events
+make seed-docker  # Seed through the running app container
 make analytics    # Print quick metrics from the database
 make analytics-xlsx   # Export a styled Excel workbook to output/spreadsheet/
 make analytics-example  # Generate a sample Excel workbook without a database
