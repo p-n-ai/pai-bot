@@ -81,13 +81,15 @@ func demoStatements(tenantID string) []string {
 		fmt.Sprintf(`
 INSERT INTO users (id, tenant_id, role, name, external_id, channel, form, config)
 VALUES
-('10000000-0000-0000-0000-000000000001', '%[1]s', 'teacher', 'Aisyah Teacher', 'teacher-aisyah', 'telegram', 'Form 1', '{"subject":"Matematik"}'::jsonb),
-('10000000-0000-0000-0000-000000000002', '%[1]s', 'student', 'Aiman', 'student-aiman', 'telegram', 'Form 1', '{"preferred_language":"bm"}'::jsonb),
-('10000000-0000-0000-0000-000000000003', '%[1]s', 'student', 'Mei Lin', 'student-meilin', 'telegram', 'Form 2', '{"preferred_language":"en"}'::jsonb),
-('10000000-0000-0000-0000-000000000004', '%[1]s', 'student', 'Kumar', 'student-kumar', 'telegram', 'Form 3', '{"preferred_language":"bm"}'::jsonb),
-('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent-farah', 'telegram', NULL, '{"children":["Aiman"]}'::jsonb)
+('10000000-0000-0000-0000-000000000001', '%[1]s', 'teacher', 'Aisyah Teacher', 'teacher_1', 'telegram', 'Form 1', '{"subject":"Matematik"}'::jsonb),
+('10000000-0000-0000-0000-000000000002', '%[1]s', 'student', 'Alya Sofea', 'stu_1', 'telegram', 'Form 1', '{"preferred_language":"bm"}'::jsonb),
+('10000000-0000-0000-0000-000000000003', '%[1]s', 'student', 'Hakim Firdaus', 'stu_2', 'telegram', 'Form 1', '{"preferred_language":"en"}'::jsonb),
+('10000000-0000-0000-0000-000000000004', '%[1]s', 'student', 'Mei Lin', 'stu_3', 'telegram', 'Form 2', '{"preferred_language":"bm"}'::jsonb),
+('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent_1', 'telegram', NULL, '{"children":["stu_1"]}'::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
+    external_id = EXCLUDED.external_id,
+    channel = EXCLUDED.channel,
     form = EXCLUDED.form,
     config = EXCLUDED.config,
     updated_at = NOW()
@@ -121,9 +123,18 @@ SET content = EXCLUDED.content,
 		fmt.Sprintf(`
 INSERT INTO learning_progress (id, user_id, tenant_id, syllabus_id, topic_id, mastery_score, ease_factor, interval_days, repetitions, next_review_at, last_studied_at)
 VALUES
-('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'kssm-f1-algebra-linear-equations', 0.72, 2.6, 3, 4, NOW() + INTERVAL '1 day', NOW() - INTERVAL '2 day'),
-('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000003', '%[1]s', 'kssm-form-2', 'kssm-f2-algebra-patterns', 0.58, 2.4, 2, 3, NOW() + INTERVAL '8 hour', NOW() - INTERVAL '1 day'),
-('40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000004', '%[1]s', 'kssm-form-3', 'kssm-f3-algebra-simultaneous-equations', 0.34, 2.2, 1, 1, NOW() + INTERVAL '4 hour', NOW() - INTERVAL '6 hour')
+('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'linear-equations', 0.86, 2.5, 6, 4, NOW() + INTERVAL '1 day', NOW() - INTERVAL '1 day'),
+('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'algebraic-expressions', 0.62, 2.2, 4, 3, NOW() + INTERVAL '12 hour', NOW() - INTERVAL '1 day' + INTERVAL '20 minute'),
+('40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'inequalities', 0.44, 1.9, 2, 2, NOW() + INTERVAL '8 hour', NOW() - INTERVAL '2 day'),
+('40000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'functions', 0.30, 1.8, 1, 1, NOW() + INTERVAL '6 hour', NOW() - INTERVAL '3 day'),
+('40000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000003', '%[1]s', 'kssm-form-1', 'linear-equations', 0.38, 1.9, 2, 2, NOW() + INTERVAL '10 hour', NOW() - INTERVAL '1 day'),
+('40000000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-000000000003', '%[1]s', 'kssm-form-1', 'algebraic-expressions', 0.57, 2.1, 3, 2, NOW() + INTERVAL '14 hour', NOW() - INTERVAL '1 day' + INTERVAL '20 minute'),
+('40000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-000000000003', '%[1]s', 'kssm-form-1', 'inequalities', 0.21, 1.7, 1, 1, NOW() + INTERVAL '5 hour', NOW() - INTERVAL '2 day'),
+('40000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000003', '%[1]s', 'kssm-form-1', 'functions', 0.18, 1.6, 1, 1, NOW() + INTERVAL '3 hour', NOW() - INTERVAL '2 day' + INTERVAL '30 minute'),
+('40000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000004', '%[1]s', 'kssm-form-2', 'linear-equations', 0.92, 2.6, 7, 5, NOW() + INTERVAL '2 day', NOW() - INTERVAL '1 day'),
+('40000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000004', '%[1]s', 'kssm-form-2', 'algebraic-expressions', 0.84, 2.5, 6, 5, NOW() + INTERVAL '36 hour', NOW() - INTERVAL '1 day' + INTERVAL '25 minute'),
+('40000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000004', '%[1]s', 'kssm-form-2', 'inequalities', 0.74, 2.3, 4, 4, NOW() + INTERVAL '18 hour', NOW() - INTERVAL '2 day'),
+('40000000-0000-0000-0000-000000000012', '10000000-0000-0000-0000-000000000004', '%[1]s', 'kssm-form-2', 'functions', 0.59, 2.1, 3, 3, NOW() + INTERVAL '12 hour', NOW() - INTERVAL '2 day' + INTERVAL '20 minute')
 ON CONFLICT (user_id, syllabus_id, topic_id) DO UPDATE
 SET mastery_score = EXCLUDED.mastery_score,
     ease_factor = EXCLUDED.ease_factor,

@@ -8,33 +8,41 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getStudentConversations, getStudentDetail, type StudentConversation } from "@/lib/api";
 
-const TOPIC_LABELS: Record<string, string> = {
-  "linear-equations": "Linear Equations",
-  "algebraic-expressions": "Expressions",
-  inequalities: "Inequalities",
-  functions: "Functions",
-};
+function formatTopicLabel(topicId: string) {
+  return topicId
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function StudentPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof getStudentDetail>> | null>(null);
   const [conversations, setConversations] = useState<StudentConversation[]>([]);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let active = true;
-    Promise.all([getStudentDetail(id), getStudentConversations(id)]).then(([student, convo]) => {
-      if (!active) return;
-      setDetail(student);
-      setConversations(convo);
-    });
+    Promise.all([getStudentDetail(id), getStudentConversations(id)])
+      .then(([student, convo]) => {
+        if (!active) return;
+        setDetail(student);
+        setConversations(convo);
+        setLoadError("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadError("Failed to load student data.");
+      });
     return () => {
       active = false;
     };
   }, [id]);
 
   const radarData = detail?.progress.map((item) => ({
-    topic: TOPIC_LABELS[item.topic_id] ?? item.topic_id,
+    topic: formatTopicLabel(item.topic_id),
     mastery: Math.round(item.mastery_score * 100),
   })) ?? [];
 
@@ -89,26 +97,30 @@ export default function StudentPage() {
                       key={item.topic_id}
                       className="rounded-full bg-amber-100 px-3 py-1 text-amber-900 hover:bg-amber-100 dark:bg-amber-300/15 dark:text-amber-100 dark:hover:bg-amber-300/15"
                     >
-                      {TOPIC_LABELS[item.topic_id] ?? item.topic_id} {Math.round(item.mastery_score * 100)}%
+                      {formatTopicLabel(item.topic_id)} {Math.round(item.mastery_score * 100)}%
                     </Badge>
                   ))
                 ) : (
                   <p className="text-sm text-slate-500 dark:text-slate-400">No active struggle areas.</p>
                 )}
               </div>
-              <div className="grid grid-cols-7 gap-2">
-                {(detail?.progress ?? []).flatMap((item, index) =>
-                  Array.from({ length: 3 }).map((_, block) => {
-                    const opacity = Math.max(0.18, item.mastery_score);
-                    return (
-                      <div
-                        key={`${item.topic_id}-${index}-${block}`}
-                        className="h-9 rounded-xl border border-white/60 bg-sky-500 dark:border-white/10"
-                        style={{ opacity }}
-                      />
-                    );
-                  })
-                )}
+              <div className="space-y-3">
+                {(detail?.progress ?? []).map((item) => (
+                  <div key={item.topic_id} className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/70">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{formatTopicLabel(item.topic_id)}</p>
+                      <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        {Math.round(item.mastery_score * 100)}% mastery
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      Last studied: {item.last_studied_at ? new Date(item.last_studied_at).toLocaleString() : "Not available"}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Next review: {item.next_review_at ? new Date(item.next_review_at).toLocaleString() : "Not scheduled"}
+                    </p>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -119,6 +131,7 @@ export default function StudentPage() {
             <CardTitle className="text-xl tracking-tight">Recent conversations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {loadError ? <p className="text-sm text-rose-600">{loadError}</p> : null}
             {conversations.map((item) => (
               <div
                 key={item.id}

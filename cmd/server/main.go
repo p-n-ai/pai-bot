@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
@@ -169,8 +173,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// HTTP health endpoints.
-	mux := newMux()
+	adminService := adminapi.New(db.Pool, store.TenantID())
+
+	// HTTP endpoints.
+	mux := newHandler(adminService, gatewaySender{gw})
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -199,6 +205,34 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+type adminDataSource interface {
+	GetClassProgress(classID string) (adminapi.ClassProgress, error)
+	GetStudentDetail(studentID string) (adminapi.StudentDetail, error)
+	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
+}
+
+type outboundMessage struct {
+	Channel string `json:"channel"`
+	UserID  string `json:"user_id"`
+	Text    string `json:"text"`
+}
+
+type messageSender interface {
+	Send(ctx context.Context, msg outboundMessage) error
+}
+
+type gatewaySender struct {
+	gw *chat.Gateway
+}
+
+func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
+	return g.gw.Send(ctx, chat.OutboundMessage{
+		Channel: msg.Channel,
+		UserID:  msg.UserID,
+		Text:    msg.Text,
+	})
 }
 
 func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
@@ -259,12 +293,20 @@ func setupAIRouter(cfg *config.Config) *ai.Router {
 	return router
 }
 
-// newMux creates the HTTP router with health check endpoints.
-func newMux() *http.ServeMux {
+// newMux creates the HTTP router with health check and admin endpoints.
+func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
+	mux.HandleFunc("GET /api/admin/classes/{id}/progress", handleAdminClassProgress(admin))
+	mux.HandleFunc("GET /api/admin/students/{id}", handleAdminStudentDetail(admin))
+	mux.HandleFunc("GET /api/admin/students/{id}/conversations", handleAdminStudentConversations(admin))
+	mux.HandleFunc("POST /api/admin/students/{id}/nudge", handleAdminStudentNudge(admin, sender))
 	return mux
+}
+
+func newHandler(admin adminDataSource, sender messageSender) http.Handler {
+	return withCORS(newMux(admin, sender))
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -277,4 +319,145 @@ func handleReadyz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ready"}`))
+}
+
+func handleAdminClassProgress(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, err := admin.GetClassProgress(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminStudentDetail(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, err := admin.GetStudentDetail(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminStudentConversations(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, err := admin.GetStudentConversations(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminStudentNudge(admin adminDataSource, sender messageSender) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		detail, err := admin.GetStudentDetail(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+
+		if detail.Student.Channel != "telegram" {
+			http.Error(w, "manual nudge is only supported for telegram students", http.StatusBadRequest)
+			return
+		}
+		if !isTelegramChatID(detail.Student.ExternalID) {
+			http.Error(w, "student does not have a real Telegram chat ID yet", http.StatusBadRequest)
+			return
+		}
+
+		msg := outboundMessage{
+			Channel: "telegram",
+			UserID:  detail.Student.ExternalID,
+			Text:    buildManualNudgeMessage(detail),
+		}
+		if err := sender.Send(r.Context(), msg); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"status":  "queued",
+			"student": detail.Student.ID,
+			"channel": msg.Channel,
+		})
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeAdminError(w http.ResponseWriter, err error) {
+	if errors.Is(err, adminapi.ErrNotFound) {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func withCORS(next http.Handler) http.Handler {
+	allowedOrigins := []string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if slices.Contains(allowedOrigins, origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		}
+
+		if r.Method == http.MethodOptions && strings.HasPrefix(r.URL.Path, "/api/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isTelegramChatID(v string) bool {
+	if v == "" {
+		return false
+	}
+	for i, r := range v {
+		if i == 0 && r == '-' {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func buildManualNudgeMessage(detail adminapi.StudentDetail) string {
+	if len(detail.Progress) == 0 {
+		return fmt.Sprintf("Hi %s, it is a good time to do a short math check-in today. Open the bot and reply with a question to continue.", detail.Student.Name)
+	}
+
+	weakest := detail.Progress[0]
+	for _, item := range detail.Progress[1:] {
+		if item.MasteryScore < weakest.MasteryScore {
+			weakest = item
+		}
+	}
+
+	return fmt.Sprintf(
+		"Hi %s, let's revisit %s today. Your current mastery is %d%%. Reply to the bot and we can work through one quick practice step together.",
+		detail.Student.Name,
+		strings.ReplaceAll(weakest.TopicID, "-", " "),
+		int(weakest.MasteryScore*100),
+	)
 }

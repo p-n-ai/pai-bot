@@ -5,14 +5,7 @@ import { useEffect, useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getClassProgress, type ClassProgress } from "@/lib/api";
-
-const TOPIC_LABELS: Record<string, string> = {
-  "linear-equations": "Linear Equations",
-  "algebraic-expressions": "Expressions",
-  inequalities: "Inequalities",
-  functions: "Functions",
-};
+import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
 
 function scoreTone(score: number) {
   if (score >= 0.8) return "bg-emerald-500 text-white";
@@ -21,18 +14,33 @@ function scoreTone(score: number) {
   return "bg-rose-400 text-white";
 }
 
+function formatTopicLabel(topicId: string) {
+  return topicId
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<ClassProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [nudgeMessage, setNudgeMessage] = useState("");
+  const [sendingStudentID, setSendingStudentID] = useState("");
 
   useEffect(() => {
     let active = true;
-    getClassProgress("form-1-algebra").then((result) => {
-      if (!active) return;
-      setData(result);
-      setLoading(false);
-    });
+    getClassProgress("all-students")
+      .then((result) => {
+        if (!active) return;
+        setData(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setData(null);
+        setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -50,6 +58,26 @@ export default function DashboardPage() {
       )
     : 0;
 
+  const trackedScores = data
+    ? data.students.reduce((total, student) => {
+        return total + Object.keys(student.topics).length;
+      }, 0)
+    : 0;
+
+  async function handleNudge(studentID: string, studentName: string) {
+    setSendingStudentID(studentID);
+    setNudgeMessage("");
+    try {
+      await sendStudentNudge(studentID);
+      setNudgeMessage(`Nudge sent to ${studentName} on Telegram.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send nudge.";
+      setNudgeMessage(message);
+    } finally {
+      setSendingStudentID("");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f8fcff_0%,#eef8f7_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -58,7 +86,7 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Class mastery at a glance</h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              This screen stays useful before the backend admin API is complete by falling back to typed mock data.
+              Review topic-by-topic mastery and open each learner profile for a closer look.
             </p>
           </div>
           <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
@@ -68,7 +96,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Sparkles className="size-4 text-amber-300" />
-              API-first, fallback-safe UI
+              Live data from the Go admin API
             </div>
           </div>
         </header>
@@ -76,7 +104,7 @@ export default function DashboardPage() {
         <section className="grid gap-4 md:grid-cols-3">
           <StatCard title="Students" value={String(data?.students.length ?? 0)} note="Tracked in this view" />
           <StatCard title="Topics" value={String(data?.topic_ids.length ?? 0)} note="Algebra sequence" />
-          <StatCard title="Nudges" value="Ready" note="UI action stubbed" />
+          <StatCard title="Tracked Scores" value={String(trackedScores)} note="Real mastery entries loaded" />
         </section>
 
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
@@ -104,10 +132,10 @@ export default function DashboardPage() {
                             key={topicId}
                             className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"
                           >
-                            {TOPIC_LABELS[topicId] ?? topicId}
+                            {formatTopicLabel(topicId)}
                           </th>
                         ))}
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Action</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nudge</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -136,10 +164,11 @@ export default function DashboardPage() {
                             <Button
                               size="sm"
                               className="gap-2"
-                              onClick={() => setNudgeMessage(`Queued nudge for ${student.name}. Backend event hook comes next.`)}
+                              disabled={sendingStudentID === student.id}
+                              onClick={() => handleNudge(student.id, student.name)}
                             >
                               <BellRing className="size-4" />
-                              Nudge
+                              {sendingStudentID === student.id ? "Sending..." : "Nudge"}
                             </Button>
                           </td>
                         </tr>
@@ -164,7 +193,7 @@ function StatCard({ title, value, note }: { title: string; value: string; note: 
     <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_50px_rgba(2,8,23,0.35)]">
       <CardHeader>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{title}</p>
-        <CardTitle className="text-3xl tracking-tight">{value}</CardTitle>
+        <CardTitle className="text-3xl tracking-tight text-slate-950 dark:text-slate-50">{value}</CardTitle>
         <p className="text-sm text-slate-500 dark:text-slate-400">{note}</p>
       </CardHeader>
     </Card>
