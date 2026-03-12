@@ -48,6 +48,8 @@
 }
 
 :root {
+  --font-sans: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-geist-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --background: oklch(0.99 0.01 97);
   --foreground: oklch(0.22 0.02 245);
   --card: oklch(1 0 0);

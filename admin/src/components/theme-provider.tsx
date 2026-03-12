@@ -63,14 +63,14 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light" as Theme);
+  const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light") as Theme;
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
   const handleToggle = () => {
-    const nextTheme = toggleTheme(theme);
+    const nextTheme = toggleTheme(theme) as Theme;
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     applyTheme(nextTheme);
     window.dispatchEvent(new Event(THEME_EVENT));
