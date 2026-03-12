@@ -18,6 +18,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 func main() {
@@ -78,15 +79,21 @@ func main() {
 		slog.Info("curriculum ready", "topics", len(topics))
 	}
 
-	// Create agent engine.
+	// Create agent engine with streaks and XP tracking.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
+	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
+	streakTracker := progress.NewMemoryStreakTracker()
+	xpTracker := progress.NewMemoryXPTracker()
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:         router,
-		Store:            store,
-		EventLogger:      eventLogger,
-		CurriculumLoader: loader,
+		AIRouter:             router,
+		Store:                store,
+		EventLogger:          eventLogger,
+		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
+		Tracker:              tracker,
+		Streaks:              streakTracker,
+		XP:                   xpTracker,
 	})
 
 	// Create Telegram channel + chat gateway.
@@ -99,9 +106,30 @@ func main() {
 	gw := chat.NewGateway()
 	gw.Register("telegram", tg)
 
+	// Start proactive scheduler (nudges for due reviews).
+	nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
+	scheduler := agent.NewScheduler(
+		agent.SchedulerConfig{
+			CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
+			MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
+			AIPersonalizedNudgesEnabled: cfg.Features.AIPersonalizedNudgesEnabled,
+		},
+		tracker,
+		streakTracker,
+		xpTracker,
+		nudgeTracker,
+		gw,
+		router,
+		store,
+	)
+
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	// Scheduler runs in background; user list is empty initially — will be populated
+	// when we add user enumeration from the database.
+	go scheduler.Start(ctx, []string{})
 
 	// Start long-polling with message handler.
 	err = gw.StartAll(ctx, func(msg chat.InboundMessage) {
@@ -125,7 +153,7 @@ func main() {
 			out.Text = chat.NormalizeTelegramMarkdown(resp)
 			out.ParseMode = "Markdown"
 			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
-			out.InlineKeyboard = chat.BuildTelegramInlineKeyboard(resp)
+			out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
 			out.Text = chat.StripReviewActionCodes(out.Text)
 		}
 		if strings.TrimSpace(out.Text) == "" {
@@ -171,6 +199,23 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
+	conv, found := store.GetActiveConversation(userID)
+	if !found || conv == nil {
+		return chat.TelegramInlineKeyboardContext{}
+	}
+
+	ctx := chat.TelegramInlineKeyboardContext{
+		QuizIntensityPending: conv.State == "quiz_intensity",
+		QuizActive:           conv.State == "quiz_active",
+	}
+	if conv.QuizState != nil && conv.QuizState.RunState == "paused" {
+		ctx.QuizPaused = true
+		ctx.QuizActive = false
+	}
+	return ctx
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {

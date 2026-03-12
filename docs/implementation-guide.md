@@ -1594,12 +1594,12 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: go test ./...
+        run: go test ./... -count=1
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.4.0
 
   build:
     runs-on: ubuntu-latest
@@ -1624,7 +1624,7 @@ jobs:
 **File:** `Makefile`
 
 ```makefile
-.PHONY: setup dev test test-integration lint test-all migrate build docker start stop logs analytics
+.PHONY: setup dev test test-integration lint test-all migrate build docker start stop logs analytics analytics-xlsx analytics-example
 
 # First-time setup
 setup:
@@ -1683,7 +1683,13 @@ ollama-pull:
 
 # Analytics
 analytics:
-	@echo "Analytics script — implemented Day 4"
+	./scripts/analytics.sh
+
+analytics-xlsx:
+	./scripts/analytics.sh --xlsx output/spreadsheet/pai-analytics.xlsx
+
+analytics-example:
+	./scripts/analytics.sh --example-xlsx output/spreadsheet/pai-analytics-example.xlsx
 ```
 
 **File:** `.env.example`
@@ -4077,12 +4083,18 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 
 **Entry criteria:** Day 6 complete. Progress tracking works. `make test-all` passes.
 
+**Current code note (March 11, 2026):** natural-language quiz start is already implemented in code and no longer requires `/quiz`. Current runtime starts the first quiz immediately with a default mixed intensity instead of blocking on an intensity prompt, persists explicit per-user quiz intensity preferences, feeds quiz outcomes into the existing progress/XP trackers instead of treating quiz as a separate side flow, and now pauses/resumes quiz state cleanly when the learner temporarily detours into normal conversation or asks for teaching help first. Telegram inline buttons now cover quiz intensity selection plus active/paused quiz controls (`hint`, `repeat`, `continue`, `stop`) through the existing callback flow, including wrong-answer/hint retries and paused side-conversation detours. Deterministic grading now also tolerates common structured-answer formatting variants for multi-part OSS questions (for example labeled vs unlabeled parts, line-separated parts, and `m=3, c=-4` style responses) instead of requiring one literal phrasing.
+
+Profile reset note: `/clear` resets conversation/runtime state only. `/reset-profile` clears learner-managed profile fields (`form`, preferred language, preferred quiz intensity) and restarts onboarding.
+
+For the runtime explanation and design rationale, see [quiz-mode.md](quiz-mode.md).
+
 #### Tasks
 
 | # | Task ID | Task | Owner | Files Created |
 |---|---------|------|-------|---------------|
-| 7.1 | `P-W2D7-1` | `/quiz` command: load questions, present sequentially, AI-grade, hints, summary | 🤖 | `internal/agent/quiz.go` |
-| 7.2 | `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge) | 🤖 | Update `internal/agent/engine.go` |
+| 7.1 | `P-W2D7-1` | Natural-language or button-driven quiz entry: load OSS-backed questions, present sequentially, deterministic grade/hint/summary loop | 🤖 | `internal/agent/quiz.go` |
+| 7.2 | `P-W2D7-2` | Quiz state routing: persisted conversation mode routes turns to chat vs quiz before tutor AI | 🤖 | Update `internal/agent/engine.go` |
 | 7.3 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway for structured grading responses | 🤖 | Update `internal/ai/gateway.go` |
 | 7.4 | `P-W2D7-4` | 🧑 Review all KSSM Algebra assessments for accuracy | 🧑 | Manual |
 
@@ -4322,7 +4334,7 @@ func (s *QuizSession) IsComplete() bool {
 - [ ] `internal/agent/quiz.go` + tests — quiz engine with questions, answers, hints, distractors
 - [ ] Session mode routing: chat vs quiz vs challenge
 - [ ] `CompleteJSON` added to AI gateway for structured grading
-- [ ] `/quiz` command loads questions and presents sequentially
+- [ ] Quiz can start from natural-language intent or button callback without requiring `/quiz`
 - [ ] 🧑 KSSM Algebra assessments reviewed for accuracy
 - [ ] `make test-all` passes
 
@@ -4560,9 +4572,9 @@ func IsStreakMilestone(days int) bool {
 
 #### Day 8-10 Exit Criteria
 
-- [ ] Scheduler checks due reviews, respects quiet hours, max 3 nudges/day
-- [ ] Streak tracking with milestones and celebrations
-- [ ] XP system: session, quiz, mastery, streak XP
+- [x] Scheduler checks due reviews, respects quiet hours, max 3 nudges/day
+- [x] Streak tracking with milestones and celebrations
+- [x] XP system: session, quiz, mastery, streak XP
 - [ ] Topic unlocking when mastery ≥0.8
 - [ ] `/learn [topic]` command sets current topic
 - [ ] Daily summary computed at 22:00
@@ -4573,7 +4585,7 @@ func IsStreakMilestone(days int) bool {
 - [ ] Nudge response ≥25%
 - [ ] Day-7 retention ≥35%
 
-**Week 2 Progress:** 8 packages | Progress tracking + quizzes + streaks + scheduler | 50 students
+**Week 2 Progress:** 8 packages | Progress tracking + quizzes + streaks + scheduler + Postgres-backed nudge tracking | 50 students
 
 ---
 
@@ -5083,9 +5095,9 @@ echo ""
 | 4 | 7 | ✅ | /start | 10 | Session management + ratings |
 | 5 | 7 | ✅ | /start | 10 | Week 1 retro |
 | 6 | 8 | ✅ | /start, /progress | 50 | Mastery tracking + SM-2 |
-| 7 | 8 | ✅ | /start, /progress, /quiz | 50 | Quiz engine |
-| 8 | 8 | ✅ | /start, /progress, /quiz | 50 | Streaks + XP + nudges |
-| 9 | 8 | ✅ | /start, /progress, /quiz, /learn | 50 | Topic navigation |
+| 7 | 8 | ✅ | /start, /progress, natural quiz entry | 50 | Quiz engine |
+| 8 | 8 | ✅ | /start, /progress, natural quiz entry | 50 | Streaks + XP + nudges |
+| 9 | 8 | ✅ | /start, /progress, natural quiz entry, /learn | 50 | Topic navigation |
 | 10 | 8 | ✅ | all Week 2 | 50 | Week 2 retro |
 | 11 | 8 | ✅ | + /goal, /challenge | 80 | Goals + peer battles |
 | 12 | 8 | ✅ | + /join, /leaderboard | 80 | Groups + leaderboards |

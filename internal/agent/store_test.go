@@ -100,6 +100,42 @@ func TestConversationStore_UserExists_NotFound(t *testing.T) {
 	}
 }
 
+func TestConversationStore_QuizIntensityPreference(t *testing.T) {
+	store := agent.NewMemoryStore()
+
+	if err := store.SetUserPreferredQuizIntensity("u-quiz-pref", "hard"); err != nil {
+		t.Fatalf("SetUserPreferredQuizIntensity() error = %v", err)
+	}
+
+	got, ok := store.GetUserPreferredQuizIntensity("u-quiz-pref")
+	if !ok {
+		t.Fatal("GetUserPreferredQuizIntensity() = false, want true")
+	}
+	if got != "hard" {
+		t.Fatalf("quiz intensity = %q, want hard", got)
+	}
+}
+
+func TestConversationStore_UserProfileNameAndForm(t *testing.T) {
+	store := agent.NewMemoryStore()
+
+	if err := store.SetUserName("u-profile", "Aina"); err != nil {
+		t.Fatalf("SetUserName() error = %v", err)
+	}
+	if err := store.SetUserForm("u-profile", "2"); err != nil {
+		t.Fatalf("SetUserForm() error = %v", err)
+	}
+
+	name, ok := store.GetUserName("u-profile")
+	if !ok || name != "Aina" {
+		t.Fatalf("GetUserName() = %q, %v, want Aina, true", name, ok)
+	}
+	form, ok := store.GetUserForm("u-profile")
+	if !ok || form != "2" {
+		t.Fatalf("GetUserForm() = %q, %v, want 2, true", form, ok)
+	}
+}
+
 func TestConversationStore_EndConversation(t *testing.T) {
 	store := agent.NewMemoryStore()
 
@@ -195,6 +231,40 @@ func TestConversationStore_UpdateConversationState_NotFound(t *testing.T) {
 	err := store.UpdateConversationState("nonexistent", "teaching")
 	if err == nil {
 		t.Error("UpdateConversationState() should error for non-existent conversation")
+	}
+}
+
+func TestConversationStore_UpdateConversationQuizState_PreservesPausedQuizOutsideQuizMode(t *testing.T) {
+	store := agent.NewMemoryStore()
+	id, _ := store.CreateConversation(agent.Conversation{
+		UserID: "u-paused-quiz",
+		State:  "quiz_active",
+	})
+
+	err := store.UpdateConversationQuizState(id, "teaching", agent.ConversationQuizState{
+		TopicID:        "F1-02",
+		Intensity:      "mixed",
+		CurrentIndex:   1,
+		CorrectAnswers: 1,
+		RunState:       "paused",
+		SuspendedBy:    "side_question",
+	})
+	if err != nil {
+		t.Fatalf("UpdateConversationQuizState() error = %v", err)
+	}
+
+	got, err := store.GetConversation(id)
+	if err != nil {
+		t.Fatalf("GetConversation() error = %v", err)
+	}
+	if got.State != "teaching" {
+		t.Fatalf("State = %q, want teaching", got.State)
+	}
+	if got.QuizState == nil {
+		t.Fatal("QuizState = nil, want preserved paused quiz state")
+	}
+	if got.QuizState.RunState != "paused" || got.QuizState.SuspendedBy != "side_question" {
+		t.Fatalf("QuizState = %#v, want paused side-question state", got.QuizState)
 	}
 }
 

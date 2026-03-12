@@ -3,6 +3,7 @@ package agent
 import (
 	"crypto/rand"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,37 +19,61 @@ type StoredMessage struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// ConversationQuizState is the persisted runtime state for an active quiz.
+type ConversationQuizState struct {
+	TopicID        string `json:"topic_id"`
+	Intensity      string `json:"intensity"`
+	CurrentIndex   int    `json:"current_index"`
+	CorrectAnswers int    `json:"correct_answers"`
+	RunState       string `json:"run_state,omitempty"`
+	SuspendedBy    string `json:"suspended_by,omitempty"`
+}
+
 // Conversation represents a teaching conversation session.
 type Conversation struct {
-	ID              string          `json:"id"`
-	UserID          string          `json:"user_id"`
-	TopicID         string          `json:"topic_id,omitempty"`
-	State           string          `json:"state"`
-	Messages        []StoredMessage `json:"messages"`
-	Summary         string          `json:"summary,omitempty"`
-	CompactedAt     int             `json:"compacted_at,omitempty"` // number of messages included in Summary
-	StartedAt       time.Time       `json:"started_at"`
-	EndedAt         *time.Time      `json:"ended_at,omitempty"`
+	ID                 string                 `json:"id"`
+	UserID             string                 `json:"user_id"`
+	TopicID            string                 `json:"topic_id,omitempty"`
+	State              string                 `json:"state"`
+	Messages           []StoredMessage        `json:"messages"`
+	Summary            string                 `json:"summary,omitempty"`
+	CompactedAt        int                    `json:"compacted_at,omitempty"` // number of messages included in Summary
+	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
+	StartedAt          time.Time              `json:"started_at"`
+	EndedAt            *time.Time             `json:"ended_at,omitempty"`
 }
 
 // ConversationStore persists conversation state and message history.
 type ConversationStore interface {
 	UserExists(userID string) bool
+	GetUserName(userID string) (string, bool)
+	SetUserName(userID, name string) error
+	GetUserForm(userID string) (string, bool)
+	SetUserForm(userID, form string) error
 	GetUserPreferredLanguage(userID string) (string, bool)
 	SetUserPreferredLanguage(userID, lang string) error
+	GetUserPreferredQuizIntensity(userID string) (string, bool)
+	SetUserPreferredQuizIntensity(userID, intensity string) error
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
 	AddMessage(conversationID string, msg StoredMessage) (string, error)
 	SetSummary(conversationID string, summary string, compactedAt int) error
 	UpdateConversationState(conversationID string, state string) error
+	UpdateConversationPendingQuiz(conversationID, state, topicID string) error
+	UpdateConversationQuizState(conversationID, state string, quizState ConversationQuizState) error
+	ClearConversationQuizState(conversationID, state string) error
 	EndConversation(id string) error
 }
 
 // MemoryStore is an in-memory implementation of ConversationStore.
 type MemoryStore struct {
 	conversations map[string]*Conversation
+	userName      map[string]string
+	userForm      map[string]string
 	userLang      map[string]string
+	userQuizLevel map[string]string
 	mu            sync.RWMutex
 }
 
@@ -56,7 +81,10 @@ type MemoryStore struct {
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		conversations: make(map[string]*Conversation),
+		userName:      make(map[string]string),
+		userForm:      make(map[string]string),
 		userLang:      make(map[string]string),
+		userQuizLevel: make(map[string]string),
 	}
 }
 
@@ -77,12 +105,68 @@ func (s *MemoryStore) CreateConversation(conv Conversation) (string, error) {
 func (s *MemoryStore) UserExists(userID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if _, ok := s.userName[userID]; ok {
+		return true
+	}
+	if _, ok := s.userForm[userID]; ok {
+		return true
+	}
+	if _, ok := s.userLang[userID]; ok {
+		return true
+	}
+	if _, ok := s.userQuizLevel[userID]; ok {
+		return true
+	}
 	for _, conv := range s.conversations {
 		if conv.UserID == userID {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *MemoryStore) GetUserName(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	name, ok := s.userName[userID]
+	return name, ok
+}
+
+func (s *MemoryStore) SetUserName(userID, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		delete(s.userName, userID)
+		return nil
+	}
+	s.userName[userID] = name
+	return nil
+}
+
+func (s *MemoryStore) GetUserForm(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	form, ok := s.userForm[userID]
+	return form, ok
+}
+
+func (s *MemoryStore) SetUserForm(userID, form string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	form = strings.TrimSpace(form)
+	if form == "" {
+		delete(s.userForm, userID)
+		return nil
+	}
+	s.userForm[userID] = form
+	return nil
 }
 
 func (s *MemoryStore) GetUserPreferredLanguage(userID string) (string, bool) {
@@ -103,6 +187,27 @@ func (s *MemoryStore) SetUserPreferredLanguage(userID, lang string) error {
 		return nil
 	}
 	s.userLang[userID] = lang
+	return nil
+}
+
+func (s *MemoryStore) GetUserPreferredQuizIntensity(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	intensity, ok := s.userQuizLevel[userID]
+	return intensity, ok
+}
+
+func (s *MemoryStore) SetUserPreferredQuizIntensity(userID, intensity string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if intensity == "" {
+		delete(s.userQuizLevel, userID)
+		return nil
+	}
+	s.userQuizLevel[userID] = intensity
 	return nil
 }
 
@@ -172,6 +277,58 @@ func (s *MemoryStore) UpdateConversationState(conversationID string, state strin
 		return fmt.Errorf("state is required")
 	}
 	conv.State = state
+	return nil
+}
+
+func (s *MemoryStore) UpdateConversationPendingQuiz(conversationID, state, topicID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
+	conv.PendingQuizTopicID = strings.TrimSpace(topicID)
+	conv.QuizState = nil
+	return nil
+}
+
+func (s *MemoryStore) UpdateConversationQuizState(conversationID, state string, quizState ConversationQuizState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
+	conv.PendingQuizTopicID = ""
+	stateCopy := quizState
+	conv.QuizState = &stateCopy
+	return nil
+}
+
+func (s *MemoryStore) ClearConversationQuizState(conversationID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
+	conv.PendingQuizTopicID = ""
+	conv.QuizState = nil
 	return nil
 }
 

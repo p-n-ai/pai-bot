@@ -1,4 +1,4 @@
-﻿# pai-bot — Daily Development Timeline
+# pai-bot — Daily Development Timeline
 
 > **Repository:** `p-n-ai/pai-bot`
 > **Focus:** KSSM Matematik (Form 1, 2, 3) — Algebra first
@@ -193,7 +193,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Additional ID | Task | Status | Owner |
 |---------------|------|--------|-------|
-| `A-W1D5-AI-1` | Pulled forward Week 2 AI gateway groundwork for quiz/assessment flows: added `Router.CompleteJSON` with structured-output validation, cheapest-model defaulting, provider fallback on invalid structured responses, and provider-side structured-output support for OpenAI/OpenRouter. This unblocks planned `P-W2D7-3`, but `/quiz`, quiz state management, and assessment content are still pending. | ✅ | 🤖 |
+| `A-W1D5-AI-1` | Pulled forward Week 2 AI gateway groundwork for quiz/assessment flows: added `Router.CompleteJSON` with structured-output validation, cheapest-model defaulting, provider fallback on invalid structured responses, and provider-side structured-output support for OpenAI/OpenRouter. This unblocks planned `P-W2D7-3`, but quiz entry/routing and assessment-driven runtime were still pending at that point. | ✅ | 🤖 |
 
 ---
 
@@ -203,9 +203,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D6-1` | Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
-| `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
-| `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
+| `P-W2D6-1` | ✅ Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
+| `P-W2D6-2` | ✅ SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
+| `P-W2D6-3` | ✅ `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
 | `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
@@ -213,22 +213,24 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 **Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D7-1` | `/quiz` command: load questions from assessments.yaml, present sequentially, AI-grade free-text answers, hints on wrong answer, summary at end. **Dynamic quiz generation fallback:** if a topic has <5 questions in assessments.yaml, use AI to generate additional questions from the topic's teaching notes via `CompleteJSON` (cheap model). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s question generation | 🤖 |
-| `P-W2D7-2` | Quiz state management: session_mode field (chat/quiz/challenge), route to appropriate handler | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | 🧑 Human |
+**Current code note (March 11, 2026):** quiz start already works from natural language without `/quiz`. Current implementation now starts immediately on first use with a default mixed intensity instead of blocking on an intensity-selection step, remembers explicit per-user intensity preferences when they exist, reuses the existing progress/XP systems so correct quiz answers award quiz XP and quiz outcomes update topic mastery, and now pauses cleanly for side conversation or teaching detours instead of grading every off-topic message as a wrong answer.
+
+| Task ID | Task | Status | Owner |
+|---------|------|--------|-------|
+| `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | | 🤖 |
+| `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | | 🤖 |
+| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | | 🤖 |
+| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
+| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
 ### Day 8 (Wed) — Proactive Nudges + Streaks
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | 🤖 |
-| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | 🤖 |
-| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | 🤖 |
-| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human |
+| Task ID | Task | Status | Owner |
+|---------|------|--------|-------|
+| `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | ✅ | 🤖 |
+| `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | ✅ | 🤖 |
+| `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | ✅ | 🤖 |
+| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | | 🧑 Human |
 
 ### Day 9 (Thu) — Topic Navigation
 
@@ -436,6 +438,3 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | 5 | 9 | 5 | 14 |
 | 6 | 6 | 6 | 12 |
 | **Total** | **80** | **35** | **115** |
-
-
-

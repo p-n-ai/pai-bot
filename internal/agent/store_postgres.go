@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -46,6 +48,140 @@ func (s *PostgresStore) UserExists(externalID string) bool {
 	return exists
 }
 
+func (s *PostgresStore) GetUserName(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var name *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT NULLIF(name, '')
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&name)
+	if err != nil || name == nil || *name == "" {
+		return "", false
+	}
+	return *name, true
+}
+
+func (s *PostgresStore) SetUserName(externalID, name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if externalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+
+	_, err := s.resolveOrCreateUser(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE users
+		 SET name = $4,
+		     updated_at = NOW()
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3`,
+		s.tenantID,
+		s.channel,
+		externalID,
+		name,
+	)
+	if err != nil {
+		return fmt.Errorf("set user name: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: %s", externalID)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetUserForm(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var form *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT NULLIF(form, '')
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&form)
+	if err != nil || form == nil || *form == "" {
+		return "", false
+	}
+	return *form, true
+}
+
+func (s *PostgresStore) SetUserForm(externalID, form string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if externalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+	form = strings.TrimSpace(form)
+
+	_, err := s.resolveOrCreateUser(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	var cmd pgconn.CommandTag
+	if form == "" {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET form = NULL,
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET form = $4,
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			form,
+		)
+	}
+	if err != nil {
+		return fmt.Errorf("set user form: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: %s", externalID)
+	}
+	return nil
+}
+
 func (s *PostgresStore) GetUserPreferredLanguage(externalID string) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -76,8 +212,77 @@ func (s *PostgresStore) SetUserPreferredLanguage(externalID, lang string) error 
 	if externalID == "" {
 		return fmt.Errorf("external_id is required")
 	}
+
+	_, err := s.resolveOrCreateUser(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	var cmd pgconn.CommandTag
 	if lang == "" {
-		return nil
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = COALESCE(config, '{}'::jsonb) - 'preferred_language',
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_language}', to_jsonb($4::text), true),
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			lang,
+		)
+	}
+	if err != nil {
+		return fmt.Errorf("set preferred language: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: %s", externalID)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetUserPreferredQuizIntensity(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var intensity *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT config->>'preferred_quiz_intensity'
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&intensity)
+	if err != nil || intensity == nil || *intensity == "" {
+		return "", false
+	}
+	return *intensity, true
+}
+
+func (s *PostgresStore) SetUserPreferredQuizIntensity(externalID, intensity string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if externalID == "" {
+		return fmt.Errorf("external_id is required")
 	}
 
 	_, err := s.resolveOrCreateUser(ctx, externalID)
@@ -85,20 +290,35 @@ func (s *PostgresStore) SetUserPreferredLanguage(externalID, lang string) error 
 		return err
 	}
 
-	cmd, err := s.pool.Exec(ctx,
-		`UPDATE users
-		 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_language}', to_jsonb($4::text), true),
-		     updated_at = NOW()
-		 WHERE tenant_id = $1::uuid
-		   AND channel = $2
-		   AND external_id = $3`,
-		s.tenantID,
-		s.channel,
-		externalID,
-		lang,
-	)
+	var cmd pgconn.CommandTag
+	if intensity == "" {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = COALESCE(config, '{}'::jsonb) - 'preferred_quiz_intensity',
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{preferred_quiz_intensity}', to_jsonb($4::text), true),
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			intensity,
+		)
+	}
 	if err != nil {
-		return fmt.Errorf("set preferred language: %w", err)
+		return fmt.Errorf("set preferred quiz intensity: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("user not found: %s", externalID)
@@ -126,6 +346,9 @@ func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, 
 		channel:  defaultChannel,
 	}, nil
 }
+
+// TenantID returns the resolved tenant UUID for this store.
+func (s *PostgresStore) TenantID() string { return s.tenantID }
 
 func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -359,6 +582,90 @@ func (s *PostgresStore) UpdateConversationState(conversationID string, state str
 	return nil
 }
 
+func (s *PostgresStore) UpdateConversationPendingQuiz(conversationID, state, topicID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2,
+		     metadata = (jsonb_set(COALESCE(metadata, '{}'::jsonb), '{pending_quiz_topic_id}', to_jsonb($3::text), true) - 'quiz_state')
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+		topicID,
+	)
+	if err != nil {
+		return fmt.Errorf("update pending quiz state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) UpdateConversationQuizState(conversationID, state string, quizState ConversationQuizState) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	payload, err := json.Marshal(quizState)
+	if err != nil {
+		return fmt.Errorf("marshal quiz state: %w", err)
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2,
+		     metadata = (jsonb_set(COALESCE(metadata, '{}'::jsonb), '{quiz_state}', $3::jsonb, true) - 'pending_quiz_topic_id')
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+		payload,
+	)
+	if err != nil {
+		return fmt.Errorf("update active quiz state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) ClearConversationQuizState(conversationID, state string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2,
+		     metadata = ((COALESCE(metadata, '{}'::jsonb) - 'pending_quiz_topic_id') - 'quiz_state')
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+	)
+	if err != nil {
+		return fmt.Errorf("clear quiz state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
 func (s *PostgresStore) EndConversation(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -444,32 +751,31 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	}
 	conv.EndedAt = endedAt
 	conv.Messages = []StoredMessage{}
-	conv.Summary, conv.CompactedAt = parseConversationMetadata(metadataBytes)
+	metadata := parseConversationMetadata(metadataBytes)
+	conv.Summary = metadata.Summary
+	conv.CompactedAt = metadata.CompactedAt
+	conv.PendingQuizTopicID = metadata.PendingQuizTopicID
+	conv.QuizState = metadata.QuizState
 
 	return conv, nil
 }
 
-func parseConversationMetadata(metadata []byte) (string, int) {
+type conversationMetadata struct {
+	Summary            string                 `json:"summary,omitempty"`
+	CompactedAt        int                    `json:"compacted_at,omitempty"`
+	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
+}
+
+func parseConversationMetadata(metadata []byte) conversationMetadata {
 	if len(metadata) == 0 {
-		return "", 0
+		return conversationMetadata{}
 	}
-	var raw map[string]any
-	if err := json.Unmarshal(metadata, &raw); err != nil {
-		return "", 0
+	var parsed conversationMetadata
+	if err := json.Unmarshal(metadata, &parsed); err != nil {
+		return conversationMetadata{}
 	}
-
-	summary, _ := raw["summary"].(string)
-	compactedAt := 0
-	if v, ok := raw["compacted_at"]; ok {
-		switch n := v.(type) {
-		case float64:
-			compactedAt = int(n)
-		case int:
-			compactedAt = n
-		}
-	}
-
-	return summary, compactedAt
+	return parsed
 }
 
 func nullIfZero(v int) any {

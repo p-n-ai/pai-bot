@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 const (
@@ -38,6 +42,9 @@ type EngineConfig struct {
 	KeepRecent            int // recent messages to keep after compaction (default 6)
 	DisableMultiLanguage  bool
 	RatingPromptEvery     int // ask for rating every N tutoring replies (default 5)
+	Tracker               progress.Tracker
+	Streaks               progress.StreakTracker
+	XP                    progress.XPTracker
 }
 
 // Engine is the core conversation processor.
@@ -45,12 +52,16 @@ type Engine struct {
 	aiRouter              *ai.Router
 	store                 ConversationStore
 	eventLogger           EventLogger
+	curriculumLoader      *curriculum.Loader
 	contextResolver       ContextResolver
 	compactThreshold      int
 	compactTokenThreshold int
 	keepRecent            int
 	disableMultiLanguage  bool
 	ratingPromptEvery     int
+	tracker               progress.Tracker
+	streaks               progress.StreakTracker
+	xp                    progress.XPTracker
 }
 
 // NewEngine creates a new agent engine.
@@ -92,12 +103,16 @@ func NewEngine(cfg EngineConfig) *Engine {
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
 		eventLogger:           eventLogger,
+		curriculumLoader:      cfg.CurriculumLoader,
 		contextResolver:       contextResolver,
 		compactThreshold:      threshold,
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
 		disableMultiLanguage:  cfg.DisableMultiLanguage,
 		ratingPromptEvery:     ratingEvery,
+		tracker:               cfg.Tracker,
+		streaks:               cfg.Streaks,
+		xp:                    cfg.XP,
 	}
 }
 
@@ -108,6 +123,8 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		"user_id", msg.UserID,
 		"text_len", len(msg.Text),
 	)
+
+	e.maybePersistUserProfile(msg)
 
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
@@ -139,6 +156,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return e.handleLanguageSelection(msg, conv), nil
 	}
 	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
+		return response, nil
+	}
+	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
 		return response, nil
 	}
 
@@ -254,6 +274,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"has_image":     msg.HasImage,
 		},
 	})
+	e.assessMasteryAsync(ctx, msg.UserID, matchedTopic, userContent, plainContent)
+	e.recordActivityAsync(msg.UserID)
+
 	if promptRequested {
 		e.logEventAsync(Event{
 			ConversationID: conv.ID,
@@ -429,6 +452,71 @@ func (e *Engine) logEventAsync(event Event) {
 	}()
 }
 
+func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *curriculum.Topic, userMessage, aiResponse string) {
+	if e.tracker == nil || topic == nil {
+		return
+	}
+	go func() {
+		prompt := fmt.Sprintf(
+			"Rate how well the student demonstrated understanding of %q in this exchange.\n\nStudent: %s\n\nTutor: %s\n\nReturn ONLY a single decimal number between 0.0 and 1.0.",
+			topic.Name,
+			truncateForPrompt(userMessage, 500),
+			truncateForPrompt(aiResponse, 500),
+		)
+		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
+			Messages: []ai.Message{
+				{Role: "system", Content: "You are a grading assistant. Return ONLY a single float between 0.0 and 1.0. No other text."},
+				{Role: "user", Content: prompt},
+			},
+			Task:      ai.TaskGrading,
+			MaxTokens: 8,
+		})
+		if err != nil {
+			slog.Warn("mastery assessment AI call failed", "user_id", userID, "topic", topic.ID, "error", err)
+			return
+		}
+		delta, err := strconv.ParseFloat(strings.TrimSpace(resp.Content), 64)
+		if err != nil {
+			slog.Warn("mastery assessment parse failed", "user_id", userID, "topic", topic.ID, "response", resp.Content, "error", err)
+			return
+		}
+		syllabusID := topic.SyllabusID
+		if syllabusID == "" {
+			syllabusID = "default"
+		}
+		if err := e.tracker.UpdateMastery(userID, syllabusID, topic.ID, delta); err != nil {
+			slog.Warn("mastery update failed", "user_id", userID, "topic", topic.ID, "error", err)
+		}
+	}()
+}
+
+// recordActivityAsync records streak activity and awards session XP in a goroutine.
+func (e *Engine) recordActivityAsync(userID string) {
+	go func() {
+		now := time.Now()
+
+		// Record streak activity.
+		if e.streaks != nil {
+			if err := e.streaks.RecordActivity(userID, now); err != nil {
+				slog.Warn("streak record failed", "user_id", userID, "error", err)
+			} else {
+				// Check for milestone celebration.
+				s, _ := e.streaks.GetStreak(userID)
+				if progress.IsStreakMilestone(s.CurrentStreak) && e.xp != nil {
+					_ = e.xp.Award(userID, progress.XPSourceStreak, progress.XPStreakMilestone, map[string]any{
+						"streak_days": s.CurrentStreak,
+					})
+				}
+			}
+		}
+
+		// Award session XP.
+		if e.xp != nil {
+			_ = e.xp.Award(userID, progress.XPSourceSession, progress.XPSession, nil)
+		}
+	}()
+}
+
 func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
 	fields := strings.Fields(msg.Text)
 	cmd := fields[0]
@@ -439,10 +527,19 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 		e.endActiveConversation(msg.UserID)
 		return e.handleStart(msg.UserID, msg)
 	case "/clear":
-		e.endActiveConversation(msg.UserID)
+		e.clearUserRuntimeState(msg.UserID)
 		return i18n.S(locale, i18n.MsgHistoryCleared), nil
+	case "/reset-profile":
+		e.resetLearnerProfile(msg.UserID)
+		onboarding, err := e.handleStart(msg.UserID, msg)
+		if err != nil {
+			return "", err
+		}
+		return i18n.S(locale, i18n.MsgProfileReset) + "\n\n" + onboarding, nil
 	case "/language":
 		return e.handleLanguageCommand(msg, fields[1:])
+	case "/progress":
+		return e.handleProgressCommand(msg)
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -518,11 +615,54 @@ func (e *Engine) handleLanguageCommand(msg chat.InboundMessage, args []string) (
 	return languageChangedMessage(lang), nil
 }
 
+func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) {
+	if e.tracker == nil {
+		return "Progress tracking is not enabled.", nil
+	}
+
+	items, err := e.tracker.GetAllProgress(msg.UserID)
+	if err != nil {
+		slog.Error("failed to get progress", "user_id", msg.UserID, "error", err)
+		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+
+	var totalXP int
+	if e.xp != nil {
+		totalXP, _ = e.xp.GetTotal(msg.UserID)
+	}
+	var streak int
+	if e.streaks != nil {
+		s, _ := e.streaks.GetStreak(msg.UserID)
+		streak = s.CurrentStreak
+	}
+	return progress.FormatProgressReport(items, totalXP, streak), nil
+}
+
 func (e *Engine) endActiveConversation(userID string) {
 	if conv, found := e.store.GetActiveConversation(userID); found {
 		if err := e.store.EndConversation(conv.ID); err != nil {
 			slog.Error("failed to end conversation", "error", err)
 		}
+	}
+}
+
+func (e *Engine) clearUserRuntimeState(userID string) {
+	e.endActiveConversation(userID)
+	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
+		slog.Error("failed to clear quiz intensity preference", "user_id", userID, "error", err)
+	}
+}
+
+func (e *Engine) resetLearnerProfile(userID string) {
+	e.endActiveConversation(userID)
+	if err := e.store.SetUserForm(userID, ""); err != nil {
+		slog.Error("failed to clear learner form", "user_id", userID, "error", err)
+	}
+	if err := e.store.SetUserPreferredLanguage(userID, ""); err != nil {
+		slog.Error("failed to clear learner language", "user_id", userID, "error", err)
+	}
+	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
+		slog.Error("failed to clear learner quiz intensity", "user_id", userID, "error", err)
 	}
 }
 
@@ -559,6 +699,26 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 	}
 
 	return i18n.S(locale, i18n.MsgStartOnboardingLang, name), nil
+}
+
+func (e *Engine) maybePersistUserProfile(msg chat.InboundMessage) {
+	if msg.UserID == "" {
+		return
+	}
+	name := preferredIncomingName(msg)
+	if name != "" {
+		if err := e.store.SetUserName(msg.UserID, name); err != nil {
+			slog.Error("failed to persist user name", "user_id", msg.UserID, "error", err)
+		}
+	}
+}
+
+func preferredIncomingName(msg chat.InboundMessage) string {
+	name := strings.TrimSpace(msg.FirstName)
+	if name != "" {
+		return name
+	}
+	return strings.TrimSpace(msg.Username)
 }
 
 func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.InboundMessage, conv *Conversation) string {
@@ -624,6 +784,10 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 
 	if err := e.store.UpdateConversationState(conv.ID, "teaching"); err != nil {
 		slog.Error("failed to update conversation state", "conversation_id", conv.ID, "error", err)
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
+	if err := e.store.SetUserForm(msg.UserID, strconv.Itoa(form)); err != nil {
+		slog.Error("failed to persist user form", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
 
@@ -894,6 +1058,9 @@ var reviewActionPattern = regexp.MustCompile(`\[\[PAI_REVIEW(?::([A-Za-z0-9-]+))
 func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversation) (string, bool) {
 	awaitingRating := isAwaitingRating(conv)
 	fromInlineCallback := msg.Channel == "telegram" && msg.CallbackQueryID != ""
+	if fromInlineCallback && !looksLikeRatingCallback(msg.Text) {
+		return "", false
+	}
 	if !awaitingRating && !fromInlineCallback {
 		return "", false
 	}
@@ -944,6 +1111,14 @@ func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversat
 	}
 
 	return thanksText, true
+}
+
+func looksLikeRatingCallback(text string) bool {
+	if strings.HasPrefix(strings.TrimSpace(text), "rating:") {
+		return true
+	}
+	_, _, ok := parseRatingCallbackDataForEngine(text)
+	return ok
 }
 
 func isAwaitingRating(conv *Conversation) bool {
