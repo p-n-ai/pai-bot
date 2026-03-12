@@ -31,20 +31,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
-      - name: Build Docker image
+      - name: Build Go Docker image
         run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
 
-      - name: Save Docker image
-        run: docker save pai-bot:latest | gzip > pai-bot.tar.gz
+      - name: Build Admin Docker image
+        run: docker build -f deploy/docker/Dockerfile.admin -t pai-admin:latest .
 
-      - name: Copy image and compose files to server
+      - name: Save Docker images
+        run: |
+          docker save pai-bot:latest | gzip > pai-bot.tar.gz
+          docker save pai-admin:latest | gzip > pai-admin.tar.gz
+
+      - name: Copy files to server
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "pai-bot.tar.gz,docker-compose.yml,docker-compose.prod.yml,migrations"
+          source: "pai-bot.tar.gz,pai-admin.tar.gz,docker-compose.yml,docker-compose.prod.yml,deploy/caddy,migrations"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
@@ -54,7 +61,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,LEARN_AUTH_JWT_SECRET,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD
+          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,LEARN_AUTH_JWT_SECRET,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD,DOMAIN
           script: |
             set -euo pipefail
             cd $DEPLOY_DIR
@@ -83,9 +90,18 @@ jobs:
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             ENVEOF
 
-            echo "--- Loading Docker image ---"
+            echo "--- Configuring Caddy ---"
+            if [ -n "${DOMAIN}" ] && [ "${DOMAIN}" != "localhost" ]; then
+              echo "DOMAIN=${DOMAIN}" >> .env
+              cp deploy/caddy/Caddyfile.https deploy/caddy/Caddyfile
+            else
+              cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
+            fi
+
+            echo "--- Loading Docker images ---"
             docker load < pai-bot.tar.gz
-            rm pai-bot.tar.gz
+            docker load < pai-admin.tar.gz
+            rm pai-bot.tar.gz pai-admin.tar.gz
 
             echo "--- Restarting services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
@@ -93,18 +109,16 @@ jobs:
 
             echo "--- Running migrations ---"
             sleep 3
-            for f in migrations/*.up.sql; do
-              docker exec -i pai-bot-postgres-1 psql -U pai -d pai < "$f" 2>&1 || true
-            done
+            docker exec pai-bot-app-1 migrate -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up
 
-            echo "--- Starting app ---"
+            echo "--- Starting all services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
             sleep 5
 
             echo "--- Health check ---"
-            curl -sf --max-time 10 http://localhost:8080/healthz
+            curl -sf --max-time 10 http://localhost/healthz
 
             echo "--- Container status ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
@@ -118,3 +132,4 @@ jobs:
           LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
           LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DOMAIN: ${{ secrets.DOMAIN }}
