@@ -1,4 +1,4 @@
-.PHONY: setup dev test test-integration test-cover lint test-all migrate build docker start stop logs analytics ollama-pull
+.PHONY: setup dev test test-integration test-cover lint test-all migrate seed seed-docker build docker start stop logs analytics ollama-pull
 
 # First-time setup
 setup:
@@ -32,6 +32,12 @@ test-cover:
 # Database
 migrate:
 	@echo "Run: docker exec -i $$(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql"
+
+seed:
+	go run ./cmd/seed
+
+seed-docker:
+	docker compose exec app /pai-seed
 
 # Build
 build:
