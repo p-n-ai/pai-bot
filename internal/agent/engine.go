@@ -1242,7 +1242,7 @@ func shouldRequestRatingAfterReply(replyCount, every int) bool {
 	return replyCount > 0 && replyCount%every == 0
 }
 
-func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
+func (e *Engine) buildSystemPrompt(msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
 	languageBlock := `LANGUAGE:
 Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
 If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu.
@@ -1370,6 +1370,24 @@ IMAGE HANDLING:
 FORMAT CONSTRAINT:
 Use plain-text math only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
 Do not format replies using Markdown (no headings, bold, italic, code blocks, or Markdown lists). Use plain chat text with simple line breaks only.`
+
+	// Inject adaptive explanation depth based on mastery level.
+	if e.tracker != nil {
+		userID := msg.UserID
+		if conv != nil {
+			userID = conv.UserID
+		}
+		var topicMastery float64
+		if topic != nil {
+			syllabusID := topic.SyllabusID
+			if syllabusID == "" {
+				syllabusID = "default"
+			}
+			topicMastery, _ = e.tracker.GetMastery(userID, syllabusID, topic.ID)
+		}
+		allProgress, _ := e.tracker.GetAllProgress(userID)
+		base += adaptiveDepthBlock(topicMastery, allProgress)
+	}
 
 	if topic == nil {
 		return base
