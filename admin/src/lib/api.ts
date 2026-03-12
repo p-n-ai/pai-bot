@@ -1,3 +1,5 @@
+import { normalizeClassProgress } from "@/lib/class-progress.mjs";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export interface Student {
@@ -67,7 +69,7 @@ async function postJSON<T>(path: string): Promise<T> {
 }
 
 export async function getClassProgress(classId: string): Promise<ClassProgress> {
-  return fetchJSON(`/api/admin/classes/${classId}/progress`);
+  return normalizeClassProgress(await fetchJSON(`/api/admin/classes/${classId}/progress`)) as ClassProgress;
 }
 
 export async function getStudentDetail(studentId: string): Promise<{

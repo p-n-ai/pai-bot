@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node src/lib/theme.test.mjs"
+    "test": "node src/lib/all.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

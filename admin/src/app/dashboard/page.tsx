@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAverageMastery, getTrackedScores } from "@/lib/class-progress.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
 
 function scoreTone(score: number) {
@@ -46,23 +47,8 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const averageMastery = data
-    ? Math.round(
-        (data.students.reduce((total, student) => {
-          return (
-            total + data.topic_ids.reduce((topicTotal, topicId) => topicTotal + (student.topics[topicId] ?? 0), 0)
-          );
-        }, 0) /
-          (data.students.length * data.topic_ids.length)) *
-          100
-      )
-    : 0;
-
-  const trackedScores = data
-    ? data.students.reduce((total, student) => {
-        return total + Object.keys(student.topics).length;
-      }, 0)
-    : 0;
+  const averageMastery = data ? getAverageMastery(data) : 0;
+  const trackedScores = data ? getTrackedScores(data) : 0;
 
   async function handleNudge(studentID: string, studentName: string) {
     setSendingStudentID(studentID);

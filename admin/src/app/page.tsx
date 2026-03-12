@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BarChart3, Users } from "lucide-react";
+import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { getClassProgress, type ClassProgress } from "@/lib/api";
 
 const cards = [
@@ -22,7 +23,7 @@ export default function Home() {
     getClassProgress("all-students")
       .then((result) => {
         if (!active) return;
-        setData(result);
+        setData(normalizeClassProgress(result) as ClassProgress);
       })
       .catch(() => {
         if (!active) return;
