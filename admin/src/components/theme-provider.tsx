@@ -63,7 +63,7 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light");
+  const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light" as Theme);
 
   useEffect(() => {
     applyTheme(theme);

@@ -31,8 +31,9 @@ services:
     image: pai-bot:latest
     build: !reset null
     dns: !reset []
-    ports: !override
-      - "127.0.0.1:8080:8080"
+    ports: !reset []
+    expose:
+      - "8080"
     restart: always
     logging:
       driver: json-file
@@ -43,3 +44,26 @@ services:
       resources:
         limits:
           memory: 512M
+
+  admin:
+    image: pai-admin:latest
+    build: !reset null
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  caddy:
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M

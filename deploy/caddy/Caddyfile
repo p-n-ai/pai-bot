@@ -1,0 +1,15 @@
+{$CADDY_GLOBAL_OPTIONS}
+
+{$CADDY_SITE_ADDRESS::80} {
+	handle /api/* {
+		reverse_proxy app:8080
+	}
+
+	handle /healthz {
+		reverse_proxy app:8080
+	}
+
+	handle {
+		reverse_proxy admin:3000
+	}
+}
