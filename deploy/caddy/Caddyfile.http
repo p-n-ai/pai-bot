@@ -1,6 +1,8 @@
-{$CADDY_GLOBAL_OPTIONS}
+{
+	auto_https off
+}
 
-{$CADDY_SITE_ADDRESS::80} {
+:80 {
 	handle /api/* {
 		reverse_proxy app:8080
 	}

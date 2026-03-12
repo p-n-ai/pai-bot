@@ -51,7 +51,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "pai-bot.tar.gz,pai-admin.tar.gz,docker-compose.yml,docker-compose.prod.yml,deploy/caddy/Caddyfile,migrations"
+          source: "pai-bot.tar.gz,pai-admin.tar.gz,docker-compose.yml,docker-compose.prod.yml,deploy/caddy,migrations"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
@@ -88,8 +88,15 @@ jobs:
             LEARN_LOG_LEVEL=info
             LEARN_LOG_FORMAT=json
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-            DOMAIN=${DOMAIN:-localhost}
             ENVEOF
+
+            echo "--- Configuring Caddy ---"
+            if [ -n "${DOMAIN}" ] && [ "${DOMAIN}" != "localhost" ]; then
+              echo "DOMAIN=${DOMAIN}" >> .env
+              cp deploy/caddy/Caddyfile.https deploy/caddy/Caddyfile
+            else
+              cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
+            fi
 
             echo "--- Loading Docker images ---"
             docker load < pai-bot.tar.gz
