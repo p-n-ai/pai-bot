@@ -28,20 +28,23 @@ func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, quest
 
 			if err := e.tracker.UpdateMastery(userID, syllabusID, topicID, quizMasterySignal(question, correct)); err != nil {
 				slog.Warn("failed to update quiz mastery", "user_id", userID, "topic_id", topicID, "error", err)
-			} else if e.xp != nil {
-				masteryAfter, err := e.tracker.GetMastery(userID, syllabusID, topicID)
-				if err != nil {
-					slog.Warn("failed to read quiz mastery after update", "user_id", userID, "topic_id", topicID, "error", err)
-				} else if !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
-					if err := e.xp.Award(userID, progress.XPSourceMastery, progress.XPMasteryUp, map[string]any{
-						"topic_id":     topicID,
-						"syllabus_id":  syllabusID,
-						"question_id":  question.ID,
-						"difficulty":   question.Difficulty,
-						"from_quiz":    true,
-						"quiz_correct": correct,
-					}); err != nil {
-						slog.Warn("failed to award mastery xp from quiz", "user_id", userID, "topic_id", topicID, "error", err)
+			} else {
+				e.syncGoalProgress(userID, syllabusID, topicID)
+				if e.xp != nil {
+					masteryAfter, err := e.tracker.GetMastery(userID, syllabusID, topicID)
+					if err != nil {
+						slog.Warn("failed to read quiz mastery after update", "user_id", userID, "topic_id", topicID, "error", err)
+					} else if !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
+						if err := e.xp.Award(userID, progress.XPSourceMastery, progress.XPMasteryUp, map[string]any{
+							"topic_id":     topicID,
+							"syllabus_id":  syllabusID,
+							"question_id":  question.ID,
+							"difficulty":   question.Difficulty,
+							"from_quiz":    true,
+							"quiz_correct": correct,
+						}); err != nil {
+							slog.Warn("failed to award mastery xp from quiz", "user_id", userID, "topic_id", topicID, "error", err)
+						}
 					}
 				}
 			}

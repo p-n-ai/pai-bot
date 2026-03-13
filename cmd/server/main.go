@@ -84,6 +84,7 @@ func main() {
 	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
 	streakTracker := progress.NewMemoryStreakTracker()
 	xpTracker := progress.NewMemoryXPTracker()
+	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -94,6 +95,7 @@ func main() {
 		Tracker:              tracker,
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
+		Goals:                goalStore,
 	})
 
 	// Create Telegram channel + chat gateway.

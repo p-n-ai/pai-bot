@@ -45,6 +45,7 @@ type EngineConfig struct {
 	Tracker               progress.Tracker
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
+	Goals                 GoalStore
 }
 
 // Engine is the core conversation processor.
@@ -62,6 +63,7 @@ type Engine struct {
 	tracker               progress.Tracker
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
+	goals                 GoalStore
 }
 
 // NewEngine creates a new agent engine.
@@ -113,6 +115,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		tracker:               cfg.Tracker,
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
+		goals:                 cfg.Goals,
 	}
 }
 
@@ -156,6 +159,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return e.handleLanguageSelection(msg, conv), nil
 	}
 	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
+		return response, nil
+	}
+	if response, handled := e.maybeHandlePendingGoal(ctx, msg, conv); handled {
 		return response, nil
 	}
 	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
@@ -486,7 +492,9 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 		}
 		if err := e.tracker.UpdateMastery(userID, syllabusID, topic.ID, delta); err != nil {
 			slog.Warn("mastery update failed", "user_id", userID, "topic", topic.ID, "error", err)
+			return
 		}
+		e.syncGoalProgress(userID, syllabusID, topic.ID)
 	}()
 }
 
@@ -517,7 +525,7 @@ func (e *Engine) recordActivityAsync(userID string) {
 	}()
 }
 
-func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (string, error) {
+func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (string, error) {
 	fields := strings.Fields(msg.Text)
 	cmd := fields[0]
 	locale := e.messageLocale(msg, nil)
@@ -540,6 +548,8 @@ func (e *Engine) handleCommand(_ context.Context, msg chat.InboundMessage) (stri
 		return e.handleLanguageCommand(msg, fields[1:])
 	case "/progress":
 		return e.handleProgressCommand(msg)
+	case "/goal":
+		return e.handleGoalCommand(ctx, msg, fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -635,7 +645,7 @@ func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) 
 		s, _ := e.streaks.GetStreak(msg.UserID)
 		streak = s.CurrentStreak
 	}
-	return progress.FormatProgressReport(items, totalXP, streak), nil
+	return e.appendGoalToProgressReport(msg.UserID, progress.FormatProgressReport(items, totalXP, streak)), nil
 }
 
 func (e *Engine) endActiveConversation(userID string) {
