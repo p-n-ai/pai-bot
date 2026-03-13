@@ -69,10 +69,13 @@ func main() {
 		}
 	}
 	var goalStore agent.GoalStore
+	var challengeStore agent.ChallengeStore
 	if memory {
 		goalStore = agent.NewMemoryGoalStore()
+		challengeStore = agent.NewMemoryChallengeStore()
 	} else {
 		goalStore = agent.NewPostgresGoalStore(state.DB.Pool, state.TenantID)
+		challengeStore = agent.NewPostgresChallengeStore(state.DB.Pool, state.TenantID)
 	}
 
 	engine := agent.NewEngine(agent.EngineConfig{
@@ -86,6 +89,7 @@ func main() {
 		Streaks:              progress.NewMemoryStreakTracker(),
 		XP:                   progress.NewMemoryXPTracker(),
 		Goals:                goalStore,
+		Challenges:           challengeStore,
 	})
 
 	if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{
