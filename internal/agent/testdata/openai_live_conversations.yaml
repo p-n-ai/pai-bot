@@ -470,15 +470,15 @@ conversations:
       expected_language: bm_or_mixed
 
   - id: C27
-    title: PT3-style algebra coaching
-    tags: [bm, pt3, exam-style]
+    title: UASA-style algebra coaching
+    tags: [bm, uasa, exam-style]
     turns:
-      - user: "Berikan bimbingan gaya PT3 untuk 4x - 5 = 19."
+      - user: "Berikan bimbingan gaya UASA untuk 4x - 5 = 19."
       - user: "Saya mahu format jawapan macam kertas peperiksaan."
       - user: "Apa markah biasanya diberi per langkah?"
       - user: "Bagi versi soalan yang sedikit lebih sukar."
       - user: "Saya jawab x = 7, semak."
-      - user: "Apa kesalahan pelajar PT3 paling kerap?"
+      - user: "Apa kesalahan pelajar UASA paling kerap?"
       - user: "Bagaimana semak jawapan secara cepat?"
       - user: "Ringkaskan strategi akhir untuk exam."
     checks:

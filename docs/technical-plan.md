@@ -175,7 +175,7 @@ When the curriculum YAML has fewer than 5 assessment questions for a topic, the 
 
 - The topic's teaching notes as source material
 - The difficulty level appropriate for the student's mastery
-- 2–3 real PT3/SPM exam exemplar questions (stored in `assessments.yaml`) as style references
+- 2–3 real UASA/SPM exam exemplar questions (stored in `assessments.yaml`) as style references
 
 This "exam mimicry" approach ensures AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
 
@@ -189,7 +189,7 @@ This "exam mimicry" approach ensures AI-generated questions match the format, di
 | **Model Routing** | Selects optimal AI provider per request | Cost-aware routing with circuit breaker pattern. Falls back through provider chain on failure. |
 | **Dual-Loop Problem Solving** | Structured step-by-step teaching for math questions | `internal/agent/prompts.go`. System prompt pattern: Understand → Plan → Solve → Verify → Connect. |
 | **Adaptive Explanation Depth** | Adjusts explanation complexity per student | `internal/agent/prompts.go`. Mastery-based prompt selection: beginner / developing / proficient. |
-| **Dynamic Question Generation** | Generates quiz questions when curriculum has insufficient assessments | `internal/agent/quiz.go`. AI generates questions from teaching notes with exam-style mimicry using PT3/SPM exemplars. |
+| **Dynamic Question Generation** | Generates quiz questions when curriculum has insufficient assessments | `internal/agent/quiz.go`. AI generates questions from teaching notes with exam-style mimicry using UASA/SPM exemplars. |
 
 ---
 

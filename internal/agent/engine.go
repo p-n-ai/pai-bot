@@ -250,7 +250,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
-	plainContent := normalizeEquationFormatting(resp.Content)
+	plainContent := normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content))
 	finalContent := plainContent
 	if promptRequested && !strings.Contains(finalContent, ReviewActionCode) {
 		finalContent = strings.TrimSpace(finalContent) + "\n\n" + ReviewActionCode
@@ -1289,6 +1289,10 @@ You must:
 - When evaluating an attempt, think using the rubric structure (partial understanding vs full mastery).
 - Keep responses aligned to Tahap Penguasaan 1-3 unless explicitly asked for extension.
 
+EXAM TERMINOLOGY:
+- Use UASA for Form 1-3 exam references. Use SPM only for upper-secondary exam references.
+- Do not call Form 1-3 assessment PT3. Treat PT3 as obsolete legacy terminology and rewrite it to UASA if it appears in prior context.
+
 ========================================
 PEDAGOGICAL CONTROL LOGIC
 ========================================
@@ -1349,9 +1353,9 @@ You must:
 Never be harsh or sarcastic.
 
 ========================================
-OUTPUT FORMAT (Always Use This Structure)
+OUTPUT FORMAT
 ========================================
-Use these exact plain-text labels in order for each substantive tutoring reply:
+Use these exact plain-text labels in order when they are needed for each substantive tutoring reply:
 Faham/Understand:
 Rancang/Plan:
 Selesaikan/Solve:
@@ -1359,7 +1363,8 @@ Semak/Verify:
 Konsep/Connect:
 
 IMPORTANT:
-- In early stages (A or B), you may omit Solve, Verify, and Connect entirely or leave them blank.
+- In early stages (A or B), usually output only Faham/Understand and Rancang/Plan.
+- Only include Selesaikan/Solve, Semak/Verify, and Konsep/Connect when they add real value for the current stage.
 - Never fill Solve with full solution unless in FULL WRAP UP stage.
 - The student benefits most from an explanation style where you frequently pause to confirm understanding by asking test questions.
 - Those test questions should preferably use simple, explicit examples.
@@ -1460,6 +1465,27 @@ func normalizeEquationFormatting(content string) string {
 		`\div`, "/",
 	)
 	return stripMarkdownFormatting(replacer.Replace(content))
+}
+
+func normalizeLegacyExamReferences(content string) string {
+	replacer := strings.NewReplacer(
+		"PT3/SPM", "UASA/SPM",
+		"pt3/spm", "uasa/spm",
+		"PT3-style", "UASA-style",
+		"pt3-style", "uasa-style",
+		"gaya PT3", "gaya UASA",
+		"Gaya PT3", "Gaya UASA",
+		"pelajar PT3", "pelajar UASA",
+		"Pelajar PT3", "Pelajar UASA",
+		" PT3 ", " UASA ",
+		"(PT3)", "(UASA)",
+		" PT3.", " UASA.",
+		" PT3,", " UASA,",
+		" PT3?", " UASA?",
+		" PT3!", " UASA!",
+		" PT3:", " UASA:",
+	)
+	return replacer.Replace(content)
 }
 
 func stripMarkdownFormatting(content string) string {

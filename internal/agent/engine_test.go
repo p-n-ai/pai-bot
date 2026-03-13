@@ -873,6 +873,36 @@ func TestEngine_SystemPrompt_EnforcesLanguageAndOutputContract(t *testing.T) {
 	if !contains(systemPrompt.Content, "Konsep/Connect") {
 		t.Fatalf("system prompt missing Konsep/Connect output label requirement")
 	}
+	if !contains(systemPrompt.Content, "Use UASA for Form 1-3 exam references") {
+		t.Fatalf("system prompt missing UASA guardrail")
+	}
+	if !contains(systemPrompt.Content, "Do not call Form 1-3 assessment PT3") {
+		t.Fatalf("system prompt missing PT3 prohibition")
+	}
+}
+
+func TestEngine_ProcessMessage_NormalizesLegacyPT3References(t *testing.T) {
+	mockAI := ai.NewMockProvider("Cuba format gaya PT3. Soalan ini mirip PT3/SPM dan sesuai untuk PT3 pelajar.")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-legacy-exam-term",
+		Text:    "Beri saya latihan gaya exam untuk persamaan linear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if contains(resp, "PT3") {
+		t.Fatalf("response should not contain PT3, got %q", resp)
+	}
+	if !contains(resp, "UASA") {
+		t.Fatalf("response should contain UASA replacement, got %q", resp)
+	}
 }
 
 func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testing.T) {

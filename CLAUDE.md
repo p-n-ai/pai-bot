@@ -189,7 +189,7 @@ Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reason
 - **Curriculum citations:** Every explanation must reference the curriculum source path (e.g., "KSSM Form 1 > Algebra > Linear Equations"). The prompt builder injects `{syllabus} > {subject} > {topic}` into the system prompt
 - **Adaptive explanation depth:** System prompt adjusts based on mastery level — beginner (<0.3): simple language, more examples; developing (0.3–0.6): standard with gradual notation; proficient (>0.6): concise, edge cases, cross-topic connections
 - **Dynamic question generation:** When assessments.yaml has <5 questions for a topic, quiz engine generates additional questions from teaching notes via `CompleteJSON` (cheap model)
-- **Exam-style mimicry:** AI-generated questions use 2–3 real PT3/SPM exemplar questions as style references to match real exam format and difficulty
+- **Exam-style mimicry:** AI-generated questions use 2–3 real UASA/SPM exemplar questions as style references to match real exam format and difficulty
 
 ### Security
 - JWT with 15-min access tokens + 7-day refresh tokens

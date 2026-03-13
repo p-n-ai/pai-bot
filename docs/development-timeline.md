@@ -220,8 +220,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | | 🤖 |
 | `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | | 🤖 |
 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
+| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real UASA/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
+| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real UASA/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
 ### Day 8 — Proactive Nudges + Streaks
 
