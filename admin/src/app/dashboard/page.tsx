@@ -65,8 +65,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8fcff_0%,#eef8f7_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
         <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
@@ -169,8 +168,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }
 

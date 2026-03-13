@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { AdminShell } from "@/components/admin-shell";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,12 +33,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <div className="pointer-events-none fixed top-5 right-5 z-50">
-            <div className="pointer-events-auto">
-              <ThemeToggle />
-            </div>
-          </div>
-          {children}
+          <AdminShell>{children}</AdminShell>
         </ThemeProvider>
       </body>
     </html>
