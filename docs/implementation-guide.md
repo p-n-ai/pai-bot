@@ -4593,7 +4593,7 @@ func IsStreakMilestone(days int) bool {
 
 ### Day 11 — Goals + Challenges
 
-Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
+Status (2026-03-13): `/goal` and `/challenge` are live. `/challenge` shipped as public matchmaking + private invite codes + 30-second AI fallback, with shared battle questions, challenge-only XP, and `/challenge` as the poll-based status surface.
 
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
@@ -4603,10 +4603,12 @@ Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mast
 |---|---------|------|-------|---------------|
 | 11.1 | `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language | 🤖 | `internal/agent/goals.go` |
 | 11.2 | `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes | 🤖 | Update goals.go |
-| 11.3 | `P-W3D11-3` | Peer challenges: `/challenge` command, 6-char code, simultaneous quiz | 🤖 | `internal/agent/challenge.go` |
+| 11.3 | `P-W3D11-3` | Peer challenges: `/challenge` command, public queue, private code, AI fallback, challenge XP | 🤖 | `internal/agent/challenge.go` |
 | 11.4 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics | 🧑 | Manual |
 
 #### 11.3 — Peer Challenge System (TDD)
+
+Status note: shipped implementation evolved past the original sketch below. Current behavior is public matchmaking, private invite codes, dynamic nearby-topic selection, and AI fallback after 30 seconds.
 
 **File:** `internal/agent/challenge_test.go`
 
