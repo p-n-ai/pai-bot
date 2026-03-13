@@ -4796,6 +4796,12 @@ Follow the same TDD pattern for:
 
 #### 16.1 — Scaffold Admin Panel
 
+Implementation boundary for auth:
+
+- Current: Day 16 JWT/RBAC applies to the Go admin API under `/api/admin/*`.
+- Current: the Next.js admin shell is still publicly routable during scaffolding. In an anonymous browser session, pages can render, but API requests without `pai_token` should fail with `401` or `403`.
+- Planned later: add the final frontend auth flow only when the team is ready to decide on login UX and route-guard behavior.
+
 ```bash
 cd admin
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --no-import-alias
@@ -4864,6 +4870,11 @@ function getToken(): string {
   return '';
 }
 ```
+
+Decision note:
+
+- For Day 16, "JWT auth" means backend bearer-token enforcement plus RBAC on admin API endpoints.
+- Frontend login pages, redirects, and Next.js middleware protection are intentionally deferred so admin UI scaffolding can proceed independently.
 
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
 

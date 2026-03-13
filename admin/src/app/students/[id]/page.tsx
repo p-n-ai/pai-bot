@@ -49,8 +49,7 @@ export default function StudentPage() {
   const struggleAreas = detail?.progress.filter((item) => item.mastery_score < 0.6) ?? [];
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#fcfffd_0%,#f3f8ff_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
         <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-3">
             <Link href="/dashboard" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
@@ -150,8 +149,7 @@ export default function StudentPage() {
             ))}
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }
 

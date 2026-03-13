@@ -306,12 +306,12 @@ Status (2026-03-12): `/goal` shipped with natural-language parsing, pending conf
 
 ### Day 16 — Scaffold Admin Panel
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. JWT auth, sidebar layout. | 🤖 |
-| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 |
-| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 |
-| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human |
+| Task ID | Task | Owner | Status |
+|---------|------|-------|--------|
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, keep frontend login/route guards deferred until a later auth-hardening pass, sidebar layout. | 🤖 | ✅ |
+| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ |
+| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ |
+| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ |
 
 ### Day 17 — API Endpoints + Parent View
 

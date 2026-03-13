@@ -17,6 +17,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
@@ -178,7 +179,7 @@ func main() {
 	adminService := adminapi.New(db.Pool, store.TenantID())
 
 	// HTTP endpoints.
-	mux := newHandler(adminService, gatewaySender{gw})
+	mux := newHandlerWithAuth(adminService, gatewaySender{gw}, cfg.Auth.JWTSecret)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -300,15 +301,28 @@ func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
-	mux.HandleFunc("GET /api/admin/classes/{id}/progress", handleAdminClassProgress(admin))
-	mux.HandleFunc("GET /api/admin/students/{id}", handleAdminStudentDetail(admin))
-	mux.HandleFunc("GET /api/admin/students/{id}/conversations", handleAdminStudentConversations(admin))
-	mux.HandleFunc("POST /api/admin/students/{id}/nudge", handleAdminStudentNudge(admin, sender))
 	return mux
 }
 
 func newHandler(admin adminDataSource, sender messageSender) http.Handler {
-	return withCORS(newMux(admin, sender))
+	return newHandlerWithAuth(admin, sender, "change-me-in-production")
+}
+
+func newHandlerWithAuth(admin adminDataSource, sender messageSender, jwtSecret string) http.Handler {
+	mux := newMux(admin, sender)
+	manager := auth.NewTokenManager(jwtSecret, time.Hour)
+
+	teacherOrAbove := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleTeacher, auth.RoleAdmin, auth.RolePlatformAdmin),
+	)
+
+	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(admin)))
+	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(admin)))
+	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(admin)))
+	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(admin, sender)))
+
+	return withCORS(mux)
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -427,6 +441,16 @@ func withCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(final http.Handler) http.Handler {
+		wrapped := final
+		for i := len(middlewares) - 1; i >= 0; i-- {
+			wrapped = middlewares[i](wrapped)
+		}
+		return wrapped
+	}
 }
 
 func isTelegramChatID(v string) bool {
