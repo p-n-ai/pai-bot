@@ -136,7 +136,7 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 - **Proactive Study Sessions** — The agent initiates conversations when it's time to review. Spaced repetition ensures long-term retention.
 - **Progress Tracking** — See mastery per topic, XP earned, streak length, and progress toward personal goals.
 - **Quizzes & Assessments** — Take quizzes in chat with AI-graded free-text answers, hints, and detailed feedback. When the question bank runs low, the AI generates new questions dynamically from curriculum content.
-- **Exam-Style Practice** — AI-generated questions match the format and difficulty of real PT3/SPM exams, so students practice with questions that feel like the real thing.
+- **Exam-Style Practice** — AI-generated questions match the format and difficulty of real UASA/SPM exams, so students practice with questions that feel like the real thing.
 - **Peer Challenges** — Battle classmates on the same set of questions. Learn together, compete for fun.
 - **Goals & Streaks** — Set a learning goal ("Master algebra by April") and track daily streaks.
 
