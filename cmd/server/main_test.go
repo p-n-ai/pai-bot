@@ -10,6 +10,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/auth"
 )
 
 func TestHealthEndpoints(t *testing.T) {
@@ -55,6 +56,7 @@ func TestHealthEndpoints(t *testing.T) {
 func TestAdminClassProgressEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/form-1-algebra/progress", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -85,6 +87,7 @@ func TestAdminClassProgressEndpoint(t *testing.T) {
 
 func TestAdminStudentDetailEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -114,6 +117,7 @@ func TestAdminStudentDetailEndpoint(t *testing.T) {
 
 func TestAdminStudentConversationsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_2/conversations", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -157,6 +161,7 @@ func TestAdminAPIOptionsPreflight(t *testing.T) {
 func TestAdminStudentNudgeEndpoint(t *testing.T) {
 	gateway := chatGatewayStub{}
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/students/tg_student/nudge", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &gateway).ServeHTTP(rec, req)
@@ -174,6 +179,7 @@ func TestAdminStudentNudgeEndpoint(t *testing.T) {
 
 func TestAdminStudentNudgeEndpointRequiresTelegramChatID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/students/stu_1/nudge", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -185,12 +191,36 @@ func TestAdminStudentNudgeEndpointRequiresTelegramChatID(t *testing.T) {
 
 func TestAdminStudentDetailNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminEndpointsRequireAuthentication(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAdminEndpointsEnforceRoles(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -321,4 +351,34 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustIssueAdminToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleAdmin)
+}
+
+func mustIssueTeacherToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleTeacher)
+}
+
+func mustIssueStudentToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleStudent)
+}
+
+func mustIssueToken(t *testing.T, role auth.Role) string {
+	t.Helper()
+
+	manager := auth.NewTokenManager("change-me-in-production", time.Hour)
+	token, err := manager.Issue(auth.TokenClaims{
+		Subject:  "user-123",
+		TenantID: "tenant-abc",
+		Role:     role,
+	}, time.Date(2026, 3, 13, 10, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+	return token
 }
