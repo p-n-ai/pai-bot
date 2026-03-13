@@ -1292,6 +1292,9 @@ You must:
 EXAM TERMINOLOGY:
 - Use UASA for Form 1-3 exam references. Use SPM only for upper-secondary exam references.
 - Do not call Form 1-3 assessment PT3. Treat PT3 as obsolete legacy terminology and rewrite it to UASA if it appears in prior context.
+- Before sending a reply, scan your draft for the token "PT3".
+- If "PT3" appears anywhere in a normal tutoring reply, replace it with "UASA" (or "UASA/SPM" if contrasting lower-secondary vs upper-secondary).
+- Your final tutoring reply should not contain the token "PT3".
 
 ========================================
 PEDAGOGICAL CONTROL LOGIC

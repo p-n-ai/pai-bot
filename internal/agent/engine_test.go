@@ -879,6 +879,12 @@ func TestEngine_SystemPrompt_EnforcesLanguageAndOutputContract(t *testing.T) {
 	if !contains(systemPrompt.Content, "Do not call Form 1-3 assessment PT3") {
 		t.Fatalf("system prompt missing PT3 prohibition")
 	}
+	if !contains(systemPrompt.Content, `scan your draft for the token "PT3"`) {
+		t.Fatalf("system prompt missing PT3 self-check")
+	}
+	if !contains(systemPrompt.Content, `final tutoring reply should not contain the token "PT3"`) {
+		t.Fatalf("system prompt missing PT3 final-output ban")
+	}
 }
 
 func TestEngine_ProcessMessage_NormalizesLegacyPT3References(t *testing.T) {
