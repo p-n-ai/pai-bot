@@ -4593,6 +4593,8 @@ func IsStreakMilestone(days int) bool {
 
 ### Day 11 (Mon) — Goals + Challenges
 
+Status (2026-03-13): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
+
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
 #### Tasks

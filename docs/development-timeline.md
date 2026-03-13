@@ -256,6 +256,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 11 (Mon) — Goals + Challenges
 
+Status (2026-03-13): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
+
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 |
