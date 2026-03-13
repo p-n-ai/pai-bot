@@ -6,7 +6,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
-func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, question QuizQuestion, correct bool) {
+func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, question QuizQuestion, correct bool, awardAnswerXP bool) {
 	if e.tracker == nil && e.xp == nil {
 		return
 	}
@@ -50,7 +50,7 @@ func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, quest
 			}
 		}
 
-		if correct && e.xp != nil {
+		if correct && awardAnswerXP && e.xp != nil {
 			if err := e.xp.Award(userID, progress.XPSourceQuiz, progress.XPQuizCorrect, map[string]any{
 				"topic_id":     topicID,
 				"question_id":  question.ID,

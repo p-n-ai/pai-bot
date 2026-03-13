@@ -256,13 +256,13 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 11 — Goals + Challenges
 
-Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
+Status (2026-03-13): `/goal` and `/challenge` are live. `/challenge` shipped as public matchmaking + private invite codes + 30s AI fallback, with shared battle questions, challenge-only XP, and poll-based `/challenge` status.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 |
 | `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 |
-| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
+| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, public matchmaking, private codes, AI fallback, results with challenge XP | 🤖 |
 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
 
 ### Day 12 — Groups + Leaderboards

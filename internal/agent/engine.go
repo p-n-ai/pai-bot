@@ -46,6 +46,8 @@ type EngineConfig struct {
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
 	Goals                 GoalStore
+	Challenges            ChallengeStore
+	Now                   func() time.Time
 }
 
 // Engine is the core conversation processor.
@@ -64,6 +66,8 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	challenges            ChallengeStore
+	now                   func() time.Time
 }
 
 // NewEngine creates a new agent engine.
@@ -101,6 +105,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 			contextResolver = NoopContextResolver{}
 		}
 	}
+	nowFn := cfg.Now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -116,6 +124,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		challenges:            cfg.Challenges,
+		now:                   nowFn,
 	}
 }
 
@@ -550,6 +560,8 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleProgressCommand(msg)
 	case "/goal":
 		return e.handleGoalCommand(ctx, msg, fields[1:])
+	case "/challenge":
+		return e.handleChallengeCommand(msg, fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
