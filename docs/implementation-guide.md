@@ -1880,7 +1880,7 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be developed in parallel on feature branc
 
 ## WEEK 1 — THE TALKING SKELETON
 
-### Day 1 (Mon) — Wire Telegram → AI → Student
+### Day 1 — Wire Telegram → AI → Student
 
 **Entry criteria:** Day 0 complete. `go test ./...` passes. `docker compose up` starts infrastructure. Migration applied. All engineers have completed the Developer Onboarding steps above.
 
@@ -2895,7 +2895,7 @@ go build ./cmd/server
 
 ---
 
-### Day 2 (Tue) — Logging + Quality
+### Day 2 — Logging + Quality
 
 **Entry criteria:** Day 1 complete. Bot responds on Telegram. `make test-all` passes.
 
@@ -3307,7 +3307,7 @@ make test-all
 
 ---
 
-### Day 3 (Wed) — Deploy + First Students
+### Day 3 — Deploy + First Students
 
 **Entry criteria:** Day 2 complete. Bot responds with curriculum context. `make test-all` passes.
 
@@ -3484,7 +3484,7 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 
 ---
 
-### Day 4 (Thu) — Iterate on Real Feedback
+### Day 4 — Iterate on Real Feedback
 
 **Entry criteria:** Day 3 complete. Bot deployed. 3+ students chatting.
 
@@ -3638,7 +3638,7 @@ CI=true go test -tags=integration ./internal/agent -run OpenAILive -v
 
 ---
 
-### Day 5 (Fri) — Week 1 Retro
+### Day 5 — Week 1 Retro
 
 **Entry criteria:** Day 4 complete. 10 students onboarded. Analytics available.
 
@@ -3663,7 +3663,7 @@ CI=true go test -tags=integration ./internal/agent -run OpenAILive -v
 
 ## WEEK 2 — PROGRESS + ASSESSMENT + 50 STUDENTS
 
-### Day 6 (Mon) — Mastery Tracking
+### Day 6 — Mastery Tracking
 
 **Entry criteria:** Week 1 complete. Bot live with 10 students. System prompt v3+. `make test-all` passes.
 
@@ -4079,7 +4079,7 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 
 ---
 
-### Day 7 (Tue) — Quiz Engine
+### Day 7 — Quiz Engine
 
 **Entry criteria:** Day 6 complete. Progress tracking works. `make test-all` passes.
 
@@ -4340,7 +4340,7 @@ func (s *QuizSession) IsComplete() bool {
 
 ---
 
-### Day 8 (Wed) — Proactive Nudges + Streaks
+### Day 8 — Proactive Nudges + Streaks
 
 **Entry criteria:** Day 7 complete. Quiz engine works. `make test-all` passes.
 
@@ -4591,7 +4591,9 @@ func IsStreakMilestone(days int) bool {
 
 ## WEEK 3 — MOTIVATION ENGINE
 
-### Day 11 (Mon) — Goals + Challenges
+### Day 11 — Goals + Challenges
+
+Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
@@ -4779,7 +4781,7 @@ Follow the same TDD pattern for:
 
 ## WEEK 4 — ADMIN PANEL + FORM SELECTION
 
-### Day 16 (Mon) — Scaffold Admin Panel
+### Day 16 — Scaffold Admin Panel
 
 **Entry criteria:** Week 3 complete. Motivation features live. `make test-all` passes.
 
@@ -4987,7 +4989,7 @@ echo ""
 
 ## WEEK 6 — LAUNCH + SCALE
 
-### Day 26 (Mon) — LAUNCH DAY
+### Day 26 — LAUNCH DAY
 
 #### Tasks
 
