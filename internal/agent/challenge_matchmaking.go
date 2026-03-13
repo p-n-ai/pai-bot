@@ -49,7 +49,18 @@ func (e *Engine) tryHumanChallengeMatch(userID string, request *challengeRequest
 	if err != nil {
 		return nil, err
 	}
-	return e.challenges.ActivateHumanMatch(best.Code, userID, input)
+	match, err := e.challenges.ActivateHumanMatch(best.Code, userID, input)
+	if err == nil {
+		return match, nil
+	}
+	switch err {
+	case ErrChallengeAlreadyActive:
+		return e.challenges.GetLiveChallengeForUser(userID)
+	case ErrChallengeFull, ErrChallengeNotFound:
+		return nil, nil
+	default:
+		return nil, err
+	}
 }
 
 func (e *Engine) pickHumanChallengeCandidate(request *challengeRequest, candidates []*Challenge) *Challenge {

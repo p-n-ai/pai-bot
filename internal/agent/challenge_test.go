@@ -291,6 +291,102 @@ func TestEngine_ChallengeAIFallbackUsesChallengeOnlyXP(t *testing.T) {
 	}
 }
 
+func TestEngine_ChallengePauseExitPreservesProgress(t *testing.T) {
+	mockAI := ai.NewMockProvider("unused")
+	store := agent.NewMemoryStore()
+	tracker := progress.NewMemoryTracker()
+	now := time.Now()
+
+	if err := store.SetUserForm("pause-user", "1"); err != nil {
+		t.Fatalf("SetUserForm() error = %v", err)
+	}
+	_ = tracker.UpdateMastery("pause-user", "kssm-f1", "F1-02", 0.1)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		Challenges:       agent.NewMemoryChallengeStore(),
+		CurriculumLoader: createTestCurriculumLoader(t),
+		Tracker:          tracker,
+		Now: func() time.Time {
+			return now
+		},
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "/challenge linear equations",
+	})
+	if err != nil {
+		t.Fatalf("queue error = %v", err)
+	}
+
+	now = now.Add(31 * time.Second)
+	startResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "/challenge start",
+	})
+	if err != nil {
+		t.Fatalf("start error = %v", err)
+	}
+	if !contains(startResp, "Question 1/3") {
+		t.Fatalf("response = %q, want first challenge question", startResp)
+	}
+
+	nextResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "wrong",
+	})
+	if err != nil {
+		t.Fatalf("answer error = %v", err)
+	}
+	if !contains(nextResp, "Question 2/3") {
+		t.Fatalf("response = %q, want second challenge question", nextResp)
+	}
+
+	pauseResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "stop quiz",
+	})
+	if err != nil {
+		t.Fatalf("pause error = %v", err)
+	}
+	if !contains(pauseResp, "paused your challenge run") {
+		t.Fatalf("response = %q, want challenge pause response", pauseResp)
+	}
+
+	exitResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "stop quiz",
+	})
+	if err != nil {
+		t.Fatalf("paused exit error = %v", err)
+	}
+	if !contains(exitResp, "paused your challenge run") {
+		t.Fatalf("response = %q, want paused challenge response", exitResp)
+	}
+
+	resumeResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "pause-user",
+		Text:    "/challenge start",
+	})
+	if err != nil {
+		t.Fatalf("resume error = %v", err)
+	}
+	if !contains(resumeResp, "Question 2/3") {
+		t.Fatalf("response = %q, want resumed second challenge question", resumeResp)
+	}
+	if contains(resumeResp, "Question 1/3") {
+		t.Fatalf("response = %q, challenge replayed from question 1", resumeResp)
+	}
+}
+
 func sampleChallengeQuestions() []agent.QuizQuestion {
 	return []agent.QuizQuestion{
 		{ID: "Q1", Text: "Solve x + 3 = 7", AnswerType: "exact", Answer: "4"},

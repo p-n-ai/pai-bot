@@ -87,11 +87,8 @@ func (s *MemoryChallengeStore) ActivateHumanMatch(code, opponentID string, input
 	if live := liveChallengeForUserLocked(s.challenges, opponentID); live != nil {
 		return nil, ErrChallengeAlreadyActive
 	}
-	if challenge.CreatorID == opponentID {
-		return nil, ErrChallengeSelfJoin
-	}
-	if challenge.OpponentID != "" {
-		return nil, ErrChallengeFull
+	if err := validateHumanMatchTarget(challenge, opponentID); err != nil {
+		return nil, err
 	}
 	now := time.Now()
 	challenge.OpponentID = opponentID
@@ -116,6 +113,9 @@ func (s *MemoryChallengeStore) ActivateAIFallback(code string, input ChallengeIn
 	challenge, ok := s.challenges[normalizeChallengeCodeValue(code)]
 	if !ok {
 		return nil, ErrChallengeNotFound
+	}
+	if !challengeCanPromoteToAI(challenge) {
+		return cloneChallenge(challenge), nil
 	}
 	now := time.Now()
 	challenge.Source = challengeSourceAIFallback
@@ -144,17 +144,11 @@ func (s *MemoryChallengeStore) JoinPrivateChallenge(code, opponentID string) (*C
 	if live := liveChallengeForUserLocked(s.challenges, opponentID); live != nil {
 		return nil, ErrChallengeAlreadyActive
 	}
-	if challenge.CreatorID == opponentID {
-		return nil, ErrChallengeSelfJoin
+	if err := validatePrivateJoinTarget(challenge, opponentID); err != nil {
+		return nil, err
 	}
-	if challenge.Source != challengeSourcePrivateCode {
-		return nil, ErrChallengeNotFound
-	}
-	if challenge.OpponentID != "" {
-		if challenge.OpponentID == opponentID {
-			return cloneChallenge(challenge), nil
-		}
-		return nil, ErrChallengeFull
+	if challenge.OpponentID == opponentID {
+		return cloneChallenge(challenge), nil
 	}
 	now := time.Now()
 	challenge.OpponentID = opponentID

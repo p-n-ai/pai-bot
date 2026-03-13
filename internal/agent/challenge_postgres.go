@@ -34,12 +34,6 @@ func (s *PostgresChallengeStore) CreatePrivateChallenge(userID string, input Cha
 }
 
 func (s *PostgresChallengeStore) insertChallenge(externalID, source, opponentType string, input ChallengeInput) (*Challenge, error) {
-	if live, err := s.GetLiveChallengeForUser(externalID); err != nil {
-		return nil, err
-	} else if live != nil {
-		return nil, ErrChallengeAlreadyActive
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -58,6 +52,22 @@ func (s *PostgresChallengeStore) insertChallenge(externalID, source, opponentTyp
 	questionCount := normalizeChallengeQuestionCount(input.QuestionCount, input.Questions)
 
 	for attempt := 0; attempt < 5; attempt++ {
+		tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("begin insert challenge tx: %w", err)
+		}
+		if _, err := s.lockUserIDByExternalID(ctx, tx, externalID); err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, err
+		}
+		if live, err := s.getLiveChallengeForUserTx(ctx, tx, externalID); err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, err
+		} else if live != nil {
+			_ = tx.Rollback(ctx)
+			return nil, ErrChallengeAlreadyActive
+		}
+
 		challenge := &Challenge{
 			Code:          generateUniqueChallengeCode(nil),
 			Source:        source,
@@ -72,7 +82,7 @@ func (s *PostgresChallengeStore) insertChallenge(externalID, source, opponentTyp
 			State:         challengeStateWaiting,
 			Metadata:      input.Metadata,
 		}
-		err = s.pool.QueryRow(ctx,
+		err = tx.QueryRow(ctx,
 			`INSERT INTO challenges (
 			    code, source, opponent_type, creator_user_id, tenant_id,
 			    topic_id, topic_name, subject_id, syllabus_id, questions, question_count,
@@ -98,8 +108,12 @@ func (s *PostgresChallengeStore) insertChallenge(externalID, source, opponentTyp
 			metadataJSON,
 		).Scan(&challenge.ID, &challenge.CreatedAt, &challenge.UpdatedAt)
 		if err == nil {
+			if err := tx.Commit(ctx); err != nil {
+				return nil, fmt.Errorf("commit insert challenge: %w", err)
+			}
 			return challenge, nil
 		}
+		_ = tx.Rollback(ctx)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
 			return nil, fmt.Errorf("insert challenge: %w", err)
@@ -171,11 +185,6 @@ func (s *PostgresChallengeStore) ListWaitingPublicChallenges(excludeUserID strin
 }
 
 func (s *PostgresChallengeStore) ActivateHumanMatch(code, opponentID string, input ChallengeInput) (*Challenge, error) {
-	if live, err := s.GetLiveChallengeForUser(opponentID); err != nil {
-		return nil, err
-	} else if live != nil {
-		return nil, ErrChallengeAlreadyActive
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -190,6 +199,15 @@ func (s *PostgresChallengeStore) ActivateHumanMatch(code, opponentID string, inp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := s.lockUserIDByExternalID(ctx, tx, opponentID); err != nil {
+		return nil, err
+	}
+	if live, err := s.getLiveChallengeForUserTx(ctx, tx, opponentID); err != nil {
+		return nil, err
+	} else if live != nil {
+		return nil, ErrChallengeAlreadyActive
+	}
+
 	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
@@ -198,11 +216,8 @@ func (s *PostgresChallengeStore) ActivateHumanMatch(code, opponentID string, inp
 	if err != nil {
 		return nil, mapChallengeQueryError(err)
 	}
-	if challenge.CreatorID == opponentID {
-		return nil, ErrChallengeSelfJoin
-	}
-	if challenge.OpponentID != "" {
-		return nil, ErrChallengeFull
+	if err := validateHumanMatchTarget(challenge, opponentID); err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -246,6 +261,9 @@ func (s *PostgresChallengeStore) ActivateAIFallback(code string, input Challenge
 	if err != nil {
 		return nil, mapChallengeQueryError(err)
 	}
+	if !challengeCanPromoteToAI(challenge) {
+		return challenge, nil
+	}
 	now := time.Now()
 	challenge.Source = challengeSourceAIFallback
 	challenge.OpponentType = challengeOpponentAI
@@ -270,11 +288,6 @@ func (s *PostgresChallengeStore) ActivateAIFallback(code string, input Challenge
 }
 
 func (s *PostgresChallengeStore) JoinPrivateChallenge(code, opponentID string) (*Challenge, error) {
-	if live, err := s.GetLiveChallengeForUser(opponentID); err != nil {
-		return nil, err
-	} else if live != nil {
-		return nil, ErrChallengeAlreadyActive
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 	opponentUserID, err := s.resolveOrCreateUserID(ctx, opponentID)
@@ -288,6 +301,15 @@ func (s *PostgresChallengeStore) JoinPrivateChallenge(code, opponentID string) (
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := s.lockUserIDByExternalID(ctx, tx, opponentID); err != nil {
+		return nil, err
+	}
+	if live, err := s.getLiveChallengeForUserTx(ctx, tx, opponentID); err != nil {
+		return nil, err
+	} else if live != nil {
+		return nil, ErrChallengeAlreadyActive
+	}
+
 	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
@@ -296,17 +318,11 @@ func (s *PostgresChallengeStore) JoinPrivateChallenge(code, opponentID string) (
 	if err != nil {
 		return nil, mapChallengeQueryError(err)
 	}
-	if challenge.Source != challengeSourcePrivateCode {
-		return nil, ErrChallengeNotFound
+	if err := validatePrivateJoinTarget(challenge, opponentID); err != nil {
+		return nil, err
 	}
-	if challenge.CreatorID == opponentID {
-		return nil, ErrChallengeSelfJoin
-	}
-	if challenge.OpponentID != "" {
-		if challenge.OpponentID == opponentID {
-			return challenge, nil
-		}
-		return nil, ErrChallengeFull
+	if challenge.OpponentID == opponentID {
+		return challenge, nil
 	}
 
 	now := time.Now()

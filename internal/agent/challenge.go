@@ -63,6 +63,11 @@ func (e *Engine) enterPublicChallenge(conv *Conversation, userID, raw string) (s
 
 	match, err := e.tryHumanChallengeMatch(userID, request)
 	if err != nil {
+		if err == ErrChallengeAlreadyActive {
+			if live, liveErr := e.challenges.GetLiveChallengeForUser(userID); liveErr == nil && live != nil {
+				return formatChallengeOverview(live, userID, conv, e.now()), nil
+			}
+		}
 		return "", err
 	}
 	if match != nil {
@@ -92,6 +97,11 @@ func (e *Engine) enterPublicChallenge(conv *Conversation, userID, raw string) (s
 		},
 	})
 	if err != nil {
+		if err == ErrChallengeAlreadyActive {
+			if live, liveErr := e.challenges.GetLiveChallengeForUser(userID); liveErr == nil && live != nil {
+				return formatChallengeOverview(live, userID, conv, e.now()), nil
+			}
+		}
 		return "", err
 	}
 
@@ -129,6 +139,11 @@ func (e *Engine) createPrivateChallenge(conv *Conversation, userID, raw string) 
 	}
 	challenge, err := e.challenges.CreatePrivateChallenge(userID, input)
 	if err != nil {
+		if err == ErrChallengeAlreadyActive {
+			if live, liveErr := e.challenges.GetLiveChallengeForUser(userID); liveErr == nil && live != nil {
+				return formatChallengeOverview(live, userID, conv, e.now()), nil
+			}
+		}
 		return "", err
 	}
 

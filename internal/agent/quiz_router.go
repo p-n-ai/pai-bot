@@ -357,6 +357,13 @@ func (e *Engine) handlePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	action := classifyPausedQuizTurn(msg.Text)
 	switch action {
 	case quizTurnActionExit:
+		if state.ChallengeCode != "" {
+			response := renderChallengePaused()
+			if _, err := e.store.AddMessage(conv.ID, StoredMessage{Role: "assistant", Content: response}); err != nil {
+				slog.Error("failed to store paused challenge exit response", "conversation_id", conv.ID, "error", err)
+			}
+			return response, true
+		}
 		if err := e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching); err != nil {
 			slog.Error("failed to clear paused quiz state on exit", "conversation_id", conv.ID, "error", err)
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true

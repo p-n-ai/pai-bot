@@ -112,6 +112,94 @@ func (s *PostgresChallengeStore) lookupUserIDByExternalID(ctx context.Context, t
 	return userID, nil
 }
 
+func (s *PostgresChallengeStore) lockUserIDByExternalID(ctx context.Context, tx pgx.Tx, externalID string) (string, error) {
+	var userID string
+	err := tx.QueryRow(ctx, `
+		SELECT id::text
+		  FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1
+		 FOR UPDATE`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&userID)
+	if err != nil {
+		return "", fmt.Errorf("lock challenge user id: %w", err)
+	}
+	return userID, nil
+}
+
+func (s *PostgresChallengeStore) getLiveChallengeForUserTx(ctx context.Context, tx pgx.Tx, userID string) (*Challenge, error) {
+	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+		WHERE c.tenant_id = $1::uuid
+		  AND ($2 = cu.external_id OR $2 = ou.external_id)
+		  AND c.state IN ('waiting', 'ready', 'active')
+		ORDER BY c.updated_at DESC
+		LIMIT 1`,
+		s.tenantID,
+		userID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return challenge, err
+}
+
+func challengeCanPromoteToAI(challenge *Challenge) bool {
+	return challenge != nil &&
+		challenge.Source == challengeSourcePublicQueue &&
+		challenge.State == challengeStateWaiting &&
+		challenge.OpponentID == ""
+}
+
+func validateHumanMatchTarget(challenge *Challenge, opponentID string) error {
+	if challenge == nil {
+		return ErrChallengeNotFound
+	}
+	if challenge.CreatorID == opponentID {
+		return ErrChallengeSelfJoin
+	}
+	if challenge.Source != challengeSourcePublicQueue {
+		return ErrChallengeNotFound
+	}
+	if challenge.OpponentID != "" {
+		if challenge.OpponentID == opponentID {
+			return ErrChallengeAlreadyActive
+		}
+		return ErrChallengeFull
+	}
+	if challenge.State != challengeStateWaiting {
+		return ErrChallengeFull
+	}
+	return nil
+}
+
+func validatePrivateJoinTarget(challenge *Challenge, opponentID string) error {
+	if challenge == nil {
+		return ErrChallengeNotFound
+	}
+	if challenge.Source != challengeSourcePrivateCode {
+		return ErrChallengeNotFound
+	}
+	if challenge.CreatorID == opponentID {
+		return ErrChallengeSelfJoin
+	}
+	if challenge.OpponentID != "" {
+		if challenge.OpponentID == opponentID {
+			return nil
+		}
+		return ErrChallengeFull
+	}
+	if challenge.State == challengeStateCompleted {
+		return ErrChallengeFull
+	}
+	return nil
+}
+
 type challengeRow interface {
 	Scan(dest ...any) error
 }
