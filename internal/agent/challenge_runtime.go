@@ -173,6 +173,13 @@ func formatChallengeOverview(challenge *Challenge, userID string, conv *Conversa
 			fallbackChallengeTopicName(challenge),
 			int(remaining.Round(time.Second).Seconds()),
 		)
+	case challenge.Source == challengeSourcePrivateCode && challenge.OpponentID == "" && challenge.State == challengeStateWaiting:
+		return fmt.Sprintf(
+			"Private challenge ready to share.\nCode: %s\nTopic: %s\nQuestions: %d\n\nShare the code, then both students send `/challenge start`.",
+			challenge.Code,
+			challenge.TopicName,
+			maxChallengeQuestionCount(challenge),
+		)
 	case challenge.State == challengeStateCompleted:
 		return formatCompletedChallenge(challenge, userID)
 	case challengeUserCompleted(challenge, userID):

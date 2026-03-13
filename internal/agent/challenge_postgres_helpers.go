@@ -132,6 +132,18 @@ func baseChallengeSelect() string {
 	          LEFT JOIN users wu ON wu.id = c.winner_user_id`
 }
 
+func lockingChallengeSelect() string {
+	return `SELECT c.id::text, c.code, c.source, c.opponent_type,
+	               (SELECT u.external_id FROM users u WHERE u.id = c.creator_user_id),
+	               (SELECT u.external_id FROM users u WHERE u.id = c.opponent_user_id),
+	               c.topic_id, c.topic_name, c.subject_id, c.syllabus_id, c.questions, c.question_count,
+	               c.state, c.creator_ready_at, c.opponent_ready_at, c.creator_correct_count, c.opponent_correct_count,
+	               c.creator_completed_at, c.opponent_completed_at, c.creator_finish_xp_granted, c.opponent_finish_xp_granted,
+	               (SELECT u.external_id FROM users u WHERE u.id = c.winner_user_id),
+	               c.winner_xp_granted, c.metadata, c.created_at, c.updated_at
+	          FROM challenges c`
+}
+
 func scanChallenge(row challengeRow) (*Challenge, error) {
 	var (
 		challenge     Challenge

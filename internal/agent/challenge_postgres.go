@@ -190,7 +190,7 @@ func (s *PostgresChallengeStore) ActivateHumanMatch(code, opponentID string, inp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
 		FOR UPDATE
@@ -238,7 +238,7 @@ func (s *PostgresChallengeStore) ActivateAIFallback(code string, input Challenge
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
 		FOR UPDATE
@@ -288,7 +288,7 @@ func (s *PostgresChallengeStore) JoinPrivateChallenge(code, opponentID string) (
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
 		FOR UPDATE
@@ -333,7 +333,7 @@ func (s *PostgresChallengeStore) MarkReady(code, userID string) (*Challenge, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
 		FOR UPDATE
@@ -406,7 +406,7 @@ func (s *PostgresChallengeStore) CompleteChallenge(code, userID string, correctA
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	challenge, err := s.queryChallenge(ctx, tx, baseChallengeSelect()+`
+	challenge, err := s.queryChallenge(ctx, tx, lockingChallengeSelect()+`
 		WHERE c.tenant_id = $1::uuid
 		  AND c.code = $2
 		FOR UPDATE

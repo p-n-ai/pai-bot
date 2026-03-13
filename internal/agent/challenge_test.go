@@ -159,6 +159,9 @@ func TestEngine_PrivateChallengeCreateJoinAndStart(t *testing.T) {
 	if !contains(createResp, "Code:") {
 		t.Fatalf("response = %q, want private code", createResp)
 	}
+	if !contains(createResp, "Private challenge ready to share.") {
+		t.Fatalf("response = %q, want private share state", createResp)
+	}
 	code := extractChallengeCode(t, createResp)
 
 	joinResp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
