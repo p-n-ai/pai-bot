@@ -36,7 +36,7 @@ func (e *Engine) tryHumanChallengeMatch(userID string, request *challengeRequest
 	if err != nil {
 		return nil, err
 	}
-	best := e.pickHumanChallengeCandidate(userID, request, candidates)
+	best := e.pickHumanChallengeCandidate(request, candidates)
 	if best == nil {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (e *Engine) tryHumanChallengeMatch(userID string, request *challengeRequest
 	return e.challenges.ActivateHumanMatch(best.Code, userID, input)
 }
 
-func (e *Engine) pickHumanChallengeCandidate(userID string, request *challengeRequest, candidates []*Challenge) *Challenge {
+func (e *Engine) pickHumanChallengeCandidate(request *challengeRequest, candidates []*Challenge) *Challenge {
 	var best *Challenge
 	bestFormGap := math.MaxFloat64
 	for _, candidate := range candidates {
@@ -130,47 +130,24 @@ func (e *Engine) selectHumanBattleTopic(userID string, requested curriculum.Topi
 }
 
 func (e *Engine) buildHumanChallengeInput(request *challengeRequest, candidate *Challenge, topic curriculum.Topic) (ChallengeInput, error) {
-	assessment, ok := e.curriculumLoader.GetAssessment(topic.ID)
-	if !ok || len(assessment.Questions) == 0 {
-		return ChallengeInput{}, fmt.Errorf("assessment not available for topic %s", topic.ID)
-	}
-	return ChallengeInput{
-		TopicID:       topic.ID,
-		TopicName:     topic.Name,
-		SubjectID:     topic.SubjectID,
-		SyllabusID:    topic.SyllabusID,
-		Questions:     trimChallengeQuestions(questionsFromAssessment(assessment), defaultChallengeQuestionMax),
-		QuestionCount: defaultChallengeQuestionMax,
-		Metadata: ChallengeMetadata{
-			RequestedText:      request.Raw,
-			RequestedTopicID:   request.Topic.ID,
-			RequestedTopicName: request.Topic.Name,
-			CreatorForm:        request.Form,
-			OpponentForm:       candidate.Metadata.CreatorForm,
-		},
-	}, nil
+	return e.challengeInputForTopic(topic, ChallengeMetadata{
+		RequestedText:      request.Raw,
+		RequestedTopicID:   request.Topic.ID,
+		RequestedTopicName: request.Topic.Name,
+		CreatorForm:        request.Form,
+		OpponentForm:       candidate.Metadata.CreatorForm,
+	})
 }
 
 func (e *Engine) buildPrivateChallengeInput(userID string, request *challengeRequest) (curriculum.Topic, ChallengeInput, error) {
 	topic := e.selectSoloChallengeTopic(userID, request.Topic)
-	assessment, ok := e.curriculumLoader.GetAssessment(topic.ID)
-	if !ok || len(assessment.Questions) == 0 {
-		return curriculum.Topic{}, ChallengeInput{}, fmt.Errorf("assessment not available for topic %s", topic.ID)
-	}
-	return topic, ChallengeInput{
-		TopicID:       topic.ID,
-		TopicName:     topic.Name,
-		SubjectID:     topic.SubjectID,
-		SyllabusID:    topic.SyllabusID,
-		Questions:     trimChallengeQuestions(questionsFromAssessment(assessment), defaultChallengeQuestionMax),
-		QuestionCount: defaultChallengeQuestionMax,
-		Metadata: ChallengeMetadata{
-			RequestedText:      request.Raw,
-			RequestedTopicID:   request.Topic.ID,
-			RequestedTopicName: request.Topic.Name,
-			CreatorForm:        request.Form,
-		},
-	}, nil
+	input, err := e.challengeInputForTopic(topic, ChallengeMetadata{
+		RequestedText:      request.Raw,
+		RequestedTopicID:   request.Topic.ID,
+		RequestedTopicName: request.Topic.Name,
+		CreatorForm:        request.Form,
+	})
+	return topic, input, err
 }
 
 func (e *Engine) activateAIChallenge(userID string, challenge *Challenge) (*Challenge, error) {
@@ -182,26 +159,34 @@ func (e *Engine) activateAIChallenge(userID string, challenge *Challenge) (*Chal
 		}
 	}
 	finalTopic := e.selectSoloChallengeTopic(userID, requestedTopic)
-	assessment, ok := e.curriculumLoader.GetAssessment(finalTopic.ID)
-	if !ok || len(assessment.Questions) == 0 {
+	aiProfile := e.buildChallengeAIProfile(userID, finalTopic, defaultChallengeQuestionMax)
+	input, err := e.challengeInputForTopic(finalTopic, ChallengeMetadata{
+		RequestedText:      challenge.Metadata.RequestedText,
+		RequestedTopicID:   requestedTopic.ID,
+		RequestedTopicName: requestedTopic.Name,
+		CreatorForm:        challenge.Metadata.CreatorForm,
+		AIProfile:          aiProfile,
+	})
+	if err != nil {
 		return challenge, nil
 	}
-	aiProfile := e.buildChallengeAIProfile(userID, finalTopic, defaultChallengeQuestionMax)
-	return e.challenges.ActivateAIFallback(challenge.Code, ChallengeInput{
-		TopicID:       finalTopic.ID,
-		TopicName:     finalTopic.Name,
-		SubjectID:     finalTopic.SubjectID,
-		SyllabusID:    finalTopic.SyllabusID,
+	return e.challenges.ActivateAIFallback(challenge.Code, input)
+}
+
+func (e *Engine) challengeInputForTopic(topic curriculum.Topic, metadata ChallengeMetadata) (ChallengeInput, error) {
+	assessment, ok := e.curriculumLoader.GetAssessment(topic.ID)
+	if !ok || len(assessment.Questions) == 0 {
+		return ChallengeInput{}, fmt.Errorf("assessment not available for topic %s", topic.ID)
+	}
+	return ChallengeInput{
+		TopicID:       topic.ID,
+		TopicName:     topic.Name,
+		SubjectID:     topic.SubjectID,
+		SyllabusID:    topic.SyllabusID,
 		Questions:     trimChallengeQuestions(questionsFromAssessment(assessment), defaultChallengeQuestionMax),
 		QuestionCount: defaultChallengeQuestionMax,
-		Metadata: ChallengeMetadata{
-			RequestedText:      challenge.Metadata.RequestedText,
-			RequestedTopicID:   requestedTopic.ID,
-			RequestedTopicName: requestedTopic.Name,
-			CreatorForm:        challenge.Metadata.CreatorForm,
-			AIProfile:          aiProfile,
-		},
-	})
+		Metadata:      metadata,
+	}, nil
 }
 
 func (e *Engine) selectSoloChallengeTopic(userID string, requested curriculum.Topic) curriculum.Topic {

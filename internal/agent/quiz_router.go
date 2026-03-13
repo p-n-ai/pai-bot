@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
@@ -259,7 +260,7 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		if !hasQuestion {
 			_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
 			if state.ChallengeCode != "" {
-				return formatChallengeStatus(challenge, msg.UserID), true
+				return formatChallengeOverview(challenge, msg.UserID, nil, time.Now()), true
 			}
 			return quizCompletedText(e.messageLocale(msg, conv), session.Summary()), true
 		}
@@ -390,7 +391,7 @@ func (e *Engine) resumePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		if state.ChallengeCode != "" {
 			challenge, err := e.challenges.GetChallenge(state.ChallengeCode)
 			if err == nil && challenge != nil {
-				return formatChallengeStatus(challenge, msg.UserID)
+				return formatChallengeOverview(challenge, msg.UserID, nil, time.Now())
 			}
 		}
 		return quizCompletedText(e.messageLocale(msg, conv), session.Summary())

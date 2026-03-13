@@ -138,10 +138,6 @@ func renderChallengeCompletion(result QuizAnswerResult, challenge *Challenge, us
 	return builder.String()
 }
 
-func formatChallengeStatus(challenge *Challenge, userID string) string {
-	return formatChallengeOverview(challenge, userID, nil, time.Now())
-}
-
 func formatChallengeOverview(challenge *Challenge, userID string, conv *Conversation, now time.Time) string {
 	if challenge == nil {
 		return challengeEmptyStateMessage()
@@ -179,7 +175,7 @@ func formatChallengeOverview(challenge *Challenge, userID string, conv *Conversa
 		)
 	case challenge.State == challengeStateCompleted:
 		return formatCompletedChallenge(challenge, userID)
-	case challengeParticipantCompleted(challenge, userID):
+	case challengeUserCompleted(challenge, userID):
 		userScore, _ := challengeScoresForUser(challenge, userID)
 		return fmt.Sprintf(
 			"Challenge submitted.\nCode: %s\nTopic: %s\nYour score: %d/%d\n\nWaiting for your opponent to finish.",
@@ -245,16 +241,11 @@ func challengeScoresForUser(challenge *Challenge, userID string) (int, int) {
 	return challenge.OpponentCorrectCount, challenge.CreatorCorrectCount
 }
 
-func challengeCompletionFlagsForUser(challenge *Challenge, userID string) (bool, bool) {
+func challengeUserCompleted(challenge *Challenge, userID string) bool {
 	if challenge.CreatorID == userID {
-		return challenge.CreatorCompletedAt != nil, challenge.OpponentCompletedAt != nil
+		return challenge.CreatorCompletedAt != nil
 	}
-	return challenge.OpponentCompletedAt != nil, challenge.CreatorCompletedAt != nil
-}
-
-func challengeParticipantCompleted(challenge *Challenge, userID string) bool {
-	completed, _ := challengeCompletionFlagsForUser(challenge, userID)
-	return completed
+	return challenge.OpponentCompletedAt != nil
 }
 
 func challengeReadinessLabel(challenge *Challenge, userID string) string {

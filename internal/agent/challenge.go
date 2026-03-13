@@ -36,10 +36,7 @@ func (e *Engine) handleChallengeCommand(msg chat.InboundMessage, args []string) 
 		return e.cancelChallengeQueue(msg.UserID)
 	}
 
-	if topicRequest, ok := strings.CutPrefix(raw, "private "); ok {
-		return e.createPrivateChallenge(conv, msg.UserID, strings.TrimSpace(topicRequest))
-	}
-	if topicRequest, ok := strings.CutPrefix(lower, "private "); ok {
+	if topicRequest, ok := parsePrivateChallengeRequest(raw); ok {
 		return e.createPrivateChallenge(conv, msg.UserID, strings.TrimSpace(topicRequest))
 	}
 
@@ -192,7 +189,7 @@ func (e *Engine) startCurrentChallenge(msg chat.InboundMessage, conv *Conversati
 	if challenge == nil {
 		return challengeEmptyStateMessage(), nil
 	}
-	if challenge.State == challengeStateCompleted || challengeParticipantCompleted(challenge, msg.UserID) {
+	if challenge.State == challengeStateCompleted || challengeUserCompleted(challenge, msg.UserID) {
 		return formatChallengeOverview(challenge, msg.UserID, conv, e.now()), nil
 	}
 
@@ -323,4 +320,12 @@ func (e *Engine) maybePromoteChallengeForStatus(userID string, challenge *Challe
 func parseChallengeCode(raw string) (string, bool) {
 	code := normalizeChallengeCodeValue(raw)
 	return code, challengeCodePattern.MatchString(code)
+}
+
+func parsePrivateChallengeRequest(raw string) (string, bool) {
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) < 2 || !strings.EqualFold(fields[0], "private") {
+		return "", false
+	}
+	return strings.Join(fields[1:], " "), true
 }
