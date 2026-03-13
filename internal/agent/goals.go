@@ -335,7 +335,7 @@ func (e *Engine) handleGoalCommand(ctx context.Context, msg chat.InboundMessage,
 }
 
 func (e *Engine) maybeHandlePendingGoal(ctx context.Context, msg chat.InboundMessage, conv *Conversation) (string, bool) {
-	if conv == nil || conv.PendingGoal == nil {
+	if conv == nil || conv.PendingGoal == nil || goalReplyOwnedByQuiz(conv) {
 		return "", false
 	}
 
@@ -385,6 +385,9 @@ func (e *Engine) applyGoalText(ctx context.Context, msg chat.InboundMessage, con
 	}
 
 	if parsed.NeedsConfirmation {
+		if goalReplyOwnedByQuiz(conv) {
+			return goalRequiresQuizFinishMessage(), nil
+		}
 		if err := e.store.SetConversationPendingGoal(conv.ID, draft); err != nil {
 			return "", err
 		}
@@ -754,6 +757,16 @@ func isGoalCancel(text string) bool {
 	return ok
 }
 
+func goalReplyOwnedByQuiz(conv *Conversation) bool {
+	if conv == nil {
+		return false
+	}
+	if conv.State == conversationStateQuizIntensity || conv.State == conversationStateQuizActive {
+		return true
+	}
+	return conv.QuizState != nil && conv.QuizState.RunState == quizRunStatePaused
+}
+
 func (r goalParseResult) targetMastery() float64 {
 	return normalizeGoalTarget(r.TargetMastery)
 }
@@ -774,6 +787,10 @@ func (r goalParseResult) syllabusID(topic *curriculum.Topic) string {
 
 func unresolvedGoalMessage() string {
 	return "I couldn't map that to a topic yet.\n\nTry something like:\n- /goal help me master linear equations\n- /goal I want to reach 80% in algebra\n- /goal help me get better at fractions"
+}
+
+func goalRequiresQuizFinishMessage() string {
+	return "Finish or cancel the quiz first, then I can confirm that goal."
 }
 
 func goalEmptyStateMessage() string {

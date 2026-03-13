@@ -340,6 +340,105 @@ func TestEngine_GoalCommand_UnresolvedTopicReturnsExamples(t *testing.T) {
 	}
 }
 
+func TestEngine_GoalCommand_DoesNotStorePendingGoalDuringActiveQuiz(t *testing.T) {
+	mockAI := ai.NewMockProvider("should-not-be-used")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		Goals:            agent.NewMemoryGoalStore(),
+		CurriculumLoader: createTestCurriculumLoader(t),
+		ContextResolver:  quizGoalResolver(),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-active-user",
+		Text:    "quiz me on linear equations",
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-active-user",
+		Text:    "/goal I want to get better at algebra",
+	})
+	if err != nil {
+		t.Fatalf("/goal during quiz error = %v", err)
+	}
+	if !contains(resp, "Finish or cancel the quiz first") {
+		t.Fatalf("response = %q, want quiz-first guidance", resp)
+	}
+
+	conv, found := store.GetActiveConversation("goal-quiz-active-user")
+	if !found || conv.PendingGoal != nil {
+		t.Fatalf("pending goal should stay empty during active quiz: found=%v conv=%#v", found, conv)
+	}
+
+	resp, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-active-user",
+		Text:    "4",
+	})
+	if err != nil {
+		t.Fatalf("quiz answer after /goal error = %v", err)
+	}
+	if !contains(resp, "Question 2/3") {
+		t.Fatalf("response = %q, want quiz to continue", resp)
+	}
+}
+
+func TestEngine_GoalCommand_DoesNotStorePendingGoalDuringPausedQuiz(t *testing.T) {
+	mockAI := ai.NewMockProvider("Let me explain that quiz question step by step.")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		Goals:            agent.NewMemoryGoalStore(),
+		CurriculumLoader: createTestCurriculumLoader(t),
+		ContextResolver:  quizGoalResolver(),
+	})
+
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-paused-user",
+		Text:    "quiz me on linear equations",
+	})
+	_, _ = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-paused-user",
+		Text:    "teach me first",
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-paused-user",
+		Text:    "/goal I want to get better at algebra",
+	})
+	if err != nil {
+		t.Fatalf("/goal during paused quiz error = %v", err)
+	}
+	if !contains(resp, "Finish or cancel the quiz first") {
+		t.Fatalf("response = %q, want quiz-first guidance", resp)
+	}
+
+	conv, found := store.GetActiveConversation("goal-quiz-paused-user")
+	if !found || conv.PendingGoal != nil {
+		t.Fatalf("pending goal should stay empty during paused quiz: found=%v conv=%#v", found, conv)
+	}
+
+	resp, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "goal-quiz-paused-user",
+		Text:    "continue quiz",
+	})
+	if err != nil {
+		t.Fatalf("continue quiz after /goal error = %v", err)
+	}
+	if !contains(resp, "Resuming your quiz.") {
+		t.Fatalf("response = %q, want paused quiz to resume", resp)
+	}
+}
+
 func TestMemoryGoalStore_SyncGoalProgress_CompletesMatchingGoals(t *testing.T) {
 	store := agent.NewMemoryGoalStore()
 	_, _ = store.AddGoal("user-1", agent.GoalInput{
@@ -407,6 +506,15 @@ func keywordGoalResolver() *goalKeywordResolver {
 			"linear equations": {ID: "algebra-linear-eq", Name: "Linear Equations", SyllabusID: "kssm-form1"},
 			"fractions":        {ID: "fractions", Name: "Fractions", SyllabusID: "kssm-form1"},
 			"algebra":          {ID: "algebra-linear-eq", Name: "Linear Equations", SyllabusID: "kssm-form1"},
+		},
+	}
+}
+
+func quizGoalResolver() *goalKeywordResolver {
+	return &goalKeywordResolver{
+		topics: map[string]*curriculum.Topic{
+			"linear equations": {ID: "F1-02", Name: "Linear Equations", SyllabusID: "kssm-f1"},
+			"algebra":          {ID: "F1-02", Name: "Linear Equations", SyllabusID: "kssm-f1"},
 		},
 	}
 }
