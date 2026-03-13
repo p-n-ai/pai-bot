@@ -25,6 +25,7 @@ type ConversationQuizState struct {
 	Intensity      string `json:"intensity"`
 	CurrentIndex   int    `json:"current_index"`
 	CorrectAnswers int    `json:"correct_answers"`
+	ChallengeCode  string `json:"challenge_code,omitempty"`
 	RunState       string `json:"run_state,omitempty"`
 	SuspendedBy    string `json:"suspended_by,omitempty"`
 }

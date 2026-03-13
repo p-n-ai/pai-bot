@@ -180,22 +180,29 @@ func (e *Engine) handleQuizIntensitySelection(msg chat.InboundMessage, conv *Con
 }
 
 func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversation, state ConversationQuizState) (string, bool) {
-	assessment, ok := e.curriculumLoader.GetAssessment(state.TopicID)
+	session, topicName, challenge, ok := e.quizSessionFromState(msg.UserID, state)
 	if !ok {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
 		return quizUnavailableText(e.messageLocale(msg, conv)), true
 	}
-
-	questions := filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity)
-	session := NewQuizSession(msg.UserID, state.TopicID, questions)
-	session.Intensity = state.Intensity
-	session.CurrentIndex = state.CurrentIndex
-	session.CorrectAnswers = state.CorrectAnswers
 	question, hasQuestion := session.NextQuestion()
 	action := classifyActiveQuizTurn(msg.Text)
 
 	switch action {
 	case quizTurnActionExit:
+		if state.ChallengeCode != "" {
+			state.RunState = quizRunStatePaused
+			state.SuspendedBy = quizPauseReasonManual
+			if err := e.store.UpdateConversationQuizState(conv.ID, conversationStateTeaching, state); err != nil {
+				slog.Error("failed to pause challenge state on exit", "conversation_id", conv.ID, "error", err)
+				return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+			}
+			response := renderChallengePaused()
+			if _, err := e.store.AddMessage(conv.ID, StoredMessage{Role: "assistant", Content: response}); err != nil {
+				slog.Error("failed to store challenge pause response", "conversation_id", conv.ID, "error", err)
+			}
+			return response, true
+		}
 		if err := e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching); err != nil {
 			slog.Error("failed to clear quiz state on exit", "conversation_id", conv.ID, "error", err)
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
@@ -227,12 +234,19 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		}
 		return response, true
 	case quizTurnActionRepeat, quizTurnActionShowQuestion:
-		response := renderQuizQuestion(e.lookupTopicName(state.TopicID), session, question)
+		response := renderQuestionForState(state, topicName, session, question)
 		if _, err := e.store.AddMessage(conv.ID, StoredMessage{Role: "assistant", Content: response}); err != nil {
 			slog.Error("failed to store quiz repeat response", "conversation_id", conv.ID, "error", err)
 		}
 		return response, true
 	case quizTurnActionRestart:
+		if state.ChallengeCode != "" {
+			response := renderQuestionForState(state, topicName, session, question)
+			if _, err := e.store.AddMessage(conv.ID, StoredMessage{Role: "assistant", Content: response}); err != nil {
+				slog.Error("failed to store challenge repeat response", "conversation_id", conv.ID, "error", err)
+			}
+			return response, true
+		}
 		topicID, resolved := e.resolveQuizStartTopic(msg, conv)
 		if !resolved {
 			topicID = state.TopicID
@@ -244,9 +258,12 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	if answerText == "" {
 		if !hasQuestion {
 			_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
+			if state.ChallengeCode != "" {
+				return formatChallengeStatus(challenge, msg.UserID), true
+			}
 			return quizCompletedText(e.messageLocale(msg, conv), session.Summary()), true
 		}
-		return renderQuizQuestion(e.lookupTopicName(state.TopicID), session, question), true
+		return renderQuestionForState(state, topicName, session, question), true
 	}
 
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -256,9 +273,14 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		slog.Error("failed to store quiz answer", "conversation_id", conv.ID, "error", err)
 	}
 
-	result := session.SubmitAnswer(answerText)
-	e.recordQuizOutcomeAsync(msg.UserID, state.TopicID, quizInputSource(msg), question, result.Correct)
-	if !result.Correct {
+	var result QuizAnswerResult
+	if state.ChallengeCode != "" {
+		result = submitChallengeAnswer(session, answerText)
+	} else {
+		result = session.SubmitAnswer(answerText)
+	}
+	e.recordQuizOutcomeAsync(msg.UserID, state.TopicID, quizInputSource(msg), question, result.Correct, state.ChallengeCode == "")
+	if !result.Correct && state.ChallengeCode == "" {
 		response := renderQuizRetry(e.messageLocale(msg, conv), result)
 		if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 			Role:    "assistant",
@@ -284,32 +306,41 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		Intensity:      state.Intensity,
 		CurrentIndex:   session.CurrentIndex,
 		CorrectAnswers: session.CorrectAnswers,
+		ChallengeCode:  state.ChallengeCode,
 		RunState:       defaultQuizRunState(),
 	}
 
 	var response string
 	if session.IsComplete() {
-		if err := e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching); err != nil {
-			slog.Error("failed to restore teaching state after quiz", "conversation_id", conv.ID, "error", err)
+		if state.ChallengeCode != "" {
+			response = e.completeChallengeQuiz(msg.UserID, conv, challenge, result, session.Summary())
+		} else {
+			if err := e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching); err != nil {
+				slog.Error("failed to restore teaching state after quiz", "conversation_id", conv.ID, "error", err)
+			}
+			response = renderQuizCompletion(e.messageLocale(msg, conv), result, session.Summary())
+			e.logEventAsync(Event{
+				ConversationID: conv.ID,
+				UserID:         msg.UserID,
+				EventType:      "quiz_completed",
+				Data: map[string]any{
+					"topic_id":        state.TopicID,
+					"correct_answers": session.CorrectAnswers,
+					"total_questions": len(session.Questions),
+				},
+			})
 		}
-		response = renderQuizCompletion(e.messageLocale(msg, conv), result, session.Summary())
-		e.logEventAsync(Event{
-			ConversationID: conv.ID,
-			UserID:         msg.UserID,
-			EventType:      "quiz_completed",
-			Data: map[string]any{
-				"topic_id":        state.TopicID,
-				"correct_answers": session.CorrectAnswers,
-				"total_questions": len(session.Questions),
-			},
-		})
 	} else {
 		if err := e.store.UpdateConversationQuizState(conv.ID, conversationStateQuizActive, nextState); err != nil {
 			slog.Error("failed to update quiz state", "conversation_id", conv.ID, "error", err)
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
 		}
 		question, _ := session.NextQuestion()
-		response = renderQuizAdvance(e.lookupTopicName(state.TopicID), session, question, result)
+		if state.ChallengeCode != "" {
+			response = renderChallengeAdvance(state.ChallengeCode, topicName, session, question, result)
+		} else {
+			response = renderQuizAdvance(topicName, session, question, result)
+		}
 	}
 
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -348,20 +379,20 @@ func (e *Engine) handlePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 }
 
 func (e *Engine) resumePausedQuizTurn(msg chat.InboundMessage, conv *Conversation, state ConversationQuizState, action quizTurnAction) string {
-	assessment, ok := e.curriculumLoader.GetAssessment(state.TopicID)
+	session, topicName, _, ok := e.quizSessionFromState(msg.UserID, state)
 	if !ok {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
 		return quizUnavailableText(e.messageLocale(msg, conv))
 	}
-
-	questions := filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity)
-	session := NewQuizSession(msg.UserID, state.TopicID, questions)
-	session.Intensity = state.Intensity
-	session.CurrentIndex = state.CurrentIndex
-	session.CorrectAnswers = state.CorrectAnswers
 	question, hasQuestion := session.NextQuestion()
 	if !hasQuestion {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
+		if state.ChallengeCode != "" {
+			challenge, err := e.challenges.GetChallenge(state.ChallengeCode)
+			if err == nil && challenge != nil {
+				return formatChallengeStatus(challenge, msg.UserID)
+			}
+		}
 		return quizCompletedText(e.messageLocale(msg, conv), session.Summary())
 	}
 
@@ -376,11 +407,23 @@ func (e *Engine) resumePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	var response string
 	switch action {
 	case quizTurnActionHint:
-		response = renderQuizResumeWithHint(e.lookupTopicName(state.TopicID), session, question)
+		if state.ChallengeCode != "" {
+			response = renderChallengeResumeWithHint(state.ChallengeCode, topicName, session, question)
+		} else {
+			response = renderQuizResumeWithHint(topicName, session, question)
+		}
 	case quizTurnActionRepeat:
-		response = renderQuizResumed(e.lookupTopicName(state.TopicID), session, question)
+		if state.ChallengeCode != "" {
+			response = renderChallengeResumed(state.ChallengeCode, topicName, session, question)
+		} else {
+			response = renderQuizResumed(topicName, session, question)
+		}
 	default:
-		response = renderQuizResumed(e.lookupTopicName(state.TopicID), session, question)
+		if state.ChallengeCode != "" {
+			response = renderChallengeResumed(state.ChallengeCode, topicName, session, question)
+		} else {
+			response = renderQuizResumed(topicName, session, question)
+		}
 	}
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{Role: "assistant", Content: response}); err != nil {
 		slog.Error("failed to store quiz resume response", "conversation_id", conv.ID, "error", err)
@@ -566,6 +609,13 @@ func renderQuizQuestion(topicName string, session *QuizSession, question QuizQue
 		builder.WriteString("\nReply with your answer.")
 	}
 	return builder.String()
+}
+
+func renderQuestionForState(state ConversationQuizState, topicName string, session *QuizSession, question QuizQuestion) string {
+	if state.ChallengeCode != "" {
+		return renderChallengeQuestion(state.ChallengeCode, topicName, session, question)
+	}
+	return renderQuizQuestion(topicName, session, question)
 }
 
 func renderQuizIntensityPrompt(learnerLabel string) string {
