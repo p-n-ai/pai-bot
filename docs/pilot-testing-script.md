@@ -22,6 +22,13 @@ Please try 6 to 10 questions. Use the prompts below. Answer normally. If the bot
 9. Ask for a real-life analogy for 2x = 10.
 10. Ask for the next term in a geometric sequence (e.g. 1, 0.3, 0.09, ...).
 
+## Prompt Tambahan (Fungsi Baharu)
+1. Tetapkan matlamat: "/goal Saya nak kuasai Algebra Tingkatan 1 dalam 2 minggu."
+2. Semak kemajuan: "/progress"
+3. Minta kuiz: "Saya nak kuiz Algebra Tingkatan 1." (kuiz boleh bermula melalui ayat biasa tanpa arahan khas)
+4. Ubah matlamat: "/goal Saya nak fokus Pola dan Jujukan minggu ini."
+5. Padam matlamat: "/goal clear"
+
 ## What to Avoid
 - Integration or differentiation
 - Non-algebra topics (e.g. statistics, geometry unless related to algebra)
