@@ -121,7 +121,7 @@ Open Telegram, find your bot, and send `/start`. That's it — you're learning.
 
 ### 5. Access the admin panel
 
-Open `http://localhost:3000` to manage schools, classes, and view student progress.
+Open `http://localhost:3000` to access the admin panel. Current scaffolding keeps the shell publicly reachable in local development, but the planned production model is invite-based account activation followed by email + password login for teacher, parent, and admin roles.
 
 ---
 
@@ -219,6 +219,13 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 | **Admin Panel** | Next.js 14, TypeScript, Refine, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
+
+### Planned Admin Auth
+
+- Teachers, parents, school admins, and platform admins are intended to access the web dashboard through invite-based account provisioning.
+- The invite link is only for first-time activation. After activation, ongoing login uses `email + password`.
+- The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
+- Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
 
 ### Project Structure
 

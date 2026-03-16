@@ -179,7 +179,13 @@ func main() {
 	adminService := adminapi.New(db.Pool, store.TenantID())
 
 	// HTTP endpoints.
-	mux := newHandlerWithAuth(adminService, gatewaySender{gw}, cfg.Auth.JWTSecret)
+	mux := newHandlerWithServices(
+		adminService,
+		gatewaySender{gw},
+		auth.NewNoopService(),
+		cfg.Auth.JWTSecret,
+		time.Duration(cfg.Auth.AccessTokenTTL)*time.Minute,
+	)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -214,6 +220,13 @@ type adminDataSource interface {
 	GetClassProgress(classID string) (adminapi.ClassProgress, error)
 	GetStudentDetail(studentID string) (adminapi.StudentDetail, error)
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
+}
+
+type authService interface {
+	Login(ctx context.Context, req auth.LoginRequest) (auth.TokenPair, error)
+	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error)
+	Refresh(ctx context.Context, refreshToken string) (auth.TokenPair, error)
+	Logout(ctx context.Context, refreshToken string) error
 }
 
 type outboundMessage struct {
@@ -305,18 +318,26 @@ func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 }
 
 func newHandler(admin adminDataSource, sender messageSender) http.Handler {
-	return newHandlerWithAuth(admin, sender, "change-me-in-production")
+	return newHandlerWithServices(admin, sender, auth.NewNoopService(), "change-me-in-production", time.Hour)
 }
 
 func newHandlerWithAuth(admin adminDataSource, sender messageSender, jwtSecret string) http.Handler {
+	return newHandlerWithServices(admin, sender, auth.NewNoopService(), jwtSecret, time.Hour)
+}
+
+func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	mux := newMux(admin, sender)
-	manager := auth.NewTokenManager(jwtSecret, time.Hour)
+	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 
 	teacherOrAbove := chain(
 		auth.Authenticate(manager, time.Now),
 		auth.RequireRoles(auth.RoleTeacher, auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
 
+	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
+	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
+	mux.Handle("POST /api/auth/refresh", handleAuthRefresh(authSvc))
+	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(admin)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(admin)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(admin)))
@@ -405,6 +426,130 @@ func handleAdminStudentNudge(admin adminDataSource, sender messageSender) http.H
 	}
 }
 
+func handleAuthLogin(authSvc authService) http.HandlerFunc {
+	type request struct {
+		TenantID string `json:"tenant_id"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.TenantID) == "" || strings.TrimSpace(body.Email) == "" || strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "tenant_id, email, and password are required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.Login(r.Context(), auth.LoginRequest{
+			TenantID: body.TenantID,
+			Email:    body.Email,
+			Password: body.Password,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
+	type request struct {
+		Token    string `json:"token"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Token) == "" || strings.TrimSpace(body.Name) == "" || strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "token, name, and password are required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.AcceptInvite(r.Context(), auth.AcceptInviteRequest{
+			Token:    body.Token,
+			Name:     body.Name,
+			Password: body.Password,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func handleAuthRefresh(authSvc authService) http.HandlerFunc {
+	type request struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.RefreshToken) == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.Refresh(r.Context(), body.RefreshToken)
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleAuthLogout(authSvc authService) http.HandlerFunc {
+	type request struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.RefreshToken) == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := authSvc.Logout(r.Context(), body.RefreshToken); err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func decodeJSONBody(r *http.Request, target any) error {
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		return fmt.Errorf("invalid json body")
+	}
+	return nil
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -417,6 +562,17 @@ func writeAdminError(w http.ResponseWriter, err error) {
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func writeAuthError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrInvalidInvite), errors.Is(err, auth.ErrInviteExpired):
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+	case errors.Is(err, auth.ErrNotImplemented):
+		http.Error(w, err.Error(), http.StatusNotImplemented)
+	default:
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
 }
 
 func withCORS(next http.Handler) http.Handler {

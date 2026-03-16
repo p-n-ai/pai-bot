@@ -310,7 +310,7 @@ Migration note (2026-03-16): the repo now uses `golang-migrate` with version tra
 
 | Task ID | Task | Owner | Status |
 |---------|------|-------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, keep frontend login/route guards deferred until a later auth-hardening pass, sidebar layout. | 🤖 | ✅ |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, keep invite activation, email/password login, and frontend route guards deferred until a later auth-hardening pass, sidebar layout. | 🤖 | ✅ |
 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ |
@@ -379,6 +379,7 @@ Migration note (2026-03-16): the repo now uses `golang-migrate` with version tra
 | `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 |
 | `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 |
+| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_refresh_tokens`; invite acceptance; email/password login; refresh/logout endpoints; Next.js route guards for teacher/parent/admin views | 🤖 |
 | `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human |
 | `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human |
 
@@ -402,7 +403,7 @@ Migration note (2026-03-16): the repo now uses `golang-migrate` with version tra
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W6D27-1` | Fix top 5 bugs from launch day | 🤖 |
-| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers | 🤖 |
+| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers via email invite flow | 🤖 |
 | `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team |
 
 ### Day 28 — i18n + Scale

@@ -34,7 +34,7 @@ For the current quiz runtime design and the OpenClaw-inspired rationale behind i
 | **Cache Client** | `go-redis/redis` | v9 | Redis-protocol client. Works with both Redis and Dragonfly without code changes. |
 | **Messaging Client** | `nats-io/nats.go` | ≥2.10 | Native Go client for NATS. JetStream support for persistent message streams. |
 | **WebSocket** | `nhooyr.io/websocket` | v1 | Lightweight, idiomatic Go WebSocket library. A single Go instance maintains hundreds of thousands of persistent connections. |
-| **JWT** | `golang-jwt/jwt` | v5 | Stateless auth — short-lived access tokens (15 min) + longer refresh tokens (7 days). Middleware validates JWT on every request with zero database calls. |
+| **JWT** | `golang-jwt/jwt` | v5 | Short-lived access tokens (15 min) issued after invite activation or email/password login. Refresh tokens rotate every 7 days and are stored hashed in PostgreSQL. |
 | **Configuration** | Environment variables | — | All config via `LEARN_` prefixed env vars. `envconfig` or `viper` for parsing. |
 | **Linting** | `golangci-lint` | latest | Static analysis with a curated set of linters enforced in CI. |
 | **Testing** | Go stdlib `testing` | — | Table-driven tests. `testcontainers-go` for integration tests against real Postgres/Dragonfly. |
@@ -118,7 +118,7 @@ Each channel adapter normalizes platform-specific message formats into a common 
 | **Styling** | Tailwind CSS | 3.x | Utility-first. Consistent design system without custom CSS. |
 | **Charts** | Recharts or Tremor | — | For mastery heatmaps, progress charts, leaderboard visualizations. |
 | **State Management** | React Query (TanStack Query) | v5 | Server state management. Automatic caching, refetching, and invalidation. |
-| **Auth** | JWT from Go backend | — | Next.js middleware validates JWT on protected routes. Refresh token rotation handled client-side. |
+| **Auth** | Invite bootstrap + email/password + JWT from Go backend | — | Teacher, parent, and admin accounts are provisioned by invite, activate by setting a password, then use email/password login with refresh token rotation. |
 
 **Admin panel views:**
 
@@ -230,7 +230,10 @@ pai-bot/
 │   │   ├── spaced_rep.go            # SM-2 algorithm implementation
 │   │   └── streaks.go               # Streak + XP + leaderboard system
 │   ├── auth/                        # Authentication
-│   │   ├── jwt.go                   # Token generation + validation
+│   │   ├── jwt.go                   # Access token generation + validation
+│   │   ├── password.go              # Password hashing + verification
+│   │   ├── invites.go               # Invite issuance + acceptance
+│   │   ├── sessions.go              # Refresh token rotation + revocation
 │   │   └── middleware.go            # Role-based access control (student/teacher/parent/admin)
 │   ├── tenant/                      # Multi-tenancy
 │   │   ├── tenant.go                # Tenant isolation logic
@@ -321,12 +324,57 @@ CREATE TABLE tenants (
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID REFERENCES tenants(id),
-    role        TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'parent', 'admin')),
+    role        TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'parent', 'admin', 'platform_admin')),
     name        TEXT NOT NULL,
     external_id TEXT,                          -- Telegram user ID, WhatsApp number, etc.
     channel     TEXT NOT NULL DEFAULT 'telegram',
     config      JSONB DEFAULT '{}',
     created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Authentication identities.
+-- Students can remain Telegram-only. Teacher/parent/admin users use email/password.
+CREATE TABLE auth_identities (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id             UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    provider              TEXT NOT NULL CHECK (provider IN ('password', 'telegram', 'whatsapp', 'google', 'microsoft')),
+    identifier            TEXT NOT NULL,
+    identifier_normalized TEXT NOT NULL,
+    password_hash         TEXT,
+    email_verified_at     TIMESTAMPTZ,
+    last_login_at         TIMESTAMPTZ,
+    created_at            TIMESTAMPTZ DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (tenant_id, provider, identifier_normalized)
+);
+
+-- Invite-only provisioning for teacher/parent/admin users.
+CREATE TABLE auth_invites (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    email            TEXT NOT NULL,
+    email_normalized TEXT NOT NULL,
+    role             TEXT NOT NULL CHECK (role IN ('teacher', 'parent', 'admin', 'platform_admin')),
+    token_hash       TEXT NOT NULL,
+    invited_by       UUID REFERENCES users(id),
+    expires_at       TIMESTAMPTZ NOT NULL,
+    accepted_at      TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Long-lived session state for refresh token rotation.
+CREATE TABLE auth_refresh_tokens (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id    UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL UNIQUE,
+    user_agent   TEXT,
+    ip_address   TEXT,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    revoked_at   TIMESTAMPTZ,
+    replaced_by  UUID REFERENCES auth_refresh_tokens(id),
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Student progress per topic
@@ -506,7 +554,7 @@ ArgoCD (running in K8s cluster)
 
 | Concern | Approach |
 |---------|----------|
-| **Authentication** | JWT with short-lived access tokens (15 min) + refresh token rotation (7 days). Built in Go — no external auth provider dependency. |
+| **Authentication** | Invite-only account provisioning for teacher/parent/admin users, followed by email/password login. Go issues JWT access tokens (15 min) plus rotating refresh tokens (7 days, hashed in PostgreSQL). Students continue using Telegram identity unless a student web portal is added later. |
 | **Authorization** | Role-based access control (RBAC). Roles: `student`, `teacher`, `parent`, `admin`, `platform_admin`. Enforced in middleware. |
 | **Data Isolation** | Multi-tenant with tenant_id on every table. Row-level security in PostgreSQL. Tenant resolved from JWT claims. |
 | **Data Sovereignty** | Self-hostable by design. No student data leaves the deployment unless explicitly configured. |
