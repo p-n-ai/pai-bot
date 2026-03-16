@@ -489,75 +489,34 @@ func runMigrations(databaseURL string) error {
 	}
 	defer m.Close()
 
-	// Check for dirty state or already-exists errors and auto-fix.
+	// Fix dirty state before attempting migrations.
 	version, dirty, verErr := m.Version()
 	if verErr == nil && dirty {
-		slog.Warn("dirty migration detected, forcing version", "version", version)
-		if forceErr := m.Force(int(version)); forceErr != nil {
-			return fmt.Errorf("force dirty version: %w", forceErr)
-		}
+		slog.Warn("dirty migration detected, forcing clean", "version", version)
+		_ = m.Force(int(version))
 	}
 
-	err = m.Up()
-	if err == nil || errors.Is(err, migrate.ErrNoChange) {
-		version, dirty, _ = m.Version()
-		slog.Info("database migrated", "version", version, "dirty", dirty)
-		return nil
-	}
-
-	// Tables already exist (DB was set up with raw SQL before golang-migrate).
-	// Detect the current state and force the version.
-	if isAlreadyExistsError(err) {
-		slog.Warn("tables already exist, detecting migration version")
-		latestVersion := detectLatestAppliedMigration(m)
-		if latestVersion > 0 {
-			if forceErr := m.Force(int(latestVersion)); forceErr != nil {
-				return fmt.Errorf("force migration version: %w", forceErr)
-			}
-			if retryErr := m.Up(); retryErr != nil && !errors.Is(retryErr, migrate.ErrNoChange) {
-				return fmt.Errorf("retry migrations: %w", retryErr)
-			}
-			version, dirty, _ = m.Version()
-			slog.Info("database migrated (after version detection)", "version", version, "dirty", dirty)
-			return nil
-		}
-	}
-
-	return fmt.Errorf("run migrations: %w", err)
-}
-
-func isAlreadyExistsError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "already exists")
-}
-
-// detectLatestAppliedMigration finds the highest migration version by scanning
-// migration directories for .up.sql files.
-func detectLatestAppliedMigration(_ *migrate.Migrate) uint {
-	var maxVersion uint
-	for _, dir := range []string{"/migrations", "migrations"} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".up.sql") {
-				continue
-			}
-			// Parse version from filename like "003_goals.up.sql"
-			parts := strings.SplitN(e.Name(), "_", 2)
-			if len(parts) < 2 {
-				continue
-			}
-			var v uint
-			if _, err := fmt.Sscanf(parts[0], "%d", &v); err == nil && v > maxVersion {
-				maxVersion = v
-			}
-		}
-		if maxVersion > 0 {
+	// Try migrating up. Keep retrying when a migration fails because its
+	// tables/indexes already exist (legacy DB created before golang-migrate).
+	for {
+		err = m.Up()
+		if err == nil || errors.Is(err, migrate.ErrNoChange) {
 			break
 		}
+		if strings.Contains(err.Error(), "already exists") {
+			// This migration's objects are already in the DB. Force its
+			// version as applied and try the next one.
+			v, _, _ := m.Version()
+			slog.Warn("migration objects already exist, skipping", "version", v)
+			_ = m.Force(int(v))
+			continue
+		}
+		return fmt.Errorf("run migrations: %w", err)
 	}
-	return maxVersion
+
+	version, dirty, _ = m.Version()
+	slog.Info("database migrated", "version", version, "dirty", dirty)
+	return nil
 }
 
 func buildManualNudgeMessage(detail adminapi.StudentDetail) string {
