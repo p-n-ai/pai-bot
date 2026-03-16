@@ -18,6 +18,8 @@ Thumbs.db
 /bin/
 /tmp/
 /server
+.gocache/
+.gomodcache/
 *.exe
 *.exe~
 *.dll
