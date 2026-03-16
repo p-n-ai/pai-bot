@@ -550,6 +550,8 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleProgressCommand(msg)
 	case "/goal":
 		return e.handleGoalCommand(ctx, msg, fields[1:])
+	case "/learn":
+		return e.handleLearnCommand(ctx, msg, fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}

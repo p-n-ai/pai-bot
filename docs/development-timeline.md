@@ -237,7 +237,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
-| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
+| `P-W2D9-2` | ✅ `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
 | `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
 | `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
 
