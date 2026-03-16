@@ -36,6 +36,16 @@ services:
     volumes:
       - nats-data:/data
 
+  migrate:
+    image: migrate/migrate:v4.18.3
+    profiles:
+      - tools
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   app:
     build:
       context: .

@@ -82,8 +82,8 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply the database migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
+make migrate
 
 # 7. Verify the server runs and health check works
 go run ./cmd/server &

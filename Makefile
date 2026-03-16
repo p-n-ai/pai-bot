@@ -1,4 +1,7 @@
-.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate seed seed-docker build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
+.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate migration migrate-down migrate-version migrate-force seed seed-docker build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
+
+MIGRATE_DSN ?= postgres://pai:pai@postgres:5432/pai?sslmode=disable
+MIGRATE_RUN = docker compose --profile tools run --rm migrate -path /migrations -database "$(MIGRATE_DSN)"
 
 # First-time setup
 setup:
@@ -37,10 +40,23 @@ test-cover:
 
 # Database
 migrate:
-	@for f in $$(ls migrations/*.up.sql | sort); do \
-		echo "Applying $$f"; \
-		docker exec -i $$(docker compose ps -q postgres) psql -U pai -d pai < $$f || exit 1; \
-	done
+	@$(MIGRATE_RUN) up
+
+migration: migrate
+
+migrate-down:
+	@$(MIGRATE_RUN) down 1
+
+migrate-version:
+	@$(MIGRATE_RUN) version
+
+ifndef VERSION
+MIGRATE_FORCE_GUARD = $(error VERSION is required, e.g. make migrate-force VERSION=2)
+endif
+
+migrate-force:
+	$(MIGRATE_FORCE_GUARD)
+	@$(MIGRATE_RUN) force $(VERSION)
 
 seed:
 	go run ./cmd/seed
