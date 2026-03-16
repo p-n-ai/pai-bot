@@ -600,9 +600,12 @@ func MapTelegramInboundForTest(update map[string]any) (InboundMessage, bool) {
 }
 
 func (t *TelegramChannel) syncCommands() error {
-	commandsJSON := `[{"command":"start","description":"Mulakan sesi pembelajaran"},{"command":"clear","description":"Reset perbualan semasa"},{"command":"language","description":"Tukar bahasa (English/BM/中文)"},{"command":"progress","description":"Lihat kemajuan pembelajaran"},{"command":"goal","description":"Tetapkan matlamat pembelajaran"}]`
+	commandsBytes, err := json.Marshal(RegisteredCommands)
+	if err != nil {
+		return fmt.Errorf("marshal commands: %w", err)
+	}
 	params := url.Values{
-		"commands": {commandsJSON},
+		"commands": {string(commandsBytes)},
 	}
 
 	resp, err := t.client.PostForm(t.baseURL+"/setMyCommands", params)
