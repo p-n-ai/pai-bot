@@ -440,6 +440,9 @@ docker compose up -d postgres dragonfly nats ollama
 # Run database migrations
 make migrate
 
+# Check the current migration version
+make migrate-version
+
 # Seed demo data (optional)
 make seed
 
@@ -503,6 +506,9 @@ make start        # Start all services via Docker Compose
 make stop         # Stop all services
 make logs         # Tail application logs
 make migrate      # Run database migrations
+make migrate-version  # Show current migration version from schema_migrations
+make migrate-down # Roll back the most recent migration
+make migrate-force VERSION=2  # Baseline an existing database that was migrated manually
 make seed         # Seed demo tenant/users/messages/progress/events
 make seed-docker  # Seed through the running app container
 make analytics    # Print quick metrics from the database

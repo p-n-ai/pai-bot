@@ -1657,7 +1657,7 @@ test-cover:
 
 # Database
 migrate:
-	@echo "Run: docker exec -i $$(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql"
+	@docker compose --profile tools run --rm migrate -path /migrations -database "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up
 
 # Build
 build:
@@ -1754,8 +1754,8 @@ go build ./cmd/server
 # Start infrastructure
 docker compose up -d postgres dragonfly nats
 
-# Run migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# Run migrations (golang-migrate; records applied versions in schema_migrations)
+make migrate
 
 # Test health endpoint
 go run ./cmd/server &
@@ -1831,8 +1831,8 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply the database migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# 6. Apply database migrations
+make migrate
 
 # 7. Verify the server starts and health check works
 go run ./cmd/server &
@@ -4595,6 +4595,8 @@ func IsStreakMilestone(days int) bool {
 
 Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
+Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
 #### Tasks
@@ -4959,7 +4961,7 @@ sleep 3
 
 # Run migrations
 echo "📦 Running database migrations..."
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+make migrate
 
 # Download Go dependencies
 echo "📥 Downloading Go dependencies..."
