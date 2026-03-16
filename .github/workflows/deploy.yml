@@ -103,23 +103,36 @@ jobs:
             docker load < pai-admin.tar.gz
             rm pai-bot.tar.gz pai-admin.tar.gz
 
-            echo "--- Restarting services ---"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            echo "--- Ensuring infra services are up ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
+            sleep 3
 
             echo "--- Running migrations ---"
-            sleep 3
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint /usr/local/bin/migrate app \
-              -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint /usr/local/bin/migrate app \
+              -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up; then
+              echo "Migrations applied successfully"
+            else
+              echo "WARNING: Migration failed (exit $?) — app will still start with existing schema"
+            fi
 
-            echo "--- Starting all services ---"
+            echo "--- Rolling out new containers ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
             sleep 5
 
             echo "--- Health check ---"
-            curl -sf --max-time 10 http://localhost/healthz
+            if curl -sf --max-time 10 http://localhost/healthz; then
+              echo "Deploy successful"
+            else
+              echo "ERROR: Health check failed — rolling back app"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml stop app
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app
+              exit 1
+            fi
+
+            echo "--- Cleaning up old images ---"
+            docker image prune -f
 
             echo "--- Container status ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
