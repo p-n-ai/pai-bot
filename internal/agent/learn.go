@@ -13,7 +13,17 @@ func (e *Engine) handleLearnCommand(_ context.Context, msg chat.InboundMessage, 
 	locale := e.messageLocale(msg, nil)
 
 	if len(args) == 0 {
-		return i18n.S(locale, i18n.MsgLearnUsage), nil
+		usage := i18n.S(locale, i18n.MsgLearnUsage)
+		if e.curriculumLoader != nil {
+			topics := e.curriculumLoader.AllTopics()
+			if len(topics) > 0 {
+				usage += "\n\nTopik tersedia:"
+				for _, t := range topics {
+					usage += "\n- " + t.Name + " (" + t.ID + ")"
+				}
+			}
+		}
+		return usage, nil
 	}
 
 	raw := strings.Join(args, " ")

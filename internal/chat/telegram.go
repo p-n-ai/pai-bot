@@ -28,6 +28,7 @@ type TelegramChannel struct {
 
 	mu                    sync.Mutex
 	answeredRatingPrompts map[string]struct{}
+	devMode               bool
 }
 
 // NewTelegramChannel creates a Telegram channel adapter.
@@ -44,6 +45,11 @@ func NewTelegramChannel(token string) (*TelegramChannel, error) {
 		stop:                  make(chan struct{}),
 		answeredRatingPrompts: make(map[string]struct{}),
 	}, nil
+}
+
+// SetDevMode enables dev commands in the Telegram command menu.
+func (t *TelegramChannel) SetDevMode(enabled bool) {
+	t.devMode = enabled
 }
 
 func (t *TelegramChannel) SendTyping(_ context.Context, userID string) error {
@@ -600,7 +606,7 @@ func MapTelegramInboundForTest(update map[string]any) (InboundMessage, bool) {
 }
 
 func (t *TelegramChannel) syncCommands() error {
-	commandsBytes, err := json.Marshal(RegisteredCommands)
+	commandsBytes, err := json.Marshal(AllCommands(t.devMode))
 	if err != nil {
 		return fmt.Errorf("marshal commands: %w", err)
 	}
