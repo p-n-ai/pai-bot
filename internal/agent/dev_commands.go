@@ -1,10 +1,70 @@
 package agent
 
 import (
+	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
+
+// handleDevBoost sets the current topic's mastery to a target value (default 0.85).
+// Usage: /dev-boost [score]  e.g. /dev-boost 0.9
+func (e *Engine) handleDevBoost(msg chat.InboundMessage, args []string) (string, error) {
+	if e.tracker == nil {
+		return "[DEV] No tracker configured.", nil
+	}
+
+	conv, _ := e.store.GetActiveConversation(msg.UserID)
+	if conv == nil || conv.TopicID == "" {
+		return "[DEV] No active topic. Use /learn <topic> first.", nil
+	}
+
+	target := 0.85
+	if len(args) > 0 {
+		if v, err := strconv.ParseFloat(args[0], 64); err == nil && v > 0 && v <= 1.0 {
+			target = v
+		}
+	}
+
+	// Look up topic for syllabus ID.
+	syllabusID := "default"
+	topicName := conv.TopicID
+	if e.curriculumLoader != nil {
+		if t, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
+			if t.SyllabusID != "" {
+				syllabusID = t.SyllabusID
+			}
+			topicName = t.Name
+		}
+	}
+
+	// Set mastery directly via the postgres/memory tracker.
+	if setter, ok := e.tracker.(interface {
+		SetMastery(userID, syllabusID, topicID string, score float64) error
+	}); ok {
+		if err := setter.SetMastery(msg.UserID, syllabusID, conv.TopicID, target); err != nil {
+			slog.Error("dev-boost: failed to set mastery", "error", err)
+			return "[DEV] Failed to set mastery.", nil
+		}
+	} else {
+		// Fallback: use UpdateMastery with target as delta (will be EMA'd, not exact).
+		if err := e.tracker.UpdateMastery(msg.UserID, syllabusID, conv.TopicID, target); err != nil {
+			slog.Error("dev-boost: failed to update mastery", "error", err)
+			return "[DEV] Failed to update mastery.", nil
+		}
+	}
+
+	// Trigger unlock check.
+	if e.curriculumLoader != nil {
+		if t, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
+			e.checkTopicUnlocks(msg.UserID, syllabusID, &t)
+		}
+	}
+
+	slog.Info("dev-boost: mastery set", "user_id", msg.UserID, "topic_id", conv.TopicID, "target", target)
+	return fmt.Sprintf("[DEV] Mastery for %s set to %.0f%%.", topicName, target*100), nil
+}
 
 // handleDevReset fully resets a user's state: conversation, profile, mastery, XP, streaks, goals.
 // Only available when DevMode is enabled (LEARN_DEV_MODE=true).

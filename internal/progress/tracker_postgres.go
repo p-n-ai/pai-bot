@@ -71,6 +71,22 @@ func (p *PostgresTracker) UpdateMastery(userID, syllabusID, topicID string, delt
 	return err
 }
 
+// SetMastery directly sets a topic's mastery score (dev/testing only).
+func (p *PostgresTracker) SetMastery(userID, syllabusID, topicID string, score float64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	now := time.Now()
+	_, err := p.pool.Exec(ctx,
+		`INSERT INTO learning_progress (user_id, tenant_id, syllabus_id, topic_id, mastery_score, last_studied_at)
+		 VALUES ((SELECT id FROM users WHERE external_id = $1 AND tenant_id = $2), $2, $3, $4, $5, $6)
+		 ON CONFLICT (user_id, syllabus_id, topic_id)
+		 DO UPDATE SET mastery_score = $5, last_studied_at = $6, updated_at = NOW()`,
+		userID, p.tenantID, syllabusID, topicID, score, now,
+	)
+	return err
+}
+
 func (p *PostgresTracker) GetMastery(userID, syllabusID, topicID string) (float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()

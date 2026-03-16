@@ -143,6 +143,26 @@ func (m *MemoryTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 	return result, nil
 }
 
+// SetMastery directly sets a topic's mastery score (dev/testing only).
+func (m *MemoryTracker) SetMastery(userID, syllabusID, topicID string, score float64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := progressKey(userID, syllabusID, topicID)
+	if item, exists := m.items[key]; exists {
+		item.MasteryScore = score
+	} else {
+		m.items[key] = &ProgressItem{
+			UserID:       userID,
+			SyllabusID:   syllabusID,
+			TopicID:      topicID,
+			MasteryScore: score,
+			EaseFactor:   2.5,
+			IntervalDays: 1,
+		}
+	}
+	return nil
+}
+
 // ResetAll removes all progress data for a user.
 func (m *MemoryTracker) ResetAll(userID string) error {
 	m.mu.Lock()
