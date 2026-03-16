@@ -582,6 +582,27 @@ func (s *PostgresStore) UpdateConversationState(conversationID string, state str
 	return nil
 }
 
+func (s *PostgresStore) UpdateConversationTopicID(conversationID, topicID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET topic_id = $2
+		 WHERE id = $1::uuid`,
+		conversationID,
+		nullIfEmpty(topicID),
+	)
+	if err != nil {
+		return fmt.Errorf("update conversation topic_id: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
 func (s *PostgresStore) UpdateConversationPendingQuiz(conversationID, state, topicID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
