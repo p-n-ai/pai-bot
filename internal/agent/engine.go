@@ -46,6 +46,7 @@ type EngineConfig struct {
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
 	Goals                 GoalStore
+	DevMode               bool
 }
 
 // Engine is the core conversation processor.
@@ -64,6 +65,7 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
 }
@@ -118,6 +120,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		devMode:               cfg.DevMode,
 		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
 		unlocks:               newPendingUnlocks(),
 	}
@@ -133,9 +136,19 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 
 	e.maybePersistUserProfile(msg)
 
+	// Drain any pending topic unlock notifications from previous mastery updates.
+	unlockPrefix := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, nil))
+
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
-		return e.handleCommand(ctx, msg)
+		resp, err := e.handleCommand(ctx, msg)
+		if err != nil {
+			return resp, err
+		}
+		if unlockPrefix != "" {
+			return unlockPrefix + "\n\n" + resp, nil
+		}
+		return resp, nil
 	}
 	// Auto-trigger onboarding for first-time users who send a normal message.
 	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
@@ -304,9 +317,8 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		responseContent = injectReviewTokenWithMessageID(finalContent, assistantMessageID)
 	}
 
-	// Prepend any pending topic unlock notifications from previous mastery updates.
-	if unlockMsg := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, conv)); unlockMsg != "" {
-		responseContent = unlockMsg + "\n\n" + responseContent
+	if unlockPrefix != "" {
+		responseContent = unlockPrefix + "\n\n" + responseContent
 	}
 
 	return responseContent, nil
@@ -563,6 +575,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleGoalCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
+	case "/dev-reset":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevReset(msg)
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}

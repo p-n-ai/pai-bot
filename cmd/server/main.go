@@ -101,6 +101,7 @@ func main() {
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
 		Goals:                goalStore,
+		DevMode:              cfg.Features.DevMode,
 	})
 
 	// Create Telegram channel + chat gateway.

@@ -86,6 +86,7 @@ func main() {
 		Streaks:              progress.NewMemoryStreakTracker(),
 		XP:                   progress.NewMemoryXPTracker(),
 		Goals:                goalStore,
+		DevMode:              cfg.Features.DevMode,
 	})
 
 	if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{

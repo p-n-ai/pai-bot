@@ -1,6 +1,7 @@
 package progress
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -140,6 +141,18 @@ func (m *MemoryTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 		}
 	}
 	return result, nil
+}
+
+// ResetAll removes all progress data for a user.
+func (m *MemoryTracker) ResetAll(userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key := range m.items {
+		if strings.HasPrefix(key, userID+"|") {
+			delete(m.items, key)
+		}
+	}
+	return nil
 }
 
 // setNextReviewAt is a test helper to override the next review time.

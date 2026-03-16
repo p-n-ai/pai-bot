@@ -81,3 +81,17 @@ func (t *MemoryXPTracker) GetTotal(userID string) (int, error) {
 	}
 	return total, nil
 }
+
+// ResetAll removes all XP entries for a user.
+func (t *MemoryXPTracker) ResetAll(userID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	filtered := t.entries[:0]
+	for _, e := range t.entries {
+		if e.UserID != userID {
+			filtered = append(filtered, e)
+		}
+	}
+	t.entries = filtered
+	return nil
+}
