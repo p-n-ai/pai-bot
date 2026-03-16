@@ -117,7 +117,7 @@ Engineer mapping:
 
 ## WEEK 1 — THE TALKING SKELETON
 
-### Day 1 (Mon) — Wire Telegram → AI → Student
+### Day 1 — Wire Telegram → AI → Student
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
@@ -129,7 +129,7 @@ Engineer mapping:
 
 **End of Day 1:** Team members can chat with the bot on Telegram. AI responds using curriculum context.
 
-### Day 2 (Tue) — Logging + Quality
+### Day 2 — Logging + Quality
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
@@ -140,7 +140,7 @@ Engineer mapping:
 | `P-W1D2-5` | Structured problem-solving prompt pattern (dual-loop): system prompt v2 instructs AI to follow Understand → Plan → Solve → Verify → Connect steps for every math question. Include curriculum citation in every explanation (e.g., "KSSM Form 1 > Algebra > Linear Equations"). Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s dual-loop solver | ✅ | 🤖 |
 | `P-W1D2-6` | 🧑 Test 30 conversation scenarios, log every bad response, validate dual-loop solving pattern quality | ✅ | 🧑 Human |
 
-### Day 3 (Wed) — Deploy + First Students
+### Day 3 — Deploy + First Students
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
@@ -150,7 +150,7 @@ Engineer mapping:
 | `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | ✅ | 🤖 |
 | `P-W1D3-5` | 🧑 Deploy to AWS (t3.medium, Docker Compose), onboard first 3 pilot students (Form 1-3 KSSM) | ✅ | 🧑 Human |
 
-### Day 4 (Thu) — Iterate on Real Feedback
+### Day 4 — Iterate on Real Feedback
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
@@ -172,7 +172,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W1D4-LANG-2` | Language chooser UX follow-up: interactive `/language` state handling for `lang:*` callbacks and explicit confirmation message after button selection | ✅ | 🤖 |
 | `A-W1D4-AI-LIVE-1` | OpenAI live conversation regression suite: `//go:build integration` test reads 30 scripted YAML conversations (2-10 turns) and validates real `agent.Engine.ProcessMessage` behavior (continuity, language profile, structured solving, concept connection, rating flows). CI explicitly skips these live tests via environment detection. | ✅ | 🤖 |
 
-### Day 5 (Fri) — Week 1 Retro
+### Day 5 — Week 1 Retro
 
 **Implementation note (Day 4 decision):** The team intentionally chose not to enforce a hard 30-minute session boundary. Context continuity is handled via rolling conversation compaction and summary in the agent engine.
 
@@ -199,7 +199,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ## WEEK 2 — PROGRESS + ASSESSMENT + 50 STUDENTS
 
-### Day 6 (Mon) — Mastery Tracking
+### Day 6 — Mastery Tracking
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -209,7 +209,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
-### Day 7 (Tue) — Quiz Engine
+### Day 7 — Quiz Engine
 
 **Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
 
@@ -220,10 +220,10 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | | 🤖 |
 | `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | | 🤖 |
 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
+| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real UASA/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
+| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real UASA/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
-### Day 8 (Wed) — Proactive Nudges + Streaks
+### Day 8 — Proactive Nudges + Streaks
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
@@ -232,7 +232,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | ✅ | 🤖 |
 | `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | | 🧑 Human |
 
-### Day 9 (Thu) — Topic Navigation
+### Day 9 — Topic Navigation
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -241,7 +241,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
 | `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
 
-### Day 10 (Fri) — Week 2 Retro
+### Day 10 — Week 2 Retro
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -254,7 +254,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ## WEEK 3 — MOTIVATION ENGINE
 
-### Day 11 (Mon) — Goals + Challenges
+### Day 11 — Goals + Challenges
+
+Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -263,7 +265,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
 
-### Day 12 (Tue) — Groups + Leaderboards
+### Day 12 — Groups + Leaderboards
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -272,7 +274,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 |
 | `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human |
 
-### Day 13 (Wed) — A/B Test + Social Features
+### Day 13 — A/B Test + Social Features
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -281,7 +283,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 |
 | `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human |
 
-### Day 14 (Thu) — Analytics Dashboard
+### Day 14 — Analytics Dashboard
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -289,7 +291,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, XP, leaderboard rank in nudge context | 🤖 |
 | `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human |
 
-### Day 15 (Fri) — Week 3 Retro
+### Day 15 — Week 3 Retro
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -302,7 +304,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ## WEEK 4 — ADMIN PANEL + FORM SELECTION
 
-### Day 16 (Mon) — Scaffold Admin Panel
+### Day 16 — Scaffold Admin Panel
 
 | Task ID | Task | Owner | Status |
 |---------|------|-------|--------|
@@ -311,7 +313,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ |
 
-### Day 17 (Tue) — API Endpoints + Parent View
+### Day 17 — API Endpoints + Parent View
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -320,7 +322,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human |
 
-### Day 18 (Wed) — Deploy Admin + Class Management
+### Day 18 — Deploy Admin + Class Management
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -328,7 +330,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 |
 | `P-W4D18-3` | 🧑 Test all 3 Forms (F1, F2, F3) with bot — does content switch correctly? | 🧑 Human |
 
-### Day 19 (Thu) — Reports + Budget Tracking
+### Day 19 — Reports + Budget Tracking
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -336,7 +338,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | 🤖 |
 | `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human |
 
-### Day 20 (Fri) — Week 4 Retro
+### Day 20 — Week 4 Retro
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -360,7 +362,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W5D21-5` | 🧑 Write launch blog post (1500 words) | 🧑 Human |
 | `P-W5D21-6` | 🧑 Record 3-min demo video | 🧑 Human |
 
-### Day 23 (Wed) — Self-Host Testing
+### Day 23 — Self-Host Testing
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -384,7 +386,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ## WEEK 6 — LAUNCH + SCALE
 
-### Day 26 (Mon) — LAUNCH DAY
+### Day 26 — LAUNCH DAY
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -393,7 +395,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W6D26-3` | 🧑 Publish blog, HN submission, Twitter/LinkedIn/Reddit, 50 personal emails | 🧑 Human |
 | `P-W6D26-4` | 🧑 Monitor server + conversations all day | 🧑 Team |
 
-### Day 27 (Tue) — Respond + Onboard
+### Day 27 — Respond + Onboard
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -401,21 +403,21 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers | 🤖 |
 | `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team |
 
-### Day 28 (Wed) — i18n + Scale
+### Day 28 — i18n + Scale
 
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 |
 | `P-W6D28-2` | 🧑 3-day post-launch metrics. Identify most-requested features. | 🧑 Human |
 
-### Day 29 (Thu) — Analytics API
+### Day 29 — Analytics API
 
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 |
 | `P-W6D29-2` | 🧑 Review community PRs. Plan next 6 weeks. | 🧑 Team |
 
-### Day 30 (Fri) — 6-Week Report
+### Day 30 — 6-Week Report
 
 | Task ID | Task | Owner |
 |---------|------|-------|

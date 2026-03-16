@@ -372,11 +372,12 @@ func mustIssueToken(t *testing.T, role auth.Role) string {
 	t.Helper()
 
 	manager := auth.NewTokenManager("change-me-in-production", time.Hour)
+	now := time.Now().UTC()
 	token, err := manager.Issue(auth.TokenClaims{
 		Subject:  "user-123",
 		TenantID: "tenant-abc",
 		Role:     role,
-	}, time.Date(2026, 3, 13, 10, 0, 0, 0, time.UTC))
+	}, now)
 	if err != nil {
 		t.Fatalf("Issue() error = %v", err)
 	}

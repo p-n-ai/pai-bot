@@ -68,6 +68,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	var goalStore agent.GoalStore
+	if memory {
+		goalStore = agent.NewMemoryGoalStore()
+	} else {
+		goalStore = agent.NewPostgresGoalStore(state.DB.Pool, state.TenantID)
+	}
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
@@ -79,6 +85,7 @@ func main() {
 		Tracker:              state.Tracker,
 		Streaks:              progress.NewMemoryStreakTracker(),
 		XP:                   progress.NewMemoryXPTracker(),
+		Goals:                goalStore,
 	})
 
 	if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{

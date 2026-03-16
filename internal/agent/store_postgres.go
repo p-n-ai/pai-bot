@@ -593,7 +593,7 @@ func (s *PostgresStore) UpdateConversationPendingQuiz(conversationID, state, top
 	cmd, err := s.pool.Exec(ctx,
 		`UPDATE conversations
 		 SET state = $2,
-		     metadata = (jsonb_set(COALESCE(metadata, '{}'::jsonb), '{pending_quiz_topic_id}', to_jsonb($3::text), true) - 'quiz_state')
+		     metadata = ((jsonb_set(COALESCE(metadata, '{}'::jsonb), '{pending_quiz_topic_id}', to_jsonb($3::text), true) - 'quiz_state') - 'pending_goal')
 		 WHERE id = $1::uuid`,
 		conversationID,
 		state,
@@ -624,7 +624,7 @@ func (s *PostgresStore) UpdateConversationQuizState(conversationID, state string
 	cmd, err := s.pool.Exec(ctx,
 		`UPDATE conversations
 		 SET state = $2,
-		     metadata = (jsonb_set(COALESCE(metadata, '{}'::jsonb), '{quiz_state}', $3::jsonb, true) - 'pending_quiz_topic_id')
+		     metadata = (((jsonb_set(COALESCE(metadata, '{}'::jsonb), '{quiz_state}', $3::jsonb, true) - 'pending_quiz_topic_id') - 'pending_goal'))
 		 WHERE id = $1::uuid`,
 		conversationID,
 		state,
@@ -663,6 +663,50 @@ func (s *PostgresStore) ClearConversationQuizState(conversationID, state string)
 		return fmt.Errorf("conversation not found: %s", conversationID)
 	}
 
+	return nil
+}
+
+func (s *PostgresStore) SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	payload, err := json.Marshal(goal)
+	if err != nil {
+		return fmt.Errorf("marshal pending goal: %w", err)
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{pending_goal}', $2::jsonb, true)
+		 WHERE id = $1::uuid`,
+		conversationID,
+		payload,
+	)
+	if err != nil {
+		return fmt.Errorf("set pending goal: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ClearConversationPendingGoal(conversationID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET metadata = COALESCE(metadata, '{}'::jsonb) - 'pending_goal'
+		 WHERE id = $1::uuid`,
+		conversationID,
+	)
+	if err != nil {
+		return fmt.Errorf("clear pending goal: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
 	return nil
 }
 
@@ -756,6 +800,7 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	conv.CompactedAt = metadata.CompactedAt
 	conv.PendingQuizTopicID = metadata.PendingQuizTopicID
 	conv.QuizState = metadata.QuizState
+	conv.PendingGoal = metadata.PendingGoal
 
 	return conv, nil
 }
@@ -765,6 +810,7 @@ type conversationMetadata struct {
 	CompactedAt        int                    `json:"compacted_at,omitempty"`
 	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
 	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
+	PendingGoal        *PendingGoalDraft      `json:"pending_goal,omitempty"`
 }
 
 func parseConversationMetadata(metadata []byte) conversationMetadata {

@@ -29,6 +29,15 @@ type ConversationQuizState struct {
 	SuspendedBy    string `json:"suspended_by,omitempty"`
 }
 
+// PendingGoalDraft stores a suggested goal awaiting confirmation.
+type PendingGoalDraft struct {
+	Summary       string  `json:"summary"`
+	TopicID       string  `json:"topic_id"`
+	TopicName     string  `json:"topic_name"`
+	SyllabusID    string  `json:"syllabus_id"`
+	TargetMastery float64 `json:"target_mastery"`
+}
+
 // Conversation represents a teaching conversation session.
 type Conversation struct {
 	ID                 string                 `json:"id"`
@@ -40,6 +49,7 @@ type Conversation struct {
 	CompactedAt        int                    `json:"compacted_at,omitempty"` // number of messages included in Summary
 	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
 	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
+	PendingGoal        *PendingGoalDraft      `json:"pending_goal,omitempty"`
 	StartedAt          time.Time              `json:"started_at"`
 	EndedAt            *time.Time             `json:"ended_at,omitempty"`
 }
@@ -64,6 +74,8 @@ type ConversationStore interface {
 	UpdateConversationPendingQuiz(conversationID, state, topicID string) error
 	UpdateConversationQuizState(conversationID, state string, quizState ConversationQuizState) error
 	ClearConversationQuizState(conversationID, state string) error
+	SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error
+	ClearConversationPendingGoal(conversationID string) error
 	EndConversation(id string) error
 }
 
@@ -294,6 +306,7 @@ func (s *MemoryStore) UpdateConversationPendingQuiz(conversationID, state, topic
 	conv.State = state
 	conv.PendingQuizTopicID = strings.TrimSpace(topicID)
 	conv.QuizState = nil
+	conv.PendingGoal = nil
 	return nil
 }
 
@@ -312,6 +325,7 @@ func (s *MemoryStore) UpdateConversationQuizState(conversationID, state string, 
 	conv.PendingQuizTopicID = ""
 	stateCopy := quizState
 	conv.QuizState = &stateCopy
+	conv.PendingGoal = nil
 	return nil
 }
 
@@ -329,6 +343,31 @@ func (s *MemoryStore) ClearConversationQuizState(conversationID, state string) e
 	conv.State = state
 	conv.PendingQuizTopicID = ""
 	conv.QuizState = nil
+	return nil
+}
+
+func (s *MemoryStore) SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	draft := goal
+	conv.PendingGoal = &draft
+	return nil
+}
+
+func (s *MemoryStore) ClearConversationPendingGoal(conversationID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	conv.PendingGoal = nil
 	return nil
 }
 
