@@ -488,7 +488,7 @@ func runMigrations(databaseURL string) error {
 			return fmt.Errorf("create migrator: %w", err)
 		}
 	}
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	// Fix dirty state before attempting migrations.
 	version, dirty, verErr := m.Version()
