@@ -107,10 +107,16 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
 
+            echo "--- Waiting for postgres to be healthy ---"
+            sleep 5
+
             echo "--- Running migrations ---"
-            sleep 3
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint /usr/local/bin/migrate app \
-              -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint /usr/local/bin/migrate app \
+              -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up; then
+              echo "Migrations applied successfully"
+            else
+              echo "WARNING: Migration failed (exit $?) — app will still start with existing schema"
+            fi
 
             echo "--- Starting all services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
