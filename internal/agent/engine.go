@@ -64,6 +64,8 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	prereqGraph           *curriculum.PrereqGraph
+	unlocks               *pendingUnlocks
 }
 
 // NewEngine creates a new agent engine.
@@ -116,6 +118,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
+		unlocks:               newPendingUnlocks(),
 	}
 }
 
@@ -299,6 +303,12 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if promptRequested && assistantMessageID != "" {
 		responseContent = injectReviewTokenWithMessageID(finalContent, assistantMessageID)
 	}
+
+	// Prepend any pending topic unlock notifications from previous mastery updates.
+	if unlockMsg := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, conv)); unlockMsg != "" {
+		responseContent = unlockMsg + "\n\n" + responseContent
+	}
+
 	return responseContent, nil
 }
 
@@ -495,6 +505,7 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 			return
 		}
 		e.syncGoalProgress(userID, syllabusID, topic.ID)
+		e.checkTopicUnlocks(userID, syllabusID, topic)
 	}()
 }
 
