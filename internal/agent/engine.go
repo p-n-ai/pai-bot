@@ -575,12 +575,12 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleGoalCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
-	case "/dev-reset":
+	case "/dev-reset", "/dev_reset":
 		if !e.devMode {
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevReset(msg)
-	case "/dev-boost":
+	case "/dev-boost", "/dev_boost":
 		if !e.devMode {
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}

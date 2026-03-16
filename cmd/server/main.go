@@ -119,6 +119,7 @@ func main() {
 		slog.Error("failed to create Telegram channel", "error", err)
 		os.Exit(1)
 	}
+	tg.SetDevMode(cfg.Features.DevMode)
 
 	gw := chat.NewGateway()
 	gw.Register("telegram", tg)
