@@ -242,7 +242,7 @@ func TestAuthLoginEndpoint(t *testing.T) {
 			},
 		},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"tenant_id":"tenant-abc","email":"teacher@example.com","password":"secret-123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"secret-123"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -350,9 +350,63 @@ func TestAuthLogoutEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminInviteEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		inviteResp: auth.InviteRecord{
+			Email:       "newteacher@example.com",
+			Role:        auth.RoleTeacher,
+			Token:       "invite-token-123",
+			ExpiresAt:   time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			InvitedByID: "user-123",
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if authSvc.inviteReq.Email != "newteacher@example.com" {
+		t.Fatalf("invite email = %q, want newteacher@example.com", authSvc.inviteReq.Email)
+	}
+	if authSvc.inviteReq.InvitedByUserID != "user-123" {
+		t.Fatalf("invited_by = %q, want user-123", authSvc.inviteReq.InvitedByUserID)
+	}
+}
+
+func TestAdminInviteEndpointRequiresAdminRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminInviteEndpointValidatesBody(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestAuthLoginEndpointMapsInvalidCredentialsToUnauthorized(t *testing.T) {
 	authSvc := &stubAuthService{loginErr: auth.ErrInvalidCredentials}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"tenant_id":"tenant-abc","email":"teacher@example.com","password":"bad-pass"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"bad-pass"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -363,13 +417,43 @@ func TestAuthLoginEndpointMapsInvalidCredentialsToUnauthorized(t *testing.T) {
 	}
 }
 
+func TestAuthLoginEndpointMapsTenantRequiredToBadRequest(t *testing.T) {
+	authSvc := &stubAuthService{loginErr: auth.NewTenantRequiredError([]auth.TenantOption{
+		{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"},
+		{TenantID: "tenant-b", TenantSlug: "school-b", TenantName: "School B"},
+	})}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"secret-123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var payload struct {
+		Error   string              `json:"error"`
+		Tenants []auth.TenantOption `json:"tenants"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Error == "" {
+		t.Fatal("expected error message in payload")
+	}
+	if len(payload.Tenants) != 2 {
+		t.Fatalf("tenant choices = %d, want 2", len(payload.Tenants))
+	}
+}
+
 func TestAuthEndpointsValidateJSONBody(t *testing.T) {
 	tests := []struct {
 		name string
 		path string
 		body string
 	}{
-		{name: "login missing password", path: "/api/auth/login", body: `{"tenant_id":"tenant-abc","email":"teacher@example.com"}`},
+		{name: "login missing password", path: "/api/auth/login", body: `{"email":"teacher@example.com"}`},
 		{name: "accept invite missing token", path: "/api/auth/invitations/accept", body: `{"name":"Teacher","password":"secret-123"}`},
 		{name: "refresh missing token", path: "/api/auth/refresh", body: `{}`},
 		{name: "logout missing token", path: "/api/auth/logout", body: `{}`},
@@ -457,6 +541,9 @@ type stubAuthService struct {
 	loginReq     auth.LoginRequest
 	loginResp    auth.TokenPair
 	loginErr     error
+	inviteReq    auth.IssueInviteRequest
+	inviteResp   auth.InviteRecord
+	inviteErr    error
 	acceptReq    auth.AcceptInviteRequest
 	acceptResp   auth.TokenPair
 	acceptErr    error
@@ -475,6 +562,11 @@ func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.
 func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error) {
 	s.acceptReq = req
 	return s.acceptResp, s.acceptErr
+}
+
+func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error) {
+	s.inviteReq = req
+	return s.inviteResp, s.inviteErr
 }
 
 func (s *stubAuthService) Refresh(_ context.Context, refreshToken string) (auth.TokenPair, error) {
@@ -497,6 +589,7 @@ func TestWriteAuthError(t *testing.T) {
 		{name: "invalid invite", err: auth.ErrInvalidInvite, wantStatus: http.StatusUnauthorized},
 		{name: "expired invite", err: auth.ErrInviteExpired, wantStatus: http.StatusUnauthorized},
 		{name: "not implemented", err: auth.ErrNotImplemented, wantStatus: http.StatusNotImplemented},
+		{name: "tenant required", err: auth.NewTenantRequiredError([]auth.TenantOption{{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"}}), wantStatus: http.StatusBadRequest},
 		{name: "validation", err: errors.New("bad request"), wantStatus: http.StatusBadRequest},
 	}
 

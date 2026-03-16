@@ -6,6 +6,22 @@ import (
 	"testing"
 )
 
+func TestTenantRequiredErrorWrapsSentinel(t *testing.T) {
+	err := NewTenantRequiredError([]TenantOption{{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"}})
+
+	if !errors.Is(err, ErrTenantRequired) {
+		t.Fatalf("errors.Is(err, ErrTenantRequired) = false")
+	}
+
+	terr, ok := TenantRequiredOptions(err)
+	if !ok {
+		t.Fatal("TenantRequiredOptions() = false, want true")
+	}
+	if len(terr) != 1 || terr[0].TenantSlug != "school-a" {
+		t.Fatalf("tenant options = %#v", terr)
+	}
+}
+
 func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 	svc := NewNoopService()
 
@@ -22,6 +38,11 @@ func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 	_, err = svc.Refresh(context.Background(), "")
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("Refresh() error = %v, want ErrNotImplemented", err)
+	}
+
+	_, err = svc.IssueInvite(context.Background(), IssueInviteRequest{})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("IssueInvite() error = %v, want ErrNotImplemented", err)
 	}
 
 	err = svc.Logout(context.Background(), "")

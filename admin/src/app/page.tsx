@@ -56,6 +56,12 @@ export default function Home() {
                 >
                   Open dashboard
                 </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-300/80 bg-white/70 px-5 py-3 text-sm font-medium text-slate-900 transition hover:border-sky-300 hover:text-sky-700 dark:border-white/15 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:text-sky-200"
+                >
+                  Sign in
+                </Link>
               </div>
             </div>
             <div className="grid gap-3 rounded-[28px] bg-slate-950 p-5 text-slate-50 dark:bg-slate-900/90">
