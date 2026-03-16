@@ -21,9 +21,9 @@ docker compose up -d postgres dragonfly nats
 until docker compose ps postgres --format '{{.Status}}' | grep -q healthy; do sleep 1; done
 ```
 
-3. Export environment variables:
+3. Export environment variables (always enable dev mode for testing):
 ```bash
-export $(grep -v '^#' .env | grep -v '^$' | xargs)
+export $(grep -v '^#' .env | grep -v '^$' | xargs) && export LEARN_DEV_MODE=true
 ```
 
 ## Test Execution
@@ -35,6 +35,14 @@ printf '<test_input>\n' | timeout 30 go run ./cmd/terminal-chat/ --memory 2>&1
 ```
 
 Each test pipes one or more messages and checks the output for expected patterns.
+
+### Important Lessons
+
+- **Always start with `/clear` or `/dev-reset`** to ensure clean state when testing mastery/progress features
+- **`--memory` flag** means each `go run` invocation starts fresh — mastery only accumulates within a single piped session
+- **Mastery grading is async** — runs in a goroutine after AI responds. In piped sessions, there may not be enough time for the goroutine to complete before the next message is processed. For mastery/progress tests, include enough teaching turns (6+) in a single piped session
+- **`/dev-reset`** (requires `LEARN_DEV_MODE=true`) fully clears mastery, XP, streaks, goals, and profile — use this to verify clean state
+- **Unlock notifications are drained at the top of `ProcessMessage`** — they appear on the message *after* mastery crosses the threshold, on any message type (commands or chat)
 
 ## Scenario: $ARGUMENTS
 
@@ -66,7 +74,7 @@ printf '/learn quantum physics\n' | timeout 15 go run ./cmd/terminal-chat/ --mem
 ```bash
 printf '/progress\n' | timeout 15 go run ./cmd/terminal-chat/ --memory 2>&1
 ```
-**Expect:** output is not empty, no error/panic
+**Expect:** output contains "Progress" or "XP", no error/panic
 
 ### 5. Command: /goal
 ```bash
@@ -85,6 +93,25 @@ printf 'Ajar saya tentang persamaan linear\n' | timeout 30 go run ./cmd/terminal
 printf '/foobar\n' | timeout 15 go run ./cmd/terminal-chat/ --memory 2>&1
 ```
 **Expect:** output contains "tidak diketahui" or "Unknown command"
+
+### 8. Multi-turn teaching + mastery accumulation
+```bash
+printf '/learn persamaan linear\nPersamaan linear x + 3 = 7, tolak 3, x = 4\n2x + 4 = 10, tolak 4, 2x = 6, bahagi 2, x = 3\n3x - 9 = 0, tambah 9, 3x = 9, bahagi 3, x = 3\n5x + 10 = 25, tolak 10, 5x = 15, bahagi 5, x = 3\n4x - 8 = 12, tambah 8, 4x = 20, bahagi 4, x = 5\n/progress\n' | timeout 180 go run ./cmd/terminal-chat/ --memory 2>&1
+```
+**Expect:** `/progress` shows F1-06 with mastery > 0%, XP > 0, streak 1 day
+
+### 9. /dev-reset hidden without dev mode
+```bash
+LEARN_DEV_MODE=false go run ./cmd/terminal-chat/ --memory <<< '/dev-reset' 2>&1
+```
+Note: This won't work with env prefix; use `export LEARN_DEV_MODE=false` before running.
+**Expect:** output contains "tidak diketahui" or "Unknown command"
+
+### 10. /dev-reset clears everything
+```bash
+printf '/learn persamaan linear\nPersamaan linear x+3=7, x=4\n2x+4=10, x=3\n3x-9=0, x=3\n5x+10=25, x=3\n4x-8=12, x=5\n/progress\n/dev-reset\n/progress\n' | timeout 180 go run ./cmd/terminal-chat/ --memory 2>&1
+```
+**Expect:** First `/progress` shows mastery/XP > 0. After `/dev-reset`, second `/progress` shows XP: 0 and no mastery.
 
 ## Validation
 
@@ -106,15 +133,18 @@ docker compose stop postgres dragonfly nats
 ```
 Agentic Test Results
 ====================
-1. /learn (no args)         PASS
-2. /learn valid topic       PASS
-3. /learn invalid topic     PASS
-4. /progress                PASS
-5. /goal                    PASS
-6. Teaching message         PASS
-7. Unknown command          PASS
+ 1. /learn (no args)           PASS
+ 2. /learn valid topic         PASS
+ 3. /learn invalid topic       PASS
+ 4. /progress                  PASS
+ 5. /goal                      PASS
+ 6. Teaching message           PASS
+ 7. Unknown command            PASS
+ 8. Multi-turn mastery         PASS
+ 9. /dev-reset hidden          PASS
+10. /dev-reset clears all      PASS
 
-Result: 7/7 passed
+Result: 10/10 passed
 ```
 
 If any test fails, show the expected vs actual output.
