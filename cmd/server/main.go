@@ -14,6 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -55,6 +59,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// Auto-migrate database on startup.
+	if err := runMigrations(cfg.Database.URL); err != nil {
+		slog.Warn("auto-migrate failed", "error", err)
+	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
@@ -467,6 +476,88 @@ func isTelegramChatID(v string) bool {
 		}
 	}
 	return true
+}
+
+func runMigrations(databaseURL string) error {
+	m, err := migrate.New("file:///migrations", databaseURL)
+	if err != nil {
+		// Try local path for dev (when not in Docker).
+		m, err = migrate.New("file://migrations", databaseURL)
+		if err != nil {
+			return fmt.Errorf("create migrator: %w", err)
+		}
+	}
+	defer m.Close()
+
+	// Check for dirty state or already-exists errors and auto-fix.
+	version, dirty, verErr := m.Version()
+	if verErr == nil && dirty {
+		slog.Warn("dirty migration detected, forcing version", "version", version)
+		if forceErr := m.Force(int(version)); forceErr != nil {
+			return fmt.Errorf("force dirty version: %w", forceErr)
+		}
+	}
+
+	err = m.Up()
+	if err == nil || errors.Is(err, migrate.ErrNoChange) {
+		version, dirty, _ = m.Version()
+		slog.Info("database migrated", "version", version, "dirty", dirty)
+		return nil
+	}
+
+	// Tables already exist (DB was set up with raw SQL before golang-migrate).
+	// Detect the current state and force the version.
+	if isAlreadyExistsError(err) {
+		slog.Warn("tables already exist, detecting migration version")
+		latestVersion := detectLatestAppliedMigration(m)
+		if latestVersion > 0 {
+			if forceErr := m.Force(int(latestVersion)); forceErr != nil {
+				return fmt.Errorf("force migration version: %w", forceErr)
+			}
+			if retryErr := m.Up(); retryErr != nil && !errors.Is(retryErr, migrate.ErrNoChange) {
+				return fmt.Errorf("retry migrations: %w", retryErr)
+			}
+			version, dirty, _ = m.Version()
+			slog.Info("database migrated (after version detection)", "version", version, "dirty", dirty)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("run migrations: %w", err)
+}
+
+func isAlreadyExistsError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "already exists")
+}
+
+// detectLatestAppliedMigration finds the highest migration version by scanning
+// migration directories for .up.sql files.
+func detectLatestAppliedMigration(_ *migrate.Migrate) uint {
+	var maxVersion uint
+	for _, dir := range []string{"/migrations", "migrations"} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".up.sql") {
+				continue
+			}
+			// Parse version from filename like "003_goals.up.sql"
+			parts := strings.SplitN(e.Name(), "_", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			var v uint
+			if _, err := fmt.Sscanf(parts[0], "%d", &v); err == nil && v > maxVersion {
+				maxVersion = v
+			}
+		}
+		if maxVersion > 0 {
+			break
+		}
+	}
+	return maxVersion
 }
 
 func buildManualNudgeMessage(detail adminapi.StudentDetail) string {
