@@ -4595,6 +4595,8 @@ func IsStreakMilestone(days int) bool {
 
 Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
+Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
 #### Tasks
