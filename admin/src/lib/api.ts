@@ -8,6 +8,7 @@ import {
   USER_KEY,
 } from "@/lib/auth-session";
 import { readJSONResponse } from "@/lib/http-response.mjs";
+import { hasClientSession } from "@/lib/session-state.mjs";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -254,6 +255,15 @@ export function getStoredUser(): AuthUser | null {
   } catch {
     return null;
   }
+}
+
+export function hasStoredSession(): boolean {
+  if (typeof window === "undefined") return false;
+
+  return hasClientSession({
+    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || "",
+    user: getStoredUser(),
+  });
 }
 
 export async function logout(): Promise<void> {

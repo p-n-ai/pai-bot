@@ -28,7 +28,7 @@ export function LogoutButton() {
       size="sm"
       onClick={handleLogout}
       disabled={pending}
-      className="rounded-full border-white/50 bg-white/75 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur hover:bg-white dark:border-white/10 dark:bg-slate-950/75 dark:text-slate-100 dark:hover:bg-slate-900"
+      className="w-full rounded-full border-white/50 bg-white/75 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur hover:bg-white dark:border-white/10 dark:bg-slate-950/75 dark:text-slate-100 dark:hover:bg-slate-900"
     >
       <LogOut className="size-4" />
       {pending ? "Signing out..." : "Logout"}
