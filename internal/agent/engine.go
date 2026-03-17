@@ -46,6 +46,7 @@ type EngineConfig struct {
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
 	Goals                 GoalStore
+	DevMode               bool
 }
 
 // Engine is the core conversation processor.
@@ -64,6 +65,9 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	devMode               bool
+	prereqGraph           *curriculum.PrereqGraph
+	unlocks               *pendingUnlocks
 }
 
 // NewEngine creates a new agent engine.
@@ -116,6 +120,9 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		devMode:               cfg.DevMode,
+		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
+		unlocks:               newPendingUnlocks(),
 	}
 }
 
@@ -129,9 +136,19 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 
 	e.maybePersistUserProfile(msg)
 
+	// Drain any pending topic unlock notifications from previous mastery updates.
+	unlockPrefix := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, nil))
+
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
-		return e.handleCommand(ctx, msg)
+		resp, err := e.handleCommand(ctx, msg)
+		if err != nil {
+			return resp, err
+		}
+		if unlockPrefix != "" {
+			return unlockPrefix + "\n\n" + resp, nil
+		}
+		return resp, nil
 	}
 	// Auto-trigger onboarding for first-time users who send a normal message.
 	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
@@ -250,7 +267,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
-	plainContent := normalizeEquationFormatting(resp.Content)
+	plainContent := normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content))
 	finalContent := plainContent
 	if promptRequested && !strings.Contains(finalContent, ReviewActionCode) {
 		finalContent = strings.TrimSpace(finalContent) + "\n\n" + ReviewActionCode
@@ -299,6 +316,11 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if promptRequested && assistantMessageID != "" {
 		responseContent = injectReviewTokenWithMessageID(finalContent, assistantMessageID)
 	}
+
+	if unlockPrefix != "" {
+		responseContent = unlockPrefix + "\n\n" + responseContent
+	}
+
 	return responseContent, nil
 }
 
@@ -495,6 +517,7 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 			return
 		}
 		e.syncGoalProgress(userID, syllabusID, topic.ID)
+		e.checkTopicUnlocks(userID, syllabusID, topic)
 	}()
 }
 
@@ -550,6 +573,18 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleProgressCommand(msg)
 	case "/goal":
 		return e.handleGoalCommand(ctx, msg, fields[1:])
+	case "/learn":
+		return e.handleLearnCommand(ctx, msg, fields[1:])
+	case "/dev-reset", "/dev_reset":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevReset(msg)
+	case "/dev-boost", "/dev_boost":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevBoost(msg, fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -1252,7 +1287,7 @@ func shouldRequestRatingAfterReply(replyCount, every int) bool {
 	return replyCount > 0 && replyCount%every == 0
 }
 
-func (e *Engine) buildSystemPrompt(_ chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
+func (e *Engine) buildSystemPrompt(msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
 	languageBlock := `LANGUAGE:
 Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
 If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu.
@@ -1288,6 +1323,13 @@ You must:
 - If the student makes a common misconception listed in the notes, explicitly address it using the recommended strategy.
 - When evaluating an attempt, think using the rubric structure (partial understanding vs full mastery).
 - Keep responses aligned to Tahap Penguasaan 1-3 unless explicitly asked for extension.
+
+EXAM TERMINOLOGY:
+- Use UASA for Form 1-3 exam references. Use SPM only for upper-secondary exam references.
+- Do not call Form 1-3 assessment PT3. Treat PT3 as obsolete legacy terminology and rewrite it to UASA if it appears in prior context.
+- Before sending a reply, scan your draft for the token "PT3".
+- If "PT3" appears anywhere in a normal tutoring reply, replace it with "UASA" (or "UASA/SPM" if contrasting lower-secondary vs upper-secondary).
+- Your final tutoring reply should not contain the token "PT3".
 
 ========================================
 PEDAGOGICAL CONTROL LOGIC
@@ -1349,9 +1391,9 @@ You must:
 Never be harsh or sarcastic.
 
 ========================================
-OUTPUT FORMAT (Always Use This Structure)
+OUTPUT FORMAT
 ========================================
-Use these exact plain-text labels in order for each substantive tutoring reply:
+Use these exact plain-text labels in order when they are needed for each substantive tutoring reply:
 Faham/Understand:
 Rancang/Plan:
 Selesaikan/Solve:
@@ -1359,7 +1401,8 @@ Semak/Verify:
 Konsep/Connect:
 
 IMPORTANT:
-- In early stages (A or B), you may omit Solve, Verify, and Connect entirely or leave them blank.
+- In early stages (A or B), usually output only Faham/Understand and Rancang/Plan.
+- Only include Selesaikan/Solve, Semak/Verify, and Konsep/Connect when they add real value for the current stage.
 - Never fill Solve with full solution unless in FULL WRAP UP stage.
 - The student benefits most from an explanation style where you frequently pause to confirm understanding by asking test questions.
 - Those test questions should preferably use simple, explicit examples.
@@ -1384,6 +1427,24 @@ IMAGE HANDLING:
 FORMAT CONSTRAINT:
 Use plain-text math only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$.
 Do not format replies using Markdown (no headings, bold, italic, code blocks, or Markdown lists). Use plain chat text with simple line breaks only.`
+
+	// Inject adaptive explanation depth based on mastery level.
+	if e.tracker != nil {
+		userID := msg.UserID
+		if conv != nil {
+			userID = conv.UserID
+		}
+		var topicMastery float64
+		if topic != nil {
+			syllabusID := topic.SyllabusID
+			if syllabusID == "" {
+				syllabusID = "default"
+			}
+			topicMastery, _ = e.tracker.GetMastery(userID, syllabusID, topic.ID)
+		}
+		allProgress, _ := e.tracker.GetAllProgress(userID)
+		base += adaptiveDepthBlock(topicMastery, allProgress)
+	}
 
 	if topic == nil {
 		return base
@@ -1460,6 +1521,27 @@ func normalizeEquationFormatting(content string) string {
 		`\div`, "/",
 	)
 	return stripMarkdownFormatting(replacer.Replace(content))
+}
+
+func normalizeLegacyExamReferences(content string) string {
+	replacer := strings.NewReplacer(
+		"PT3/SPM", "UASA/SPM",
+		"pt3/spm", "uasa/spm",
+		"PT3-style", "UASA-style",
+		"pt3-style", "uasa-style",
+		"gaya PT3", "gaya UASA",
+		"Gaya PT3", "Gaya UASA",
+		"pelajar PT3", "pelajar UASA",
+		"Pelajar PT3", "Pelajar UASA",
+		" PT3 ", " UASA ",
+		"(PT3)", "(UASA)",
+		" PT3.", " UASA.",
+		" PT3,", " UASA,",
+		" PT3?", " UASA?",
+		" PT3!", " UASA!",
+		" PT3:", " UASA:",
+	)
+	return replacer.Replace(content)
 }
 
 func stripMarkdownFormatting(content string) string {

@@ -82,8 +82,8 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply the database migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
+make migrate
 
 # 7. Verify the server runs and health check works
 go run ./cmd/server &
@@ -206,7 +206,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D6-1` | ✅ Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
 | `P-W2D6-2` | ✅ SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
 | `P-W2D6-3` | ✅ `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
-| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
+| `P-W2D6-4` | ✅ Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
 ### Day 7 — Quiz Engine
@@ -220,8 +220,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | ✅ | 🤖 |
 | `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | ✅ | 🤖 |
 | `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | ✅ | 🤖 |
-| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real PT3/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
-| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real PT3/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
+| `P-W2D7-4` | Exam-style question mimicry: include 2–3 real UASA/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
+| `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real UASA/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
 ### Day 8 — Proactive Nudges + Streaks
 
@@ -236,8 +236,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
-| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
+| `P-W2D9-1` | ✅ Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
+| `P-W2D9-2` | ✅ `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
 | `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
 | `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
 
@@ -259,6 +259,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 ### Day 11 — Goals + Challenges
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
+
+Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -308,19 +310,19 @@ Status (2026-03-12): `/goal` shipped with natural-language parsing, pending conf
 
 ### Day 16 — Scaffold Admin Panel
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. JWT auth, sidebar layout. | 🤖 |
-| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 |
-| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 |
-| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human |
+| Task ID | Task | Owner | Status |
+|---------|------|-------|--------|
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, keep invite activation, email/password login, and frontend route guards deferred until a later auth-hardening pass, sidebar layout. | 🤖 | ✅ |
+| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ |
+| `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ |
+| `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ |
 
 ### Day 17 — API Endpoints + Parent View
 
-| Task ID | Task | Owner |
-|---------|------|-------|
+| Task ID | Task | Owner | Status |
+|---------|------|-------|--------|
 | `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 |
-| `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 |
+| `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 | ✅ |
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human |
 
@@ -379,6 +381,7 @@ Status (2026-03-12): `/goal` shipped with natural-language parsing, pending conf
 | `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 |
 | `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 |
+| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_refresh_tokens`; invite acceptance; email/password login; refresh/logout endpoints; Next.js route guards for teacher/parent/admin views | 🤖 |
 | `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human |
 | `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human |
 
@@ -402,7 +405,7 @@ Status (2026-03-12): `/goal` shipped with natural-language parsing, pending conf
 | Task ID | Task | Owner |
 |---------|------|-------|
 | `P-W6D27-1` | Fix top 5 bugs from launch day | 🤖 |
-| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers | 🤖 |
+| `P-W6D27-2` | School onboarding wizard in admin: name → syllabus → bot setup → create class → invite teachers via email invite flow | 🤖 |
 | `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team |
 
 ### Day 28 — i18n + Scale

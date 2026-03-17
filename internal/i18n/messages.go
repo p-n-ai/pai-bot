@@ -27,6 +27,10 @@ const (
 	MsgLanguageChanged       Key = "language_changed"
 	MsgRatingThanks          Key = "rating_thanks"
 	MsgProfileReset          Key = "profile_reset"
+	MsgLearnUsage            Key = "learn_usage"
+	MsgLearnTopicNotFound    Key = "learn_topic_not_found"
+	MsgLearnTopicSet         Key = "learn_topic_set"
+	MsgTopicUnlocked         Key = "topic_unlocked"
 )
 
 var catalog = map[string]map[Key]string{
@@ -72,6 +76,10 @@ Tingkatan berapa anda sekarang?`,
 		MsgLanguageChanged:     "Bahasa telah ditukar ke Bahasa Melayu.",
 		MsgRatingThanks:        "Terima kasih atas rating anda. Jom kita sambung.",
 		MsgProfileReset:        "Profil pembelajaran anda telah direset. Mari tetapkan semula.",
+		MsgLearnUsage:          "Guna: /learn <topik>\nContoh: /learn persamaan linear",
+		MsgLearnTopicNotFound:  "Topik tidak dijumpai: %s\nGuna /learn <topik> dengan nama topik yang betul.",
+		MsgLearnTopicSet:       "Topik ditetapkan: %s\nMari kita mula belajar!",
+		MsgTopicUnlocked:       "Tahniah! Anda telah membuka topik baru:\n- %s\n\nGuna /learn untuk mula belajar topik ini.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -115,6 +123,10 @@ Which form are you in now?`,
 		MsgLanguageChanged:     "Language updated to English.",
 		MsgRatingThanks:        "Thanks for your rating. Let's continue.",
 		MsgProfileReset:        "Your learner profile has been reset. Let's set it up again.",
+		MsgLearnUsage:          "Usage: /learn <topic>\nExample: /learn linear equations",
+		MsgLearnTopicNotFound:  "Topic not found: %s\nUse /learn <topic> with a valid topic name.",
+		MsgLearnTopicSet:       "Topic set: %s\nLet's start learning!",
+		MsgTopicUnlocked:       "Congratulations! You've unlocked new topics:\n- %s\n\nUse /learn to start studying them.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -158,6 +170,10 @@ Which form are you in now?`,
 		MsgLanguageChanged:     "语言已切换为中文。",
 		MsgRatingThanks:        "谢谢你的评分。我们继续。",
 		MsgProfileReset:        "你的学习档案已重置。我们重新设置一次。",
+		MsgLearnUsage:          "用法：/learn <主题>\n例如：/learn 线性方程",
+		MsgLearnTopicNotFound:  "未找到主题：%s\n请使用 /learn <主题> 并输入正确的主题名称。",
+		MsgLearnTopicSet:       "主题已设置：%s\n我们开始学习吧！",
+		MsgTopicUnlocked:       "恭喜！你已解锁新主题：\n- %s\n\n使用 /learn 开始学习。",
 	},
 }
 

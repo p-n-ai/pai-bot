@@ -30,6 +30,7 @@ type FeatureConfig struct {
 	DisableMultiLanguage        bool
 	RatingPromptEvery           int
 	AIPersonalizedNudgesEnabled bool
+	DevMode                     bool
 }
 
 // ServerConfig holds HTTP server settings.
@@ -188,6 +189,7 @@ func Load() (*Config, error) {
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
 		},
 		Features: FeatureConfig{
+			DevMode:                     envBool("LEARN_DEV_MODE", false),
 			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
 			RatingPromptEvery:           envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
 			AIPersonalizedNudgesEnabled: envBoolWithFallback("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "LEARN_AI_NUDGES_ENABLED", true),

@@ -65,8 +65,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8fcff_0%,#eef8f7_100%)] px-6 py-8 dark:bg-[linear-gradient(180deg,#07111c_0%,#0d1725_100%)] lg:px-10">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
         <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
@@ -92,6 +91,24 @@ export default function DashboardPage() {
           <StatCard title="Topics" value={String(data?.topic_ids.length ?? 0)} note="Algebra sequence" />
           <StatCard title="Tracked Scores" value={String(trackedScores)} note="Real mastery entries loaded" />
         </section>
+
+        <Card className="rounded-[28px] border-white/70 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.1)] dark:border-white/10 dark:bg-slate-900/85">
+          <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Operations</p>
+              <h2 className="text-2xl font-semibold tracking-tight">Check AI usage before costs drift.</h2>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300">
+                Open the usage view to inspect token volume by provider and model across the current admin API snapshot.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/ai-usage"
+              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-sky-100"
+            >
+              Open AI usage
+            </Link>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -169,8 +186,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }
 

@@ -1657,7 +1657,7 @@ test-cover:
 
 # Database
 migrate:
-	@echo "Run: docker exec -i $$(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql"
+	@docker compose --profile tools run --rm migrate -path /migrations -database "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up
 
 # Build
 build:
@@ -1754,8 +1754,8 @@ go build ./cmd/server
 # Start infrastructure
 docker compose up -d postgres dragonfly nats
 
-# Run migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# Run migrations (golang-migrate; records applied versions in schema_migrations)
+make migrate
 
 # Test health endpoint
 go run ./cmd/server &
@@ -1831,8 +1831,8 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply the database migration
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+# 6. Apply database migrations
+make migrate
 
 # 7. Verify the server starts and health check works
 go run ./cmd/server &
@@ -4336,7 +4336,7 @@ func (s *QuizSession) IsComplete() bool {
 - [x] `CompleteJSON` added to AI gateway for structured grading
 - [x] Quiz can start from natural-language intent or button callback without requiring `/quiz`
 - [x] 🧑 KSSM Algebra assessments reviewed for accuracy
-- [ ] `make test-all` passes
+- [x] `make test-all` passes
 
 ---
 
@@ -4595,6 +4595,8 @@ func IsStreakMilestone(days int) bool {
 
 Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
+Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
 #### Tasks
@@ -4796,6 +4798,14 @@ Follow the same TDD pattern for:
 
 #### 16.1 — Scaffold Admin Panel
 
+Implementation boundary for auth:
+
+- Current: Day 16 JWT/RBAC applies to the Go admin API under `/api/admin/*`.
+- Current: the Next.js admin shell is still publicly routable during scaffolding. In an anonymous browser session, pages can render, but API requests without `pai_token` should fail with `401` or `403`.
+- Planned later: add the final frontend auth flow only when the team is ready to land the invite + password UX and route-guard behavior.
+- Planned auth model: teachers, parents, admins, and platform admins are provisioned by email invite, accept the invite by setting a password, then use email + password for future logins.
+- Planned auth storage: keep profile and role data in `users`; add `auth_identities`, `auth_invites`, and `auth_refresh_tokens` tables for login credentials and session state.
+
 ```bash
 cd admin
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --no-import-alias
@@ -4865,6 +4875,12 @@ function getToken(): string {
 }
 ```
 
+Decision note:
+
+- For Day 16, "JWT auth" means backend bearer-token enforcement plus RBAC on admin API endpoints.
+- Frontend login pages, redirects, and Next.js middleware protection are intentionally deferred so admin UI scaffolding can proceed independently.
+- The deferred auth-hardening pass should implement invite acceptance, password setup, email/password login, refresh token rotation, logout, and protected frontend routes.
+
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
 
 Follow the same pattern:
@@ -4873,6 +4889,13 @@ Follow the same pattern:
 - **Day 18:** Deploy admin panel via docker-compose with nginx reverse proxy. Class management page.
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page.
 - **Day 20:** Week 4 retro.
+
+Planned follow-up after Week 4 scaffolding:
+
+- Add a migration for `auth_identities`, `auth_invites`, and `auth_refresh_tokens`.
+- Add backend endpoints for invite acceptance, email/password login, token refresh, and logout.
+- Add Next.js login screen and middleware guards for teacher, parent, admin, and platform admin views.
+- Keep students on Telegram identity until a separate student web portal is explicitly introduced.
 
 **Week 4 Targets:**
 - [ ] Admin panel live
@@ -4948,7 +4971,7 @@ sleep 3
 
 # Run migrations
 echo "📦 Running database migrations..."
-docker exec -i $(docker compose ps -q postgres) psql -U pai pai < migrations/001_initial.up.sql
+make migrate
 
 # Download Go dependencies
 echo "📥 Downloading Go dependencies..."
@@ -5029,6 +5052,7 @@ echo ""
 | `internal/curriculum` | Day 1 | `loader.go`, `types.go` | YAML curriculum loader |
 | `internal/progress` | Day 6 | `tracker.go`, `spaced_rep.go`, `display.go`, `streaks.go`, `xp.go` | Mastery tracking, SM-2, streaks, XP |
 | `internal/auth` | Day 16 | `jwt.go`, `middleware.go` | JWT auth + RBAC middleware |
+| `internal/auth` | Planned auth-hardening pass | `password.go`, `invites.go`, `sessions.go` | Password login, invite onboarding, refresh token rotation |
 | `internal/tenant` | Day 23 | `tenant.go`, `middleware.go` | Multi-tenancy isolation |
 
 ---

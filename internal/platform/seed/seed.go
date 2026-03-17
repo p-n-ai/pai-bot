@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/p-n-ai/pai-bot/internal/auth"
 )
 
 const tenantUpsertSQL = `
@@ -77,6 +78,13 @@ func seedDemo(ctx context.Context, db beginner) (err error) {
 }
 
 func demoStatements(tenantID string) []string {
+	passwordHash, _ := auth.HashPassword("demo-password")
+	studentEmail := "student@example.com"
+	teacherEmail := "teacher@example.com"
+	parentEmail := "parent@example.com"
+	adminEmail := "admin@example.com"
+	platformAdminEmail := "platform-admin@example.com"
+
 	return []string{
 		fmt.Sprintf(`
 INSERT INTO users (id, tenant_id, role, name, external_id, channel, form, config)
@@ -85,7 +93,9 @@ VALUES
 ('10000000-0000-0000-0000-000000000002', '%[1]s', 'student', 'Alya Sofea', 'stu_1', 'telegram', 'Form 1', '{"preferred_language":"bm"}'::jsonb),
 ('10000000-0000-0000-0000-000000000003', '%[1]s', 'student', 'Hakim Firdaus', 'stu_2', 'telegram', 'Form 1', '{"preferred_language":"en"}'::jsonb),
 ('10000000-0000-0000-0000-000000000004', '%[1]s', 'student', 'Mei Lin', 'stu_3', 'telegram', 'Form 2', '{"preferred_language":"bm"}'::jsonb),
-('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent_1', 'telegram', NULL, '{"children":["stu_1"]}'::jsonb)
+('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent_1', 'telegram', NULL, '{"children":["stu_1"]}'::jsonb),
+('10000000-0000-0000-0000-000000000006', '%[1]s', 'admin', 'Nadia Admin', 'admin_1', 'web', NULL, '{"scope":"school"}'::jsonb),
+('10000000-0000-0000-0000-000000000007', '%[1]s', 'platform_admin', 'P&AI Platform Admin', 'platform_admin_1', 'web', NULL, '{"scope":"platform"}'::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     external_id = EXCLUDED.external_id,
@@ -94,6 +104,28 @@ SET name = EXCLUDED.name,
     config = EXCLUDED.config,
     updated_at = NOW()
 `, tenantID),
+		fmt.Sprintf(`
+INSERT INTO auth_identities (
+    user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+)
+VALUES
+('10000000-0000-0000-0000-000000000001', '%[1]s', 'password', '%[2]s', '%[3]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000002', '%[1]s', 'password', '%[4]s', '%[5]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000005', '%[1]s', 'password', '%[6]s', '%[7]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000006', '%[1]s', 'password', '%[8]s', '%[9]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000007', '%[1]s', 'password', '%[11]s', '%[12]s', '%[10]s', NOW(), NOW(), NOW(), NOW())
+ON CONFLICT (tenant_id, provider, identifier_normalized) DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    email_verified_at = EXCLUDED.email_verified_at,
+    last_login_at = EXCLUDED.last_login_at,
+    updated_at = NOW()
+`, tenantID,
+			teacherEmail, auth.NormalizeIdentifier(teacherEmail),
+			studentEmail, auth.NormalizeIdentifier(studentEmail),
+			parentEmail, auth.NormalizeIdentifier(parentEmail),
+			adminEmail, auth.NormalizeIdentifier(adminEmail),
+			passwordHash,
+			platformAdminEmail, auth.NormalizeIdentifier(platformAdminEmail)),
 		fmt.Sprintf(`
 INSERT INTO conversations (id, user_id, tenant_id, topic_id, state, metadata, started_at)
 VALUES

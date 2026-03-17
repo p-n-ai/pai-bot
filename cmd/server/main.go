@@ -14,9 +14,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
@@ -54,6 +59,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// Auto-migrate database on startup.
+	if err := runMigrations(cfg.Database.URL); err != nil {
+		slog.Warn("auto-migrate failed", "error", err)
+	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
@@ -100,6 +110,7 @@ func main() {
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
 		Goals:                goalStore,
+		DevMode:              cfg.Features.DevMode,
 	})
 
 	// Create Telegram channel + chat gateway.
@@ -108,6 +119,7 @@ func main() {
 		slog.Error("failed to create Telegram channel", "error", err)
 		os.Exit(1)
 	}
+	tg.SetDevMode(cfg.Features.DevMode)
 
 	gw := chat.NewGateway()
 	gw.Register("telegram", tg)
@@ -176,9 +188,21 @@ func main() {
 	}
 
 	adminService := adminapi.New(db.Pool, store.TenantID())
+	authService := auth.NewPostgresService(
+		db.Pool,
+		cfg.Auth.JWTSecret,
+		time.Duration(cfg.Auth.AccessTokenTTL)*time.Minute,
+		time.Duration(cfg.Auth.RefreshTokenTTL)*24*time.Hour,
+	)
 
 	// HTTP endpoints.
-	mux := newHandler(adminService, gatewaySender{gw})
+	mux := newHandlerWithServices(
+		adminService,
+		gatewaySender{gw},
+		authService,
+		cfg.Auth.JWTSecret,
+		time.Duration(cfg.Auth.AccessTokenTTL)*time.Minute,
+	)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -213,6 +237,16 @@ type adminDataSource interface {
 	GetClassProgress(classID string) (adminapi.ClassProgress, error)
 	GetStudentDetail(studentID string) (adminapi.StudentDetail, error)
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
+	GetParentSummary(parentID string) (adminapi.ParentSummary, error)
+	GetAIUsage() (adminapi.AIUsageSummary, error)
+}
+
+type authService interface {
+	Login(ctx context.Context, req auth.LoginRequest) (auth.TokenPair, error)
+	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error)
+	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
+	Refresh(ctx context.Context, refreshToken string) (auth.TokenPair, error)
+	Logout(ctx context.Context, refreshToken string) error
 }
 
 type outboundMessage struct {
@@ -300,15 +334,43 @@ func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
-	mux.HandleFunc("GET /api/admin/classes/{id}/progress", handleAdminClassProgress(admin))
-	mux.HandleFunc("GET /api/admin/students/{id}", handleAdminStudentDetail(admin))
-	mux.HandleFunc("GET /api/admin/students/{id}/conversations", handleAdminStudentConversations(admin))
-	mux.HandleFunc("POST /api/admin/students/{id}/nudge", handleAdminStudentNudge(admin, sender))
 	return mux
 }
 
 func newHandler(admin adminDataSource, sender messageSender) http.Handler {
-	return withCORS(newMux(admin, sender))
+	return newHandlerWithServices(admin, sender, auth.NewNoopService(), "change-me-in-production", time.Hour)
+}
+
+func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
+	mux := newMux(admin, sender)
+	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
+
+	teacherOrAbove := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleTeacher, auth.RoleAdmin, auth.RolePlatformAdmin),
+	)
+	parentOrAbove := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleParent, auth.RoleAdmin, auth.RolePlatformAdmin),
+	)
+	adminOrAbove := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+	)
+
+	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
+	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
+	mux.Handle("POST /api/auth/refresh", handleAuthRefresh(authSvc))
+	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
+	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
+	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(admin)))
+	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(admin)))
+	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(admin)))
+	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(admin, sender)))
+	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(admin)))
+	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(admin)))
+
+	return withCORS(mux)
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -356,6 +418,40 @@ func handleAdminStudentConversations(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
+func handleAdminParentSummary(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		parentID := r.PathValue("id")
+		if claims.Role == auth.RoleParent && claims.Subject != parentID {
+			http.Error(w, "parents can only access their own summary", http.StatusForbidden)
+			return
+		}
+
+		payload, err := admin.GetParentSummary(parentID)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminAIUsage(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, err := admin.GetAIUsage()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
 func handleAdminStudentNudge(admin adminDataSource, sender messageSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		detail, err := admin.GetStudentDetail(r.PathValue("id"))
@@ -391,6 +487,173 @@ func handleAdminStudentNudge(admin adminDataSource, sender messageSender) http.H
 	}
 }
 
+func handleAdminInvite(authSvc authService) http.HandlerFunc {
+	type request struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Email) == "" || strings.TrimSpace(body.Role) == "" {
+			http.Error(w, "email and role are required", http.StatusBadRequest)
+			return
+		}
+
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		resp, err := authSvc.IssueInvite(r.Context(), auth.IssueInviteRequest{
+			InvitedByUserID: claims.Subject,
+			TenantID:        claims.TenantID,
+			Email:           body.Email,
+			Role:            auth.Role(body.Role),
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func handleAuthLogin(authSvc authService) http.HandlerFunc {
+	type request struct {
+		TenantID string `json:"tenant_id"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Email) == "" || strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "email and password are required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.Login(r.Context(), auth.LoginRequest{
+			TenantID: body.TenantID,
+			Email:    body.Email,
+			Password: body.Password,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
+	type request struct {
+		Token    string `json:"token"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Token) == "" || strings.TrimSpace(body.Name) == "" || strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "token, name, and password are required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.AcceptInvite(r.Context(), auth.AcceptInviteRequest{
+			Token:    body.Token,
+			Name:     body.Name,
+			Password: body.Password,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func handleAuthRefresh(authSvc authService) http.HandlerFunc {
+	type request struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.RefreshToken) == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.Refresh(r.Context(), body.RefreshToken)
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleAuthLogout(authSvc authService) http.HandlerFunc {
+	type request struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.RefreshToken) == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+
+		if err := authSvc.Logout(r.Context(), body.RefreshToken); err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func decodeJSONBody(r *http.Request, target any) (err error) {
+	defer func() {
+		closeErr := r.Body.Close()
+		if err == nil && closeErr != nil {
+			err = fmt.Errorf("close request body: %w", closeErr)
+		}
+	}()
+
+	if err = json.NewDecoder(r.Body).Decode(target); err != nil {
+		return fmt.Errorf("invalid json body")
+	}
+	return nil
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -403,6 +666,25 @@ func writeAdminError(w http.ResponseWriter, err error) {
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func writeAuthError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrInvalidInvite), errors.Is(err, auth.ErrInviteExpired):
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+	case errors.Is(err, auth.ErrInviteConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, auth.ErrTenantRequired):
+		options, _ := auth.TenantRequiredOptions(err)
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":   err.Error(),
+			"tenants": options,
+		})
+	case errors.Is(err, auth.ErrNotImplemented):
+		http.Error(w, err.Error(), http.StatusNotImplemented)
+	default:
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
 }
 
 func withCORS(next http.Handler) http.Handler {
@@ -429,6 +711,16 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
+func chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(final http.Handler) http.Handler {
+		wrapped := final
+		for i := len(middlewares) - 1; i >= 0; i-- {
+			wrapped = middlewares[i](wrapped)
+		}
+		return wrapped
+	}
+}
+
 func isTelegramChatID(v string) bool {
 	if v == "" {
 		return false
@@ -442,6 +734,47 @@ func isTelegramChatID(v string) bool {
 		}
 	}
 	return true
+}
+
+func runMigrations(databaseURL string) error {
+	m, err := migrate.New("file:///migrations", databaseURL)
+	if err != nil {
+		// Try local path for dev (when not in Docker).
+		m, err = migrate.New("file://migrations", databaseURL)
+		if err != nil {
+			return fmt.Errorf("create migrator: %w", err)
+		}
+	}
+	defer func() { _, _ = m.Close() }()
+
+	// Fix dirty state before attempting migrations.
+	version, dirty, verErr := m.Version()
+	if verErr == nil && dirty {
+		slog.Warn("dirty migration detected, forcing clean", "version", version)
+		_ = m.Force(int(version))
+	}
+
+	// Try migrating up. Keep retrying when a migration fails because its
+	// tables/indexes already exist (legacy DB created before golang-migrate).
+	for {
+		err = m.Up()
+		if err == nil || errors.Is(err, migrate.ErrNoChange) {
+			break
+		}
+		if strings.Contains(err.Error(), "already exists") {
+			// This migration's objects are already in the DB. Force its
+			// version as applied and try the next one.
+			v, _, _ := m.Version()
+			slog.Warn("migration objects already exist, skipping", "version", v)
+			_ = m.Force(int(v))
+			continue
+		}
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	version, dirty, _ = m.Version()
+	slog.Info("database migrated", "version", version, "dirty", dirty)
+	return nil
 }
 
 func buildManualNudgeMessage(detail adminapi.StudentDetail) string {

@@ -121,7 +121,7 @@ Open Telegram, find your bot, and send `/start`. That's it — you're learning.
 
 ### 5. Access the admin panel
 
-Open `http://localhost:3000` to manage schools, classes, and view student progress.
+Open `http://localhost:3000` to access the admin panel. Current scaffolding keeps the shell publicly reachable in local development, but the planned production model is invite-based account activation followed by email + password login for teacher, parent, and admin roles.
 
 ---
 
@@ -136,7 +136,7 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 - **Proactive Study Sessions** — The agent initiates conversations when it's time to review. Spaced repetition ensures long-term retention.
 - **Progress Tracking** — See mastery per topic, XP earned, streak length, and progress toward personal goals.
 - **Quizzes & Assessments** — Take quizzes in chat with deterministic grading for OSS-backed free-text answers, hints, and detailed feedback.
-- **Exam-Style Practice** — Current quiz content comes from OSS KSSM assessment sets reviewed against Algebra topics. Dynamic AI-generated exam mimicry is planned, not yet live.
+- **Exam-Style Practice** — Current quiz content comes from OSS KSSM assessment sets reviewed against Algebra topics. Dynamic AI-generated UASA/SPM-style mimicry is planned, not yet live.
 - **Peer Challenges** — Battle classmates on the same set of questions. Learn together, compete for fun.
 - **Goals & Streaks** — Set a learning goal ("Master algebra by April") and track daily streaks.
 
@@ -219,6 +219,13 @@ Open `http://localhost:3000` to manage schools, classes, and view student progre
 | **Admin Panel** | Next.js 14, TypeScript, Refine, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
+
+### Planned Admin Auth
+
+- Teachers, parents, school admins, and platform admins are intended to access the web dashboard through invite-based account provisioning.
+- The invite link is only for first-time activation. After activation, ongoing login uses `email + password`.
+- The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
+- Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
 
 ### Project Structure
 
@@ -440,6 +447,9 @@ docker compose up -d postgres dragonfly nats ollama
 # Run database migrations
 make migrate
 
+# Check the current migration version
+make migrate-version
+
 # Seed demo data (optional)
 make seed
 
@@ -503,6 +513,9 @@ make start        # Start all services via Docker Compose
 make stop         # Stop all services
 make logs         # Tail application logs
 make migrate      # Run database migrations
+make migrate-version  # Show current migration version from schema_migrations
+make migrate-down # Roll back the most recent migration
+make migrate-force VERSION=2  # Baseline an existing database that was migrated manually
 make seed         # Seed demo tenant/users/messages/progress/events
 make seed-docker  # Seed through the running app container
 make analytics    # Print quick metrics from the database

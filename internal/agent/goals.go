@@ -545,12 +545,13 @@ func (e *Engine) syncGoalProgress(userID, syllabusID, topicID string) {
 
 func activeGoalsDescending(goals []*Goal) []*Goal {
 	var active []*Goal
-	for _, goal := range goals {
+	for i := len(goals) - 1; i >= 0; i-- {
+		goal := goals[i]
 		if goal != nil && goal.Status == "active" {
 			active = append(active, goal)
 		}
 	}
-	sort.Slice(active, func(i, j int) bool {
+	sort.SliceStable(active, func(i, j int) bool {
 		return active[i].CreatedAt.After(active[j].CreatedAt)
 	})
 	return active

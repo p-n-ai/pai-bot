@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -49,6 +50,51 @@ type StudentConversation struct {
 	Timestamp time.Time `json:"timestamp"`
 	Role      string    `json:"role"`
 	Text      string    `json:"text"`
+}
+
+type Parent struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	ChildIDs  []string  `json:"child_ids"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type WeeklyStats struct {
+	DaysActive        int `json:"days_active"`
+	MessagesExchanged int `json:"messages_exchanged"`
+	QuizzesCompleted  int `json:"quizzes_completed"`
+	NeedsReviewCount  int `json:"needs_review_count"`
+}
+
+type EncouragementSuggestion struct {
+	Headline string `json:"headline"`
+	Text     string `json:"text"`
+}
+
+type ParentSummary struct {
+	Parent        Parent                  `json:"parent"`
+	Child         Student                 `json:"child"`
+	Streak        StreakSummary           `json:"streak"`
+	WeeklyStats   WeeklyStats             `json:"weekly_stats"`
+	Mastery       []ProgressItem          `json:"mastery"`
+	Encouragement EncouragementSuggestion `json:"encouragement"`
+}
+
+type AIProviderUsage struct {
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	Messages     int    `json:"messages"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	TotalTokens  int    `json:"total_tokens"`
+}
+
+type AIUsageSummary struct {
+	TotalMessages     int               `json:"total_messages"`
+	TotalInputTokens  int               `json:"total_input_tokens"`
+	TotalOutputTokens int               `json:"total_output_tokens"`
+	Providers         []AIProviderUsage `json:"providers"`
 }
 
 type ClassStudent struct {
@@ -273,6 +319,287 @@ func (s *Service) GetStudentConversations(studentID string) ([]StudentConversati
 	return conversations, nil
 }
 
+func (s *Service) GetParentSummary(parentID string) (ParentSummary, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	parent, childID, err := s.loadParent(ctx, parentID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+
+	child, childInternalID, err := s.loadStudentByExternalID(ctx, childID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+
+	progress, err := s.loadStudentProgress(ctx, childInternalID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+
+	current, longest, err := s.loadStreakSummary(ctx, childInternalID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+	totalXP, err := s.loadTotalXP(ctx, childInternalID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+
+	weeklyStats, err := s.loadWeeklyStats(ctx, childInternalID)
+	if err != nil {
+		return ParentSummary{}, err
+	}
+
+	return ParentSummary{
+		Parent:      parent,
+		Child:       child,
+		Streak:      StreakSummary{Current: current, Longest: longest, TotalXP: totalXP},
+		WeeklyStats: weeklyStats,
+		Mastery:     progress,
+		Encouragement: buildParentEncouragement(
+			child.Name,
+			StreakSummary{Current: current, Longest: longest, TotalXP: totalXP},
+			progress,
+			weeklyStats,
+		),
+	}, nil
+}
+
+func (s *Service) GetAIUsage() (AIUsageSummary, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			COALESCE(model, '') AS model,
+			COUNT(*) AS message_count,
+			COALESCE(SUM(input_tokens), 0) AS input_tokens,
+			COALESCE(SUM(output_tokens), 0) AS output_tokens
+		FROM messages
+		WHERE tenant_id = $1
+			AND model IS NOT NULL
+			AND model <> ''
+		GROUP BY model
+		ORDER BY COUNT(*) DESC, model ASC
+	`, s.tenantID)
+	if err != nil {
+		return AIUsageSummary{}, fmt.Errorf("query ai usage: %w", err)
+	}
+	defer rows.Close()
+
+	var summary AIUsageSummary
+	for rows.Next() {
+		var item AIProviderUsage
+		if err := rows.Scan(&item.Model, &item.Messages, &item.InputTokens, &item.OutputTokens); err != nil {
+			return AIUsageSummary{}, fmt.Errorf("scan ai usage: %w", err)
+		}
+		item.Provider, item.Model = splitProviderModel(item.Model)
+		item.TotalTokens = item.InputTokens + item.OutputTokens
+
+		summary.TotalMessages += item.Messages
+		summary.TotalInputTokens += item.InputTokens
+		summary.TotalOutputTokens += item.OutputTokens
+		summary.Providers = append(summary.Providers, item)
+	}
+	if err := rows.Err(); err != nil {
+		return AIUsageSummary{}, fmt.Errorf("iterate ai usage: %w", err)
+	}
+
+	return summary, nil
+}
+
+func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, string, error) {
+	var (
+		parent    Parent
+		childJSON []byte
+	)
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			u.id::text,
+			u.name,
+			COALESCE(ai.identifier, ''),
+			u.created_at,
+			COALESCE(u.config->'children', '[]'::jsonb)
+		FROM users u
+		LEFT JOIN auth_identities ai
+			ON ai.user_id = u.id
+			AND ai.tenant_id = u.tenant_id
+			AND ai.provider = 'password'
+		WHERE u.tenant_id = $1
+			AND u.role = 'parent'
+			AND (
+				u.id::text = $2
+				OR COALESCE(NULLIF(u.external_id, ''), u.id::text) = $2
+			)
+		ORDER BY ai.created_at ASC NULLS LAST
+		LIMIT 1
+	`, s.tenantID, parentID).Scan(
+		&parent.ID,
+		&parent.Name,
+		&parent.Email,
+		&parent.CreatedAt,
+		&childJSON,
+	)
+	if err == pgx.ErrNoRows {
+		return Parent{}, "", ErrNotFound
+	}
+	if err != nil {
+		return Parent{}, "", fmt.Errorf("query parent summary: %w", err)
+	}
+
+	if err := json.Unmarshal(childJSON, &parent.ChildIDs); err != nil {
+		return Parent{}, "", fmt.Errorf("decode parent children: %w", err)
+	}
+	if len(parent.ChildIDs) == 0 {
+		return Parent{}, "", ErrNotFound
+	}
+
+	return parent, parent.ChildIDs[0], nil
+}
+
+func (s *Service) loadStudentByExternalID(ctx context.Context, studentID string) (Student, string, error) {
+	var (
+		internalUserID string
+		student        Student
+	)
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			u.id::text,
+			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
+			u.name,
+			COALESCE(u.external_id, ''),
+			u.channel,
+			COALESCE(u.form, ''),
+			u.created_at
+		FROM users u
+		WHERE u.tenant_id = $1
+			AND u.role = 'student'
+			AND COALESCE(NULLIF(u.external_id, ''), u.id::text) = $2
+		LIMIT 1
+	`, s.tenantID, studentID).Scan(
+		&internalUserID,
+		&student.ID,
+		&student.Name,
+		&student.ExternalID,
+		&student.Channel,
+		&student.Form,
+		&student.CreatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return Student{}, "", ErrNotFound
+	}
+	if err != nil {
+		return Student{}, "", fmt.Errorf("query parent child detail: %w", err)
+	}
+
+	return student, internalUserID, nil
+}
+
+func (s *Service) loadStudentProgress(ctx context.Context, internalUserID string) ([]ProgressItem, error) {
+	progressRows, err := s.pool.Query(ctx, `
+		SELECT topic_id, mastery_score, ease_factor, interval_days, next_review_at, last_studied_at
+		FROM learning_progress
+		WHERE tenant_id = $1
+			AND user_id = $2::uuid
+		ORDER BY last_studied_at DESC NULLS LAST, topic_id ASC
+	`, s.tenantID, internalUserID)
+	if err != nil {
+		return nil, fmt.Errorf("query student progress: %w", err)
+	}
+	defer progressRows.Close()
+
+	var progress []ProgressItem
+	for progressRows.Next() {
+		var item ProgressItem
+		if err := progressRows.Scan(
+			&item.TopicID,
+			&item.MasteryScore,
+			&item.EaseFactor,
+			&item.IntervalDays,
+			&item.NextReviewAt,
+			&item.LastStudiedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan student progress: %w", err)
+		}
+		progress = append(progress, item)
+	}
+	if err := progressRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate student progress: %w", err)
+	}
+
+	return progress, nil
+}
+
+func (s *Service) loadWeeklyStats(ctx context.Context, userID string) (WeeklyStats, error) {
+	var stats WeeklyStats
+
+	err := s.pool.QueryRow(ctx, `
+		WITH window AS (
+			SELECT NOW() - INTERVAL '7 day' AS since_at
+		)
+		SELECT
+			COALESCE((
+				SELECT COUNT(*)
+				FROM (
+					SELECT DISTINCT DATE(m.created_at AT TIME ZONE 'UTC') AS activity_day
+					FROM messages m
+					JOIN conversations c ON c.id = m.conversation_id
+					CROSS JOIN window
+					WHERE c.user_id = $2::uuid
+						AND m.created_at >= window.since_at
+					UNION
+					SELECT DISTINCT DATE(e.created_at AT TIME ZONE 'UTC')
+					FROM events e
+					CROSS JOIN window
+					WHERE e.user_id = $2::uuid
+						AND e.created_at >= window.since_at
+				) active_days
+			), 0) AS days_active,
+			COALESCE((
+				SELECT COUNT(*)
+				FROM messages m
+				JOIN conversations c ON c.id = m.conversation_id
+				CROSS JOIN window
+				WHERE c.user_id = $2::uuid
+					AND m.created_at >= window.since_at
+					AND m.role IN ('user', 'assistant')
+			), 0) AS messages_exchanged,
+			COALESCE((
+				SELECT COUNT(*)
+				FROM events e
+				CROSS JOIN window
+				WHERE e.tenant_id = $1
+					AND e.user_id = $2::uuid
+					AND e.created_at >= window.since_at
+					AND e.event_type = 'quiz_completed'
+			), 0) AS quizzes_completed,
+			COALESCE((
+				SELECT COUNT(*)
+				FROM learning_progress lp
+				WHERE lp.tenant_id = $1
+					AND lp.user_id = $2::uuid
+					AND (
+						lp.mastery_score < 0.6
+						OR (lp.next_review_at IS NOT NULL AND lp.next_review_at <= NOW() + INTERVAL '7 day')
+					)
+			), 0) AS needs_review_count
+	`, s.tenantID, userID).Scan(
+		&stats.DaysActive,
+		&stats.MessagesExchanged,
+		&stats.QuizzesCompleted,
+		&stats.NeedsReviewCount,
+	)
+	if err != nil {
+		return WeeklyStats{}, fmt.Errorf("query weekly stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 func (s *Service) loadStreakSummary(ctx context.Context, userID string) (int, int, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT activity_day
@@ -365,6 +692,73 @@ func formFromClassID(classID string) string {
 	default:
 		return ""
 	}
+}
+
+func buildParentEncouragement(childName string, streak StreakSummary, progress []ProgressItem, stats WeeklyStats) EncouragementSuggestion {
+	if len(progress) == 0 {
+		return EncouragementSuggestion{
+			Headline: fmt.Sprintf("%s is ready for a fresh study sprint.", childName),
+			Text:     "Celebrate any small step this week and invite one short check-in to rebuild momentum together.",
+		}
+	}
+
+	lowest := progress[0]
+	for _, item := range progress[1:] {
+		if item.MasteryScore < lowest.MasteryScore {
+			lowest = item
+		}
+	}
+
+	if streak.Current >= 5 {
+		return EncouragementSuggestion{
+			Headline: fmt.Sprintf("%s is showing strong consistency.", childName),
+			Text: fmt.Sprintf(
+				"Celebrate the %d-day streak, then encourage one short practice on %s to turn steady effort into stronger mastery.",
+				streak.Current,
+				humanizeTopicID(lowest.TopicID),
+			),
+		}
+	}
+
+	if stats.NeedsReviewCount > 1 {
+		return EncouragementSuggestion{
+			Headline: fmt.Sprintf("%s could use a gentle reset this week.", childName),
+			Text: fmt.Sprintf(
+				"Keep the tone light and ask for one focused review on %s. A short session now can prevent multiple topics from slipping.",
+				humanizeTopicID(lowest.TopicID),
+			),
+		}
+	}
+
+	return EncouragementSuggestion{
+		Headline: fmt.Sprintf("%s is building momentum topic by topic.", childName),
+		Text: fmt.Sprintf(
+			"Offer specific praise for recent study activity and suggest one more quick round on %s to lift confidence.",
+			humanizeTopicID(lowest.TopicID),
+		),
+	}
+}
+
+func humanizeTopicID(topicID string) string {
+	parts := strings.Split(topicID, "-")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
+}
+
+func splitProviderModel(raw string) (provider string, model string) {
+	parts := strings.SplitN(strings.TrimSpace(raw), ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	if len(parts) == 1 && parts[0] != "" {
+		return "unknown", parts[0]
+	}
+	return "unknown", ""
 }
 
 func computeStreakSummary(dates []time.Time) (int, int) {

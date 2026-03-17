@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/auth"
 )
 
 func TestHealthEndpoints(t *testing.T) {
@@ -55,6 +58,7 @@ func TestHealthEndpoints(t *testing.T) {
 func TestAdminClassProgressEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/form-1-algebra/progress", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -85,6 +89,7 @@ func TestAdminClassProgressEndpoint(t *testing.T) {
 
 func TestAdminStudentDetailEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -114,6 +119,7 @@ func TestAdminStudentDetailEndpoint(t *testing.T) {
 
 func TestAdminStudentConversationsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_2/conversations", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -137,6 +143,108 @@ func TestAdminStudentConversationsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminParentSummaryEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/parent-1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueParentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		Parent struct {
+			ID string `json:"id"`
+		} `json:"parent"`
+		Child struct {
+			ID string `json:"id"`
+		} `json:"child"`
+		WeeklyStats struct {
+			DaysActive        int `json:"days_active"`
+			MessagesExchanged int `json:"messages_exchanged"`
+		} `json:"weekly_stats"`
+		Mastery []struct {
+			TopicID string `json:"topic_id"`
+		} `json:"mastery"`
+		Encouragement struct {
+			Text string `json:"text"`
+		} `json:"encouragement"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Parent.ID != "parent-1" {
+		t.Fatalf("parent.id = %q, want parent-1", payload.Parent.ID)
+	}
+	if payload.Child.ID != "stu_1" {
+		t.Fatalf("child.id = %q, want stu_1", payload.Child.ID)
+	}
+	if payload.WeeklyStats.DaysActive != 5 || payload.WeeklyStats.MessagesExchanged != 18 {
+		t.Fatalf("weekly stats = %#v, want days_active=5 messages_exchanged=18", payload.WeeklyStats)
+	}
+	if len(payload.Mastery) != 4 {
+		t.Fatalf("mastery rows = %d, want 4", len(payload.Mastery))
+	}
+	if payload.Encouragement.Text == "" {
+		t.Fatal("encouragement text is empty")
+	}
+}
+
+func TestAdminParentSummaryEndpointNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminAIUsageEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/usage", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		TotalMessages     int `json:"total_messages"`
+		TotalInputTokens  int `json:"total_input_tokens"`
+		TotalOutputTokens int `json:"total_output_tokens"`
+		Providers         []struct {
+			Provider      string `json:"provider"`
+			Model         string `json:"model"`
+			Messages      int    `json:"messages"`
+			InputTokens   int    `json:"input_tokens"`
+			OutputTokens  int    `json:"output_tokens"`
+			TotalTokens   int    `json:"total_tokens"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.TotalMessages != 6 {
+		t.Fatalf("total_messages = %d, want 6", payload.TotalMessages)
+	}
+	if payload.TotalInputTokens != 226 || payload.TotalOutputTokens != 187 {
+		t.Fatalf("token totals = %#v, want input=226 output=187", payload)
+	}
+	if len(payload.Providers) != 2 {
+		t.Fatalf("providers = %d, want 2", len(payload.Providers))
+	}
+	if payload.Providers[0].Provider == "" || payload.Providers[0].Model == "" {
+		t.Fatalf("first provider summary = %#v, want populated fields", payload.Providers[0])
+	}
+}
+
 func TestAdminAPIOptionsPreflight(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/api/admin/students/stu_1", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -157,6 +265,7 @@ func TestAdminAPIOptionsPreflight(t *testing.T) {
 func TestAdminStudentNudgeEndpoint(t *testing.T) {
 	gateway := chatGatewayStub{}
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/students/tg_student/nudge", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &gateway).ServeHTTP(rec, req)
@@ -174,6 +283,7 @@ func TestAdminStudentNudgeEndpoint(t *testing.T) {
 
 func TestAdminStudentNudgeEndpointRequiresTelegramChatID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/students/stu_1/nudge", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
@@ -185,12 +295,308 @@ func TestAdminStudentNudgeEndpointRequiresTelegramChatID(t *testing.T) {
 
 func TestAdminStudentDetailNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
 	rec := httptest.NewRecorder()
 
 	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminEndpointsRequireAuthentication(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAdminEndpointsEnforceRoles(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestParentEndpointRejectsTeacherRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/parent-1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminAIUsageEndpointRejectsStudentRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/usage", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAuthLoginEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		loginResp: auth.TokenPair{
+			AccessToken:      "access-123",
+			RefreshToken:     "refresh-123",
+			AccessExpiresAt:  time.Date(2026, 3, 16, 10, 15, 0, 0, time.UTC),
+			RefreshExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			User: auth.UserSession{
+				UserID:   "teacher-1",
+				TenantID: "tenant-abc",
+				Role:     auth.RoleTeacher,
+				Name:     "Teacher One",
+				Email:    "teacher@example.com",
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"secret-123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.loginReq.Email != "teacher@example.com" {
+		t.Fatalf("login email = %q, want teacher@example.com", authSvc.loginReq.Email)
+	}
+
+	var payload struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		User         struct {
+			UserID string `json:"user_id"`
+			Role   string `json:"role"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.AccessToken != "access-123" || payload.RefreshToken != "refresh-123" {
+		t.Fatalf("tokens = %#v", payload)
+	}
+	if payload.User.UserID != "teacher-1" || payload.User.Role != string(auth.RoleTeacher) {
+		t.Fatalf("user payload = %#v", payload.User)
+	}
+}
+
+func TestAuthAcceptInviteEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		acceptResp: auth.TokenPair{
+			AccessToken:      "access-accept",
+			RefreshToken:     "refresh-accept",
+			AccessExpiresAt:  time.Date(2026, 3, 16, 10, 15, 0, 0, time.UTC),
+			RefreshExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			User: auth.UserSession{
+				UserID:   "parent-1",
+				TenantID: "tenant-abc",
+				Role:     auth.RoleParent,
+				Name:     "Parent One",
+				Email:    "parent@example.com",
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/invitations/accept", strings.NewReader(`{"token":"invite-token","name":"Parent One","password":"strong-pass-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if authSvc.acceptReq.Token != "invite-token" {
+		t.Fatalf("accept token = %q, want invite-token", authSvc.acceptReq.Token)
+	}
+}
+
+func TestAuthRefreshEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		refreshResp: auth.TokenPair{
+			AccessToken:      "access-next",
+			RefreshToken:     "refresh-next",
+			AccessExpiresAt:  time.Date(2026, 3, 16, 11, 15, 0, 0, time.UTC),
+			RefreshExpiresAt: time.Date(2026, 3, 23, 11, 0, 0, 0, time.UTC),
+			User: auth.UserSession{
+				UserID:   "admin-1",
+				TenantID: "tenant-abc",
+				Role:     auth.RoleAdmin,
+				Name:     "Admin One",
+				Email:    "admin@example.com",
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{"refresh_token":"refresh-old"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.refreshToken != "refresh-old" {
+		t.Fatalf("refresh token = %q, want refresh-old", authSvc.refreshToken)
+	}
+}
+
+func TestAuthLogoutEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{"refresh_token":"refresh-old"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if authSvc.logoutToken != "refresh-old" {
+		t.Fatalf("logout token = %q, want refresh-old", authSvc.logoutToken)
+	}
+}
+
+func TestAdminInviteEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		inviteResp: auth.InviteRecord{
+			Email:       "newteacher@example.com",
+			Role:        auth.RoleTeacher,
+			Token:       "invite-token-123",
+			ExpiresAt:   time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			InvitedByID: "user-123",
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if authSvc.inviteReq.Email != "newteacher@example.com" {
+		t.Fatalf("invite email = %q, want newteacher@example.com", authSvc.inviteReq.Email)
+	}
+	if authSvc.inviteReq.InvitedByUserID != "user-123" {
+		t.Fatalf("invited_by = %q, want user-123", authSvc.inviteReq.InvitedByUserID)
+	}
+}
+
+func TestAdminInviteEndpointRequiresAdminRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminInviteEndpointValidatesBody(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"","role":"teacher"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAuthLoginEndpointMapsInvalidCredentialsToUnauthorized(t *testing.T) {
+	authSvc := &stubAuthService{loginErr: auth.ErrInvalidCredentials}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"bad-pass"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthLoginEndpointMapsTenantRequiredToBadRequest(t *testing.T) {
+	authSvc := &stubAuthService{loginErr: auth.NewTenantRequiredError([]auth.TenantOption{
+		{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"},
+		{TenantID: "tenant-b", TenantSlug: "school-b", TenantName: "School B"},
+	})}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"secret-123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var payload struct {
+		Error   string              `json:"error"`
+		Tenants []auth.TenantOption `json:"tenants"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Error == "" {
+		t.Fatal("expected error message in payload")
+	}
+	if len(payload.Tenants) != 2 {
+		t.Fatalf("tenant choices = %d, want 2", len(payload.Tenants))
+	}
+}
+
+func TestAuthEndpointsValidateJSONBody(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{name: "login missing password", path: "/api/auth/login", body: `{"email":"teacher@example.com"}`},
+		{name: "accept invite missing token", path: "/api/auth/invitations/accept", body: `{"name":"Teacher","password":"secret-123"}`},
+		{name: "refresh missing token", path: "/api/auth/refresh", body: `{}`},
+		{name: "logout missing token", path: "/api/auth/logout", body: `{}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+		})
 	}
 }
 
@@ -246,6 +652,62 @@ func (stubAdminAPI) GetStudentConversations(studentID string) ([]adminapi.Studen
 	}, nil
 }
 
+func (stubAdminAPI) GetParentSummary(parentID string) (adminapi.ParentSummary, error) {
+	if parentID == "missing" {
+		return adminapi.ParentSummary{}, adminapi.ErrNotFound
+	}
+
+	next := time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC)
+	last := time.Date(2026, 3, 9, 11, 20, 0, 0, time.UTC)
+
+	return adminapi.ParentSummary{
+		Parent: adminapi.Parent{
+			ID:        "parent-1",
+			Name:      "Farah Parent",
+			Email:     "parent@example.com",
+			ChildIDs:  []string{"stu_1"},
+			CreatedAt: time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC),
+		},
+		Child: adminapi.Student{
+			ID:         "stu_1",
+			Name:       "Alya Sofea",
+			ExternalID: "stu_1",
+			Channel:    "telegram",
+			Form:       "Form 1",
+			CreatedAt:  time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC),
+		},
+		Streak: adminapi.StreakSummary{Current: 5, Longest: 9, TotalXP: 1240},
+		WeeklyStats: adminapi.WeeklyStats{
+			DaysActive:        5,
+			MessagesExchanged: 18,
+			QuizzesCompleted:  3,
+			NeedsReviewCount:  2,
+		},
+		Mastery: []adminapi.ProgressItem{
+			{TopicID: "linear-equations", MasteryScore: 0.86, EaseFactor: 2.5, IntervalDays: 6, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "algebraic-expressions", MasteryScore: 0.62, EaseFactor: 2.2, IntervalDays: 4, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "inequalities", MasteryScore: 0.44, EaseFactor: 1.9, IntervalDays: 2, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "functions", MasteryScore: 0.30, EaseFactor: 1.8, IntervalDays: 1, NextReviewAt: &next, LastStudiedAt: &last},
+		},
+		Encouragement: adminapi.EncouragementSuggestion{
+			Headline: "Alya is keeping the habit alive.",
+			Text:     "Celebrate the 5-day streak and encourage one short review on inequalities this week.",
+		},
+	}, nil
+}
+
+func (stubAdminAPI) GetAIUsage() (adminapi.AIUsageSummary, error) {
+	return adminapi.AIUsageSummary{
+		TotalMessages:     6,
+		TotalInputTokens:  226,
+		TotalOutputTokens: 187,
+		Providers: []adminapi.AIProviderUsage{
+			{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 168, OutputTokens: 126, TotalTokens: 294},
+			{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
+		},
+	}, nil
+}
+
 var _ adminDataSource = stubAdminAPI{}
 
 type chatGatewayStub struct {
@@ -255,6 +717,73 @@ type chatGatewayStub struct {
 func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
 	c.messages = append(c.messages, msg)
 	return nil
+}
+
+type stubAuthService struct {
+	loginReq     auth.LoginRequest
+	loginResp    auth.TokenPair
+	loginErr     error
+	inviteReq    auth.IssueInviteRequest
+	inviteResp   auth.InviteRecord
+	inviteErr    error
+	acceptReq    auth.AcceptInviteRequest
+	acceptResp   auth.TokenPair
+	acceptErr    error
+	refreshToken string
+	refreshResp  auth.TokenPair
+	refreshErr   error
+	logoutToken  string
+	logoutErr    error
+}
+
+func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.TokenPair, error) {
+	s.loginReq = req
+	return s.loginResp, s.loginErr
+}
+
+func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error) {
+	s.acceptReq = req
+	return s.acceptResp, s.acceptErr
+}
+
+func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error) {
+	s.inviteReq = req
+	return s.inviteResp, s.inviteErr
+}
+
+func (s *stubAuthService) Refresh(_ context.Context, refreshToken string) (auth.TokenPair, error) {
+	s.refreshToken = refreshToken
+	return s.refreshResp, s.refreshErr
+}
+
+func (s *stubAuthService) Logout(_ context.Context, refreshToken string) error {
+	s.logoutToken = refreshToken
+	return s.logoutErr
+}
+
+func TestWriteAuthError(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "invalid credentials", err: auth.ErrInvalidCredentials, wantStatus: http.StatusUnauthorized},
+		{name: "invalid invite", err: auth.ErrInvalidInvite, wantStatus: http.StatusUnauthorized},
+		{name: "expired invite", err: auth.ErrInviteExpired, wantStatus: http.StatusUnauthorized},
+		{name: "not implemented", err: auth.ErrNotImplemented, wantStatus: http.StatusNotImplemented},
+		{name: "tenant required", err: auth.NewTenantRequiredError([]auth.TenantOption{{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"}}), wantStatus: http.StatusBadRequest},
+		{name: "validation", err: errors.New("bad request"), wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			writeAuthError(rec, tt.err)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+		})
+	}
 }
 
 func TestTelegramInlineKeyboardContext(t *testing.T) {
@@ -321,4 +850,45 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustIssueAdminToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleAdmin)
+}
+
+func mustIssueTeacherToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleTeacher)
+}
+
+func mustIssueParentToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueTokenWithSubject(t, auth.RoleParent, "parent-1")
+}
+
+func mustIssueStudentToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueToken(t, auth.RoleStudent)
+}
+
+func mustIssueToken(t *testing.T, role auth.Role) string {
+	t.Helper()
+	return mustIssueTokenWithSubject(t, role, "user-123")
+}
+
+func mustIssueTokenWithSubject(t *testing.T, role auth.Role, subject string) string {
+	t.Helper()
+
+	manager := auth.NewTokenManager("change-me-in-production", time.Hour)
+	now := time.Now().UTC()
+	token, err := manager.Issue(auth.TokenClaims{
+		Subject:  subject,
+		TenantID: "tenant-abc",
+		Role:     role,
+	}, now)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+	return token
 }
