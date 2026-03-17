@@ -34,7 +34,7 @@ export default function DashboardPage() {
       await sendStudentNudge(studentID);
       setNudgeMessage(`Nudge sent to ${studentName} on Telegram.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to send nudge.";
+      const message = error instanceof Error ? error.message : "Couldn't send the nudge right now. Please try again.";
       setNudgeMessage(message);
     } finally {
       setSendingStudentID("");
@@ -97,8 +97,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Loading dashboard...</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Preparing the latest class snapshot.</p>
             ) : data ? (
+              data.students.length === 0 || data.topic_ids.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Class progress will appear here once students start working through assigned topics.
+                </p>
+              ) : (
               <div className="space-y-5">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] border-separate border-spacing-y-2">
@@ -156,8 +161,11 @@ export default function DashboardPage() {
                 </div>
                 {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
               </div>
+              )
             ) : (
-              <p className="text-sm text-rose-600">{error || "Failed to load class data."}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
+              </p>
             )}
           </CardContent>
         </Card>

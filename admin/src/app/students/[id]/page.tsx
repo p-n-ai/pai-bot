@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
 import { Metric } from "@/components/metric";
 import { PageHero } from "@/components/page-hero";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
@@ -38,8 +37,14 @@ export default function StudentPage() {
     <div className="space-y-6">
         <PageHero
           eyebrow="Student detail"
-          title={detail?.student.name ?? "Loading student..."}
-          description={detail ? `${detail.student.form} | ${detail.student.channel} | ${detail.student.external_id}` : "Fetching student record"}
+          title={detail?.student.name ?? "Student summary"}
+          description={
+            detail
+              ? `${detail.student.form} | ${detail.student.channel} | ${detail.student.external_id}`
+              : error
+                ? "Student information isn't available right now."
+                : "Student details will appear here once the latest record is ready."
+          }
           aside={
             <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90 sm:grid-cols-3 lg:grid-cols-1">
               <Metric label="Current streak" value={detail ? `${detail.streak.current} days` : "-"} />
@@ -60,14 +65,20 @@ export default function StudentPage() {
               <CardTitle className="text-xl tracking-tight">Mastery radar</CardTitle>
             </CardHeader>
             <CardContent className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="topic" />
-                  <Tooltip />
-                  <Radar dataKey="mastery" stroke="#0284c7" fill="#38bdf8" fillOpacity={0.35} />
-                </RadarChart>
-              </ResponsiveContainer>
+              {radarData.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData}>
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="topic" />
+                    <Tooltip />
+                    <Radar dataKey="mastery" stroke="#0284c7" fill="#38bdf8" fillOpacity={0.35} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm text-slate-500 dark:text-slate-400">
+                  Progress details will appear after the student completes some work.
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -91,22 +102,26 @@ export default function StudentPage() {
                 )}
               </div>
               <div className="space-y-3">
-                {(detail?.progress ?? []).map((item) => (
-                  <div key={item.topic_id} className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/70">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{formatTopicLabel(item.topic_id)}</p>
-                      <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                        {Math.round(item.mastery_score * 100)}% mastery
-                      </span>
+                {(detail?.progress ?? []).length ? (
+                  (detail?.progress ?? []).map((item) => (
+                    <div key={item.topic_id} className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/70">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{formatTopicLabel(item.topic_id)}</p>
+                        <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                          {Math.round(item.mastery_score * 100)}% mastery
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        Last studied: {item.last_studied_at ? formatAdminDateTime(item.last_studied_at) : "Not recorded yet"}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Next review: {item.next_review_at ? formatAdminDateTime(item.next_review_at) : "To be scheduled"}
+                      </p>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      Last studied: {item.last_studied_at ? formatAdminDateTime(item.last_studied_at) : "Not available"}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Next review: {item.next_review_at ? formatAdminDateTime(item.next_review_at) : "Not scheduled"}
-                    </p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No topic progress has been recorded for this student yet.</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -117,7 +132,8 @@ export default function StudentPage() {
             <CardTitle className="text-xl tracking-tight">Recent conversations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {error ? <p className="text-sm text-slate-500 dark:text-slate-400">Conversation history isn't available right now.</p> : null}
+            {!error && conversations.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Recent tutoring messages will appear here once the student has chatted.</p> : null}
             {conversations.map((item) => (
               <div
                 key={item.id}

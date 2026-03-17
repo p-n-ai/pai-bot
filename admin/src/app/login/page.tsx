@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getStoredUser, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
-import { getDefaultRouteForUser } from "@/lib/default-route.mjs";
+import { getStoredUser, hasStoredSession, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
+import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 
 export default function LoginPage() {
   return (
@@ -23,6 +23,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [checkedSession, setCheckedSession] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tenantID, setTenantID] = useState("");
@@ -31,10 +32,17 @@ function LoginPageContent() {
 
   useEffect(() => {
     const user = getStoredUser();
-    if (user) {
-      router.replace(searchParams.get("next") || getDefaultRouteForUser(user));
+    if (user && hasStoredSession() && hasAdminUIAccess(user)) {
+      router.replace(getSafeNextPath(user, searchParams.get("next")));
+      return;
     }
+
+    setCheckedSession(true);
   }, [router, searchParams]);
+
+  if (!checkedSession) {
+    return null;
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,8 +55,12 @@ function LoginPageContent() {
           email: email.trim(),
           password,
         });
+        if (!hasAdminUIAccess(session.user)) {
+          setError("This account does not have access to the admin UI.");
+          return;
+        }
         persistSession(session);
-        router.push(searchParams.get("next") || getDefaultRouteForUser(session.user));
+        router.push(getSafeNextPath(session.user, searchParams.get("next")));
       } catch (err) {
         if (err instanceof LoginError && err.code === "tenant_required") {
           setTenantChoices(err.tenants);
@@ -247,7 +259,7 @@ function LoginPageLayout({
               Platform admin: <span className="font-mono">platform-admin@example.com</span> / <span className="font-mono">demo-password</span>
             </p>
             <p className="mt-3">
-              Tenant is now resolved from the account itself. Student login may authenticate successfully, but student accounts are not intended for the admin UI.
+              Tenant is now resolved from the account itself. Student accounts are not allowed into the admin UI.
             </p>
           </div>
 

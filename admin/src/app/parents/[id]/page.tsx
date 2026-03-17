@@ -21,7 +21,7 @@ export default async function ParentPage({
   try {
     summary = await getServerParentSummary(id);
   } catch {
-    loadError = "Failed to load parent summary.";
+    loadError = "The parent summary isn't available right now.";
   }
 
   const masteryRows = summary?.mastery ?? [];
@@ -30,7 +30,7 @@ export default async function ParentPage({
     <div className="space-y-6">
       <PageHero
         eyebrow="Parent support summary"
-        title={summary ? `${summary.child.name} this week` : "Loading child summary..."}
+        title={summary ? `${summary.child.name} this week` : "Child summary"}
         description={buildParentContextLine(summary)}
         aside={
           <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90 sm:grid-cols-3 lg:grid-cols-1">
@@ -60,7 +60,7 @@ export default async function ParentPage({
             <CardTitle className="text-xl tracking-tight">Mastery progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {loadError ? <p className="text-sm text-rose-600">{loadError}</p> : null}
+            {loadError ? <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p> : null}
             {masteryRows.length ? (
               masteryRows.map((item) => {
                 const score = Math.round(item.mastery_score * 100);
@@ -95,10 +95,10 @@ export default async function ParentPage({
             <div className="rounded-[24px] bg-slate-950 p-5 text-white dark:bg-slate-900">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Suggested message</p>
               <p className="mt-3 text-2xl font-semibold tracking-tight">
-                {summary?.encouragement.headline ?? "Preparing a parent-friendly talking point..."}
+                {summary?.encouragement.headline ?? "A suggested encouragement will appear here soon."}
               </p>
               <p className="mt-3 text-sm leading-7 text-slate-200">
-                {summary?.encouragement.text ?? "One concise encouragement will appear here once the summary loads."}
+                {summary?.encouragement.text ?? "Once the weekly summary is ready, you'll see a short message you can send or say at home."}
               </p>
             </div>
 

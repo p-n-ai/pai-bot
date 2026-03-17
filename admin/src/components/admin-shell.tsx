@@ -9,7 +9,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getStoredUser, hasStoredSession } from "@/lib/api";
-import { getCurrentSection, isRouteActive, primaryNavigation } from "@/lib/navigation.mjs";
+import { getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { cn } from "@/lib/utils";
 
 const navIcons: Record<string, typeof Home> = {
@@ -50,7 +50,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="sticky top-0 hidden h-screen w-80 shrink-0 border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
-          <SidebarContent pathname={pathname} />
+          <SidebarContent pathname={pathname} currentUser={currentUser} />
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
@@ -87,7 +87,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     mobileOpen ? "translate-y-0 scale-100" : "-translate-y-2 scale-[0.98]",
                   )}
                 >
-                  <SidebarContent pathname={pathname} compact onNavigate={() => setMobileOpen(false)} />
+                  <SidebarContent pathname={pathname} currentUser={currentUser} compact onNavigate={() => setMobileOpen(false)} />
                 </div>
               </div>
             </div>
@@ -122,13 +122,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
 function SidebarContent({
   pathname,
+  currentUser,
   compact = false,
   onNavigate,
 }: {
   pathname: string | null;
+  currentUser: ReturnType<typeof getStoredUser>;
   compact?: boolean;
   onNavigate?: () => void;
 }) {
+  const navigationItems = getNavigationForUser(currentUser);
+
   return (
     <div className="flex h-full flex-col gap-6">
       <div className="space-y-4">
@@ -152,7 +156,7 @@ function SidebarContent({
         </Link>
 
         <nav className="space-y-2">
-          {primaryNavigation.map((item) => {
+          {navigationItems.map((item) => {
             const Icon = navIcons[item.href] ?? Home;
             const active = isRouteActive(pathname, item.href);
             return (

@@ -5,6 +5,7 @@ import {
   buildCookieRemoval,
   buildCookieValue,
   REFRESH_TOKEN_KEY,
+  USER_COOKIE,
   USER_KEY,
 } from "@/lib/auth-session";
 import { readJSONResponse } from "@/lib/http-response.mjs";
@@ -100,7 +101,7 @@ export interface NudgeResponse {
 export interface AuthUser {
   user_id: string;
   tenant_id: string;
-  role: "teacher" | "parent" | "admin" | "platform_admin";
+  role: "student" | "teacher" | "parent" | "admin" | "platform_admin";
   name: string;
   email: string;
 }
@@ -233,6 +234,7 @@ export function persistSession(session: AuthSession): void {
   localStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
   localStorage.setItem(USER_KEY, JSON.stringify(session.user));
   document.cookie = buildCookieValue(ACCESS_TOKEN_COOKIE, session.access_token, 60 * 60 * 24 * 7);
+  document.cookie = buildCookieValue(USER_COOKIE, JSON.stringify(session.user), 60 * 60 * 24 * 7);
 }
 
 export function clearSession(): void {
@@ -242,6 +244,7 @@ export function clearSession(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   document.cookie = buildCookieRemoval(ACCESS_TOKEN_COOKIE);
+  document.cookie = buildCookieRemoval(USER_COOKIE);
 }
 
 export function getStoredUser(): AuthUser | null {

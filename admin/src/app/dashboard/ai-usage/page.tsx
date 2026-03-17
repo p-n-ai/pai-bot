@@ -32,7 +32,7 @@ export default async function AIUsagePage() {
   try {
     usage = await getServerAIUsage();
   } catch {
-    loadError = "Failed to load AI usage.";
+    loadError = "AI usage isn't available right now.";
   }
 
   const topProvider = getTopProvider(usage);
@@ -49,11 +49,11 @@ export default async function AIUsagePage() {
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Top provider</p>
             <p className="mt-2 text-3xl font-semibold">
-              {topProvider ? `${topProvider.provider} / ${topProvider.model}` : "No data"}
+              {topProvider ? `${topProvider.provider} / ${topProvider.model}` : "Usage snapshot pending"}
             </p>
           </div>
           <div className="text-sm text-slate-300">
-            {topProvider ? `${formatCompactNumber(topProvider.total_tokens)} tokens handled in this snapshot.` : "Waiting for AI usage data from the admin API."}
+            {topProvider ? `${formatCompactNumber(topProvider.total_tokens)} tokens handled in this snapshot.` : "Usage details will appear once model activity has been recorded."}
           </div>
         </div>
         }
@@ -79,7 +79,8 @@ export default async function AIUsagePage() {
           </Link>
         </CardHeader>
         <CardContent className="space-y-4">
-          {loadError ? <p className="text-sm text-rose-600">{loadError}</p> : null}
+          {loadError ? <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p> : null}
+          {usage && usage.providers.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -116,9 +117,11 @@ export default async function AIUsagePage() {
               })}
             </TableBody>
           </Table>
-          {usage && usage.providers.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">No AI usage has been recorded yet.</p>
-          ) : null}
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {loadError ? "Please check back after the next sync." : "No AI usage has been recorded yet."}
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

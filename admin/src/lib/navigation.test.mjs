@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCurrentSection, isRouteActive } from "./navigation.mjs";
+import { getCurrentSection, getNavigationForUser, isRouteActive } from "./navigation.mjs";
 
 test("isRouteActive matches exact and nested routes", () => {
   assert.equal(isRouteActive("/", "/"), true);
@@ -36,4 +36,21 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
     title: "AI Usage",
     description: "Review token volume by provider and model across the teacher workspace.",
   });
+});
+
+test("getNavigationForUser hides teacher links from parents", () => {
+  assert.deepEqual(getNavigationForUser({ role: "parent", user_id: "parent-1" }), [
+    {
+      title: "Child Summary",
+      href: "/parents/parent-1",
+      description: "Weekly momentum, mastery, and encouragement for home support.",
+    },
+  ]);
+});
+
+test("getNavigationForUser keeps elevated navigation for teachers", () => {
+  assert.deepEqual(
+    getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
+    ["/", "/dashboard", "/dashboard/ai-usage"],
+  );
 });
