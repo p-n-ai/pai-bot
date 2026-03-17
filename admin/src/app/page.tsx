@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BarChart3, Users } from "lucide-react";
+import { BarChart3, Coins, Users } from "lucide-react";
 import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { getClassProgress, type ClassProgress } from "@/lib/api";
 
@@ -12,6 +12,12 @@ const cards = [
     text: "Scan class mastery, identify weak topics, and move quickly on learners who need attention.",
     href: "/dashboard",
     icon: BarChart3,
+  },
+  {
+    title: "AI Usage",
+    text: "Inspect token volume by provider and model before budget tracking lands in the admin panel.",
+    href: "/dashboard/ai-usage",
+    icon: Coins,
   },
 ];
 
@@ -82,7 +88,7 @@ export default function Home() {
           </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-1">
+      <section className="grid gap-4 md:grid-cols-2">
         {cards.map((card) => {
           const Icon = card.icon;
           return (

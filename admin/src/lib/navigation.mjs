@@ -9,6 +9,11 @@ export const primaryNavigation = [
     href: "/dashboard",
     description: "Class mastery heatmap and nudges",
   },
+  {
+    title: "AI Usage",
+    href: "/dashboard/ai-usage",
+    description: "Review token volume by provider and model across the teacher workspace.",
+  },
 ];
 
 export function isRouteActive(pathname, href) {
@@ -31,6 +36,22 @@ export function getCurrentSection(pathname) {
       eyebrow: "Student detail",
       title: "Learner profile",
       description: "Review mastery, streaks, and recent tutoring conversations.",
+    };
+  }
+
+  if (pathname.startsWith("/parents/")) {
+    return {
+      eyebrow: "Parent view",
+      title: "Child summary",
+      description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/ai-usage")) {
+    return {
+      eyebrow: "Admin panel",
+      title: "AI Usage",
+      description: "Review token volume by provider and model across the teacher workspace.",
     };
   }
 

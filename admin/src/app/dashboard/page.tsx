@@ -92,6 +92,24 @@ export default function DashboardPage() {
           <StatCard title="Tracked Scores" value={String(trackedScores)} note="Real mastery entries loaded" />
         </section>
 
+        <Card className="rounded-[28px] border-white/70 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.1)] dark:border-white/10 dark:bg-slate-900/85">
+          <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Operations</p>
+              <h2 className="text-2xl font-semibold tracking-tight">Check AI usage before costs drift.</h2>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300">
+                Open the usage view to inspect token volume by provider and model across the current admin API snapshot.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/ai-usage"
+              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-sky-100"
+            >
+              Open AI usage
+            </Link>
+          </CardContent>
+        </Card>
+
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>

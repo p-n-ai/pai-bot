@@ -226,6 +226,8 @@ type adminDataSource interface {
 	GetClassProgress(classID string) (adminapi.ClassProgress, error)
 	GetStudentDetail(studentID string) (adminapi.StudentDetail, error)
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
+	GetParentSummary(parentID string) (adminapi.ParentSummary, error)
+	GetAIUsage() (adminapi.AIUsageSummary, error)
 }
 
 type authService interface {
@@ -336,6 +338,10 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 		auth.Authenticate(manager, time.Now),
 		auth.RequireRoles(auth.RoleTeacher, auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
+	parentOrAbove := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleParent, auth.RoleAdmin, auth.RolePlatformAdmin),
+	)
 	adminOrAbove := chain(
 		auth.Authenticate(manager, time.Now),
 		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
@@ -350,6 +356,8 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(admin)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(admin)))
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(admin, sender)))
+	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(admin)))
+	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(admin)))
 
 	return withCORS(mux)
 }
@@ -391,6 +399,40 @@ func handleAdminStudentDetail(admin adminDataSource) http.HandlerFunc {
 func handleAdminStudentConversations(admin adminDataSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		payload, err := admin.GetStudentConversations(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminParentSummary(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		parentID := r.PathValue("id")
+		if claims.Role == auth.RoleParent && claims.Subject != parentID {
+			http.Error(w, "parents can only access their own summary", http.StatusForbidden)
+			return
+		}
+
+		payload, err := admin.GetParentSummary(parentID)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminAIUsage(admin adminDataSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		payload, err := admin.GetAIUsage()
 		if err != nil {
 			writeAdminError(w, err)
 			return
