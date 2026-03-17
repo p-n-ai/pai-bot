@@ -9,6 +9,11 @@ test("isRouteActive matches exact and nested routes", () => {
   assert.equal(isRouteActive("/students/123", "/dashboard"), false);
 });
 
+test("isRouteActive prefers the most specific dashboard route", () => {
+  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard"), false);
+  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
+});
+
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
   assert.deepEqual(getCurrentSection("/students/abc"), {
     eyebrow: "Student detail",

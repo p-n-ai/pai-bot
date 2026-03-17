@@ -19,7 +19,19 @@ export const primaryNavigation = [
 export function isRouteActive(pathname, href) {
   if (!pathname || !href) return false;
   if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+
+  const matches = pathname === href || pathname.startsWith(`${href}/`);
+  if (!matches) return false;
+
+  const moreSpecificMatch = primaryNavigation.some((item) => {
+    if (item.href === href || item.href === "/") {
+      return false;
+    }
+
+    return item.href.startsWith(`${href}/`) && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+  });
+
+  return !moreSpecificMatch;
 }
 
 export function getCurrentSection(pathname) {
