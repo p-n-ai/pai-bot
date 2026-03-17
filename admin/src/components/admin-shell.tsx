@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, ChevronDown, ChevronLeft, Home, Menu, Sparkles, UserRound } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound } from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 const navIcons: Record<string, typeof Home> = {
   "/": Home,
   "/dashboard": BarChart3,
+  "/dashboard/ai-usage": Coins,
 };
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -137,7 +138,7 @@ function SidebarContent({
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Day 16 foundation for teacher operations, student review, and rollout visibility.
+            Week 4 workspace for teacher operations, student review, and parent-facing progress snapshots.
           </p>
         </Link>
 
@@ -177,12 +178,20 @@ function SidebarContent({
             </div>
             <div>
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                {pathname?.startsWith("/students/") ? "Student profile open" : "Teacher workflow active"}
+                {pathname?.startsWith("/students/")
+                  ? "Student profile open"
+                  : pathname?.startsWith("/parents/")
+                    ? "Parent summary open"
+                    : "Teacher workflow active"}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {pathname?.startsWith("/students/")
                   ? "Use this view to review struggles before sending the next intervention."
-                  : "Scan class mastery, then drill into a learner profile when intervention is needed."}
+                  : pathname?.startsWith("/parents/")
+                    ? "Translate learner progress into a concise weekly summary a parent can act on."
+                    : pathname?.startsWith("/dashboard/ai-usage")
+                      ? "Review model traffic and token totals before budget controls and provider tuning."
+                    : "Scan class mastery, then drill into a learner profile when intervention is needed."}
               </p>
             </div>
           </div>
@@ -195,7 +204,8 @@ function SidebarContent({
           <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
             <li>Teacher dashboard for class-wide mastery and nudges</li>
             <li>Student detail view for progress and recent tutoring activity</li>
-            <li>Shared sidebar shell for the remaining Day 16 pages</li>
+            <li>Parent view for weekly momentum, mastery, and encouragement</li>
+            <li>AI usage analytics by provider and model</li>
           </ul>
         </div>
       ) : null}

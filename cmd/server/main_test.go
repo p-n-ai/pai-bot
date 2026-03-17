@@ -143,6 +143,108 @@ func TestAdminStudentConversationsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminParentSummaryEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/parent-1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueParentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		Parent struct {
+			ID string `json:"id"`
+		} `json:"parent"`
+		Child struct {
+			ID string `json:"id"`
+		} `json:"child"`
+		WeeklyStats struct {
+			DaysActive        int `json:"days_active"`
+			MessagesExchanged int `json:"messages_exchanged"`
+		} `json:"weekly_stats"`
+		Mastery []struct {
+			TopicID string `json:"topic_id"`
+		} `json:"mastery"`
+		Encouragement struct {
+			Text string `json:"text"`
+		} `json:"encouragement"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Parent.ID != "parent-1" {
+		t.Fatalf("parent.id = %q, want parent-1", payload.Parent.ID)
+	}
+	if payload.Child.ID != "stu_1" {
+		t.Fatalf("child.id = %q, want stu_1", payload.Child.ID)
+	}
+	if payload.WeeklyStats.DaysActive != 5 || payload.WeeklyStats.MessagesExchanged != 18 {
+		t.Fatalf("weekly stats = %#v, want days_active=5 messages_exchanged=18", payload.WeeklyStats)
+	}
+	if len(payload.Mastery) != 4 {
+		t.Fatalf("mastery rows = %d, want 4", len(payload.Mastery))
+	}
+	if payload.Encouragement.Text == "" {
+		t.Fatal("encouragement text is empty")
+	}
+}
+
+func TestAdminParentSummaryEndpointNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminAIUsageEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/usage", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		TotalMessages     int `json:"total_messages"`
+		TotalInputTokens  int `json:"total_input_tokens"`
+		TotalOutputTokens int `json:"total_output_tokens"`
+		Providers         []struct {
+			Provider      string `json:"provider"`
+			Model         string `json:"model"`
+			Messages      int    `json:"messages"`
+			InputTokens   int    `json:"input_tokens"`
+			OutputTokens  int    `json:"output_tokens"`
+			TotalTokens   int    `json:"total_tokens"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.TotalMessages != 6 {
+		t.Fatalf("total_messages = %d, want 6", payload.TotalMessages)
+	}
+	if payload.TotalInputTokens != 226 || payload.TotalOutputTokens != 187 {
+		t.Fatalf("token totals = %#v, want input=226 output=187", payload)
+	}
+	if len(payload.Providers) != 2 {
+		t.Fatalf("providers = %d, want 2", len(payload.Providers))
+	}
+	if payload.Providers[0].Provider == "" || payload.Providers[0].Model == "" {
+		t.Fatalf("first provider summary = %#v, want populated fields", payload.Providers[0])
+	}
+}
+
 func TestAdminAPIOptionsPreflight(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/api/admin/students/stu_1", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -216,6 +318,30 @@ func TestAdminEndpointsRequireAuthentication(t *testing.T) {
 
 func TestAdminEndpointsEnforceRoles(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestParentEndpointRejectsTeacherRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/parent-1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminAIUsageEndpointRejectsStudentRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/usage", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
 	rec := httptest.NewRecorder()
 
@@ -526,6 +652,62 @@ func (stubAdminAPI) GetStudentConversations(studentID string) ([]adminapi.Studen
 	}, nil
 }
 
+func (stubAdminAPI) GetParentSummary(parentID string) (adminapi.ParentSummary, error) {
+	if parentID == "missing" {
+		return adminapi.ParentSummary{}, adminapi.ErrNotFound
+	}
+
+	next := time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC)
+	last := time.Date(2026, 3, 9, 11, 20, 0, 0, time.UTC)
+
+	return adminapi.ParentSummary{
+		Parent: adminapi.Parent{
+			ID:        "parent-1",
+			Name:      "Farah Parent",
+			Email:     "parent@example.com",
+			ChildIDs:  []string{"stu_1"},
+			CreatedAt: time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC),
+		},
+		Child: adminapi.Student{
+			ID:         "stu_1",
+			Name:       "Alya Sofea",
+			ExternalID: "stu_1",
+			Channel:    "telegram",
+			Form:       "Form 1",
+			CreatedAt:  time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC),
+		},
+		Streak: adminapi.StreakSummary{Current: 5, Longest: 9, TotalXP: 1240},
+		WeeklyStats: adminapi.WeeklyStats{
+			DaysActive:        5,
+			MessagesExchanged: 18,
+			QuizzesCompleted:  3,
+			NeedsReviewCount:  2,
+		},
+		Mastery: []adminapi.ProgressItem{
+			{TopicID: "linear-equations", MasteryScore: 0.86, EaseFactor: 2.5, IntervalDays: 6, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "algebraic-expressions", MasteryScore: 0.62, EaseFactor: 2.2, IntervalDays: 4, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "inequalities", MasteryScore: 0.44, EaseFactor: 1.9, IntervalDays: 2, NextReviewAt: &next, LastStudiedAt: &last},
+			{TopicID: "functions", MasteryScore: 0.30, EaseFactor: 1.8, IntervalDays: 1, NextReviewAt: &next, LastStudiedAt: &last},
+		},
+		Encouragement: adminapi.EncouragementSuggestion{
+			Headline: "Alya is keeping the habit alive.",
+			Text:     "Celebrate the 5-day streak and encourage one short review on inequalities this week.",
+		},
+	}, nil
+}
+
+func (stubAdminAPI) GetAIUsage() (adminapi.AIUsageSummary, error) {
+	return adminapi.AIUsageSummary{
+		TotalMessages:     6,
+		TotalInputTokens:  226,
+		TotalOutputTokens: 187,
+		Providers: []adminapi.AIProviderUsage{
+			{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 168, OutputTokens: 126, TotalTokens: 294},
+			{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
+		},
+	}, nil
+}
+
 var _ adminDataSource = stubAdminAPI{}
 
 type chatGatewayStub struct {
@@ -680,6 +862,11 @@ func mustIssueTeacherToken(t *testing.T) string {
 	return mustIssueToken(t, auth.RoleTeacher)
 }
 
+func mustIssueParentToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueTokenWithSubject(t, auth.RoleParent, "parent-1")
+}
+
 func mustIssueStudentToken(t *testing.T) string {
 	t.Helper()
 	return mustIssueToken(t, auth.RoleStudent)
@@ -687,11 +874,16 @@ func mustIssueStudentToken(t *testing.T) string {
 
 func mustIssueToken(t *testing.T, role auth.Role) string {
 	t.Helper()
+	return mustIssueTokenWithSubject(t, role, "user-123")
+}
+
+func mustIssueTokenWithSubject(t *testing.T, role auth.Role, subject string) string {
+	t.Helper()
 
 	manager := auth.NewTokenManager("change-me-in-production", time.Hour)
 	now := time.Now().UTC()
 	token, err := manager.Issue(auth.TokenClaims{
-		Subject:  "user-123",
+		Subject:  subject,
 		TenantID: "tenant-abc",
 		Role:     role,
 	}, now)

@@ -16,3 +16,19 @@ test("getCurrentSection returns student detail metadata for nested student route
     description: "Review mastery, streaks, and recent tutoring conversations.",
   });
 });
+
+test("getCurrentSection returns parent detail metadata for nested parent routes", () => {
+  assert.deepEqual(getCurrentSection("/parents/parent-1"), {
+    eyebrow: "Parent view",
+    title: "Child summary",
+    description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
+  });
+});
+
+test("getCurrentSection returns AI usage metadata for dashboard analytics routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/ai-usage"), {
+    eyebrow: "Admin panel",
+    title: "AI Usage",
+    description: "Review token volume by provider and model across the teacher workspace.",
+  });
+});

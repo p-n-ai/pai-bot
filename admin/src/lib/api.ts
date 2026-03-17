@@ -45,6 +45,51 @@ export interface StudentConversation {
   text: string;
 }
 
+export interface ParentProfile {
+  id: string;
+  name: string;
+  email: string;
+  child_ids: string[];
+  created_at: string;
+}
+
+export interface WeeklyStats {
+  days_active: number;
+  messages_exchanged: number;
+  quizzes_completed: number;
+  needs_review_count: number;
+}
+
+export interface EncouragementSuggestion {
+  headline: string;
+  text: string;
+}
+
+export interface ParentSummary {
+  parent: ParentProfile;
+  child: Student;
+  streak: { current: number; longest: number; total_xp: number };
+  weekly_stats: WeeklyStats;
+  mastery: ProgressItem[];
+  encouragement: EncouragementSuggestion;
+}
+
+export interface AIProviderUsage {
+  provider: string;
+  model: string;
+  messages: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface AIUsageSummary {
+  total_messages: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  providers: AIProviderUsage[];
+}
+
 export interface NudgeResponse {
   status: string;
   student: string;
@@ -130,6 +175,14 @@ export async function getStudentDetail(studentId: string): Promise<{
 
 export async function getStudentConversations(studentId: string): Promise<StudentConversation[]> {
   return fetchJSON(`/api/admin/students/${studentId}/conversations`);
+}
+
+export async function getParentSummary(parentId: string): Promise<ParentSummary> {
+  return fetchJSON(`/api/admin/parents/${parentId}`);
+}
+
+export async function getAIUsage(): Promise<AIUsageSummary> {
+  return fetchJSON(`/api/admin/ai/usage`);
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {

@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,5 +40,76 @@ func TestComputeStreakSummary(t *testing.T) {
 	}
 	if longest != 3 {
 		t.Fatalf("longest = %d, want 3", longest)
+	}
+}
+
+func TestBuildParentEncouragement(t *testing.T) {
+	tests := []struct {
+		name   string
+		streak StreakSummary
+		stats  WeeklyStats
+		rows   []ProgressItem
+		want   string
+	}{
+		{
+			name:   "strong streak celebrates consistency",
+			streak: StreakSummary{Current: 5},
+			stats:  WeeklyStats{NeedsReviewCount: 1},
+			rows: []ProgressItem{
+				{TopicID: "linear-equations", MasteryScore: 0.8},
+				{TopicID: "inequalities", MasteryScore: 0.4},
+			},
+			want: "5-day streak",
+		},
+		{
+			name:   "needs review nudges reset",
+			streak: StreakSummary{Current: 1},
+			stats:  WeeklyStats{NeedsReviewCount: 3},
+			rows: []ProgressItem{
+				{TopicID: "functions", MasteryScore: 0.3},
+			},
+			want: "Functions",
+		},
+		{
+			name:   "empty progress falls back",
+			streak: StreakSummary{},
+			stats:  WeeklyStats{},
+			rows:   nil,
+			want:   "fresh study sprint",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildParentEncouragement("Alya", tt.streak, tt.rows, tt.stats)
+			if got.Headline == "" || got.Text == "" {
+				t.Fatalf("encouragement = %#v, want non-empty headline and text", got)
+			}
+			if !strings.Contains(got.Headline+" "+got.Text, tt.want) {
+				t.Fatalf("encouragement = %#v, want substring %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSplitProviderModel(t *testing.T) {
+	tests := []struct {
+		name         string
+		raw          string
+		wantProvider string
+		wantModel    string
+	}{
+		{name: "provider and model", raw: "openai:gpt-4o-mini", wantProvider: "openai", wantModel: "gpt-4o-mini"},
+		{name: "model only", raw: "gpt-4o-mini", wantProvider: "unknown", wantModel: "gpt-4o-mini"},
+		{name: "empty", raw: "", wantProvider: "unknown", wantModel: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotProvider, gotModel := splitProviderModel(tt.raw)
+			if gotProvider != tt.wantProvider || gotModel != tt.wantModel {
+				t.Fatalf("splitProviderModel(%q) = (%q, %q), want (%q, %q)", tt.raw, gotProvider, gotModel, tt.wantProvider, tt.wantModel)
+			}
+		})
 	}
 }

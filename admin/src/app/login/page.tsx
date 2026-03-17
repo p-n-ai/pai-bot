@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getStoredUser, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
+import { getDefaultRouteForUser } from "@/lib/default-route.mjs";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,8 +22,9 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (getStoredUser()) {
-      router.replace(searchParams.get("next") || "/dashboard");
+    const user = getStoredUser();
+    if (user) {
+      router.replace(searchParams.get("next") || getDefaultRouteForUser(user));
     }
   }, [router, searchParams]);
 
@@ -38,7 +40,7 @@ export default function LoginPage() {
           password,
         });
         persistSession(session);
-        router.push(searchParams.get("next") || "/dashboard");
+        router.push(searchParams.get("next") || getDefaultRouteForUser(session.user));
       } catch (err) {
         if (err instanceof LoginError && err.code === "tenant_required") {
           setTenantChoices(err.tenants);
