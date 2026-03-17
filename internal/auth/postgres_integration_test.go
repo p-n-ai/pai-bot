@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,30 @@ func TestPostgresService_LoginRequiresTenantWhenEmailExistsAcrossTenants(t *test
 	}
 }
 
+func TestAuthIdentityTenantConstraintRejectsMismatchedTenant(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+
+	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
+	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
+	userID := seedWebUser(t, ctx, pool, defaultTenantID, RoleTeacher, "Teacher One")
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO auth_identities (user_id, tenant_id, provider, identifier, identifier_normalized)
+		 VALUES ($1::uuid, $2::uuid, 'password', $3, $4)`,
+		userID,
+		secondTenantID,
+		"teacher@example.com",
+		NormalizeIdentifier("teacher@example.com"),
+	)
+	if err == nil {
+		t.Fatal("expected auth identity insert with mismatched tenant to fail")
+	}
+	if !strings.Contains(err.Error(), "auth_identities_user_id_tenant_id_fkey") {
+		t.Fatalf("constraint error = %v, want auth_identities_user_id_tenant_id_fkey", err)
+	}
+}
+
 func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 
@@ -185,6 +210,7 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	waitForAuthPostgresReady(t, ctx, pool)
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "001_initial.up.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "004_auth_tables.up.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "005_auth_identity_tenant_consistency.up.sql"))
 
 	return pool
 }
