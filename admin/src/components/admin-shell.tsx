@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { BarChart3, ChevronLeft, Home, Menu, Sparkles, UserRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BarChart3, ChevronDown, ChevronLeft, Home, Menu, Sparkles, UserRound } from "lucide-react";
+import { LogoutButton } from "@/components/logout-button";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getStoredUser } from "@/lib/api";
 import { getCurrentSection, isRouteActive, primaryNavigation } from "@/lib/navigation.mjs";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +20,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const section = getCurrentSection(pathname);
+  const isLoginRoute = pathname === "/login";
+  const currentUser = getStoredUser();
+
+  if (isLoginRoute) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
+        <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col">
+          <div className="flex items-center justify-end px-4 pt-4 lg:px-8 lg:pt-8">
+            <ThemeToggle />
+          </div>
+          <main className="flex-1">{children}</main>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
+    <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="sticky top-0 hidden h-screen w-80 shrink-0 border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
           <SidebarContent pathname={pathname} />
@@ -40,17 +58,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">{section.title}</p>
                 <p className="truncate text-xs text-slate-500 dark:text-slate-400">{section.eyebrow}</p>
               </div>
-              <ThemeToggle />
-            </div>
-            {mobileOpen ? (
-              <div className="pt-4">
-                <SidebarContent pathname={pathname} compact onNavigate={() => setMobileOpen(false)} />
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <SessionControls currentUser={currentUser} />
               </div>
-            ) : null}
+            </div>
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows,opacity,transform] duration-300 ease-out",
+                mobileOpen ? "grid-rows-[1fr] pt-4 opacity-100" : "grid-rows-[0fr] opacity-0",
+              )}
+              aria-hidden={!mobileOpen}
+            >
+              <div className="overflow-hidden">
+                <div
+                  className={cn(
+                    "transition duration-300 ease-out",
+                    mobileOpen ? "translate-y-0 scale-100" : "-translate-y-2 scale-[0.98]",
+                  )}
+                >
+                  <SidebarContent pathname={pathname} compact onNavigate={() => setMobileOpen(false)} />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <header className="px-4 pb-4 pt-5 lg:px-8 lg:pb-0 lg:pt-8">
-            <div className="rounded-[28px] border border-white/75 bg-white/72 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-slate-950/55 dark:shadow-[0_24px_80px_rgba(2,8,23,0.36)]">
+          <div className="relative z-30 px-4 pb-4 pt-5 lg:px-8 lg:pb-0 lg:pt-8">
+            <div className="relative overflow-visible rounded-[28px] border border-white/75 bg-white/72 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-slate-950/55 dark:shadow-[0_24px_80px_rgba(2,8,23,0.36)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">{section.eyebrow}</p>
@@ -59,14 +93,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{section.description}</p>
                   </div>
                 </div>
-                <div className="hidden lg:block">
+                <div className="hidden lg:flex lg:items-center lg:gap-3">
                   <ThemeToggle />
+                  <SessionControls currentUser={currentUser} />
                 </div>
               </div>
             </div>
-          </header>
+          </div>
 
-          <main className="flex-1 px-4 pb-8 lg:px-8 lg:pt-6">
+          <main className="relative z-10 flex-1 px-4 pb-8 lg:px-8 lg:pt-6">
             <div className="mx-auto max-w-7xl">{children}</div>
           </main>
         </div>
@@ -164,6 +199,87 @@ function SidebarContent({
           </ul>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SessionControls({
+  currentUser,
+}: {
+  currentUser: ReturnType<typeof getStoredUser>;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  return (
+    <div className="relative z-[120]" ref={containerRef}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="rounded-full border-white/50 bg-white/75 px-3 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur hover:bg-white dark:border-white/10 dark:bg-slate-950/75 dark:text-slate-100 dark:hover:bg-slate-900"
+      >
+        <UserRound className="size-4" />
+        <span className="hidden max-w-[140px] truncate sm:inline">
+          {currentUser?.name || "Account"}
+        </span>
+        <ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "")} />
+      </Button>
+
+      <div
+        className={cn(
+          "absolute right-0 top-[calc(100%+0.65rem)] z-[160] w-72 origin-top-right rounded-[24px] border border-white/75 bg-white/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur transition duration-200 ease-out dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_24px_80px_rgba(2,8,23,0.55)]",
+          open
+            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+            : "pointer-events-none -translate-y-2 scale-95 opacity-0",
+        )}
+        role="menu"
+        aria-hidden={!open}
+      >
+          <div className="flex items-start gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200">
+              <UserRound className="size-5" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">
+                {currentUser?.name || "Signed-in user"}
+              </p>
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                {currentUser?.email || "No stored profile"}
+              </p>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                {currentUser?.role?.replaceAll("_", " ") || "session"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-white/10">
+            <LogoutButton />
+          </div>
+      </div>
     </div>
   );
 }

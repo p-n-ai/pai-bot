@@ -19,6 +19,7 @@ Thumbs.db
 /tmp/
 /server
 .gocache/
+.golangci-cache/
 .gomodcache/
 *.exe
 *.exe~

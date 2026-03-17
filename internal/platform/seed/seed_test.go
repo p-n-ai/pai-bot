@@ -27,14 +27,23 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if tx.rolledBack {
 		t.Fatal("did not expect rollback on success")
 	}
-	if len(tx.execSQL) != 15 {
-		t.Fatalf("expected 15 exec statements, got %d", len(tx.execSQL))
+	if len(tx.execSQL) != 16 {
+		t.Fatalf("expected 16 exec statements, got %d", len(tx.execSQL))
 	}
 	if !strings.Contains(tx.queryRowSQL, "INSERT INTO tenants") {
 		t.Fatalf("tenant upsert SQL = %q, want INSERT INTO tenants", tx.queryRowSQL)
 	}
 	if !strings.Contains(tx.execSQL[0], "INSERT INTO users") {
 		t.Fatalf("first statement = %q, want INSERT INTO users", tx.execSQL[0])
+	}
+	if !strings.Contains(tx.execSQL[0], "'platform_admin'") {
+		t.Fatalf("user seed SQL = %q, want platform_admin demo user", tx.execSQL[0])
+	}
+	if !strings.Contains(tx.execSQL[1], "platform-admin@example.com") {
+		t.Fatalf("auth identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[1])
+	}
+	if !strings.Contains(tx.execSQL[1], "student@example.com") {
+		t.Fatalf("auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
 	}
 	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "INSERT INTO events") {
 		t.Fatalf("last statement = %q, want INSERT INTO events", tx.execSQL[len(tx.execSQL)-1])

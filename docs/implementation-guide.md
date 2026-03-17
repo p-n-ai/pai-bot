@@ -4802,7 +4802,9 @@ Implementation boundary for auth:
 
 - Current: Day 16 JWT/RBAC applies to the Go admin API under `/api/admin/*`.
 - Current: the Next.js admin shell is still publicly routable during scaffolding. In an anonymous browser session, pages can render, but API requests without `pai_token` should fail with `401` or `403`.
-- Planned later: add the final frontend auth flow only when the team is ready to decide on login UX and route-guard behavior.
+- Planned later: add the final frontend auth flow only when the team is ready to land the invite + password UX and route-guard behavior.
+- Planned auth model: teachers, parents, admins, and platform admins are provisioned by email invite, accept the invite by setting a password, then use email + password for future logins.
+- Planned auth storage: keep profile and role data in `users`; add `auth_identities`, `auth_invites`, and `auth_refresh_tokens` tables for login credentials and session state.
 
 ```bash
 cd admin
@@ -4877,6 +4879,7 @@ Decision note:
 
 - For Day 16, "JWT auth" means backend bearer-token enforcement plus RBAC on admin API endpoints.
 - Frontend login pages, redirects, and Next.js middleware protection are intentionally deferred so admin UI scaffolding can proceed independently.
+- The deferred auth-hardening pass should implement invite acceptance, password setup, email/password login, refresh token rotation, logout, and protected frontend routes.
 
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
 
@@ -4886,6 +4889,13 @@ Follow the same pattern:
 - **Day 18:** Deploy admin panel via docker-compose with nginx reverse proxy. Class management page.
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page.
 - **Day 20:** Week 4 retro.
+
+Planned follow-up after Week 4 scaffolding:
+
+- Add a migration for `auth_identities`, `auth_invites`, and `auth_refresh_tokens`.
+- Add backend endpoints for invite acceptance, email/password login, token refresh, and logout.
+- Add Next.js login screen and middleware guards for teacher, parent, admin, and platform admin views.
+- Keep students on Telegram identity until a separate student web portal is explicitly introduced.
 
 **Week 4 Targets:**
 - [ ] Admin panel live
@@ -5042,6 +5052,7 @@ echo ""
 | `internal/curriculum` | Day 1 | `loader.go`, `types.go` | YAML curriculum loader |
 | `internal/progress` | Day 6 | `tracker.go`, `spaced_rep.go`, `display.go`, `streaks.go`, `xp.go` | Mastery tracking, SM-2, streaks, XP |
 | `internal/auth` | Day 16 | `jwt.go`, `middleware.go` | JWT auth + RBAC middleware |
+| `internal/auth` | Planned auth-hardening pass | `password.go`, `invites.go`, `sessions.go` | Password login, invite onboarding, refresh token rotation |
 | `internal/tenant` | Day 23 | `tenant.go`, `middleware.go` | Multi-tenancy isolation |
 
 ---
