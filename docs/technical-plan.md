@@ -169,15 +169,15 @@ The system prompt adjusts explanation complexity based on the student's mastery 
 
 Mastery score is read from the `progress` table and injected into the system prompt alongside the student's progress context ("mastered X, working on Y, struggles with Z").
 
-#### 2.6.4 Dynamic Question Generation
+#### 2.6.4 Planned Dynamic Question Generation
 
-When the curriculum YAML has fewer than 5 assessment questions for a topic, the quiz engine generates additional questions dynamically using the AI gateway's `CompleteJSON` fast-path (cheapest model). The generation prompt includes:
+Current runtime uses OSS-backed assessment YAML only. Planned follow-up: when the curriculum YAML has fewer than 5 assessment questions for a topic, the quiz engine should generate additional questions dynamically using the AI gateway's `CompleteJSON` fast-path (cheapest model). The intended generation prompt includes:
 
 - The topic's teaching notes as source material
 - The difficulty level appropriate for the student's mastery
 - 2–3 real UASA/SPM exam exemplar questions (stored in `assessments.yaml`) as style references
 
-This "exam mimicry" approach ensures AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
+This planned "exam mimicry" approach should ensure AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
 
 ### 2.7 Algorithms
 
@@ -189,7 +189,7 @@ This "exam mimicry" approach ensures AI-generated questions match the format, di
 | **Model Routing** | Selects optimal AI provider per request | Cost-aware routing with circuit breaker pattern. Falls back through provider chain on failure. |
 | **Dual-Loop Problem Solving** | Structured step-by-step teaching for math questions | `internal/agent/prompts.go`. System prompt pattern: Understand → Plan → Solve → Verify → Connect. |
 | **Adaptive Explanation Depth** | Adjusts explanation complexity per student | `internal/agent/prompts.go`. Mastery-based prompt selection: beginner / developing / proficient. |
-| **Dynamic Question Generation** | Generates quiz questions when curriculum has insufficient assessments | `internal/agent/quiz.go`. AI generates questions from teaching notes with exam-style mimicry using UASA/SPM exemplars. |
+| **Dynamic Question Generation** | Planned: generate quiz questions when curriculum has insufficient assessments | Planned future extension of `internal/agent/quiz.go` using `CompleteJSON` plus UASA/SPM exemplars. |
 
 ---
 

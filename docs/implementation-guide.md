@@ -3480,7 +3480,7 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 - [x] Auto-lookup user by telegram_id on every message, auto-trigger /start for new users
 - [x] AI router retries with backoff, falls back through provider chain
 - [ ] 🧑 Deployed to AWS, 3 pilot students onboarded and chatting
-- [ ] `make test-all` passes
+- [x] `make test-all` passes
 
 ---
 
@@ -4083,7 +4083,7 @@ func FormatProgressReport(items []ProgressItem, totalXP int, streak int) string 
 
 **Entry criteria:** Day 6 complete. Progress tracking works. `make test-all` passes.
 
-**Current code note (March 11, 2026):** natural-language quiz start is already implemented in code and no longer requires `/quiz`. Current runtime starts the first quiz immediately with a default mixed intensity instead of blocking on an intensity prompt, persists explicit per-user quiz intensity preferences, feeds quiz outcomes into the existing progress/XP trackers instead of treating quiz as a separate side flow, and now pauses/resumes quiz state cleanly when the learner temporarily detours into normal conversation or asks for teaching help first. Telegram inline buttons now cover quiz intensity selection plus active/paused quiz controls (`hint`, `repeat`, `continue`, `stop`) through the existing callback flow, including wrong-answer/hint retries and paused side-conversation detours. Deterministic grading now also tolerates common structured-answer formatting variants for multi-part OSS questions (for example labeled vs unlabeled parts, line-separated parts, and `m=3, c=-4` style responses) instead of requiring one literal phrasing.
+**Current code note (March 16, 2026):** natural-language quiz start is already implemented in code and no longer requires `/quiz`. Current runtime starts the first quiz immediately with a default mixed intensity instead of blocking on an intensity prompt, persists explicit per-user quiz intensity preferences, feeds quiz outcomes into the existing progress/XP trackers instead of treating quiz as a separate side flow, and pauses/resumes quiz state cleanly when the learner temporarily detours into normal conversation or asks for teaching help first. Telegram inline buttons now cover quiz intensity selection plus active/paused quiz controls (`hint`, `repeat`, `continue`, `stop`) through the existing callback flow, including wrong-answer/hint retries and paused side-conversation detours. Deterministic grading now also tolerates common structured-answer formatting variants for multi-part OSS questions (for example labeled vs unlabeled parts, line-separated parts, and `m=3, c=-4` style responses) instead of requiring one literal phrasing. Dynamic fallback question generation and explicit mimic-mode prompting are still planned; current runtime uses OSS-backed assessments only.
 
 Profile reset note: `/clear` resets conversation/runtime state only. `/reset-profile` clears learner-managed profile fields (`form`, preferred language, preferred quiz intensity) and restarts onboarding.
 
@@ -4331,12 +4331,12 @@ func (s *QuizSession) IsComplete() bool {
 
 #### Day 7 Exit Criteria
 
-- [ ] `internal/agent/quiz.go` + tests — quiz engine with questions, answers, hints, distractors
-- [ ] Session mode routing: chat vs quiz vs challenge
-- [ ] `CompleteJSON` added to AI gateway for structured grading
-- [ ] Quiz can start from natural-language intent or button callback without requiring `/quiz`
-- [ ] 🧑 KSSM Algebra assessments reviewed for accuracy
-- [ ] `make test-all` passes
+- [x] `internal/agent/quiz.go` + tests — quiz engine with questions, answers, hints, distractors
+- [x] Session mode routing: chat vs quiz vs challenge
+- [x] `CompleteJSON` added to AI gateway for structured grading
+- [x] Quiz can start from natural-language intent or button callback without requiring `/quiz`
+- [x] 🧑 KSSM Algebra assessments reviewed for accuracy
+- [x] `make test-all` passes
 
 ---
 

@@ -211,15 +211,15 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 7 — Quiz Engine
 
-**Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
+**Implementation note (March 16, 2026):** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`, and the shipped quiz runtime now covers natural-language/button entry, persisted quiz-state routing, deterministic OSS-backed grading, hint/repeat/continue/stop controls, and clean pause/resume behavior around side conversations or teaching detours. The remaining unshipped Day 7 slice is dynamic question generation plus explicit exam-mimicry prompting.
 
-**Current code note (March 11, 2026):** quiz start already works from natural language without `/quiz`. Current implementation now starts immediately on first use with a default mixed intensity instead of blocking on an intensity-selection step, remembers explicit per-user intensity preferences when they exist, reuses the existing progress/XP systems so correct quiz answers award quiz XP and quiz outcomes update topic mastery, and now pauses cleanly for side conversation or teaching detours instead of grading every off-topic message as a wrong answer.
+**Current code note (March 16, 2026):** quiz start already works from natural language without `/quiz`. Current implementation starts immediately on first use with a default mixed intensity instead of blocking on an intensity-selection step, remembers explicit per-user intensity preferences when they exist, reuses the existing progress/XP systems so correct quiz answers award quiz XP and quiz outcomes update topic mastery, and pauses cleanly for side conversation or teaching detours instead of grading every off-topic message as a wrong answer. Quiz content is still loaded from OSS `assessments.yaml`; fallback AI question generation is not yet wired into the live runtime.
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | | 🤖 |
-| `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | | 🤖 |
+| `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | ✅ | 🤖 |
+| `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | ✅ | 🤖 |
+| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | ✅ | 🤖 |
 | `P-W2D7-4` | Exam-style question mimicry: include 2–3 real UASA/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
 | `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real UASA/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
@@ -248,7 +248,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
 | `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
 
-**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
+**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%, adaptive explanation depth adjusting based on mastery level.
+
+**Current code reality (March 16, 2026):** OSS-backed quiz runtime is live. Dynamic quiz generation and explicit exam-style mimicry are still planned follow-up work.
 
 ---
 
