@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound } from "lucide-react";
+import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getStoredUser } from "@/lib/api";
+import { getStoredUser, hasStoredSession } from "@/lib/api";
 import { getCurrentSection, isRouteActive, primaryNavigation } from "@/lib/navigation.mjs";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const section = getCurrentSection(pathname);
   const isLoginRoute = pathname === "/login";
   const currentUser = getStoredUser();
+  const isLoggedIn = hasStoredSession();
 
   if (isLoginRoute) {
     return (
@@ -61,7 +63,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center gap-2">
                 <ThemeToggle />
-                <SessionControls currentUser={currentUser} />
+                <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} />
               </div>
             </div>
             <div
@@ -96,7 +98,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="hidden lg:flex lg:items-center lg:gap-3">
                   <ThemeToggle />
-                  <SessionControls currentUser={currentUser} />
+                  <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} />
                 </div>
               </div>
             </div>
@@ -215,8 +217,10 @@ function SidebarContent({
 
 function SessionControls({
   currentUser,
+  isLoggedIn,
 }: {
   currentUser: ReturnType<typeof getStoredUser>;
+  isLoggedIn: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -276,18 +280,22 @@ function SessionControls({
             </div>
             <div className="min-w-0 space-y-1">
               <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">
-                {currentUser?.name || "Signed-in user"}
+                {currentUser?.name || "Guest session"}
               </p>
               <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                 {currentUser?.email || "No stored profile"}
               </p>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                {currentUser?.role?.replaceAll("_", " ") || "session"}
+                {currentUser?.role?.replaceAll("_", " ") || "not signed in"}
               </p>
             </div>
           </div>
           <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-white/10">
-            <LogoutButton />
+            {isLoggedIn ? (
+              <LogoutButton />
+            ) : (
+              <LoginButton onClick={() => setOpen(false)} />
+            )}
           </div>
       </div>
     </div>
