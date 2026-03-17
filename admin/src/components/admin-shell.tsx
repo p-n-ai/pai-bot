@@ -21,10 +21,17 @@ const navIcons: Record<string, typeof Home> = {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const section = getCurrentSection(pathname);
   const isLoginRoute = pathname === "/login";
-  const currentUser = getStoredUser();
-  const isLoggedIn = hasStoredSession();
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+    setIsLoggedIn(hasStoredSession());
+    setHydrated(true);
+  }, []);
 
   if (isLoginRoute) {
     return (
@@ -63,7 +70,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center gap-2">
                 <ThemeToggle />
-                <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} />
+                <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} hydrated={hydrated} />
               </div>
             </div>
             <div
@@ -98,7 +105,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="hidden lg:flex lg:items-center lg:gap-3">
                   <ThemeToggle />
-                  <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} />
+                  <SessionControls currentUser={currentUser} isLoggedIn={isLoggedIn} hydrated={hydrated} />
                 </div>
               </div>
             </div>
@@ -218,9 +225,11 @@ function SidebarContent({
 function SessionControls({
   currentUser,
   isLoggedIn,
+  hydrated,
 }: {
   currentUser: ReturnType<typeof getStoredUser>;
   isLoggedIn: boolean;
+  hydrated: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -259,7 +268,7 @@ function SessionControls({
       >
         <UserRound className="size-4" />
         <span className="hidden max-w-[140px] truncate sm:inline">
-          {currentUser?.name || "Account"}
+          {hydrated ? currentUser?.name || "Account" : "Account"}
         </span>
         <ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "")} />
       </Button>
@@ -280,18 +289,18 @@ function SessionControls({
             </div>
             <div className="min-w-0 space-y-1">
               <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">
-                {currentUser?.name || "Guest session"}
+                {hydrated ? currentUser?.name || "Guest session" : "Guest session"}
               </p>
               <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                {currentUser?.email || "No stored profile"}
+                {hydrated ? currentUser?.email || "No stored profile" : "No stored profile"}
               </p>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                {currentUser?.role?.replaceAll("_", " ") || "not signed in"}
+                {hydrated ? currentUser?.role?.replaceAll("_", " ") || "not signed in" : "not signed in"}
               </p>
             </div>
           </div>
           <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-white/10">
-            {isLoggedIn ? (
+            {hydrated && isLoggedIn ? (
               <LogoutButton />
             ) : (
               <LoginButton onClick={() => setOpen(false)} />
