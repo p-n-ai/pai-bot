@@ -477,13 +477,7 @@ func (s *PostgresService) issueSessionWithID(ctx context.Context, tx pgx.Tx, use
 		RefreshToken:     refreshToken,
 		AccessExpiresAt:  now.Add(s.tokenManager.ttl),
 		RefreshExpiresAt: refreshExpiresAt,
-		User: UserSession{
-			UserID:   user.UserID,
-			TenantID: user.TenantID,
-			Role:     user.Role,
-			Name:     user.Name,
-			Email:    user.Email,
-		},
+		User:             UserSession(user),
 	}, tokenID, nil
 }
 

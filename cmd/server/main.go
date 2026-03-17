@@ -328,10 +328,6 @@ func newHandler(admin adminDataSource, sender messageSender) http.Handler {
 	return newHandlerWithServices(admin, sender, auth.NewNoopService(), "change-me-in-production", time.Hour)
 }
 
-func newHandlerWithAuth(admin adminDataSource, sender messageSender, jwtSecret string) http.Handler {
-	return newHandlerWithServices(admin, sender, auth.NewNoopService(), jwtSecret, time.Hour)
-}
-
 func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	mux := newMux(admin, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
@@ -591,10 +587,15 @@ func handleAuthLogout(authSvc authService) http.HandlerFunc {
 	}
 }
 
-func decodeJSONBody(r *http.Request, target any) error {
-	defer r.Body.Close()
+func decodeJSONBody(r *http.Request, target any) (err error) {
+	defer func() {
+		closeErr := r.Body.Close()
+		if err == nil && closeErr != nil {
+			err = fmt.Errorf("close request body: %w", closeErr)
+		}
+	}()
 
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(target); err != nil {
 		return fmt.Errorf("invalid json body")
 	}
 	return nil
