@@ -1,13 +1,12 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { Coins, Cpu, MessagesSquare, Orbit } from "lucide-react";
-import type { ComponentType } from "react";
+import { PageHero } from "@/components/page-hero";
+import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getAIUsage, type AIUsageSummary } from "@/lib/api";
-import { formatCompactNumber, getTopProvider, normalizeAIUsage } from "@/lib/ai-usage.mjs";
+import type { AIUsageSummary } from "@/lib/api";
+import { formatCompactNumber, getTopProvider } from "@/lib/ai-usage.mjs";
+import { getServerAIUsage } from "@/lib/server-api";
 
 function providerTone(provider: string) {
   switch (provider) {
@@ -24,43 +23,29 @@ function providerTone(provider: string) {
   }
 }
 
-export default function AIUsagePage() {
-  const [usage, setUsage] = useState<AIUsageSummary | null>(null);
-  const [loadError, setLoadError] = useState("");
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    let active = true;
+export default async function AIUsagePage() {
+  let usage: AIUsageSummary | null = null;
+  let loadError = "";
 
-    getAIUsage()
-      .then((result) => {
-        if (!active) return;
-        setUsage(normalizeAIUsage(result) as AIUsageSummary);
-        setLoadError("");
-      })
-      .catch(() => {
-        if (!active) return;
-        setLoadError("Failed to load AI usage.");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  try {
+    usage = await getServerAIUsage();
+  } catch {
+    loadError = "Failed to load AI usage.";
+  }
 
   const topProvider = getTopProvider(usage);
   const totalTokens = (usage?.total_input_tokens ?? 0) + (usage?.total_output_tokens ?? 0);
 
   return (
     <div className="space-y-6">
-      <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">AI operations</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Provider usage at a glance</h1>
-          <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Track message volume, token load, and the models currently carrying the teacher workspace.
-          </p>
-        </div>
-        <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
+      <PageHero
+        eyebrow="AI operations"
+        title="Provider usage at a glance"
+        description="Track message volume, token load, and the models currently carrying the teacher workspace."
+        aside={
+          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Top provider</p>
             <p className="mt-2 text-3xl font-semibold">
@@ -71,7 +56,8 @@ export default function AIUsagePage() {
             {topProvider ? `${formatCompactNumber(topProvider.total_tokens)} tokens handled in this snapshot.` : "Waiting for AI usage data from the admin API."}
           </div>
         </div>
-      </header>
+        }
+      />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={MessagesSquare} title="AI messages" value={formatCompactNumber(usage?.total_messages ?? 0)} note="Messages with a recorded model" />
@@ -136,30 +122,5 @@ export default function AIUsagePage() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  title,
-  value,
-  note,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  title: string;
-  value: string;
-  note: string;
-}) {
-  return (
-    <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_50px_rgba(2,8,23,0.35)]">
-      <CardHeader className="space-y-3">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200">
-          <Icon className="size-5" />
-        </div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{title}</p>
-        <CardTitle className="text-3xl tracking-tight text-slate-950 dark:text-slate-50">{value}</CardTitle>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{note}</p>
-      </CardHeader>
-    </Card>
   );
 }

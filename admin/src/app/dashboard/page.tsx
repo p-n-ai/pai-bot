@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
+import { PageHero } from "@/components/page-hero";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getAverageMastery, getTrackedScores } from "@/lib/class-progress.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
+import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 
 function scoreTone(score: number) {
   if (score >= 0.8) return "bg-emerald-500 text-white";
@@ -15,37 +19,10 @@ function scoreTone(score: number) {
   return "bg-rose-400 text-white";
 }
 
-function formatTopicLabel(topicId: string) {
-  return topicId
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export default function DashboardPage() {
-  const [data, setData] = useState<ClassProgress | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error } = useAsyncResource<ClassProgress>(() => getClassProgress("all-students"), []);
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    getClassProgress("all-students")
-      .then((result) => {
-        if (!active) return;
-        setData(result);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!active) return;
-        setData(null);
-        setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const averageMastery = data ? getAverageMastery(data) : 0;
   const trackedScores = data ? getTrackedScores(data) : 0;
@@ -66,15 +43,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Class mastery at a glance</h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Review topic-by-topic mastery and open each learner profile for a closer look.
-            </p>
-          </div>
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
+        <PageHero
+          eyebrow="Teacher cockpit"
+          title="Class mastery at a glance"
+          description="Review topic-by-topic mastery and open each learner profile for a closer look."
+          aside={
+            <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Average mastery</p>
               <p className="mt-2 text-4xl font-semibold">{averageMastery}%</p>
@@ -84,7 +58,8 @@ export default function DashboardPage() {
               Live data from the Go admin API
             </div>
           </div>
-        </header>
+          }
+        />
 
         <section className="grid gap-4 md:grid-cols-3">
           <StatCard title="Students" value={String(data?.students.length ?? 0)} note="Tracked in this view" />
@@ -182,22 +157,10 @@ export default function DashboardPage() {
                 {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
               </div>
             ) : (
-              <p className="text-sm text-rose-600">Failed to load class data.</p>
+              <p className="text-sm text-rose-600">{error || "Failed to load class data."}</p>
             )}
           </CardContent>
         </Card>
     </div>
-  );
-}
-
-function StatCard({ title, value, note }: { title: string; value: string; note: string }) {
-  return (
-    <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_50px_rgba(2,8,23,0.35)]">
-      <CardHeader>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{title}</p>
-        <CardTitle className="text-3xl tracking-tight text-slate-950 dark:text-slate-50">{value}</CardTitle>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{note}</p>
-      </CardHeader>
-    </Card>
   );
 }

@@ -1,10 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { BarChart3, Coins, Users } from "lucide-react";
-import { normalizeClassProgress } from "@/lib/class-progress.mjs";
-import { getClassProgress, type ClassProgress } from "@/lib/api";
+import { getServerClassProgress } from "@/lib/server-api";
 
 const cards = [
   {
@@ -21,28 +17,21 @@ const cards = [
   },
 ];
 
-export default function Home() {
-  const [data, setData] = useState<ClassProgress | null>(null);
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    let active = true;
-    getClassProgress("all-students")
-      .then((result) => {
-        if (!active) return;
-        setData(normalizeClassProgress(result) as ClassProgress);
-      })
-      .catch(() => {
-        if (!active) return;
-        setData(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+export default async function Home() {
+  let studentCount = "...";
+
+  try {
+    const data = await getServerClassProgress("all-students");
+    studentCount = String(data.students.length);
+  } catch {
+    studentCount = "...";
+  }
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-6 rounded-[32px] border border-white/60 bg-white/70 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur md:p-10 dark:border-white/10 dark:bg-slate-950/55 dark:shadow-[0_24px_80px_rgba(2,8,23,0.45)]">
+      <section className="flex flex-col gap-6 rounded-[32px] border border-white/60 bg-white/70 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur md:p-10 dark:border-white/10 dark:bg-slate-950/55 dark:shadow-[0_24px_80px_rgba(2,8,23,0.45)]">
           <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
             <span className="rounded-full bg-sky-100 px-3 py-1 dark:bg-sky-400/15 dark:text-sky-100">P&AI Bot</span>
             <span className="rounded-full bg-amber-100 px-3 py-1 dark:bg-amber-300/15 dark:text-amber-100">Admin Panel</span>
@@ -73,8 +62,8 @@ export default function Home() {
             <div className="grid gap-3 rounded-[28px] bg-slate-950 p-5 text-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 dark:bg-white/[0.03]">
                 <Users className="size-5 text-sky-300 dark:text-sky-200" />
-                <div>
-                  <p className="text-2xl font-semibold">{data ? data.students.length : "..."}</p>
+                  <div>
+                  <p className="text-2xl font-semibold">{studentCount}</p>
                   <p className="text-sm text-slate-300">students currently returned by the admin API</p>
                 </div>
               </div>
@@ -86,7 +75,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-      </header>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         {cards.map((card) => {
