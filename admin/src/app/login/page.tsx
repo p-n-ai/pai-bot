@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,14 @@ import { getStoredUser, LoginError, login, persistSession, type TenantChoice } f
 import { getDefaultRouteForUser } from "@/lib/default-route.mjs";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -56,6 +64,69 @@ export default function LoginPage() {
   }
 
   return (
+    <LoginPageLayout
+      email={email}
+      password={password}
+      tenantID={tenantID}
+      tenantChoices={tenantChoices}
+      error={error}
+      isPending={isPending}
+      onEmailChange={(value) => {
+        setEmail(value);
+        if (tenantChoices.length > 0) {
+          setTenantChoices([]);
+          setTenantID("");
+          setError("");
+        }
+      }}
+      onPasswordChange={setPassword}
+      onTenantChange={setTenantID}
+      onSubmit={handleSubmit}
+    />
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <LoginPageLayout
+      email=""
+      password=""
+      tenantID=""
+      tenantChoices={[]}
+      error=""
+      isPending={false}
+      onEmailChange={() => {}}
+      onPasswordChange={() => {}}
+      onTenantChange={() => {}}
+      onSubmit={(event) => event.preventDefault()}
+    />
+  );
+}
+
+function LoginPageLayout({
+  email,
+  password,
+  tenantID,
+  tenantChoices,
+  error,
+  isPending,
+  onEmailChange,
+  onPasswordChange,
+  onTenantChange,
+  onSubmit,
+}: {
+  email: string;
+  password: string;
+  tenantID: string;
+  tenantChoices: TenantChoice[];
+  error: string;
+  isPending: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onTenantChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
     <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
       <section className="space-y-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 shadow-sm dark:border-sky-400/20 dark:bg-slate-950/40 dark:text-sky-200">
@@ -97,7 +168,7 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-8 pb-8">
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={onSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -105,14 +176,7 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  if (tenantChoices.length > 0) {
-                    setTenantChoices([]);
-                    setTenantID("");
-                    setError("");
-                  }
-                }}
+                onChange={(event) => onEmailChange(event.target.value)}
                 placeholder="teacher@example.com"
                 autoComplete="email"
                 className="text-slate-950 placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -126,7 +190,7 @@ export default function LoginPage() {
                   id="tenant_id"
                   name="tenant_id"
                   value={tenantID}
-                  onChange={(event) => setTenantID(event.target.value)}
+                  onChange={(event) => onTenantChange(event.target.value)}
                   className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
                   required
                 >
@@ -148,7 +212,7 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => onPasswordChange(event.target.value)}
                 placeholder="Enter your password"
                 autoComplete="current-password"
                 className="text-slate-950 placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
