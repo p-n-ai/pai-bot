@@ -46,6 +46,7 @@ type EngineConfig struct {
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
 	Goals                 GoalStore
+	Challenges            ChallengeStore
 	DevMode               bool
 }
 
@@ -65,6 +66,7 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	challenges            ChallengeStore
 	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
@@ -105,6 +107,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 			contextResolver = NoopContextResolver{}
 		}
 	}
+	challenges := cfg.Challenges
+	if challenges == nil {
+		challenges = NewMemoryChallengeStore()
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -120,6 +126,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		challenges:            challenges,
 		devMode:               cfg.DevMode,
 		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
 		unlocks:               newPendingUnlocks(),
@@ -573,6 +580,8 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleProgressCommand(msg)
 	case "/goal":
 		return e.handleGoalCommand(ctx, msg, fields[1:])
+	case "/challenge":
+		return e.handleChallengeCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":

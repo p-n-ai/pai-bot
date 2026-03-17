@@ -258,6 +258,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
+Status (2026-03-18): first `/challenge` slice shipped. Current scope: invite-code challenge creation and join, new `005_challenges` migration groundwork, in-memory + Postgres challenge stores, and engine command wiring for `/challenge invite <topic>` plus `/challenge <code>`. Human matchmaking, AI fallback, attempt runtime, settlement, XP, and review remain pending.
+
 Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
 
 | Task ID | Task | Owner |
@@ -266,6 +268,15 @@ Migration note (2026-03-16): the repo now uses `golang-migrate` with version tra
 | `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 |
 | `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
+
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W3D11-CH-1` | Challenge groundwork slice: add `005_challenges` migration (`challenges`, `challenge_attempts`, `challenge_matchmaking_tickets`), introduce memory/Postgres challenge stores, and ship invite-code `/challenge invite <topic>` create + `/challenge <code>` join command flow with tests. | ✅ | 🤖 |
 
 ### Day 12 — Groups + Leaderboards
 
