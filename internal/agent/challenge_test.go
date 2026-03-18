@@ -155,6 +155,42 @@ func TestMemoryChallengeStore_StartChallengeSearch_RejectsWhenUserHasLiveInviteC
 	}
 }
 
+func TestMemoryChallengeStore_CancelOpenChallenge_CancelsWaitingInvite(t *testing.T) {
+	store := agent.NewMemoryChallengeStore()
+	input := agent.ChallengeCreateInput{
+		TopicID:       "F1-02",
+		TopicName:     "Linear Equations",
+		SyllabusID:    "kssm-f1",
+		QuestionCount: 5,
+	}
+
+	challenge, err := store.CreateInviteChallenge("queue-user-1", input)
+	if err != nil {
+		t.Fatalf("CreateInviteChallenge() error = %v", err)
+	}
+
+	cancelled, err := store.CancelOpenChallenge("queue-user-1")
+	if err != nil {
+		t.Fatalf("CancelOpenChallenge() error = %v", err)
+	}
+	if !cancelled {
+		t.Fatal("CancelOpenChallenge() = false, want true")
+	}
+
+	_, err = store.GetChallenge(challenge.Code)
+	if err != agent.ErrChallengeNotFound {
+		t.Fatalf("GetChallenge() error = %v, want ErrChallengeNotFound after cancel", err)
+	}
+
+	reopened, err := store.CreateInviteChallenge("queue-user-1", input)
+	if err != nil {
+		t.Fatalf("CreateInviteChallenge() after cancel error = %v", err)
+	}
+	if reopened.Code == challenge.Code {
+		t.Fatalf("challenge code = %q, want a new invite after cancel", reopened.Code)
+	}
+}
+
 func TestMemoryChallengeStore_StartChallengeSearch_PairsIntoPendingAcceptance(t *testing.T) {
 	store := agent.NewMemoryChallengeStore()
 	input := agent.ChallengeCreateInput{
@@ -738,6 +774,48 @@ func TestEngine_ChallengeCommand_CancelCancelsSearchingTicket(t *testing.T) {
 	}
 	if !contains(resp, "cancel") {
 		t.Fatalf("response = %q, want cancellation confirmation", resp)
+	}
+}
+
+func TestEngine_ChallengeCommand_CancelCancelsInviteChallenge(t *testing.T) {
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		Store:            store,
+		Challenges:       agent.NewMemoryChallengeStore(),
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "invite-cancel-user",
+		Text:    "/challenge invite linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge invite) error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "invite-cancel-user",
+		Text:    "/challenge cancel",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge cancel) error = %v", err)
+	}
+	if !contains(resp, "Challenge cancelled.") {
+		t.Fatalf("response = %q, want open challenge cancellation confirmation", resp)
+	}
+
+	resp, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "invite-cancel-user",
+		Text:    "/challenge invite linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(second /challenge invite) error = %v", err)
+	}
+	if !contains(resp, "Challenge created.") {
+		t.Fatalf("response = %q, want a fresh invite after cancel", resp)
 	}
 }
 

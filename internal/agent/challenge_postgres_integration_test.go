@@ -85,6 +85,84 @@ func TestPostgresChallengeStore_CreateInviteChallengeSupportsExplicitChannel(t *
 	}
 }
 
+func TestPostgresChallengeStore_StartChallengeSearch_DoesNotPairAcrossChannels(t *testing.T) {
+	ctx := context.Background()
+	pool, tenantID := startSchedulerPostgres(t, ctx)
+	applyChallengeMigrations(t, ctx, pool)
+
+	seedChallengeUser(t, ctx, pool, tenantID, "terminal-user", "terminal")
+	seedChallengeUser(t, ctx, pool, tenantID, "telegram-user", "telegram")
+
+	terminalStore := NewPostgresChallengeStoreForChannel(pool, tenantID, "terminal")
+	telegramStore := NewPostgresChallengeStoreForChannel(pool, tenantID, "telegram")
+	input := ChallengeCreateInput{
+		TopicID:       "F1-02",
+		TopicName:     "Linear Equations",
+		SyllabusID:    "kssm-f1",
+		QuestionCount: 5,
+	}
+
+	terminalResult, err := terminalStore.StartChallengeSearch("terminal-user", input)
+	if err != nil {
+		t.Fatalf("terminal StartChallengeSearch() error = %v", err)
+	}
+	if terminalResult.Search == nil || terminalResult.Challenge != nil {
+		t.Fatalf("terminal result = %#v, want one searching ticket only", terminalResult)
+	}
+
+	telegramResult, err := telegramStore.StartChallengeSearch("telegram-user", input)
+	if err != nil {
+		t.Fatalf("telegram StartChallengeSearch() error = %v", err)
+	}
+	if telegramResult.Search == nil || telegramResult.Challenge != nil {
+		t.Fatalf("telegram result = %#v, want one searching ticket only", telegramResult)
+	}
+	if telegramResult.Search.Status != MatchmakingStatusSearching {
+		t.Fatalf("telegram search.Status = %q, want %q", telegramResult.Search.Status, MatchmakingStatusSearching)
+	}
+
+	var matchedCount int
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*)
+		   FROM challenge_matchmaking_tickets
+		  WHERE tenant_id = $1::uuid
+		    AND status = 'matched'`,
+		tenantID,
+	).Scan(&matchedCount)
+	if err != nil {
+		t.Fatalf("count matched tickets: %v", err)
+	}
+	if matchedCount != 0 {
+		t.Fatalf("matched tickets = %d, want 0 across channels", matchedCount)
+	}
+}
+
+func TestPostgresChallengeStore_JoinChallenge_RejectsCrossChannelInviteJoin(t *testing.T) {
+	ctx := context.Background()
+	pool, tenantID := startSchedulerPostgres(t, ctx)
+	applyChallengeMigrations(t, ctx, pool)
+
+	seedChallengeUser(t, ctx, pool, tenantID, "terminal-owner", "terminal")
+	seedChallengeUser(t, ctx, pool, tenantID, "telegram-joiner", "telegram")
+
+	terminalStore := NewPostgresChallengeStoreForChannel(pool, tenantID, "terminal")
+	telegramStore := NewPostgresChallengeStoreForChannel(pool, tenantID, "telegram")
+	challenge, err := terminalStore.CreateInviteChallenge("terminal-owner", ChallengeCreateInput{
+		TopicID:       "F1-02",
+		TopicName:     "Linear Equations",
+		SyllabusID:    "kssm-f1",
+		QuestionCount: 5,
+	})
+	if err != nil {
+		t.Fatalf("CreateInviteChallenge() error = %v", err)
+	}
+
+	_, err = telegramStore.JoinChallenge(challenge.Code, "telegram-joiner")
+	if err != ErrChallengeNotFound {
+		t.Fatalf("JoinChallenge() error = %v, want ErrChallengeNotFound for cross-channel join", err)
+	}
+}
+
 func TestPostgresChallengeStore_StartChallengeSearch_ResumesSearchingTicket(t *testing.T) {
 	ctx := context.Background()
 	pool, tenantID := startSchedulerPostgres(t, ctx)
@@ -390,6 +468,88 @@ func TestPostgresChallengeStore_CancelChallengeSearch_CancelsSearchingTicket(t *
 	}
 	if status != MatchmakingStatusCancelled {
 		t.Fatalf("ticket status = %q, want %q", status, MatchmakingStatusCancelled)
+	}
+}
+
+func TestPostgresChallengeStore_CancelOpenChallenge_CancelsAIFallbackAndUnblocksUser(t *testing.T) {
+	ctx := context.Background()
+	pool, tenantID := startSchedulerPostgres(t, ctx)
+	applyChallengeMigrations(t, ctx, pool)
+
+	seedChallengeUser(t, ctx, pool, tenantID, "queue-user-1", "telegram")
+
+	store := NewPostgresChallengeStore(pool, tenantID)
+	input := ChallengeCreateInput{
+		TopicID:       "F1-02",
+		TopicName:     "Linear Equations",
+		SyllabusID:    "kssm-f1",
+		QuestionCount: 5,
+	}
+
+	firstResult, err := store.StartChallengeSearch("queue-user-1", input)
+	if err != nil {
+		t.Fatalf("StartChallengeSearch() error = %v", err)
+	}
+	if firstResult.Search == nil {
+		t.Fatal("first search should not be nil")
+	}
+
+	_, err = pool.Exec(ctx,
+		`UPDATE challenge_matchmaking_tickets
+		    SET expires_at = NOW() - INTERVAL '1 second'
+		  WHERE id = $1::uuid`,
+		firstResult.Search.ID,
+	)
+	if err != nil {
+		t.Fatalf("expire searching ticket: %v", err)
+	}
+
+	fallbackResult, err := store.StartChallengeSearch("queue-user-1", input)
+	if err != nil {
+		t.Fatalf("StartChallengeSearch() after timeout error = %v", err)
+	}
+	if fallbackResult.Challenge == nil {
+		t.Fatal("AI fallback challenge should not be nil")
+	}
+
+	cancelled, err := store.CancelOpenChallenge("queue-user-1")
+	if err != nil {
+		t.Fatalf("CancelOpenChallenge() error = %v", err)
+	}
+	if !cancelled {
+		t.Fatal("CancelOpenChallenge() = false, want true")
+	}
+
+	var (
+		challengeState string
+		ticketStatus   string
+	)
+	err = pool.QueryRow(ctx,
+		`SELECT c.state, t.status
+		   FROM challenges c
+		   JOIN challenge_matchmaking_tickets t ON t.matched_challenge_id = c.id
+		  WHERE c.id = $1::uuid`,
+		fallbackResult.Challenge.ID,
+	).Scan(&challengeState, &ticketStatus)
+	if err != nil {
+		t.Fatalf("query cancelled AI fallback challenge: %v", err)
+	}
+	if challengeState != "cancelled" {
+		t.Fatalf("challenge state = %q, want cancelled", challengeState)
+	}
+	if ticketStatus != MatchmakingStatusCancelled {
+		t.Fatalf("ticket status = %q, want %q", ticketStatus, MatchmakingStatusCancelled)
+	}
+
+	reopenedResult, err := store.StartChallengeSearch("queue-user-1", input)
+	if err != nil {
+		t.Fatalf("StartChallengeSearch() after cancel error = %v", err)
+	}
+	if reopenedResult.Search == nil || reopenedResult.Challenge != nil {
+		t.Fatalf("reopened result = %#v, want one new searching ticket", reopenedResult)
+	}
+	if reopenedResult.Search.Status != MatchmakingStatusSearching {
+		t.Fatalf("search.Status = %q, want %q", reopenedResult.Search.Status, MatchmakingStatusSearching)
 	}
 }
 

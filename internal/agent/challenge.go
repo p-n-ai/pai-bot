@@ -105,6 +105,7 @@ type ChallengeStore interface {
 	CancelChallengeSearch(userID string) (bool, error)
 	AcceptPendingChallenge(userID string) (*Challenge, error)
 	DeclinePendingChallenge(userID string) (bool, error)
+	CancelOpenChallenge(userID string) (bool, error)
 }
 
 // MemoryChallengeStore stores challenges in memory.
@@ -191,6 +192,9 @@ func (s *MemoryChallengeStore) GetChallenge(code string) (*Challenge, error) {
 
 	challenge, ok := s.challenges[normalizeChallengeCode(code)]
 	if !ok {
+		return nil, ErrChallengeNotFound
+	}
+	if !challengeResumableAt(challenge, time.Now()) {
 		return nil, ErrChallengeNotFound
 	}
 	return cloneChallenge(challenge), nil
@@ -448,6 +452,20 @@ func (s *MemoryChallengeStore) DeclinePendingChallenge(userID string) (bool, err
 	return true, nil
 }
 
+func (s *MemoryChallengeStore) CancelOpenChallenge(userID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	challenge := s.findOpenChallengeForUserLocked(userID)
+	if challenge == nil {
+		return false, nil
+	}
+	challenge.State = "cancelled"
+	challenge.JoinDeadlineAt = nil
+	s.cancelMatchedSearchesForChallengeLocked(challenge.ID)
+	return true, nil
+}
+
 func (s *MemoryChallengeStore) findQueueChallengeForUserLocked(userID string) *Challenge {
 	now := time.Now()
 	for _, challenge := range s.challengesByID {
@@ -458,6 +476,23 @@ func (s *MemoryChallengeStore) findQueueChallengeForUserLocked(userID string) *C
 			continue
 		}
 		if !challengeResumableAt(challenge, now) {
+			continue
+		}
+		return challenge
+	}
+	return nil
+}
+
+func (s *MemoryChallengeStore) findOpenChallengeForUserLocked(userID string) *Challenge {
+	now := time.Now()
+	for _, challenge := range s.challengesByID {
+		if challenge.CreatorID != userID && challenge.OpponentID != userID {
+			continue
+		}
+		if !challengeResumableAt(challenge, now) {
+			continue
+		}
+		if challenge.State == ChallengeStatePendingAcceptance {
 			continue
 		}
 		return challenge
@@ -1013,6 +1048,77 @@ func (s *PostgresChallengeStore) DeclinePendingChallenge(externalUserID string) 
 	return true, nil
 }
 
+func (s *PostgresChallengeStore) CancelOpenChallenge(externalUserID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	userUUID, err := s.resolveUserUUID(ctx, externalUserID)
+	if err != nil {
+		return false, err
+	}
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return false, fmt.Errorf("begin cancel open challenge tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := s.lockUser(ctx, tx, userUUID); err != nil {
+		return false, err
+	}
+
+	var challengeID string
+	err = tx.QueryRow(ctx,
+		`SELECT id::text
+		   FROM challenges
+		  WHERE tenant_id = $1::uuid
+		    AND state IN ('waiting', 'ready', 'active')
+		    AND (creator_user_id = $2::uuid OR opponent_user_id = $2::uuid)
+		  ORDER BY created_at DESC
+		  LIMIT 1
+		  FOR UPDATE`,
+		s.tenantID,
+		userUUID,
+	).Scan(&challengeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("get open challenge: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE challenges
+		    SET state = 'cancelled',
+		        join_deadline_at = NULL,
+		        updated_at = NOW()
+		  WHERE id = $1::uuid`,
+		challengeID,
+	); err != nil {
+		return false, fmt.Errorf("cancel open challenge: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE challenge_matchmaking_tickets
+		    SET status = $2,
+		        cancelled_at = NOW(),
+		        updated_at = NOW()
+		  WHERE tenant_id = $1::uuid
+		    AND matched_challenge_id = $3::uuid
+		    AND status = $4`,
+		s.tenantID,
+		MatchmakingStatusCancelled,
+		challengeID,
+		MatchmakingStatusMatched,
+	); err != nil {
+		return false, fmt.Errorf("cancel open challenge tickets: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit cancel open challenge: %w", err)
+	}
+	return true, nil
+}
+
 func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx pgx.Tx, code string) (*Challenge, string, error) {
 	var challenge Challenge
 	var readyAt *time.Time
@@ -1046,10 +1152,12 @@ func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx p
 		   LEFT JOIN users opponent ON opponent.id = c.opponent_user_id
 		  WHERE c.tenant_id = $1::uuid
 		    AND c.invite_code = $2
+		    AND creator.channel = $3
 		    AND c.state IN ('waiting', 'pending_acceptance', 'ready', 'active')
 		  FOR UPDATE OF c`,
 		s.tenantID,
 		code,
+		s.channel,
 	).Scan(
 		&challenge.ID,
 		&challenge.Code,
@@ -1117,9 +1225,11 @@ func (s *PostgresChallengeStore) getChallenge(ctx context.Context, querier inter
 		   LEFT JOIN users opponent ON opponent.id = c.opponent_user_id
 		  WHERE c.tenant_id = $1::uuid
 		    AND c.invite_code = $2
+		    AND creator.channel = $3
 		    AND c.state IN ('waiting', 'pending_acceptance', 'ready', 'active')`,
 		s.tenantID,
 		code,
+		s.channel,
 	).Scan(
 		&challenge.ID,
 		&challenge.Code,
@@ -1618,6 +1728,7 @@ func (s *PostgresChallengeStore) findCompatibleSearch(ctx context.Context, tx pg
 		    AND t.status = $3
 		    AND t.expires_at > NOW()
 		    AND t.user_id <> $4::uuid
+		    AND u.channel = $5
 		  ORDER BY t.created_at ASC
 		  LIMIT 1
 		  FOR UPDATE SKIP LOCKED`,
@@ -1625,6 +1736,7 @@ func (s *PostgresChallengeStore) findCompatibleSearch(ctx context.Context, tx pg
 		topicID,
 		MatchmakingStatusSearching,
 		currentUserUUID,
+		s.channel,
 	).Scan(
 		&search.ID,
 		&search.UserID,

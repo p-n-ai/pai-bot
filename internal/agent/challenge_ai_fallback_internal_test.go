@@ -227,6 +227,70 @@ func TestEngine_ChallengeAcceptCommand_RejectsWhenOnlyAIFallbackChallengeExists(
 	}
 }
 
+func TestEngine_ChallengeCancelCommand_CancelsReadyAIFallbackChallenge(t *testing.T) {
+	store := NewMemoryStore()
+	challenges := NewMemoryChallengeStore()
+	convID, err := store.CreateConversation(Conversation{UserID: "queue-ai-user"})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := store.UpdateConversationTopicID(convID, "F1-02"); err != nil {
+		t.Fatalf("UpdateConversationTopicID() error = %v", err)
+	}
+
+	engine := NewEngine(EngineConfig{
+		Store:            store,
+		Challenges:       challenges,
+		CurriculumLoader: createChallengeFallbackCurriculumLoader(t),
+	})
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "queue-ai-user",
+		Text:    "/challenge",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge) error = %v", err)
+	}
+
+	challenges.mu.Lock()
+	challenges.searches["queue-ai-user"].ExpiresAt = time.Now().Add(-time.Second)
+	challenges.mu.Unlock()
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "queue-ai-user",
+		Text:    "/challenge",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge) after timeout error = %v", err)
+	}
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "queue-ai-user",
+		Text:    "/challenge cancel",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge cancel) error = %v", err)
+	}
+	if !strings.Contains(resp, "Challenge cancelled.") {
+		t.Fatalf("response = %q, want open challenge cancellation confirmation", resp)
+	}
+
+	resp, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "queue-ai-user",
+		Text:    "/challenge",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/challenge) after cancel error = %v", err)
+	}
+	if !strings.Contains(resp, "Searching for an opponent.") {
+		t.Fatalf("response = %q, want search reopened after cancelling AI fallback", resp)
+	}
+}
+
 func createChallengeFallbackCurriculumLoader(t *testing.T) *curriculum.Loader {
 	t.Helper()
 

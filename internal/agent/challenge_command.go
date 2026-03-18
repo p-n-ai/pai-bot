@@ -131,15 +131,28 @@ func (e *Engine) handleChallengeCancel(msg chat.InboundMessage, conv *Conversati
 	if err != nil {
 		return "I hit a technical issue while declining that challenge.", nil
 	}
-	if !declined {
-		return "You do not have an active challenge search right now.", nil
+	if declined {
+		e.logEventAsync(Event{
+			ConversationID: conv.ID,
+			UserID:         msg.UserID,
+			EventType:      "challenge_matchmaking_declined",
+		})
+		return "Challenge declined.", nil
 	}
-	e.logEventAsync(Event{
-		ConversationID: conv.ID,
-		UserID:         msg.UserID,
-		EventType:      "challenge_matchmaking_declined",
-	})
-	return "Challenge declined.", nil
+
+	cancelled, err = e.challenges.CancelOpenChallenge(msg.UserID)
+	if err != nil {
+		return "I hit a technical issue while cancelling that challenge.", nil
+	}
+	if cancelled {
+		e.logEventAsync(Event{
+			ConversationID: conv.ID,
+			UserID:         msg.UserID,
+			EventType:      "challenge_cancelled",
+		})
+		return "Challenge cancelled.", nil
+	}
+	return "You do not have a cancellable challenge right now.", nil
 }
 
 func (e *Engine) handleChallengeAccept(msg chat.InboundMessage, conv *Conversation) (string, error) {
@@ -320,7 +333,7 @@ func unresolvedChallengeSearchTopicMessage() string {
 }
 
 func challengeAlreadyActiveMessage() string {
-	return "You already have a live challenge or challenge search. Finish it first, or use /challenge cancel if you're still searching."
+	return "You already have a live challenge or challenge search. Finish it first, or use /challenge cancel if it has not started yet."
 }
 
 func formatChallengeCreatedMessage(challenge *Challenge) string {
