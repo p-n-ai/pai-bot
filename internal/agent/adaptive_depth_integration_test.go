@@ -22,14 +22,14 @@ type capturingProvider struct {
 func (p *capturingProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
 	p.requests = append(p.requests, req)
 	return ai.CompletionResponse{
-		Content: "Faham/Understand: Kita perlu selesaikan persamaan linear.\nRancang/Plan: Langkah 1.\nSemak/Verify: OK.\nKonsep/Connect: Persamaan linear.",
+		Content: "Faham/Understand: Kita perlu selesaikan persamaan linear.\nCuba asingkan pemboleh ubah dahulu.\nSemak/Verify: OK.\nKonsep/Connect: Persamaan linear.",
 		Model:   "mock",
 	}, nil
 }
 func (p *capturingProvider) StreamComplete(context.Context, ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
 	return nil, nil
 }
-func (p *capturingProvider) Models() []ai.ModelInfo     { return nil }
+func (p *capturingProvider) Models() []ai.ModelInfo            { return nil }
 func (p *capturingProvider) HealthCheck(context.Context) error { return nil }
 
 func TestAdaptiveDepth_BeginnerInSystemPrompt(t *testing.T) {
