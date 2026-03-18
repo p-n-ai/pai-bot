@@ -97,6 +97,34 @@ type AIUsageSummary struct {
 	Providers         []AIProviderUsage `json:"providers"`
 }
 
+type DailyActiveUsersPoint struct {
+	Date  string `json:"date"`
+	Users int    `json:"users"`
+}
+
+type RetentionPoint struct {
+	CohortDate string  `json:"cohort_date"`
+	CohortSize int     `json:"cohort_size"`
+	Day1Rate   float64 `json:"day_1_rate"`
+	Day7Rate   float64 `json:"day_7_rate"`
+	Day14Rate  float64 `json:"day_14_rate"`
+}
+
+type NudgeRateSummary struct {
+	NudgesSent             int     `json:"nudges_sent"`
+	ResponsesWithin24Hours int     `json:"responses_within_24h"`
+	ResponseRate           float64 `json:"response_rate"`
+}
+
+type MetricsSummary struct {
+	WindowDays       int                   `json:"window_days"`
+	DailyActiveUsers []DailyActiveUsersPoint `json:"daily_active_users"`
+	Retention        []RetentionPoint      `json:"retention"`
+	NudgeRate        NudgeRateSummary      `json:"nudge_rate"`
+	AIUsage          AIUsageSummary        `json:"ai_usage"`
+	ABComparison     any                   `json:"ab_comparison"`
+}
+
 type ClassStudent struct {
 	ID     string             `json:"id"`
 	Name   string             `json:"name"`
@@ -112,6 +140,14 @@ type Service struct {
 	pool       *pgxpool.Pool
 	tenantID   string
 	allTenants bool
+}
+
+type retentionCohortSample struct {
+	CohortDate time.Time
+	CohortSize int
+	Day1Users  int
+	Day7Users  int
+	Day14Users int
 }
 
 func New(pool *pgxpool.Pool, tenantID string) *Service {
@@ -426,6 +462,37 @@ func (s *Service) GetAIUsage() (AIUsageSummary, error) {
 	return summary, nil
 }
 
+func (s *Service) GetMetrics() (MetricsSummary, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	daily, err := s.loadDailyActiveUsers(ctx, 14)
+	if err != nil {
+		return MetricsSummary{}, err
+	}
+	retention, err := s.loadRetention(ctx)
+	if err != nil {
+		return MetricsSummary{}, err
+	}
+	nudgeRate, err := s.loadNudgeRate(ctx, 14)
+	if err != nil {
+		return MetricsSummary{}, err
+	}
+	aiUsage, err := s.GetAIUsage()
+	if err != nil {
+		return MetricsSummary{}, err
+	}
+
+	return MetricsSummary{
+		WindowDays:       14,
+		DailyActiveUsers: daily,
+		Retention:        retention,
+		NudgeRate:        nudgeRate,
+		AIUsage:          aiUsage,
+		ABComparison:     nil,
+	}, nil
+}
+
 func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, string, error) {
 	var (
 		parent    Parent
@@ -474,6 +541,165 @@ func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, stri
 	}
 
 	return parent, parent.ChildIDs[0], nil
+}
+
+func (s *Service) loadDailyActiveUsers(ctx context.Context, days int) ([]DailyActiveUsersPoint, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		WITH day_series AS (
+			SELECT generate_series(
+				DATE(NOW() AT TIME ZONE 'UTC') - ($2::int - 1),
+				DATE(NOW() AT TIME ZONE 'UTC'),
+				INTERVAL '1 day'
+			)::date AS activity_date
+		),
+		activity AS (
+			SELECT DATE(e.created_at AT TIME ZONE 'UTC') AS activity_date, e.user_id
+			FROM events e
+			WHERE %s
+				AND e.user_id IS NOT NULL
+				AND e.created_at >= DATE(NOW() AT TIME ZONE 'UTC') - ($2::int - 1)
+			UNION
+			SELECT DATE(m.created_at AT TIME ZONE 'UTC') AS activity_date, c.user_id
+			FROM messages m
+			JOIN conversations c ON c.id = m.conversation_id
+			WHERE %s
+				AND m.created_at >= DATE(NOW() AT TIME ZONE 'UTC') - ($2::int - 1)
+		)
+		SELECT ds.activity_date, COUNT(DISTINCT a.user_id)
+		FROM day_series ds
+		LEFT JOIN activity a ON a.activity_date = ds.activity_date
+		GROUP BY ds.activity_date
+		ORDER BY ds.activity_date ASC
+	`, s.tenantPredicate("e.tenant_id", 1), s.tenantPredicate("c.tenant_id", 1)), s.tenantArg(), days)
+	if err != nil {
+		return nil, fmt.Errorf("query daily active users: %w", err)
+	}
+	defer rows.Close()
+
+	points := make([]DailyActiveUsersPoint, 0, days)
+	for rows.Next() {
+		var day time.Time
+		var users int
+		if err := rows.Scan(&day, &users); err != nil {
+			return nil, fmt.Errorf("scan daily active users: %w", err)
+		}
+		points = append(points, DailyActiveUsersPoint{
+			Date:  day.UTC().Format("2006-01-02"),
+			Users: users,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate daily active users: %w", err)
+	}
+	return points, nil
+}
+
+func (s *Service) loadRetention(ctx context.Context) ([]RetentionPoint, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		WITH student_cohorts AS (
+			SELECT
+				u.id,
+				DATE(u.created_at AT TIME ZONE 'UTC') AS cohort_date
+			FROM users u
+			WHERE %s
+				AND u.role = 'student'
+				AND DATE(u.created_at AT TIME ZONE 'UTC') <= DATE(NOW() AT TIME ZONE 'UTC') - 1
+		),
+		activity AS (
+			SELECT DISTINCT e.user_id, DATE(e.created_at AT TIME ZONE 'UTC') AS activity_date
+			FROM events e
+			WHERE %s
+				AND e.user_id IS NOT NULL
+			UNION
+			SELECT DISTINCT c.user_id, DATE(m.created_at AT TIME ZONE 'UTC') AS activity_date
+			FROM messages m
+			JOIN conversations c ON c.id = m.conversation_id
+			WHERE %s
+		)
+		SELECT
+			sc.cohort_date,
+			COUNT(*) AS cohort_size,
+			COUNT(*) FILTER (WHERE EXISTS (
+				SELECT 1 FROM activity a
+				WHERE a.user_id = sc.id
+					AND a.activity_date = sc.cohort_date + 1
+			)) AS day_1_users,
+			COUNT(*) FILTER (WHERE EXISTS (
+				SELECT 1 FROM activity a
+				WHERE a.user_id = sc.id
+					AND a.activity_date = sc.cohort_date + 7
+			)) AS day_7_users,
+			COUNT(*) FILTER (WHERE EXISTS (
+				SELECT 1 FROM activity a
+				WHERE a.user_id = sc.id
+					AND a.activity_date = sc.cohort_date + 14
+			)) AS day_14_users
+		FROM student_cohorts sc
+		GROUP BY sc.cohort_date
+		ORDER BY sc.cohort_date DESC
+		LIMIT 8
+	`, s.tenantPredicate("u.tenant_id", 1), s.tenantPredicate("e.tenant_id", 1), s.tenantPredicate("c.tenant_id", 1)), s.tenantArg(), s.tenantArg(), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query retention: %w", err)
+	}
+	defer rows.Close()
+
+	var samples []retentionCohortSample
+	for rows.Next() {
+		var sample retentionCohortSample
+		if err := rows.Scan(&sample.CohortDate, &sample.CohortSize, &sample.Day1Users, &sample.Day7Users, &sample.Day14Users); err != nil {
+			return nil, fmt.Errorf("scan retention: %w", err)
+		}
+		samples = append(samples, sample)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate retention: %w", err)
+	}
+
+	slices.Reverse(samples)
+	return computeRetentionSeries(samples), nil
+}
+
+func (s *Service) loadNudgeRate(ctx context.Context, days int) (NudgeRateSummary, error) {
+	var nudgesSent int
+	var responses int
+
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		WITH nudges AS (
+			SELECT nl.id, nl.user_id, nl.sent_at
+			FROM nudge_log nl
+			WHERE %s
+				AND nl.sent_at >= NOW() - make_interval(days => $2::int)
+		)
+		SELECT
+			COUNT(*) AS nudges_sent,
+			COUNT(*) FILTER (WHERE EXISTS (
+				SELECT 1
+				FROM (
+					SELECT e.created_at
+					FROM events e
+					WHERE %s
+						AND e.user_id = nudges.user_id
+						AND e.created_at > nudges.sent_at
+						AND e.created_at <= nudges.sent_at + INTERVAL '24 hour'
+					UNION ALL
+					SELECT m.created_at
+					FROM messages m
+					JOIN conversations c ON c.id = m.conversation_id
+					WHERE %s
+						AND c.user_id = nudges.user_id
+						AND m.role = 'user'
+						AND m.created_at > nudges.sent_at
+						AND m.created_at <= nudges.sent_at + INTERVAL '24 hour'
+				) responses
+			)) AS responses_within_24h
+		FROM nudges
+	`, s.tenantPredicate("nl.tenant_id", 1), s.tenantPredicate("e.tenant_id", 1), s.tenantPredicate("c.tenant_id", 1)), s.tenantArg(), days, s.tenantArg(), s.tenantArg()).Scan(&nudgesSent, &responses)
+	if err != nil {
+		return NudgeRateSummary{}, fmt.Errorf("query nudge rate: %w", err)
+	}
+
+	return buildNudgeRateSummary(nudgesSent, responses), nil
 }
 
 func (s *Service) loadStudentByExternalID(ctx context.Context, studentID string) (Student, string, error) {
@@ -708,6 +934,35 @@ func formFromClassID(classID string) string {
 	default:
 		return ""
 	}
+}
+
+func computeRetentionSeries(samples []retentionCohortSample) []RetentionPoint {
+	points := make([]RetentionPoint, 0, len(samples))
+	for _, sample := range samples {
+		if sample.CohortSize <= 0 {
+			continue
+		}
+		denom := float64(sample.CohortSize)
+		points = append(points, RetentionPoint{
+			CohortDate: sample.CohortDate.UTC().Format("2006-01-02"),
+			CohortSize: sample.CohortSize,
+			Day1Rate:   float64(sample.Day1Users) / denom,
+			Day7Rate:   float64(sample.Day7Users) / denom,
+			Day14Rate:  float64(sample.Day14Users) / denom,
+		})
+	}
+	return points
+}
+
+func buildNudgeRateSummary(nudgesSent, responses int) NudgeRateSummary {
+	summary := NudgeRateSummary{
+		NudgesSent:             nudgesSent,
+		ResponsesWithin24Hours: responses,
+	}
+	if nudgesSent > 0 {
+		summary.ResponseRate = float64(responses) / float64(nudgesSent)
+	}
+	return summary
 }
 
 func buildParentEncouragement(childName string, streak StreakSummary, progress []ProgressItem, stats WeeklyStats) EncouragementSuggestion {

@@ -30,6 +30,7 @@ func TestSchedulerUsesAIPersonalizedNudgeWhenEnabled(t *testing.T) {
 		progress.NewMemoryTracker(),
 		progress.NewMemoryStreakTracker(),
 		progress.NewMemoryXPTracker(),
+		nil,
 		NewMemoryNudgeTracker(),
 		chat.NewGateway(),
 		router,
@@ -44,6 +45,23 @@ func TestSchedulerUsesAIPersonalizedNudgeWhenEnabled(t *testing.T) {
 	}
 	if err := scheduler.xp.Award("user-1", progress.XPSourceSession, 80, map[string]any{"topic_id": "linear-equations"}); err != nil {
 		t.Fatalf("Award() error = %v", err)
+	}
+	if err := scheduler.tracker.UpdateMastery("user-1", "kssm-form1", "linear-equations", 0.62); err != nil {
+		t.Fatalf("UpdateMastery() error = %v", err)
+	}
+	if err := scheduler.tracker.UpdateMastery("user-1", "kssm-form1", "functions", 0.22); err != nil {
+		t.Fatalf("UpdateMastery() error = %v", err)
+	}
+	scheduler.goals = NewMemoryGoalStore()
+	if _, err := scheduler.goals.AddGoal("user-1", GoalInput{
+		Summary:        "Reach 80% mastery in Linear Equations",
+		TopicID:        "linear-equations",
+		TopicName:      "Linear Equations",
+		SyllabusID:     "kssm-form1",
+		TargetMastery:  0.8,
+		CurrentMastery: 0.62,
+	}); err != nil {
+		t.Fatalf("AddGoal() error = %v", err)
 	}
 
 	now := time.Date(2026, 3, 9, 10, 0, 0, 0, time.UTC)
@@ -86,6 +104,12 @@ func TestSchedulerUsesAIPersonalizedNudgeWhenEnabled(t *testing.T) {
 	if !strings.Contains(mockAI.LastRequest.Messages[1].Content, "Total XP: 80") {
 		t.Fatalf("AI prompt = %q, want xp context", mockAI.LastRequest.Messages[1].Content)
 	}
+	if !strings.Contains(mockAI.LastRequest.Messages[1].Content, "Active goal: Reach 80% mastery in Linear Equations") {
+		t.Fatalf("AI prompt = %q, want active goal context", mockAI.LastRequest.Messages[1].Content)
+	}
+	if !strings.Contains(mockAI.LastRequest.Messages[1].Content, "Struggle area: functions") {
+		t.Fatalf("AI prompt = %q, want struggle area context", mockAI.LastRequest.Messages[1].Content)
+	}
 }
 
 func TestSchedulerFallsBackWhenAINudgeFails(t *testing.T) {
@@ -108,6 +132,7 @@ func TestSchedulerFallsBackWhenAINudgeFails(t *testing.T) {
 		progress.NewMemoryTracker(),
 		progress.NewMemoryStreakTracker(),
 		progress.NewMemoryXPTracker(),
+		nil,
 		NewMemoryNudgeTracker(),
 		chat.NewGateway(),
 		router,

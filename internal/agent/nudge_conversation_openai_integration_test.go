@@ -82,6 +82,7 @@ func TestOpenAILiveNudgeConversationDemo(t *testing.T) {
 		tracker,
 		streaks,
 		xp,
+		nil,
 		NewMemoryNudgeTracker(),
 		gateway,
 		router,

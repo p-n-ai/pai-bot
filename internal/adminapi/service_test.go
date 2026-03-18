@@ -152,3 +152,44 @@ func TestTenantPredicate(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeRetentionSeries(t *testing.T) {
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	series := computeRetentionSeries([]retentionCohortSample{
+		{
+			CohortDate: base,
+			CohortSize: 10,
+			Day1Users:  8,
+			Day7Users:  6,
+			Day14Users: 4,
+		},
+		{
+			CohortDate: base.Add(24 * time.Hour),
+			CohortSize: 5,
+			Day1Users:  3,
+			Day7Users:  2,
+			Day14Users: 1,
+		},
+	})
+
+	if len(series) != 2 {
+		t.Fatalf("retention series len = %d, want 2", len(series))
+	}
+	if series[0].Day1Rate != 0.8 || series[0].Day7Rate != 0.6 || series[0].Day14Rate != 0.4 {
+		t.Fatalf("series[0] = %#v, want 0.8/0.6/0.4", series[0])
+	}
+	if series[1].Day1Rate != 0.6 || series[1].Day7Rate != 0.4 || series[1].Day14Rate != 0.2 {
+		t.Fatalf("series[1] = %#v, want 0.6/0.4/0.2", series[1])
+	}
+}
+
+func TestBuildNudgeRateSummary(t *testing.T) {
+	got := buildNudgeRateSummary(40, 11)
+	if got.NudgesSent != 40 || got.ResponsesWithin24Hours != 11 {
+		t.Fatalf("nudge summary = %#v, want nudges=40 responses=11", got)
+	}
+	if got.ResponseRate != 0.275 {
+		t.Fatalf("response rate = %v, want 0.275", got.ResponseRate)
+	}
+}

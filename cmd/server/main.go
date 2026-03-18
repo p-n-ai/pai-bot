@@ -128,6 +128,7 @@ func main() {
 		tracker,
 		streakTracker,
 		xpTracker,
+		goalStore,
 		nudgeTracker,
 		gw,
 		router,
@@ -238,6 +239,7 @@ type adminDataSource interface {
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
 	GetParentSummary(parentID string) (adminapi.ParentSummary, error)
 	GetAIUsage() (adminapi.AIUsageSummary, error)
+	GetMetrics() (adminapi.MetricsSummary, error)
 }
 
 type adminDataSourceProvider interface {
@@ -403,6 +405,7 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(adminProvider)))
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
+	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
 
@@ -515,6 +518,22 @@ func handleAdminAIUsage(adminProvider adminDataSourceProvider) http.HandlerFunc 
 		}
 
 		payload, err := admin.GetAIUsage()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminMetrics(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetMetrics()
 		if err != nil {
 			writeAdminError(w, err)
 			return

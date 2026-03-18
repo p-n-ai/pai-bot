@@ -3,7 +3,8 @@ import { ACCESS_TOKEN_COOKIE } from "@/lib/auth-session";
 import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 import { normalizeAIUsage } from "@/lib/ai-usage.mjs";
-import type { AIUsageSummary, ClassProgress, ParentSummary } from "@/lib/api";
+import { normalizeMetrics } from "@/lib/metrics.mjs";
+import type { AIUsageSummary, ClassProgress, MetricsSummary, ParentSummary } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -29,6 +30,10 @@ export async function getServerClassProgress(classID: string): Promise<ClassProg
 
 export async function getServerAIUsage(): Promise<AIUsageSummary> {
   return normalizeAIUsage(await fetchServerJSON(`/api/admin/ai/usage`)) as AIUsageSummary;
+}
+
+export async function getServerMetrics(): Promise<MetricsSummary> {
+  return normalizeMetrics(await fetchServerJSON(`/api/admin/metrics`)) as MetricsSummary;
 }
 
 export async function getServerParentSummary(parentID: string): Promise<ParentSummary> {

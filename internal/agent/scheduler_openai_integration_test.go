@@ -58,6 +58,7 @@ func TestSchedulerOpenAILiveNudge(t *testing.T) {
 		progress.NewMemoryTracker(),
 		streaks,
 		xp,
+		nil,
 		NewMemoryNudgeTracker(),
 		chat.NewGateway(),
 		router,

@@ -12,6 +12,8 @@ test("isRouteActive matches exact and nested routes", () => {
 test("isRouteActive prefers the most specific dashboard route", () => {
   assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard"), false);
   assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
+  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), false);
+  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard/metrics"), true);
 });
 
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
@@ -38,6 +40,14 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
   });
 });
 
+test("getCurrentSection returns metrics metadata for dashboard metrics routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/metrics"), {
+    eyebrow: "Admin panel",
+    title: "Metrics",
+    description: "Review DAU, retention, nudge response, and token activity across the workspace.",
+  });
+});
+
 test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
   assert.deepEqual(getCurrentSection(), {
     eyebrow: "Admin panel",
@@ -59,6 +69,6 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/", "/dashboard", "/dashboard/ai-usage"],
+    ["/", "/dashboard", "/dashboard/metrics", "/dashboard/ai-usage"],
   );
 });

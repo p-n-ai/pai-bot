@@ -108,6 +108,7 @@ type Scheduler struct {
 	tracker  progress.Tracker
 	streaks  progress.StreakTracker
 	xp       progress.XPTracker
+	goals    GoalStore
 	nudges   NudgeTracker
 	gateway  *chat.Gateway
 	aiRouter *ai.Router
@@ -121,6 +122,7 @@ func NewScheduler(
 	tracker progress.Tracker,
 	streaks progress.StreakTracker,
 	xp progress.XPTracker,
+	goals GoalStore,
 	nudges NudgeTracker,
 	gateway *chat.Gateway,
 	aiRouter *ai.Router,
@@ -131,6 +133,7 @@ func NewScheduler(
 		tracker:  tracker,
 		streaks:  streaks,
 		xp:       xp,
+		goals:    goals,
 		nudges:   nudges,
 		gateway:  gateway,
 		aiRouter: aiRouter,
@@ -256,6 +259,22 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 		}
 	}
 
+	activeGoal := ""
+	if s.goals != nil {
+		goals, err := s.goals.ListActiveGoals(userID)
+		if err == nil && len(goals) > 0 && goals[0] != nil {
+			activeGoal = goals[0].Summary
+		}
+	}
+
+	struggleArea := ""
+	if s.tracker != nil {
+		allProgress, err := s.tracker.GetAllProgress(userID)
+		if err == nil {
+			struggleArea = weakestTopicID(allProgress)
+		}
+	}
+
 	overdueHours := int(now.Sub(item.NextReviewAt).Round(time.Hour).Hours())
 	if overdueHours < 0 {
 		overdueHours = 0
@@ -278,13 +297,15 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 			{
 				Role: "user",
 				Content: fmt.Sprintf(
-					"Write one personalized nudge message for this student.\nPreferred language: %s\nTopic ID: %s\nMastery score: %d%%\nHours overdue: %d\nCurrent streak: %d days\nTotal XP: %d\nAudience: secondary school student in Malaysia learning math via chat.",
+					"Write one personalized nudge message for this student.\nPreferred language: %s\nTopic ID: %s\nMastery score: %d%%\nHours overdue: %d\nCurrent streak: %d days\nTotal XP: %d\nActive goal: %s\nStruggle area: %s\nAudience: secondary school student in Malaysia learning math via chat.",
 					locale,
 					item.TopicID,
 					int(item.MasteryScore*100),
 					overdueHours,
 					streakDays,
 					totalXP,
+					emptyIfBlank(activeGoal, "none"),
+					emptyIfBlank(struggleArea, "none"),
 				),
 			},
 		},
@@ -380,4 +401,25 @@ func buildDefaultNudgeMessage(item progress.ProgressItem, now time.Time, locale 
 		"%s\n\n%s: %s\n%s: %d%%\n\n%s",
 		urgency, topicLabel, item.TopicID, masteryLabel, pct, cta,
 	)
+}
+
+func weakestTopicID(items []progress.ProgressItem) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	weakest := items[0]
+	for _, item := range items[1:] {
+		if item.MasteryScore < weakest.MasteryScore {
+			weakest = item
+		}
+	}
+	return weakest.TopicID
+}
+
+func emptyIfBlank(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

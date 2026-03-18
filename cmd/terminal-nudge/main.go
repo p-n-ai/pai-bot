@@ -91,6 +91,7 @@ func main() {
 		state.Tracker,
 		nil,
 		nil,
+		nil,
 		agent.NewPostgresNudgeTracker(state.DB.Pool, state.TenantID),
 		gateway,
 		router,
