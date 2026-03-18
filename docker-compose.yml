@@ -36,12 +36,15 @@ services:
     volumes:
       - nats-data:/data
 
-  migrate:
-    image: migrate/migrate:v4.18.3
+  goose:
+    image: golang:1.25
     profiles:
       - tools
+    working_dir: /app
     volumes:
-      - ./migrations:/migrations:ro
+      - ./:/app
+      - goose-gomod:/go/pkg/mod
+      - goose-gocache:/root/.cache/go-build
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,3 +114,5 @@ volumes:
   caddy_data:
   caddy_config:
   ollama-data:
+  goose-gomod:
+  goose-gocache:

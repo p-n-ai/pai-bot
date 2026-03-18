@@ -109,6 +109,14 @@ func (t *MemoryStreakTracker) GetStreak(userID string) (Streak, error) {
 	return *s, nil
 }
 
+// ResetAll removes all streak data for a user.
+func (t *MemoryStreakTracker) ResetAll(userID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.streaks, userID)
+	return nil
+}
+
 // truncateToDate truncates a time to the start of the day in UTC.
 func truncateToDate(t time.Time) time.Time {
 	y, m, d := t.UTC().Date()

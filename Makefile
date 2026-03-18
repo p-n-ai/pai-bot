@@ -1,7 +1,9 @@
-.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate migration migrate-down migrate-version migrate-force seed seed-docker build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
+.PHONY: setup dev chat-terminal nudge-terminal test test-integration test-cover lint test-all migrate migration migrate-down migrate-status migrate-version migration-create seed seed-docker build docker start stop logs analytics analytics-xlsx analytics-example ollama-pull
 
-MIGRATE_DSN ?= postgres://pai:pai@postgres:5432/pai?sslmode=disable
-MIGRATE_RUN = docker compose --profile tools run --rm migrate -path /migrations -database "$(MIGRATE_DSN)"
+GOOSE_DRIVER ?= postgres
+GOOSE_DSN ?= postgres://pai:pai@postgres:5432/pai?sslmode=disable
+GOOSE_RUN = docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
+GOOSE_CMD = $(GOOSE_RUN) -dir /app/migrations $(GOOSE_DRIVER) "$(GOOSE_DSN)"
 
 # First-time setup
 setup:
@@ -40,23 +42,26 @@ test-cover:
 
 # Database
 migrate:
-	@$(MIGRATE_RUN) up
+	@$(GOOSE_CMD) up -allow-missing
 
 migration: migrate
 
 migrate-down:
-	@$(MIGRATE_RUN) down 1
+	@$(GOOSE_CMD) down
+
+migrate-status:
+	@$(GOOSE_CMD) status
 
 migrate-version:
-	@$(MIGRATE_RUN) version
+	@$(GOOSE_CMD) version
 
-ifndef VERSION
-MIGRATE_FORCE_GUARD = $(error VERSION is required, e.g. make migrate-force VERSION=2)
+ifndef NAME
+MIGRATION_CREATE_GUARD = $(error NAME is required, e.g. make migration-create NAME=add_parent_portal)
 endif
 
-migrate-force:
-	$(MIGRATE_FORCE_GUARD)
-	@$(MIGRATE_RUN) force $(VERSION)
+migration-create:
+	$(MIGRATION_CREATE_GUARD)
+	@$(GOOSE_RUN) -dir /app/migrations create $(NAME) sql
 
 seed:
 	go run ./cmd/seed

@@ -90,6 +90,7 @@ func main() {
 	streakTracker := progress.NewMemoryStreakTracker()
 	xpTracker := progress.NewMemoryXPTracker()
 	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
+	challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -101,6 +102,8 @@ func main() {
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
 		Goals:                goalStore,
+		Challenges:           challengeStore,
+		DevMode:              cfg.Features.DevMode,
 	})
 
 	// Create Telegram channel + chat gateway.
@@ -109,6 +112,7 @@ func main() {
 		slog.Error("failed to create Telegram channel", "error", err)
 		os.Exit(1)
 	}
+	tg.SetDevMode(cfg.Features.DevMode)
 
 	gw := chat.NewGateway()
 	gw.Register("telegram", tg)

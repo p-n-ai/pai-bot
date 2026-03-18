@@ -151,10 +151,10 @@ VALUES
 ('10000000-0000-0000-0000-000000000012', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW())
 ON CONFLICT (tenant_id, provider, identifier_normalized) DO UPDATE
 SET password_hash = EXCLUDED.password_hash,
-    identifier = EXCLUDED.identifier,
-    identifier_normalized = EXCLUDED.identifier_normalized,
     user_id = EXCLUDED.user_id,
     tenant_id = EXCLUDED.tenant_id,
+    identifier = EXCLUDED.identifier,
+    identifier_normalized = EXCLUDED.identifier_normalized,
     email_verified_at = EXCLUDED.email_verified_at,
     last_login_at = EXCLUDED.last_login_at,
     updated_at = NOW()
@@ -182,6 +182,52 @@ SET password_hash = EXCLUDED.password_hash,
     last_login_at = EXCLUDED.last_login_at,
     updated_at = NOW()
 `, platformAdminEmail, platformAdminEmailNormalized, passwordHash),
+		fmt.Sprintf(`
+WITH existing_identity AS (
+    SELECT id
+    FROM auth_identities
+    WHERE user_id = '10000000-0000-0000-0000-000000000007'
+       OR identifier_normalized = '%[2]s'
+    ORDER BY created_at ASC
+    LIMIT 1
+),
+updated_identity AS (
+    UPDATE auth_identities
+    SET user_id = '10000000-0000-0000-0000-000000000007',
+        tenant_id = NULL,
+        provider = 'password',
+        identifier = '%[1]s',
+        identifier_normalized = '%[2]s',
+        password_hash = '%[3]s',
+        email_verified_at = NOW(),
+        last_login_at = NOW(),
+        updated_at = NOW()
+    WHERE id IN (SELECT id FROM existing_identity)
+    RETURNING id
+)
+INSERT INTO auth_identities (
+    id, user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+)
+SELECT
+    '60000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000007',
+    NULL,
+    'password',
+    '%[1]s',
+    '%[2]s',
+    '%[3]s',
+    NOW(),
+    NOW(),
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM updated_identity)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM auth_identities
+      WHERE user_id = '10000000-0000-0000-0000-000000000007'
+         OR identifier_normalized = '%[2]s'
+  )
+`, platformAdminEmail, auth.NormalizeIdentifier(platformAdminEmail), passwordHash),
 		fmt.Sprintf(`
 INSERT INTO conversations (id, user_id, tenant_id, topic_id, state, metadata, started_at)
 VALUES

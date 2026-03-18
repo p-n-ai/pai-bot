@@ -1,36 +1,93 @@
 # AGENTS.md — P&AI Bot
 
-This file is the working guide for **any coding agent** operating in this repository.
+This file is the **single source of truth** for any coding agent (Claude Code, Cursor, Copilot, etc.) working on this repository. `CLAUDE.md` symlinks here.
 
-## Project Status (Current Reality)
+## Project Overview
 
-**Day 0 foundation is complete** (as of March 2026). The repository has working application code:
+P&AI Bot is a **proactive AI learning agent** that teaches students through chat (Telegram, WhatsApp, Web). It doesn't wait for students to ask — it initiates study sessions, tracks mastery via spaced repetition, and motivates through battles, streaks, leaderboards, and goals.
 
-- `cmd/server/main.go` — HTTP server with `/healthz` and `/readyz` endpoints
-- `internal/platform/config/` — Configuration from `LEARN_` env vars
-- `internal/platform/database/` — PostgreSQL client (pgxpool)
-- `internal/platform/cache/` — Dragonfly/Redis client (go-redis)
-- `internal/ai/` — AI Gateway with 6 providers (OpenAI, Anthropic, Google, Ollama, OpenRouter + DeepSeek via OpenAI), router with fallback chain, budget tracker
-- `migrations/001_initial.{up,down}.sql` — Database schema (tenants, users, conversations, messages, learning_progress, events)
-- `deploy/docker/Dockerfile` — Multi-stage Docker build
-- `docker-compose.yml` — PostgreSQL, Dragonfly, NATS, Ollama, app
-- `.github/workflows/ci.yml` — CI pipeline
-- `.env.example`, `Makefile` — Developer tooling
+Built by the [Pandai](https://pandai.org) team. Licensed under Apache 2.0.
 
-All unit tests pass (`make test-all`). See `docs/development-timeline.md` for current progress.
+**Core philosophy:** Content is commodity. Motivation is the moat.
 
-## Mission and Product Context
+## Status
 
-P&AI Bot is a proactive AI learning companion focused on motivation-first learning:
+**Day 0 foundation is complete.** The repository has a working Go backend with health endpoints, configuration system, AI gateway (6 providers), database/cache clients, Docker infrastructure, CI pipeline, and full test suite.
 
-- Proactive study nudges (not only reactive Q&A)
-- Mastery tracking + spaced repetition
-- Gamified engagement (streaks, XP, challenges, leaderboards)
-- Chat-first UX (Telegram first, then WhatsApp/Web)
+Development follows a 30-day timeline. See [docs/development-timeline.md](docs/development-timeline.md) for current progress.
 
-Initial curriculum target:
+The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specifically Algebra topics first.
 
-- Malaysia KSSM Matematik (Form 1, Form 2, Form 3), Algebra-first
+## Tech Stack
+
+### Backend (Go)
+- **Language:** Go 1.22+ (stdlib `net/http` for routing — no framework)
+- **Database:** PostgreSQL 17 via `pgx/v5`
+- **Cache:** Dragonfly (Redis-compatible) via `go-redis/v9`
+- **Message Queue:** NATS + JetStream via `nats-io/nats.go`
+- **WebSocket:** `nhooyr.io/websocket`
+- **Auth:** JWT via `golang-jwt/jwt/v5` (short-lived access + refresh tokens)
+- **Logging:** `log/slog` (structured JSON)
+- **Telemetry:** OpenTelemetry SDK
+- **Migrations:** `golang-migrate/migrate/v4`
+- **Linting:** `golangci-lint`
+- **Testing:** stdlib `testing` + `testcontainers-go` for integration tests
+
+### Frontend (Admin Panel)
+- **Framework:** Next.js 14 (App Router) + TypeScript
+- **Admin framework:** Refine v4+
+- **UI:** shadcn/ui + Tailwind CSS 3
+- **Charts:** Recharts or Tremor
+- **State:** TanStack Query v5
+- **Validation:** Zod
+
+### Infrastructure
+- Docker Compose (dev/single-server) and Helm (Kubernetes)
+- Terraform for cloud IaC
+- GitHub Actions CI → ArgoCD CD
+- Grafana stack (Prometheus, Loki, Tempo) for observability
+
+## Architecture
+
+**Modular monolith** — single Go binary with clean domain boundaries. Can split into microservices later if needed.
+
+Key domains:
+- `internal/ai/` — AI Gateway: provider-agnostic interface, model routing, token budget tracking
+- `internal/agent/` — Agent Engine: conversation state machine, proactive scheduler, pedagogical prompts (dual-loop problem solving, adaptive explanation depth, curriculum citations), quiz engine (static + dynamic question generation with exam-style mimicry), peer challenges
+- `internal/chat/` — Chat Gateway: unified interface for Telegram, WhatsApp, WebSocket
+- `internal/curriculum/` — Curriculum Service: loads YAML from OSS repository
+- `internal/progress/` — Progress Tracker: mastery scoring, SM-2 spaced repetition, streaks/XP
+- `internal/auth/` — Authentication: JWT, RBAC middleware
+- `internal/tenant/` — Multi-tenancy: tenant isolation
+- `internal/platform/` — Shared infra: config, database, cache, messaging, storage, telemetry, health
+- `admin/` — Next.js admin panel (teacher dashboard, parent view, school admin)
+
+## Project Structure
+
+```
+pai-bot/
+├── cmd/server/main.go          # Application entrypoint
+├── internal/
+│   ├── ai/                     # AI Gateway (providers, routing, budget)
+│   ├── agent/                  # Agent Engine (state machine, scheduler, prompts, quiz, challenges)
+│   ├── chat/                   # Chat Gateway (telegram, whatsapp, websocket)
+│   ├── curriculum/             # Curriculum loader (YAML from OSS)
+│   ├── progress/               # Mastery scoring, SM-2, streaks/XP
+│   ├── auth/                   # JWT + RBAC middleware
+│   ├── tenant/                 # Multi-tenancy isolation
+│   └── platform/               # Shared: config, database, cache, messaging, storage, telemetry, health
+├── admin/                      # Next.js admin panel
+├── migrations/                 # SQL migrations (golang-migrate)
+├── deploy/
+│   ├── docker/                 # Dockerfiles
+│   └── helm/pai/               # Helm chart
+├── terraform/                  # Infrastructure as Code
+├── scripts/                    # setup.sh, deploy.sh, analytics.sh
+├── docker-compose.yml          # Local dev
+├── docker-compose.prod.yml     # Production single-server
+├── Makefile                    # Dev shortcuts
+└── .env.example                # All config documented
+```
 
 ## Source of Truth
 
@@ -50,12 +107,12 @@ If you change one doc and it affects others, update all impacted docs in the sam
 
 **Before starting ANY daily implementation task, you MUST read and cross-reference BOTH:**
 
-1. **`docs/implementation-guide.md`** — Contains exact code templates, function signatures, test specifications, file-by-file details, and exit criteria for each day
-2. **`docs/development-timeline.md`** — Contains task IDs, dependencies between tasks, engineer allocation, and execution order
+1. **[docs/implementation-guide.md](docs/implementation-guide.md)** — Code templates, function signatures, test specifications, file-by-file implementation details, and exit criteria for each day
+2. **[docs/development-timeline.md](docs/development-timeline.md)** — Task assignments, dependencies between tasks, engineer allocation, and day-by-day execution order
 
-**Do NOT implement from one document alone.** The implementation guide defines **what** and **how**; the timeline defines **when** and **in what order**. Skipping either will lead to missed dependencies or divergent implementations.
+**Why both?** The implementation guide tells you **what** to build and **how** (exact code patterns, test cases, API contracts). The development timeline tells you **when** and **in what order** (task dependencies, parallelization, which tasks block others). Using only one will lead to missed dependencies or divergent implementations.
 
-**For each day's work:**
+**The workflow for each day:**
 1. Read the day's section in `docs/development-timeline.md` — identify task IDs, dependencies, and assignments
 2. Read the day's section in `docs/implementation-guide.md` — identify code templates, test specs, and exit criteria
 3. Follow TDD (Rule 5 below)
@@ -64,43 +121,24 @@ If you change one doc and it affects others, update all impacted docs in the sam
 ### 1) Be explicit about present vs planned state
 
 When writing or editing docs:
-
-- Clearly distinguish:
-  - **Current:** what exists in this repo now
-  - **Planned:** what is intended to be built
-- Do not describe planned files/modules as already implemented.
+- Clearly distinguish **Current** (exists in repo) vs **Planned** (intended to be built)
+- Do not describe planned files/modules as already implemented
 
 ### 2) Keep architecture consistent across docs
 
-Core planned architecture is a modular monolith with these planned domains:
-
-- `internal/ai`
-- `internal/agent`
-- `internal/chat`
-- `internal/curriculum`
-- `internal/progress`
-- `internal/auth`
-- `internal/tenant`
-- `internal/platform`
-- `admin/` (Next.js panel)
+Core architecture is a modular monolith with these domains: `internal/ai`, `internal/agent`, `internal/chat`, `internal/curriculum`, `internal/progress`, `internal/auth`, `internal/tenant`, `internal/platform`, `admin/`
 
 If one doc changes these boundaries, propagate the same model everywhere.
 
-### 3) Preserve key technical conventions (planned implementation)
+### 3) Preserve key technical conventions
 
 - Backend: Go 1.22+, stdlib `net/http`
-- DB: PostgreSQL
-- Cache: Dragonfly (Redis-compatible)
-- Messaging: NATS + JetStream
-- Auth: JWT (access + refresh)
-- Logging: `log/slog`
-- Telemetry: OpenTelemetry
+- DB: PostgreSQL, Cache: Dragonfly, Messaging: NATS + JetStream
+- Auth: JWT (access + refresh), Logging: `log/slog`, Telemetry: OpenTelemetry
 - Migrations: `golang-migrate`
 - Admin: Next.js + TypeScript + Refine + shadcn/ui + Tailwind
 
 ### 4) Maintain security and tenancy assumptions
-
-Keep these constraints intact in documentation and future code scaffolding:
 
 - Multi-tenant design (`tenant_id` isolation)
 - Role-based access (`student`, `teacher`, `parent`, `admin`, `platform_admin`)
@@ -109,6 +147,10 @@ Keep these constraints intact in documentation and future code scaffolding:
 - Budget-aware AI routing with graceful fallback
 
 ### 5) Test-first development (TDD) — mandatory
+
+**MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
+
+**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` to mark the task status as ✅. Never consider a task done until the timeline is updated.**
 
 **Every implementation task must follow this cycle. No exceptions.**
 
@@ -132,14 +174,28 @@ Keep these constraints intact in documentation and future code scaffolding:
 - Jest + React Testing Library for component tests
 - Test data provider integrations and auth flows
 
-**Bug fix workflow:**
-1. Write a test that reproduces the bug
-2. Confirm test fails (bug exists)
-3. Fix the bug
-4. Run `make test-all` — full suite green, no regressions
-5. Commit
+**When adding a new feature:**
+```
+1. Write _test.go with test cases       → defines the contract
+2. Run `make test` → confirm RED         → tests fail (not yet implemented)
+3. Write implementation .go              → make tests pass
+4. Run `make test` → confirm GREEN       → new tests pass
+5. Run `make test-all` → full suite      → ALL tests pass, no regressions
+6. If anything broke → fix it now, re-run `make test-all`
+7. Commit only when `make test-all` is fully green
+```
 
-### 6) Prefer incremental bootstrap when code work is requested
+**When fixing a bug:**
+```
+1. Write a test that reproduces the bug  → proves the bug exists
+2. Run `make test` → confirm RED         → test fails, bug confirmed
+3. Fix the bug
+4. Run `make test` → confirm GREEN       → bug is fixed
+5. Run `make test-all` → full suite      → ALL tests pass, no regressions
+6. Commit only when `make test-all` is fully green
+```
+
+### 6) Prefer incremental bootstrap
 
 If asked to start implementation, scaffold in this order unless user specifies otherwise:
 
@@ -153,10 +209,114 @@ If asked to start implementation, scaffold in this order unless user specifies o
 
 Keep commits/doc changes small and verifiable.
 
+## Key Conventions
+
+### Go Code
+- All config via environment variables with `LEARN_` prefix
+- Use Go stdlib `net/http` for routing (Go 1.22+ pattern-based routing)
+- Table-driven tests with `_test.go` files alongside every implementation file
+- Structured logging with `slog`
+- No external web framework — stdlib only
+- Domain code in `internal/` — nothing exported outside the module
+- Each AI provider implements the `Provider` interface (in `internal/ai/gateway.go`)
+- Each chat channel implements the `Channel` interface (in `internal/chat/`)
+- All external dependencies behind interfaces for testability
+
+### Database
+- All tables include `tenant_id` for multi-tenancy
+- UUID primary keys (`gen_random_uuid()`)
+- Timestamps as `TIMESTAMPTZ`
+- JSONB for flexible/config fields
+- Migration files: `NNN_description.up.sql` / `NNN_description.down.sql`
+- Parameterized queries only — never interpolate user input
+
+### Admin Panel (Next.js)
+- App Router (not Pages Router)
+- Refine for CRUD/data management
+- shadcn/ui components (copied into codebase, not imported as dependency)
+- Tailwind for styling
+- Zod for validation schemas
+
+### AI Gateway
+- Provider-agnostic: all AI calls go through the gateway interface
+- **6 providers:** OpenAI (+ DeepSeek via configurable base URL), Anthropic, Google Gemini, Ollama, OpenRouter
+- DeepSeek uses OpenAI-compatible API — same `provider_openai.go` with different base URL and API key
+- Google Gemini has its own provider file (`provider_google.go`) — different API format
+- Qwen, Kimi, and other models accessible via OpenRouter or self-hosted via Ollama
+- Task-based routing: teaching → best model (Claude Sonnet, GPT-4o, Gemini Pro), grading/question generation → cheapest (DeepSeek V3, GPT-4o-mini, Gemini Flash), nudges → any
+- Automatic fallback chain: paid providers → self-hosted Ollama
+- Token budget enforcement per tenant/student
+- Never cut off a student — degrade to free models when budget runs out
+
+### Pedagogical Prompt Patterns
+Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reasoning architecture, adapted for chat-based K-12 tutoring as prompt-level patterns (no extra infrastructure).
+- **Dual-loop problem solving:** Every math question follows Understand → Plan → Solve → Verify → Connect. Implemented as system prompt instructions in `internal/agent/prompts.go`
+- **Curriculum citations:** Every explanation must reference the curriculum source path (e.g., "KSSM Form 1 > Algebra > Linear Equations"). The prompt builder injects `{syllabus} > {subject} > {topic}` into the system prompt
+- **Adaptive explanation depth:** System prompt adjusts based on mastery level — beginner (<0.3): simple language, more examples; developing (0.3–0.6): standard with gradual notation; proficient (>0.6): concise, edge cases, cross-topic connections
+- **Dynamic question generation:** When assessments.yaml has <5 questions for a topic, quiz engine generates additional questions from teaching notes via `CompleteJSON` (cheap model)
+- **Exam-style mimicry:** AI-generated questions use 2–3 real UASA/SPM exemplar questions as style references to match real exam format and difficulty
+
+### Security
+- JWT with 15-min access tokens + 7-day refresh tokens
+- RBAC roles: student, teacher, parent, admin, platform_admin
+- Row-level security via tenant_id
+- No raw user input in AI system prompts — use structured templates
+- Rate limiting per user (Dragonfly) and per tenant (ingress)
+- Never store API keys in code or env files in production — use secrets management
+
+## Common Commands
+
+```bash
+make setup          # First-time setup
+make dev            # Start Go server with hot reload
+make test           # Run Go unit tests
+make test-integration  # Integration tests (testcontainers)
+make lint           # golangci-lint
+make test-all       # All tests + lint
+make migrate        # Run database migrations
+make build          # Build Go binary + admin static
+make docker         # Build Docker image
+make start          # docker compose up -d
+make stop           # docker compose down
+make logs           # Tail logs
+make analytics      # Quick metrics
+make ollama-pull    # Download free AI model
+```
+
+## Environment Variables
+
+All prefixed with `LEARN_`. Key ones:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LEARN_TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token |
+| `LEARN_DATABASE_URL` | No | PostgreSQL connection string |
+| `LEARN_CACHE_URL` | No | Dragonfly/Redis connection |
+| `LEARN_NATS_URL` | No | NATS server URL |
+| `LEARN_AI_OPENAI_API_KEY` | No* | OpenAI API key |
+| `LEARN_AI_ANTHROPIC_API_KEY` | No* | Anthropic API key |
+| `LEARN_AI_DEEPSEEK_API_KEY` | No* | DeepSeek API key (OpenAI-compatible) |
+| `LEARN_AI_GOOGLE_API_KEY` | No* | Google Gemini API key |
+| `LEARN_AI_OPENROUTER_API_KEY` | No* | OpenRouter API key (access to 100+ models) |
+| `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
+| `LEARN_AUTH_JWT_SECRET` | No | JWT signing secret |
+| `LEARN_TENANT_MODE` | No | `single` or `multi` |
+
+*At least one AI provider must be configured.
+
+## Key Algorithms
+
+- **SM-2 (SuperMemo 2):** Spaced repetition scheduling in `internal/progress/spaced_rep.go`
+- **Mastery Scoring:** Weighted accuracy/consistency/recency, threshold 0.75 for mastery
+- **Token Budget:** Real-time tracking in Dragonfly, periodic PostgreSQL sync
+- **Model Routing:** Cost-aware with circuit breaker, automatic fallback chain
+- **Dual-Loop Problem Solving:** Structured prompt pattern (Understand → Plan → Solve → Verify → Connect) in `internal/agent/prompts.go`
+- **Adaptive Explanation Depth:** Mastery-based prompt adjustment (beginner/developing/proficient) in `internal/agent/prompts.go`
+- **Dynamic Question Generation:** AI generates quiz questions from teaching notes with exam-style mimicry in `internal/agent/quiz.go`
+
 ## Documentation Quality Checklist
 
 Before finishing any documentation change, verify:
-
 - The file/dir map matches real repo contents
 - Planned items are labeled as planned
 - No contradictory claims between README and docs
@@ -165,13 +325,19 @@ Before finishing any documentation change, verify:
 
 ## Non-Goals (for now)
 
-Avoid pretending unbuilt features are validated:
-
 - Only claim endpoints/features are operational if they exist in the codebase and tests pass
-- Do not claim future-day features are present (e.g., Day 3 features during Day 1 work)
+- Do not claim future-day features are present
 - Verify claims against actual code, not just documentation
 
 ## Related Repositories
 
-- `p-n-ai/oss` — curriculum content source (planned integration)
-- `p-n-ai/oss-bot` — curriculum contribution tooling and automation
+- [p-n-ai/oss](https://github.com/p-n-ai/oss) — Open School Syllabus: structured curriculum YAML consumed as Git submodule
+- [p-n-ai/oss-bot](https://github.com/p-n-ai/oss-bot) — GitHub bot + CLI for contributing to OSS
+
+## Documentation
+
+- [README.md](README.md) — Project overview, quick start, features, deployment
+- [docs/technical-plan.md](docs/technical-plan.md) — Detailed architecture, schema, infra, security
+- [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
+- [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
+- [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day

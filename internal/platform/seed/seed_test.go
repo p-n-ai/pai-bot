@@ -30,8 +30,8 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if tx.rolledBack {
 		t.Fatal("did not expect rollback on success")
 	}
-	if len(tx.execSQL) != 17 {
-		t.Fatalf("expected 17 exec statements, got %d", len(tx.execSQL))
+	if len(tx.execSQL) != 18 {
+		t.Fatalf("expected 18 exec statements, got %d", len(tx.execSQL))
 	}
 	if len(tx.queryRowSQL) != 2 {
 		t.Fatalf("expected 2 tenant upsert queries, got %d", len(tx.queryRowSQL))
@@ -71,6 +71,18 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	}
 	if !strings.Contains(tx.execSQL[2], "'platform-admin@example.com', 'platform-admin@example.com'") {
 		t.Fatalf("platform auth identity seed SQL = %q, want platform admin identifier and normalized identifier to match", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[1], "ON CONFLICT (tenant_id, provider, identifier_normalized)") {
+		t.Fatalf("auth identity seed SQL = %q, want tenant-scoped upsert strategy", tx.execSQL[1])
+	}
+	if !strings.Contains(tx.execSQL[3], "platform-admin@example.com") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want platform-admin@example.com", tx.execSQL[3])
+	}
+	if !strings.Contains(tx.execSQL[3], "'60000000-0000-0000-0000-000000000005'") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want stable auth identity id", tx.execSQL[3])
+	}
+	if !strings.Contains(tx.execSQL[3], "tenant_id = NULL") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want NULL tenant_id update path", tx.execSQL[3])
 	}
 	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "INSERT INTO events") {
 		t.Fatalf("last statement = %q, want INSERT INTO events", tx.execSQL[len(tx.execSQL)-1])

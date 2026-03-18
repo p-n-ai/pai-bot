@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -244,8 +245,8 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 
 	waitForAuthPostgresReady(t, ctx, pool)
-	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "001_initial.up.sql"))
-	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "004_auth_tables.up.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100000_initial.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "005_auth_identity_tenant_consistency.up.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "006_global_platform_admins.up.sql"))
 
@@ -274,9 +275,35 @@ func applyAuthMigrationFile(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	if err != nil {
 		t.Fatalf("read migration %s: %v", path, err)
 	}
-	if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
+	upSQL, err := authGooseUpSQL(string(sqlBytes))
+	if err != nil {
+		t.Fatalf("parse migration %s: %v", path, err)
+	}
+	if _, err := pool.Exec(ctx, upSQL); err != nil {
 		t.Fatalf("apply migration %s: %v", path, err)
 	}
+}
+
+func authGooseUpSQL(content string) (string, error) {
+	upMarker := "-- +goose Up"
+	downMarker := "-- +goose Down"
+
+	upIdx := strings.Index(content, upMarker)
+	if upIdx == -1 {
+		return strings.TrimSpace(content), nil
+	}
+
+	upBody := content[upIdx+len(upMarker):]
+	if downIdx := strings.Index(upBody, downMarker); downIdx >= 0 {
+		upBody = upBody[:downIdx]
+	}
+
+	upBody = strings.TrimSpace(upBody)
+	if upBody == "" {
+		return "", fmt.Errorf("missing goose Up section")
+	}
+
+	return upBody, nil
 }
 
 func loadDefaultTenantID(t *testing.T, ctx context.Context, pool *pgxpool.Pool) string {

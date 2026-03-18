@@ -326,10 +326,19 @@ func (s *PostgresStore) SetUserPreferredQuizIntensity(externalID, intensity stri
 	return nil
 }
 
-// NewPostgresStore creates a PostgreSQL-backed conversation store for the default tenant.
+// NewPostgresStore creates a PostgreSQL-backed conversation store for the default channel.
 func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, error) {
+	return NewPostgresStoreForChannel(ctx, pool, defaultChannel)
+}
+
+// NewPostgresStoreForChannel creates a PostgreSQL-backed conversation store for a specific channel.
+func NewPostgresStoreForChannel(ctx context.Context, pool *pgxpool.Pool, channel string) (*PostgresStore, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("pool is nil")
+	}
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = defaultChannel
 	}
 
 	var tenantID string
@@ -343,7 +352,7 @@ func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, 
 	return &PostgresStore{
 		pool:     pool,
 		tenantID: tenantID,
-		channel:  defaultChannel,
+		channel:  channel,
 	}, nil
 }
 
@@ -486,7 +495,11 @@ func (s *PostgresStore) GetActiveConversation(userID string) (*Conversation, boo
 		return nil, false
 	}
 
-	return conv, true
+	full, err := s.GetConversation(conv.ID)
+	if err != nil {
+		return nil, false
+	}
+	return full, true
 }
 
 func (s *PostgresStore) AddMessage(conversationID string, msg StoredMessage) (string, error) {
@@ -574,6 +587,27 @@ func (s *PostgresStore) UpdateConversationState(conversationID string, state str
 	)
 	if err != nil {
 		return fmt.Errorf("update conversation state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) UpdateConversationTopicID(conversationID, topicID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET topic_id = $2
+		 WHERE id = $1::uuid`,
+		conversationID,
+		nullIfEmpty(topicID),
+	)
+	if err != nil {
+		return fmt.Errorf("update conversation topic_id: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return fmt.Errorf("conversation not found: %s", conversationID)

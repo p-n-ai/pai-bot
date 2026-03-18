@@ -24,7 +24,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
+| `P-D0-5` | Create `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
 | `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
 | `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
 | `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
@@ -82,7 +82,7 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
+# 6. Apply database migrations (goose; version-tracked via goose_db_version)
 make migrate
 
 # 7. Verify the server runs and health check works
@@ -206,20 +206,20 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D6-1` | ✅ Progress tracking: lightweight AI call after each exchange to assess mastery_delta, update learning_progress | 🤖 |
 | `P-W2D6-2` | ✅ SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 |
 | `P-W2D6-3` | ✅ `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 |
-| `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
+| `P-W2D6-4` | ✅ Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 |
 | `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human |
 
 ### Day 7 — Quiz Engine
 
-**Implementation note:** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`. The remaining Day 7 quiz product work is still planned here.
+**Implementation note (March 16, 2026):** `P-W2D7-3` groundwork was pulled forward on Day 5 via `A-W1D5-AI-1`, and the shipped quiz runtime now covers natural-language/button entry, persisted quiz-state routing, deterministic OSS-backed grading, hint/repeat/continue/stop controls, and clean pause/resume behavior around side conversations or teaching detours. The remaining unshipped Day 7 slice is dynamic question generation plus explicit exam-mimicry prompting.
 
-**Current code note (March 11, 2026):** quiz start already works from natural language without `/quiz`. Current implementation now starts immediately on first use with a default mixed intensity instead of blocking on an intensity-selection step, remembers explicit per-user intensity preferences when they exist, reuses the existing progress/XP systems so correct quiz answers award quiz XP and quiz outcomes update topic mastery, and now pauses cleanly for side conversation or teaching detours instead of grading every off-topic message as a wrong answer.
+**Current code note (March 16, 2026):** quiz start already works from natural language without `/quiz`. Current implementation starts immediately on first use with a default mixed intensity instead of blocking on an intensity-selection step, remembers explicit per-user intensity preferences when they exist, reuses the existing progress/XP systems so correct quiz answers award quiz XP and quiz outcomes update topic mastery, and pauses cleanly for side conversation or teaching detours instead of grading every off-topic message as a wrong answer. Quiz content is still loaded from OSS `assessments.yaml`; fallback AI question generation is not yet wired into the live runtime.
 
 | Task ID | Task | Status | Owner |
 |---------|------|--------|-------|
-| `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | | 🤖 |
-| `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | | 🤖 |
-| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | | 🤖 |
+| `P-W2D7-1` | Natural-language / button-driven quiz entry: load questions from `assessments.yaml`, present sequentially, deterministic grading for OSS-backed answers, hints on wrong answer, summary at end. Do not require `/quiz` to start. | ✅ | 🤖 |
+| `P-W2D7-2` | Quiz state management: explicit conversation mode in persisted state, route each turn to chat vs quiz handler before tutor AI | ✅ | 🤖 |
+| `P-W2D7-3` | `CompleteJSON` fast-path in AI gateway: structured JSON responses for grading/assessment and dynamic question generation (use cheapest model) | ✅ | 🤖 |
 | `P-W2D7-4` | Exam-style question mimicry: include 2–3 real UASA/SPM exemplar questions per topic in assessments.yaml. AI prompt for dynamic generation says: "Generate a question in the same style, format, and difficulty as these examples: [exemplars]." Inspired by DeepTutor's Mimic Mode | | 🤖 |
 | `P-W2D7-5` | 🧑 Review all KSSM Algebra assessments for accuracy and pedagogical quality. **Source 2–3 real UASA/SPM exam questions per Algebra topic** as exemplars for the mimic-mode question generator | ✅ | 🧑 Human |
 
@@ -236,8 +236,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner |
 |---------|------|-------|
-| `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
-| `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
+| `P-W2D9-1` | ✅ Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
+| `P-W2D9-2` | ✅ `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
 | `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
 | `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
 
@@ -248,7 +248,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
 | `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
 
-**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%. Dynamic quiz generation and exam-style mimicry active. Adaptive explanation depth adjusting based on mastery level.
+**Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%, adaptive explanation depth adjusting based on mastery level.
+
+**Current code reality (March 16, 2026):** OSS-backed quiz runtime is live. Dynamic quiz generation and explicit exam-style mimicry are still planned follow-up work.
 
 ---
 
@@ -258,7 +260,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
+
+Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Shipped scope: challenge migration groundwork now tracked in timestamped goose files (`20260318102000_challenges`, `20260318102100_challenge_acceptance`, `20260318102200_challenge_matchmaking_question_count`), in-memory + Postgres challenge stores, `/challenge invite <topic>`, `/challenge <code>`, bare `/challenge` search/resume, `/challenge cancel`, `/challenge accept`, queue pairing into `pending_acceptance`, timeout-to-AI fallback, and hardening for search expiry, stale matched-ticket cleanup, one-live-challenge/search exclusivity across invite + queue flows, and idempotent same-user search reopening. AI fallback now also preserves the original stored search input, including question count. Terminal-chat smoke verification now passes after fixing persistent store channel alignment and Postgres invite-join locking. Attempt runtime, settlement, XP, and review remain pending.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -266,6 +270,21 @@ Migration note (2026-03-16): the repo now uses `golang-migrate` with version tra
 | `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 |
 | `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 |
 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human |
+
+Current note: `P-W3D11-3` is only partially complete. The shipped Day 11 slice is the challenge-creation and matchmaking baseline listed below; the simultaneous quiz runtime, results settlement, XP award, and post-challenge review parts of that planned task still belong to later slices.
+
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W3D11-INFRA-1` | Migration workflow moved from `golang-migrate` to `goose`: single-file timestamped SQL migrations, explicit CLI-driven migration step, `make migrate-status`/`make migration-create`, and removal of startup auto-migration with dirty-state auto-force logic. | ✅ | 🤖 |
+| `A-W3D11-CH-1` | Challenge groundwork slice: add `20260318102000_challenges` migration (`challenges`, `challenge_attempts`, `challenge_matchmaking_tickets`), introduce memory/Postgres challenge stores, and ship invite-code `/challenge invite <topic>` create + `/challenge <code>` join command flow with tests. | ✅ | 🤖 |
+| `A-W3D11-CH-2` | Thin human-matchmaking slice: make bare `/challenge` start or resume human matchmaking for a resolved topic, prompt for topic selection when resolution is ambiguous, support `/challenge cancel` to leave search, and pair compatible searchers. | ✅ | 🤖 |
+| `A-W3D11-CH-3` | Challenge hardening slice: enforce matchmaking expiry, expire stale matched tickets before reopening search, enforce one-live-challenge/search exclusivity across invite + queue flows, and make same-user `/challenge` reopen idempotent under store-level races. | ✅ | 🤖 |
+| `A-W3D11-CH-4` | Challenge AI-fallback slice: when a `searching` ticket times out without a human match, claim that ticket exactly once, create a ready `ai_fallback` challenge with `opponent_kind='ai'`, preserve the original stored search topic/syllabus/question_count, and keep invite + human acceptance flows distinct. | ✅ | 🤖 |
 
 ### Day 12 — Groups + Leaderboards
 

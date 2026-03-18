@@ -47,7 +47,7 @@ For the current quiz runtime design and the OpenClaw-inspired rationale behind i
 | **Connection Pooling** | PgBouncer (prod) / pgx built-in (dev) | — | Essential at scale. Multiplexes thousands of app connections into fewer PG connections. On AWS, use RDS Proxy during credits year; swap to PgBouncer on migration. |
 | **Cache** | Dragonfly | ≥1.0 | Drop-in Redis replacement that is multi-threaded and uses ~80% less memory at scale. Same Redis protocol, same client libraries. Used for: session state, rate limiting, leaderboards, spaced repetition scheduling queues. |
 | **Message Queue** | NATS + JetStream | ≥2.10 | Written in Go, single binary. Handles millions of messages/second. Used for: proactive nudge scheduling, background job processing (report generation, analytics events), event-driven communication between domain modules. Far lighter than Kafka, more capable than Redis pub/sub. |
-| **Migrations** | `golang-migrate` | v4 | SQL-based migrations. Each migration is a pair of `.up.sql` / `.down.sql` files in `migrations/`. Run via `make migrate`. |
+| **Migrations** | `goose` | v3 | SQL-based migrations. Each migration is a single timestamped `.sql` file with `-- +goose Up/Down` blocks in `migrations/`. Run via `make migrate`. |
 
 ### 2.3 AI Gateway
 
@@ -169,15 +169,15 @@ The system prompt adjusts explanation complexity based on the student's mastery 
 
 Mastery score is read from the `progress` table and injected into the system prompt alongside the student's progress context ("mastered X, working on Y, struggles with Z").
 
-#### 2.6.4 Dynamic Question Generation
+#### 2.6.4 Planned Dynamic Question Generation
 
-When the curriculum YAML has fewer than 5 assessment questions for a topic, the quiz engine generates additional questions dynamically using the AI gateway's `CompleteJSON` fast-path (cheapest model). The generation prompt includes:
+Current runtime uses OSS-backed assessment YAML only. Planned follow-up: when the curriculum YAML has fewer than 5 assessment questions for a topic, the quiz engine should generate additional questions dynamically using the AI gateway's `CompleteJSON` fast-path (cheapest model). The intended generation prompt includes:
 
 - The topic's teaching notes as source material
 - The difficulty level appropriate for the student's mastery
 - 2–3 real UASA/SPM exam exemplar questions (stored in `assessments.yaml`) as style references
 
-This "exam mimicry" approach ensures AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
+This planned "exam mimicry" approach should ensure AI-generated questions match the format, difficulty, and style of real Malaysian national exams, rather than producing generic math problems.
 
 ### 2.7 Algorithms
 
@@ -189,7 +189,7 @@ This "exam mimicry" approach ensures AI-generated questions match the format, di
 | **Model Routing** | Selects optimal AI provider per request | Cost-aware routing with circuit breaker pattern. Falls back through provider chain on failure. |
 | **Dual-Loop Problem Solving** | Structured step-by-step teaching for math questions | `internal/agent/prompts.go`. System prompt pattern: Understand → Plan → Solve → Verify → Connect. |
 | **Adaptive Explanation Depth** | Adjusts explanation complexity per student | `internal/agent/prompts.go`. Mastery-based prompt selection: beginner / developing / proficient. |
-| **Dynamic Question Generation** | Generates quiz questions when curriculum has insufficient assessments | `internal/agent/quiz.go`. AI generates questions from teaching notes with exam-style mimicry using UASA/SPM exemplars. |
+| **Dynamic Question Generation** | Planned: generate quiz questions when curriculum has insufficient assessments | Planned future extension of `internal/agent/quiz.go` using `CompleteJSON` plus UASA/SPM exemplars. |
 
 ---
 
@@ -265,9 +265,9 @@ pai-bot/
 │   ├── next.config.js
 │   ├── tailwind.config.ts
 │   └── tsconfig.json
-├── migrations/                      # SQL migration files (golang-migrate)
-│   ├── 001_init_schema.up.sql
-│   ├── 001_init_schema.down.sql
+├── migrations/                      # SQL migration files (goose)
+│   ├── 20260318100000_initial.sql
+│   ├── 20260318100100_streaks_xp.sql
 │   └── ...
 ├── deploy/
 │   ├── docker/
@@ -577,7 +577,7 @@ ArgoCD (running in K8s cluster)
 | jwt | JWT auth | `github.com/golang-jwt/jwt/v5` |
 | otel | OpenTelemetry | `go.opentelemetry.io/otel` |
 | slog | Structured logging | `log/slog` (stdlib) |
-| migrate | Database migrations | `github.com/golang-migrate/migrate/v4` |
+| goose | Database migrations | `github.com/pressly/goose/v3` |
 | testcontainers | Integration testing | `github.com/testcontainers/testcontainers-go` |
 | golangci-lint | Linting | `github.com/golangci/golangci-lint` |
 
