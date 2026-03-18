@@ -41,7 +41,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         accessToken: getStoredAccessToken(),
         user: snapshot.currentUser,
         cookieString: document.cookie,
-        writeCookie(value) {
+        writeCookie(value: string) {
           document.cookie = value;
         },
       });
