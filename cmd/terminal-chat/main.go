@@ -75,7 +75,7 @@ func main() {
 		challengeStore = agent.NewMemoryChallengeStore()
 	} else {
 		goalStore = agent.NewPostgresGoalStore(state.DB.Pool, state.TenantID)
-		challengeStore = agent.NewPostgresChallengeStore(state.DB.Pool, state.TenantID)
+		challengeStore = agent.NewPostgresChallengeStoreForChannel(state.DB.Pool, state.TenantID, "terminal")
 	}
 
 	engine := agent.NewEngine(agent.EngineConfig{

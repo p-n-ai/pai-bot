@@ -143,10 +143,18 @@ type PostgresChallengeStore struct {
 }
 
 func NewPostgresChallengeStore(pool *pgxpool.Pool, tenantID string) *PostgresChallengeStore {
+	return NewPostgresChallengeStoreForChannel(pool, tenantID, defaultChannel)
+}
+
+func NewPostgresChallengeStoreForChannel(pool *pgxpool.Pool, tenantID, channel string) *PostgresChallengeStore {
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = defaultChannel
+	}
 	return &PostgresChallengeStore{
 		pool:     pool,
 		tenantID: tenantID,
-		channel:  defaultChannel,
+		channel:  channel,
 	}
 }
 
@@ -298,6 +306,7 @@ func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx p
 		   LEFT JOIN users opponent ON opponent.id = c.opponent_user_id
 		  WHERE c.tenant_id = $1::uuid
 		    AND c.invite_code = $2
+		    AND c.state IN ('waiting', 'pending_acceptance', 'ready', 'active')
 		  FOR UPDATE`,
 		s.tenantID,
 		code,
@@ -353,7 +362,8 @@ func (s *PostgresChallengeStore) getChallenge(ctx context.Context, querier inter
 		   JOIN users creator ON creator.id = c.creator_user_id
 		   LEFT JOIN users opponent ON opponent.id = c.opponent_user_id
 		  WHERE c.tenant_id = $1::uuid
-		    AND c.invite_code = $2`,
+		    AND c.invite_code = $2
+		    AND c.state IN ('waiting', 'pending_acceptance', 'ready', 'active')`,
 		s.tenantID,
 		code,
 	).Scan(
