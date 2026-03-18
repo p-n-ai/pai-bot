@@ -13,10 +13,10 @@ import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/ap
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 
 function scoreTone(score: number) {
-  if (score >= 0.8) return "bg-emerald-500 text-white";
-  if (score >= 0.6) return "bg-lime-400 text-slate-950";
-  if (score >= 0.4) return "bg-amber-300 text-slate-950";
-  return "bg-rose-400 text-white";
+  if (score >= 0.8) return "border border-emerald-200 bg-emerald-100 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/18 dark:text-emerald-50";
+  if (score >= 0.6) return "border border-lime-200 bg-lime-100 text-lime-900 dark:border-lime-400/20 dark:bg-lime-400/18 dark:text-lime-50";
+  if (score >= 0.4) return "border border-amber-200 bg-amber-100 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/18 dark:text-amber-50";
+  return "border border-rose-200 bg-rose-100 text-rose-900 dark:border-rose-400/20 dark:bg-rose-400/18 dark:text-rose-50";
 }
 
 export default function DashboardPage() {
@@ -88,8 +88,8 @@ export default function DashboardPage() {
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-xl tracking-tight">Mastery heatmap</CardTitle>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Students by topic with direct navigation into detail views.</p>
+              <CardTitle className="text-xl tracking-tight text-slate-950 dark:text-slate-50">Mastery heatmap</CardTitle>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Students by topic with direct navigation into detail views.</p>
             </div>
             <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
               Back home
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                     <tbody>
                       {data.students.map((student) => (
                         <tr key={student.id}>
-                          <td className="rounded-l-2xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/80 dark:text-slate-100">
+                          <td className="rounded-l-2xl bg-slate-50/80 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/70 dark:text-slate-100">
                             <Link
                               href={`/students/${student.id}`}
                               className="inline-flex items-center gap-2 hover:text-sky-700 dark:hover:text-sky-300"
@@ -136,14 +136,14 @@ export default function DashboardPage() {
                           {data.topic_ids.map((topicId) => {
                             const score = student.topics[topicId] ?? 0;
                             return (
-                              <td key={`${student.id}-${topicId}`} className="bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
+                              <td key={`${student.id}-${topicId}`} className="bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                                 <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
                                   {Math.round(score * 100)}%
                                 </span>
                               </td>
                             );
                           })}
-                          <td className="rounded-r-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
+                          <td className="rounded-r-2xl bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                             <Button
                               size="sm"
                               className="gap-2"

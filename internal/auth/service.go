@@ -47,11 +47,13 @@ func TenantRequiredOptions(err error) ([]TenantOption, bool) {
 
 // UserSession contains the authenticated user payload returned by auth flows.
 type UserSession struct {
-	UserID   string `json:"user_id"`
-	TenantID string `json:"tenant_id"`
-	Role     Role   `json:"role"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
+	UserID     string `json:"user_id"`
+	TenantID   string `json:"tenant_id"`
+	TenantSlug string `json:"tenant_slug"`
+	TenantName string `json:"tenant_name"`
+	Role       Role   `json:"role"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
 }
 
 // TokenPair contains the access and refresh tokens returned after successful auth.

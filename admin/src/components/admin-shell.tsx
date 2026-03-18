@@ -343,6 +343,16 @@ function SessionControls({
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                 {hydrated ? currentUser?.role?.replaceAll("_", " ") || "not signed in" : "not signed in"}
               </p>
+              {hydrated && currentUser?.tenant_name ? (
+                <div className="pt-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                    Tenant
+                  </p>
+                  <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                    {currentUser.tenant_name}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="mt-4 border-t border-slate-200/80 pt-4 dark:border-white/10">

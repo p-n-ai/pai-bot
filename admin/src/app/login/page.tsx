@@ -55,6 +55,14 @@ function LoginPageContent() {
           email: email.trim(),
           password,
         });
+        const resolvedTenant = tenantChoices.find((tenant) => tenant.tenant_id === (tenantID || session.user.tenant_id));
+        if (!session.user.tenant_name && resolvedTenant) {
+          session.user = {
+            ...session.user,
+            tenant_name: resolvedTenant.tenant_name,
+            tenant_slug: resolvedTenant.tenant_slug,
+          };
+        }
         if (!hasAdminUIAccess(session.user)) {
           setError("This account does not have access to the admin UI.");
           return;
