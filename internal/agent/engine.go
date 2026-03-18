@@ -634,6 +634,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevBoost(msg, fields[1:])
+	case "/dev-summary", "/dev_summary":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevSummary(msg)
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
