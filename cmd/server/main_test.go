@@ -245,6 +245,57 @@ func TestAdminAIUsageEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminMetricsEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/metrics", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		WindowDays int `json:"window_days"`
+		DailyActiveUsers []struct {
+			Date  string `json:"date"`
+			Users int    `json:"users"`
+		} `json:"daily_active_users"`
+		Retention []struct {
+			CohortDate string  `json:"cohort_date"`
+			CohortSize int     `json:"cohort_size"`
+			Day1Rate   float64 `json:"day_1_rate"`
+			Day7Rate   float64 `json:"day_7_rate"`
+			Day14Rate  float64 `json:"day_14_rate"`
+		} `json:"retention"`
+		NudgeRate struct {
+			NudgesSent             int     `json:"nudges_sent"`
+			ResponsesWithin24Hours int     `json:"responses_within_24h"`
+			ResponseRate           float64 `json:"response_rate"`
+		} `json:"nudge_rate"`
+		ABComparison any `json:"ab_comparison"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.WindowDays != 14 {
+		t.Fatalf("window_days = %d, want 14", payload.WindowDays)
+	}
+	if len(payload.DailyActiveUsers) != 2 {
+		t.Fatalf("daily_active_users = %d, want 2", len(payload.DailyActiveUsers))
+	}
+	if len(payload.Retention) != 1 {
+		t.Fatalf("retention rows = %d, want 1", len(payload.Retention))
+	}
+	if payload.NudgeRate.NudgesSent != 14 || payload.NudgeRate.ResponsesWithin24Hours != 5 {
+		t.Fatalf("nudge rate = %#v, want nudges=14 responses=5", payload.NudgeRate)
+	}
+	if payload.ABComparison != nil {
+		t.Fatalf("ab_comparison = %#v, want nil", payload.ABComparison)
+	}
+}
+
 func TestAdminAPIOptionsPreflight(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/api/admin/students/stu_1", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -342,6 +393,18 @@ func TestParentEndpointRejectsTeacherRole(t *testing.T) {
 
 func TestAdminAIUsageEndpointRejectsStudentRole(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/usage", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAdminMetricsEndpointRejectsStudentRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/metrics", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueStudentToken(t))
 	rec := httptest.NewRecorder()
 
@@ -704,6 +767,33 @@ func (stubAdminAPI) GetAIUsage() (adminapi.AIUsageSummary, error) {
 		Providers: []adminapi.AIProviderUsage{
 			{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 168, OutputTokens: 126, TotalTokens: 294},
 			{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
+		},
+	}, nil
+}
+
+func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
+	return adminapi.MetricsSummary{
+		WindowDays: 14,
+		DailyActiveUsers: []adminapi.DailyActiveUsersPoint{
+			{Date: "2026-03-10", Users: 17},
+			{Date: "2026-03-11", Users: 19},
+		},
+		Retention: []adminapi.RetentionPoint{
+			{CohortDate: "2026-03-01", CohortSize: 10, Day1Rate: 0.8, Day7Rate: 0.6, Day14Rate: 0.4},
+		},
+		NudgeRate: adminapi.NudgeRateSummary{
+			NudgesSent:             14,
+			ResponsesWithin24Hours: 5,
+			ResponseRate:           5.0 / 14.0,
+		},
+		AIUsage: adminapi.AIUsageSummary{
+			TotalMessages:     6,
+			TotalInputTokens:  226,
+			TotalOutputTokens: 187,
+			Providers: []adminapi.AIProviderUsage{
+				{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 168, OutputTokens: 126, TotalTokens: 294},
+				{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
+			},
 		},
 	}, nil
 }

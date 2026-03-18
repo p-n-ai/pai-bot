@@ -12,6 +12,12 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
+    title: "Metrics",
+    href: "/dashboard/metrics",
+    description: "Review DAU, retention, nudge response, and token activity across the workspace.",
+    roles: ["teacher", "admin", "platform_admin"],
+  },
+  {
     title: "AI Usage",
     href: "/dashboard/ai-usage",
     description: "Review token volume by provider and model across the teacher workspace.",
@@ -85,6 +91,14 @@ export function getCurrentSection(pathname) {
       eyebrow: "Admin panel",
       title: "AI Usage",
       description: "Review token volume by provider and model across the teacher workspace.",
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/metrics")) {
+    return {
+      eyebrow: "Admin panel",
+      title: "Metrics",
+      description: "Review DAU, retention, nudge response, and token activity across the workspace.",
     };
   }
 

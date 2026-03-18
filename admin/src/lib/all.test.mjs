@@ -8,3 +8,4 @@ import "./ai-usage.test.mjs";
 import "./dates.test.mjs";
 import "./parent-summary.test.mjs";
 import "./topic-labels.test.mjs";
+import "./metrics.test.mjs";

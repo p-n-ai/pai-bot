@@ -306,11 +306,11 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 14 — Analytics Dashboard
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W3D14-1` | Analytics HTML page at `/admin/metrics`: DAU chart, retention cohort, A/B comparison, token costs, nudge rate | 🤖 |
-| `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, XP, leaderboard rank in nudge context | 🤖 |
-| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human |
+| Task ID | Task | Owner | Status |
+|---------|------|-------|--------|
+| `P-W3D14-1` | Metrics page at `/dashboard/metrics`: DAU, retention snapshots, AI usage/token activity, nudge response rate. A/B comparison remains deferred until experiment flags are persisted. | 🤖 | ✅ |
+| `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, and XP in nudge context. Leaderboard rank remains deferred until a stable rank source exists. | 🤖 | ✅ |
+| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human | |
 
 ### Day 15 — Week 3 Retro
 

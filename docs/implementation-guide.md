@@ -4661,7 +4661,7 @@ Follow the same TDD pattern for:
 
 - **Day 12:** Class groups (`groups` + `group_members` tables), `/join [code]`, `/create_group [name]`, `/leaderboard` showing top 10 by weekly mastery gain
 - **Day 13:** A/B test infrastructure (`user_flags` JSONB), post-challenge learning review, milestone celebrations
-- **Day 14:** Analytics HTML page at `/admin/metrics`, smart nudge personalization (streak, goal, struggle area in nudge context)
+- **Day 14:** Metrics page at `/dashboard/metrics` (DAU, retention snapshots, AI usage/token activity, nudge response rate; A/B comparison deferred until experiment flags are persisted), plus smart nudge personalization using streak, goal, struggle area, and XP context
 - **Day 15:** Week 3 retro
 
 **Week 3 Targets:**

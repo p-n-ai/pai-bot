@@ -1,4 +1,5 @@
 import { normalizeClassProgress } from "@/lib/class-progress.mjs";
+import { normalizeMetrics } from "@/lib/metrics.mjs";
 import {
   ACCESS_TOKEN_COOKIE,
   ACCESS_TOKEN_KEY,
@@ -91,6 +92,25 @@ export interface AIUsageSummary {
   total_input_tokens: number;
   total_output_tokens: number;
   providers: AIProviderUsage[];
+}
+
+export interface MetricsSummary {
+  window_days: number;
+  daily_active_users: { date: string; users: number }[];
+  retention: {
+    cohort_date: string;
+    cohort_size: number;
+    day_1_rate: number;
+    day_7_rate: number;
+    day_14_rate: number;
+  }[];
+  nudge_rate: {
+    nudges_sent: number;
+    responses_within_24h: number;
+    response_rate: number;
+  };
+  ai_usage: AIUsageSummary;
+  ab_comparison: unknown;
 }
 
 export interface NudgeResponse {
@@ -188,6 +208,10 @@ export async function getParentSummary(parentId: string): Promise<ParentSummary>
 
 export async function getAIUsage(): Promise<AIUsageSummary> {
   return fetchJSON(`/api/admin/ai/usage`);
+}
+
+export async function getMetrics(): Promise<MetricsSummary> {
+  return normalizeMetrics(await fetchJSON(`/api/admin/metrics`));
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {
