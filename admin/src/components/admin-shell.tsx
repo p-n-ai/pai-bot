@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound, Users } from "lucide-react";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
@@ -228,7 +228,7 @@ function SidebarContent({
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Focus</p>
         <div className="rounded-[24px] border border-slate-200/70 bg-white/85 p-4 dark:border-white/10 dark:bg-slate-950/45">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-300/15 dark:text-amber-100">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-300/15 dark:text-amber-100">
               <UserRound className="size-5" />
             </div>
             <div>
