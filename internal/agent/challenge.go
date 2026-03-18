@@ -274,18 +274,15 @@ func (s *MemoryChallengeStore) tryPairLocked(search *ChallengeSearch, questionCo
 	}
 
 	now := time.Now()
-	creatorID, opponentID := search.UserID, opponentSearch.UserID
-	if opponentSearch.CreatedAt.Before(search.CreatedAt) {
-		creatorID, opponentID = opponentSearch.UserID, search.UserID
-	}
+	creatorSearch, opponentSearchForChallenge := opponentSearch, search
 	challenge := &Challenge{
 		ID:             generateID(),
-		CreatorID:      creatorID,
-		OpponentID:     opponentID,
-		TopicID:        search.TopicID,
-		TopicName:      search.TopicName,
-		SyllabusID:     search.SyllabusID,
-		QuestionCount:  normalizeChallengeQuestionCount(questionCount),
+		CreatorID:      creatorSearch.UserID,
+		OpponentID:     opponentSearchForChallenge.UserID,
+		TopicID:        creatorSearch.TopicID,
+		TopicName:      creatorSearch.TopicName,
+		SyllabusID:     creatorSearch.SyllabusID,
+		QuestionCount:  normalizeChallengeQuestionCount(creatorSearch.QuestionCount),
 		State:          ChallengeStatePendingAcceptance,
 		MatchSource:    ChallengeMatchSourceQueue,
 		OpponentKind:   ChallengeOpponentKindHuman,

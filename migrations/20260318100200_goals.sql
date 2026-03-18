@@ -1,4 +1,5 @@
--- P&AI Bot — Goal tracking (Day 11)
+-- +goose Up
+-- P&AI Bot - Goal tracking (Day 11)
 
 CREATE TABLE goals (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -18,3 +19,6 @@ CREATE TABLE goals (
 
 CREATE INDEX idx_goals_user_status ON goals(user_id, status);
 CREATE INDEX idx_goals_tenant_status ON goals(tenant_id, status);
+
+-- +goose Down
+DROP TABLE IF EXISTS goals;

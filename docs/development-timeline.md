@@ -24,7 +24,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
+| `P-D0-5` | Create `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
 | `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
 | `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
 | `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
@@ -82,7 +82,7 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
+# 6. Apply database migrations (goose; version-tracked via goose_db_version)
 make migrate
 
 # 7. Verify the server runs and health check works
@@ -260,9 +260,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
-Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Shipped scope: `005_challenges` migration groundwork, in-memory + Postgres challenge stores, `/challenge invite <topic>`, `/challenge <code>`, bare `/challenge` search/resume, `/challenge cancel`, `/challenge accept`, queue pairing into `pending_acceptance`, timeout-to-AI fallback, and hardening for search expiry, stale matched-ticket cleanup, one-live-challenge/search exclusivity across invite + queue flows, and idempotent same-user search reopening. AI fallback now also preserves the original stored search input, including question count, via `007_challenge_matchmaking_question_count`. Terminal-chat smoke verification now passes after fixing persistent store channel alignment and Postgres invite-join locking. Attempt runtime, settlement, XP, and review remain pending.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Shipped scope: challenge migration groundwork now tracked in timestamped goose files (`20260318102000_challenges`, `20260318102100_challenge_acceptance`, `20260318102200_challenge_matchmaking_question_count`), in-memory + Postgres challenge stores, `/challenge invite <topic>`, `/challenge <code>`, bare `/challenge` search/resume, `/challenge cancel`, `/challenge accept`, queue pairing into `pending_acceptance`, timeout-to-AI fallback, and hardening for search expiry, stale matched-ticket cleanup, one-live-challenge/search exclusivity across invite + queue flows, and idempotent same-user search reopening. AI fallback now also preserves the original stored search input, including question count. Terminal-chat smoke verification now passes after fixing persistent store channel alignment and Postgres invite-join locking. Attempt runtime, settlement, XP, and review remain pending.
 
 | Task ID | Task | Owner |
 |---------|------|-------|
@@ -280,7 +280,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Additional ID | Task | Status | Owner |
 |---------------|------|--------|-------|
-| `A-W3D11-CH-1` | Challenge groundwork slice: add `005_challenges` migration (`challenges`, `challenge_attempts`, `challenge_matchmaking_tickets`), introduce memory/Postgres challenge stores, and ship invite-code `/challenge invite <topic>` create + `/challenge <code>` join command flow with tests. | ✅ | 🤖 |
+| `A-W3D11-INFRA-1` | Migration workflow moved from `golang-migrate` to `goose`: single-file timestamped SQL migrations, explicit CLI-driven migration step, `make migrate-status`/`make migration-create`, and removal of startup auto-migration with dirty-state auto-force logic. | ✅ | 🤖 |
+| `A-W3D11-CH-1` | Challenge groundwork slice: add `20260318102000_challenges` migration (`challenges`, `challenge_attempts`, `challenge_matchmaking_tickets`), introduce memory/Postgres challenge stores, and ship invite-code `/challenge invite <topic>` create + `/challenge <code>` join command flow with tests. | ✅ | 🤖 |
 | `A-W3D11-CH-2` | Thin human-matchmaking slice: make bare `/challenge` start or resume human matchmaking for a resolved topic, prompt for topic selection when resolution is ambiguous, support `/challenge cancel` to leave search, and pair compatible searchers. | ✅ | 🤖 |
 | `A-W3D11-CH-3` | Challenge hardening slice: enforce matchmaking expiry, expire stale matched tickets before reopening search, enforce one-live-challenge/search exclusivity across invite + queue flows, and make same-user `/challenge` reopen idempotent under store-level races. | ✅ | 🤖 |
 | `A-W3D11-CH-4` | Challenge AI-fallback slice: when a `searching` ticket times out without a human match, claim that ticket exactly once, create a ready `ai_fallback` challenge with `opponent_kind='ai'`, preserve the original stored search topic/syllabus/question_count, and keep invite + human acceptance flows distinct. | ✅ | 🤖 |

@@ -27,8 +27,8 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if tx.rolledBack {
 		t.Fatal("did not expect rollback on success")
 	}
-	if len(tx.execSQL) != 16 {
-		t.Fatalf("expected 16 exec statements, got %d", len(tx.execSQL))
+	if len(tx.execSQL) != 17 {
+		t.Fatalf("expected 17 exec statements, got %d", len(tx.execSQL))
 	}
 	if !strings.Contains(tx.queryRowSQL, "INSERT INTO tenants") {
 		t.Fatalf("tenant upsert SQL = %q, want INSERT INTO tenants", tx.queryRowSQL)
@@ -39,11 +39,23 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if !strings.Contains(tx.execSQL[0], "'platform_admin'") {
 		t.Fatalf("user seed SQL = %q, want platform_admin demo user", tx.execSQL[0])
 	}
-	if !strings.Contains(tx.execSQL[1], "platform-admin@example.com") {
-		t.Fatalf("auth identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[1])
+	if !strings.Contains(tx.execSQL[0], "'10000000-0000-0000-0000-000000000007', NULL, 'platform_admin'") {
+		t.Fatalf("user seed SQL = %q, want global platform_admin with NULL tenant_id", tx.execSQL[0])
 	}
 	if !strings.Contains(tx.execSQL[1], "student@example.com") {
 		t.Fatalf("auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
+	}
+	if !strings.Contains(tx.execSQL[1], "ON CONFLICT (tenant_id, provider, identifier_normalized)") {
+		t.Fatalf("auth identity seed SQL = %q, want tenant-scoped upsert strategy", tx.execSQL[1])
+	}
+	if !strings.Contains(tx.execSQL[2], "platform-admin@example.com") {
+		t.Fatalf("platform admin identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "'60000000-0000-0000-0000-000000000005'") {
+		t.Fatalf("platform admin identity seed SQL = %q, want stable auth identity id", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "tenant_id = NULL") {
+		t.Fatalf("platform admin identity seed SQL = %q, want NULL tenant_id update path", tx.execSQL[2])
 	}
 	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "INSERT INTO events") {
 		t.Fatalf("last statement = %q, want INSERT INTO events", tx.execSQL[len(tx.execSQL)-1])

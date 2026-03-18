@@ -83,7 +83,7 @@ go version && docker --version && docker compose version
 | 0.2 | `P-D0-2` | Config loader with `LEARN_` prefix | 🤖 | `internal/platform/config/config.go` |
 | 0.3 | `P-D0-3` | Database + cache clients | 🤖 | `internal/platform/database/`, `internal/platform/cache/` |
 | 0.4 | `P-D0-4` | Docker Compose + multi-stage Dockerfile | 🤖 | `docker-compose.yml`, `deploy/docker/Dockerfile` |
-| 0.5 | `P-D0-5` | Initial database migration | 🤖 | `migrations/001_initial.up.sql` |
+| 0.5 | `P-D0-5` | Initial database migration | 🤖 | `migrations/20260318100000_initial.sql` |
 | 0.6 | `P-D0-6` | AI Gateway: Provider interface + implementations | 🤖 | `internal/ai/` |
 | 0.7 | `P-D0-7` | GitHub Actions CI | 🤖 | `.github/workflows/ci.yml` |
 | 0.8 | `P-D0-8` | Create Telegram bot via @BotFather | 🧑 | Bot token saved |
@@ -766,9 +766,10 @@ ENTRYPOINT ["/pai-server"]
 
 ### 0.5 — Initial Database Migration
 
-**File:** `migrations/001_initial.up.sql`
+**File:** `migrations/20260318100000_initial.sql`
 
 ```sql
+-- +goose Up
 -- P&AI Bot — Initial Schema
 -- All tables include tenant_id for multi-tenancy.
 
@@ -864,11 +865,8 @@ CREATE INDEX idx_events_created_at ON events(created_at);
 
 -- Insert default tenant for single-tenant mode
 INSERT INTO tenants (name, slug) VALUES ('Default', 'default');
-```
 
-**File:** `migrations/001_initial.down.sql`
-
-```sql
+-- +goose Down
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS learning_progress;
 DROP TABLE IF EXISTS messages;
@@ -1657,7 +1655,7 @@ test-cover:
 
 # Database
 migrate:
-	@docker compose --profile tools run --rm migrate -path /migrations -database "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up
+	@docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir /app/migrations postgres "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up -allow-missing
 
 # Build
 build:
@@ -1754,7 +1752,7 @@ go build ./cmd/server
 # Start infrastructure
 docker compose up -d postgres dragonfly nats
 
-# Run migrations (golang-migrate; records applied versions in schema_migrations)
+# Run migrations (goose; records applied versions in goose_db_version)
 make migrate
 
 # Test health endpoint
@@ -1776,7 +1774,7 @@ docker compose down
 - [x] `internal/platform/cache/` — go-redis wrapper with tests
 - [x] `internal/ai/` — Provider interface, MockProvider, OpenAI, Anthropic, Google, Ollama, OpenRouter, Router with tests
 - [x] `docker-compose.yml` — Postgres 17, Dragonfly, NATS, app, optional Ollama
-- [x] `migrations/001_initial.up.sql` — tenants, users, conversations, messages, learning_progress, events
+- [x] `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events
 - [x] `Makefile`, `.env.example`, `.github/workflows/ci.yml`
 - [x] `go test ./...` passes with zero failures
 
@@ -4595,9 +4593,9 @@ func IsStreakMilestone(days int) bool {
 
 Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
-Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Terminal-chat smoke verification now also passes for invite create/join, queue pairing, and `/challenge accept` after aligning terminal PostgreSQL state to the `terminal` channel and fixing Postgres join locking. Attempt runtime, settlement, XP, and review remain pending.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Terminal-chat smoke verification now also passes for invite create/join, queue pairing, and `/challenge accept` after aligning terminal PostgreSQL state to the `terminal` channel and fixing Postgres join locking. Attempt runtime, settlement, XP, and review remain pending.
 
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
@@ -4956,13 +4954,18 @@ echo ""
 
 | Migration | Day | Tables Created |
 |-----------|-----|---------------|
-| `001_initial` | Day 0 | tenants, users, conversations, messages, learning_progress, events |
-| `002_streaks_xp` | Day 8 | streaks, XP-related engagement data |
-| `003_goals` | Day 11 | goals (student goals) |
-| `004_auth_tables` | Day 10 | auth and session support tables |
-| `005_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
-| `006_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
-| `007_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
+| `20260318100000_initial` | Day 0 | tenants, users, conversations, messages, learning_progress, events |
+| `20260318100100_streaks_xp` | Day 8 | streaks, xp_ledger, nudge_log |
+| `20260318100200_goals` | Day 11 | goals |
+| `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
+| `20260318101000_platform_admin_scope` | Day 15 follow-up | align `platform_admin` records to global scope in users and auth tables |
+| `20260318102000_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
+| `20260318102100_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
+| `20260318102200_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
+| `make migration-create NAME=add_assessments` | Day 7 (planned) | assessments (quiz results) |
+| `make migration-create NAME=add_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
+| `make migration-create NAME=add_groups` | Day 12 (planned) | groups, group_members (class groups) |
+| `make migration-create NAME=add_user_flags` | Day 13 (planned) | add `user_flags` JSONB to users for A/B testing |
 
 ---
 

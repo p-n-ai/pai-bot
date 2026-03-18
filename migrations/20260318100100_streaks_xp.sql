@@ -1,14 +1,15 @@
--- P&AI Bot — Streaks & XP Schema (Day 8)
+-- +goose Up
+-- P&AI Bot - Streaks and XP schema (Day 8)
 
 -- Streak tracking per user
 CREATE TABLE streaks (
-    user_id         UUID PRIMARY KEY REFERENCES users(id),
-    tenant_id       UUID NOT NULL REFERENCES tenants(id),
-    current_streak  INTEGER NOT NULL DEFAULT 0,
-    longest_streak  INTEGER NOT NULL DEFAULT 0,
+    user_id          UUID PRIMARY KEY REFERENCES users(id),
+    tenant_id        UUID NOT NULL REFERENCES tenants(id),
+    current_streak   INTEGER NOT NULL DEFAULT 0,
+    longest_streak   INTEGER NOT NULL DEFAULT 0,
     last_active_date DATE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_streaks_tenant_id ON streaks(tenant_id);
@@ -38,3 +39,8 @@ CREATE TABLE nudge_log (
 );
 
 CREATE INDEX idx_nudge_log_user_id_sent ON nudge_log(user_id, sent_at);
+
+-- +goose Down
+DROP TABLE IF EXISTS nudge_log;
+DROP TABLE IF EXISTS xp_ledger;
+DROP TABLE IF EXISTS streaks;

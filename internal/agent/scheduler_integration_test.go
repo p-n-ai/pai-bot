@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,8 +151,8 @@ func startSchedulerPostgres(t *testing.T, ctx context.Context) (*pgxpool.Pool, s
 	t.Cleanup(pool.Close)
 	waitForPostgresReady(t, ctx, pool)
 
-	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "001_initial.up.sql"))
-	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "002_streaks_xp.up.sql"))
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100000_initial.sql"))
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100100_streaks_xp.sql"))
 
 	var tenantID string
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug = 'default'`).Scan(&tenantID); err != nil {
@@ -183,9 +184,35 @@ func applyMigrationFile(t *testing.T, ctx context.Context, pool *pgxpool.Pool, p
 	if err != nil {
 		t.Fatalf("read migration %s: %v", path, err)
 	}
-	if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
+	upSQL, err := gooseUpSQL(string(sqlBytes))
+	if err != nil {
+		t.Fatalf("parse migration %s: %v", path, err)
+	}
+	if _, err := pool.Exec(ctx, upSQL); err != nil {
 		t.Fatalf("apply migration %s: %v", path, err)
 	}
+}
+
+func gooseUpSQL(content string) (string, error) {
+	upMarker := "-- +goose Up"
+	downMarker := "-- +goose Down"
+
+	upIdx := strings.Index(content, upMarker)
+	if upIdx == -1 {
+		return strings.TrimSpace(content), nil
+	}
+
+	upBody := content[upIdx+len(upMarker):]
+	if downIdx := strings.Index(upBody, downMarker); downIdx >= 0 {
+		upBody = upBody[:downIdx]
+	}
+
+	upBody = strings.TrimSpace(upBody)
+	if upBody == "" {
+		return "", fmt.Errorf("missing goose Up section")
+	}
+
+	return upBody, nil
 }
 
 func seedSchedulerUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID, externalID string) {

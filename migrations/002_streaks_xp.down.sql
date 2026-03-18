@@ -1,3 +1,0 @@
-DROP TABLE IF EXISTS nudge_log;
-DROP TABLE IF EXISTS xp_ledger;
-DROP TABLE IF EXISTS streaks;

@@ -95,9 +95,10 @@ VALUES
 ('10000000-0000-0000-0000-000000000004', '%[1]s', 'student', 'Mei Lin', 'stu_3', 'telegram', 'Form 2', '{"preferred_language":"bm"}'::jsonb),
 ('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent_1', 'telegram', NULL, '{"children":["stu_1"]}'::jsonb),
 ('10000000-0000-0000-0000-000000000006', '%[1]s', 'admin', 'Nadia Admin', 'admin_1', 'web', NULL, '{"scope":"school"}'::jsonb),
-('10000000-0000-0000-0000-000000000007', '%[1]s', 'platform_admin', 'P&AI Platform Admin', 'platform_admin_1', 'web', NULL, '{"scope":"platform"}'::jsonb)
+('10000000-0000-0000-0000-000000000007', NULL, 'platform_admin', 'P&AI Platform Admin', 'platform_admin_1', 'web', NULL, '{"scope":"platform"}'::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
+    tenant_id = EXCLUDED.tenant_id,
     external_id = EXCLUDED.external_id,
     channel = EXCLUDED.channel,
     form = EXCLUDED.form,
@@ -112,10 +113,12 @@ VALUES
 ('10000000-0000-0000-0000-000000000001', '%[1]s', 'password', '%[2]s', '%[3]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
 ('10000000-0000-0000-0000-000000000002', '%[1]s', 'password', '%[4]s', '%[5]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
 ('10000000-0000-0000-0000-000000000005', '%[1]s', 'password', '%[6]s', '%[7]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000006', '%[1]s', 'password', '%[8]s', '%[9]s', '%[10]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000007', '%[1]s', 'password', '%[11]s', '%[12]s', '%[10]s', NOW(), NOW(), NOW(), NOW())
+('10000000-0000-0000-0000-000000000006', '%[1]s', 'password', '%[8]s', '%[9]s', '%[10]s', NOW(), NOW(), NOW(), NOW())
 ON CONFLICT (tenant_id, provider, identifier_normalized) DO UPDATE
 SET password_hash = EXCLUDED.password_hash,
+    user_id = EXCLUDED.user_id,
+    identifier = EXCLUDED.identifier,
+    identifier_normalized = EXCLUDED.identifier_normalized,
     email_verified_at = EXCLUDED.email_verified_at,
     last_login_at = EXCLUDED.last_login_at,
     updated_at = NOW()
@@ -126,6 +129,52 @@ SET password_hash = EXCLUDED.password_hash,
 			adminEmail, auth.NormalizeIdentifier(adminEmail),
 			passwordHash,
 			platformAdminEmail, auth.NormalizeIdentifier(platformAdminEmail)),
+		fmt.Sprintf(`
+WITH existing_identity AS (
+    SELECT id
+    FROM auth_identities
+    WHERE user_id = '10000000-0000-0000-0000-000000000007'
+       OR identifier_normalized = '%[2]s'
+    ORDER BY created_at ASC
+    LIMIT 1
+),
+updated_identity AS (
+    UPDATE auth_identities
+    SET user_id = '10000000-0000-0000-0000-000000000007',
+        tenant_id = NULL,
+        provider = 'password',
+        identifier = '%[1]s',
+        identifier_normalized = '%[2]s',
+        password_hash = '%[3]s',
+        email_verified_at = NOW(),
+        last_login_at = NOW(),
+        updated_at = NOW()
+    WHERE id IN (SELECT id FROM existing_identity)
+    RETURNING id
+)
+INSERT INTO auth_identities (
+    id, user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+)
+SELECT
+    '60000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000007',
+    NULL,
+    'password',
+    '%[1]s',
+    '%[2]s',
+    '%[3]s',
+    NOW(),
+    NOW(),
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM updated_identity)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM auth_identities
+      WHERE user_id = '10000000-0000-0000-0000-000000000007'
+         OR identifier_normalized = '%[2]s'
+  )
+`, platformAdminEmail, auth.NormalizeIdentifier(platformAdminEmail), passwordHash),
 		fmt.Sprintf(`
 INSERT INTO conversations (id, user_id, tenant_id, topic_id, state, metadata, started_at)
 VALUES
