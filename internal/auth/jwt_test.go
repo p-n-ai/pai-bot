@@ -117,3 +117,44 @@ func TestClaimsFromContext(t *testing.T) {
 		t.Fatalf("Role = %q, want %q", claims.Role, RoleParent)
 	}
 }
+
+func TestTokenManagerAllowsPlatformAdminWithoutTenant(t *testing.T) {
+	t.Parallel()
+
+	manager := NewTokenManager("test-secret", time.Minute)
+	now := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC)
+
+	token, err := manager.Issue(TokenClaims{
+		Subject: "platform-123",
+		Role:    RolePlatformAdmin,
+	}, now)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+
+	claims, err := manager.Parse(token, now.Add(30*time.Second))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if claims.TenantID != "" {
+		t.Fatalf("TenantID = %q, want empty", claims.TenantID)
+	}
+	if claims.Role != RolePlatformAdmin {
+		t.Fatalf("Role = %q, want %q", claims.Role, RolePlatformAdmin)
+	}
+}
+
+func TestTokenManagerRejectsNonPlatformRoleWithoutTenant(t *testing.T) {
+	t.Parallel()
+
+	manager := NewTokenManager("test-secret", time.Minute)
+	now := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC)
+
+	_, err := manager.Issue(TokenClaims{
+		Subject: "admin-123",
+		Role:    RoleAdmin,
+	}, now)
+	if !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("Issue() error = %v, want %v", err, ErrInvalidToken)
+	}
+}

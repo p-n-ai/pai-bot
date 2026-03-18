@@ -113,3 +113,42 @@ func TestSplitProviderModel(t *testing.T) {
 		})
 	}
 }
+
+func TestTenantPredicate(t *testing.T) {
+	tests := []struct {
+		name     string
+		service  Service
+		column   string
+		position int
+		want     string
+		wantArg  any
+	}{
+		{
+			name:     "tenant scoped service filters by tenant",
+			service:  Service{tenantID: "tenant-1"},
+			column:   "u.tenant_id",
+			position: 1,
+			want:     "($1::uuid IS NULL OR u.tenant_id = $1::uuid)",
+			wantArg:  "tenant-1",
+		},
+		{
+			name:     "platform service bypasses tenant filter",
+			service:  Service{allTenants: true},
+			column:   "messages.tenant_id",
+			position: 2,
+			want:     "($2::uuid IS NULL OR messages.tenant_id = $2::uuid)",
+			wantArg:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.service.tenantPredicate(tt.column, tt.position); got != tt.want {
+				t.Fatalf("tenantPredicate(%q, %d) = %q, want %q", tt.column, tt.position, got, tt.want)
+			}
+			if got := tt.service.tenantArg(); got != tt.wantArg {
+				t.Fatalf("tenantArg() = %#v, want %#v", got, tt.wantArg)
+			}
+		})
+	}
+}

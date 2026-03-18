@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getStoredUser, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
-import { getDefaultRouteForUser } from "@/lib/default-route.mjs";
+import { getStoredUser, hasStoredSession, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
+import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 
 export default function LoginPage() {
   return (
@@ -23,6 +23,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [checkedSession, setCheckedSession] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tenantID, setTenantID] = useState("");
@@ -31,10 +32,17 @@ function LoginPageContent() {
 
   useEffect(() => {
     const user = getStoredUser();
-    if (user) {
-      router.replace(searchParams.get("next") || getDefaultRouteForUser(user));
+    if (user && hasStoredSession() && hasAdminUIAccess(user)) {
+      router.replace(getSafeNextPath(user, searchParams.get("next")));
+      return;
     }
+
+    setCheckedSession(true);
   }, [router, searchParams]);
+
+  if (!checkedSession) {
+    return null;
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,8 +55,20 @@ function LoginPageContent() {
           email: email.trim(),
           password,
         });
+        const resolvedTenant = tenantChoices.find((tenant) => tenant.tenant_id === (tenantID || session.user.tenant_id));
+        if (!session.user.tenant_name && resolvedTenant) {
+          session.user = {
+            ...session.user,
+            tenant_name: resolvedTenant.tenant_name,
+            tenant_slug: resolvedTenant.tenant_slug,
+          };
+        }
+        if (!hasAdminUIAccess(session.user)) {
+          setError("This account does not have access to the admin UI.");
+          return;
+        }
         persistSession(session);
-        router.push(searchParams.get("next") || getDefaultRouteForUser(session.user));
+        router.push(getSafeNextPath(session.user, searchParams.get("next")));
       } catch (err) {
         if (err instanceof LoginError && err.code === "tenant_required") {
           setTenantChoices(err.tenants);
@@ -228,28 +248,6 @@ function LoginPageLayout({
               {isPending ? "Signing in..." : "Sign in"}
             </Button>
           </form>
-
-          <div className="mt-6 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300">
-            <p className="font-medium text-slate-900 dark:text-slate-100">Demo credentials</p>
-            <p className="mt-2">
-              Student: <span className="font-mono">student@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Teacher: <span className="font-mono">teacher@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Parent: <span className="font-mono">parent@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Admin: <span className="font-mono">admin@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Platform admin: <span className="font-mono">platform-admin@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p className="mt-3">
-              Tenant is now resolved from the account itself. Student login may authenticate successfully, but student accounts are not intended for the admin UI.
-            </p>
-          </div>
 
           <div className="mt-4 text-sm text-slate-500 dark:text-slate-400">
             <Link href="/" className="underline decoration-slate-300 underline-offset-4 hover:text-slate-900 dark:hover:text-white">

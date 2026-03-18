@@ -13,7 +13,10 @@ import (
 func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	ctx := context.Background()
 	tx := &fakeTx{
-		queryRowValues: []any{"11111111-1111-1111-1111-111111111111"},
+		queryRowValues: [][]any{
+			{"11111111-1111-1111-1111-111111111111"},
+			{"22222222-2222-2222-2222-222222222222"},
+		},
 	}
 	db := &fakeBeginner{tx: tx}
 
@@ -27,11 +30,17 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if tx.rolledBack {
 		t.Fatal("did not expect rollback on success")
 	}
-	if len(tx.execSQL) != 17 {
-		t.Fatalf("expected 17 exec statements, got %d", len(tx.execSQL))
+	if len(tx.execSQL) != 18 {
+		t.Fatalf("expected 18 exec statements, got %d", len(tx.execSQL))
 	}
-	if !strings.Contains(tx.queryRowSQL, "INSERT INTO tenants") {
-		t.Fatalf("tenant upsert SQL = %q, want INSERT INTO tenants", tx.queryRowSQL)
+	if len(tx.queryRowSQL) != 2 {
+		t.Fatalf("expected 2 tenant upsert queries, got %d", len(tx.queryRowSQL))
+	}
+	if !strings.Contains(tx.queryRowSQL[0], "INSERT INTO tenants") {
+		t.Fatalf("first tenant upsert SQL = %q, want INSERT INTO tenants", tx.queryRowSQL[0])
+	}
+	if !strings.Contains(tx.queryRowSQL[1], "Second Demo School") {
+		t.Fatalf("second tenant upsert SQL = %q, want Second Demo School", tx.queryRowSQL[1])
 	}
 	if !strings.Contains(tx.execSQL[0], "INSERT INTO users") {
 		t.Fatalf("first statement = %q, want INSERT INTO users", tx.execSQL[0])
@@ -39,23 +48,41 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if !strings.Contains(tx.execSQL[0], "'platform_admin'") {
 		t.Fatalf("user seed SQL = %q, want platform_admin demo user", tx.execSQL[0])
 	}
-	if !strings.Contains(tx.execSQL[0], "'10000000-0000-0000-0000-000000000007', NULL, 'platform_admin'") {
-		t.Fatalf("user seed SQL = %q, want global platform_admin with NULL tenant_id", tx.execSQL[0])
+	if !strings.Contains(tx.execSQL[0], "('10000000-0000-0000-0000-000000000007', NULL, 'platform_admin'") {
+		t.Fatalf("user seed SQL = %q, want platform_admin seeded without tenant_id", tx.execSQL[0])
+	}
+	if !strings.Contains(tx.execSQL[0], "teacher_2") {
+		t.Fatalf("user seed SQL = %q, want second tenant teacher user", tx.execSQL[0])
 	}
 	if !strings.Contains(tx.execSQL[1], "student@example.com") {
-		t.Fatalf("auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
+		t.Fatalf("tenant auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
+	}
+	if !strings.Contains(tx.execSQL[1], "'10000000-0000-0000-0000-000000000009', '22222222-2222-2222-2222-222222222222', 'password', 'second-student@example.com', 'second-student@example.com'") {
+		t.Fatalf("tenant auth identity seed SQL = %q, want second tenant student identity row to use second-student@example.com", tx.execSQL[1])
+	}
+	if count := strings.Count(tx.execSQL[1], "teacher@example.com"); count != 4 {
+		t.Fatalf("tenant auth identity seed SQL teacher@example.com count = %d, want 4", count)
+	}
+	if !strings.Contains(tx.execSQL[2], "platform-admin@example.com") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "'10000000-0000-0000-0000-000000000007', NULL, 'password', 'platform-admin@example.com'") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform admin auth identity without tenant_id", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "'platform-admin@example.com', 'platform-admin@example.com'") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform admin identifier and normalized identifier to match", tx.execSQL[2])
 	}
 	if !strings.Contains(tx.execSQL[1], "ON CONFLICT (tenant_id, provider, identifier_normalized)") {
 		t.Fatalf("auth identity seed SQL = %q, want tenant-scoped upsert strategy", tx.execSQL[1])
 	}
-	if !strings.Contains(tx.execSQL[2], "platform-admin@example.com") {
-		t.Fatalf("platform admin identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[2])
+	if !strings.Contains(tx.execSQL[3], "platform-admin@example.com") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want platform-admin@example.com", tx.execSQL[3])
 	}
-	if !strings.Contains(tx.execSQL[2], "'60000000-0000-0000-0000-000000000005'") {
-		t.Fatalf("platform admin identity seed SQL = %q, want stable auth identity id", tx.execSQL[2])
+	if !strings.Contains(tx.execSQL[3], "'60000000-0000-0000-0000-000000000005'") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want stable auth identity id", tx.execSQL[3])
 	}
-	if !strings.Contains(tx.execSQL[2], "tenant_id = NULL") {
-		t.Fatalf("platform admin identity seed SQL = %q, want NULL tenant_id update path", tx.execSQL[2])
+	if !strings.Contains(tx.execSQL[3], "tenant_id = NULL") {
+		t.Fatalf("platform admin identity normalization SQL = %q, want NULL tenant_id update path", tx.execSQL[3])
 	}
 	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "INSERT INTO events") {
 		t.Fatalf("last statement = %q, want INSERT INTO events", tx.execSQL[len(tx.execSQL)-1])
@@ -65,7 +92,10 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 func TestSeedDemo_RollsBackOnExecError(t *testing.T) {
 	ctx := context.Background()
 	tx := &fakeTx{
-		queryRowValues: []any{"11111111-1111-1111-1111-111111111111"},
+		queryRowValues: [][]any{
+			{"11111111-1111-1111-1111-111111111111"},
+			{"22222222-2222-2222-2222-222222222222"},
+		},
 		execErrAt:      2,
 		execErr:        errors.New("boom"),
 	}
@@ -121,9 +151,9 @@ func (f *fakeBeginner) Begin(ctx context.Context) (txLike, error) {
 }
 
 type fakeTx struct {
-	queryRowValues []any
+	queryRowValues [][]any
 	queryRowErr    error
-	queryRowSQL    string
+	queryRowSQL    []string
 	execSQL        []string
 	execErrAt      int
 	execErr        error
@@ -174,9 +204,14 @@ func (f *fakeTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, 
 }
 
 func (f *fakeTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	f.queryRowSQL = sql
+	f.queryRowSQL = append(f.queryRowSQL, sql)
+	values := []any{}
+	if len(f.queryRowValues) > 0 {
+		values = f.queryRowValues[0]
+		f.queryRowValues = f.queryRowValues[1:]
+	}
 	return fakeRow{
-		values: f.queryRowValues,
+		values: values,
 		err:    f.queryRowErr,
 	}
 }

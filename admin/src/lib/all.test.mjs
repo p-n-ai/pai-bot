@@ -5,4 +5,6 @@ import "./http-response.test.mjs";
 import "./session-state.test.mjs";
 import "./api.test.mjs";
 import "./ai-usage.test.mjs";
+import "./dates.test.mjs";
 import "./parent-summary.test.mjs";
+import "./topic-labels.test.mjs";

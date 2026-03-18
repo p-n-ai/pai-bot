@@ -1,12 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCurrentSection, isRouteActive } from "./navigation.mjs";
+import { getCurrentSection, getNavigationForUser, isRouteActive } from "./navigation.mjs";
 
 test("isRouteActive matches exact and nested routes", () => {
   assert.equal(isRouteActive("/", "/"), true);
   assert.equal(isRouteActive("/dashboard", "/dashboard"), true);
   assert.equal(isRouteActive("/dashboard/weekly", "/dashboard"), true);
   assert.equal(isRouteActive("/students/123", "/dashboard"), false);
+});
+
+test("isRouteActive prefers the most specific dashboard route", () => {
+  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard"), false);
+  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
 });
 
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
@@ -31,4 +36,29 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
     title: "AI Usage",
     description: "Review token volume by provider and model across the teacher workspace.",
   });
+});
+
+test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
+  assert.deepEqual(getCurrentSection(), {
+    eyebrow: "Admin panel",
+    title: "Overview",
+    description: "Open the teacher workspace and monitor daily activity.",
+  });
+});
+
+test("getNavigationForUser hides teacher links from parents", () => {
+  assert.deepEqual(getNavigationForUser({ role: "parent", user_id: "parent-1" }), [
+    {
+      title: "Child Summary",
+      href: "/parents/parent-1",
+      description: "Weekly momentum, mastery, and encouragement for home support.",
+    },
+  ]);
+});
+
+test("getNavigationForUser keeps elevated navigation for teachers", () => {
+  assert.deepEqual(
+    getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
+    ["/", "/dashboard", "/dashboard/ai-usage"],
+  );
 });

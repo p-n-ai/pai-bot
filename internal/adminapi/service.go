@@ -109,12 +109,28 @@ type ClassProgress struct {
 }
 
 type Service struct {
-	pool     *pgxpool.Pool
-	tenantID string
+	pool       *pgxpool.Pool
+	tenantID   string
+	allTenants bool
 }
 
 func New(pool *pgxpool.Pool, tenantID string) *Service {
 	return &Service{pool: pool, tenantID: tenantID}
+}
+
+func NewPlatform(pool *pgxpool.Pool) *Service {
+	return &Service{pool: pool, allTenants: true}
+}
+
+func (s *Service) tenantPredicate(column string, argPos int) string {
+	return fmt.Sprintf("($%d::uuid IS NULL OR %s = $%d::uuid)", argPos, column, argPos)
+}
+
+func (s *Service) tenantArg() any {
+	if s.allTenants {
+		return nil
+	}
+	return s.tenantID
 }
 
 func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
@@ -122,7 +138,7 @@ func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
 	defer cancel()
 
 	formFilter := formFromClassID(classID)
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT
 			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
 			u.name,
@@ -132,11 +148,11 @@ func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
 		LEFT JOIN learning_progress lp
 			ON lp.user_id = u.id
 			AND lp.tenant_id = u.tenant_id
-		WHERE u.tenant_id = $1
+		WHERE %s
 			AND u.role = 'student'
 			AND ($2 = '' OR u.form = $2)
 		ORDER BY u.created_at ASC, u.name ASC, lp.topic_id ASC
-	`, s.tenantID, formFilter)
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg(), formFilter)
 	if err != nil {
 		return ClassProgress{}, fmt.Errorf("query class progress: %w", err)
 	}
@@ -187,7 +203,7 @@ func (s *Service) GetStudentDetail(studentID string) (StudentDetail, error) {
 
 	var internalUserID string
 	var detail StudentDetail
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			u.id::text,
 			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
@@ -197,11 +213,11 @@ func (s *Service) GetStudentDetail(studentID string) (StudentDetail, error) {
 			COALESCE(u.form, ''),
 			u.created_at
 		FROM users u
-		WHERE u.tenant_id = $1
+		WHERE %s
 			AND u.role = 'student'
 			AND COALESCE(NULLIF(u.external_id, ''), u.id::text) = $2
 		LIMIT 1
-	`, s.tenantID, studentID).Scan(
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg(), studentID).Scan(
 		&internalUserID,
 		&detail.Student.ID,
 		&detail.Student.Name,
@@ -217,13 +233,13 @@ func (s *Service) GetStudentDetail(studentID string) (StudentDetail, error) {
 		return StudentDetail{}, fmt.Errorf("query student detail: %w", err)
 	}
 
-	progressRows, err := s.pool.Query(ctx, `
+	progressRows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT topic_id, mastery_score, ease_factor, interval_days, next_review_at, last_studied_at
 		FROM learning_progress
-		WHERE tenant_id = $1
+		WHERE %s
 			AND user_id = $2::uuid
 		ORDER BY last_studied_at DESC NULLS LAST, topic_id ASC
-	`, s.tenantID, internalUserID)
+	`, s.tenantPredicate("tenant_id", 1)), s.tenantArg(), internalUserID)
 	if err != nil {
 		return StudentDetail{}, fmt.Errorf("query student progress: %w", err)
 	}
@@ -268,7 +284,7 @@ func (s *Service) GetStudentConversations(studentID string) ([]StudentConversati
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT
 			m.id::text,
 			m.created_at,
@@ -277,12 +293,12 @@ func (s *Service) GetStudentConversations(studentID string) ([]StudentConversati
 		FROM messages m
 		JOIN conversations c ON c.id = m.conversation_id
 		JOIN users u ON u.id = c.user_id
-		WHERE u.tenant_id = $1
+		WHERE %s
 			AND u.role = 'student'
 			AND COALESCE(NULLIF(u.external_id, ''), u.id::text) = $2
 			AND m.role IN ('user', 'assistant')
 		ORDER BY m.created_at ASC
-	`, s.tenantID, studentID)
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg(), studentID)
 	if err != nil {
 		return nil, fmt.Errorf("query student conversations: %w", err)
 	}
@@ -301,14 +317,14 @@ func (s *Service) GetStudentConversations(studentID string) ([]StudentConversati
 	}
 	if len(conversations) == 0 {
 		var exists bool
-		if err := s.pool.QueryRow(ctx, `
+		if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 			SELECT EXISTS(
 				SELECT 1 FROM users
-				WHERE tenant_id = $1
+				WHERE %s
 					AND role = 'student'
 					AND COALESCE(NULLIF(external_id, ''), id::text) = $2
 			)
-		`, s.tenantID, studentID).Scan(&exists); err != nil {
+		`, s.tenantPredicate("tenant_id", 1)), s.tenantArg(), studentID).Scan(&exists); err != nil {
 			return nil, fmt.Errorf("check student existence: %w", err)
 		}
 		if !exists {
@@ -371,19 +387,19 @@ func (s *Service) GetAIUsage() (AIUsageSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT
 			COALESCE(model, '') AS model,
 			COUNT(*) AS message_count,
 			COALESCE(SUM(input_tokens), 0) AS input_tokens,
 			COALESCE(SUM(output_tokens), 0) AS output_tokens
 		FROM messages
-		WHERE tenant_id = $1
+		WHERE %s
 			AND model IS NOT NULL
 			AND model <> ''
 		GROUP BY model
 		ORDER BY COUNT(*) DESC, model ASC
-	`, s.tenantID)
+	`, s.tenantPredicate("tenant_id", 1)), s.tenantArg())
 	if err != nil {
 		return AIUsageSummary{}, fmt.Errorf("query ai usage: %w", err)
 	}
@@ -416,7 +432,7 @@ func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, stri
 		childJSON []byte
 	)
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			u.id::text,
 			u.name,
@@ -428,7 +444,7 @@ func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, stri
 			ON ai.user_id = u.id
 			AND ai.tenant_id = u.tenant_id
 			AND ai.provider = 'password'
-		WHERE u.tenant_id = $1
+		WHERE %s
 			AND u.role = 'parent'
 			AND (
 				u.id::text = $2
@@ -436,7 +452,7 @@ func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, stri
 			)
 		ORDER BY ai.created_at ASC NULLS LAST
 		LIMIT 1
-	`, s.tenantID, parentID).Scan(
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg(), parentID).Scan(
 		&parent.ID,
 		&parent.Name,
 		&parent.Email,
@@ -466,7 +482,7 @@ func (s *Service) loadStudentByExternalID(ctx context.Context, studentID string)
 		student        Student
 	)
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			u.id::text,
 			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
@@ -476,11 +492,11 @@ func (s *Service) loadStudentByExternalID(ctx context.Context, studentID string)
 			COALESCE(u.form, ''),
 			u.created_at
 		FROM users u
-		WHERE u.tenant_id = $1
+		WHERE %s
 			AND u.role = 'student'
 			AND COALESCE(NULLIF(u.external_id, ''), u.id::text) = $2
 		LIMIT 1
-	`, s.tenantID, studentID).Scan(
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg(), studentID).Scan(
 		&internalUserID,
 		&student.ID,
 		&student.Name,
@@ -500,13 +516,13 @@ func (s *Service) loadStudentByExternalID(ctx context.Context, studentID string)
 }
 
 func (s *Service) loadStudentProgress(ctx context.Context, internalUserID string) ([]ProgressItem, error) {
-	progressRows, err := s.pool.Query(ctx, `
+	progressRows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT topic_id, mastery_score, ease_factor, interval_days, next_review_at, last_studied_at
 		FROM learning_progress
-		WHERE tenant_id = $1
+		WHERE %s
 			AND user_id = $2::uuid
 		ORDER BY last_studied_at DESC NULLS LAST, topic_id ASC
-	`, s.tenantID, internalUserID)
+	`, s.tenantPredicate("tenant_id", 1)), s.tenantArg(), internalUserID)
 	if err != nil {
 		return nil, fmt.Errorf("query student progress: %w", err)
 	}
@@ -537,7 +553,7 @@ func (s *Service) loadStudentProgress(ctx context.Context, internalUserID string
 func (s *Service) loadWeeklyStats(ctx context.Context, userID string) (WeeklyStats, error) {
 	var stats WeeklyStats
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		WITH window AS (
 			SELECT NOW() - INTERVAL '7 day' AS since_at
 		)
@@ -572,7 +588,7 @@ func (s *Service) loadWeeklyStats(ctx context.Context, userID string) (WeeklySta
 				SELECT COUNT(*)
 				FROM events e
 				CROSS JOIN window
-				WHERE e.tenant_id = $1
+				WHERE %s
 					AND e.user_id = $2::uuid
 					AND e.created_at >= window.since_at
 					AND e.event_type = 'quiz_completed'
@@ -580,14 +596,14 @@ func (s *Service) loadWeeklyStats(ctx context.Context, userID string) (WeeklySta
 			COALESCE((
 				SELECT COUNT(*)
 				FROM learning_progress lp
-				WHERE lp.tenant_id = $1
+				WHERE %s
 					AND lp.user_id = $2::uuid
 					AND (
 						lp.mastery_score < 0.6
 						OR (lp.next_review_at IS NOT NULL AND lp.next_review_at <= NOW() + INTERVAL '7 day')
 					)
 			), 0) AS needs_review_count
-	`, s.tenantID, userID).Scan(
+	`, s.tenantPredicate("e.tenant_id", 1), s.tenantPredicate("lp.tenant_id", 1)), s.tenantArg(), userID).Scan(
 		&stats.DaysActive,
 		&stats.MessagesExchanged,
 		&stats.QuizzesCompleted,
@@ -640,13 +656,13 @@ func (s *Service) loadStreakSummary(ctx context.Context, userID string) (int, in
 }
 
 func (s *Service) loadTotalXP(ctx context.Context, userID string) (int, error) {
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT event_type, COUNT(*)
 		FROM events
-		WHERE tenant_id = $1
+		WHERE %s
 			AND user_id = $2::uuid
 		GROUP BY event_type
-	`, s.tenantID, userID)
+	`, s.tenantPredicate("tenant_id", 1)), s.tenantArg(), userID)
 	if err != nil {
 		return 0, fmt.Errorf("query xp summary: %w", err)
 	}

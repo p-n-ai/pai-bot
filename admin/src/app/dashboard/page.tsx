@@ -1,51 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
+import { PageHero } from "@/components/page-hero";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getAverageMastery, getTrackedScores } from "@/lib/class-progress.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
+import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 
 function scoreTone(score: number) {
-  if (score >= 0.8) return "bg-emerald-500 text-white";
-  if (score >= 0.6) return "bg-lime-400 text-slate-950";
-  if (score >= 0.4) return "bg-amber-300 text-slate-950";
-  return "bg-rose-400 text-white";
-}
-
-function formatTopicLabel(topicId: string) {
-  return topicId
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  if (score >= 0.8) return "border border-emerald-200 bg-emerald-100 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/18 dark:text-emerald-50";
+  if (score >= 0.6) return "border border-lime-200 bg-lime-100 text-lime-900 dark:border-lime-400/20 dark:bg-lime-400/18 dark:text-lime-50";
+  if (score >= 0.4) return "border border-amber-200 bg-amber-100 text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/18 dark:text-amber-50";
+  return "border border-rose-200 bg-rose-100 text-rose-900 dark:border-rose-400/20 dark:bg-rose-400/18 dark:text-rose-50";
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<ClassProgress | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error } = useAsyncResource<ClassProgress>(() => getClassProgress("all-students"), []);
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    getClassProgress("all-students")
-      .then((result) => {
-        if (!active) return;
-        setData(result);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!active) return;
-        setData(null);
-        setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const averageMastery = data ? getAverageMastery(data) : 0;
   const trackedScores = data ? getTrackedScores(data) : 0;
@@ -57,7 +34,7 @@ export default function DashboardPage() {
       await sendStudentNudge(studentID);
       setNudgeMessage(`Nudge sent to ${studentName} on Telegram.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to send nudge.";
+      const message = error instanceof Error ? error.message : "Couldn't send the nudge right now. Please try again.";
       setNudgeMessage(message);
     } finally {
       setSendingStudentID("");
@@ -66,15 +43,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-        <header className="grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.4)] lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">Teacher cockpit</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">Class mastery at a glance</h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Review topic-by-topic mastery and open each learner profile for a closer look.
-            </p>
-          </div>
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
+        <PageHero
+          eyebrow="Teacher cockpit"
+          title="Class mastery at a glance"
+          description="Review topic-by-topic mastery and open each learner profile for a closer look."
+          aside={
+            <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Average mastery</p>
               <p className="mt-2 text-4xl font-semibold">{averageMastery}%</p>
@@ -84,7 +58,8 @@ export default function DashboardPage() {
               Live data from the Go admin API
             </div>
           </div>
-        </header>
+          }
+        />
 
         <section className="grid gap-4 md:grid-cols-3">
           <StatCard title="Students" value={String(data?.students.length ?? 0)} note="Tracked in this view" />
@@ -113,8 +88,8 @@ export default function DashboardPage() {
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-xl tracking-tight">Mastery heatmap</CardTitle>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Students by topic with direct navigation into detail views.</p>
+              <CardTitle className="text-xl tracking-tight text-slate-950 dark:text-slate-50">Mastery heatmap</CardTitle>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Students by topic with direct navigation into detail views.</p>
             </div>
             <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
               Back home
@@ -122,8 +97,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Loading dashboard...</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Preparing the latest class snapshot.</p>
             ) : data ? (
+              data.students.length === 0 || data.topic_ids.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Class progress will appear here once students start working through assigned topics.
+                </p>
+              ) : (
               <div className="space-y-5">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] border-separate border-spacing-y-2">
@@ -144,7 +124,7 @@ export default function DashboardPage() {
                     <tbody>
                       {data.students.map((student) => (
                         <tr key={student.id}>
-                          <td className="rounded-l-2xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/80 dark:text-slate-100">
+                          <td className="rounded-l-2xl bg-slate-50/80 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/70 dark:text-slate-100">
                             <Link
                               href={`/students/${student.id}`}
                               className="inline-flex items-center gap-2 hover:text-sky-700 dark:hover:text-sky-300"
@@ -156,14 +136,14 @@ export default function DashboardPage() {
                           {data.topic_ids.map((topicId) => {
                             const score = student.topics[topicId] ?? 0;
                             return (
-                              <td key={`${student.id}-${topicId}`} className="bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
+                              <td key={`${student.id}-${topicId}`} className="bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                                 <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
                                   {Math.round(score * 100)}%
                                 </span>
                               </td>
                             );
                           })}
-                          <td className="rounded-r-2xl bg-slate-50 px-3 py-3 dark:bg-slate-900/80">
+                          <td className="rounded-r-2xl bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                             <Button
                               size="sm"
                               className="gap-2"
@@ -181,23 +161,14 @@ export default function DashboardPage() {
                 </div>
                 {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
               </div>
+              )
             ) : (
-              <p className="text-sm text-rose-600">Failed to load class data.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
+              </p>
             )}
           </CardContent>
         </Card>
     </div>
-  );
-}
-
-function StatCard({ title, value, note }: { title: string; value: string; note: string }) {
-  return (
-    <Card className="rounded-[24px] border-white/70 bg-white/85 shadow-[0_16px_40px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_50px_rgba(2,8,23,0.35)]">
-      <CardHeader>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{title}</p>
-        <CardTitle className="text-3xl tracking-tight text-slate-950 dark:text-slate-50">{value}</CardTitle>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{note}</p>
-      </CardHeader>
-    </Card>
   );
 }

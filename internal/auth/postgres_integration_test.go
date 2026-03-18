@@ -154,6 +154,66 @@ func TestPostgresService_LoginRequiresTenantWhenEmailExistsAcrossTenants(t *test
 	}
 }
 
+func TestAuthIdentityTenantConstraintRejectsMismatchedTenant(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+
+	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
+	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
+	userID := seedWebUser(t, ctx, pool, defaultTenantID, RoleTeacher, "Teacher One")
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO auth_identities (user_id, tenant_id, provider, identifier, identifier_normalized)
+		 VALUES ($1::uuid, $2::uuid, 'password', $3, $4)`,
+		userID,
+		secondTenantID,
+		"teacher@example.com",
+		NormalizeIdentifier("teacher@example.com"),
+	)
+	if err == nil {
+		t.Fatal("expected auth identity insert with mismatched tenant to fail")
+	}
+	if !strings.Contains(err.Error(), "auth_identities_user_id_tenant_id_fkey") {
+		t.Fatalf("constraint error = %v, want auth_identities_user_id_tenant_id_fkey", err)
+	}
+}
+
+func TestPostgresService_PlatformAdminLoginWithoutTenant(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+
+	userID := seedGlobalPasswordUser(t, ctx, pool, "platform-admin@example.com", RolePlatformAdmin, "secret-123")
+
+	pair, err := svc.Login(ctx, LoginRequest{
+		Email:    "platform-admin@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if pair.User.UserID != userID {
+		t.Fatalf("user_id = %q, want %q", pair.User.UserID, userID)
+	}
+	if pair.User.Role != RolePlatformAdmin {
+		t.Fatalf("role = %q, want %q", pair.User.Role, RolePlatformAdmin)
+	}
+	if pair.User.TenantID != "" {
+		t.Fatalf("tenant_id = %q, want empty", pair.User.TenantID)
+	}
+
+	refreshed, err := svc.Refresh(ctx, pair.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+	if refreshed.User.TenantID != "" {
+		t.Fatalf("refreshed tenant_id = %q, want empty", refreshed.User.TenantID)
+	}
+	assertRefreshTokenStored(t, ctx, pool, pair.RefreshToken, true)
+	assertRefreshTokenStored(t, ctx, pool, refreshed.RefreshToken, false)
+}
+
 func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 
@@ -187,6 +247,8 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	waitForAuthPostgresReady(t, ctx, pool)
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100000_initial.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100500_global_platform_admins.sql"))
 
 	return pool
 }
@@ -322,6 +384,40 @@ func seedWebUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID
 	).Scan(&userID)
 	if err != nil {
 		t.Fatalf("insert web user: %v", err)
+	}
+
+	return userID
+}
+
+func seedGlobalPasswordUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, email string, role Role, password string) string {
+	t.Helper()
+
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword() error = %v", err)
+	}
+
+	var userID string
+	err = pool.QueryRow(ctx,
+		`INSERT INTO users (tenant_id, role, name, channel)
+		 VALUES (NULL, $1, 'Platform Admin', 'web')
+		 RETURNING id::text`,
+		string(role),
+	).Scan(&userID)
+	if err != nil {
+		t.Fatalf("insert global user: %v", err)
+	}
+
+	_, err = pool.Exec(ctx,
+		`INSERT INTO auth_identities (user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at)
+		 VALUES ($1::uuid, NULL, 'password', $2, $3, $4, NOW())`,
+		userID,
+		email,
+		NormalizeIdentifier(email),
+		passwordHash,
+	)
+	if err != nil {
+		t.Fatalf("insert global identity: %v", err)
 	}
 
 	return userID

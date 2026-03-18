@@ -60,7 +60,10 @@ func NewTokenManager(secret string, ttl time.Duration) *TokenManager {
 }
 
 func (m *TokenManager) Issue(claims TokenClaims, now time.Time) (string, error) {
-	if strings.TrimSpace(claims.Subject) == "" || strings.TrimSpace(claims.TenantID) == "" || claims.Role == "" {
+	if strings.TrimSpace(claims.Subject) == "" || claims.Role == "" {
+		return "", fmt.Errorf("issue token: %w", ErrInvalidToken)
+	}
+	if claims.Role != RolePlatformAdmin && strings.TrimSpace(claims.TenantID) == "" {
 		return "", fmt.Errorf("issue token: %w", ErrInvalidToken)
 	}
 	if len(m.secret) == 0 {
@@ -132,7 +135,10 @@ func (m *TokenManager) Parse(token string, now time.Time) (TokenClaims, error) {
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
 		return TokenClaims{}, ErrInvalidToken
 	}
-	if payload.Subject == "" || payload.TenantID == "" || payload.Role == "" {
+	if payload.Subject == "" || payload.Role == "" {
+		return TokenClaims{}, ErrInvalidToken
+	}
+	if payload.Role != RolePlatformAdmin && payload.TenantID == "" {
 		return TokenClaims{}, ErrInvalidToken
 	}
 	if payload.ExpiresAt <= now.Unix() {

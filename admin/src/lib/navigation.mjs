@@ -2,24 +2,57 @@ export const primaryNavigation = [
   {
     title: "Overview",
     href: "/",
-    description: "Admin home and rollout summary",
+    description: "Admin home and key workspace entry points.",
+    roles: ["teacher", "admin", "platform_admin"],
   },
   {
     title: "Teacher Dashboard",
     href: "/dashboard",
     description: "Class mastery heatmap and nudges",
+    roles: ["teacher", "admin", "platform_admin"],
   },
   {
     title: "AI Usage",
     href: "/dashboard/ai-usage",
     description: "Review token volume by provider and model across the teacher workspace.",
+    roles: ["teacher", "admin", "platform_admin"],
   },
 ];
+
+export function getNavigationForUser(user) {
+  if (user?.role === "parent" && user?.user_id) {
+    return [
+      {
+        title: "Child Summary",
+        href: `/parents/${user.user_id}`,
+        description: "Weekly momentum, mastery, and encouragement for home support.",
+      },
+    ];
+  }
+
+  if (!user?.role) {
+    return primaryNavigation;
+  }
+
+  return primaryNavigation.filter((item) => item.roles?.includes(user.role));
+}
 
 export function isRouteActive(pathname, href) {
   if (!pathname || !href) return false;
   if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+
+  const matches = pathname === href || pathname.startsWith(`${href}/`);
+  if (!matches) return false;
+
+  const moreSpecificMatch = primaryNavigation.some((item) => {
+    if (item.href === href || item.href === "/") {
+      return false;
+    }
+
+    return item.href.startsWith(`${href}/`) && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+  });
+
+  return !moreSpecificMatch;
 }
 
 export function getCurrentSection(pathname) {
@@ -27,7 +60,7 @@ export function getCurrentSection(pathname) {
     return {
       eyebrow: "Admin panel",
       title: "Overview",
-      description: "Track rollout progress and open the teacher workspace.",
+      description: "Open the teacher workspace and monitor daily activity.",
     };
   }
 
