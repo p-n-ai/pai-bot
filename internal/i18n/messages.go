@@ -31,6 +31,11 @@ const (
 	MsgLearnTopicNotFound    Key = "learn_topic_not_found"
 	MsgLearnTopicSet         Key = "learn_topic_set"
 	MsgTopicUnlocked         Key = "topic_unlocked"
+
+	MsgMilestoneTopicMastered Key = "milestone_topic_mastered"
+	MsgMilestoneXP            Key = "milestone_xp"
+	MsgMilestoneSubjectDone   Key = "milestone_subject_done"
+	MsgMilestoneStreakRecord   Key = "milestone_streak_record"
 )
 
 var catalog = map[string]map[Key]string{
@@ -79,7 +84,11 @@ Tingkatan berapa anda sekarang?`,
 		MsgLearnUsage:          "Guna: /learn <topik>\nContoh: /learn persamaan linear",
 		MsgLearnTopicNotFound:  "Topik tidak dijumpai: %s\nGuna /learn <topik> dengan nama topik yang betul.",
 		MsgLearnTopicSet:       "Topik ditetapkan: %s\nMari kita mula belajar!",
-		MsgTopicUnlocked:       "Tahniah! Anda telah membuka topik baru:\n- %s\n\nGuna /learn untuk mula belajar topik ini.",
+		MsgTopicUnlocked:          "Tahniah! Anda telah membuka topik baru:\n- %s\n\nGuna /learn untuk mula belajar topik ini.",
+		MsgMilestoneTopicMastered: "🏆 *Tahniah!*\n\nAnda telah menguasai topik *%s*!\n⭐ +%d XP\n\nTeruskan ke topik seterusnya! 💪",
+		MsgMilestoneXP:            "🌟 *Pencapaian XP!*\n\nAnda telah mencapai *%d XP*!\n\nKerja keras anda membuahkan hasil! 🎉",
+		MsgMilestoneSubjectDone:   "🎓 *LUAR BIASA!*\n\nAnda telah menguasai semua topik dalam *%s*!\n\nAnda seorang juara matematik! 🏅",
+		MsgMilestoneStreakRecord:   "🔥 *Rekod Baru!*\n\nStreak terpanjang anda: *%d hari*!\n\nDedikasi yang mengagumkan! 🏅",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -126,7 +135,11 @@ Which form are you in now?`,
 		MsgLearnUsage:          "Usage: /learn <topic>\nExample: /learn linear equations",
 		MsgLearnTopicNotFound:  "Topic not found: %s\nUse /learn <topic> with a valid topic name.",
 		MsgLearnTopicSet:       "Topic set: %s\nLet's start learning!",
-		MsgTopicUnlocked:       "Congratulations! You've unlocked new topics:\n- %s\n\nUse /learn to start studying them.",
+		MsgTopicUnlocked:          "Congratulations! You've unlocked new topics:\n- %s\n\nUse /learn to start studying them.",
+		MsgMilestoneTopicMastered: "🏆 *Congratulations!*\n\nYou've mastered *%s*!\n⭐ +%d XP\n\nKeep going to the next topic! 💪",
+		MsgMilestoneXP:            "🌟 *XP Milestone!*\n\nYou've reached *%d XP*!\n\nYour hard work is paying off! 🎉",
+		MsgMilestoneSubjectDone:   "🎓 *AMAZING!*\n\nYou've mastered all topics in *%s*!\n\nYou're a math champion! 🏅",
+		MsgMilestoneStreakRecord:   "🔥 *New Record!*\n\nYour longest streak: *%d days*!\n\nIncredible dedication! 🏅",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -173,7 +186,11 @@ Which form are you in now?`,
 		MsgLearnUsage:          "用法：/learn <主题>\n例如：/learn 线性方程",
 		MsgLearnTopicNotFound:  "未找到主题：%s\n请使用 /learn <主题> 并输入正确的主题名称。",
 		MsgLearnTopicSet:       "主题已设置：%s\n我们开始学习吧！",
-		MsgTopicUnlocked:       "恭喜！你已解锁新主题：\n- %s\n\n使用 /learn 开始学习。",
+		MsgTopicUnlocked:          "恭喜！你已解锁新主题：\n- %s\n\n使用 /learn 开始学习。",
+		MsgMilestoneTopicMastered: "🏆 *恭喜！*\n\n你已经掌握了 *%s*！\n⭐ +%d XP\n\n继续下一个主题吧！💪",
+		MsgMilestoneXP:            "🌟 *XP 里程碑！*\n\n你已达到 *%d XP*！\n\n你的努力正在得到回报！🎉",
+		MsgMilestoneSubjectDone:   "🎓 *太厉害了！*\n\n你已掌握 *%s* 的所有主题！\n\n你是数学冠军！🏅",
+		MsgMilestoneStreakRecord:   "🔥 *新纪录！*\n\n你最长的连续学习记录：*%d 天*！\n\n令人敬佩的毅力！🏅",
 	},
 }
 
