@@ -7,6 +7,8 @@
 
 This guide provides step-by-step executable instructions for every day of the pai-bot development timeline. Each day includes entry criteria, exact file paths, code templates, test specifications, validation commands, and exit checklists.
 
+**Task runner note (2026-03-18):** the repo now uses `just` as the primary task runner. If you encounter older `make ...` commands in historical sections below, use the equivalent `just ...` recipe.
+
 ## How to Use This Guide
 
 1. Work through days sequentially — each day builds on the previous
@@ -33,7 +35,7 @@ Every feature follows this strict cycle:
 2. Run tests (RED)       → confirm tests fail
 3. Implement             → write minimum code to pass
 4. Run package tests     → go test ./internal/<package>/...
-5. Run FULL test suite   → make test-all
+5. Run FULL test suite   → just test-all
 6. Never skip step 5     → every feature must pass the full suite
 ```
 

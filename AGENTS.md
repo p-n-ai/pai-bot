@@ -85,7 +85,8 @@ pai-bot/
 ├── scripts/                    # setup.sh, deploy.sh, analytics.sh
 ├── docker-compose.yml          # Local dev
 ├── docker-compose.prod.yml     # Production single-server
-├── Makefile                    # Dev shortcuts
+├── justfile                    # Primary task runner
+├── Makefile                    # Legacy compatibility task runner
 └── .env.example                # All config documented
 ```
 
@@ -148,7 +149,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 
 ### 5) Test-first development (TDD) — mandatory
 
-**MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
+**MANDATORY: After finishing ANY implementation, always run `just test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
 **MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` to mark the task status as ✅. Never consider a task done until the timeline is updated.**
 
@@ -158,17 +159,17 @@ If one doc changes these boundaries, propagate the same model everywhere.
 2. **Run tests, confirm RED** — Verify tests fail for the right reason (missing implementation)
 3. **Write the minimum implementation** to make tests pass
 4. **Run tests for the new feature** — Confirm the new tests pass
-5. **Run `make test-all`** — Run the FULL test suite to ensure no earlier code is broken
+5. **Run `just test-all`** — Run the FULL test suite to ensure no earlier code is broken
 6. **Fix any regressions** before moving on — if anything broke, fix it now
-7. **Refactor** if needed, re-run `make test-all` to confirm nothing breaks
-8. **Commit only when `make test-all` is fully green**
+7. **Refactor** if needed, re-run `just test-all` to confirm nothing breaks
+8. **Commit only when `just test-all` is fully green**
 
 **Go backend testing rules:**
 - Every `.go` file gets a corresponding `_test.go` in the same package
 - Use table-driven tests for all tests with multiple cases
 - Use `testcontainers-go` for integration tests needing real PostgreSQL/Dragonfly/NATS
 - All external dependencies (AI providers, chat channels, database) behind interfaces for mocking
-- `make test` = unit tests, `make test-integration` = integration tests, `make test-all` = everything + lint
+- `just test-backend` = Go unit tests, `just test-frontend` = admin tests, `just test-integration` = integration tests, `just test-all` = lint + backend + frontend tests
 
 **Admin panel (Next.js) testing rules:**
 - Jest + React Testing Library for component tests
@@ -177,22 +178,22 @@ If one doc changes these boundaries, propagate the same model everywhere.
 **When adding a new feature:**
 ```
 1. Write _test.go with test cases       → defines the contract
-2. Run `make test` → confirm RED         → tests fail (not yet implemented)
+2. Run `just test-backend` → confirm RED  → tests fail (not yet implemented)
 3. Write implementation .go              → make tests pass
-4. Run `make test` → confirm GREEN       → new tests pass
-5. Run `make test-all` → full suite      → ALL tests pass, no regressions
-6. If anything broke → fix it now, re-run `make test-all`
-7. Commit only when `make test-all` is fully green
+4. Run `just test-backend` → confirm GREEN → new tests pass
+5. Run `just test-all` → full suite      → ALL tests pass, no regressions
+6. If anything broke → fix it now, re-run `just test-all`
+7. Commit only when `just test-all` is fully green
 ```
 
 **When fixing a bug:**
 ```
 1. Write a test that reproduces the bug  → proves the bug exists
-2. Run `make test` → confirm RED         → test fails, bug confirmed
+2. Run `just test-backend` → confirm RED  → test fails, bug confirmed
 3. Fix the bug
-4. Run `make test` → confirm GREEN       → bug is fixed
-5. Run `make test-all` → full suite      → ALL tests pass, no regressions
-6. Commit only when `make test-all` is fully green
+4. Run `just test-backend` → confirm GREEN → bug is fixed
+5. Run `just test-all` → full suite      → ALL tests pass, no regressions
+6. Commit only when `just test-all` is fully green
 ```
 
 ### 6) Prefer incremental bootstrap
@@ -204,7 +205,7 @@ If asked to start implementation, scaffold in this order unless user specifies o
 3. `internal/ai` provider interface + router
 4. `internal/chat` Telegram adapter skeleton
 5. `internal/agent` engine skeleton
-6. `migrations/` + `docker-compose.yml` + `Makefile`
+6. `migrations/` + `docker-compose.yml` + task runner (`justfile`, plus `Makefile` during transition)
 7. `admin/` Next.js scaffold
 
 Keep commits/doc changes small and verifiable.
@@ -267,21 +268,44 @@ Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reason
 ## Common Commands
 
 ```bash
-make setup          # First-time setup
-make dev            # Start Go server with hot reload
-make test           # Run Go unit tests
-make test-integration  # Integration tests (testcontainers)
-make lint           # golangci-lint
-make test-all       # All tests + lint
-make migrate        # Run database migrations
-make build          # Build Go binary + admin static
-make docker         # Build Docker image
-make start          # docker compose up -d
-make stop           # docker compose down
-make logs           # Tail logs
-make analytics      # Quick metrics
-make ollama-pull    # Download free AI model
+just setup          # First-time setup
+just dev-backend    # Start Go server locally
+just dev-frontend   # Start admin panel locally
+just dev            # Start backend + frontend together
+just test-backend   # Run Go unit tests
+just test-frontend  # Run admin tests
+just test-integration  # Integration tests (testcontainers)
+just lint           # golangci-lint
+just test-all       # Lint + backend + frontend tests
+just migrate        # Run database migrations
+just build          # Build Go binary + admin static
+just docker         # Build Docker image
+just start          # docker compose up -d
+just stop           # docker compose down
+just logs           # Tail logs
+just analytics      # Quick metrics
+just ollama-pull    # Download free AI model
 ```
+
+## Local Workflow Notes
+
+### Hankweave
+
+- `hank/` is local workflow scratch space. Do not commit it unless the user explicitly asks.
+- Use Hankweave here as a local Codex-only runtime for repo review workflows, not as app runtime code.
+- Run it standalone from the folder:
+
+```bash
+cd hank
+hankweave --config ./hank.json --data .. -n -o ./outputs --headless -y
+```
+
+- `--data ..` mounts the repo root as the read-only data source for prompts.
+- `-o ./outputs` copies artifacts back into `hank/outputs`.
+- Keep the workflow Codex-only. Do not use Hank to orchestrate non-Codex model runs unless the user explicitly asks.
+- Rewrite `hank/prompts/*.md` for the actual repo task before relying on it.
+- In this repo, use Hank only with Codex subagents. Do not use Hank to orchestrate non-Codex model runs unless the user explicitly asks.
+- Keep Hank outputs inside `hank/` and leave them out of normal feature commits.
 
 ## Environment Variables
 
@@ -341,3 +365,5 @@ Before finishing any documentation change, verify:
 - [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
 - [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
 - [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day
+- Run `docs:list` before doc-heavy changes. If repo-local `bin/docs-list` is missing here, use `/Users/thor/bin/docs-list`.
+- For auth work, read `docs/technical-plan.md`, `README.md` Planned Admin Auth, and scan `internal/auth/` + `migrations/004_auth_tables.up.sql` before editing behavior/docs.

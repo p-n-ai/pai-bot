@@ -14,13 +14,15 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 
 **TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
 
+**Task runner note (2026-03-18):** the repo now uses `just` as the primary task runner. If you see older `make ...` commands in historical plan text, prefer the equivalent `just ...` recipe. The companion docs in `docs/technical-plan.md` and `docs/implementation-guide.md` were updated in the same sweep so the schedule stays aligned with the active workflow.
+
 ---
 
 ## DAY 0 — SETUP (4.5 hours) ✅ COMPLETE
 
 | Task ID | Task | Owner | Status |
 |---------|------|-------|--------|
-| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, `Makefile`, `.env.example` | 🤖 | ✅ |
+| `P-D0-1` | Initialize Go 1.22 project: `cmd/server/main.go`, skeleton packages, task runner, `.env.example` | 🤖 | ✅ |
 | `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
@@ -69,21 +71,21 @@ go install github.com/air-verse/air@latest
 git clone https://github.com/p-n-ai/pai-bot.git
 cd pai-bot
 
-# 2. First-time setup (copies .env.example → .env, downloads Go modules)
-make setup
+# 2. First-time setup (copies .env.example → .env, downloads Go modules, installs admin deps)
+just setup
 
 # 3. Edit .env — add your Telegram bot token and at least one AI provider key
 #    LEARN_TELEGRAM_BOT_TOKEN=<your-token>
 #    LEARN_AI_OPENAI_API_KEY=<key>   (or any other provider)
 
 # 4. Verify all tests pass
-make test
+just test-backend
 
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
 # 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
-make migrate
+just migrate
 
 # 7. Verify the server runs and health check works
 go run ./cmd/server &
@@ -111,7 +113,7 @@ Engineer mapping:
 
 **Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
 
-**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `make test-all`. Never commit until the full suite passes.
+**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `just test-all`. Never commit until the full suite passes.
 
 ---
 
@@ -262,7 +264,7 @@ Status (2026-03-12): `/goal` shipped with natural-language parsing, pending conf
 
 Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Shipped scope: `005_challenges` migration groundwork, in-memory + Postgres challenge stores, `/challenge invite <topic>`, `/challenge <code>`, bare `/challenge` search/resume, `/challenge cancel`, `/challenge accept`, queue pairing into `pending_acceptance`, timeout-to-AI fallback, and hardening for search expiry, stale matched-ticket cleanup, one-live-challenge/search exclusivity across invite + queue flows, and idempotent same-user search reopening. AI fallback now also preserves the original stored search input, including question count, via `007_challenge_matchmaking_question_count`. Terminal-chat smoke verification now passes after fixing persistent store channel alignment and Postgres invite-join locking. Attempt runtime, settlement, XP, and review remain pending.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `just migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `just migrate-force <n>` before continuing. Use `1` if only `001_initial` is already present, or `2` if both `001_initial` and `002_streaks_xp` were already applied manually.
 
 | Task ID | Task | Owner |
 |---------|------|-------|

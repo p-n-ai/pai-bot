@@ -47,7 +47,7 @@ For the current quiz runtime design and the OpenClaw-inspired rationale behind i
 | **Connection Pooling** | PgBouncer (prod) / pgx built-in (dev) | — | Essential at scale. Multiplexes thousands of app connections into fewer PG connections. On AWS, use RDS Proxy during credits year; swap to PgBouncer on migration. |
 | **Cache** | Dragonfly | ≥1.0 | Drop-in Redis replacement that is multi-threaded and uses ~80% less memory at scale. Same Redis protocol, same client libraries. Used for: session state, rate limiting, leaderboards, spaced repetition scheduling queues. |
 | **Message Queue** | NATS + JetStream | ≥2.10 | Written in Go, single binary. Handles millions of messages/second. Used for: proactive nudge scheduling, background job processing (report generation, analytics events), event-driven communication between domain modules. Far lighter than Kafka, more capable than Redis pub/sub. |
-| **Migrations** | `golang-migrate` | v4 | SQL-based migrations. Each migration is a pair of `.up.sql` / `.down.sql` files in `migrations/`. Run via `make migrate`. |
+| **Migrations** | `golang-migrate` | v4 | SQL-based migrations. Each migration is a pair of `.up.sql` / `.down.sql` files in `migrations/`. Run via `just migrate`. |
 
 ### 2.3 AI Gateway
 
@@ -295,7 +295,8 @@ pai-bot/
 │   └── analytics.sh                 # Quick metrics from CLI
 ├── docker-compose.yml               # One-command local development
 ├── docker-compose.prod.yml          # Production compose (single-server)
-├── Makefile                         # Dev shortcuts (dev, test, lint, migrate, build)
+├── justfile                         # Primary task runner (dev, test, lint, migrate, build)
+├── Makefile                         # Legacy compatibility task runner
 ├── .env.example                     # All configuration documented
 ├── .github/
 │   └── workflows/
@@ -625,32 +626,34 @@ ArgoCD (running in K8s cluster)
 
 ```bash
 # Prerequisites
-# Go 1.22+, Node.js 20+, Docker, Docker Compose
+# Go 1.22+, Node.js 20+, Docker, Docker Compose, just
 
 # First-time setup
-make setup                           # Copies .env.example, pulls deps
+just setup                           # Copies .env.example, pulls backend deps, installs admin deps
 
 # Start infrastructure
 docker compose up -d postgres dragonfly nats ollama
 
 # Run database migrations
-make migrate
+just migrate
 
-# Start Go server with hot reload (air)
-make dev
+# Start Go server locally
+just dev-backend
 
-# Start admin panel (separate terminal)
-cd admin && npm install && npm run dev
+# Start backend + frontend together
+just dev
 
 # Run tests
-make test                            # Unit tests
-make test-integration                # Integration tests (testcontainers)
-make lint                            # golangci-lint
-make test-all                        # Everything
+just test-backend                    # Go unit tests
+just test-frontend                   # Admin tests
+just test                            # Backend + frontend tests
+just test-integration                # Integration tests (testcontainers)
+just lint                            # golangci-lint
+just test-all                        # Everything
 
 # Build for production
-make build                           # Go binary + admin static
-make docker                          # Docker image
+just build                           # Go binary + admin static
+just docker                          # Docker image
 ```
 
 ---
