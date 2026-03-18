@@ -285,7 +285,7 @@ pai-bot/
 │   │   └── providers/               # Auth + data providers
 │   ├── package.json
 │   └── next.config.js
-├── migrations/                      # SQL migration files (golang-migrate)
+├── migrations/                      # SQL migration files (goose)
 ├── deploy/
 │   ├── docker/
 │   │   ├── Dockerfile               # Multi-stage Go + Admin build
@@ -523,9 +523,10 @@ just start              # Start all services via Docker Compose
 just stop               # Stop all services
 just logs               # Tail application logs
 just migrate            # Run database migrations
-just migrate-version    # Show current migration version from schema_migrations
+just migrate-status     # Show applied/pending goose migrations
+just migrate-version    # Show current goose migration version
 just migrate-down       # Roll back the most recent migration
-just migrate-force 2    # Baseline an existing database that was migrated manually
+just migration-create add_parent_invites  # Create a new timestamped SQL migration
 just seed               # Seed demo tenant/users/messages/progress/events
 just seed-docker        # Seed through the running app container
 just analytics          # Print quick metrics from the database
@@ -542,6 +543,12 @@ Excel export notes:
 - `scripts/analytics.sh --example-xlsx output/spreadsheet/pai-analytics-example.xlsx` creates a sample workbook for layout review without touching the database.
 - The analytics script loads `.env` automatically when present. When `PAI_DB_URL` is unset, it falls back to `LEARN_DATABASE_URL` from the app environment before using Docker Compose PostgreSQL.
 - The workbook builder now runs through `go run ./cmd/analyticsxlsx`, so there is no separate Python runtime or spreadsheet dependency to install.
+
+Migration notes:
+
+- The repo now uses `goose` with single-file timestamped SQL migrations and `goose_db_version` tracking.
+- `just migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges.
+- Existing databases already tracked by `golang-migrate` should be recreated in local dev or explicitly baselined before switching to goose. Do not run both tools against the same database long-term.
 
 ### Rating Analytics Contract
 

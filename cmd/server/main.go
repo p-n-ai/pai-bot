@@ -14,10 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -59,11 +55,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-
-	// Auto-migrate database on startup.
-	if err := runMigrations(cfg.Database.URL); err != nil {
-		slog.Warn("auto-migrate failed", "error", err)
-	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
@@ -736,47 +727,6 @@ func isTelegramChatID(v string) bool {
 		}
 	}
 	return true
-}
-
-func runMigrations(databaseURL string) error {
-	m, err := migrate.New("file:///migrations", databaseURL)
-	if err != nil {
-		// Try local path for dev (when not in Docker).
-		m, err = migrate.New("file://migrations", databaseURL)
-		if err != nil {
-			return fmt.Errorf("create migrator: %w", err)
-		}
-	}
-	defer func() { _, _ = m.Close() }()
-
-	// Fix dirty state before attempting migrations.
-	version, dirty, verErr := m.Version()
-	if verErr == nil && dirty {
-		slog.Warn("dirty migration detected, forcing clean", "version", version)
-		_ = m.Force(int(version))
-	}
-
-	// Try migrating up. Keep retrying when a migration fails because its
-	// tables/indexes already exist (legacy DB created before golang-migrate).
-	for {
-		err = m.Up()
-		if err == nil || errors.Is(err, migrate.ErrNoChange) {
-			break
-		}
-		if strings.Contains(err.Error(), "already exists") {
-			// This migration's objects are already in the DB. Force its
-			// version as applied and try the next one.
-			v, _, _ := m.Version()
-			slog.Warn("migration objects already exist, skipping", "version", v)
-			_ = m.Force(int(v))
-			continue
-		}
-		return fmt.Errorf("run migrations: %w", err)
-	}
-
-	version, dirty, _ = m.Version()
-	slog.Info("database migrated", "version", version, "dirty", dirty)
-	return nil
 }
 
 func buildManualNudgeMessage(detail adminapi.StudentDetail) string {

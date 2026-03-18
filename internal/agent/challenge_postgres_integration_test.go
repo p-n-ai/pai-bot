@@ -14,9 +14,9 @@ import (
 
 func applyChallengeMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
-	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "005_challenges.up.sql"))
-	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "006_challenge_acceptance.up.sql"))
-	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "007_challenge_matchmaking_question_count.up.sql"))
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318102000_challenges.sql"))
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318102100_challenge_acceptance.sql"))
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318102200_challenge_matchmaking_question_count.sql"))
 }
 
 func TestPostgresChallengeStore_GetChallengeIgnoresCompletedInviteCodes(t *testing.T) {

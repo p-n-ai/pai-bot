@@ -1,6 +1,11 @@
 set dotenv-load
 set shell := ["bash", "-cu"]
 
+goose_driver := env_var_or_default("GOOSE_DRIVER", "postgres")
+goose_dsn := env_var_or_default("GOOSE_DSN", "postgres://pai:pai@postgres:5432/pai?sslmode=disable")
+goose_run := "docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0"
+goose_cmd := goose_run + " -dir /app/migrations " + goose_driver + " \"" + goose_dsn + "\""
+
 default:
   @just --list
 
@@ -83,19 +88,22 @@ test-cover:
   go tool cover -html=coverage.out -o coverage.html
 
 migrate:
-  docker compose --profile tools run --rm migrate -path /migrations -database "${MIGRATE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" up
+  @{{goose_cmd}} up -allow-missing
 
 migration:
   just migrate
 
 migrate-down:
-  docker compose --profile tools run --rm migrate -path /migrations -database "${MIGRATE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" down 1
+  @{{goose_cmd}} down
 
 migrate-version:
-  docker compose --profile tools run --rm migrate -path /migrations -database "${MIGRATE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" version
+  @{{goose_cmd}} version
 
-migrate-force version:
-  docker compose --profile tools run --rm migrate -path /migrations -database "${MIGRATE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" force {{version}}
+migrate-status:
+  @{{goose_cmd}} status
+
+migration-create name:
+  @{{goose_run}} -dir /app/migrations create {{name}} sql
 
 seed:
   go run ./cmd/seed

@@ -1,4 +1,5 @@
--- P&AI Bot — Initial Schema
+-- +goose Up
+-- P&AI Bot - Initial schema
 -- All tables include tenant_id for multi-tenancy.
 
 -- Multi-tenancy
@@ -13,7 +14,7 @@ CREATE TABLE tenants (
 -- Users (students, teachers, parents, admins)
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id   UUID NOT NULL REFERENCES tenants(id),
+    tenant_id   UUID REFERENCES tenants(id),
     role        TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'parent', 'admin', 'platform_admin')),
     name        TEXT NOT NULL,
     external_id TEXT,
@@ -23,6 +24,13 @@ CREATE TABLE users (
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE users
+    ADD CONSTRAINT users_tenant_scope_check
+    CHECK (
+        (role = 'platform_admin' AND tenant_id IS NULL) OR
+        (role <> 'platform_admin' AND tenant_id IS NOT NULL)
+    );
 
 CREATE INDEX idx_users_external_id ON users(external_id);
 CREATE INDEX idx_users_tenant_id ON users(tenant_id);
@@ -93,3 +101,11 @@ CREATE INDEX idx_events_created_at ON events(created_at);
 
 -- Insert default tenant for single-tenant mode
 INSERT INTO tenants (name, slug) VALUES ('Default', 'default');
+
+-- +goose Down
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS learning_progress;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS conversations;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS tenants;
