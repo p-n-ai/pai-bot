@@ -83,7 +83,7 @@ go version && docker --version && docker compose version
 | 0.2 | `P-D0-2` | Config loader with `LEARN_` prefix | 🤖 | `internal/platform/config/config.go` |
 | 0.3 | `P-D0-3` | Database + cache clients | 🤖 | `internal/platform/database/`, `internal/platform/cache/` |
 | 0.4 | `P-D0-4` | Docker Compose + multi-stage Dockerfile | 🤖 | `docker-compose.yml`, `deploy/docker/Dockerfile` |
-| 0.5 | `P-D0-5` | Initial database migration | 🤖 | `migrations/001_initial.up.sql` |
+| 0.5 | `P-D0-5` | Initial database migration | 🤖 | `migrations/20260318100000_initial.sql` |
 | 0.6 | `P-D0-6` | AI Gateway: Provider interface + implementations | 🤖 | `internal/ai/` |
 | 0.7 | `P-D0-7` | GitHub Actions CI | 🤖 | `.github/workflows/ci.yml` |
 | 0.8 | `P-D0-8` | Create Telegram bot via @BotFather | 🧑 | Bot token saved |
@@ -766,9 +766,10 @@ ENTRYPOINT ["/pai-server"]
 
 ### 0.5 — Initial Database Migration
 
-**File:** `migrations/001_initial.up.sql`
+**File:** `migrations/20260318100000_initial.sql`
 
 ```sql
+-- +goose Up
 -- P&AI Bot — Initial Schema
 -- All tables include tenant_id for multi-tenancy.
 
@@ -864,11 +865,8 @@ CREATE INDEX idx_events_created_at ON events(created_at);
 
 -- Insert default tenant for single-tenant mode
 INSERT INTO tenants (name, slug) VALUES ('Default', 'default');
-```
 
-**File:** `migrations/001_initial.down.sql`
-
-```sql
+-- +goose Down
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS learning_progress;
 DROP TABLE IF EXISTS messages;
@@ -1657,7 +1655,7 @@ test-cover:
 
 # Database
 migrate:
-	@docker compose --profile tools run --rm migrate -path /migrations -database "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up
+	@docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir /app/migrations postgres "postgres://pai:pai@postgres:5432/pai?sslmode=disable" up -allow-missing
 
 # Build
 build:
@@ -1754,7 +1752,7 @@ go build ./cmd/server
 # Start infrastructure
 docker compose up -d postgres dragonfly nats
 
-# Run migrations (golang-migrate; records applied versions in schema_migrations)
+# Run migrations (goose; records applied versions in goose_db_version)
 make migrate
 
 # Test health endpoint
@@ -1776,7 +1774,7 @@ docker compose down
 - [x] `internal/platform/cache/` — go-redis wrapper with tests
 - [x] `internal/ai/` — Provider interface, MockProvider, OpenAI, Anthropic, Google, Ollama, OpenRouter, Router with tests
 - [x] `docker-compose.yml` — Postgres 17, Dragonfly, NATS, app, optional Ollama
-- [x] `migrations/001_initial.up.sql` — tenants, users, conversations, messages, learning_progress, events
+- [x] `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events
 - [x] `Makefile`, `.env.example`, `.github/workflows/ci.yml`
 - [x] `go test ./...` passes with zero failures
 
@@ -4595,7 +4593,7 @@ func IsStreakMilestone(days int) bool {
 
 Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mastery goals, vague-goal confirmation flow, multiple active goals, `/goal clear`, and auto-progress sync from mastery + quiz updates. `/challenge` remains deferred.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
 
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
@@ -5061,13 +5059,13 @@ echo ""
 
 | Migration | Day | Tables Created |
 |-----------|-----|---------------|
-| `001_initial` | Day 0 | tenants, users, conversations, messages, learning_progress, events |
-| `002_assessments` | Day 7 | assessments (quiz results) |
-| `003_streaks` | Day 8 | streaks (engagement data) |
-| `004_token_budgets` | Day 8 | token_budgets (AI cost tracking) |
-| `005_goals` | Day 11 | goals (student goals) |
-| `006_challenges` | Day 11 | challenges (peer battles) |
-| `007_groups` | Day 12 | groups, group_members (class groups) |
+| `20260318100000_initial` | Day 0 | tenants, users, conversations, messages, learning_progress, events |
+| `20260318100100_streaks_xp` | Day 8 | streaks, xp_ledger, nudge_log |
+| `20260318100200_goals` | Day 11 | goals |
+| `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
+| `20260318xxxxxx_assessments` | Day 7 (planned) | assessments (quiz results) |
+| `20260318xxxxxx_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
+| `20260318xxxxxx_groups` | Day 12 (planned) | groups, group_members (class groups) |
 | `008_user_flags` | Day 13 | Add user_flags JSONB to users (A/B testing) |
 
 ---

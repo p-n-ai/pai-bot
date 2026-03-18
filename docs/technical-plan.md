@@ -47,7 +47,7 @@ For the current quiz runtime design and the OpenClaw-inspired rationale behind i
 | **Connection Pooling** | PgBouncer (prod) / pgx built-in (dev) | — | Essential at scale. Multiplexes thousands of app connections into fewer PG connections. On AWS, use RDS Proxy during credits year; swap to PgBouncer on migration. |
 | **Cache** | Dragonfly | ≥1.0 | Drop-in Redis replacement that is multi-threaded and uses ~80% less memory at scale. Same Redis protocol, same client libraries. Used for: session state, rate limiting, leaderboards, spaced repetition scheduling queues. |
 | **Message Queue** | NATS + JetStream | ≥2.10 | Written in Go, single binary. Handles millions of messages/second. Used for: proactive nudge scheduling, background job processing (report generation, analytics events), event-driven communication between domain modules. Far lighter than Kafka, more capable than Redis pub/sub. |
-| **Migrations** | `golang-migrate` | v4 | SQL-based migrations. Each migration is a pair of `.up.sql` / `.down.sql` files in `migrations/`. Run via `make migrate`. |
+| **Migrations** | `goose` | v3 | SQL-based migrations. Each migration is a single timestamped `.sql` file with `-- +goose Up/Down` blocks in `migrations/`. Run via `make migrate`. |
 
 ### 2.3 AI Gateway
 
@@ -265,9 +265,9 @@ pai-bot/
 │   ├── next.config.js
 │   ├── tailwind.config.ts
 │   └── tsconfig.json
-├── migrations/                      # SQL migration files (golang-migrate)
-│   ├── 001_init_schema.up.sql
-│   ├── 001_init_schema.down.sql
+├── migrations/                      # SQL migration files (goose)
+│   ├── 20260318100000_initial.sql
+│   ├── 20260318100100_streaks_xp.sql
 │   └── ...
 ├── deploy/
 │   ├── docker/
@@ -577,7 +577,7 @@ ArgoCD (running in K8s cluster)
 | jwt | JWT auth | `github.com/golang-jwt/jwt/v5` |
 | otel | OpenTelemetry | `go.opentelemetry.io/otel` |
 | slog | Structured logging | `log/slog` (stdlib) |
-| migrate | Database migrations | `github.com/golang-migrate/migrate/v4` |
+| goose | Database migrations | `github.com/pressly/goose/v3` |
 | testcontainers | Integration testing | `github.com/testcontainers/testcontainers-go` |
 | golangci-lint | Linting | `github.com/golangci/golangci-lint` |
 

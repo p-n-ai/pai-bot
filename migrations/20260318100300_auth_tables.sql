@@ -1,9 +1,10 @@
+-- +goose Up
 -- P&AI Bot - Auth tables for invite onboarding and web login
 
 CREATE TABLE auth_identities (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tenant_id             UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id             UUID REFERENCES tenants(id) ON DELETE CASCADE,
     provider              TEXT NOT NULL CHECK (provider IN ('password', 'telegram', 'whatsapp', 'google', 'microsoft')),
     identifier            TEXT NOT NULL,
     identifier_normalized TEXT NOT NULL,
@@ -37,7 +38,7 @@ CREATE INDEX idx_auth_invites_expires_at ON auth_invites(expires_at);
 CREATE TABLE auth_refresh_tokens (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tenant_id    UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id    UUID REFERENCES tenants(id) ON DELETE CASCADE,
     token_hash   TEXT NOT NULL UNIQUE,
     user_agent   TEXT,
     ip_address   TEXT,
@@ -49,3 +50,8 @@ CREATE TABLE auth_refresh_tokens (
 
 CREATE INDEX idx_auth_refresh_tokens_user_id ON auth_refresh_tokens(user_id);
 CREATE INDEX idx_auth_refresh_tokens_tenant_id ON auth_refresh_tokens(tenant_id);
+
+-- +goose Down
+DROP TABLE IF EXISTS auth_refresh_tokens;
+DROP TABLE IF EXISTS auth_invites;
+DROP TABLE IF EXISTS auth_identities;

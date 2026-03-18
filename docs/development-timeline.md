@@ -24,7 +24,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 | `P-D0-2` | Create `internal/platform/config/config.go` — nested config structs, `LEARN_` prefix, `Validate()` | 🤖 | ✅ |
 | `P-D0-3` | Create database + cache clients (`pgxpool`, `go-redis`) with struct wrappers | 🤖 | ✅ |
 | `P-D0-4` | Create `docker-compose.yml` (Postgres 17, Dragonfly, NATS, app, optional Ollama) + multi-stage Dockerfile | 🤖 | ✅ |
-| `P-D0-5` | Create `migrations/001_initial.up.sql` + `down.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
+| `P-D0-5` | Create `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events + default tenant seed | 🤖 | ✅ |
 | `P-D0-6` | Create AI gateway: `Provider` interface + OpenAI (+ DeepSeek via base URL) + Anthropic + Google Gemini + Ollama + OpenRouter + `MockProvider` + Router with fallback chain + budget tracker | 🤖 | ✅ |
 | `P-D0-7` | GitHub Actions CI: build, test, vet, Docker image build | 🤖 | ✅ |
 | `P-D0-8` | Create Telegram bot via @BotFather, save token | 🧑 | ✅ |
@@ -82,7 +82,7 @@ make test
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
-# 6. Apply database migrations (golang-migrate; version-tracked via schema_migrations)
+# 6. Apply database migrations (goose; version-tracked via goose_db_version)
 make migrate
 
 # 7. Verify the server runs and health check works
@@ -260,7 +260,16 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
-Migration note (2026-03-16): the repo now uses `golang-migrate` with version tracking in `schema_migrations`. If a local database was previously migrated manually, `make migrate` may stop with `Dirty database version 1. Fix and force version.` In that case, either recreate the local Postgres volume or baseline the existing schema with `make migrate-force VERSION=<n>` before continuing. Use `VERSION=1` if only `001_initial` is already present, or `VERSION=2` if both `001_initial` and `002_streaks_xp` were already applied manually.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
+
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W3D11-INFRA-1` | Migration workflow moved from `golang-migrate` to `goose`: single-file timestamped SQL migrations, explicit CLI-driven migration step, `make migrate-status`/`make migration-create`, and removal of startup auto-migration with dirty-state auto-force logic. | ✅ | 🤖 |
 
 | Task ID | Task | Owner |
 |---------|------|-------|
