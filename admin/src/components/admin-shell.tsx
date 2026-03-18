@@ -23,6 +23,7 @@ const navIcons: Record<string, typeof Home> = {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const refreshSessionStateRef = useRef<() => void>(() => {});
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
@@ -31,7 +32,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isLoginRoute = pathname === "/login";
 
   useEffect(() => {
-    function refreshSessionState() {
+    refreshSessionStateRef.current = () => {
       const snapshot = getClientSessionSnapshot({
         accessToken: getStoredAccessToken(),
         user: getStoredUser(),
@@ -52,17 +53,27 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       if (syncedCookies) {
         router.refresh();
       }
+    };
+  }, [router]);
+
+  useEffect(() => {
+    function handleSessionChange() {
+      refreshSessionStateRef.current();
     }
 
-    refreshSessionState();
-    window.addEventListener(SESSION_CHANGED_EVENT, refreshSessionState);
-    window.addEventListener("storage", refreshSessionState);
+    handleSessionChange();
+    window.addEventListener(SESSION_CHANGED_EVENT, handleSessionChange);
+    window.addEventListener("storage", handleSessionChange);
 
     return () => {
-      window.removeEventListener(SESSION_CHANGED_EVENT, refreshSessionState);
-      window.removeEventListener("storage", refreshSessionState);
+      window.removeEventListener(SESSION_CHANGED_EVENT, handleSessionChange);
+      window.removeEventListener("storage", handleSessionChange);
     };
-  }, [pathname, router]);
+  }, []);
+
+  useEffect(() => {
+    refreshSessionStateRef.current();
+  }, [pathname]);
 
   if (isLoginRoute) {
     return (
