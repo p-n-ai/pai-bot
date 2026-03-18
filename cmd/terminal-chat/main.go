@@ -54,7 +54,8 @@ func main() {
 	}
 
 	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{
-		Memory: memory,
+		Memory:  memory,
+		Channel: "terminal",
 	}, terminalchat.StateDeps{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build terminal chat state: %v\n", err)
@@ -74,7 +75,7 @@ func main() {
 		goalStore = agent.NewMemoryGoalStore()
 		challengeStore = agent.NewMemoryChallengeStore()
 	} else {
-		goalStore = agent.NewPostgresGoalStore(state.DB.Pool, state.TenantID)
+		goalStore = agent.NewPostgresGoalStoreForChannel(state.DB.Pool, state.TenantID, "terminal")
 		challengeStore = agent.NewPostgresChallengeStoreForChannel(state.DB.Pool, state.TenantID, "terminal")
 	}
 

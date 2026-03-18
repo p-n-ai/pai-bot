@@ -145,10 +145,18 @@ type PostgresGoalStore struct {
 }
 
 func NewPostgresGoalStore(pool *pgxpool.Pool, tenantID string) *PostgresGoalStore {
+	return NewPostgresGoalStoreForChannel(pool, tenantID, defaultChannel)
+}
+
+func NewPostgresGoalStoreForChannel(pool *pgxpool.Pool, tenantID, channel string) *PostgresGoalStore {
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = defaultChannel
+	}
 	return &PostgresGoalStore{
 		pool:     pool,
 		tenantID: tenantID,
-		channel:  defaultChannel,
+		channel:  channel,
 	}
 }
 
