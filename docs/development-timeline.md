@@ -286,6 +286,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W3D11-CH-2` | Thin human-matchmaking slice: make bare `/challenge` start or resume human matchmaking for a resolved topic, prompt for topic selection when resolution is ambiguous, support `/challenge cancel` to leave search, and pair compatible searchers. | ✅ | 🤖 |
 | `A-W3D11-CH-3` | Challenge hardening slice: enforce matchmaking expiry, expire stale matched tickets before reopening search, enforce one-live-challenge/search exclusivity across invite + queue flows, and make same-user `/challenge` reopen idempotent under store-level races. | ✅ | 🤖 |
 | `A-W3D11-CH-4` | Challenge AI-fallback slice: when a `searching` ticket times out without a human match, claim that ticket exactly once, create a ready `ai_fallback` challenge with `opponent_kind='ai'`, preserve the original stored search topic/syllabus/question_count, and keep invite + human acceptance flows distinct. | ✅ | 🤖 |
+| `A-W3D11-DX-1` | Dev-workflow slice (2026-03-18): add a repo-level `justfile` as the primary task runner, standardize `just dev-backend`, `just dev-frontend`, `just dev`, `just test`, and `just test-all`, and sync README + technical/implementation/schedule docs to the new workflow. | ✅ | 🤖 |
 
 ### Day 12 — Groups + Leaderboards
 
