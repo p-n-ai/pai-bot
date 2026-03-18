@@ -4958,7 +4958,8 @@ echo ""
 | `20260318100100_streaks_xp` | Day 8 | streaks, xp_ledger, nudge_log |
 | `20260318100200_goals` | Day 11 | goals |
 | `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
-| `20260318101000_platform_admin_scope` | Day 15 follow-up | align `platform_admin` records to global scope in users and auth tables |
+| `20260318100400_auth_identity_tenant_consistency` | Day 15 follow-up | enforce `(user_id, tenant_id)` auth identity foreign-key consistency |
+| `20260318100500_global_platform_admins` | Day 15 follow-up | allow global `platform_admin` records and tenant-less auth identities/refresh tokens |
 | `20260318102000_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
 | `20260318102100_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
 | `20260318102200_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |

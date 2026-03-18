@@ -247,8 +247,8 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	waitForAuthPostgresReady(t, ctx, pool)
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100000_initial.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
-	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "005_auth_identity_tenant_consistency.up.sql"))
-	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "006_global_platform_admins.up.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100500_global_platform_admins.sql"))
 
 	return pool
 }
