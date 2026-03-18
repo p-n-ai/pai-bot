@@ -12,7 +12,8 @@ import (
 
 // StateOptions controls whether the terminal chat uses persistent or in-memory state.
 type StateOptions struct {
-	Memory bool
+	Memory  bool
+	Channel string
 }
 
 // State bundles the dependencies needed by the engine for session state.
@@ -53,7 +54,7 @@ func BuildState(ctx context.Context, cfg *config.Config, opts StateOptions, deps
 	newPostgresStore := deps.NewPostgresStore
 	if newPostgresStore == nil {
 		newPostgresStore = func(ctx context.Context, db *database.DB) (agent.ConversationStore, string, error) {
-			store, err := agent.NewPostgresStore(ctx, db.Pool)
+			store, err := agent.NewPostgresStoreForChannel(ctx, db.Pool, opts.Channel)
 			if err != nil {
 				return nil, "", err
 			}

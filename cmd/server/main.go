@@ -99,6 +99,7 @@ func main() {
 	streakTracker := progress.NewMemoryStreakTracker()
 	xpTracker := progress.NewMemoryXPTracker()
 	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
+	challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -110,6 +111,7 @@ func main() {
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
 		Goals:                goalStore,
+		Challenges:           challengeStore,
 		DevMode:              cfg.Features.DevMode,
 	})
 
