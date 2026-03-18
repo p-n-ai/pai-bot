@@ -1,4 +1,5 @@
--- P&AI Bot — challenge groundwork
+-- +goose Up
+-- P&AI Bot - challenge groundwork
 
 CREATE TABLE challenges (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,18 +59,18 @@ CREATE UNIQUE INDEX uniq_challenge_attempts_user
     WHERE user_id IS NOT NULL;
 
 CREATE TABLE challenge_matchmaking_tickets (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id           UUID NOT NULL REFERENCES tenants(id),
-    user_id             UUID NOT NULL REFERENCES users(id),
-    topic_id            TEXT NOT NULL,
-    topic_name          TEXT NOT NULL,
-    syllabus_id         TEXT NOT NULL,
-    status              TEXT NOT NULL CHECK (status IN ('searching', 'matched', 'cancelled', 'expired')),
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id            UUID NOT NULL REFERENCES tenants(id),
+    user_id              UUID NOT NULL REFERENCES users(id),
+    topic_id             TEXT NOT NULL,
+    topic_name           TEXT NOT NULL,
+    syllabus_id          TEXT NOT NULL,
+    status               TEXT NOT NULL CHECK (status IN ('searching', 'matched', 'cancelled', 'expired')),
     matched_challenge_id UUID REFERENCES challenges(id),
-    expires_at          TIMESTAMPTZ NOT NULL,
-    cancelled_at        TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    expires_at           TIMESTAMPTZ NOT NULL,
+    cancelled_at         TIMESTAMPTZ,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX uniq_matchmaking_active_ticket
@@ -78,3 +79,8 @@ CREATE UNIQUE INDEX uniq_matchmaking_active_ticket
 
 CREATE INDEX idx_matchmaking_search
     ON challenge_matchmaking_tickets (tenant_id, topic_id, status, created_at);
+
+-- +goose Down
+DROP TABLE IF EXISTS challenge_matchmaking_tickets;
+DROP TABLE IF EXISTS challenge_attempts;
+DROP TABLE IF EXISTS challenges;

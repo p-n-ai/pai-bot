@@ -4959,13 +4959,13 @@ echo ""
 | `20260318100200_goals` | Day 11 | goals |
 | `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
 | `20260318101000_platform_admin_scope` | Day 15 follow-up | align `platform_admin` records to global scope in users and auth tables |
-| `005_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
-| `006_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
-| `007_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
-| `20260318xxxxxx_assessments` | Day 7 (planned) | assessments (quiz results) |
-| `20260318xxxxxx_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
-| `20260318xxxxxx_groups` | Day 12 (planned) | groups, group_members (class groups) |
-| `008_user_flags` | Day 13 (planned) | add `user_flags` JSONB to users for A/B testing |
+| `20260318102000_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
+| `20260318102100_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
+| `20260318102200_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
+| `make migration-create NAME=add_assessments` | Day 7 (planned) | assessments (quiz results) |
+| `make migration-create NAME=add_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
+| `make migration-create NAME=add_groups` | Day 12 (planned) | groups, group_members (class groups) |
+| `make migration-create NAME=add_user_flags` | Day 13 (planned) | add `user_flags` JSONB to users for A/B testing |
 
 ---
 
@@ -5052,4 +5052,3 @@ echo ""
 | 5 | 9 | 5 | 14 |
 | 6 | 6 | 6 | 12 |
 | **Total** | **77** | **35** | **112** |
-
