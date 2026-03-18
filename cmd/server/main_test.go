@@ -220,12 +220,12 @@ func TestAdminAIUsageEndpoint(t *testing.T) {
 		TotalInputTokens  int `json:"total_input_tokens"`
 		TotalOutputTokens int `json:"total_output_tokens"`
 		Providers         []struct {
-			Provider      string `json:"provider"`
-			Model         string `json:"model"`
-			Messages      int    `json:"messages"`
-			InputTokens   int    `json:"input_tokens"`
-			OutputTokens  int    `json:"output_tokens"`
-			TotalTokens   int    `json:"total_tokens"`
+			Provider     string `json:"provider"`
+			Model        string `json:"model"`
+			Messages     int    `json:"messages"`
+			InputTokens  int    `json:"input_tokens"`
+			OutputTokens int    `json:"output_tokens"`
+			TotalTokens  int    `json:"total_tokens"`
 		} `json:"providers"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
@@ -710,6 +710,20 @@ func (stubAdminAPI) GetAIUsage() (adminapi.AIUsageSummary, error) {
 
 var _ adminDataSource = stubAdminAPI{}
 
+type recordingAdminProvider struct {
+	tenantIDs []string
+}
+
+func (p *recordingAdminProvider) ForRequest(r *http.Request) (adminDataSource, error) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		return nil, errors.New("missing auth claims")
+	}
+
+	p.tenantIDs = append(p.tenantIDs, claims.TenantID)
+	return stubAdminAPI{}, nil
+}
+
 type chatGatewayStub struct {
 	messages []outboundMessage
 }
@@ -852,6 +866,25 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 	}
 }
 
+func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
+	provider := &recordingAdminProvider{}
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/all-students/progress", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServicesAndAdminProvider(provider, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if len(provider.tenantIDs) != 1 {
+		t.Fatalf("provider calls = %d, want 1", len(provider.tenantIDs))
+	}
+	if provider.tenantIDs[0] != "tenant-second" {
+		t.Fatalf("tenant_id = %q, want tenant-second", provider.tenantIDs[0])
+	}
+}
+
 func mustIssueAdminToken(t *testing.T) string {
 	t.Helper()
 	return mustIssueToken(t, auth.RoleAdmin)
@@ -874,17 +907,22 @@ func mustIssueStudentToken(t *testing.T) string {
 
 func mustIssueToken(t *testing.T, role auth.Role) string {
 	t.Helper()
-	return mustIssueTokenWithSubject(t, role, "user-123")
+	return mustIssueTokenWithTenant(t, role, "user-123", "tenant-abc")
 }
 
 func mustIssueTokenWithSubject(t *testing.T, role auth.Role, subject string) string {
+	t.Helper()
+	return mustIssueTokenWithTenant(t, role, subject, "tenant-abc")
+}
+
+func mustIssueTokenWithTenant(t *testing.T, role auth.Role, subject, tenantID string) string {
 	t.Helper()
 
 	manager := auth.NewTokenManager("change-me-in-production", time.Hour)
 	now := time.Now().UTC()
 	token, err := manager.Issue(auth.TokenClaims{
 		Subject:  subject,
-		TenantID: "tenant-abc",
+		TenantID: tenantID,
 		Role:     role,
 	}, now)
 	if err != nil {

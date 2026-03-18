@@ -15,7 +15,7 @@ const elevatedCards = [
   },
   {
     title: "AI Usage",
-    text: "Inspect token volume by provider and model before budget tracking lands in the admin panel.",
+    text: "Inspect token volume by provider and model inside the admin panel.",
     href: "/dashboard/ai-usage",
     icon: Coins,
   },

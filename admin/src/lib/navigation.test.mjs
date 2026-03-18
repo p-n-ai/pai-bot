@@ -38,6 +38,14 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
   });
 });
 
+test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
+  assert.deepEqual(getCurrentSection(), {
+    eyebrow: "Admin panel",
+    title: "Overview",
+    description: "Open the teacher workspace and monitor daily activity.",
+  });
+});
+
 test("getNavigationForUser hides teacher links from parents", () => {
   assert.deepEqual(getNavigationForUser({ role: "parent", user_id: "parent-1" }), [
     {

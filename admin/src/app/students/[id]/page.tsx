@@ -62,7 +62,7 @@ export default function StudentPage() {
         <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
           <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
             <CardHeader>
-              <CardTitle className="text-xl tracking-tight">Mastery radar</CardTitle>
+              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Mastery radar</CardTitle>
             </CardHeader>
             <CardContent className="h-[320px]">
               {radarData.length ? (
@@ -84,7 +84,7 @@ export default function StudentPage() {
 
           <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
             <CardHeader>
-              <CardTitle className="text-xl tracking-tight">Struggle areas</CardTitle>
+              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Struggle areas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -129,7 +129,7 @@ export default function StudentPage() {
 
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
           <CardHeader>
-            <CardTitle className="text-xl tracking-tight">Recent conversations</CardTitle>
+            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Recent conversations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {error ? <p className="text-sm text-slate-500 dark:text-slate-400">Conversation history isn't available right now.</p> : null}

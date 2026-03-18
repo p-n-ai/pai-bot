@@ -176,7 +176,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	adminService := adminapi.New(db.Pool, store.TenantID())
 	authService := auth.NewPostgresService(
 		db.Pool,
 		cfg.Auth.JWTSecret,
@@ -185,8 +184,12 @@ func main() {
 	)
 
 	// HTTP endpoints.
-	mux := newHandlerWithServices(
-		adminService,
+	mux := newHandlerWithServicesAndAdminProvider(
+		tenantAdminDataSourceProvider{
+			newForTenant: func(tenantID string) adminDataSource {
+				return adminapi.New(db.Pool, tenantID)
+			},
+		},
 		gatewaySender{gw},
 		authService,
 		cfg.Auth.JWTSecret,
@@ -228,6 +231,31 @@ type adminDataSource interface {
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
 	GetParentSummary(parentID string) (adminapi.ParentSummary, error)
 	GetAIUsage() (adminapi.AIUsageSummary, error)
+}
+
+type adminDataSourceProvider interface {
+	ForRequest(r *http.Request) (adminDataSource, error)
+}
+
+type fixedAdminDataSourceProvider struct {
+	source adminDataSource
+}
+
+func (p fixedAdminDataSourceProvider) ForRequest(_ *http.Request) (adminDataSource, error) {
+	return p.source, nil
+}
+
+type tenantAdminDataSourceProvider struct {
+	newForTenant func(tenantID string) adminDataSource
+}
+
+func (p tenantAdminDataSourceProvider) ForRequest(r *http.Request) (adminDataSource, error) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok || strings.TrimSpace(claims.TenantID) == "" {
+		return nil, errors.New("missing auth claims")
+	}
+
+	return p.newForTenant(claims.TenantID), nil
 }
 
 type authService interface {
@@ -331,7 +359,11 @@ func newHandler(admin adminDataSource, sender messageSender) http.Handler {
 }
 
 func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
-	mux := newMux(admin, sender)
+	return newHandlerWithServicesAndAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, authSvc, jwtSecret, accessTokenTTL)
+}
+
+func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
+	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 
 	teacherOrAbove := chain(
@@ -352,12 +384,12 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 	mux.Handle("POST /api/auth/refresh", handleAuthRefresh(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
-	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(admin)))
-	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(admin)))
-	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(admin)))
-	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(admin, sender)))
-	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(admin)))
-	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(admin)))
+	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
+	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
+	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(adminProvider)))
+	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
+	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
+	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
 
 	return withCORS(mux)
 }
@@ -374,8 +406,23 @@ func handleReadyz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ready"}`))
 }
 
-func handleAdminClassProgress(admin adminDataSource) http.HandlerFunc {
+func resolveAdminDataSource(w http.ResponseWriter, r *http.Request, provider adminDataSourceProvider) (adminDataSource, bool) {
+	admin, err := provider.ForRequest(r)
+	if err != nil {
+		http.Error(w, "missing auth claims", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	return admin, true
+}
+
+func handleAdminClassProgress(adminProvider adminDataSourceProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		payload, err := admin.GetClassProgress(r.PathValue("id"))
 		if err != nil {
 			writeAdminError(w, err)
@@ -385,8 +432,13 @@ func handleAdminClassProgress(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
-func handleAdminStudentDetail(admin adminDataSource) http.HandlerFunc {
+func handleAdminStudentDetail(adminProvider adminDataSourceProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		payload, err := admin.GetStudentDetail(r.PathValue("id"))
 		if err != nil {
 			writeAdminError(w, err)
@@ -396,8 +448,13 @@ func handleAdminStudentDetail(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
-func handleAdminStudentConversations(admin adminDataSource) http.HandlerFunc {
+func handleAdminStudentConversations(adminProvider adminDataSourceProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		payload, err := admin.GetStudentConversations(r.PathValue("id"))
 		if err != nil {
 			writeAdminError(w, err)
@@ -407,7 +464,7 @@ func handleAdminStudentConversations(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
-func handleAdminParentSummary(admin adminDataSource) http.HandlerFunc {
+func handleAdminParentSummary(adminProvider adminDataSourceProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := auth.ClaimsFromContext(r.Context())
 		if !ok {
@@ -421,6 +478,11 @@ func handleAdminParentSummary(admin adminDataSource) http.HandlerFunc {
 			return
 		}
 
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		payload, err := admin.GetParentSummary(parentID)
 		if err != nil {
 			writeAdminError(w, err)
@@ -430,8 +492,13 @@ func handleAdminParentSummary(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
-func handleAdminAIUsage(admin adminDataSource) http.HandlerFunc {
+func handleAdminAIUsage(adminProvider adminDataSourceProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		payload, err := admin.GetAIUsage()
 		if err != nil {
 			writeAdminError(w, err)
@@ -441,8 +508,13 @@ func handleAdminAIUsage(admin adminDataSource) http.HandlerFunc {
 	}
 }
 
-func handleAdminStudentNudge(admin adminDataSource, sender messageSender) http.HandlerFunc {
+func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messageSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
 		detail, err := admin.GetStudentDetail(r.PathValue("id"))
 		if err != nil {
 			writeAdminError(w, err)

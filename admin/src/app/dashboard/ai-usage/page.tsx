@@ -69,7 +69,7 @@ export default async function AIUsagePage() {
       <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-xl tracking-tight">Provider breakdown</CardTitle>
+            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Provider breakdown</CardTitle>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Use this table to spot which providers and models are carrying most of the token load.
             </p>
@@ -84,13 +84,13 @@ export default async function AIUsagePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Provider</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Messages</TableHead>
-                <TableHead>Input</TableHead>
-                <TableHead>Output</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Load</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Provider</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Model</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Messages</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Input</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Output</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Total</TableHead>
+                <TableHead className="text-slate-600 dark:text-slate-300">Load</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -98,12 +98,12 @@ export default async function AIUsagePage() {
                 const share = totalTokens > 0 ? Math.round((item.total_tokens / totalTokens) * 100) : 0;
                 return (
                   <TableRow key={`${item.provider}:${item.model}`}>
-                    <TableCell className="font-medium capitalize">{item.provider}</TableCell>
-                    <TableCell>{item.model}</TableCell>
-                    <TableCell>{formatCompactNumber(item.messages)}</TableCell>
-                    <TableCell>{formatCompactNumber(item.input_tokens)}</TableCell>
-                    <TableCell>{formatCompactNumber(item.output_tokens)}</TableCell>
-                    <TableCell>{formatCompactNumber(item.total_tokens)}</TableCell>
+                    <TableCell className="font-medium capitalize text-slate-600 dark:text-slate-300">{item.provider}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-300">{item.model}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-300">{formatCompactNumber(item.messages)}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-300">{formatCompactNumber(item.input_tokens)}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-300">{formatCompactNumber(item.output_tokens)}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-300">{formatCompactNumber(item.total_tokens)}</TableCell>
                     <TableCell>
                       <div className="min-w-[150px] space-y-2">
                         <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">

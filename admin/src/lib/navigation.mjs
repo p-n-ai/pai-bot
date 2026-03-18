@@ -2,7 +2,7 @@ export const primaryNavigation = [
   {
     title: "Overview",
     href: "/",
-    description: "Admin home and rollout summary",
+    description: "Admin home and key workspace entry points.",
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
@@ -60,7 +60,7 @@ export function getCurrentSection(pathname) {
     return {
       eyebrow: "Admin panel",
       title: "Overview",
-      description: "Track rollout progress and open the teacher workspace.",
+      description: "Open the teacher workspace and monitor daily activity.",
     };
   }
 

@@ -249,31 +249,6 @@ function LoginPageLayout({
             </Button>
           </form>
 
-          <div className="mt-6 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300">
-            <p className="font-medium text-slate-900 dark:text-slate-100">Demo credentials</p>
-            <p className="mt-2">
-              Student: <span className="font-mono">student@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Teacher: <span className="font-mono">teacher@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Parent: <span className="font-mono">parent@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Admin: <span className="font-mono">admin@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Second school admin: <span className="font-mono">second-admin@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p>
-              Platform admin: <span className="font-mono">platform-admin@example.com</span> / <span className="font-mono">demo-password</span>
-            </p>
-            <p className="mt-3">
-              teacher@example.com exists in both demo schools, so that login will prompt for a tenant choice. Student accounts are still not allowed into the admin UI.
-            </p>
-          </div>
-
           <div className="mt-4 text-sm text-slate-500 dark:text-slate-400">
             <Link href="/" className="underline decoration-slate-300 underline-offset-4 hover:text-slate-900 dark:hover:text-white">
               Back to admin overview

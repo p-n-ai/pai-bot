@@ -193,7 +193,7 @@ function SidebarContent({
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Week 4 workspace for teacher operations, student review, and parent-facing progress snapshots.
+            Teacher operations, student review, and parent-facing progress snapshots in one workspace.
           </p>
         </Link>
 
