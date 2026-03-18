@@ -293,7 +293,6 @@ just ollama-pull    # Download free AI model
 
 - `hank/` is local workflow scratch space. Do not commit it unless the user explicitly asks.
 - Use Hankweave here as a local Codex-only runtime for repo review workflows, not as app runtime code.
-- Remote Codex review/bot review is not available in this repo. Assume only local Codex/subagent review workflows exist unless the user explicitly says otherwise.
 - Run it standalone from the folder:
 
 ```bash
