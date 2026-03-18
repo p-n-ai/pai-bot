@@ -4595,6 +4595,8 @@ Status (2026-03-12): `/goal` is live. Scope shipped: natural-language topic mast
 
 Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
 
+Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Terminal-chat smoke verification now also passes for invite create/join, queue pairing, and `/challenge accept` after aligning terminal PostgreSQL state to the `terminal` channel and fixing Postgres join locking. Attempt runtime, settlement, XP, and review remain pending.
+
 **Entry criteria:** Week 2 complete. Progress tracking, quizzes, streaks live. `make test-all` passes.
 
 #### Tasks
@@ -4608,157 +4610,50 @@ Migration note (2026-03-18): the repo now uses `goose` with single-file timestam
 
 #### 11.3 — Peer Challenge System (TDD)
 
-**File:** `internal/agent/challenge_test.go`
+The original Day 11 challenge scaffold in this guide is now stale. The shipped baseline grew beyond invite-code create/join and no longer matches the simplified `CreateChallenge` example that used to live here.
+
+Current shipped scope:
+
+- invite-code create + join: `/challenge invite <topic>`, `/challenge <code>`
+- human matchmaking: bare `/challenge` starts or resumes search for a resolved topic
+- bounded human acceptance: queue pairs stop in `pending_acceptance`; `/challenge accept` advances to `ready`
+- decline/cancel behavior: `/challenge cancel` cancels open search or declines a pending human match
+- AI fallback: a timed-out unmatched search can be claimed exactly once into a ready `ai_fallback` challenge
+- store hardening: expired searches do not match, stale matched tickets are cleaned before reopen, one live challenge/search blocks new invite or queue entry, and AI fallback preserves the original stored search question count
+- terminal CLI parity: `cmd/terminal-chat` now uses channel-consistent PostgreSQL-backed conversation, goal, and challenge stores, so challenge smoke tests can be run from two terminal sessions against the same persistent state
+
+Still planned, not shipped:
+
+- frozen shared question snapshots
+- simultaneous challenge runtime via `challenge_attempts`
+- grading, settlement, XP award, and post-challenge review
+
+Current contract files:
+
+- `internal/agent/challenge.go`
+- `internal/agent/challenge_command.go`
+- `internal/agent/challenge_test.go`
+- `internal/agent/challenge_internal_test.go`
+- `internal/agent/challenge_postgres_integration_test.go`
+- `internal/agent/challenge_ai_fallback_internal_test.go`
+- `internal/agent/challenge_ai_fallback_postgres_integration_test.go`
+- `docs/challenge-invite-slice.md`
+
+Current key store surface:
 
 ```go
-package agent_test
-
-import (
-	"testing"
-
-	"github.com/p-n-ai/pai-bot/internal/agent"
-)
-
-func TestGenerateChallengeCode(t *testing.T) {
-	code := agent.GenerateChallengeCode()
-	if len(code) != 6 {
-		t.Errorf("Challenge code length = %d, want 6", len(code))
-	}
-}
-
-func TestChallenge_Create(t *testing.T) {
-	store := agent.NewMemoryChallengeStore()
-
-	ch, err := store.CreateChallenge("user1", "F1-01", 5)
-	if err != nil {
-		t.Fatalf("CreateChallenge() error = %v", err)
-	}
-	if ch.Code == "" {
-		t.Error("Challenge.Code should not be empty")
-	}
-	if ch.CreatorID != "user1" {
-		t.Errorf("CreatorID = %q, want user1", ch.CreatorID)
-	}
-}
-
-func TestChallenge_Join(t *testing.T) {
-	store := agent.NewMemoryChallengeStore()
-
-	ch, _ := store.CreateChallenge("user1", "F1-01", 5)
-
-	err := store.JoinChallenge(ch.Code, "user2")
-	if err != nil {
-		t.Fatalf("JoinChallenge() error = %v", err)
-	}
-}
-
-func TestChallenge_Join_NotFound(t *testing.T) {
-	store := agent.NewMemoryChallengeStore()
-
-	err := store.JoinChallenge("XXXXXX", "user2")
-	if err == nil {
-		t.Error("JoinChallenge() should error for invalid code")
-	}
-}
-```
-
-**File:** `internal/agent/challenge.go`
-
-```go
-package agent
-
-import (
-	"crypto/rand"
-	"fmt"
-	"math/big"
-	"sync"
-	"time"
-)
-
-// Challenge represents a peer challenge (battle).
-type Challenge struct {
-	ID           string
-	Code         string
-	CreatorID    string
-	OpponentID   string
-	TopicID      string
-	QuestionCount int
-	State        string // waiting, active, completed
-	CreatedAt    time.Time
-}
-
-// ChallengeStore is the interface for challenge persistence.
 type ChallengeStore interface {
-	CreateChallenge(creatorID, topicID string, questionCount int) (*Challenge, error)
-	JoinChallenge(code, opponentID string) error
-	GetChallenge(code string) (*Challenge, bool)
-}
-
-// MemoryChallengeStore is an in-memory ChallengeStore.
-type MemoryChallengeStore struct {
-	challenges map[string]*Challenge
-	mu         sync.RWMutex
-}
-
-func NewMemoryChallengeStore() *MemoryChallengeStore {
-	return &MemoryChallengeStore{
-		challenges: make(map[string]*Challenge),
-	}
-}
-
-func (s *MemoryChallengeStore) CreateChallenge(creatorID, topicID string, questionCount int) (*Challenge, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	code := GenerateChallengeCode()
-	ch := &Challenge{
-		ID:            code,
-		Code:          code,
-		CreatorID:     creatorID,
-		TopicID:       topicID,
-		QuestionCount: questionCount,
-		State:         "waiting",
-		CreatedAt:     time.Now(),
-	}
-	s.challenges[code] = ch
-	return ch, nil
-}
-
-func (s *MemoryChallengeStore) JoinChallenge(code, opponentID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	ch, ok := s.challenges[code]
-	if !ok {
-		return fmt.Errorf("challenge %s not found", code)
-	}
-	if ch.State != "waiting" {
-		return fmt.Errorf("challenge %s is not waiting for opponent", code)
-	}
-
-	ch.OpponentID = opponentID
-	ch.State = "active"
-	return nil
-}
-
-func (s *MemoryChallengeStore) GetChallenge(code string) (*Challenge, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	ch, ok := s.challenges[code]
-	return ch, ok
-}
-
-// GenerateChallengeCode generates a 6-character alphanumeric code.
-func GenerateChallengeCode() string {
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // No I/O/0/1 to avoid confusion
-	code := make([]byte, 6)
-	for i := range code {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		code[i] = charset[n.Int64()]
-	}
-	return string(code)
+	CreateInviteChallenge(creatorID string, input ChallengeCreateInput) (*Challenge, error)
+	JoinChallenge(code, opponentID string) (*Challenge, error)
+	GetChallenge(code string) (*Challenge, error)
+	StartChallengeSearch(userID string, input ChallengeCreateInput) (*StartChallengeSearchResult, error)
+	CancelChallengeSearch(userID string) (bool, error)
+	AcceptPendingChallenge(userID string) (*Challenge, error)
+	DeclinePendingChallenge(userID string) (bool, error)
 }
 ```
+
+Use `docs/challenge-invite-slice.md` as the behavior/source-of-truth doc for the current challenge state machine. Keep this guide explicit: Day 11 shipped the challenge entry + matchmaking baseline, but not the later runtime or settlement pieces that were part of the original broader plan.
 
 ### Day 12-15 — Groups, Leaderboards, A/B Test, Analytics Dashboard
 
@@ -5063,10 +4958,14 @@ echo ""
 | `20260318100100_streaks_xp` | Day 8 | streaks, xp_ledger, nudge_log |
 | `20260318100200_goals` | Day 11 | goals |
 | `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
+| `20260318101000_platform_admin_scope` | Day 15 follow-up | align `platform_admin` records to global scope in users and auth tables |
+| `005_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
+| `006_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
+| `007_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
 | `20260318xxxxxx_assessments` | Day 7 (planned) | assessments (quiz results) |
 | `20260318xxxxxx_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
 | `20260318xxxxxx_groups` | Day 12 (planned) | groups, group_members (class groups) |
-| `008_user_flags` | Day 13 | Add user_flags JSONB to users (A/B testing) |
+| `008_user_flags` | Day 13 (planned) | add `user_flags` JSONB to users for A/B testing |
 
 ---
 
@@ -5153,3 +5052,4 @@ echo ""
 | 5 | 9 | 5 | 14 |
 | 6 | 6 | 6 | 12 |
 | **Total** | **77** | **35** | **112** |
+

@@ -46,6 +46,7 @@ type EngineConfig struct {
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
 	Goals                 GoalStore
+	Challenges            ChallengeStore
 	DevMode               bool
 }
 
@@ -65,6 +66,7 @@ type Engine struct {
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
 	goals                 GoalStore
+	challenges            ChallengeStore
 	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
@@ -105,6 +107,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 			contextResolver = NoopContextResolver{}
 		}
 	}
+	challenges := cfg.Challenges
+	if challenges == nil {
+		challenges = NewMemoryChallengeStore()
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -120,6 +126,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
+		challenges:            challenges,
 		devMode:               cfg.DevMode,
 		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
 		unlocks:               newPendingUnlocks(),
@@ -573,6 +580,8 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleProgressCommand(msg)
 	case "/goal":
 		return e.handleGoalCommand(ctx, msg, fields[1:])
+	case "/challenge":
+		return e.handleChallengeCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":
@@ -1341,7 +1350,7 @@ STAGE A - NEW PROBLEM
 If the student asks a fresh math question and has not attempted it:
 - Output ONLY:
   Faham/Understand: [restate what is asked]
-  Rancang/Plan: [give a short 1-3 step plan]
+- Then give a short 1-3 step direction in plain prose, without adding another section label.
 - End with a question asking them to execute the first step.
 - Do NOT solve.
 - Do NOT reveal the final answer.
@@ -1395,13 +1404,12 @@ OUTPUT FORMAT
 ========================================
 Use these exact plain-text labels in order when they are needed for each substantive tutoring reply:
 Faham/Understand:
-Rancang/Plan:
 Selesaikan/Solve:
 Semak/Verify:
 Konsep/Connect:
 
 IMPORTANT:
-- In early stages (A or B), usually output only Faham/Understand and Rancang/Plan.
+- In early stages (A or B), usually output Faham/Understand followed by a short plain-prose next step.
 - Only include Selesaikan/Solve, Semak/Verify, and Konsep/Connect when they add real value for the current stage.
 - Never fill Solve with full solution unless in FULL WRAP UP stage.
 - The student benefits most from an explanation style where you frequently pause to confirm understanding by asking test questions.
