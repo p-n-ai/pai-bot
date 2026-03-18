@@ -885,6 +885,32 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	}
 }
 
+func TestPlatformAdminRequestsUseGlobalAdminSource(t *testing.T) {
+	provider := tenantAdminDataSourceProvider{
+		newForTenant: func(tenantID string) adminDataSource {
+			t.Fatalf("newForTenant(%q) should not be called for platform admin", tenantID)
+			return nil
+		},
+		newForPlatform: func() adminDataSource {
+			return stubAdminAPI{}
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/all-students/progress", nil)
+	req = req.WithContext(auth.WithClaims(req.Context(), auth.TokenClaims{
+		Subject:  "platform-user",
+		Role:     auth.RolePlatformAdmin,
+	}))
+
+	admin, err := provider.ForRequest(req)
+	if err != nil {
+		t.Fatalf("ForRequest() error = %v", err)
+	}
+	if _, ok := admin.(stubAdminAPI); !ok {
+		t.Fatalf("admin source = %T, want stubAdminAPI", admin)
+	}
+}
+
 func mustIssueAdminToken(t *testing.T) string {
 	t.Helper()
 	return mustIssueToken(t, auth.RoleAdmin)

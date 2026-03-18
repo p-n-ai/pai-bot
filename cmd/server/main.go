@@ -189,6 +189,9 @@ func main() {
 			newForTenant: func(tenantID string) adminDataSource {
 				return adminapi.New(db.Pool, tenantID)
 			},
+			newForPlatform: func() adminDataSource {
+				return adminapi.NewPlatform(db.Pool)
+			},
 		},
 		gatewaySender{gw},
 		authService,
@@ -246,12 +249,20 @@ func (p fixedAdminDataSourceProvider) ForRequest(_ *http.Request) (adminDataSour
 }
 
 type tenantAdminDataSourceProvider struct {
-	newForTenant func(tenantID string) adminDataSource
+	newForTenant   func(tenantID string) adminDataSource
+	newForPlatform func() adminDataSource
 }
 
 func (p tenantAdminDataSourceProvider) ForRequest(r *http.Request) (adminDataSource, error) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
-	if !ok || strings.TrimSpace(claims.TenantID) == "" {
+	if !ok {
+		return nil, errors.New("missing auth claims")
+	}
+
+	if claims.Role == auth.RolePlatformAdmin && p.newForPlatform != nil {
+		return p.newForPlatform(), nil
+	}
+	if strings.TrimSpace(claims.TenantID) == "" {
 		return nil, errors.New("missing auth claims")
 	}
 

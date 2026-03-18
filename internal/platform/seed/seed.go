@@ -94,13 +94,21 @@ RETURNING id::text
 func demoStatements(defaultTenantID, secondTenantID string) []string {
 	passwordHash, _ := auth.HashPassword("demo-password")
 	studentEmail := "student@example.com"
+	studentEmailNormalized := auth.NormalizeIdentifier(studentEmail)
 	teacherEmail := "teacher@example.com"
+	teacherEmailNormalized := auth.NormalizeIdentifier(teacherEmail)
 	parentEmail := "parent@example.com"
+	parentEmailNormalized := auth.NormalizeIdentifier(parentEmail)
 	adminEmail := "admin@example.com"
+	adminEmailNormalized := auth.NormalizeIdentifier(adminEmail)
 	platformAdminEmail := "platform-admin@example.com"
+	platformAdminEmailNormalized := auth.NormalizeIdentifier(platformAdminEmail)
 	secondStudentEmail := "second-student@example.com"
+	secondStudentEmailNormalized := auth.NormalizeIdentifier(secondStudentEmail)
 	secondParentEmail := "second-parent@example.com"
+	secondParentEmailNormalized := auth.NormalizeIdentifier(secondParentEmail)
 	secondAdminEmail := "second-admin@example.com"
+	secondAdminEmailNormalized := auth.NormalizeIdentifier(secondAdminEmail)
 
 	return []string{
 		fmt.Sprintf(`
@@ -112,14 +120,16 @@ VALUES
 ('10000000-0000-0000-0000-000000000004', '%[1]s', 'student', 'Mei Lin', 'stu_3', 'telegram', 'Form 2', '{"preferred_language":"bm"}'::jsonb),
 ('10000000-0000-0000-0000-000000000005', '%[1]s', 'parent', 'Farah Parent', 'parent_1', 'telegram', NULL, '{"children":["stu_1"]}'::jsonb),
 ('10000000-0000-0000-0000-000000000006', '%[1]s', 'admin', 'Nadia Admin', 'admin_1', 'web', NULL, '{"scope":"school"}'::jsonb),
-('10000000-0000-0000-0000-000000000007', '%[1]s', 'platform_admin', 'P&AI Platform Admin', 'platform_admin_1', 'web', NULL, '{"scope":"platform"}'::jsonb),
+('10000000-0000-0000-0000-000000000007', NULL, 'platform_admin', 'P&AI Platform Admin', 'platform_admin_1', 'web', NULL, '{"scope":"platform"}'::jsonb),
 ('10000000-0000-0000-0000-000000000008', '%[2]s', 'teacher', 'Aisyah Teacher North', 'teacher_2', 'telegram', 'Form 2', '{"subject":"Matematik"}'::jsonb),
 ('10000000-0000-0000-0000-000000000009', '%[2]s', 'student', 'Irfan Danish', 'stu_4', 'telegram', 'Form 2', '{"preferred_language":"en"}'::jsonb),
 ('10000000-0000-0000-0000-000000000010', '%[2]s', 'student', 'Nur Qistina', 'stu_5', 'telegram', 'Form 3', '{"preferred_language":"bm"}'::jsonb),
 ('10000000-0000-0000-0000-000000000011', '%[2]s', 'parent', 'Salmah Parent', 'parent_2', 'telegram', NULL, '{"children":["stu_4","stu_5"]}'::jsonb),
 ('10000000-0000-0000-0000-000000000012', '%[2]s', 'admin', 'Hafiz Admin', 'admin_2', 'web', NULL, '{"scope":"school"}'::jsonb)
 ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name,
+SET tenant_id = EXCLUDED.tenant_id,
+    role = EXCLUDED.role,
+    name = EXCLUDED.name,
     external_id = EXCLUDED.external_id,
     channel = EXCLUDED.channel,
     form = EXCLUDED.form,
@@ -131,30 +141,47 @@ INSERT INTO auth_identities (
     user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
 )
 VALUES
-('10000000-0000-0000-0000-000000000001', '%[1]s', 'password', '%[3]s', '%[4]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000002', '%[1]s', 'password', '%[5]s', '%[6]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000005', '%[1]s', 'password', '%[7]s', '%[8]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000006', '%[1]s', 'password', '%[9]s', '%[10]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000007', '%[1]s', 'password', '%[12]s', '%[13]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000008', '%[2]s', 'password', '%[3]s', '%[4]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000009', '%[2]s', 'password', '%[14]s', '%[15]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000011', '%[2]s', 'password', '%[16]s', '%[17]s', '%[11]s', NOW(), NOW(), NOW(), NOW()),
-('10000000-0000-0000-0000-000000000012', '%[2]s', 'password', '%[18]s', '%[19]s', '%[11]s', NOW(), NOW(), NOW(), NOW())
+('10000000-0000-0000-0000-000000000001', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000002', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000005', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000006', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000008', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000009', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000011', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW()),
+('10000000-0000-0000-0000-000000000012', '%s', 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW())
 ON CONFLICT (tenant_id, provider, identifier_normalized) DO UPDATE
 SET password_hash = EXCLUDED.password_hash,
+    identifier = EXCLUDED.identifier,
+    identifier_normalized = EXCLUDED.identifier_normalized,
+    user_id = EXCLUDED.user_id,
+    tenant_id = EXCLUDED.tenant_id,
     email_verified_at = EXCLUDED.email_verified_at,
     last_login_at = EXCLUDED.last_login_at,
     updated_at = NOW()
-`, defaultTenantID, secondTenantID,
-			teacherEmail, auth.NormalizeIdentifier(teacherEmail),
-			studentEmail, auth.NormalizeIdentifier(studentEmail),
-			parentEmail, auth.NormalizeIdentifier(parentEmail),
-			adminEmail, auth.NormalizeIdentifier(adminEmail),
-			passwordHash,
-			platformAdminEmail, auth.NormalizeIdentifier(platformAdminEmail),
-			secondStudentEmail, auth.NormalizeIdentifier(secondStudentEmail),
-			secondParentEmail, auth.NormalizeIdentifier(secondParentEmail),
-			secondAdminEmail, auth.NormalizeIdentifier(secondAdminEmail)),
+`, defaultTenantID, teacherEmail, teacherEmailNormalized, passwordHash,
+			defaultTenantID, studentEmail, studentEmailNormalized, passwordHash,
+			defaultTenantID, parentEmail, parentEmailNormalized, passwordHash,
+			defaultTenantID, adminEmail, adminEmailNormalized, passwordHash,
+			secondTenantID, teacherEmail, teacherEmailNormalized, passwordHash,
+			secondTenantID, secondStudentEmail, secondStudentEmailNormalized, passwordHash,
+			secondTenantID, secondParentEmail, secondParentEmailNormalized, passwordHash,
+			secondTenantID, secondAdminEmail, secondAdminEmailNormalized, passwordHash),
+		fmt.Sprintf(`
+INSERT INTO auth_identities (
+    user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+)
+VALUES
+('10000000-0000-0000-0000-000000000007', NULL, 'password', '%s', '%s', '%s', NOW(), NOW(), NOW(), NOW())
+ON CONFLICT (provider, identifier_normalized) WHERE tenant_id IS NULL DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    identifier = EXCLUDED.identifier,
+    identifier_normalized = EXCLUDED.identifier_normalized,
+    user_id = EXCLUDED.user_id,
+    tenant_id = EXCLUDED.tenant_id,
+    email_verified_at = EXCLUDED.email_verified_at,
+    last_login_at = EXCLUDED.last_login_at,
+    updated_at = NOW()
+`, platformAdminEmail, platformAdminEmailNormalized, passwordHash),
 		fmt.Sprintf(`
 INSERT INTO conversations (id, user_id, tenant_id, topic_id, state, metadata, started_at)
 VALUES

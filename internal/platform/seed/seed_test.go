@@ -30,8 +30,8 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if tx.rolledBack {
 		t.Fatal("did not expect rollback on success")
 	}
-	if len(tx.execSQL) != 16 {
-		t.Fatalf("expected 16 exec statements, got %d", len(tx.execSQL))
+	if len(tx.execSQL) != 17 {
+		t.Fatalf("expected 17 exec statements, got %d", len(tx.execSQL))
 	}
 	if len(tx.queryRowSQL) != 2 {
 		t.Fatalf("expected 2 tenant upsert queries, got %d", len(tx.queryRowSQL))
@@ -48,23 +48,29 @@ func TestSeedDemo_SucceedsAndCommits(t *testing.T) {
 	if !strings.Contains(tx.execSQL[0], "'platform_admin'") {
 		t.Fatalf("user seed SQL = %q, want platform_admin demo user", tx.execSQL[0])
 	}
+	if !strings.Contains(tx.execSQL[0], "('10000000-0000-0000-0000-000000000007', NULL, 'platform_admin'") {
+		t.Fatalf("user seed SQL = %q, want platform_admin seeded without tenant_id", tx.execSQL[0])
+	}
 	if !strings.Contains(tx.execSQL[0], "teacher_2") {
 		t.Fatalf("user seed SQL = %q, want second tenant teacher user", tx.execSQL[0])
 	}
-	if !strings.Contains(tx.execSQL[1], "platform-admin@example.com") {
-		t.Fatalf("auth identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[1])
-	}
-	if !strings.Contains(tx.execSQL[1], "'platform-admin@example.com', 'platform-admin@example.com'") {
-		t.Fatalf("auth identity seed SQL = %q, want platform admin identifier and normalized identifier to match", tx.execSQL[1])
-	}
 	if !strings.Contains(tx.execSQL[1], "student@example.com") {
-		t.Fatalf("auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
+		t.Fatalf("tenant auth identity seed SQL = %q, want student@example.com", tx.execSQL[1])
 	}
-	if !strings.Contains(tx.execSQL[1], "'second-student@example.com', 'second-student@example.com'") {
-		t.Fatalf("auth identity seed SQL = %q, want second-student identifier and normalized identifier to match", tx.execSQL[1])
+	if !strings.Contains(tx.execSQL[1], "'10000000-0000-0000-0000-000000000009', '22222222-2222-2222-2222-222222222222', 'password', 'second-student@example.com', 'second-student@example.com'") {
+		t.Fatalf("tenant auth identity seed SQL = %q, want second tenant student identity row to use second-student@example.com", tx.execSQL[1])
 	}
 	if count := strings.Count(tx.execSQL[1], "teacher@example.com"); count != 4 {
-		t.Fatalf("auth identity seed SQL teacher@example.com count = %d, want 4", count)
+		t.Fatalf("tenant auth identity seed SQL teacher@example.com count = %d, want 4", count)
+	}
+	if !strings.Contains(tx.execSQL[2], "platform-admin@example.com") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform-admin@example.com", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "'10000000-0000-0000-0000-000000000007', NULL, 'password', 'platform-admin@example.com'") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform admin auth identity without tenant_id", tx.execSQL[2])
+	}
+	if !strings.Contains(tx.execSQL[2], "'platform-admin@example.com', 'platform-admin@example.com'") {
+		t.Fatalf("platform auth identity seed SQL = %q, want platform admin identifier and normalized identifier to match", tx.execSQL[2])
 	}
 	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "INSERT INTO events") {
 		t.Fatalf("last statement = %q, want INSERT INTO events", tx.execSQL[len(tx.execSQL)-1])
