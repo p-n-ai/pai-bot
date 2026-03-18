@@ -114,6 +114,7 @@ type Scheduler struct {
 	aiRouter *ai.Router
 	store    nudgeLanguageStore
 	logger   *slog.Logger
+	lastSummaryDate time.Time // only accessed from ticker goroutine
 }
 
 // NewScheduler creates a new proactive scheduler.
@@ -162,6 +163,13 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 
 func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
 	now := time.Now()
+
+	// Check if it's time for daily summary (22:00-22:05 MYT).
+	if IsDailySummaryTime(now) && !s.dailySummarySentToday(now) {
+		s.SendDailySummaries(ctx, userIDs, now)
+		s.markDailySummarySent(now)
+	}
+
 	if IsQuietHours(now) {
 		return
 	}
@@ -172,6 +180,43 @@ func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
 				"user_id", userID, "error", err)
 		}
 	}
+}
+
+// SendDailySummaries sends a daily progress summary to each user with activity.
+func (s *Scheduler) SendDailySummaries(ctx context.Context, userIDs []string, now time.Time) {
+	for _, userID := range userIDs {
+		summary := ComputeDailySummary(userID, s.tracker, s.streaks, s.xp)
+		locale := s.userLocale(userID)
+		msg := FormatDailySummary(summary, locale)
+		if msg == "" {
+			continue
+		}
+		out := chat.OutboundMessage{
+			Channel:   "telegram",
+			UserID:    userID,
+			Text:      msg,
+			ParseMode: "Markdown",
+		}
+		if err := s.gateway.Send(ctx, out); err != nil {
+			s.logger.Error("failed to send daily summary", "user_id", userID, "error", err)
+			continue
+		}
+		s.logger.Info("daily summary sent", "user_id", userID)
+	}
+}
+
+func (s *Scheduler) dailySummarySentToday(now time.Time) bool {
+	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
+	if err != nil {
+		loc = time.FixedZone("MYT", 8*60*60)
+	}
+	today := now.In(loc).Truncate(24 * time.Hour)
+	lastDay := s.lastSummaryDate.In(loc).Truncate(24 * time.Hour)
+	return today.Equal(lastDay)
+}
+
+func (s *Scheduler) markDailySummarySent(now time.Time) {
+	s.lastSummaryDate = now
 }
 
 func (s *Scheduler) checkUser(ctx context.Context, userID string, now time.Time) error {
