@@ -3,15 +3,11 @@ package agent
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
-const (
-	dailySummaryHour   = 22
-	dailySummaryWindow = 5 * time.Minute
-)
+const dailySummaryHour = 22
 
 // DailySummary holds a cumulative progress snapshot for a user.
 type DailySummary struct {
@@ -22,19 +18,6 @@ type DailySummary struct {
 	CurrentStreak  int
 	BestTopic      string
 	BestMastery    float64
-}
-
-// IsDailySummaryTime returns true if t falls within the daily summary window (22:00–22:04 MYT).
-func IsDailySummaryTime(t time.Time) bool {
-	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
-	if err != nil {
-		loc = time.FixedZone("MYT", 8*60*60)
-	}
-	myt := t.In(loc)
-	if myt.Hour() != dailySummaryHour {
-		return false
-	}
-	return myt.Minute() < 5
 }
 
 // ComputeDailySummary builds a cumulative progress snapshot for the given user.

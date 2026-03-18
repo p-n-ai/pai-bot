@@ -114,7 +114,6 @@ type Scheduler struct {
 	aiRouter *ai.Router
 	store    nudgeLanguageStore
 	logger   *slog.Logger
-	lastSummaryDate time.Time // only accessed from ticker goroutine
 }
 
 // NewScheduler creates a new proactive scheduler.
@@ -148,6 +147,9 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
+	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
+	go s.runDailySummaryTimer(ctx, userIDs)
+
 	s.logger.Info("scheduler started", "interval", s.config.CheckInterval)
 
 	for {
@@ -161,14 +163,39 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	}
 }
 
+// runDailySummaryTimer fires at exactly 22:00 MYT each day.
+func (s *Scheduler) runDailySummaryTimer(ctx context.Context, userIDs []string) {
+	for {
+		delay := timeUntilNext(dailySummaryHour, 0)
+		s.logger.Info("daily summary scheduled", "fires_in", delay.Round(time.Second))
+
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case now := <-timer.C:
+			s.SendDailySummaries(ctx, userIDs, now)
+		}
+	}
+}
+
+// timeUntilNext returns the duration until the next occurrence of hour:minute in MYT.
+func timeUntilNext(hour, minute int) time.Duration {
+	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
+	if err != nil {
+		loc = time.FixedZone("MYT", 8*60*60)
+	}
+	now := time.Now().In(loc)
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
+	if !next.After(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next.Sub(now)
+}
+
 func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
 	now := time.Now()
-
-	// Check if it's time for daily summary (22:00-22:05 MYT).
-	if IsDailySummaryTime(now) && !s.dailySummarySentToday(now) {
-		s.SendDailySummaries(ctx, userIDs, now)
-		s.markDailySummarySent(now)
-	}
 
 	if IsQuietHours(now) {
 		return
@@ -203,20 +230,6 @@ func (s *Scheduler) SendDailySummaries(ctx context.Context, userIDs []string, no
 		}
 		s.logger.Info("daily summary sent", "user_id", userID)
 	}
-}
-
-func (s *Scheduler) dailySummarySentToday(now time.Time) bool {
-	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
-	if err != nil {
-		loc = time.FixedZone("MYT", 8*60*60)
-	}
-	today := now.In(loc).Truncate(24 * time.Hour)
-	lastDay := s.lastSummaryDate.In(loc).Truncate(24 * time.Hour)
-	return today.Equal(lastDay)
-}
-
-func (s *Scheduler) markDailySummarySent(now time.Time) {
-	s.lastSummaryDate = now
 }
 
 func (s *Scheduler) checkUser(ctx context.Context, userID string, now time.Time) error {

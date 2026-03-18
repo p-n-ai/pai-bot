@@ -111,7 +111,7 @@ func TestScheduler_DailySummaryTick(t *testing.T) {
 
 	scheduler := agent.NewScheduler(
 		agent.SchedulerConfig{CheckInterval: 1 * time.Second, MaxNudgesPerDay: 3},
-		tracker, streaks, xpTracker,
+		tracker, streaks, xpTracker, nil,
 		agent.NewMemoryNudgeTracker(), gw, nil, nil,
 	)
 
@@ -139,7 +139,7 @@ func TestScheduler_DailySummarySkipsInactiveUser(t *testing.T) {
 
 	scheduler := agent.NewScheduler(
 		agent.SchedulerConfig{CheckInterval: 1 * time.Second, MaxNudgesPerDay: 3},
-		tracker, streaks, xpTracker,
+		tracker, streaks, xpTracker, nil,
 		agent.NewMemoryNudgeTracker(), gw, nil, nil,
 	)
 

@@ -77,26 +77,10 @@ func TestFormatDailySummary_ZeroTopics(t *testing.T) {
 	}
 }
 
-func TestIsDailySummaryTime(t *testing.T) {
-	loc, _ := time.LoadLocation("Asia/Kuala_Lumpur")
-	tests := []struct {
-		name string
-		t    time.Time
-		want bool
-	}{
-		{"22:00 MYT", time.Date(2026, 3, 18, 22, 0, 0, 0, loc), true},
-		{"22:04 MYT", time.Date(2026, 3, 18, 22, 4, 0, 0, loc), true},
-		{"22:06 MYT", time.Date(2026, 3, 18, 22, 6, 0, 0, loc), false},
-		{"21:59 MYT", time.Date(2026, 3, 18, 21, 59, 0, 0, loc), false},
-		{"10:00 MYT", time.Date(2026, 3, 18, 10, 0, 0, 0, loc), false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsDailySummaryTime(tt.t)
-			if got != tt.want {
-				t.Errorf("IsDailySummaryTime(%v) = %v, want %v", tt.t, got, tt.want)
-			}
-		})
+func TestTimeUntilNext(t *testing.T) {
+	d := timeUntilNext(22, 0)
+	if d <= 0 || d > 24*time.Hour {
+		t.Errorf("timeUntilNext(22,0) = %v, want 0 < d <= 24h", d)
 	}
 }
 
