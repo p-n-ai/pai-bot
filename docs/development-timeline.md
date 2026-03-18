@@ -238,7 +238,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 |---------|------|-------|
 | `P-W2D9-1` | ✅ Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 |
 | `P-W2D9-2` | ✅ `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 |
-| `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
+| `P-W2D9-3` | ✅ Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 |
 | `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human |
 
 ### Day 10 — Week 2 Retro
@@ -301,7 +301,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 |---------|------|-------|
 | `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 |
 | `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 |
-| `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 |
+| `P-W3D13-3` | ✅ Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 |
 | `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human |
 
 ### Day 14 — Analytics Dashboard
