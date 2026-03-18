@@ -5,6 +5,15 @@ export function hasClientSession({ accessToken, user }) {
   return Boolean(accessToken && user?.user_id && user?.email);
 }
 
+export function getClientSessionSnapshot({ accessToken, user }) {
+  const isLoggedIn = hasClientSession({ accessToken, user });
+
+  return {
+    isLoggedIn,
+    currentUser: isLoggedIn ? user : null,
+  };
+}
+
 export function hasSessionCookies(cookieString) {
   if (!cookieString) {
     return false;

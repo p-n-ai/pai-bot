@@ -8,9 +8,10 @@ import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
 import { getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
 import { getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
-import { syncSessionCookies } from "@/lib/session-state.mjs";
+import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
 import { cn } from "@/lib/utils";
 
 const navIcons: Record<string, typeof Home> = {
@@ -30,25 +31,38 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isLoginRoute = pathname === "/login";
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    const loggedIn = hasStoredSession();
-    const syncedCookies = syncSessionCookies({
-      accessToken: getStoredAccessToken(),
-      user: storedUser,
-      cookieString: document.cookie,
-      writeCookie(value) {
-        document.cookie = value;
-      },
-    });
+    function refreshSessionState() {
+      const snapshot = getClientSessionSnapshot({
+        accessToken: getStoredAccessToken(),
+        user: getStoredUser(),
+      });
+      const syncedCookies = syncSessionCookies({
+        accessToken: getStoredAccessToken(),
+        user: snapshot.currentUser,
+        cookieString: document.cookie,
+        writeCookie(value) {
+          document.cookie = value;
+        },
+      });
 
-    setCurrentUser(storedUser);
-    setIsLoggedIn(loggedIn);
-    setHydrated(true);
+      setCurrentUser(snapshot.currentUser);
+      setIsLoggedIn(snapshot.isLoggedIn && hasStoredSession());
+      setHydrated(true);
 
-    if (syncedCookies) {
-      router.refresh();
+      if (syncedCookies) {
+        router.refresh();
+      }
     }
-  }, [router]);
+
+    refreshSessionState();
+    window.addEventListener(SESSION_CHANGED_EVENT, refreshSessionState);
+    window.addEventListener("storage", refreshSessionState);
+
+    return () => {
+      window.removeEventListener(SESSION_CHANGED_EVENT, refreshSessionState);
+      window.removeEventListener("storage", refreshSessionState);
+    };
+  }, [pathname, router]);
 
   if (isLoginRoute) {
     return (

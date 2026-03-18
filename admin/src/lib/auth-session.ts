@@ -1,6 +1,7 @@
 export const ACCESS_TOKEN_KEY = "pai_token";
 export const REFRESH_TOKEN_KEY = "pai_refresh_token";
 export const USER_KEY = "pai_user";
+export const SESSION_CHANGED_EVENT = "pai-admin-session-change";
 
 export const ACCESS_TOKEN_COOKIE = "pai_admin_access";
 export const USER_COOKIE = "pai_admin_user";

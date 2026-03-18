@@ -5,6 +5,7 @@ import {
   buildCookieRemoval,
   buildCookieValue,
   REFRESH_TOKEN_KEY,
+  SESSION_CHANGED_EVENT,
   USER_COOKIE,
   USER_KEY,
 } from "@/lib/auth-session";
@@ -235,6 +236,7 @@ export function persistSession(session: AuthSession): void {
   localStorage.setItem(USER_KEY, JSON.stringify(session.user));
   document.cookie = buildCookieValue(ACCESS_TOKEN_COOKIE, session.access_token, 60 * 60 * 24 * 7);
   document.cookie = buildCookieValue(USER_COOKIE, JSON.stringify(session.user), 60 * 60 * 24 * 7);
+  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 export function clearSession(): void {
@@ -245,6 +247,7 @@ export function clearSession(): void {
   localStorage.removeItem(USER_KEY);
   document.cookie = buildCookieRemoval(ACCESS_TOKEN_COOKIE);
   document.cookie = buildCookieRemoval(USER_COOKIE);
+  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 export function getStoredUser(): AuthUser | null {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { hasClientSession, hasSessionCookies, syncSessionCookies } from "./session-state.mjs";
+import { getClientSessionSnapshot, hasClientSession, hasSessionCookies, syncSessionCookies } from "./session-state.mjs";
 
 test("hasClientSession returns true when token and user are present", () => {
   assert.equal(
@@ -31,6 +31,34 @@ test("hasClientSession returns false when user is missing", () => {
     }),
     false,
   );
+});
+
+test("getClientSessionSnapshot returns the active user for a valid session", () => {
+  assert.deepEqual(
+    getClientSessionSnapshot({
+      accessToken: "token-123",
+      user: { user_id: "u1", role: "teacher", name: "Teacher", email: "teacher@example.com" },
+    }),
+    {
+      isLoggedIn: true,
+      currentUser: { user_id: "u1", role: "teacher", name: "Teacher", email: "teacher@example.com" },
+    },
+  );
+});
+
+test("getClientSessionSnapshot replaces the old role when a different user signs in", () => {
+  const previous = getClientSessionSnapshot({
+    accessToken: "teacher-token",
+    user: { user_id: "teacher-1", role: "teacher", name: "Teacher", email: "teacher@example.com" },
+  });
+
+  const next = getClientSessionSnapshot({
+    accessToken: "parent-token",
+    user: { user_id: "parent-1", role: "parent", name: "Parent", email: "parent@example.com" },
+  });
+
+  assert.equal(previous.currentUser.role, "teacher");
+  assert.equal(next.currentUser.role, "parent");
 });
 
 test("hasSessionCookies returns true when both auth cookies are present", () => {
