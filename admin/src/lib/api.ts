@@ -260,11 +260,17 @@ export function getStoredUser(): AuthUser | null {
   }
 }
 
+export function getStoredAccessToken(): string {
+  if (typeof window === "undefined") return "";
+
+  return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
+}
+
 export function hasStoredSession(): boolean {
   if (typeof window === "undefined") return false;
 
   return hasClientSession({
-    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || "",
+    accessToken: getStoredAccessToken(),
     user: getStoredUser(),
   });
 }
@@ -285,7 +291,7 @@ export async function logout(): Promise<void> {
 
 function getToken(): string {
   if (typeof window !== "undefined") {
-    return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
+    return getStoredAccessToken();
   }
   return "";
 }

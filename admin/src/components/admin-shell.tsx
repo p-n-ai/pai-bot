@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound } from "lucide-react";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getStoredUser, hasStoredSession } from "@/lib/api";
+import { getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
 import { getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
+import { syncSessionCookies } from "@/lib/session-state.mjs";
 import { cn } from "@/lib/utils";
 
 const navIcons: Record<string, typeof Home> = {
@@ -20,6 +21,7 @@ const navIcons: Record<string, typeof Home> = {
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
@@ -28,10 +30,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isLoginRoute = pathname === "/login";
 
   useEffect(() => {
-    setCurrentUser(getStoredUser());
-    setIsLoggedIn(hasStoredSession());
+    const storedUser = getStoredUser();
+    const loggedIn = hasStoredSession();
+    const syncedCookies = syncSessionCookies({
+      accessToken: getStoredAccessToken(),
+      user: storedUser,
+      cookieString: document.cookie,
+      writeCookie(value) {
+        document.cookie = value;
+      },
+    });
+
+    setCurrentUser(storedUser);
+    setIsLoggedIn(loggedIn);
     setHydrated(true);
-  }, []);
+
+    if (syncedCookies) {
+      router.refresh();
+    }
+  }, [router]);
 
   if (isLoginRoute) {
     return (
