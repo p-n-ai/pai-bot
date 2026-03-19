@@ -14,6 +14,8 @@ test("isRouteActive prefers the most specific dashboard route", () => {
   assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
   assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), false);
   assert.equal(isRouteActive("/dashboard/metrics", "/dashboard/metrics"), true);
+  assert.equal(isRouteActive("/dashboard/classes", "/dashboard"), false);
+  assert.equal(isRouteActive("/dashboard/classes", "/dashboard/classes"), true);
 });
 
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
@@ -48,6 +50,14 @@ test("getCurrentSection returns metrics metadata for dashboard metrics routes", 
   });
 });
 
+test("getCurrentSection returns class management metadata for dashboard classes routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/classes"), {
+    eyebrow: "Teaching operations",
+    title: "Class management",
+    description: "Review the planned class setup, join code, roster, and topic assignment layout.",
+  });
+});
+
 test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
   assert.deepEqual(getCurrentSection(), {
     eyebrow: "Admin panel",
@@ -70,7 +80,7 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/", "/dashboard", "/dashboard/metrics", "/dashboard/ai-usage"],
+    ["/", "/dashboard", "/dashboard/classes", "/dashboard/metrics", "/dashboard/ai-usage"],
   );
 });
 
@@ -86,5 +96,12 @@ test("getBreadcrumbs returns parent hierarchy for a parent user", () => {
   assert.deepEqual(getBreadcrumbs("/parents/parent-1", { role: "parent", user_id: "parent-1" }), [
     { label: "Home", href: "/" },
     { label: "Child summary", href: "/parents/parent-1" },
+  ]);
+});
+
+test("getBreadcrumbs returns class management hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/dashboard/classes"), [
+    { label: "Home", href: "/" },
+    { label: "Classes", href: "/dashboard/classes" },
   ]);
 });

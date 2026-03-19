@@ -16,3 +16,4 @@ import "./dashboard-view.test.mjs";
 import "./metrics-view.test.mjs";
 import "./student-view.test.mjs";
 import "./parent-view.test.mjs";
+import "./mock-classes.test.mjs";
