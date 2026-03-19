@@ -2175,3 +2175,41 @@ questions:
 	}
 	return loader
 }
+
+func TestEngine_MilestoneCelebration_NoPanic(t *testing.T) {
+	mockAI := ai.NewMockProvider("Great job! Keep learning.")
+	xpTracker := progress.NewMemoryXPTracker()
+	streakTracker := progress.NewMemoryStreakTracker()
+	progressTracker := progress.NewMemoryTracker()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		XP:       xpTracker,
+		Streaks:  streakTracker,
+		Tracker:  progressTracker,
+	})
+
+	userID := "milestone-test-user"
+
+	// First message — milestones field should be wired and drain without panic.
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "Hello!",
+	})
+	if err != nil {
+		t.Fatalf("first ProcessMessage() error = %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Second message — any pending milestones (e.g. XP milestone from session) drain cleanly.
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  userID,
+		Text:    "Tell me more.",
+	})
+	if err != nil {
+		t.Fatalf("second ProcessMessage() error = %v", err)
+	}
+}

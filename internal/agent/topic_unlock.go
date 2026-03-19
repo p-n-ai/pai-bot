@@ -110,6 +110,23 @@ func (e *Engine) drainUnlockNotification(userID, locale string) string {
 	return formatUnlockNotification(locale, topics)
 }
 
+// drainMilestoneNotification returns and clears any pending milestone celebration messages for the user.
+func (e *Engine) drainMilestoneNotification(userID string) string {
+	if e.milestones == nil {
+		return ""
+	}
+	msgs := e.milestones.drain(userID)
+	return formatMilestoneBlock(msgs)
+}
+
+// resolveUserLocale returns the preferred locale for the given user, falling back to DefaultLocale.
+func (e *Engine) resolveUserLocale(userID string) string {
+	if lang, ok := e.store.GetUserPreferredLanguage(userID); ok && lang != "" {
+		return lang
+	}
+	return i18n.DefaultLocale
+}
+
 // buildPrereqGraph creates the prerequisite graph from loaded curriculum topics.
 func buildPrereqGraph(loader *curriculum.Loader) *curriculum.PrereqGraph {
 	if loader == nil {

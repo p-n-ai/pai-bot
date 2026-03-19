@@ -66,6 +66,20 @@ func (e *Engine) handleDevBoost(msg chat.InboundMessage, args []string) (string,
 	return fmt.Sprintf("[DEV] Mastery for %s set to %.0f%%.", topicName, target*100), nil
 }
 
+// handleDevSummary triggers the daily summary for the current user.
+func (e *Engine) handleDevSummary(msg chat.InboundMessage) (string, error) {
+	locale := "ms"
+	if lang, ok := e.store.GetUserPreferredLanguage(msg.UserID); ok && lang != "" {
+		locale = lang
+	}
+	summary := ComputeDailySummary(msg.UserID, e.tracker, e.streaks, e.xp)
+	result := FormatDailySummary(summary, locale)
+	if result == "" {
+		return "[DEV] No activity to summarize.", nil
+	}
+	return result, nil
+}
+
 // handleDevReset fully resets a user's state: conversation, profile, mastery, XP, streaks, goals.
 // Only available when DevMode is enabled (LEARN_DEV_MODE=true).
 func (e *Engine) handleDevReset(msg chat.InboundMessage) (string, error) {
