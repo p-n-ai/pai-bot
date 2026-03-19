@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Coins, Cpu, MessagesSquare, Orbit } from "lucide-react";
+import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { StatCard } from "@/components/stat-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { AIUsageSummary } from "@/lib/api";
 import { formatCompactNumber, getTopProvider } from "@/lib/ai-usage.mjs";
@@ -66,19 +66,17 @@ export default async function AIUsagePage() {
         <StatCard icon={Orbit} title="Providers" value={String(usage?.providers.length ?? 0)} note="Distinct provider/model rows returned" />
       </section>
 
-      <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Provider breakdown</CardTitle>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Use this table to spot which providers and models are carrying most of the token load.
-            </p>
-          </div>
-          <Link href="/dashboard" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
-            Back to dashboard
-          </Link>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <AdminSurface>
+        <AdminSurfaceHeader
+          title="Provider breakdown"
+          description="Use this table to spot which providers and models are carrying most of the token load."
+          action={
+            <Link href="/dashboard" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
+              Back to dashboard
+            </Link>
+          }
+        />
+        <div className="mt-6 space-y-4">
           {loadError ? <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p> : null}
           {usage && usage.providers.length > 0 ? (
           <Table>
@@ -122,8 +120,8 @@ export default async function AIUsagePage() {
               {loadError ? "Please check back after the next sync." : "No AI usage has been recorded yet."}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </AdminSurface>
     </div>
   );
 }

@@ -368,6 +368,23 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 **Week 4 Targets:** Admin panel live. All 3 Forms working. 2+ teachers using dashboard. 100+ students active. Day-14 retention ≥30%.
 
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W4D16-UI-1` | Admin panel shadcn/ui migration plan: standardize the remaining admin screens around shared `@/components/ui` primitives, lock design-token ownership in `globals.css`, migrate forms first, layout/navigation second, data-display surfaces third, and remove duplicated bespoke UI after each slice. | ✅ | 🤖 |
+| `A-W4D16-UI-2` | First shadcn/ui migration slice: introduce a shared admin surface wrapper component and move the dashboard mastery heatmap onto the local shadcn table primitives instead of a bespoke table implementation. | ✅ | 🤖 |
+| `A-W4D16-UI-3` | Second shadcn/ui migration slice: extract the admin login form into reusable shadcn-based form components (`FormField`, `LoginFormCard`), replace the native tenant selector with the shared select primitive, and add component tests for the new auth form surface. | ✅ | 🤖 |
+| `A-W4D16-UI-4` | Third shadcn/ui migration slice: add the missing invite-acceptance entry point at `/activate`, reuse the shared auth form primitives for password setup, connect it to `POST /api/auth/invitations/accept`, and add component tests for the activation form state. | ✅ | 🤖 |
+| `A-W4D16-UI-5` | Fourth shadcn/ui migration slice: add a reusable admin invite-issuance form, wire it to `POST /api/admin/invites` from the class-management operations area, and surface the generated `/activate` link for teacher, parent, and admin onboarding. | ✅ | 🤖 |
+| `A-W4D16-UI-6` | Fifth shadcn/ui migration slice: standardize the analytics pages and shell support panels on shared wrappers by moving metrics and AI usage page sections to `AdminSurface` and replacing repeated sidebar inset cards with a shared `AdminInsetPanel`. | ✅ | 🤖 |
+| `A-W4D16-UI-7` | Sixth shadcn/ui migration slice: standardize the home, student detail, and parent summary pages on shared wrappers by introducing reusable highlight and link-card components and replacing repeated content cards with `AdminSurface`, `AdminInsetPanel`, and `AdminHighlightPanel`. | ✅ | 🤖 |
+| `A-W4D16-UI-8` | Seventh shadcn/ui migration slice: refactor the remaining class-management view onto shared wrappers by introducing reusable class-list and topic-progress components and replacing bespoke class tiles, selected-class summary, and topic rows with shared shadcn-based surfaces. | ✅ | 🤖 |
+| `A-W4D16-UI-9` | Shared frontend cleanup after the shadcn migration: remove the last admin lint issues in the theme toggle, async resource hook, and small shared components so `admin/` now passes `npm run lint` cleanly. | ✅ | 🤖 |
+
 ---
 
 ## WEEK 5 — SELF-HOSTABLE + OPEN SOURCE PREP

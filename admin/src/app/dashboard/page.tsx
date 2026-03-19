@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
+import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
@@ -66,8 +67,8 @@ export default function DashboardPage() {
           <StatCard title="Tracked Scores" value={String(summary.trackedScores)} note="Real mastery entries loaded" />
         </section>
 
-        <Card className="rounded-[28px] border-white/70 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.1)] dark:border-white/10 dark:bg-slate-900/85">
-          <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+        <AdminSurface className="border-white/60 bg-slate-950 text-white dark:bg-slate-900/85">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Operations</p>
               <h2 className="text-2xl font-semibold tracking-tight">Check AI usage before costs drift.</h2>
@@ -81,20 +82,20 @@ export default function DashboardPage() {
             >
               Open AI usage
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </AdminSurface>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl tracking-tight text-slate-950 dark:text-slate-50">Mastery heatmap</CardTitle>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Students by topic with direct navigation into detail views.</p>
-            </div>
-            <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
-              Back home
-            </Link>
-          </CardHeader>
-          <CardContent>
+        <AdminSurface>
+          <AdminSurfaceHeader
+            title="Mastery heatmap"
+            description="Students by topic with direct navigation into detail views."
+            action={
+              <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
+                Back home
+              </Link>
+            }
+          />
+          <div className="mt-6">
             {loading ? (
               <StatePanel
                 tone="loading"
@@ -110,26 +111,25 @@ export default function DashboardPage() {
                 />
               ) : (
               <div className="space-y-5">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] border-separate border-spacing-y-2">
-                    <thead>
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Student</th>
+                <Table className="min-w-[760px] border-separate border-spacing-y-2">
+                  <TableHeader>
+                    <TableRow className="border-none hover:bg-transparent">
+                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Student</TableHead>
                         {data.topic_ids.map((topicId) => (
-                          <th
+                          <TableHead
                             key={topicId}
                             className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"
                           >
                             {formatTopicLabel(topicId)}
-                          </th>
+                          </TableHead>
                         ))}
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nudge</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nudge</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                       {data.students.map((student) => (
-                        <tr key={student.id}>
-                          <td className="rounded-l-2xl bg-slate-50/80 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/70 dark:text-slate-100">
+                        <TableRow key={student.id} className="border-none hover:bg-transparent">
+                          <TableCell className="rounded-l-2xl bg-slate-50/80 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/70 dark:text-slate-100">
                             <Link
                               href={`/students/${student.id}`}
                               className="inline-flex items-center gap-2 hover:text-sky-700 dark:hover:text-sky-300"
@@ -137,18 +137,18 @@ export default function DashboardPage() {
                               {student.name}
                               <ChevronRight className="size-4" />
                             </Link>
-                          </td>
+                          </TableCell>
                           {data.topic_ids.map((topicId) => {
                             const score = student.topics[topicId] ?? 0;
                             return (
-                              <td key={`${student.id}-${topicId}`} className="bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
+                              <TableCell key={`${student.id}-${topicId}`} className="bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                                 <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
                                   {Math.round(score * 100)}%
                                 </span>
-                              </td>
+                              </TableCell>
                             );
                           })}
-                          <td className="rounded-r-2xl bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
+                          <TableCell className="rounded-r-2xl bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
                             <Button
                               size="sm"
                               className="gap-2"
@@ -158,12 +158,11 @@ export default function DashboardPage() {
                               <BellRing className="size-4" />
                               {sendingStudentID === student.id ? "Sending..." : "Nudge"}
                             </Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                  </TableBody>
+                </Table>
                 {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
               </div>
               )
@@ -174,8 +173,8 @@ export default function DashboardPage() {
                 description={error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
               />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </AdminSurface>
     </div>
   );
 }

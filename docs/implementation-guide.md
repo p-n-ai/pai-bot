@@ -4785,6 +4785,17 @@ Follow the same pattern:
 Planned follow-up after Week 4 scaffolding:
 
 - Keep students on Telegram identity until a separate student web portal is explicitly introduced.
+- Treat `admin/src/app/globals.css` as the single owner for admin design tokens (color, radius, typography, focus, sidebar, and chart palette).
+- Standardize remaining feature pages on shared `@/components/ui` primitives and thin wrappers instead of repeating page-level card, table, and dialog styling.
+- Initial migration slices should cover dashboard surfaces first, then auth forms (login, invite acceptance, password setup) so new admin entry points share the same shadcn-based form contract.
+- Invite acceptance should be a public Next.js route that reads the invite token from the URL, posts to `POST /api/auth/invitations/accept`, persists the returned session, and redirects to the role-safe default route.
+- Admin invite issuance should reuse the same form primitives from an authenticated workspace surface and expose the generated `/activate?token=...` link so backend-issued invites and frontend onboarding stay coupled to one activation path.
+- After auth flows are aligned, migrate analytics pages and shell support panels onto shared shadcn-backed wrappers before touching more bespoke feature pages; that removes repeated card/layout styling with lower behavior risk than the student detail pages.
+- The remaining page-level migration should then cover the home view plus student and parent detail pages, replacing repeated highlight blocks and content cards with shared wrappers rather than introducing page-specific variants.
+- The last high-signal page-level migration in the current repo is class management: class selector tiles, selected-class summary, and topic progress rows should all use shared wrappers/components rather than remain bespoke to that screen.
+- Migrate in this order: form controls and form wrappers first, layout/navigation shell second, data-display surfaces and table-based views third.
+- After each migration slice, remove superseded bespoke UI so the admin app does not accumulate parallel component systems.
+- Every migration slice still follows TDD: component tests first, feature tests second, then `make test-all` before the slice is considered complete.
 
 **Week 4 Targets:**
 - [ ] Admin panel live

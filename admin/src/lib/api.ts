@@ -143,6 +143,14 @@ export interface TenantChoice {
   tenant_name: string;
 }
 
+export interface InviteRecord {
+  email: string;
+  role: "teacher" | "parent" | "admin" | "platform_admin";
+  invite_token: string;
+  expires_at: string;
+  invited_by_user_id: string;
+}
+
 export class LoginError extends Error {
   code: "tenant_required" | "generic";
   tenants: TenantChoice[];
@@ -252,6 +260,43 @@ export async function login(input: {
   }
 
   return (await readJSONResponse(res)) as AuthSession;
+}
+
+export async function acceptInvite(input: {
+  token: string;
+  name: string;
+  password: string;
+}): Promise<AuthSession> {
+  const res = await fetch(`${API_BASE}/api/auth/invitations/accept`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+
+    try {
+      const payload = JSON.parse(raw) as { error?: string };
+      throw new Error(payload.error || `Invite activation failed: ${res.status}`);
+    } catch (error) {
+      if (error instanceof Error && error.message !== raw) {
+        throw error;
+      }
+      throw new Error(raw || `Invite activation failed: ${res.status}`);
+    }
+  }
+
+  return (await readJSONResponse(res)) as AuthSession;
+}
+
+export async function issueInvite(input: {
+  email: string;
+  role: "teacher" | "parent" | "admin";
+}): Promise<InviteRecord> {
+  return postJSONWithBody("/api/admin/invites", input);
 }
 
 export function persistSession(session: AuthSession): void {
