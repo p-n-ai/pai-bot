@@ -111,7 +111,7 @@ Each channel adapter normalizes platform-specific message formats into a common 
 
 | Component | Technology | Version | Rationale |
 |-----------|-----------|---------|-----------|
-| **Framework** | Next.js (App Router) | 14 | SSR for SEO, API routes for BFF patterns, edge middleware. AI agents write excellent Next.js code — strongest ecosystem support. |
+| **Framework** | Next.js (App Router) | 16 | SSR for SEO, API routes for BFF patterns, edge middleware. AI agents write excellent Next.js code — strongest ecosystem support. |
 | **Language** | TypeScript | 5.x | Type safety, excellent agentic coding support. |
 | **Admin Framework** | Refine | ≥4 | Filament-equivalent for React. Rapid CRUD generation, headless architecture, data provider abstraction. |
 | **UI Components** | shadcn/ui | latest | Copy-paste component library built on Radix. Not a dependency — components live in your codebase. Tailwind-based styling. |
@@ -593,7 +593,7 @@ ArgoCD (running in K8s cluster)
     "@refinedev/core": "^4",
     "@refinedev/nextjs-router": "^6",
     "@refinedev/react-hook-form": "^4",
-    "tailwindcss": "^3",
+    "tailwindcss": "^4",
     "@radix-ui/react-*": "latest",
     "recharts": "^2",
     "tanstack/react-query": "^5",

@@ -4684,7 +4684,7 @@ Follow the same TDD pattern for:
 
 | # | Task ID | Task | Owner | Files Created |
 |---|---------|------|-------|---------------|
-| 16.1 | `P-W4D16-1` | Scaffold Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine | 🤖 | `admin/` directory |
+| 16.1 | `P-W4D16-1` | Scaffold Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine | 🤖 | `admin/` directory |
 | 16.2 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid, "Nudge" button per student | 🤖 | `admin/src/app/dashboard/page.tsx` |
 | 16.3 | `P-W4D16-3` | Student detail page: profile, mastery radar, activity grid, conversations | 🤖 | `admin/src/app/students/[id]/page.tsx` |
 | 16.4 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views | 🧑 | Manual |

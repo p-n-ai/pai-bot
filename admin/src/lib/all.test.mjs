@@ -11,3 +11,4 @@ import "./topic-labels.test.mjs";
 import "./metrics.test.mjs";
 import "./student-activity.test.mjs";
 import "./refine-resources.test.mjs";
+import "./proxy-routing.test.mjs";
