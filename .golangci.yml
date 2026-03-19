@@ -1,0 +1,5 @@
+issues:
+  exclude-dirs:
+    - admin/node_modules
+    - admin/.next
+    - .golangci-cache

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AdminShell } from "@/components/admin-shell";
+import { RefineProvider } from "@/components/refine-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -33,7 +35,11 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <AdminShell>{children}</AdminShell>
+          <Suspense fallback={null}>
+            <RefineProvider>
+              <AdminShell>{children}</AdminShell>
+            </RefineProvider>
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>
