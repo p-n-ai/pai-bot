@@ -10,7 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
 import { getStudentConversations, getStudentDetail, type StudentConversation } from "@/lib/api";
+import { buildStudentActivityGrid } from "@/lib/student-activity.mjs";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
+
+function activityTone(level: number) {
+  if (level >= 4) return "bg-sky-600 dark:bg-sky-300";
+  if (level === 3) return "bg-sky-500 dark:bg-sky-400";
+  if (level === 2) return "bg-sky-300 dark:bg-sky-500";
+  if (level === 1) return "bg-sky-200 dark:bg-sky-700";
+  return "bg-slate-200 dark:bg-slate-800";
+}
 
 export default function StudentPage() {
   const params = useParams<{ id: string }>();
@@ -32,6 +41,7 @@ export default function StudentPage() {
   })) ?? [];
 
   const struggleAreas = detail?.progress.filter((item) => item.mastery_score < 0.6) ?? [];
+  const activityGrid = buildStudentActivityGrid(conversations);
 
   return (
     <div className="space-y-6">
@@ -59,7 +69,33 @@ export default function StudentPage() {
             </Link>
         </PageHero>
 
-        <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+        <section className="grid gap-4 xl:grid-cols-[0.75fr_1fr_0.9fr]">
+          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
+            <CardHeader>
+              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Profile card</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Form</p>
+                <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{detail?.student.form ?? "-"}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Channel</p>
+                <p className="mt-2 text-sm font-medium capitalize text-slate-900 dark:text-slate-100">{detail?.student.channel ?? "-"}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">External ID</p>
+                <p className="mt-2 break-all text-sm font-medium text-slate-900 dark:text-slate-100">{detail?.student.external_id ?? "-"}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Joined</p>
+                <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {detail?.student.created_at ? formatAdminDateTime(detail.student.created_at) : "-"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
             <CardHeader>
               <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Mastery radar</CardTitle>
@@ -126,6 +162,36 @@ export default function StudentPage() {
             </CardContent>
           </Card>
         </section>
+
+        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
+          <CardHeader>
+            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Activity grid</CardTitle>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Conversation activity over the last 14 days.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-7 gap-2 md:grid-cols-14">
+              {activityGrid.map((item) => (
+                <div key={item.date} className="space-y-2 text-center">
+                  <div
+                    className={`h-12 rounded-2xl border border-white/60 shadow-inner dark:border-white/10 ${activityTone(item.level)}`}
+                    title={`${item.shortLabel}: ${item.count} messages`}
+                  />
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{item.shortLabel}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span>Less active</span>
+              {[0, 1, 2, 3, 4].map((level) => (
+                <span
+                  key={level}
+                  className={`inline-flex size-4 rounded-full border border-white/60 dark:border-white/10 ${activityTone(level)}`}
+                />
+              ))}
+              <span>More active</span>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
           <CardHeader>

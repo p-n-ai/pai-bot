@@ -91,8 +91,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="sticky top-0 hidden h-screen w-80 shrink-0 border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
-          <SidebarContent pathname={pathname} currentUser={currentUser} />
+        <aside className="sticky top-0 hidden h-screen w-80 shrink-0 overflow-hidden border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
+          <div className="scrollbar-thin-subtle min-h-0 flex-1 overflow-y-auto pr-2">
+            <SidebarContent pathname={pathname} currentUser={currentUser} />
+          </div>
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
@@ -125,7 +127,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <div className="overflow-hidden">
                 <div
                   className={cn(
-                    "transition duration-300 ease-out",
+                    "scrollbar-thin-subtle max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 transition duration-300 ease-out",
                     mobileOpen ? "translate-y-0 scale-100" : "-translate-y-2 scale-[0.98]",
                   )}
                 >
