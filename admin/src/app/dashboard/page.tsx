@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { BellRing, ChevronRight, Sparkles } from "lucide-react";
 import { PageHero } from "@/components/page-hero";
+import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAsyncResource } from "@/hooks/use-async-resource";
-import { getAverageMastery, getTrackedScores } from "@/lib/class-progress.mjs";
+import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 
@@ -23,9 +24,7 @@ export default function DashboardPage() {
   const { data, loading, error } = useAsyncResource<ClassProgress>(() => getClassProgress("all-students"), []);
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
-
-  const averageMastery = data ? getAverageMastery(data) : 0;
-  const trackedScores = data ? getTrackedScores(data) : 0;
+  const summary = getDashboardSummary(data);
 
   async function handleNudge(studentID: string, studentName: string) {
     setSendingStudentID(studentID);
@@ -51,7 +50,7 @@ export default function DashboardPage() {
             <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Average mastery</p>
-              <p className="mt-2 text-4xl font-semibold">{averageMastery}%</p>
+              <p className="mt-2 text-4xl font-semibold">{summary.averageMastery}%</p>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Sparkles className="size-4 text-amber-300" />
@@ -62,9 +61,9 @@ export default function DashboardPage() {
         />
 
         <section className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Students" value={String(data?.students.length ?? 0)} note="Tracked in this view" />
-          <StatCard title="Topics" value={String(data?.topic_ids.length ?? 0)} note="Algebra sequence" />
-          <StatCard title="Tracked Scores" value={String(trackedScores)} note="Real mastery entries loaded" />
+          <StatCard title="Students" value={String(summary.studentCount)} note="Tracked in this view" />
+          <StatCard title="Topics" value={String(summary.topicCount)} note="Algebra sequence" />
+          <StatCard title="Tracked Scores" value={String(summary.trackedScores)} note="Real mastery entries loaded" />
         </section>
 
         <Card className="rounded-[28px] border-white/70 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.1)] dark:border-white/10 dark:bg-slate-900/85">
@@ -97,12 +96,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Preparing the latest class snapshot.</p>
+              <StatePanel
+                tone="loading"
+                title="Preparing the latest class snapshot"
+                description="Pulling student mastery, tracked topics, and direct links into the learner detail pages."
+              />
             ) : data ? (
-              data.students.length === 0 || data.topic_ids.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Class progress will appear here once students start working through assigned topics.
-                </p>
+              !summary.hasHeatmap ? (
+                <StatePanel
+                  tone="empty"
+                  title="No class heatmap yet"
+                  description="Class progress will appear here once students start working through assigned topics."
+                />
               ) : (
               <div className="space-y-5">
                 <div className="overflow-x-auto">
@@ -163,9 +168,11 @@ export default function DashboardPage() {
               </div>
               )
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
-              </p>
+              <StatePanel
+                tone={error ? "error" : "empty"}
+                title={error ? "Class data is unavailable" : "Waiting for class data"}
+                description={error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
+              />
             )}
           </CardContent>
         </Card>

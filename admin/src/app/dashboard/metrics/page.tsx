@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Activity, ArrowUpRight, BellRing, LineChart } from "lucide-react";
 import { PageHero } from "@/components/page-hero";
+import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MetricsSummary } from "@/lib/api";
 import { formatCompactNumber } from "@/lib/ai-usage.mjs";
+import { getMetricsViewModel } from "@/lib/metrics-view.mjs";
 import { getServerMetrics } from "@/lib/server-api";
 
 function formatPercent(value: number) {
@@ -23,10 +25,7 @@ export default async function MetricsPage() {
     loadError = "Metrics aren't available right now.";
   }
 
-  const latestDAU = metrics?.daily_active_users.at(-1)?.users ?? 0;
-  const latestRetention = metrics?.retention.at(-1);
-  const aiUsage = metrics?.ai_usage;
-  const dauPeak = Math.max(...(metrics?.daily_active_users.map((point) => point.users) ?? [1]));
+  const view = getMetricsViewModel(metrics);
 
   return (
     <div className="space-y-6">
@@ -38,7 +37,7 @@ export default async function MetricsPage() {
           <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Latest DAU</p>
-              <p className="mt-2 text-4xl font-semibold">{formatCompactNumber(latestDAU)}</p>
+              <p className="mt-2 text-4xl font-semibold">{formatCompactNumber(view.latestDAU)}</p>
             </div>
             <div className="text-sm text-slate-300">
               {metrics ? `Window: ${metrics.window_days} days` : "Waiting for the first metrics snapshot."}
@@ -48,15 +47,15 @@ export default async function MetricsPage() {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Activity} title="Latest DAU" value={formatCompactNumber(latestDAU)} note="Distinct active learners today" />
-        <StatCard icon={ArrowUpRight} title="Day 7 retention" value={formatPercent(latestRetention?.day_7_rate ?? 0)} note="Most recent cohort snapshot" />
+        <StatCard icon={Activity} title="Latest DAU" value={formatCompactNumber(view.latestDAU)} note="Distinct active learners today" />
+        <StatCard icon={ArrowUpRight} title="Day 7 retention" value={formatPercent(view.latestRetention?.day_7_rate ?? 0)} note="Most recent cohort snapshot" />
         <StatCard
           icon={BellRing}
           title="Nudge response"
           value={formatPercent(metrics?.nudge_rate.response_rate ?? 0)}
           note={`${metrics?.nudge_rate.responses_within_24h ?? 0} responses within 24 hours`}
         />
-        <StatCard icon={LineChart} title="AI messages" value={formatCompactNumber(aiUsage?.total_messages ?? 0)} note="Teacher workspace model traffic" />
+        <StatCard icon={LineChart} title="AI messages" value={formatCompactNumber(view.aiUsage?.total_messages ?? 0)} note="Teacher workspace model traffic" />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -71,9 +70,9 @@ export default async function MetricsPage() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-4">
-            {metrics?.daily_active_users.length ? (
-              metrics.daily_active_users.map((point) => {
-                const width = `${Math.max(8, Math.round((point.users / dauPeak) * 100))}%`;
+            {view.hasDailyActivity ? (
+              metrics!.daily_active_users.map((point) => {
+                const width = `${Math.max(8, Math.round((point.users / view.dauPeak) * 100))}%`;
                 return (
                   <div key={point.date} className="space-y-2">
                     <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
@@ -87,9 +86,11 @@ export default async function MetricsPage() {
                 );
               })
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {loadError || "Daily activity will appear once metrics have been recorded."}
-              </p>
+              <StatePanel
+                tone={loadError ? "error" : "empty"}
+                title={loadError ? "Metrics snapshot unavailable" : "No daily activity yet"}
+                description={loadError || "Daily activity will appear once metrics have been recorded."}
+              />
             )}
           </CardContent>
         </Card>
@@ -100,8 +101,8 @@ export default async function MetricsPage() {
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Day 1, Day 7, and Day 14 follow-through by signup cohort.</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {metrics?.retention.length ? (
-              metrics.retention.map((row) => (
+            {view.hasRetention ? (
+              metrics!.retention.map((row) => (
                 <div key={row.cohort_date} className="rounded-2xl border border-slate-200/80 p-4 dark:border-white/10">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -119,9 +120,11 @@ export default async function MetricsPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {loadError || "Retention snapshots will appear after multiple cohorts are available."}
-              </p>
+              <StatePanel
+                tone={loadError ? "error" : "empty"}
+                title={loadError ? "Retention data unavailable" : "No retention cohorts yet"}
+                description={loadError || "Retention snapshots will appear after multiple cohorts are available."}
+              />
             )}
           </CardContent>
         </Card>
@@ -138,7 +141,7 @@ export default async function MetricsPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Token activity</p>
-            <p className="mt-2 text-2xl font-semibold">{formatCompactNumber((aiUsage?.total_input_tokens ?? 0) + (aiUsage?.total_output_tokens ?? 0))}</p>
+            <p className="mt-2 text-2xl font-semibold">{formatCompactNumber(view.totalTokens)}</p>
             <p className="mt-2 text-sm text-slate-300">Prompt and completion tokens across the current metrics snapshot.</p>
           </div>
           <div>
