@@ -14,6 +14,13 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
+    title: "Classes",
+    href: "/dashboard/classes",
+    description: "Mock class setup, join codes, roster, and topic assignment layout.",
+    group: "Teaching",
+    roles: ["teacher", "admin", "platform_admin"],
+  },
+  {
     title: "Metrics",
     href: "/dashboard/metrics",
     description: "Review DAU, retention, nudge response, and token activity across the workspace.",
@@ -107,6 +114,14 @@ export function getCurrentSection(pathname) {
     };
   }
 
+  if (pathname.startsWith("/dashboard/classes")) {
+    return {
+      eyebrow: "Teaching operations",
+      title: "Class management",
+      description: "Review the planned class setup, join code, roster, and topic assignment layout.",
+    };
+  }
+
   const match = primaryNavigation.find((item) => isRouteActive(pathname, item.href));
   if (match) {
     return {
@@ -141,6 +156,13 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Home", href: "/" },
       { label: "Child summary", href: parentHref },
+    ];
+  }
+
+  if (pathname.startsWith("/dashboard/classes")) {
+    return [
+      { label: "Home", href: "/" },
+      { label: "Classes", href: "/dashboard/classes" },
     ];
   }
 

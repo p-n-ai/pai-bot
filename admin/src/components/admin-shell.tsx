@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound, Users } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound, Users, LibraryBig } from "lucide-react";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 const navIcons: Record<string, typeof Home> = {
   "/": Home,
   "/dashboard": BarChart3,
+  "/dashboard/classes": LibraryBig,
   "/dashboard/metrics": BarChart3,
   "/dashboard/ai-usage": Coins,
   "/parents/parent-1": Users,
