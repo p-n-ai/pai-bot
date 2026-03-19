@@ -10,14 +10,16 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
 import { getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
-import { getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
+import { getBreadcrumbs, getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
 import { cn } from "@/lib/utils";
 
 const navIcons: Record<string, typeof Home> = {
   "/": Home,
   "/dashboard": BarChart3,
+  "/dashboard/metrics": BarChart3,
   "/dashboard/ai-usage": Coins,
+  "/parents/parent-1": Users,
 };
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const section = getCurrentSection(pathname);
+  const breadcrumbs = getBreadcrumbs(pathname, currentUser);
   const isLoginRoute = pathname === "/login";
 
   useEffect(() => {
@@ -142,6 +145,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">{section.eyebrow}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {breadcrumbs.map((item, index) => (
+                      <div key={`${item.href}-${item.label}`} className="flex items-center gap-2">
+                        {index > 0 ? <span>/</span> : null}
+                        {index === breadcrumbs.length - 1 ? (
+                          <span className="text-slate-700 dark:text-slate-200">{item.label}</span>
+                        ) : (
+                          <Link href={item.href} className="hover:text-sky-700 dark:hover:text-sky-300">
+                            {item.label}
+                          </Link>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                   <div className="space-y-2">
                     <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">{section.title}</h1>
                     <p className="max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{section.description}</p>
@@ -176,6 +193,15 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const navigationItems = getNavigationForUser(currentUser);
+  type NavigationItem = (typeof navigationItems)[number];
+  const groupedNavigation = navigationItems.reduce<Record<string, NavigationItem[]>>((result, item) => {
+    const group = item.group || "Workspace";
+    if (!result[group]) {
+      result[group] = [];
+    }
+    result[group].push(item);
+    return result;
+  }, {});
 
   return (
     <div className="flex h-full flex-col gap-6">
@@ -199,30 +225,35 @@ function SidebarContent({
           </p>
         </Link>
 
-        <nav className="space-y-2">
-          {navigationItems.map((item) => {
-            const Icon = navIcons[item.href] ?? Home;
-            const active = isRouteActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition",
-                  active
-                    ? "border-sky-300 bg-sky-100 text-sky-950 shadow-[0_10px_30px_rgba(14,165,233,0.14)] dark:border-sky-400/40 dark:bg-sky-400/12 dark:text-sky-100"
-                    : "border-slate-200/70 bg-white/85 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-slate-950/65",
-                )}
-              >
-                <Icon className="size-4" />
-                <div className="min-w-0">
-                  <p className="font-medium">{item.title}</p>
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
-                </div>
-              </Link>
-            );
-          })}
+        <nav className="space-y-4">
+          {Object.entries(groupedNavigation).map(([group, items]) => (
+            <div key={group} className="space-y-2">
+              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{group}</p>
+              {items.map((item) => {
+                const Icon = navIcons[item.href] ?? (item.href.startsWith("/parents/") ? Users : Home);
+                const active = isRouteActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition",
+                      active
+                        ? "border-sky-300 bg-sky-100 text-sky-950 shadow-[0_10px_30px_rgba(14,165,233,0.14)] dark:border-sky-400/40 dark:bg-sky-400/12 dark:text-sky-100"
+                        : "border-slate-200/70 bg-white/85 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200 dark:hover:border-white/20 dark:hover:bg-slate-950/65",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 

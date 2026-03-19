@@ -1,26 +1,30 @@
 export const primaryNavigation = [
   {
-    title: "Overview",
+    title: "Home",
     href: "/",
-    description: "Admin home and key workspace entry points.",
+    description: "Workspace overview and role-based entry points.",
+    group: "Workspace",
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
-    title: "Teacher Dashboard",
+    title: "Class Dashboard",
     href: "/dashboard",
-    description: "Class mastery heatmap and nudges",
+    description: "Mastery heatmap, nudges, and learner drill-down.",
+    group: "Teaching",
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
     title: "Metrics",
     href: "/dashboard/metrics",
     description: "Review DAU, retention, nudge response, and token activity across the workspace.",
+    group: "Operations",
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
     title: "AI Usage",
     href: "/dashboard/ai-usage",
     description: "Review token volume by provider and model across the teacher workspace.",
+    group: "Operations",
     roles: ["teacher", "admin", "platform_admin"],
   },
 ];
@@ -32,6 +36,7 @@ export function getNavigationForUser(user) {
         title: "Child Summary",
         href: `/parents/${user.user_id}`,
         description: "Weekly momentum, mastery, and encouragement for home support.",
+        group: "Workspace",
       },
     ];
   }
@@ -72,15 +77,15 @@ export function getCurrentSection(pathname) {
 
   if (pathname.startsWith("/students/")) {
     return {
-      eyebrow: "Student detail",
+      eyebrow: "Learner detail",
       title: "Learner profile",
-      description: "Review mastery, streaks, and recent tutoring conversations.",
+      description: "Review mastery, activity, and conversation history before the next intervention.",
     };
   }
 
   if (pathname.startsWith("/parents/")) {
     return {
-      eyebrow: "Parent view",
+      eyebrow: "Parent support",
       title: "Child summary",
       description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
     };
@@ -116,4 +121,36 @@ export function getCurrentSection(pathname) {
     title: "Workspace",
     description: "Monitor teachers, students, and class momentum.",
   };
+}
+
+export function getBreadcrumbs(pathname, user) {
+  if (!pathname) {
+    return [{ label: "Home", href: "/" }];
+  }
+
+  if (pathname.startsWith("/students/")) {
+    return [
+      { label: "Home", href: "/" },
+      { label: "Class Dashboard", href: "/dashboard" },
+      { label: "Learner profile", href: pathname },
+    ];
+  }
+
+  if (pathname.startsWith("/parents/")) {
+    const parentHref = user?.role === "parent" && user?.user_id ? `/parents/${user.user_id}` : pathname;
+    return [
+      { label: "Home", href: "/" },
+      { label: "Child summary", href: parentHref },
+    ];
+  }
+
+  const activeItem = primaryNavigation.find((item) => isRouteActive(pathname, item.href));
+  if (activeItem) {
+    return [
+      { label: "Home", href: "/" },
+      ...(activeItem.href === "/" ? [] : [{ label: activeItem.title, href: activeItem.href }]),
+    ];
+  }
+
+  return [{ label: "Home", href: "/" }];
 }

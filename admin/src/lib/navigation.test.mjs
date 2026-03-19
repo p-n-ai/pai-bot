@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCurrentSection, getNavigationForUser, isRouteActive } from "./navigation.mjs";
+import { getBreadcrumbs, getCurrentSection, getNavigationForUser, isRouteActive } from "./navigation.mjs";
 
 test("isRouteActive matches exact and nested routes", () => {
   assert.equal(isRouteActive("/", "/"), true);
@@ -18,15 +18,15 @@ test("isRouteActive prefers the most specific dashboard route", () => {
 
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
   assert.deepEqual(getCurrentSection("/students/abc"), {
-    eyebrow: "Student detail",
+    eyebrow: "Learner detail",
     title: "Learner profile",
-    description: "Review mastery, streaks, and recent tutoring conversations.",
+    description: "Review mastery, activity, and conversation history before the next intervention.",
   });
 });
 
 test("getCurrentSection returns parent detail metadata for nested parent routes", () => {
   assert.deepEqual(getCurrentSection("/parents/parent-1"), {
-    eyebrow: "Parent view",
+    eyebrow: "Parent support",
     title: "Child summary",
     description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
   });
@@ -62,6 +62,7 @@ test("getNavigationForUser hides teacher links from parents", () => {
       title: "Child Summary",
       href: "/parents/parent-1",
       description: "Weekly momentum, mastery, and encouragement for home support.",
+      group: "Workspace",
     },
   ]);
 });
@@ -71,4 +72,19 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
     ["/", "/dashboard", "/dashboard/metrics", "/dashboard/ai-usage"],
   );
+});
+
+test("getBreadcrumbs returns learner detail hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/students/student-1"), [
+    { label: "Home", href: "/" },
+    { label: "Class Dashboard", href: "/dashboard" },
+    { label: "Learner profile", href: "/students/student-1" },
+  ]);
+});
+
+test("getBreadcrumbs returns parent hierarchy for a parent user", () => {
+  assert.deepEqual(getBreadcrumbs("/parents/parent-1", { role: "parent", user_id: "parent-1" }), [
+    { label: "Home", href: "/" },
+    { label: "Child summary", href: "/parents/parent-1" },
+  ]);
 });
