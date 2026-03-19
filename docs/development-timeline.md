@@ -243,10 +243,13 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 ### Day 10 — Week 2 Retro
 
-| Task ID | Task | Owner |
-|---------|------|-------|
-| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human |
-| `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team |
+| Task ID | Task | Status | Owner |
+|---------|------|--------|-------|
+| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain |  | 🧑 Human |
+| `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | ✅ Done | 🧑 Team |
+
+**Retro Feedback:** Core teaching loop for Algebra is locked. Telegram simulation results successfully validated [here](../../oss/docs/qa/P-W2D10-2-telegram-simulation-results.md). Ready for Week 3 Motivation Engine.
+
 
 **Week 2 Targets:** 50 students onboarded, 30+ active, progress tracking + quizzes live, nudge response ≥25%, Day-7 retention ≥35%, adaptive explanation depth adjusting based on mastery level.
 
