@@ -9,7 +9,7 @@ function isProtectedPath(pathname: string): boolean {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(ACCESS_TOKEN_COOKIE)?.value);
   const user = parseCookieJSON(request.cookies.get(USER_COOKIE)?.value);
