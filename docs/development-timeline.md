@@ -329,7 +329,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status |
 |---------|------|-------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, keep invite activation, email/password login, and frontend route guards deferred until a later auth-hardening pass, sidebar layout. | 🤖 | ✅ |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, support invite-based web auth and frontend route guards, sidebar layout. | 🤖 | ✅ |
 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ |

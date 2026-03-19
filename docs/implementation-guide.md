@@ -4694,10 +4694,9 @@ Follow the same TDD pattern for:
 Implementation boundary for auth:
 
 - Current: Day 16 JWT/RBAC applies to the Go admin API under `/api/admin/*`.
-- Current: the Next.js admin shell is still publicly routable during scaffolding. In an anonymous browser session, pages can render, but API requests without `pai_token` should fail with `401` or `403`.
-- Planned later: add the final frontend auth flow only when the team is ready to land the invite + password UX and route-guard behavior.
-- Planned auth model: teachers, parents, admins, and platform admins are provisioned by email invite, accept the invite by setting a password, then use email + password for future logins.
-- Planned auth storage: keep profile and role data in `users`; add `auth_identities`, `auth_invites`, and `auth_refresh_tokens` tables for login credentials and session state.
+- Current: the Next.js admin shell now has a login screen plus route guards for teacher, parent, admin, and platform admin views.
+- Current: teachers, parents, admins, and platform admins are provisioned by email invite, accept the invite by setting a password, then use email + password for future logins.
+- Current: auth storage uses `users` for profile and role data plus `auth_identities`, `auth_invites`, and `auth_refresh_tokens` for login credentials and session state.
 
 ```bash
 cd admin
@@ -4785,9 +4784,6 @@ Follow the same pattern:
 
 Planned follow-up after Week 4 scaffolding:
 
-- Add a migration for `auth_identities`, `auth_invites`, and `auth_refresh_tokens`.
-- Add backend endpoints for invite acceptance, email/password login, token refresh, and logout.
-- Add Next.js login screen and middleware guards for teacher, parent, admin, and platform admin views.
 - Keep students on Telegram identity until a separate student web portal is explicitly introduced.
 
 **Week 4 Targets:**
