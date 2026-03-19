@@ -216,7 +216,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 | **Messaging** | NATS + JetStream | Proactive nudge scheduling, background jobs, event-driven communication. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
-| **Admin Panel** | Next.js 14, TypeScript, Refine, shadcn/ui | Teacher dashboards, parent views, school admin. |
+| **Admin Panel** | Next.js 16, TypeScript, Refine v5, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
 

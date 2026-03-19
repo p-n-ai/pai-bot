@@ -4,6 +4,8 @@ GOOSE_DRIVER ?= postgres
 GOOSE_DSN ?= postgres://pai:pai@postgres:5432/pai?sslmode=disable
 GOOSE_RUN = docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
 GOOSE_CMD = $(GOOSE_RUN) -dir /app/migrations $(GOOSE_DRIVER) "$(GOOSE_DSN)"
+GOLANGCI_LINT_VERSION ?= v2.4.0
+GOLANGCI_LINT_RUN = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 # First-time setup
 setup:
@@ -32,7 +34,7 @@ test-integration:
 	go test -tags=integration ./...
 
 lint:
-	golangci-lint run ./...
+	$(GOLANGCI_LINT_RUN) run ./...
 
 test-all: lint test
 
