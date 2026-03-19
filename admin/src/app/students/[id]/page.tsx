@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import { Metric } from "@/components/metric";
 import { PageHero } from "@/components/page-hero";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
+import { StatePanel } from "@/components/state-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
 import { getStudentConversations, getStudentDetail, type StudentConversation } from "@/lib/api";
-import { buildStudentActivityGrid } from "@/lib/student-activity.mjs";
+import { buildStudentViewModel } from "@/lib/student-view.mjs";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 
 function activityTone(level: number) {
@@ -35,13 +36,13 @@ export default function StudentPage() {
   const detail = data?.detail ?? null;
   const conversations = data?.conversations ?? [];
 
-  const radarData = detail?.progress.map((item) => ({
-    topic: formatTopicLabel(item.topic_id),
-    mastery: Math.round(item.mastery_score * 100),
-  })) ?? [];
-
-  const struggleAreas = detail?.progress.filter((item) => item.mastery_score < 0.6) ?? [];
-  const activityGrid = buildStudentActivityGrid(conversations);
+  const view = buildStudentViewModel(detail, conversations);
+  const radarData = view.radarData.map((item) => ({
+    topic: formatTopicLabel(item.topic),
+    mastery: item.mastery,
+  }));
+  const struggleAreas = view.struggleAreas;
+  const activityGrid = view.activityGrid;
 
   return (
     <div className="space-y-6">
@@ -111,8 +112,13 @@ export default function StudentPage() {
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-center text-sm text-slate-500 dark:text-slate-400">
-                  Progress details will appear after the student completes some work.
+                <div className="flex h-full items-center justify-center">
+                  <StatePanel
+                    tone="empty"
+                    title="No mastery radar yet"
+                    description="Progress details will appear after the student completes some work."
+                    className="w-full"
+                  />
                 </div>
               )}
             </CardContent>
@@ -134,11 +140,15 @@ export default function StudentPage() {
                     </Badge>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">No active struggle areas.</p>
+                  <StatePanel
+                    tone="empty"
+                    title="No active struggle areas"
+                    description="This learner does not currently have any topics below the intervention threshold."
+                  />
                 )}
               </div>
               <div className="space-y-3">
-                {(detail?.progress ?? []).length ? (
+                {view.hasProgress ? (
                   (detail?.progress ?? []).map((item) => (
                     <div key={item.topic_id} className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/70">
                       <div className="flex items-center justify-between gap-3">
@@ -156,7 +166,11 @@ export default function StudentPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">No topic progress has been recorded for this student yet.</p>
+                  <StatePanel
+                    tone="empty"
+                    title="No topic progress yet"
+                    description="No topic progress has been recorded for this student yet."
+                  />
                 )}
               </div>
             </CardContent>
@@ -198,8 +212,20 @@ export default function StudentPage() {
             <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Recent conversations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {error ? <p className="text-sm text-slate-500 dark:text-slate-400">Conversation history isn't available right now.</p> : null}
-            {!error && conversations.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Recent tutoring messages will appear here once the student has chatted.</p> : null}
+            {error ? (
+              <StatePanel
+                tone="error"
+                title="Conversation history unavailable"
+                description="Conversation history isn't available right now."
+              />
+            ) : null}
+            {!error && !view.hasConversations ? (
+              <StatePanel
+                tone="empty"
+                title="No tutoring messages yet"
+                description="Recent tutoring messages will appear here once the student has chatted."
+              />
+            ) : null}
             {conversations.map((item) => (
               <div
                 key={item.id}

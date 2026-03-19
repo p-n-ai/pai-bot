@@ -1,9 +1,11 @@
 import { PageHero } from "@/components/page-hero";
 import { Metric } from "@/components/metric";
+import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { HeartHandshake, MessageSquareText, Trophy, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
+import { getParentViewModel } from "@/lib/parent-view.mjs";
 import { getServerParentSummary } from "@/lib/server-api";
 import { buildParentContextLine, formatParentTopicLabel, getParentMasteryTone } from "@/lib/parent-summary.mjs";
 
@@ -24,7 +26,8 @@ export default async function ParentPage({
     loadError = "The parent summary isn't available right now.";
   }
 
-  const masteryRows = summary?.mastery ?? [];
+  const view = getParentViewModel(summary);
+  const masteryRows = view.masteryRows;
 
   return (
     <div className="space-y-6">
@@ -60,8 +63,14 @@ export default async function ParentPage({
             <CardTitle className="text-xl tracking-tight">Mastery progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {loadError ? <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p> : null}
-            {masteryRows.length ? (
+            {loadError ? (
+              <StatePanel
+                tone="error"
+                title="Parent summary unavailable"
+                description={loadError}
+              />
+            ) : null}
+            {view.hasMastery ? (
               masteryRows.map((item) => {
                 const score = Math.round(item.mastery_score * 100);
                 return (
@@ -82,7 +91,11 @@ export default async function ParentPage({
                 );
               })
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No mastery data available yet.</p>
+              <StatePanel
+                tone="empty"
+                title="No mastery data yet"
+                description="No mastery data is available yet for this learner."
+              />
             )}
           </CardContent>
         </Card>
@@ -94,11 +107,9 @@ export default async function ParentPage({
           <CardContent className="space-y-4">
             <div className="rounded-[24px] bg-slate-950 p-5 text-white dark:bg-slate-900">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Suggested message</p>
-              <p className="mt-3 text-2xl font-semibold tracking-tight">
-                {summary?.encouragement.headline ?? "A suggested encouragement will appear here soon."}
-              </p>
+              <p className="mt-3 text-2xl font-semibold tracking-tight">{view.encouragementHeadline}</p>
               <p className="mt-3 text-sm leading-7 text-slate-200">
-                {summary?.encouragement.text ?? "Once the weekly summary is ready, you'll see a short message you can send or say at home."}
+                {view.encouragementText}
               </p>
             </div>
 
