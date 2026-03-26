@@ -276,7 +276,7 @@ Status (2026-03-18): current `/challenge` surface now covers invite-code challen
 
 **Implementation note (Late Mar 2026):** All Form 1, Form 2, and Form 3 Algebra assessment pools have been comprehensively standardized for the Battle Engine. 
 *   **The "5-5-5" Rule:** Every topic pool now guarantees a minimum baseline of 5 Easy, 5 Medium, and 5 Hard questions.
-*   **What's New:** Injected new pedagogical schema metadata not present in earlier versions, including explicit `tp_level` (1-6) routing, `kbat: true/false` flags for higher-order tracking, and `# EXAM: UASA` provenance tags to map AI models directly to national exam formats (OAP, OPK, Subjektif). Upgraded Form 3 pools with brand new TP6 non-routine application problems.
+*   **What's New:** Injected new pedagogical schema metadata not present in earlier versions, including explicit `tp_level` (1-6) routing, `kbat: true/false` flags for higher-order tracking, and `# EXAM: UASA` provenance tags to map AI models directly to national exam formats (OAP, OPB, Subjektif). Upgraded Form 3 pools with brand new TP6 non-routine application problems.
 
 Current note: `P-W3D11-3` is only partially complete. The shipped Day 11 slice is the challenge-creation and matchmaking baseline listed below; the simultaneous quiz runtime, results settlement, XP award, and post-challenge review parts of that planned task still belong to later slices.
 
