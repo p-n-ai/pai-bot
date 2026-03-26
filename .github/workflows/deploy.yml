@@ -38,7 +38,7 @@ jobs:
         run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
 
       - name: Build Admin Docker image
-        run: docker build -f deploy/docker/Dockerfile.admin --build-arg NEXT_PUBLIC_API_URL= -t pai-admin:latest .
+        run: docker build -f deploy/docker/Dockerfile.admin --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} -t pai-admin:latest .
 
       - name: Save Docker images
         run: |
