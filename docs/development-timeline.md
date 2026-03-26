@@ -296,7 +296,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 | ⬜ | |
 | `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 | ⬜ | |
 | `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 | ⬜ | |
-| `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human | ⬜ | |
+| `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human | ✅ | Setup telegram group from existing users|
 
 ### Day 13 — A/B Test + Social Features
 
@@ -305,7 +305,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 | ⬜ | |
 | `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 | ⬜ | |
 | `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 | ✅ | |
-| `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human | ⬜ | |
+| `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human | ✅ | Work with Sekolah Menengah Sains Batu Pahat with Cikgu Akmallina |
 
 ### Day 14 — Analytics Dashboard
 
