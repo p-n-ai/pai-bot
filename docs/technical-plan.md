@@ -588,8 +588,8 @@ ArgoCD (running in K8s cluster)
 ```json
 {
   "dependencies": {
-    "next": "^14",
-    "react": "^18",
+    "next": "^16",
+    "react": "^19",
     "@refinedev/core": "^4",
     "@refinedev/nextjs-router": "^6",
     "@refinedev/react-hook-form": "^4",

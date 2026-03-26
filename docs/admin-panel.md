@@ -2,7 +2,7 @@
 
 > **Status:** Planned (Week 3–6 of [development timeline](development-timeline.md))
 >
-> **Stack:** Next.js 14 (App Router) · TypeScript · Refine v4+ · shadcn/ui · Tailwind CSS 3 · TanStack Query v5 · Recharts/Tremor
+> **Stack:** Next.js 16 (App Router) · TypeScript · Refine v4+ · shadcn/ui · Tailwind CSS 3 · TanStack Query v5 · Recharts/Tremor
 
 This document describes all planned features for the P&AI Bot admin panel, organized by user role. The admin panel serves teachers, parents, school administrators, and platform operators — students interact exclusively via chat (Telegram / WhatsApp / WebSocket).
 
