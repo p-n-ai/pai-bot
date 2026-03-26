@@ -207,7 +207,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D6-2` | SM-2 spaced repetition scheduler: calculate next_review based on performance | 🤖 | ✅ | |
 | `P-W2D6-3` | `/progress` command: Unicode progress bars per topic, XP, streak, next review | 🤖 | ✅ | |
 | `P-W2D6-4` | Adaptive explanation depth in system prompt based on mastery level: mastery <0.3 → simple language, more examples, smaller steps; mastery 0.3–0.6 → standard explanations, introduce formal notation gradually; mastery >0.6 → concise, focus on edge cases and cross-topic connections. Include progress context: "Student mastered X, working on Y, struggles with Z" | 🤖 | ✅ | |
-| `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human | ⬜ | |
+| `P-W2D6-5` | 🧑 Recruit 40 more students from Pandai (KSSM Matematik Form 1-3 users) | 🧑 Human | ✅ | Recruited 45 new students from Telegram group |
 
 ### Day 7 — Quiz Engine
 
@@ -230,7 +230,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D8-1` | Agent scheduler: every 5min check due reviews, respect quiet hours (21:00-07:00 MYT), max 3 nudges/day | 🤖 | ✅ | |
 | `P-W2D8-2` | Streak tracking: consecutive days, milestones (3/7/14/30), celebrations, bonus XP | 🤖 | ✅ | |
 | `P-W2D8-3` | XP system: session XP, quiz XP (by difficulty), mastery XP, streak XP | 🤖 | ✅ | |
-| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human | ⬜ | |
+| `P-W2D8-4` | 🧑 Check metrics: how many of 50 students active? Message inactive ones directly | 🧑 Human | ✅ | 42 student active|
 
 ### Day 9 — Topic Navigation
 
@@ -239,13 +239,13 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W2D9-1` | Topic unlocking: when mastery ≥0.8, check prerequisite graph, notify student of newly unlocked topics | 🤖 | ✅ | |
 | `P-W2D9-2` | `/learn [topic]` command: set current topic, load teaching notes, start teaching session | 🤖 | ✅ | |
 | `P-W2D9-3` | Daily summary event: scheduler at 22:00 computes per-student daily stats | 🤖 | ✅ | |
-| `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human | ⬜ | |
+| `P-W2D9-4` | 🧑 Interview 5 students: "Did you get a bot message today? How did that feel? Was the quiz helpful?" | 🧑 Human | ✅ | Interviewed 6 students and they gave suggestion to improve|
 
 ### Day 10 — Week 2 Retro
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human | ⬜ | |
+| `P-W2D10-1` | 🧑 Compile Week 2 metrics: DAU, Day-7 retention, quiz completion rate, nudge response rate, mastery gain | 🧑 Human | ✅ | Added the metrics based on Postgres data|
 | `P-W2D10-2` | 🧑 1hr retro. Decision: ready for motivation features or iterate on core teaching? | 🧑 Team | ✅ | |
 
 **Retro Feedback:** Core teaching loop for Algebra is locked. Telegram simulation results successfully validated [here](../../oss/docs/qa/P-W2D10-2-telegram-simulation-results.md). Ready for Week 3 Motivation Engine.
@@ -313,7 +313,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 |---------|------|-------|--------|--------|
 | `P-W3D14-1` | Metrics page at `/dashboard/metrics`: DAU, retention snapshots, AI usage/token activity, nudge response rate. A/B comparison remains deferred until experiment flags are persisted. | 🤖 | ✅ | |
 | `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, and XP in nudge context. Leaderboard rank remains deferred until a stable rank source exists. | 🤖 | ✅ | |
-| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human | ⬜ | |
+| `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human | ✅ | Called Cikgu Akmallina, receive positive feedback|
 
 ### Day 15 — Week 3 Retro
 
