@@ -150,7 +150,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 
 **MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
-**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` to mark the task status as ✅. Never consider a task done until the timeline is updated.**
+**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` using the task table format `| Task ID | Task | Owner | Status | Remark |`. Set `Status` to `✅` when completed (otherwise `⬜`), and put any notes in the `Remark` column. Never consider a task done until the timeline is updated.**
 
 **Every implementation task must follow this cycle. No exceptions.**
 
