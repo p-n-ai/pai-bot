@@ -127,6 +127,14 @@ func (e *Engine) resolveUserLocale(userID string) string {
 	return i18n.DefaultLocale
 }
 
+// userABGroup returns the A/B group for the given user, defaulting to ABGroupA.
+func (e *Engine) userABGroup(userID string) string {
+	if group, ok := e.store.GetUserABGroup(userID); ok && group != "" {
+		return group
+	}
+	return ABGroupA
+}
+
 // buildPrereqGraph creates the prerequisite graph from loaded curriculum topics.
 func buildPrereqGraph(loader *curriculum.Loader) *curriculum.PrereqGraph {
 	if loader == nil {
