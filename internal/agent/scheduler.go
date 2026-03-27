@@ -39,6 +39,7 @@ func DefaultSchedulerConfig() SchedulerConfig {
 
 type nudgeLanguageStore interface {
 	GetUserPreferredLanguage(userID string) (string, bool)
+	GetUserABGroup(userID string) (string, bool)
 }
 
 var nudgeSentenceBreakRE = regexp.MustCompile(`([.!?。！？])\s+`)
@@ -239,6 +240,13 @@ func (s *Scheduler) checkUser(ctx context.Context, userID string, now time.Time)
 	}
 	if !CanNudge(now, count) {
 		return nil
+	}
+
+	// Skip nudges for AB group B.
+	if s.store != nil {
+		if group, ok := s.store.GetUserABGroup(userID); ok && group == ABGroupB {
+			return nil
+		}
 	}
 
 	// Check for due reviews.
