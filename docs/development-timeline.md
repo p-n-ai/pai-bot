@@ -306,7 +306,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 | ⬜ | |
+| `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 | ✅ | Uses `users.config` JSONB `ab_group` field, 50/50 random on /start, group B skips milestones + nudges |
 | `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 | ⬜ | |
 | `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 | ✅ | |
 | `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human | ✅ | Work with Sekolah Menengah Sains Batu Pahat with Cikgu Akmallina |
