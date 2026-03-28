@@ -81,7 +81,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (isLoginRoute) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
         <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col">
           <div className="flex items-center justify-end px-4 pt-4 lg:px-8 lg:pt-8">
             <ThemeToggle />
@@ -93,7 +93,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
+    <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="sticky top-0 hidden h-screen w-80 shrink-0 overflow-hidden border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
           <div className="scrollbar-thin-subtle min-h-0 flex-1 overflow-y-auto pr-2">
@@ -336,7 +336,7 @@ function SessionControls({
   }, []);
 
   return (
-    <div className="relative z-[120]" ref={containerRef}>
+    <div className="relative z-120" ref={containerRef}>
       <Button
         type="button"
         variant="outline"
@@ -355,7 +355,7 @@ function SessionControls({
 
       <div
         className={cn(
-          "absolute right-0 top-[calc(100%+0.65rem)] z-[160] w-72 origin-top-right rounded-[24px] border border-white/75 bg-white/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur transition duration-200 ease-out dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_24px_80px_rgba(2,8,23,0.55)]",
+          "absolute right-0 top-[calc(100%+0.65rem)] z-160 w-72 origin-top-right rounded-[24px] border border-white/75 bg-white/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur transition duration-200 ease-out dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_24px_80px_rgba(2,8,23,0.55)]",
           open
             ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
             : "pointer-events-none -translate-y-2 scale-95 opacity-0",

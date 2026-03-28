@@ -84,7 +84,7 @@ export default async function Home() {
               </div>
             </div>
             <div className="grid gap-3 rounded-[28px] bg-slate-950 p-5 text-slate-50 dark:bg-slate-900/90">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 dark:bg-white/[0.03]">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 dark:bg-white/3">
                 <Users className="size-5 text-sky-300 dark:text-sky-200" />
                   <div>
                  <p className="text-2xl font-semibold">{studentCount}</p>
@@ -93,7 +93,7 @@ export default async function Home() {
                   </p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 dark:bg-white/[0.03]">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 dark:bg-white/3">
                 <p className="text-sm text-slate-300">What you can inspect</p>
                 <p className="mt-2 text-sm leading-6 text-slate-100">
                   {isParentView

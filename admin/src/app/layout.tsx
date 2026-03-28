@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { Agentation } from "agentation";
 import { AdminShell } from "@/components/admin-shell";
 import { RefineProvider } from "@/components/refine-provider";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -41,6 +42,7 @@ export default function RootLayout({
             </RefineProvider>
           </Suspense>
         </ThemeProvider>
+        {process.env.NODE_ENV === "development" ? <Agentation /> : null}
       </body>
     </html>
   );
