@@ -147,6 +147,9 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
+	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
+	go s.runDailySummaryTimer(ctx, userIDs)
+
 	s.logger.Info("scheduler started", "interval", s.config.CheckInterval)
 
 	for {
@@ -160,8 +163,40 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	}
 }
 
+// runDailySummaryTimer fires at exactly 22:00 MYT each day.
+func (s *Scheduler) runDailySummaryTimer(ctx context.Context, userIDs []string) {
+	for {
+		delay := timeUntilNext(dailySummaryHour, 0)
+		s.logger.Info("daily summary scheduled", "fires_in", delay.Round(time.Second))
+
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case now := <-timer.C:
+			s.SendDailySummaries(ctx, userIDs, now)
+		}
+	}
+}
+
+// timeUntilNext returns the duration until the next occurrence of hour:minute in MYT.
+func timeUntilNext(hour, minute int) time.Duration {
+	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
+	if err != nil {
+		loc = time.FixedZone("MYT", 8*60*60)
+	}
+	now := time.Now().In(loc)
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
+	if !next.After(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next.Sub(now)
+}
+
 func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
 	now := time.Now()
+
 	if IsQuietHours(now) {
 		return
 	}
@@ -171,6 +206,29 @@ func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
 			s.logger.Error("scheduler check failed",
 				"user_id", userID, "error", err)
 		}
+	}
+}
+
+// SendDailySummaries sends a daily progress summary to each user with activity.
+func (s *Scheduler) SendDailySummaries(ctx context.Context, userIDs []string, now time.Time) {
+	for _, userID := range userIDs {
+		summary := ComputeDailySummary(userID, s.tracker, s.streaks, s.xp)
+		locale := s.userLocale(userID)
+		msg := FormatDailySummary(summary, locale)
+		if msg == "" {
+			continue
+		}
+		out := chat.OutboundMessage{
+			Channel:   "telegram",
+			UserID:    userID,
+			Text:      msg,
+			ParseMode: "Markdown",
+		}
+		if err := s.gateway.Send(ctx, out); err != nil {
+			s.logger.Error("failed to send daily summary", "user_id", userID, "error", err)
+			continue
+		}
+		s.logger.Info("daily summary sent", "user_id", userID)
 	}
 }
 

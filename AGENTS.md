@@ -98,6 +98,8 @@ Use these files as primary references:
 3. `docs/business-plan.md` for product strategy and metrics intent
 4. `docs/development-timeline.md` for phased execution plan and task assignments
 5. `docs/implementation-guide.md` for code templates, test specs, and exit criteria
+6. `docs/admin-panel.md` for admin panel features, roles, and API specification
+7. `docs/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
 
 If you change one doc and it affects others, update all impacted docs in the same task.
 
@@ -150,7 +152,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 
 **MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
-**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` to mark the task status as ✅. Never consider a task done until the timeline is updated.**
+**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` using the task table format `| Task ID | Task | Owner | Status | Remark |`. Set `Status` to `✅` when completed (otherwise `⬜`), and put any notes in the `Remark` column. Never consider a task done until the timeline is updated.**
 
 **Every implementation task must follow this cycle. No exceptions.**
 
@@ -341,3 +343,5 @@ Before finishing any documentation change, verify:
 - [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
 - [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
 - [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day
+- [docs/admin-panel.md](docs/admin-panel.md) — Admin panel features, roles, routes, and API specification
+- [docs/admin-panel-uiux.md](docs/admin-panel-uiux.md) — Admin panel UI/UX wireframes, design system, and interaction patterns

@@ -4575,7 +4575,7 @@ func IsStreakMilestone(days int) bool {
 - [x] XP system: session, quiz, mastery, streak XP
 - [ ] Topic unlocking when mastery ≥0.8
 - [ ] `/learn [topic]` command sets current topic
-- [ ] Daily summary computed at 22:00
+- [x] Daily summary computed at 22:00
 
 **Week 2 Targets:**
 - [ ] 50 students onboarded, 30+ active

@@ -70,6 +70,7 @@ type Engine struct {
 	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
+	milestones            *pendingMilestones
 }
 
 // NewEngine creates a new agent engine.
@@ -130,6 +131,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		devMode:               cfg.DevMode,
 		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
 		unlocks:               newPendingUnlocks(),
+		milestones:            newPendingMilestones(),
 	}
 }
 
@@ -145,6 +147,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 
 	// Drain any pending topic unlock notifications from previous mastery updates.
 	unlockPrefix := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, nil))
+	milestonePrefix := e.drainMilestoneNotification(msg.UserID)
 
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
@@ -152,8 +155,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		if err != nil {
 			return resp, err
 		}
-		if unlockPrefix != "" {
-			return unlockPrefix + "\n\n" + resp, nil
+		prefix := milestonePrefix + unlockPrefix
+		if prefix != "" {
+			return prefix + "\n\n" + resp, nil
 		}
 		return resp, nil
 	}
@@ -324,8 +328,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		responseContent = injectReviewTokenWithMessageID(finalContent, assistantMessageID)
 	}
 
-	if unlockPrefix != "" {
-		responseContent = unlockPrefix + "\n\n" + responseContent
+	prefix := milestonePrefix + unlockPrefix
+	if prefix != "" {
+		responseContent = prefix + "\n\n" + responseContent
 	}
 
 	return responseContent, nil
@@ -519,12 +524,20 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 		if syllabusID == "" {
 			syllabusID = "default"
 		}
+		masteryBefore, _ := e.tracker.GetMastery(userID, syllabusID, topic.ID)
 		if err := e.tracker.UpdateMastery(userID, syllabusID, topic.ID, delta); err != nil {
 			slog.Warn("mastery update failed", "user_id", userID, "topic", topic.ID, "error", err)
 			return
 		}
 		e.syncGoalProgress(userID, syllabusID, topic.ID)
 		e.checkTopicUnlocks(userID, syllabusID, topic)
+		if e.milestones != nil {
+			masteryAfter, mErr := e.tracker.GetMastery(userID, syllabusID, topic.ID)
+			if mErr == nil && !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
+				locale := e.resolveUserLocale(userID)
+				e.milestones.add(userID, FormatTopicMasteredCelebration(locale, topic.Name, progress.XPMasteryUp))
+			}
+		}
 	}()
 }
 
@@ -532,6 +545,16 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 func (e *Engine) recordActivityAsync(userID string) {
 	go func() {
 		now := time.Now()
+
+		// Capture baselines for milestone detection.
+		var xpBefore int
+		if e.xp != nil {
+			xpBefore, _ = e.xp.GetTotal(userID)
+		}
+		var streakBefore progress.Streak
+		if e.streaks != nil {
+			streakBefore, _ = e.streaks.GetStreak(userID)
+		}
 
 		// Record streak activity.
 		if e.streaks != nil {
@@ -551,6 +574,23 @@ func (e *Engine) recordActivityAsync(userID string) {
 		// Award session XP.
 		if e.xp != nil {
 			_ = e.xp.Award(userID, progress.XPSourceSession, progress.XPSession, nil)
+		}
+
+		// Check XP milestone crossing.
+		if e.xp != nil && e.milestones != nil {
+			xpAfter, _ := e.xp.GetTotal(userID)
+			if hit, at := CheckXPMilestone(xpBefore, xpAfter); hit {
+				locale := e.resolveUserLocale(userID)
+				e.milestones.add(userID, FormatXPMilestoneCelebration(locale, at))
+			}
+		}
+		// Check streak record.
+		if e.streaks != nil && e.milestones != nil {
+			streakAfter, _ := e.streaks.GetStreak(userID)
+			if streakAfter.LongestStreak > streakBefore.LongestStreak {
+				locale := e.resolveUserLocale(userID)
+				e.milestones.add(userID, FormatStreakRecordCelebration(locale, streakAfter.LongestStreak))
+			}
 		}
 	}()
 }
@@ -594,6 +634,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevBoost(msg, fields[1:])
+	case "/dev-summary", "/dev_summary":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevSummary(msg)
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}

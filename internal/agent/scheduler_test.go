@@ -1,10 +1,14 @@
 package agent_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
 func TestIsQuietHours(t *testing.T) {
@@ -90,5 +94,61 @@ func TestSchedulerConfig_Defaults(t *testing.T) {
 	}
 	if cfg.MaxNudgesPerDay != 3 {
 		t.Errorf("MaxNudgesPerDay = %d, want 3", cfg.MaxNudgesPerDay)
+	}
+}
+
+func TestScheduler_DailySummaryTick(t *testing.T) {
+	tracker := progress.NewMemoryTracker()
+	streaks := progress.NewMemoryStreakTracker()
+	xpTracker := progress.NewMemoryXPTracker()
+	mockCh := &chat.MockChannel{}
+	gw := chat.NewGateway()
+	gw.Register("telegram", mockCh)
+
+	_ = tracker.UpdateMastery("user1", "default", "F1-01", 0.7)
+	_ = xpTracker.Award("user1", progress.XPSourceSession, 50, nil)
+	_ = streaks.RecordActivity("user1", time.Now())
+
+	scheduler := agent.NewScheduler(
+		agent.SchedulerConfig{CheckInterval: 1 * time.Second, MaxNudgesPerDay: 3},
+		tracker, streaks, xpTracker, nil,
+		agent.NewMemoryNudgeTracker(), gw, nil, nil,
+	)
+
+	loc, _ := time.LoadLocation("Asia/Kuala_Lumpur")
+	summaryTime := time.Date(2026, 3, 18, 22, 1, 0, 0, loc)
+
+	scheduler.SendDailySummaries(context.Background(), []string{"user1"}, summaryTime)
+
+	if len(mockCh.SentMessages) == 0 {
+		t.Fatal("expected daily summary message to be sent")
+	}
+	msg := mockCh.SentMessages[0].Text
+	if !strings.Contains(msg, "Ringkasan Kemajuan") && !strings.Contains(msg, "Progress Snapshot") {
+		t.Errorf("expected summary content, got: %s", msg)
+	}
+}
+
+func TestScheduler_DailySummarySkipsInactiveUser(t *testing.T) {
+	tracker := progress.NewMemoryTracker()
+	streaks := progress.NewMemoryStreakTracker()
+	xpTracker := progress.NewMemoryXPTracker()
+	mockCh := &chat.MockChannel{}
+	gw := chat.NewGateway()
+	gw.Register("telegram", mockCh)
+
+	scheduler := agent.NewScheduler(
+		agent.SchedulerConfig{CheckInterval: 1 * time.Second, MaxNudgesPerDay: 3},
+		tracker, streaks, xpTracker, nil,
+		agent.NewMemoryNudgeTracker(), gw, nil, nil,
+	)
+
+	loc, _ := time.LoadLocation("Asia/Kuala_Lumpur")
+	summaryTime := time.Date(2026, 3, 18, 22, 1, 0, 0, loc)
+
+	scheduler.SendDailySummaries(context.Background(), []string{"inactive-user"}, summaryTime)
+
+	if len(mockCh.SentMessages) != 0 {
+		t.Errorf("expected no message for inactive user, got %d", len(mockCh.SentMessages))
 	}
 }

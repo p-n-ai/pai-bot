@@ -38,7 +38,7 @@ jobs:
         run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
 
       - name: Build Admin Docker image
-        run: docker build -f deploy/docker/Dockerfile.admin -t pai-admin:latest .
+        run: docker build -f deploy/docker/Dockerfile.admin --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} -t pai-admin:latest .
 
       - name: Save Docker images
         run: |
@@ -107,9 +107,12 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
             sleep 3
 
-            echo "--- Running migrations ---"
-            if docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint /usr/local/bin/migrate app \
-              -path /migrations -database "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" up; then
+            echo "--- Running migrations (goose) ---"
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
+              go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 \
+              -dir /app/migrations postgres \
+              "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" \
+              up -allow-missing; then
               echo "Migrations applied successfully"
             else
               echo "WARNING: Migration failed (exit $?) — app will still start with existing schema"
