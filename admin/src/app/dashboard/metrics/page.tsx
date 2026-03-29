@@ -13,6 +13,15 @@ function formatPercent(value: number) {
   return `${Math.round((value || 0) * 100)}%`;
 }
 
+function formatDelta(value: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Pending";
+  }
+
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${Math.round(value * 100)}pp`;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function MetricsPage() {
@@ -146,11 +155,111 @@ export default async function MetricsPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-400">A/B comparison</p>
-            <p className="mt-2 text-2xl font-semibold">Pending</p>
+            <p className="mt-2 text-2xl font-semibold">{formatDelta(view.primaryABDelta)}</p>
             <p className="mt-2 text-sm text-slate-300">
-              Experiment comparison stays disabled until user flag assignment is persisted in the backend.
+              {view.hasABComparison
+                ? `Primary delta for ${view.abComparison.metric_name || "the active experiment"} across the current comparison window.`
+                : "Experiment comparison stays in fallback mode until user flag assignment is persisted in the backend."}
             </p>
           </div>
+        </div>
+      </AdminSurface>
+
+      <AdminSurface>
+        <AdminSurfaceHeader
+          title="A/B experiment comparison"
+          description="Compare the motivation experiment variants once the backend starts returning persisted experiment assignments."
+        />
+        <div className="mt-6 space-y-4">
+          {view.hasABComparison ? (
+            <>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {[view.abComparison.variant_a, view.abComparison.variant_b].map((variant) => (
+                  <div key={variant.label} className="rounded-2xl border border-slate-200/80 p-5 dark:border-white/10">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                          {variant.label}
+                        </p>
+                        <p className="mt-2 text-3xl font-semibold text-slate-950 dark:text-slate-50">
+                          {variant.users}
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Learners in this variant</p>
+                      </div>
+                      {view.abComparison.winner === "variant_a" && variant === view.abComparison.variant_a ? (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-300/15 dark:text-emerald-200">
+                          Leading
+                        </span>
+                      ) : null}
+                      {view.abComparison.winner === "variant_b" && variant === view.abComparison.variant_b ? (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-300/15 dark:text-emerald-200">
+                          Leading
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-5 grid gap-3 md:grid-cols-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Retention</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {formatPercent(variant.retention_rate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Challenge participation</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {formatPercent(variant.challenge_participation_rate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Leaderboard engagement</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {formatPercent(variant.leaderboard_engagement_rate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nudge response</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {formatPercent(variant.nudge_response_rate)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  title="Retention delta"
+                  value={formatDelta(view.abComparison.delta_retention_rate)}
+                  note="Variant B minus Variant A retention rate"
+                />
+                <StatCard
+                  title="Challenge delta"
+                  value={formatDelta(view.abComparison.delta_challenge_participation_rate)}
+                  note="Variant B minus Variant A challenge participation"
+                />
+                <StatCard
+                  title="Leaderboard delta"
+                  value={formatDelta(view.abComparison.delta_leaderboard_engagement_rate)}
+                  note="Variant B minus Variant A leaderboard engagement"
+                />
+                <StatCard
+                  title="Nudge delta"
+                  value={formatDelta(view.abComparison.delta_nudge_response_rate)}
+                  note="Variant B minus Variant A 24h nudge response"
+                />
+              </div>
+            </>
+          ) : (
+            <StatePanel
+              tone={loadError ? "error" : "empty"}
+              title={loadError ? "A/B comparison unavailable" : "Experiment data pending backend support"}
+              description={
+                loadError ||
+                "The page is ready to render variant comparisons, but the current backend payload does not yet include persisted experiment assignment and outcome breakdowns."
+              }
+            />
+          )}
         </div>
       </AdminSurface>
     </div>

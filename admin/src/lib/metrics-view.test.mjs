@@ -28,3 +28,18 @@ test("getMetricsViewModel falls back safely when metrics are missing", () => {
   assert.equal(model.hasDailyActivity, false);
   assert.equal(model.hasRetention, false);
 });
+
+test("getMetricsViewModel exposes experiment comparison data when present", () => {
+  const model = getMetricsViewModel({
+    ab_comparison: {
+      experiment_key: "motivation_features",
+      variant_a: { label: "Control", users: 50, retention_rate: 0.3 },
+      variant_b: { label: "Motivation", users: 48, retention_rate: 0.38 },
+      delta_retention_rate: 0.08,
+    },
+  });
+
+  assert.equal(model.hasABComparison, true);
+  assert.equal(model.abComparison.experiment_key, "motivation_features");
+  assert.equal(model.primaryABDelta, 0.08);
+});

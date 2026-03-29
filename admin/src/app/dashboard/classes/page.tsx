@@ -69,7 +69,7 @@ export default function ClassManagementPage() {
       <PageHero
         eyebrow="Teaching operations"
         title="Class management"
-        description="Frontend scaffold with mock data for class setup, join codes, member roster, and topic assignment. Backend integration is still pending."
+        description="Frontend scaffold with mock data for class setup, join codes, member roster, and topic assignment. The real class backend contract is not implemented yet."
         aside={
           <AdminHighlightPanel>
             <div>
@@ -77,7 +77,7 @@ export default function ClassManagementPage() {
               <p className="mt-2 text-3xl font-semibold">Mock data only</p>
             </div>
             <p className="text-sm text-slate-300">
-              Use this page to validate layout and information architecture before the real class backend lands.
+              Use this page to validate layout and information architecture only. None of the class-management actions below persist yet.
             </p>
           </AdminHighlightPanel>
         }
@@ -92,7 +92,7 @@ export default function ClassManagementPage() {
               <DialogHeader>
                 <DialogTitle>Create class</DialogTitle>
                 <DialogDescription>
-                  This dialog is currently a UI scaffold. Submission and persistence will be connected once class management APIs exist.
+                  This dialog is currently a UI scaffold. Submission is intentionally disabled until create-class and class-edit APIs exist.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-2">
@@ -161,7 +161,7 @@ export default function ClassManagementPage() {
       <StatePanel
         tone="empty"
         title="Mock-data scaffold"
-        description="The class list, join codes, member roster, and topic assignment panels below are static mock data for Day 18 frontend planning. They are not backed by create/edit APIs yet."
+        description="The class list, join codes, member roster, and topic assignment panels below are static mock data for Day 18 frontend planning. They are not backed by live class, membership, join-code, or topic-assignment APIs yet."
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -228,7 +228,7 @@ export default function ClassManagementPage() {
                       <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Join code</p>
                       <p className="mt-2 text-4xl font-semibold">{selectedClass.joinCode}</p>
                     </div>
-                    <p className="text-sm text-slate-300">Mock join code display. Generation and refresh are pending backend support.</p>
+                    <p className="text-sm text-slate-300">Mock join code display only. Generation, refresh, and member enrollment remain blocked on backend APIs.</p>
                   </AdminHighlightPanel>
                 </div>
               </AdminSurface>

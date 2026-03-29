@@ -92,6 +92,20 @@ export interface AIUsageSummary {
   total_input_tokens: number;
   total_output_tokens: number;
   providers: AIProviderUsage[];
+  monthly_cost_usd?: number | null;
+  budget_limit_usd?: number | null;
+  per_student_average_tokens?: number | null;
+  per_student_average_cost_usd?: number | null;
+  daily_usage?: {
+    date: string;
+    messages: number;
+    tokens: number;
+    cost_usd?: number | null;
+  }[];
+  provider_costs?: {
+    provider: string;
+    cost_usd?: number | null;
+  }[];
 }
 
 export interface MetricsSummary {
@@ -110,7 +124,32 @@ export interface MetricsSummary {
     response_rate: number;
   };
   ai_usage: AIUsageSummary;
-  ab_comparison: unknown;
+  ab_comparison: {
+    experiment_key?: string;
+    window_days?: number | null;
+    metric_name?: string;
+    variant_a?: {
+      label?: string;
+      users?: number;
+      retention_rate?: number;
+      challenge_participation_rate?: number;
+      leaderboard_engagement_rate?: number;
+      nudge_response_rate?: number;
+    };
+    variant_b?: {
+      label?: string;
+      users?: number;
+      retention_rate?: number;
+      challenge_participation_rate?: number;
+      leaderboard_engagement_rate?: number;
+      nudge_response_rate?: number;
+    };
+    winner?: string;
+    delta_retention_rate?: number | null;
+    delta_challenge_participation_rate?: number | null;
+    delta_leaderboard_engagement_rate?: number | null;
+    delta_nudge_response_rate?: number | null;
+  } | null;
 }
 
 export interface NudgeResponse {
