@@ -44,6 +44,7 @@ The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specificall
 Frontend working note:
 - When doing frontend/UI work, use `pnpm` for package management and scripts.
 - Do not spam `pnpm build`; run it only when build verification is needed for the task or handoff gate.
+- For visual tuning loops on motion/color-heavy UI (for example Aurora backgrounds), temporary DialKit usage is OK for local adjustment, but do not commit the DialKit library/dependency changes.
 - When building frontend/UI work, install and enable Agentation in dev and prefer running Agentation MCP alongside it for visual critique/annotation workflows.
 - Keep the toolbar dev-only. If Agentation is missing in the admin app, add `<Agentation />` in the root layout and wire an explicit local MCP endpoint so annotations auto-sync in development.
 - If the user asks whether you can "see the annotation", interpret that as MCP/automation visibility by default, not browser-visible markers. Only use browser inspection for annotations when the user explicitly asks for browser/UI verification.

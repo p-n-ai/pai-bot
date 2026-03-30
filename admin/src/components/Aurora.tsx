@@ -1,8 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { Color, Mesh, Program, Renderer, Triangle } from "ogl";
 import { cn } from "@/lib/utils";
+
+const DEFAULT_COLOR_STOPS = ["#5227FF", "#7cff67", "#5227FF"];
+
+function toColorStopValues(colorStops: string[]) {
+  return colorStops.map((hex) => {
+    const color = new Color(hex);
+    return [color.r, color.g, color.b];
+  });
+}
+
+function getColorStopsKey(colorStops: string[]) {
+  return colorStops.join("|");
+}
 
 const VERT = `#version 300 es
 in vec2 position;
@@ -19,6 +32,7 @@ uniform float uAmplitude;
 uniform vec3 uColorStops[3];
 uniform vec2 uResolution;
 uniform float uBlend;
+uniform float uDrift;
 
 out vec4 fragColor;
 
@@ -94,7 +108,8 @@ void main() {
   colors[2] = ColorStop(uColorStops[2], 1.0);
   
   vec3 rampColor;
-  COLOR_RAMP(colors, uv.x, rampColor);
+  float rampFactor = fract(uv.x + (uTime * uDrift));
+  COLOR_RAMP(colors, rampFactor, rampColor);
   
   float height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;
   height = exp(height);
@@ -115,25 +130,28 @@ interface AuroraProps {
   colorStops?: string[];
   amplitude?: number;
   blend?: number;
+  drift?: number;
   time?: number;
   speed?: number;
+  style?: CSSProperties;
 }
 
 export default function Aurora(props: AuroraProps) {
-  const {
-    className,
-    colorStops = ["#5227FF", "#7cff67", "#5227FF"],
-    amplitude = 1.0,
-    blend = 0.5,
-  } = props;
   const propsRef = useRef<AuroraProps>(props);
-  propsRef.current = props;
-
   const ctnDom = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    propsRef.current = props;
+  }, [props]);
 
   useEffect(() => {
     const ctn = ctnDom.current;
     if (!ctn) return;
+    const initialProps = propsRef.current;
+    const initialColorStops = initialProps.colorStops ?? DEFAULT_COLOR_STOPS;
+    const initialAmplitude = initialProps.amplitude ?? 1.0;
+    const initialBlend = initialProps.blend ?? 0.5;
+    const initialDrift = initialProps.drift ?? 0.0;
 
     const renderer = new Renderer({
       alpha: true,
@@ -160,20 +178,16 @@ export default function Aurora(props: AuroraProps) {
       delete geometry.attributes.uv;
     }
 
-    const colorStopsArray = colorStops.map((hex) => {
-      const c = new Color(hex);
-      return [c.r, c.g, c.b];
-    });
-
     const program = new Program(gl, {
       vertex: VERT,
       fragment: FRAG,
       uniforms: {
         uTime: { value: 0 },
-        uAmplitude: { value: amplitude },
-        uColorStops: { value: colorStopsArray },
+        uAmplitude: { value: initialAmplitude },
+        uColorStops: { value: toColorStopValues(initialColorStops) },
         uResolution: { value: [ctn.offsetWidth, ctn.offsetHeight] },
-        uBlend: { value: blend },
+        uBlend: { value: initialBlend },
+        uDrift: { value: initialDrift },
       },
     });
 
@@ -181,17 +195,28 @@ export default function Aurora(props: AuroraProps) {
     ctn.appendChild(gl.canvas);
 
     let animateId = 0;
+    let colorStopsKey = getColorStopsKey(initialColorStops);
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
-      const { time = t * 0.01, speed = 1.0 } = propsRef.current;
-      program.uniforms.uTime.value = time * speed * 0.1;
-      program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
-      program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
-      const stops = propsRef.current.colorStops ?? colorStops;
-        program.uniforms.uColorStops.value = stops.map((hex: string) => {
-          const c = new Color(hex);
-          return [c.r, c.g, c.b];
-        });
+      const nextProps = propsRef.current;
+      const nextTime = nextProps.time ?? t * 0.01;
+      const nextSpeed = nextProps.speed ?? 1.0;
+      const nextAmplitude = nextProps.amplitude ?? 1.0;
+      const nextBlend = nextProps.blend ?? 0.5;
+      const nextDrift = nextProps.drift ?? 0.0;
+      const nextColorStops = nextProps.colorStops ?? DEFAULT_COLOR_STOPS;
+      const nextColorStopsKey = getColorStopsKey(nextColorStops);
+
+      program.uniforms.uTime.value = nextTime * nextSpeed * 0.1;
+      program.uniforms.uAmplitude.value = nextAmplitude;
+      program.uniforms.uBlend.value = nextBlend;
+      program.uniforms.uDrift.value = nextDrift;
+
+      if (nextColorStopsKey !== colorStopsKey) {
+        program.uniforms.uColorStops.value = toColorStopValues(nextColorStops);
+        colorStopsKey = nextColorStopsKey;
+      }
+
       renderer.render({ scene: mesh });
     };
     animateId = requestAnimationFrame(update);
@@ -206,7 +231,7 @@ export default function Aurora(props: AuroraProps) {
       }
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [amplitude, blend, colorStops]);
+  }, []);
 
-  return <div ref={ctnDom} className={cn("size-full", className)} />;
+  return <div ref={ctnDom} className={cn("size-full", props.className)} style={props.style} />;
 }
