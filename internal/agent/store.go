@@ -25,8 +25,9 @@ type ConversationQuizState struct {
 	Intensity      string `json:"intensity"`
 	CurrentIndex   int    `json:"current_index"`
 	CorrectAnswers int    `json:"correct_answers"`
-	RunState       string `json:"run_state,omitempty"`
-	SuspendedBy    string `json:"suspended_by,omitempty"`
+	RunState          string        `json:"run_state,omitempty"`
+	SuspendedBy       string        `json:"suspended_by,omitempty"`
+	GeneratedQuestions []QuizQuestion `json:"generated_questions,omitempty"`
 }
 
 // PendingGoalDraft stores a suggested goal awaiting confirmation.
