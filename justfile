@@ -1,7 +1,8 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 alias migration := migrate
-alias backend := dev
+alias backend := go
+alias dev := go
 
 default:
   @just --list
@@ -13,7 +14,7 @@ setup:
   echo "Setup complete. Edit .env with your configuration."
 
 # Development
-dev:
+go:
   set -a; source .env; set +a; go run ./cmd/server
 
 frontend-deps:
@@ -38,6 +39,31 @@ frontend:
     exit 1; \
   fi; \
   cd admin && NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" pnpm dev --hostname 127.0.0.1 --port "$frontend_port"
+
+next:
+  backend_port="${BACKEND_PORT:-8080}"; \
+  if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
+    echo "backend already running on http://127.0.0.1:$backend_port"; \
+  elif lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then \
+    echo "port $backend_port is already in use"; \
+    lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN; \
+    exit 1; \
+  else \
+    echo "starting Go server on http://127.0.0.1:$backend_port"; \
+    nohup just go >/tmp/pai-go.log 2>&1 & \
+    disown || true; \
+    for _ in {1..20}; do \
+      if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
+        break; \
+      fi; \
+      sleep 1; \
+    done; \
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
+      echo "backend failed to start; check /tmp/pai-go.log"; \
+      exit 1; \
+    fi; \
+  fi; \
+  just frontend
 
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app

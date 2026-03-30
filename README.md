@@ -458,10 +458,10 @@ just seed
 just seed-docker
 
 # Start the Go server
-go run ./cmd/server
+just go
 
-# In another terminal — start the admin panel + Agentation MCP
-just frontend
+# Start the admin panel + Agentation MCP, and boot the Go server if needed
+just next
 ```
 
 ### Running Tests

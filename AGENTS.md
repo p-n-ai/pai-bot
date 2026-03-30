@@ -286,9 +286,10 @@ If the user explicitly says "use just", prefer repo `just` recipes over raw Dock
 
 ```bash
 just setup             # First-time setup
-just dev               # Start Go server with .env loaded
-just backend           # Same as just dev
-just frontend          # Start Next.js admin on :3000 and boot Agentation MCP
+just go                # Start Go server with .env loaded
+just backend           # Same as just go
+just next              # Start Go server if needed, then Next.js admin + Agentation MCP
+just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP
 just test              # Run Go unit tests
 just test-integration  # Integration tests (testcontainers)
 just lint              # golangci-lint
