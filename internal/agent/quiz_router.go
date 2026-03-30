@@ -17,15 +17,15 @@ const (
 	conversationStateQuizActive    = "quiz_active"
 )
 
-func (e *Engine) maybeHandleQuizTurn(_ context.Context, msg chat.InboundMessage, conv *Conversation) (string, bool) {
+func (e *Engine) maybeHandleQuizTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation) (string, bool) {
 	if conv.State == conversationStateQuizIntensity && conv.PendingQuizTopicID != "" {
 		return e.handleQuizIntensitySelection(msg, conv, conv.PendingQuizTopicID), true
 	}
 	if conv.State == conversationStateQuizActive && conv.QuizState != nil {
-		return e.handleActiveQuizTurn(msg, conv, *conv.QuizState)
+		return e.handleActiveQuizTurn(ctx, msg, conv, *conv.QuizState)
 	}
 	if conv.QuizState != nil && conv.QuizState.RunState == quizRunStatePaused {
-		return e.handlePausedQuizTurn(msg, conv, *conv.QuizState)
+		return e.handlePausedQuizTurn(ctx, msg, conv, *conv.QuizState)
 	}
 
 	topicID, ok := e.resolveQuizStartTopic(msg, conv)
@@ -179,7 +179,47 @@ func (e *Engine) handleQuizIntensitySelection(msg chat.InboundMessage, conv *Con
 	return e.startQuizWithIntensity(msg, conv, topicID, intensity, false)
 }
 
-func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversation, state ConversationQuizState) (string, bool) {
+func (e *Engine) maybeGenerateQuizQuestions(ctx context.Context, session *QuizSession) {
+	if e.aiRouter == nil || !e.aiRouter.HasProvider() || e.curriculumLoader == nil {
+		return
+	}
+	remaining := QuizMaxQuestions - len(session.Questions)
+	if remaining <= 0 {
+		return
+	}
+	n := 3
+	if remaining < n {
+		n = remaining
+	}
+	topic, ok := e.curriculumLoader.GetTopic(session.TopicID)
+	if !ok {
+		return
+	}
+	teachingNotes, _ := e.curriculumLoader.GetTeachingNotes(session.TopicID)
+	assessment, ok := e.curriculumLoader.GetAssessment(session.TopicID)
+	if !ok {
+		return
+	}
+	allStatic := questionsFromAssessment(assessment)
+
+	gen := quizQuestionGenerator{aiRouter: e.aiRouter}
+	questions, err := gen.Generate(ctx, quizGenerateInput{
+		TopicID:       session.TopicID,
+		TopicName:     topic.Name,
+		SyllabusID:    topic.SyllabusID,
+		Intensity:     session.Intensity,
+		N:             n,
+		TeachingNotes: teachingNotes,
+		AllQuestions:   allStatic,
+	})
+	if err != nil {
+		slog.Warn("quiz question generation failed", "topic_id", session.TopicID, "error", err)
+		return
+	}
+	session.AppendQuestions(questions)
+}
+
+func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, state ConversationQuizState) (string, bool) {
 	assessment, ok := e.curriculumLoader.GetAssessment(state.TopicID)
 	if !ok {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
@@ -191,6 +231,9 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	session.Intensity = state.Intensity
 	session.CurrentIndex = state.CurrentIndex
 	session.CorrectAnswers = state.CorrectAnswers
+	if len(state.GeneratedQuestions) > 0 {
+		session.AppendQuestions(state.GeneratedQuestions)
+	}
 	question, hasQuestion := session.NextQuestion()
 	action := classifyActiveQuizTurn(msg.Text)
 
@@ -279,12 +322,20 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		return response, true
 	}
 
+	if session.IsComplete() && len(session.Questions) < QuizMaxQuestions {
+		e.maybeGenerateQuizQuestions(ctx, session)
+	}
+
 	nextState := ConversationQuizState{
 		TopicID:        state.TopicID,
 		Intensity:      state.Intensity,
 		CurrentIndex:   session.CurrentIndex,
 		CorrectAnswers: session.CorrectAnswers,
 		RunState:       defaultQuizRunState(),
+	}
+	staticCount := len(filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity))
+	if len(session.Questions) > staticCount {
+		nextState.GeneratedQuestions = session.Questions[staticCount:]
 	}
 
 	var response string
@@ -321,7 +372,7 @@ func (e *Engine) handleActiveQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	return response, true
 }
 
-func (e *Engine) handlePausedQuizTurn(msg chat.InboundMessage, conv *Conversation, state ConversationQuizState) (string, bool) {
+func (e *Engine) handlePausedQuizTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, state ConversationQuizState) (string, bool) {
 	action := classifyPausedQuizTurn(msg.Text)
 	switch action {
 	case quizTurnActionExit:
@@ -335,7 +386,7 @@ func (e *Engine) handlePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 		}
 		return response, true
 	case quizTurnActionResume, quizTurnActionHint, quizTurnActionRepeat:
-		return e.resumePausedQuizTurn(msg, conv, state, action), true
+		return e.resumePausedQuizTurn(ctx, msg, conv, state, action), true
 	case quizTurnActionRestart:
 		topicID, resolved := e.resolveQuizStartTopic(msg, conv)
 		if !resolved {
@@ -347,7 +398,7 @@ func (e *Engine) handlePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	}
 }
 
-func (e *Engine) resumePausedQuizTurn(msg chat.InboundMessage, conv *Conversation, state ConversationQuizState, action quizTurnAction) string {
+func (e *Engine) resumePausedQuizTurn(_ context.Context, msg chat.InboundMessage, conv *Conversation, state ConversationQuizState, action quizTurnAction) string {
 	assessment, ok := e.curriculumLoader.GetAssessment(state.TopicID)
 	if !ok {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
@@ -359,6 +410,9 @@ func (e *Engine) resumePausedQuizTurn(msg chat.InboundMessage, conv *Conversatio
 	session.Intensity = state.Intensity
 	session.CurrentIndex = state.CurrentIndex
 	session.CorrectAnswers = state.CorrectAnswers
+	if len(state.GeneratedQuestions) > 0 {
+		session.AppendQuestions(state.GeneratedQuestions)
+	}
 	question, hasQuestion := session.NextQuestion()
 	if !hasQuestion {
 		_ = e.store.ClearConversationQuizState(conv.ID, conversationStateTeaching)
