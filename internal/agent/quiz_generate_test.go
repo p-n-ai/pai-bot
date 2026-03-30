@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/ai"
 )
 
 func TestSelectExemplars_FiltersByDifficulty(t *testing.T) {
@@ -94,5 +97,58 @@ func TestParseGeneratedQuestions_EmptyArray(t *testing.T) {
 	}
 	if len(questions) != 0 {
 		t.Fatalf("len = %d, want 0", len(questions))
+	}
+}
+
+func TestQuizQuestionGenerator_Generate_Success(t *testing.T) {
+	fakeResp := `[{"text":"What is 2+2?","difficulty":"easy","answer_type":"exact","answer":"4","working":"2+2=4","hints":[{"level":1,"text":"count"}],"distractors":[]}]`
+	mockAI := ai.NewMockProvider(fakeResp)
+	router := ai.NewRouter()
+	router.Register("fake", mockAI)
+	gen := quizQuestionGenerator{aiRouter: router}
+
+	questions, err := gen.Generate(context.Background(), quizGenerateInput{
+		TopicID: "F1-01", TopicName: "Basics", SyllabusID: "kssm-f1",
+		Intensity: "easy", N: 3, TeachingNotes: "Basic arithmetic.",
+		AllQuestions: []QuizQuestion{{ID: "Q1", Difficulty: "easy", AnswerType: "exact", Answer: "1"}},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(questions) != 1 {
+		t.Fatalf("len = %d, want 1", len(questions))
+	}
+	if questions[0].Answer != "4" {
+		t.Errorf("Answer = %q, want 4", questions[0].Answer)
+	}
+}
+
+func TestQuizQuestionGenerator_Generate_AIFailure(t *testing.T) {
+	mockAI := ai.NewMockProvider("invalid json")
+	router := ai.NewRouter()
+	router.Register("fake", mockAI)
+	gen := quizQuestionGenerator{aiRouter: router}
+
+	_, err := gen.Generate(context.Background(), quizGenerateInput{
+		TopicID: "F1-01", TopicName: "Basics", SyllabusID: "kssm-f1",
+		Intensity: "easy", N: 3,
+		AllQuestions: []QuizQuestion{{ID: "Q1", Difficulty: "easy", AnswerType: "exact", Answer: "1"}},
+	})
+	if err == nil {
+		t.Fatal("expected error on invalid AI response")
+	}
+}
+
+func TestQuizQuestionGenerator_Generate_NoExemplars(t *testing.T) {
+	router := ai.NewRouter()
+	gen := quizQuestionGenerator{aiRouter: router}
+
+	_, err := gen.Generate(context.Background(), quizGenerateInput{
+		TopicID: "F1-01", TopicName: "Basics", SyllabusID: "kssm-f1",
+		Intensity: "easy", N: 3,
+		AllQuestions: nil,
+	})
+	if err == nil {
+		t.Fatal("expected error with no exemplars")
 	}
 }

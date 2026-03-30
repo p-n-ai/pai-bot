@@ -1,11 +1,66 @@
 package agent
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	mathrand "math/rand/v2"
+
+	"github.com/p-n-ai/pai-bot/internal/ai"
 )
+
+// quizGenerateInput holds the parameters for generating quiz questions via AI.
+type quizGenerateInput struct {
+	TopicID       string
+	TopicName     string
+	SyllabusID    string
+	Intensity     string
+	N             int
+	TeachingNotes string
+	AllQuestions  []QuizQuestion
+}
+
+// quizQuestionGenerator generates quiz questions using an AI router.
+type quizQuestionGenerator struct {
+	aiRouter *ai.Router
+}
+
+// Generate produces N new quiz questions for the given topic using exam-style mimicry.
+func (g *quizQuestionGenerator) Generate(ctx context.Context, input quizGenerateInput) ([]QuizQuestion, error) {
+	if g.aiRouter == nil || !g.aiRouter.HasProvider() {
+		return nil, fmt.Errorf("no AI provider available")
+	}
+	exemplars := selectExemplars(input.AllQuestions, input.Intensity)
+	if len(exemplars) == 0 {
+		return nil, fmt.Errorf("no exemplar questions available")
+	}
+	prompt := buildExamMimicryPrompt(examMimicryPromptInput{
+		N:             input.N,
+		TopicName:     input.TopicName,
+		TopicID:       input.TopicID,
+		SyllabusID:    input.SyllabusID,
+		Intensity:     input.Intensity,
+		TeachingNotes: input.TeachingNotes,
+		Exemplars:     exemplars,
+	})
+	resp, err := g.aiRouter.Complete(ctx, ai.CompletionRequest{
+		Task:        ai.TaskGrading,
+		MaxTokens:   2000,
+		Temperature: 0.7,
+		Messages:    []ai.Message{{Role: "user", Content: prompt}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("AI question generation: %w", err)
+	}
+	slog.Debug("AI question generation completed",
+		"topic_id", input.TopicID,
+		"model", resp.Model,
+		"tokens", resp.TotalTokens(),
+	)
+	return parseGeneratedQuestions([]byte(resp.Content))
+}
 
 func selectExemplars(questions []QuizQuestion, intensity string) []QuizQuestion {
 	if len(questions) == 0 {
