@@ -283,12 +283,15 @@ Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reason
 
 Prefer `just <recipe>` over `make <target>`. Keep `Makefile` only for parity/compatibility.
 If the user explicitly says "use just", prefer repo `just` recipes over raw Docker commands for local lifecycle work.
+`just` recipes are macOS/Linux-oriented for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
 
 ```bash
 just setup             # First-time setup
-just go                # Start Go server with .env loaded
+just install-deps      # Install Go modules + frontend packages
+just install-local-runtime  # Install local Postgres client + redis-cli via Homebrew
+just go                # Turnkey local boot: deps + local runtime + seed + Go server
 just backend           # Same as just go
-just next              # Start Go server if needed, then Next.js admin + Agentation MCP
+just next              # Same turnkey boot, then Next.js admin + Agentation MCP
 just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP
 just test              # Run Go unit tests
 just test-integration  # Integration tests (testcontainers)
