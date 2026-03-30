@@ -65,6 +65,8 @@ type ConversationStore interface {
 	SetUserPreferredLanguage(userID, lang string) error
 	GetUserPreferredQuizIntensity(userID string) (string, bool)
 	SetUserPreferredQuizIntensity(userID, intensity string) error
+	GetUserABGroup(userID string) (string, bool)
+	SetUserABGroup(userID, group string) error
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
@@ -87,6 +89,7 @@ type MemoryStore struct {
 	userForm      map[string]string
 	userLang      map[string]string
 	userQuizLevel map[string]string
+	userABGroup   map[string]string
 	mu            sync.RWMutex
 }
 
@@ -98,6 +101,7 @@ func NewMemoryStore() *MemoryStore {
 		userForm:      make(map[string]string),
 		userLang:      make(map[string]string),
 		userQuizLevel: make(map[string]string),
+		userABGroup:   make(map[string]string),
 	}
 }
 
@@ -128,6 +132,9 @@ func (s *MemoryStore) UserExists(userID string) bool {
 		return true
 	}
 	if _, ok := s.userQuizLevel[userID]; ok {
+		return true
+	}
+	if _, ok := s.userABGroup[userID]; ok {
 		return true
 	}
 	for _, conv := range s.conversations {
@@ -221,6 +228,27 @@ func (s *MemoryStore) SetUserPreferredQuizIntensity(userID, intensity string) er
 		return nil
 	}
 	s.userQuizLevel[userID] = intensity
+	return nil
+}
+
+func (s *MemoryStore) GetUserABGroup(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	group, ok := s.userABGroup[userID]
+	return group, ok
+}
+
+func (s *MemoryStore) SetUserABGroup(userID, group string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if group == "" {
+		delete(s.userABGroup, userID)
+		return nil
+	}
+	s.userABGroup[userID] = group
 	return nil
 }
 
