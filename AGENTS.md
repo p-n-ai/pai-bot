@@ -29,14 +29,14 @@ The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specificall
 - **Auth:** JWT via `golang-jwt/jwt/v5` (short-lived access + refresh tokens)
 - **Logging:** `log/slog` (structured JSON)
 - **Telemetry:** OpenTelemetry SDK
-- **Migrations:** `golang-migrate/migrate/v4`
+- **Migrations:** `goose` via `github.com/pressly/goose/v3`
 - **Linting:** `golangci-lint`
 - **Testing:** stdlib `testing` + `testcontainers-go` for integration tests
 
 ### Frontend (Admin Panel)
-- **Framework:** Next.js 14 (App Router) + TypeScript
-- **Admin framework:** Refine v4+
-- **UI:** shadcn/ui + Tailwind CSS 3
+- **Framework:** Next.js 16 (App Router) + TypeScript
+- **Admin framework:** Refine v5+
+- **UI:** shadcn/ui + Tailwind CSS 4
 - **Charts:** Recharts or Tremor
 - **State:** TanStack Query v5
 - **Validation:** Zod
@@ -85,7 +85,7 @@ pai-bot/
 │   ├── tenant/                 # Multi-tenancy isolation
 │   └── platform/               # Shared: config, database, cache, messaging, storage, telemetry, health
 ├── admin/                      # Next.js admin panel
-├── migrations/                 # SQL migrations (golang-migrate)
+├── migrations/                 # SQL migrations (goose)
 ├── deploy/
 │   ├── docker/                 # Dockerfiles
 │   └── helm/pai/               # Helm chart
@@ -148,7 +148,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 - Backend: Go 1.22+, stdlib `net/http`
 - DB: PostgreSQL, Cache: Dragonfly, Messaging: NATS + JetStream
 - Auth: JWT (access + refresh), Logging: `log/slog`, Telemetry: OpenTelemetry
-- Migrations: `golang-migrate`
+- Migrations: `goose`
 - Admin: Next.js + TypeScript + Refine + shadcn/ui + Tailwind
 
 ### 4) Maintain security and tenancy assumptions
