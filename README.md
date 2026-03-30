@@ -96,13 +96,13 @@ This starts: PostgreSQL, Dragonfly (cache), NATS (messaging), the Go server, and
 If you want demo rows in PostgreSQL for local testing, run:
 
 ```bash
-make seed
+just seed
 ```
 
 If the app is running in Docker, seed through the app container instead:
 
 ```bash
-make seed-docker
+just seed-docker
 ```
 
 When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`.
@@ -458,7 +458,7 @@ just seed
 just seed-docker
 
 # Start the Go server
-just dev
+go run ./cmd/server
 
 # In another terminal — start the admin panel + Agentation MCP
 just frontend
@@ -467,11 +467,12 @@ just frontend
 ### Running Tests
 
 ```bash
-just test         # Run all Go tests
-just test-integration  # Run integration tests (requires -tags=integration tests)
-just test-cover   # Run tests with coverage report
-just lint         # Run golangci-lint
-just test-all     # Lint + Go tests
+go test ./...     # Run all Go tests
+go test -tags=integration ./...   # Run integration tests
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
+just test-all     # Convenience gate: lint + Go tests
 ```
 
 OpenAI live conversation integration suite:
@@ -569,7 +570,7 @@ We welcome contributions! P&AI is built by a community that believes every stude
 1. Fork the repo
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Run tests (`make test && make lint`)
+4. Run tests (`go test ./...` and `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...`)
 5. Commit (`git commit -m 'Add amazing feature'`)
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
