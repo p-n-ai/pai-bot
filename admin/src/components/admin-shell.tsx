@@ -337,7 +337,7 @@ function SessionControls({
   }, []);
 
   return (
-    <div className="relative z-120" ref={containerRef}>
+    <div className="relative z-[120]" ref={containerRef}>
       <Button
         type="button"
         variant="outline"
@@ -356,7 +356,7 @@ function SessionControls({
 
       <div
         className={cn(
-          "absolute right-0 top-[calc(100%+0.65rem)] z-160 w-72 origin-top-right rounded-[24px] border border-white/75 bg-white/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur transition duration-200 ease-out dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_24px_80px_rgba(2,8,23,0.55)]",
+          "absolute right-0 top-[calc(100%+0.65rem)] z-[160] w-72 origin-top-right rounded-[24px] border border-white/75 bg-white/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur transition duration-200 ease-out dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_24px_80px_rgba(2,8,23,0.55)]",
           open
             ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
             : "pointer-events-none -translate-y-2 scale-95 opacity-0",

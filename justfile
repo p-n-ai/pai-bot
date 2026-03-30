@@ -24,7 +24,7 @@ frontend:
   agentation_port="${AGENTATION_PORT:-4747}"; \
   if ! lsof -nP -iTCP:"$agentation_port" -sTCP:LISTEN >/dev/null 2>&1; then \
     echo "starting Agentation MCP on http://127.0.0.1:$agentation_port"; \
-    nohup npx agentation-mcp server --port "$agentation_port" >/tmp/pai-agentation.log 2>&1 & \
+    cd admin && nohup pnpm exec agentation-mcp server --port "$agentation_port" >/tmp/pai-agentation.log 2>&1 & \
     disown || true; \
   fi; \
   if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then \

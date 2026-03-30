@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   description: "Teacher and parent dashboard for P&AI Bot",
 };
 
+const agentationEndpoint = process.env.NEXT_PUBLIC_AGENTATION_ENDPOINT;
+const showAgentation = process.env.NODE_ENV === "development" && Boolean(agentationEndpoint);
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,7 +45,7 @@ export default function RootLayout({
             </RefineProvider>
           </Suspense>
         </ThemeProvider>
-        <Agentation />
+        {showAgentation ? <Agentation endpoint={agentationEndpoint} /> : null}
       </body>
     </html>
   );
