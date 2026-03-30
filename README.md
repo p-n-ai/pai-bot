@@ -96,13 +96,13 @@ This starts: PostgreSQL, Dragonfly (cache), NATS (messaging), the Go server, and
 If you want demo rows in PostgreSQL for local testing, run:
 
 ```bash
-make seed
+just seed
 ```
 
 If the app is running in Docker, seed through the app container instead:
 
 ```bash
-make seed-docker
+just seed-docker
 ```
 
 When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`.
@@ -220,10 +220,10 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
 
-### Planned Admin Auth
+### Current Admin Auth
 
-- Teachers, parents, school admins, and platform admins are intended to access the web dashboard through invite-based account provisioning.
-- The invite link is only for first-time activation. After activation, ongoing login uses `email + password`.
+- Teachers, parents, school admins, and platform admins can enter through the shared public gate on `/` or the direct login route on `/login`.
+- Ongoing login uses `email + password`; if the same email belongs to multiple schools, the UI asks the user to pick the correct school before finishing sign-in.
 - The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
 - Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
 
@@ -298,7 +298,8 @@ pai-bot/
 │   └── analytics.sh                 # Quick metrics from CLI
 ├── docker-compose.yml               # One-command local development
 ├── docker-compose.prod.yml          # Production compose (single-server)
-├── Makefile                         # Dev shortcuts
+├── justfile                         # Preferred task runner
+├── Makefile                         # Legacy parity shortcuts
 ├── .env.example                     # All configuration documented
 ├── .github/workflows/               # CI/CD (build, test, lint, release)
 └── README.md
@@ -445,32 +446,33 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 docker compose up -d postgres dragonfly nats ollama
 
 # Run database migrations
-make migrate
+just migrate
 
 # Check the current migration version
-make migrate-version
+just migrate-version
 
 # Seed demo data (optional)
-make seed
+just seed
 
 # Or, if the app itself is running in Docker
-make seed-docker
+just seed-docker
 
-# Start the Go server with hot reload
-make dev
+# Start the Go server
+just go
 
-# In another terminal — start the admin panel
-cd admin && npm install && npm run dev
+# Start the admin panel + Agentation MCP, and boot the Go server if needed
+just next
 ```
 
 ### Running Tests
 
 ```bash
-make test         # Run all Go tests
-make test-integration  # Run integration tests (requires -tags=integration tests)
-make test-cover   # Run tests with coverage report
-make lint         # Run golangci-lint
-make test-all     # Lint + Go tests
+go test ./...     # Run all Go tests
+go test -tags=integration ./...   # Run integration tests
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
+just test-all     # Convenience gate: lint + Go tests
 ```
 
 OpenAI live conversation integration suite:
@@ -486,7 +488,7 @@ OpenAI live conversation integration suite:
 Terminal chat workflow:
 
 ```bash
-make chat-terminal
+just chat-terminal
 # or:
 docker compose run --rm --entrypoint /pai-terminal-chat app --user-id demo-user --lang en
 # for an ephemeral local-only session:
@@ -498,7 +500,7 @@ The terminal chat uses the same `agent.Engine` and AI router as the app. By defa
 Terminal nudge workflow:
 
 ```bash
-make nudge-terminal USER_ID=demo-user
+just nudge-terminal USER_ID=demo-user
 # or:
 docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id demo-user
 ```
@@ -508,23 +510,23 @@ The terminal nudge command triggers the real scheduler path for one user and pri
 ### Useful Commands
 
 ```bash
-make setup        # First-time setup
-make start        # Start all services via Docker Compose
-make stop         # Stop all services
-make logs         # Tail application logs
-make migrate      # Run database migrations
-make migrate-status   # Show applied/pending goose migrations
-make migrate-version  # Show current goose migration version
-make migrate-down # Roll back the most recent migration
-make migration-create NAME=add_parent_invites  # Create a new timestamped SQL migration
-make seed         # Seed demo tenant/users/messages/progress/events
-make seed-docker  # Seed through the running app container
-make analytics    # Print quick metrics from the database
-make analytics-xlsx   # Export a styled Excel workbook to output/spreadsheet/
-make analytics-example  # Generate a sample Excel workbook without a database
-make ollama-pull  # Download a free AI model for Ollama
-make chat-terminal  # Open a local terminal chat session
-make nudge-terminal USER_ID=<user-id>  # Trigger a due-review nudge for one user
+just setup        # First-time setup
+just start        # Start all services via Docker Compose
+just stop         # Stop all services
+just logs         # Tail application logs
+just migrate      # Run database migrations
+just migrate-status   # Show applied/pending goose migrations
+just migrate-version  # Show current goose migration version
+just migrate-down # Roll back the most recent migration
+just migration-create add_parent_invites  # Create a new timestamped SQL migration
+just seed         # Seed demo tenant/users/messages/progress/events
+just seed-docker  # Seed through the running app container
+just analytics    # Print quick metrics from the database
+just analytics-xlsx   # Export a styled Excel workbook to output/spreadsheet/
+just analytics-example  # Generate a sample Excel workbook without a database
+just ollama-pull  # Download a free AI model for Ollama
+just chat-terminal  # Open a local terminal chat session
+just nudge-terminal USER_ID=<user-id>  # Trigger a due-review nudge for one user
 ```
 
 Excel export notes:
@@ -537,8 +539,8 @@ Excel export notes:
 Migration notes:
 
 - The repo now uses `goose` with single-file timestamped SQL migrations and `goose_db_version` tracking.
-- `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges.
-- Existing databases already tracked by `golang-migrate` should be recreated in local dev or explicitly baselined before switching to goose. Do not run both tools against the same database long-term.
+- `just migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges.
+- Existing databases from the pre-goose migration flow should be recreated in local dev or explicitly baselined before switching tools. Do not run both migration systems against the same database long-term.
 
 ### Rating Analytics Contract
 
@@ -568,7 +570,7 @@ We welcome contributions! P&AI is built by a community that believes every stude
 1. Fork the repo
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Run tests (`make test && make lint`)
+4. Run tests (`go test ./...` and `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...`)
 5. Commit (`git commit -m 'Add amazing feature'`)
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request

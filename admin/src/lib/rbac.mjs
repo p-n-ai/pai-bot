@@ -1,5 +1,9 @@
 const ELEVATED_ROLES = new Set(["teacher", "admin", "platform_admin"]);
 
+export function isPublicEntryRoute(pathname) {
+  return pathname === "/" || pathname === "/login";
+}
+
 export function isElevatedRole(role) {
   return ELEVATED_ROLES.has(role);
 }
@@ -11,7 +15,7 @@ export function hasAdminUIAccess(user) {
 export function canAccessPath(user, pathname) {
   if (!pathname) return false;
 
-  if (pathname === "/" || pathname === "/login") {
+  if (isPublicEntryRoute(pathname)) {
     return true;
   }
 

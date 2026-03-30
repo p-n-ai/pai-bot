@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
 import { getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
 import { getBreadcrumbs, getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
+import { isPublicEntryRoute } from "@/lib/rbac.mjs";
 import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const section = getCurrentSection(pathname);
   const breadcrumbs = getBreadcrumbs(pathname, currentUser);
-  const isLoginRoute = pathname === "/login";
+  const isPublicRoute = isPublicEntryRoute(pathname);
 
   useEffect(() => {
     refreshSessionStateRef.current = () => {
@@ -79,21 +80,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     refreshSessionStateRef.current();
   }, [pathname]);
 
-  if (isLoginRoute) {
+  if (isPublicRoute) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
-        <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col">
-          <div className="flex items-center justify-end px-4 pt-4 lg:px-8 lg:pt-8">
+      <div className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.08),transparent_28%),radial-gradient(circle_at_85%_12%,rgba(71,85,105,0.08),transparent_20%),linear-gradient(180deg,#fcfcfb_0%,#f4f4f2_48%,#efefec_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_28%),radial-gradient(circle_at_85%_12%,rgba(148,163,184,0.06),transparent_20%),linear-gradient(180deg,#0b0d10_0%,#101419_48%,#14181d_100%)] dark:text-slate-100">
+        <div className="pointer-events-none fixed right-3 top-3 z-20 lg:right-6 lg:top-3.5">
+          <div className="pointer-events-auto">
             <ThemeToggle />
           </div>
-          <main className="flex-1">{children}</main>
         </div>
+        <main className="w-full">{children}</main>
       </div>
     );
   }
 
   return (
-    <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
+    <div className="isolate min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(249,115,22,0.16),transparent_18%),linear-gradient(180deg,#fffef7_0%,#f5fbff_45%,#eef8f5_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_85%_12%,rgba(251,191,36,0.12),transparent_18%),linear-gradient(180deg,#07111c_0%,#0c1724_45%,#101926_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="sticky top-0 hidden h-screen w-80 shrink-0 overflow-hidden border-r border-white/70 bg-white/72 px-6 py-6 backdrop-blur dark:border-white/10 dark:bg-slate-950/58 lg:flex lg:flex-col">
           <div className="scrollbar-thin-subtle min-h-0 flex-1 overflow-y-auto pr-2">

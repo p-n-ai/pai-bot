@@ -1,8 +1,17 @@
+---
+title: "Admin Panel Feature Specification"
+summary: "Roles, routes, auth flow, and planned capabilities for the P&AI Bot teacher, parent, admin, and platform-admin web panel."
+read_when:
+  - You are changing admin panel routes, role access, or auth entry flow
+  - You are adding teacher, parent, school-admin, or platform-admin features
+  - You need the source-of-truth feature map before editing admin UI or admin APIs
+---
+
 # Admin / Management Panel — Feature Specification
 
-> **Status:** Planned (Week 3–6 of [development timeline](development-timeline.md))
+> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), metrics, AI usage, class dashboard, student detail, and parent summary. Remaining sections below stay planned until implemented.
 >
-> **Stack:** Next.js 16 (App Router) · TypeScript · Refine v4+ · shadcn/ui · Tailwind CSS 3 · TanStack Query v5 · Recharts/Tremor
+> **Stack:** Next.js 16 (App Router) · TypeScript · Refine v5+ · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
 
 This document describes all planned features for the P&AI Bot admin panel, organized by user role. The admin panel serves teachers, parents, school administrators, and platform operators — students interact exclusively via chat (Telegram / WhatsApp / WebSocket).
 
@@ -33,14 +42,15 @@ This document describes all planned features for the P&AI Bot admin panel, organ
 | `platform_admin` | Multi-tenant management + all admin features | Web (admin panel) |
 
 ---
+Unauthenticated entry now starts at a public gate page on `/`, with `/login` kept as a direct login entrypoint rendering the same gate experience.
 
 ## Authentication & Authorization
 
 ### Flow
 
-1. **Invite** — Admin or platform admin invites user via email (creates `auth_invites` record)
-2. **Activate** — User clicks invite link, sets password (creates `auth_identities` record)
-3. **Login** — Email + password → JWT access token (15 min) + refresh token (7 days, rotated on use)
+1. **Enter** — User lands on `/` or `/login`
+2. **Login** — Email + password → JWT access token (15 min) + refresh token (7 days, rotated on use)
+3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in
 4. **Route guards** — Next.js enforces role-based page access on the frontend
 5. **API middleware** — Go backend enforces RBAC on all `/api/admin/*` endpoints
 
@@ -173,18 +183,19 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 
 ## Pages & Routes
 
-| Page | Route | Accessible By | Timeline |
-|------|-------|---------------|----------|
-| Login | `/login` | All web roles | Week 4, Day 16 |
-| Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Week 4, Day 16 |
-| Mastery Heatmap | `/dashboard/heatmap` | Teacher, Admin, Platform Admin | Week 4, Day 16 |
-| Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Week 4, Day 16 |
-| Analytics | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Week 3, Day 14 |
-| Parent Child View | `/child/[id]` | Parent | Week 4, Day 17 |
-| Class Management | `/classes` | Admin, Platform Admin | Week 4, Day 18 |
-| Token Budget | `/settings/budget` | Admin, Platform Admin | Week 4, Day 19 |
-| Data Export | `/export` | Admin, Platform Admin | Week 5, Day 24 |
-| School Onboarding | `/setup/onboard` | Admin | Week 6, Day 27 |
+| Page | Route | Accessible By | Status |
+|------|-------|---------------|--------|
+| Home Gate | `/` | All web roles | Current |
+| Login | `/login` | All web roles | Current |
+| Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Current |
+| Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Current |
+| Analytics | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Current |
+| AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Current |
+| Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
+| Parent Child View | `/parents/[id]` | Parent | Current |
+| Token Budget | `/settings/budget` | Admin, Platform Admin | Planned |
+| Data Export | `/export` | Admin, Platform Admin | Planned |
+| School Onboarding | `/setup/onboard` | Admin | Planned |
 
 ---
 
