@@ -443,6 +443,8 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 
 Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
 
+`just go` / `just next` require `LEARN_DATABASE_URL` to be present in `.env`; the local bootstrap path no longer falls back to an implicit default DSN or shell override.
+
 ```bash
 # Start infrastructure (Postgres, Dragonfly, NATS, Ollama)
 docker compose up -d postgres dragonfly nats ollama
