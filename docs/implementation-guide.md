@@ -1632,7 +1632,7 @@ setup:
 
 install-deps:
 	go mod download
-	cd admin && pnpm install
+	if [ ! -d admin/node_modules ]; then cd admin && pnpm install --frozen-lockfile; fi
 
 # Development
 dev:

@@ -457,10 +457,11 @@ just seed
 # Or, if the app itself is running in Docker
 just seed-docker
 
-# Start the Go server
+# Start the Go server (turnkey: installs deps, starts local Postgres + Dragonfly, seeds if needed)
 just go
 
 # Start the admin panel + Agentation MCP, and boot the Go server if needed
+# Same turnkey local setup as just go
 just next
 ```
 
@@ -512,6 +513,7 @@ The terminal nudge command triggers the real scheduler path for one user and pri
 ```bash
 just setup        # First-time setup
 just install-deps # Install Go modules + frontend packages
+just install-local-runtime  # Install local Postgres client + redis-cli via Homebrew
 just start        # Start all services via Docker Compose
 just stop         # Stop all services
 just logs         # Tail application logs
