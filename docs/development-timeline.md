@@ -341,14 +341,18 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
 
+Status (2026-03-30): Week 4 admin is ahead of the original scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
+
 ### Day 17 — API Endpoints + Parent View
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ⬜ | |
+| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Also shipping GET /api/admin/metrics, GET /api/admin/parents/{id}, POST /api/admin/students/{id}/nudge, and POST /api/admin/invites |
 | `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 | ✅ | |
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
+
+Implementation note (2026-03-30): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes for teacher/parent/admin/platform-admin. Still pending: bot-side form selection.
 
 ### Day 18 — Deploy Admin + Class Management
 

@@ -135,7 +135,7 @@ export function LoginGateForm() {
             </Label>
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{tenantChoices.length} found</span>
           </div>
-          <Select value={tenantID} onValueChange={setTenantID}>
+          <Select value={tenantID} onValueChange={(value) => setTenantID(value ?? "")}>
             <SelectTrigger
               id="tenant_id"
               aria-label="School"

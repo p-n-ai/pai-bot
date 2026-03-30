@@ -84,7 +84,13 @@ test-integration:
 lint:
   go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
 
-test-all: lint test
+admin-lint:
+  cd admin && pnpm lint
+
+admin-test:
+  cd admin && pnpm test
+
+test-all: lint test admin-lint admin-test
 
 test-cover:
   go test -coverprofile=coverage.out ./...
@@ -113,8 +119,13 @@ seed-docker:
   docker compose exec app /pai-seed
 
 # Build
-build:
+build-backend:
   CGO_ENABLED=0 go build -o bin/pai-server ./cmd/server
+
+admin-build:
+  cd admin && pnpm build
+
+build: build-backend admin-build
 
 # Docker
 docker:

@@ -4680,6 +4680,8 @@ Follow the same TDD pattern for:
 
 **Entry criteria:** Week 3 complete. Motivation features live. `just test-all` passes.
 
+Status (2026-03-30): this slice is beyond the original bare scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
+
 #### Tasks
 
 | # | Task ID | Task | Owner | Files Created |
@@ -4782,6 +4784,8 @@ Follow the same pattern:
 - **Day 18:** Deploy admin panel via docker-compose with nginx reverse proxy. Class management page.
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page.
 - **Day 20:** Week 4 retro.
+
+Status (2026-03-30): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection.
 
 Planned follow-up after Week 4 scaffolding:
 
