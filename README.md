@@ -441,6 +441,8 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 
 ### Local Development
 
+Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
+
 ```bash
 # Start infrastructure (Postgres, Dragonfly, NATS, Ollama)
 docker compose up -d postgres dragonfly nats ollama
