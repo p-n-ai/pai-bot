@@ -21,22 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (() => {
-                const key = "pai-admin-theme";
-                const saved = window.localStorage.getItem(key);
-                const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-                const theme = saved === "light" || saved === "dark" ? saved : system;
-                document.documentElement.classList.toggle("dark", theme === "dark");
-                document.documentElement.style.colorScheme = theme;
-              })();
-            `,
-          }}
-        />
-      </head>
+      <head />
       <body className="antialiased">
         <ThemeProvider>
           <Suspense fallback={null}>

@@ -6,11 +6,12 @@ import { LightLoginGate } from "@/components/login-gate/light-login-gate";
 import { LoginGateProvider } from "@/components/login-gate/login-gate-provider";
 
 export function LoginGate({ nextPath = null }: { nextPath?: string | null }) {
-  const { theme } = useTheme();
+  const { theme, mounted } = useTheme();
+  const isDark = mounted && theme === "dark";
 
   return (
     <LoginGateProvider nextPath={nextPath}>
-      {theme === "dark" ? <DarkLoginGate /> : <LightLoginGate />}
+      {isDark ? <DarkLoginGate /> : <LightLoginGate />}
     </LoginGateProvider>
   );
 }
