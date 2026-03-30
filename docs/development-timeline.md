@@ -393,6 +393,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W4D16-UI-9` | Shared frontend cleanup after the shadcn migration: remove the last admin lint issues in the theme toggle, async resource hook, and small shared components so `admin/` now passes `npm run lint` cleanly. | ✅ | 🤖 |
 | `A-W4D16-UI-10` | Admin shell hydration fix: move theme hydration state into the provider and keep `ThemeToggle` as a thin consumer while preserving deterministic pre-hydration markup so SSR and client output stay aligned. | ✅ | 🤖 |
 | `A-W4D16-UI-11` | Shared hydration hardening: add a reusable `useHydrated` hook and apply it to invite activation so client-stored session reads stay behind a deterministic hydration boundary instead of running during SSR/client reconciliation. | ✅ | 🤖 |
+| `A-W4D16-UI-12` | Replace the custom admin theme store and inline boot script with `next-themes`, keeping the existing toggle UX while delegating class, storage, and color-scheme synchronization to the maintained provider to reduce hydration mismatch risk. | ✅ | 🤖 |
 
 ---
 
