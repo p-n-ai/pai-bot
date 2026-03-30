@@ -1,3 +1,12 @@
+---
+title: "Admin Panel Feature Specification"
+summary: "Roles, routes, auth flow, and planned capabilities for the P&AI Bot teacher, parent, admin, and platform-admin web panel."
+read_when:
+  - You are changing admin panel routes, role access, or auth entry flow
+  - You are adding teacher, parent, school-admin, or platform-admin features
+  - You need the source-of-truth feature map before editing admin UI or admin APIs
+---
+
 # Admin / Management Panel — Feature Specification
 
 > **Status:** Planned (Week 3–6 of [development timeline](development-timeline.md))
@@ -33,6 +42,7 @@ This document describes all planned features for the P&AI Bot admin panel, organ
 | `platform_admin` | Multi-tenant management + all admin features | Web (admin panel) |
 
 ---
+Unauthenticated entry now starts at a public gate page on `/`, with `/login` kept as a direct login entrypoint rendering the same gate experience.
 
 ## Authentication & Authorization
 
@@ -175,6 +185,7 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 
 | Page | Route | Accessible By | Timeline |
 |------|-------|---------------|----------|
+| Home Gate | `/` | All web roles | Current |
 | Login | `/login` | All web roles | Week 4, Day 16 |
 | Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Week 4, Day 16 |
 | Mastery Heatmap | `/dashboard/heatmap` | Teacher, Admin, Platform Admin | Week 4, Day 16 |

@@ -42,7 +42,7 @@ export default function RootLayout({
             </RefineProvider>
           </Suspense>
         </ThemeProvider>
-        {process.env.NODE_ENV === "development" ? <Agentation /> : null}
+        <Agentation />
       </body>
     </html>
   );

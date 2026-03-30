@@ -45,7 +45,8 @@ Frontend working note:
 - When doing frontend/UI work, use `pnpm` for package management and scripts.
 - Do not spam `pnpm build`; run it only when build verification is needed for the task or handoff gate.
 - When building frontend/UI work, install and enable Agentation in dev and prefer running Agentation MCP alongside it for visual critique/annotation workflows.
-- Keep the toolbar dev-only. If Agentation is missing in the admin app, add `<Agentation />` in the root layout and use `npx agentation-mcp server` as the MCP entrypoint for critique sessions.
+- Keep the toolbar dev-only. If Agentation is missing in the admin app, add `<Agentation />` in the root layout and wire an explicit local MCP endpoint so annotations auto-sync in development.
+- If the user asks whether you can "see the annotation", interpret that as MCP/automation visibility by default, not browser-visible markers. Only use browser inspection for annotations when the user explicitly asks for browser/UI verification.
 
 ### Infrastructure
 - Docker Compose (dev/single-server) and Helm (Kubernetes)
@@ -280,10 +281,13 @@ Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reason
 ## Common Commands
 
 Prefer `just <recipe>` over `make <target>`. Keep `Makefile` only for parity/compatibility.
+If the user explicitly says "use just", prefer repo `just` recipes over raw Docker commands for local lifecycle work.
 
 ```bash
 just setup             # First-time setup
-just dev               # Start Go server with hot reload
+just dev               # Start Go server with .env loaded
+just backend           # Same as just dev
+just frontend          # Start Next.js admin on :3000 and boot Agentation MCP
 just test              # Run Go unit tests
 just test-integration  # Integration tests (testcontainers)
 just lint              # golangci-lint

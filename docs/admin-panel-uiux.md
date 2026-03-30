@@ -1,3 +1,12 @@
+---
+title: "Admin Panel UI/UX Specification"
+summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the public gate/login entry."
+read_when:
+  - You are redesigning the admin landing or login gate
+  - You are changing admin shell layout, responsive behavior, or navigation
+  - You need the UI/UX reference before building or refactoring admin-facing pages
+---
+
 # Admin Panel — UI/UX Specification & Wireframes
 
 > **Status:** Partially implemented (scaffold complete), ongoing development
@@ -149,7 +158,7 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 
 ## Login Page
 
-**Route:** `/login`
+**Routes:** `/`, `/login`
 **Access:** All roles (unauthenticated)
 **Status:** Implemented
 
@@ -182,8 +191,10 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 └───────────────────────────────────────────────────┘
 ```
 
+The root route `/` is the first-run gate page. `/login` remains as a direct auth URL and renders the same gate layout.
+
 **Interactions:**
-- On success → redirect to `/` (role-based landing)
+- On success → redirect to the role-appropriate workspace
 - Teachers/admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
 - Tenant selector appears if email maps to multiple schools

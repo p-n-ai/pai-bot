@@ -1,6 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 alias migration := migrate
+alias backend := dev
 
 default:
   @just --list
@@ -13,7 +14,30 @@ setup:
 
 # Development
 dev:
-  go run ./cmd/server
+  set -a; source .env; set +a; go run ./cmd/server
+
+frontend-deps:
+  cd admin && pnpm install
+
+frontend:
+  frontend_port="${FRONTEND_PORT:-3000}"; \
+  agentation_port="${AGENTATION_PORT:-4747}"; \
+  if ! lsof -nP -iTCP:"$agentation_port" -sTCP:LISTEN >/dev/null 2>&1; then \
+    echo "starting Agentation MCP on http://127.0.0.1:$agentation_port"; \
+    nohup npx agentation-mcp server --port "$agentation_port" >/tmp/pai-agentation.log 2>&1 & \
+    disown || true; \
+  fi; \
+  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then \
+    if curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then \
+      echo "frontend already running on http://127.0.0.1:$frontend_port"; \
+      echo "agentation mcp on http://127.0.0.1:$agentation_port"; \
+      exit 0; \
+    fi; \
+    echo "port $frontend_port is already in use"; \
+    lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN; \
+    exit 1; \
+  fi; \
+  cd admin && NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" pnpm dev --hostname 127.0.0.1 --port "$frontend_port"
 
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app
