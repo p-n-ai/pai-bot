@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	mathrand "math/rand/v2"
+	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 )
@@ -140,7 +141,22 @@ type generatedQuestionJSON struct {
 	} `json:"distractors"`
 }
 
+// stripCodeFences removes markdown code fences (```json ... ```) from AI responses.
+func stripCodeFences(raw []byte) []byte {
+	s := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(s, "```") {
+		if idx := strings.Index(s, "\n"); idx != -1 {
+			s = s[idx+1:]
+		}
+		if idx := strings.LastIndex(s, "```"); idx != -1 {
+			s = s[:idx]
+		}
+	}
+	return []byte(strings.TrimSpace(s))
+}
+
 func parseGeneratedQuestions(raw []byte) ([]QuizQuestion, error) {
+	raw = stripCodeFences(raw)
 	var parsed []generatedQuestionJSON
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("parse generated questions: %w", err)
