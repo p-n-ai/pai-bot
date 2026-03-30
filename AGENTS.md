@@ -288,8 +288,8 @@ If the user explicitly says "use just", prefer repo `just` recipes over raw Dock
 ```bash
 just setup             # First-time setup
 just install-deps      # Install Go modules + frontend packages
-just install-local-runtime  # Install local Postgres client + redis-cli via Homebrew
-just go                # Turnkey local boot: deps + local runtime + seed + Go server
+just install-local-runtime  # Install missing Postgres client tools via Homebrew when available
+just go                # Turnkey local boot: deps + local runtime + safe default-dev seed + Go server
 just backend           # Same as just go
 just next              # Same turnkey boot, then Next.js admin + Agentation MCP
 just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP

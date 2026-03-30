@@ -18,20 +18,57 @@ install-deps:
   if [ ! -d admin/node_modules ]; then cd admin && pnpm install --frozen-lockfile; fi
 
 install-local-runtime:
+  needs_postgres_tools="no"; \
+  needs_redis_cli="no"; \
   brew_bin="$(command -v brew || true)"; \
-  if [ -z "$brew_bin" ]; then \
-    echo "homebrew is required for turnkey local setup"; \
-    exit 1; \
-  fi; \
   if ! command -v pg_isready >/dev/null 2>&1 || ! command -v psql >/dev/null 2>&1; then \
-    "$brew_bin" install libpq; \
+    needs_postgres_tools="yes"; \
   fi; \
   if ! command -v redis-cli >/dev/null 2>&1; then \
+    needs_redis_cli="yes"; \
+  fi; \
+  if [ "$needs_postgres_tools" = "no" ] && [ "$needs_redis_cli" = "no" ]; then \
+    exit 0; \
+  fi; \
+  if [ -z "$brew_bin" ]; then \
+    if [ "$needs_postgres_tools" = "yes" ]; then \
+      echo "postgres client tools missing; install pg_isready + psql, or install Homebrew and rerun"; \
+      exit 1; \
+    fi; \
+    echo "redis-cli not found; skipping optional install because Homebrew is unavailable"; \
+    exit 0; \
+  fi; \
+  if [ "$needs_postgres_tools" = "yes" ]; then \
+    "$brew_bin" install libpq; \
+  fi; \
+  if [ "$needs_redis_cli" = "yes" ]; then \
     "$brew_bin" install redis; \
   fi
 
-check-local-db:
-  set -a; [ -f .env ] && source .env; set +a; \
+default-db-url:
+  @printf '%s\n' "postgres://pai:pai@localhost:5432/pai?sslmode=disable"
+
+db-url:
+  @db_url="${LEARN_DATABASE_URL:-}"; \
+  if [ -z "$db_url" ] && [ -f .env ]; then \
+    set -a; \
+    source .env; \
+    set +a; \
+    db_url="${LEARN_DATABASE_URL:-}"; \
+  fi; \
+  printf '%s\n' "${db_url:-$(just default-db-url)}"
+
+db-target-allows-auto-seed:
+  @db_url="$(just db-url)"; \
+  default_db_url="$(just default-db-url)"; \
+  if [ "$db_url" = "$default_db_url" ]; then \
+    printf 'yes\n'; \
+  else \
+    printf 'no\n'; \
+  fi
+
+db-seed-state:
+  @db_url="$(just db-url)"; \
   brew_bin="$(command -v brew || true)"; \
   pg_isready_bin="$(command -v pg_isready || true)"; \
   psql_bin="$(command -v psql || true)"; \
@@ -42,21 +79,49 @@ check-local-db:
     psql_bin="$("$brew_bin" --prefix libpq)/bin/psql"; \
   fi; \
   if [ -z "$pg_isready_bin" ] || [ -z "$psql_bin" ]; then \
-    echo "postgres client tools missing"; \
-    exit 1; \
+    printf 'missing_tools\n'; \
+    exit 0; \
   fi; \
-  db_url="${LEARN_DATABASE_URL:-postgres://pai:pai@localhost:5432/pai?sslmode=disable}"; \
   if ! "$pg_isready_bin" -d "$db_url" >/dev/null 2>&1; then \
-    echo "postgres is not reachable at $db_url"; \
-    echo "start it first, then retry"; \
-    exit 1; \
+    printf 'unreachable\n'; \
+    exit 0; \
   fi; \
-  seed_state="$("$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL THEN 'missing_auth_identities' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END")"; \
-  if [ "$seed_state" != "seeded" ]; then \
-    echo "database is up but demo auth data is not ready ($seed_state)"; \
-    echo "run 'just seed' before 'just go' or 'just next'"; \
-    exit 1; \
-  fi
+  "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL THEN 'missing_auth_identities' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
+
+check-local-db:
+  @db_url="$(just db-url)"; \
+  db_allows_auto_seed="$(just db-target-allows-auto-seed)"; \
+  seed_state="$(just db-seed-state)"; \
+  case "$seed_state" in \
+    seeded) exit 0 ;; \
+    missing_tools) \
+      echo "postgres client tools missing"; \
+      exit 1; \
+      ;; \
+    unreachable) \
+      echo "postgres is not reachable at $db_url"; \
+      echo "start it first, then retry"; \
+      exit 1; \
+      ;; \
+    missing_auth_identities) \
+      echo "database schema is not ready (missing auth tables)"; \
+      echo "run 'just migrate' before 'just go' or 'just next'"; \
+      exit 1; \
+      ;; \
+    not_seeded) \
+      if [ "$db_allows_auto_seed" = "yes" ]; then \
+        echo "database is up but demo auth data is not ready ($seed_state)"; \
+        echo "run 'just seed' before 'just go' or 'just next'"; \
+        exit 1; \
+      fi; \
+      echo "database is reachable and migrated; skipping demo seed requirement for target $db_url"; \
+      exit 0; \
+      ;; \
+    *) \
+      echo "unexpected local database state: $seed_state"; \
+      exit 1; \
+      ;; \
+  esac
 
 ensure-local-runtime:
   if ! docker info >/dev/null 2>&1; then \
@@ -86,8 +151,15 @@ prepare-local-dev:
   just install-deps
   just install-local-runtime
   just ensure-local-runtime
-  if ! just check-local-db >/dev/null 2>&1; then \
-    just seed; \
+  db_url="$(just db-url)"; \
+  db_allows_auto_seed="$(just db-target-allows-auto-seed)"; \
+  seed_state="$(just db-seed-state)"; \
+  if [ "$seed_state" = "not_seeded" ]; then \
+    if [ "$db_allows_auto_seed" = "yes" ]; then \
+      just seed; \
+    else \
+      echo "database is not seeded and auto-seed is disabled for target $db_url"; \
+    fi; \
   fi; \
   just check-local-db
 
