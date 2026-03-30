@@ -1,19 +1,13 @@
 "use client";
 
 import { Moon, SunMedium } from "lucide-react";
-import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 
-function subscribe() {
-  return () => {};
-}
-
 export function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const { isHydrated, theme, toggle } = useTheme();
 
-  if (!mounted) {
+  if (!isHydrated) {
     return (
       <Button
         type="button"

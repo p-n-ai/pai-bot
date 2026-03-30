@@ -391,7 +391,8 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W4D16-UI-7` | Sixth shadcn/ui migration slice: standardize the home, student detail, and parent summary pages on shared wrappers by introducing reusable highlight and link-card components and replacing repeated content cards with `AdminSurface`, `AdminInsetPanel`, and `AdminHighlightPanel`. | ✅ | 🤖 |
 | `A-W4D16-UI-8` | Seventh shadcn/ui migration slice: refactor the remaining class-management view onto shared wrappers by introducing reusable class-list and topic-progress components and replacing bespoke class tiles, selected-class summary, and topic rows with shared shadcn-based surfaces. | ✅ | 🤖 |
 | `A-W4D16-UI-9` | Shared frontend cleanup after the shadcn migration: remove the last admin lint issues in the theme toggle, async resource hook, and small shared components so `admin/` now passes `npm run lint` cleanly. | ✅ | 🤖 |
-| `A-W4D16-UI-10` | Admin shell hydration fix: make `ThemeToggle` render a deterministic pre-hydration button, then resolve the stored/system theme after mount so SSR and client markup stay aligned. | ✅ | 🤖 |
+| `A-W4D16-UI-10` | Admin shell hydration fix: move theme hydration state into the provider and keep `ThemeToggle` as a thin consumer while preserving deterministic pre-hydration markup so SSR and client output stay aligned. | ✅ | 🤖 |
+| `A-W4D16-UI-11` | Shared hydration hardening: add a reusable `useHydrated` hook and apply it to invite activation so client-stored session reads stay behind a deterministic hydration boundary instead of running during SSR/client reconciliation. | ✅ | 🤖 |
 
 ---
 

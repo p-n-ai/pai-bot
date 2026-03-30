@@ -1,12 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { getPreferredTheme, isTheme, THEME_STORAGE_KEY, toggleTheme } from "@/lib/theme.mjs";
 
 type Theme = "light" | "dark";
 const THEME_EVENT = "pai-theme-change";
 
 type ThemeContextValue = {
+  isHydrated: boolean;
   theme: Theme;
   toggle: () => void;
 };
@@ -63,6 +65,7 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const isHydrated = useHydrated();
   const theme = useSyncExternalStore(subscribe, getThemeSnapshot, () => "light") as Theme;
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new Event(THEME_EVENT));
   };
 
-  return <ThemeContext.Provider value={{ theme, toggle: handleToggle }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ isHydrated, theme, toggle: handleToggle }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
