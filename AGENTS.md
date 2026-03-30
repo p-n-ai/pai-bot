@@ -286,6 +286,7 @@ If the user explicitly says "use just", prefer repo `just` recipes over raw Dock
 
 ```bash
 just setup             # First-time setup
+just install-deps      # Install Go modules + frontend packages
 just go                # Start Go server with .env loaded
 just backend           # Same as just go
 just next              # Start Go server if needed, then Next.js admin + Agentation MCP

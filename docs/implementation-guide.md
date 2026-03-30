@@ -1627,8 +1627,12 @@ jobs:
 # First-time setup
 setup:
 	cp -n .env.example .env 2>/dev/null || true
-	go mod download
+	just install-deps
 	@echo "Setup complete. Edit .env with your configuration."
+
+install-deps:
+	go mod download
+	cd admin && pnpm install
 
 # Development
 dev:

@@ -511,6 +511,7 @@ The terminal nudge command triggers the real scheduler path for one user and pri
 
 ```bash
 just setup        # First-time setup
+just install-deps # Install Go modules + frontend packages
 just start        # Start all services via Docker Compose
 just stop         # Stop all services
 just logs         # Tail application logs

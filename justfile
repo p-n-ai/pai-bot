@@ -10,11 +10,37 @@ default:
 # First-time setup
 setup:
   cp -n .env.example .env 2>/dev/null || true
-  go mod download
+  just install-deps
   echo "Setup complete. Edit .env with your configuration."
+
+install-deps:
+  go mod download
+  cd admin && pnpm install
+
+check-local-db:
+  set -a; [ -f .env ] && source .env; set +a; \
+  pg_isready_bin="$$(command -v pg_isready)"; \
+  psql_bin="$$(command -v psql)"; \
+  if [ -z "$$pg_isready_bin" ] || [ -z "$$psql_bin" ]; then \
+    echo "postgres client tools missing; install libpq/psql first"; \
+    exit 1; \
+  fi; \
+  db_url="${LEARN_DATABASE_URL:-postgres://pai:pai@localhost:5432/pai?sslmode=disable}"; \
+  if ! "$$pg_isready_bin" -d "$$db_url" >/dev/null 2>&1; then \
+    echo "postgres is not reachable at $$db_url"; \
+    echo "start it first, then retry"; \
+    exit 1; \
+  fi; \
+  seed_state="$$( "$$psql_bin" "$$db_url" -Atqc \"SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL THEN 'missing_auth_identities' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END\" )"; \
+  if [ "$$seed_state" != "seeded" ]; then \
+    echo "database is up but demo auth data is not ready ($$seed_state)"; \
+    echo "run 'just seed' before 'just go' or 'just next'"; \
+    exit 1; \
+  fi
 
 # Development
 go:
+  just check-local-db
   set -a; source .env; set +a; go run ./cmd/server
 
 frontend-deps:
@@ -41,6 +67,7 @@ frontend:
   cd admin && NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" pnpm dev --hostname 127.0.0.1 --port "$frontend_port"
 
 next:
+  just check-local-db; \
   backend_port="${BACKEND_PORT:-8080}"; \
   if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
     echo "backend already running on http://127.0.0.1:$backend_port"; \
