@@ -480,6 +480,16 @@ func (e *Engine) createConversation(userID, state string) (*Conversation, error)
 }
 
 func (e *Engine) logEventAsync(event Event) {
+	// Inject AB group into event data.
+	if event.UserID != "" {
+		if group, ok := e.store.GetUserABGroup(event.UserID); ok && group != "" {
+			if event.Data == nil {
+				event.Data = map[string]any{}
+			}
+			event.Data["ab_group"] = group
+		}
+	}
+
 	go func() {
 		if err := e.eventLogger.LogEvent(event); err != nil {
 			slog.Warn("failed to log event",
@@ -531,7 +541,7 @@ func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *c
 		}
 		e.syncGoalProgress(userID, syllabusID, topic.ID)
 		e.checkTopicUnlocks(userID, syllabusID, topic)
-		if e.milestones != nil {
+		if e.milestones != nil && e.userABGroup(userID) == ABGroupA {
 			masteryAfter, mErr := e.tracker.GetMastery(userID, syllabusID, topic.ID)
 			if mErr == nil && !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
 				locale := e.resolveUserLocale(userID)
@@ -577,7 +587,7 @@ func (e *Engine) recordActivityAsync(userID string) {
 		}
 
 		// Check XP milestone crossing.
-		if e.xp != nil && e.milestones != nil {
+		if e.xp != nil && e.milestones != nil && e.userABGroup(userID) == ABGroupA {
 			xpAfter, _ := e.xp.GetTotal(userID)
 			if hit, at := CheckXPMilestone(xpBefore, xpAfter); hit {
 				locale := e.resolveUserLocale(userID)
@@ -585,7 +595,7 @@ func (e *Engine) recordActivityAsync(userID string) {
 			}
 		}
 		// Check streak record.
-		if e.streaks != nil && e.milestones != nil {
+		if e.streaks != nil && e.milestones != nil && e.userABGroup(userID) == ABGroupA {
 			streakAfter, _ := e.streaks.GetStreak(userID)
 			if streakAfter.LongestStreak > streakBefore.LongestStreak {
 				locale := e.resolveUserLocale(userID)
@@ -639,6 +649,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevSummary(msg)
+	case "/dev-ab", "/dev_ab":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevAB(msg, fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -782,6 +797,16 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 	if _, err := e.createConversation(userID, initialState); err != nil {
 		slog.Error("failed to create onboarding conversation", "user_id", userID, "error", err)
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+
+	// Assign AB group for new users.
+	if _, ok := e.store.GetUserABGroup(userID); !ok {
+		group := AssignABGroup()
+		if err := e.store.SetUserABGroup(userID, group); err != nil {
+			slog.Warn("failed to assign AB group", "user_id", userID, "error", err)
+		} else {
+			slog.Info("AB group assigned", "user_id", userID, "group", group)
+		}
 	}
 
 	locale := e.messageLocale(msg, nil)

@@ -326,6 +326,78 @@ func (s *PostgresStore) SetUserPreferredQuizIntensity(externalID, intensity stri
 	return nil
 }
 
+func (s *PostgresStore) GetUserABGroup(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var group *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT config->>'ab_group'
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&group)
+	if err != nil || group == nil || *group == "" {
+		return "", false
+	}
+	return *group, true
+}
+
+func (s *PostgresStore) SetUserABGroup(externalID, group string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if externalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+
+	_, err := s.resolveOrCreateUser(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	var cmd pgconn.CommandTag
+	if group == "" {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = COALESCE(config, '{}'::jsonb) - 'ab_group',
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+		)
+	} else {
+		cmd, err = s.pool.Exec(ctx,
+			`UPDATE users
+			 SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{ab_group}', to_jsonb($4::text), true),
+			     updated_at = NOW()
+			 WHERE tenant_id = $1::uuid
+			   AND channel = $2
+			   AND external_id = $3`,
+			s.tenantID,
+			s.channel,
+			externalID,
+			group,
+		)
+	}
+	if err != nil {
+		return fmt.Errorf("set ab group: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: %s", externalID)
+	}
+	return nil
+}
+
 // NewPostgresStore creates a PostgreSQL-backed conversation store for the default channel.
 func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, error) {
 	return NewPostgresStoreForChannel(ctx, pool, defaultChannel)
