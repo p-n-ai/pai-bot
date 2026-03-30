@@ -441,6 +441,8 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 
 ### Local Development
 
+Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
+
 ```bash
 # Start infrastructure (Postgres, Dragonfly, NATS, Ollama)
 docker compose up -d postgres dragonfly nats ollama
@@ -457,10 +459,11 @@ just seed
 # Or, if the app itself is running in Docker
 just seed-docker
 
-# Start the Go server
+# Start the Go server (turnkey deps + local Postgres/Dragonfly; auto-seeds only for the default local dev DB target)
 just go
 
 # Start the admin panel + Agentation MCP, and boot the Go server if needed
+# Same turnkey local setup as just go
 just next
 ```
 
@@ -511,6 +514,8 @@ The terminal nudge command triggers the real scheduler path for one user and pri
 
 ```bash
 just setup        # First-time setup
+just install-deps # Install Go modules + frontend packages
+just install-local-runtime  # Install missing Postgres client tools via Homebrew when available
 just start        # Start all services via Docker Compose
 just stop         # Stop all services
 just logs         # Tail application logs
