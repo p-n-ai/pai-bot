@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 
 export function ThemeToggle() {
-  const { theme, toggle } = useTheme();
+  const { theme, mounted, toggle } = useTheme();
   const isDark = theme === "dark";
-  const label = isDark ? "Switch to light theme" : "Switch to dark theme";
+  const label = mounted ? (isDark ? "Switch to light theme" : "Switch to dark theme") : "Toggle theme";
 
   return (
     <Button
@@ -19,7 +19,7 @@ export function ThemeToggle() {
       title={label}
       className="rounded-full border-slate-200/70 bg-slate-50/72 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.1)] backdrop-blur hover:bg-slate-50/88 dark:border-white/12 dark:bg-slate-900/58 dark:text-slate-100 dark:hover:bg-slate-900/72"
     >
-      {isDark ? <SunMedium className="size-4" /> : <Moon className="size-4" />}
+      {mounted && isDark ? <SunMedium className="size-4" /> : <Moon className="size-4" />}
     </Button>
   );
 }

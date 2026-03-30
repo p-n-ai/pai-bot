@@ -49,14 +49,22 @@ default-db-url:
   @printf '%s\n' "postgres://pai:pai@localhost:5432/pai?sslmode=disable"
 
 db-url:
-  @db_url="${LEARN_DATABASE_URL:-}"; \
-  if [ -z "$db_url" ] && [ -f .env ]; then \
+  @db_url=""; \
+  if [ -f .env ]; then \
     set -a; \
     source .env; \
     set +a; \
     db_url="${LEARN_DATABASE_URL:-}"; \
   fi; \
-  printf '%s\n' "${db_url:-$(just default-db-url)}"
+  if [ -z "$db_url" ]; then \
+    echo "LEARN_DATABASE_URL must be set in .env" >&2; \
+    exit 1; \
+  fi; \
+  printf '%s\n' "$db_url"
+
+db-url-redacted:
+  @db_url="$(just db-url)"; \
+  printf '%s\n' "$db_url" | sed -E 's#(postgres(ql)?://)[^/@:]+(:[^@]*)?@#\1***:***@#'
 
 db-target-allows-auto-seed:
   @db_url="$(just db-url)"; \
@@ -90,6 +98,7 @@ db-seed-state:
 
 check-local-db:
   @db_url="$(just db-url)"; \
+  db_url_redacted="$(just db-url-redacted)"; \
   db_allows_auto_seed="$(just db-target-allows-auto-seed)"; \
   seed_state="$(just db-seed-state)"; \
   case "$seed_state" in \
@@ -99,7 +108,7 @@ check-local-db:
       exit 1; \
       ;; \
     unreachable) \
-      echo "postgres is not reachable at $db_url"; \
+      echo "postgres is not reachable at $db_url_redacted"; \
       echo "start it first, then retry"; \
       exit 1; \
       ;; \
@@ -114,7 +123,7 @@ check-local-db:
         echo "run 'just seed' before 'just go' or 'just next'"; \
         exit 1; \
       fi; \
-      echo "database is reachable and migrated; skipping demo seed requirement for target $db_url"; \
+      echo "database is reachable and migrated; skipping demo seed requirement for target $db_url_redacted"; \
       exit 0; \
       ;; \
     *) \
@@ -152,13 +161,14 @@ prepare-local-dev:
   just install-local-runtime
   just ensure-local-runtime
   db_url="$(just db-url)"; \
+  db_url_redacted="$(just db-url-redacted)"; \
   db_allows_auto_seed="$(just db-target-allows-auto-seed)"; \
   seed_state="$(just db-seed-state)"; \
   if [ "$seed_state" = "not_seeded" ]; then \
     if [ "$db_allows_auto_seed" = "yes" ]; then \
       just seed; \
     else \
-      echo "database is not seeded and auto-seed is disabled for target $db_url"; \
+      echo "database is not seeded and auto-seed is disabled for target $db_url_redacted"; \
     fi; \
   fi; \
   just check-local-db
