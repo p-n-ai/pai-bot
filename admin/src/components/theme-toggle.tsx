@@ -7,7 +7,7 @@ import { useTheme } from "@/components/theme-provider";
 export function ThemeToggle() {
   const { theme, mounted, toggle } = useTheme();
   const isDark = theme === "dark";
-  const label = isDark ? "Switch to light theme" : "Switch to dark theme";
+  const label = mounted ? (isDark ? "Switch to light theme" : "Switch to dark theme") : "Toggle theme";
 
   return (
     <Button
