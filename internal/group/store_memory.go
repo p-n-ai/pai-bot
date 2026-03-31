@@ -144,6 +144,19 @@ func (s *MemoryStore) Archive(ctx context.Context, tenantID, groupID string) err
 	return nil
 }
 
+// Rename updates the name of a group.
+func (s *MemoryStore) Rename(ctx context.Context, tenantID, groupID, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	g, ok := s.groups[groupID]
+	if !ok || g.TenantID != tenantID {
+		return ErrGroupNotFound
+	}
+	g.Name = newName
+	return nil
+}
+
 // AddMember adds userID to the group with the given role.
 // Returns ErrAlreadyMember if already present, ErrGroupArchived if group is archived.
 func (s *MemoryStore) AddMember(ctx context.Context, groupID, userID, membershipRole string) error {

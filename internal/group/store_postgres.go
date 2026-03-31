@@ -203,6 +203,25 @@ func (s *PostgresStore) Archive(ctx context.Context, tenantID, groupID string) e
 	return nil
 }
 
+// Rename updates the name of a group.
+func (s *PostgresStore) Rename(ctx context.Context, tenantID, groupID, newName string) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
+	defer cancel()
+
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE groups SET name = $3, updated_at = NOW()
+		 WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+		tenantID, groupID, newName,
+	)
+	if err != nil {
+		return fmt.Errorf("rename group: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrGroupNotFound
+	}
+	return nil
+}
+
 // AddMember adds userID to the group with the given membership role.
 // Returns ErrGroupNotFound if the group does not exist, ErrGroupArchived if archived,
 // and ErrAlreadyMember if the user is already in the group.

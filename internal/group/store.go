@@ -38,6 +38,7 @@ type Store interface {
 	ListByTenant(ctx context.Context, tenantID string) ([]Group, error)
 	ListByUser(ctx context.Context, userID string) ([]Group, error)
 	Archive(ctx context.Context, tenantID, groupID string) error
+	Rename(ctx context.Context, tenantID, groupID, newName string) error
 	AddMember(ctx context.Context, groupID, userID, membershipRole string) error
 	RemoveMember(ctx context.Context, groupID, userID string) error
 	GetMembers(ctx context.Context, groupID string) ([]Member, error)
