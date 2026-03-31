@@ -13,6 +13,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/group"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
@@ -47,6 +48,7 @@ type EngineConfig struct {
 	XP                    progress.XPTracker
 	Goals                 GoalStore
 	Challenges            ChallengeStore
+	Groups                group.Store
 	DevMode               bool
 }
 
@@ -67,6 +69,7 @@ type Engine struct {
 	xp                    progress.XPTracker
 	goals                 GoalStore
 	challenges            ChallengeStore
+	groups                group.Store
 	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
@@ -128,6 +131,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
 		challenges:            challenges,
+		groups:                cfg.Groups,
 		devMode:               cfg.DevMode,
 		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
 		unlocks:               newPendingUnlocks(),
@@ -632,6 +636,10 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleGoalCommand(ctx, msg, fields[1:])
 	case "/challenge":
 		return e.handleChallengeCommand(ctx, msg, fields[1:])
+	case "/group":
+		return e.handleGroupCommand(ctx, msg, fields[1:])
+	case "/join":
+		return e.handleGroupCommand(ctx, msg, append([]string{"join"}, fields[1:]...))
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":
