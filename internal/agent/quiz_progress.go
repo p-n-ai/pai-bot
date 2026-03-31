@@ -45,7 +45,7 @@ func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, quest
 						}); err != nil {
 							slog.Warn("failed to award mastery xp from quiz", "user_id", userID, "topic_id", topicID, "error", err)
 						}
-						if e.milestones != nil {
+						if e.milestones != nil && e.userABGroup(userID) == ABGroupA {
 							topicName := topicID
 							if e.curriculumLoader != nil {
 								if t, ok := e.curriculumLoader.GetTopic(topicID); ok {

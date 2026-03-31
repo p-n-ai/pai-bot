@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
@@ -78,6 +79,25 @@ func (e *Engine) handleDevSummary(msg chat.InboundMessage) (string, error) {
 		return "[DEV] No activity to summarize.", nil
 	}
 	return result, nil
+}
+
+// handleDevAB manually sets the user's AB test group.
+// Usage: /dev-ab A  or  /dev-ab B
+func (e *Engine) handleDevAB(msg chat.InboundMessage, args []string) (string, error) {
+	if len(args) == 0 {
+		current := e.userABGroup(msg.UserID)
+		return fmt.Sprintf("[DEV] Current AB group: %s. Usage: /dev-ab A or /dev-ab B", current), nil
+	}
+	group := strings.ToUpper(strings.TrimSpace(args[0]))
+	if group != ABGroupA && group != ABGroupB {
+		return "[DEV] Invalid group. Use: /dev-ab A or /dev-ab B", nil
+	}
+	if err := e.store.SetUserABGroup(msg.UserID, group); err != nil {
+		slog.Error("dev-ab: failed to set AB group", "user_id", msg.UserID, "error", err)
+		return "[DEV] Failed to set AB group.", nil
+	}
+	slog.Info("dev-ab: AB group set", "user_id", msg.UserID, "group", group)
+	return fmt.Sprintf("[DEV] AB group set to %s.", group), nil
 }
 
 // handleDevReset fully resets a user's state: conversation, profile, mastery, XP, streaks, goals.
