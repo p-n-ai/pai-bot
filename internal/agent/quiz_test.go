@@ -1,6 +1,9 @@
 package agent
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestQuizSession_SubmitAnswer_ExactAdvances(t *testing.T) {
 	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
@@ -181,6 +184,36 @@ func TestQuizSession_SubmitAnswer_StructuredAnswersRejectWrongAssignmentLabels(t
 	result := session.SubmitAnswer("x=3, y=-4")
 	if result.Correct {
 		t.Fatal("SubmitAnswer() should reject unrelated assignment labels for structured answers")
+	}
+}
+
+func TestQuizSession_AppendQuestions(t *testing.T) {
+	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
+		{ID: "Q1", Text: "Q1", AnswerType: "exact", Answer: "1"},
+	})
+	extra := []QuizQuestion{
+		{ID: "gen-1", Text: "Gen1", AnswerType: "exact", Answer: "2"},
+		{ID: "gen-2", Text: "Gen2", AnswerType: "exact", Answer: "3"},
+	}
+	session.AppendQuestions(extra)
+	if len(session.Questions) != 3 {
+		t.Fatalf("len(Questions) = %d, want 3", len(session.Questions))
+	}
+}
+
+func TestQuizSession_AppendQuestions_RespectsMaxCap(t *testing.T) {
+	initial := make([]QuizQuestion, 8)
+	for i := range initial {
+		initial[i] = QuizQuestion{ID: fmt.Sprintf("Q%d", i), AnswerType: "exact", Answer: "x"}
+	}
+	session := NewQuizSession("user-1", "F1-01", initial)
+	extra := make([]QuizQuestion, 5)
+	for i := range extra {
+		extra[i] = QuizQuestion{ID: fmt.Sprintf("gen-%d", i), AnswerType: "exact", Answer: "y"}
+	}
+	session.AppendQuestions(extra)
+	if len(session.Questions) != QuizMaxQuestions {
+		t.Fatalf("len(Questions) = %d, want %d", len(session.Questions), QuizMaxQuestions)
 	}
 }
 

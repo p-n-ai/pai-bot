@@ -8,6 +8,9 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
+// QuizMaxQuestions is the maximum number of questions allowed in a single quiz session.
+const QuizMaxQuestions = 10
+
 // QuizQuestion is the agent-facing question shape used by the quiz runtime.
 type QuizQuestion struct {
 	ID                string
@@ -69,6 +72,18 @@ func NewQuizSession(userID, topicID string, questions []QuizQuestion) *QuizSessi
 		TopicID:   topicID,
 		Questions: questions,
 	}
+}
+
+// AppendQuestions adds extra questions to the session up to QuizMaxQuestions total.
+func (s *QuizSession) AppendQuestions(questions []QuizQuestion) {
+	remaining := QuizMaxQuestions - len(s.Questions)
+	if remaining <= 0 {
+		return
+	}
+	if len(questions) > remaining {
+		questions = questions[:remaining]
+	}
+	s.Questions = append(s.Questions, questions...)
 }
 
 // NextQuestion returns the current question without advancing.
