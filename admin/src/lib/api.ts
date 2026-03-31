@@ -92,6 +92,20 @@ export interface AIUsageSummary {
   total_input_tokens: number;
   total_output_tokens: number;
   providers: AIProviderUsage[];
+  monthly_cost_usd?: number | null;
+  budget_limit_usd?: number | null;
+  per_student_average_tokens?: number | null;
+  per_student_average_cost_usd?: number | null;
+  daily_usage?: {
+    date: string;
+    messages: number;
+    tokens: number;
+    cost_usd?: number | null;
+  }[];
+  provider_costs?: {
+    provider: string;
+    cost_usd?: number | null;
+  }[];
 }
 
 export interface MetricsSummary {
@@ -110,7 +124,32 @@ export interface MetricsSummary {
     response_rate: number;
   };
   ai_usage: AIUsageSummary;
-  ab_comparison: unknown;
+  ab_comparison: {
+    experiment_key?: string;
+    window_days?: number | null;
+    metric_name?: string;
+    variant_a?: {
+      label?: string;
+      users?: number;
+      retention_rate?: number;
+      challenge_participation_rate?: number;
+      leaderboard_engagement_rate?: number;
+      nudge_response_rate?: number;
+    };
+    variant_b?: {
+      label?: string;
+      users?: number;
+      retention_rate?: number;
+      challenge_participation_rate?: number;
+      leaderboard_engagement_rate?: number;
+      nudge_response_rate?: number;
+    };
+    winner?: string;
+    delta_retention_rate?: number | null;
+    delta_challenge_participation_rate?: number | null;
+    delta_leaderboard_engagement_rate?: number | null;
+    delta_nudge_response_rate?: number | null;
+  } | null;
 }
 
 export interface NudgeResponse {
@@ -141,6 +180,14 @@ export interface TenantChoice {
   tenant_id: string;
   tenant_slug: string;
   tenant_name: string;
+}
+
+export interface InviteRecord {
+  email: string;
+  role: "teacher" | "parent" | "admin" | "platform_admin";
+  invite_token: string;
+  expires_at: string;
+  invited_by_user_id: string;
 }
 
 export class LoginError extends Error {
@@ -252,6 +299,43 @@ export async function login(input: {
   }
 
   return (await readJSONResponse(res)) as AuthSession;
+}
+
+export async function acceptInvite(input: {
+  token: string;
+  name: string;
+  password: string;
+}): Promise<AuthSession> {
+  const res = await fetch(`${API_BASE}/api/auth/invitations/accept`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+
+    try {
+      const payload = JSON.parse(raw) as { error?: string };
+      throw new Error(payload.error || `Invite activation failed: ${res.status}`);
+    } catch (error) {
+      if (error instanceof Error && error.message !== raw) {
+        throw error;
+      }
+      throw new Error(raw || `Invite activation failed: ${res.status}`);
+    }
+  }
+
+  return (await readJSONResponse(res)) as AuthSession;
+}
+
+export async function issueInvite(input: {
+  email: string;
+  role: "teacher" | "parent" | "admin";
+}): Promise<InviteRecord> {
+  return postJSONWithBody("/api/admin/invites", input);
 }
 
 export function persistSession(session: AuthSession): void {

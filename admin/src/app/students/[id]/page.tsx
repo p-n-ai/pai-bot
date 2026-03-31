@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { AdminHighlightPanel } from "@/components/admin-highlight-panel";
+import { AdminInsetPanel } from "@/components/admin-inset-panel";
+import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { Metric } from "@/components/metric";
 import { PageHero } from "@/components/page-hero";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
 import { StatePanel } from "@/components/state-panel";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
 import { getStudentConversations, getStudentDetail, type StudentConversation } from "@/lib/api";
@@ -57,11 +59,11 @@ export default function StudentPage() {
                 : "Student details will appear here once the latest record is ready."
           }
           aside={
-            <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90 sm:grid-cols-3 lg:grid-cols-1">
+            <AdminHighlightPanel className="sm:grid-cols-3 lg:grid-cols-1">
               <Metric label="Current streak" value={detail ? `${detail.streak.current} days` : "-"} />
               <Metric label="Longest streak" value={detail ? `${detail.streak.longest} days` : "-"} />
               <Metric label="Total XP" value={detail ? String(detail.streak.total_xp) : "-"} />
-            </div>
+            </AdminHighlightPanel>
           }
           className="bg-white/85 dark:bg-slate-950/60 lg:grid-cols-[1.15fr_0.85fr]"
         >
@@ -71,37 +73,33 @@ export default function StudentPage() {
         </PageHero>
 
         <section className="grid gap-4 xl:grid-cols-[0.75fr_1fr_0.9fr]">
-          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-            <CardHeader>
-              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Profile card</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+          <AdminSurface>
+            <AdminSurfaceHeader title="Profile card" />
+            <div className="mt-6 space-y-4">
+              <AdminInsetPanel>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Form</p>
                 <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{detail?.student.form ?? "-"}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+              </AdminInsetPanel>
+              <AdminInsetPanel>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Channel</p>
                 <p className="mt-2 text-sm font-medium capitalize text-slate-900 dark:text-slate-100">{detail?.student.channel ?? "-"}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+              </AdminInsetPanel>
+              <AdminInsetPanel>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">External ID</p>
                 <p className="mt-2 break-all text-sm font-medium text-slate-900 dark:text-slate-100">{detail?.student.external_id ?? "-"}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-900/70">
+              </AdminInsetPanel>
+              <AdminInsetPanel>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Joined</p>
                 <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
                   {detail?.student.created_at ? formatAdminDateTime(detail.student.created_at) : "-"}
                 </p>
-              </div>
-            </CardContent>
-          </Card>
+              </AdminInsetPanel>
+            </div>
+          </AdminSurface>
 
-          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-            <CardHeader>
-              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Mastery radar</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[320px]">
+          <AdminSurface>
+            <AdminSurfaceHeader title="Mastery radar" />
+            <div className="mt-6 h-[320px]">
               {radarData.length ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={radarData}>
@@ -121,14 +119,12 @@ export default function StudentPage() {
                   />
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </AdminSurface>
 
-          <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-            <CardHeader>
-              <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Struggle areas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <AdminSurface>
+            <AdminSurfaceHeader title="Struggle areas" />
+            <div className="mt-6 space-y-4">
               <div className="flex flex-wrap gap-2">
                 {struggleAreas.length ? (
                   struggleAreas.map((item) => (
@@ -150,7 +146,7 @@ export default function StudentPage() {
               <div className="space-y-3">
                 {view.hasProgress ? (
                   (detail?.progress ?? []).map((item) => (
-                    <div key={item.topic_id} className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-slate-900/70">
+                    <AdminInsetPanel key={item.topic_id}>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{formatTopicLabel(item.topic_id)}</p>
                         <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
@@ -163,7 +159,7 @@ export default function StudentPage() {
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         Next review: {item.next_review_at ? formatAdminDateTime(item.next_review_at) : "To be scheduled"}
                       </p>
-                    </div>
+                    </AdminInsetPanel>
                   ))
                 ) : (
                   <StatePanel
@@ -173,16 +169,13 @@ export default function StudentPage() {
                   />
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </AdminSurface>
         </section>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Activity grid</CardTitle>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Conversation activity over the last 14 days.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <AdminSurface>
+          <AdminSurfaceHeader title="Activity grid" description="Conversation activity over the last 14 days." />
+          <div className="mt-6 space-y-4">
             <div className="grid grid-cols-7 gap-2 md:grid-cols-14">
               {activityGrid.map((item) => (
                 <div key={item.date} className="space-y-2 text-center">
@@ -204,14 +197,12 @@ export default function StudentPage() {
               ))}
               <span>More active</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </AdminSurface>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-tight text-slate-800 dark:text-slate-100">Recent conversations</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <AdminSurface>
+          <AdminSurfaceHeader title="Recent conversations" />
+          <div className="mt-6 space-y-3">
             {error ? (
               <StatePanel
                 tone="error"
@@ -227,23 +218,23 @@ export default function StudentPage() {
               />
             ) : null}
             {conversations.map((item) => (
-              <div
+              <AdminInsetPanel
                 key={item.id}
-                className={`rounded-2xl border p-4 ${
+                className={
                   item.role === "student"
                     ? "bg-slate-50 dark:border-white/10 dark:bg-slate-900/80"
                     : "bg-sky-50 dark:border-sky-400/20 dark:bg-sky-400/10"
-                }`}
+                }
               >
                 <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                   <span>{item.role}</span>
                   <span>{formatAdminDateTime(item.timestamp)}</span>
                 </div>
                 <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">{item.text}</p>
-              </div>
+              </AdminInsetPanel>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </AdminSurface>
     </div>
   );
 }

@@ -21,7 +21,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
       <body className="antialiased">
         <ThemeProvider>
           <Suspense fallback={null}>

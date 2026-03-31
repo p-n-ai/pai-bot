@@ -10,6 +10,16 @@ describe("ThemeToggle", () => {
     document.documentElement.style.colorScheme = "";
   });
 
+  it("renders a hydration-safe fallback label before mount", () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Toggle theme" })).toBeInTheDocument();
+  });
+
   it("renders the current theme action once mounted", async () => {
     render(
       <ThemeProvider>
@@ -18,6 +28,18 @@ describe("ThemeToggle", () => {
     );
 
     expect(await screen.findByRole("button", { name: "Switch to dark theme" })).toBeInTheDocument();
+  });
+
+  it("renders the stored dark theme action after mount", async () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByRole("button", { name: "Switch to light theme" })).toBeInTheDocument();
   });
 
   it("toggles theme state and persists it to localStorage", async () => {

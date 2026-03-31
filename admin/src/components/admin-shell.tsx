@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BarChart3, ChevronDown, ChevronLeft, Coins, Home, Menu, Sparkles, UserRound, Users, LibraryBig } from "lucide-react";
+import { AdminInsetPanel } from "@/components/admin-inset-panel";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { Button } from "@/components/ui/button";
@@ -260,8 +261,7 @@ function SidebarContent({
       </div>
 
       <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Focus</p>
-        <div className="rounded-[24px] border border-slate-200/70 bg-white/85 p-4 dark:border-white/10 dark:bg-slate-950/45">
+        <AdminInsetPanel title="Focus">
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-300/15 dark:text-amber-100">
               <UserRound className="size-5" />
@@ -285,19 +285,18 @@ function SidebarContent({
               </p>
             </div>
           </div>
-        </div>
+        </AdminInsetPanel>
       </div>
 
       {!compact ? (
-        <div className="mt-auto rounded-[24px] border border-slate-200/70 bg-white/85 p-4 dark:border-white/10 dark:bg-slate-950/45">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Current scope</p>
+        <AdminInsetPanel title="Current scope" className="mt-auto">
           <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
             <li>Teacher dashboard for class-wide mastery and nudges</li>
             <li>Student detail view for progress and recent tutoring activity</li>
             <li>Parent view for weekly momentum, mastery, and encouragement</li>
             <li>AI usage analytics by provider and model</li>
           </ul>
-        </div>
+        </AdminInsetPanel>
       ) : null}
     </div>
   );

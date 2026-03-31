@@ -1,9 +1,11 @@
+import { AdminHighlightPanel } from "@/components/admin-highlight-panel";
+import { AdminInsetPanel } from "@/components/admin-inset-panel";
+import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { Metric } from "@/components/metric";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { HeartHandshake, MessageSquareText, Trophy, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
 import { getParentViewModel } from "@/lib/parent-view.mjs";
 import { getServerParentSummary } from "@/lib/server-api";
@@ -36,11 +38,11 @@ export default async function ParentPage({
         title={summary ? `${summary.child.name} this week` : "Child summary"}
         description={buildParentContextLine(summary)}
         aside={
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90 sm:grid-cols-3 lg:grid-cols-1">
+          <AdminHighlightPanel className="sm:grid-cols-3 lg:grid-cols-1">
             <Metric label="Current streak" value={summary ? `${summary.streak.current} days` : "-"} />
             <Metric label="Longest streak" value={summary ? `${summary.streak.longest} days` : "-"} />
             <Metric label="Total XP" value={summary ? String(summary.streak.total_xp) : "-"} />
-          </div>
+          </AdminHighlightPanel>
         }
         className="bg-white/85 dark:bg-slate-950/60"
       />
@@ -58,11 +60,9 @@ export default async function ParentPage({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-tight">Mastery progress</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <AdminSurface>
+          <AdminSurfaceHeader title="Mastery progress" />
+          <div className="mt-6 space-y-4">
             {loadError ? (
               <StatePanel
                 tone="error"
@@ -97,30 +97,28 @@ export default async function ParentPage({
                 description="No mastery data is available yet for this learner."
               />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </AdminSurface>
 
-        <Card className="rounded-[28px] border-white/70 bg-white/85 shadow-[0_16px_50px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_20px_60px_rgba(2,8,23,0.35)]">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-tight">Encouragement suggestion</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-[24px] bg-slate-950 p-5 text-white dark:bg-slate-900">
+        <AdminSurface>
+          <AdminSurfaceHeader title="Encouragement suggestion" />
+          <div className="mt-6 space-y-4">
+            <AdminHighlightPanel className="p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Suggested message</p>
               <p className="mt-3 text-2xl font-semibold tracking-tight">{view.encouragementHeadline}</p>
               <p className="mt-3 text-sm leading-7 text-slate-200">
                 {view.encouragementText}
               </p>
-            </div>
+            </AdminHighlightPanel>
 
-            <div className="rounded-[24px] border border-slate-200/70 bg-slate-50 px-4 py-4 dark:border-white/10 dark:bg-slate-900/70">
+            <AdminInsetPanel>
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100">What this means for home support</p>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
                 Keep praise specific, focus on one topic only, and ask for a short follow-up practice session instead of a long catch-up.
               </p>
-            </div>
-          </CardContent>
-        </Card>
+            </AdminInsetPanel>
+          </div>
+        </AdminSurface>
       </section>
     </div>
   );

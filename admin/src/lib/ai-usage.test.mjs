@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { formatCompactNumber, getTopProvider, normalizeAIUsage } from "./ai-usage.mjs";
+import {
+  formatCompactNumber,
+  formatUSD,
+  getAIUsageBudgetViewModel,
+  getTopProvider,
+  normalizeAIUsage,
+} from "./ai-usage.mjs";
 
 test("normalizeAIUsage fills missing fields with safe defaults", () => {
   const usage = normalizeAIUsage({
@@ -33,4 +39,56 @@ test("getTopProvider returns the highest token consumer", () => {
 
 test("formatCompactNumber keeps admin stats readable", () => {
   assert.equal(formatCompactNumber(1250), "1.3K");
+});
+
+test("normalizeAIUsage keeps optional budget fields when provided", () => {
+  const usage = normalizeAIUsage({
+    monthly_cost_usd: 42.75,
+    budget_limit_usd: 100,
+    per_student_average_tokens: 812,
+    per_student_average_cost_usd: 0.34,
+    daily_usage: [{ date: "2026-03-28", tokens: 1200, cost_usd: 4.5 }],
+    provider_costs: [{ provider: "openai", cost_usd: 12.2 }],
+  });
+
+  assert.equal(usage.monthly_cost_usd, 42.75);
+  assert.equal(usage.budget_limit_usd, 100);
+  assert.equal(usage.per_student_average_tokens, 812);
+  assert.equal(usage.per_student_average_cost_usd, 0.34);
+  assert.deepEqual(usage.daily_usage, [{ date: "2026-03-28", messages: 0, tokens: 1200, cost_usd: 4.5 }]);
+  assert.deepEqual(usage.provider_costs, [{ provider: "openai", cost_usd: 12.2 }]);
+});
+
+test("getAIUsageBudgetViewModel derives remaining budget and status", () => {
+  const view = getAIUsageBudgetViewModel({
+    total_input_tokens: 100,
+    total_output_tokens: 50,
+    monthly_cost_usd: 24,
+    budget_limit_usd: 30,
+    provider_costs: [{ provider: "openai", cost_usd: 24 }],
+  });
+
+  assert.equal(view.totalTokens, 150);
+  assert.equal(view.remainingBudget, 6);
+  assert.equal(view.usageRatio, 0.8);
+  assert.equal(view.budgetStatus.label, "Near budget limit");
+  assert.equal(view.hasProviderCosts, true);
+});
+
+test("getAIUsageBudgetViewModel reports pending status when budget data is missing", () => {
+  const view = getAIUsageBudgetViewModel({
+    total_input_tokens: 10,
+    total_output_tokens: 5,
+  });
+
+  assert.equal(view.remainingBudget, null);
+  assert.equal(view.usageRatio, null);
+  assert.equal(view.budgetStatus.label, "Pending backend budget fields");
+  assert.equal(view.hasDailyTrend, false);
+  assert.equal(view.hasPerStudentAverages, false);
+});
+
+test("formatUSD returns a fallback label when cost data is missing", () => {
+  assert.equal(formatUSD(19.25), "$19.25");
+  assert.equal(formatUSD(null), "Pending");
 });

@@ -358,8 +358,8 @@ Implementation note (2026-03-30): auth/session work is ahead of the original seq
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* → Go, /* → Next.js) | 🤖 | ⬜ | |
-| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 | ⬜ | |
+| `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* → Go, /* → Next.js) | 🤖 | ✅ | Docker Compose, admin image build, and reverse proxy config are in repo under `deploy/caddy` and `deploy/nginx`. |
+| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 | ⬜ | Frontend scaffold exists in `admin/src/app/dashboard/classes/page.tsx`, but it still uses mock data because class CRUD, join-code, membership, and topic-assignment APIs are not implemented yet. |
 | `P-W4D18-3` | 🧑 Test all 3 Forms (F1, F2, F3) with bot — does content switch correctly? | 🧑 Human | ⬜ | |
 
 ### Day 19 — Reports + Budget Tracking
@@ -367,7 +367,7 @@ Implementation note (2026-03-30): auth/session work is ahead of the original seq
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 | ⬜ | |
-| `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | 🤖 | ⬜ | |
+| `P-W4D19-2` | Token budget tracking page: monthly cost, by-provider pie chart, daily trend, per-student avg, budget limits | 🤖 | ⬜ | Current admin UI ships a partial AI usage page, but the full cost/budget tracking scope is still pending backend budget fields and frontend expansion. |
 | `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human | ⬜ | |
 
 ### Day 20 — Week 4 Retro
@@ -378,6 +378,26 @@ Implementation note (2026-03-30): auth/session work is ahead of the original seq
 | `P-W4D20-2` | 🧑 Retro. Big decision: ready for open-source prep? | 🧑 Team | ⬜ | |
 
 **Week 4 Targets:** Admin panel live. All 3 Forms working. 2+ teachers using dashboard. 100+ students active. Day-14 retention ≥30%.
+
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.  
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+| Additional ID | Task | Status | Owner |
+|---------------|------|--------|-------|
+| `A-W4D16-UI-1` | Admin panel shadcn/ui migration plan: standardize the remaining admin screens around shared `@/components/ui` primitives, lock design-token ownership in `globals.css`, migrate forms first, layout/navigation second, data-display surfaces third, and remove duplicated bespoke UI after each slice. | ✅ | 🤖 |
+| `A-W4D16-UI-2` | First shadcn/ui migration slice: introduce a shared admin surface wrapper component and move the dashboard mastery heatmap onto the local shadcn table primitives instead of a bespoke table implementation. | ✅ | 🤖 |
+| `A-W4D16-UI-3` | Second shadcn/ui migration slice: extract the admin login form into reusable shadcn-based form components (`FormField`, `LoginFormCard`), replace the native tenant selector with the shared select primitive, and add component tests for the new auth form surface. | ✅ | 🤖 |
+| `A-W4D16-UI-4` | Third shadcn/ui migration slice: add the missing invite-acceptance entry point at `/activate`, reuse the shared auth form primitives for password setup, connect it to `POST /api/auth/invitations/accept`, and add component tests for the activation form state. | ✅ | 🤖 |
+| `A-W4D16-UI-5` | Fourth shadcn/ui migration slice: add a reusable admin invite-issuance form, wire it to `POST /api/admin/invites` from the class-management operations area, and surface the generated `/activate` link for teacher, parent, and admin onboarding. | ✅ | 🤖 |
+| `A-W4D16-UI-6` | Fifth shadcn/ui migration slice: standardize the analytics pages and shell support panels on shared wrappers by moving metrics and AI usage page sections to `AdminSurface` and replacing repeated sidebar inset cards with a shared `AdminInsetPanel`. | ✅ | 🤖 |
+| `A-W4D16-UI-7` | Sixth shadcn/ui migration slice: standardize the home, student detail, and parent summary pages on shared wrappers by introducing reusable highlight and link-card components and replacing repeated content cards with `AdminSurface`, `AdminInsetPanel`, and `AdminHighlightPanel`. | ✅ | 🤖 |
+| `A-W4D16-UI-8` | Seventh shadcn/ui migration slice: refactor the remaining class-management view onto shared wrappers by introducing reusable class-list and topic-progress components and replacing bespoke class tiles, selected-class summary, and topic rows with shared shadcn-based surfaces. | ✅ | 🤖 |
+| `A-W4D16-UI-9` | Shared frontend cleanup after the shadcn migration: remove the last admin lint issues in the theme toggle, async resource hook, and small shared components so `admin/` now passes `npm run lint` cleanly. | ✅ | 🤖 |
+| `A-W4D16-UI-10` | Admin shell hydration fix: move theme hydration state into the provider and keep `ThemeToggle` as a thin consumer while preserving deterministic pre-hydration markup so SSR and client output stay aligned. | ✅ | 🤖 |
+| `A-W4D16-UI-11` | Shared hydration hardening: add a reusable `useHydrated` hook and apply it to invite activation so client-stored session reads stay behind a deterministic hydration boundary instead of running during SSR/client reconciliation. | ✅ | 🤖 |
+| `A-W4D16-UI-12` | Replace the custom admin theme store and inline boot script with `next-themes`, keeping the existing toggle UX while delegating class, storage, and color-scheme synchronization to the maintained provider to reduce hydration mismatch risk. | ✅ | 🤖 |
 
 ---
 
