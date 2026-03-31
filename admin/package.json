@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:react",
     "test:unit": "node src/lib/all.test.mjs",
-    "test:react": "vitest run"
+    "test:react": "vitest run --config vitest.config.mjs --configLoader native --pool threads --maxWorkers 1"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -9,6 +9,9 @@ import type { AIUsageSummary } from "@/lib/api";
 import { formatCompactNumber, formatUSD, getAIUsageBudgetViewModel } from "@/lib/ai-usage.mjs";
 import { getServerAIUsage } from "@/lib/server-api";
 
+type DailyUsagePoint = NonNullable<AIUsageSummary["daily_usage"]>[number];
+type ProviderCostItem = NonNullable<AIUsageSummary["provider_costs"]>[number];
+
 function providerTone(provider: string) {
   switch (provider) {
     case "openai":
@@ -74,7 +77,7 @@ export default async function AIUsagePage() {
           />
           <div className="mt-6 space-y-4">
             {view.hasDailyTrend ? (
-              view.daily_usage.map((point) => {
+              view.daily_usage.map((point: DailyUsagePoint) => {
                 const width = `${Math.max(8, Math.round((point.tokens / Math.max(view.dailyTrendPeak, 1)) * 100))}%`;
                 return (
                   <div key={point.date} className="space-y-2">
@@ -142,7 +145,7 @@ export default async function AIUsagePage() {
           {loadError ? <p className="text-sm text-slate-500 dark:text-slate-400">{loadError}</p> : null}
           {view.hasProviderCosts ? (
             <div className="grid gap-3 md:grid-cols-2">
-              {view.provider_costs.map((item) => {
+              {view.provider_costs.map((item: ProviderCostItem) => {
                 const share =
                   view.providerCostTotal > 0 ? Math.round(((item.cost_usd ?? 0) / view.providerCostTotal) * 100) : 0;
                 return (
@@ -183,7 +186,7 @@ export default async function AIUsagePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(view.providers ?? []).map((item) => {
+              {(view.providers ?? []).map((item: AIUsageSummary["providers"][number]) => {
                 const share = view.totalTokens > 0 ? Math.round((item.total_tokens / view.totalTokens) * 100) : 0;
                 return (
                   <TableRow key={`${item.provider}:${item.model}`}>

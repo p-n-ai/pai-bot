@@ -36,6 +36,7 @@ const legacyUseEffectFiles = [
   "src/components/ui/sidebar.tsx",
   "src/hooks/use-async-resource.ts",
   "src/hooks/use-mobile.ts",
+  "src/hooks/use-session-redirect.ts",
 ];
 
 const eslintConfig = defineConfig([

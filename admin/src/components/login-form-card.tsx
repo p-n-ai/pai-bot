@@ -96,7 +96,7 @@ export function LoginFormCard({
                 htmlFor="tenant_id"
                 description="The same email is linked to multiple tenant-scoped accounts, so the backend needs the school context."
               >
-                <Select value={tenantID} onValueChange={onTenantChange}>
+                <Select value={tenantID} onValueChange={(value) => onTenantChange(value ?? "")}>
                   <SelectTrigger id="tenant_id" className="h-10 w-full bg-white text-slate-950 dark:bg-slate-900 dark:text-slate-100">
                     <SelectValue placeholder="Choose a school" />
                   </SelectTrigger>

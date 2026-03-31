@@ -10,14 +10,14 @@ describe("ThemeToggle", () => {
     document.documentElement.style.colorScheme = "";
   });
 
-  it("renders a hydration-safe fallback label before mount", () => {
+  it("renders an accessible toggle button immediately", () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
       </ThemeProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "Toggle theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch to dark theme" })).toBeInTheDocument();
   });
 
   it("renders the current theme action once mounted", async () => {
