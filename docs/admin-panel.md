@@ -9,7 +9,7 @@ read_when:
 
 # Admin / Management Panel — Feature Specification
 
-> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), metrics, AI usage, class dashboard, student detail, and parent summary. Remaining sections below stay planned until implemented.
+> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), metrics, AI usage, class dashboard, student detail, and parent summary. The current budget view is token-allowance based (`token_budgets` window, used/remaining tokens, daily token trend, per-student average tokens); real-money USD attribution and provider cost reporting remain planned. Remaining sections below stay planned until implemented.
 >
 > **Stack:** Next.js 16 (App Router) · TypeScript · Refine v5+ · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
 
@@ -149,19 +149,21 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 | **Teacher Management** | Invite teachers via email, assign to classes, revoke access |
 | **Parent Provisioning** | Invite and manage parent accounts, link to students |
 | **Class Configuration** | Create classes, generate join codes, assign curriculum |
-| **Token Budget Management** | Set tenant-level budget limits, monitor consumption by class/student, configure AI fallback strategies, view cost projections |
+| **Token Budget Management** | Set tenant-level token allowance windows, monitor token consumption by class/student, configure AI fallback strategies, and later add USD cost projections |
 | **School Onboarding Wizard** | Interactive setup: school name → curriculum selection → bot setup → class creation → teacher invitation |
 | **Data Export** | Export students (CSV), conversations (JSON), progress data (CSV) |
 | **All Teacher Features** | Full access to mastery heatmaps, student details, analytics, nudges |
 
 ### Token Budget Dashboard
 
-- Monthly cost visualization (bar chart)
-- By-provider breakdown (pie chart)
-- Daily usage trend (line graph)
-- Per-student average cost
-- Budget limit configuration with alerts
-- Fallback strategy settings (paid → free model degradation)
+- Current: tenant token budget window, used tokens, remaining tokens
+- Current: daily token usage trend
+- Current: per-student average tokens
+- Planned: monthly USD cost visualization
+- Planned: by-provider cost breakdown
+- Planned: per-student average cost
+- Planned: budget limit editing with alerts
+- Planned: fallback strategy settings (paid → free model degradation)
 
 ---
 
@@ -222,7 +224,7 @@ All endpoints are under `/api/admin/` and require JWT authentication with RBAC v
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends |
+| `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends, and current token budget window. USD cost attribution remains planned. |
 | `GET` | `/api/admin/analytics/report` | Admin, Platform Admin | Comprehensive analytics report |
 
 ### Data Export

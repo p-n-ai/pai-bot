@@ -90,11 +90,34 @@ type AIProviderUsage struct {
 	TotalTokens  int    `json:"total_tokens"`
 }
 
+type AIDailyUsagePoint struct {
+	Date     string   `json:"date"`
+	Messages int      `json:"messages"`
+	Tokens   int      `json:"tokens"`
+	CostUSD  *float64 `json:"cost_usd,omitempty"`
+}
+
+type AIProviderCost struct {
+	Provider string   `json:"provider"`
+	CostUSD  *float64 `json:"cost_usd,omitempty"`
+}
+
 type AIUsageSummary struct {
-	TotalMessages     int               `json:"total_messages"`
-	TotalInputTokens  int               `json:"total_input_tokens"`
-	TotalOutputTokens int               `json:"total_output_tokens"`
-	Providers         []AIProviderUsage `json:"providers"`
+	TotalMessages            int                 `json:"total_messages"`
+	TotalInputTokens         int                 `json:"total_input_tokens"`
+	TotalOutputTokens        int                 `json:"total_output_tokens"`
+	Providers                []AIProviderUsage   `json:"providers"`
+	MonthlyCostUSD           *float64            `json:"monthly_cost_usd,omitempty"`
+	BudgetLimitUSD           *float64            `json:"budget_limit_usd,omitempty"`
+	PerStudentAverageTokens  *float64            `json:"per_student_average_tokens,omitempty"`
+	PerStudentAverageCostUSD *float64            `json:"per_student_average_cost_usd,omitempty"`
+	BudgetLimitTokens        *int64              `json:"budget_limit_tokens,omitempty"`
+	BudgetUsedTokens         *int64              `json:"budget_used_tokens,omitempty"`
+	BudgetRemainingTokens    *int64              `json:"budget_remaining_tokens,omitempty"`
+	BudgetPeriodStart        string              `json:"budget_period_start,omitempty"`
+	BudgetPeriodEnd          string              `json:"budget_period_end,omitempty"`
+	DailyUsage               []AIDailyUsagePoint `json:"daily_usage,omitempty"`
+	ProviderCosts            []AIProviderCost    `json:"provider_costs,omitempty"`
 }
 
 type DailyActiveUsersPoint struct {
@@ -117,12 +140,12 @@ type NudgeRateSummary struct {
 }
 
 type MetricsSummary struct {
-	WindowDays       int                   `json:"window_days"`
+	WindowDays       int                     `json:"window_days"`
 	DailyActiveUsers []DailyActiveUsersPoint `json:"daily_active_users"`
-	Retention        []RetentionPoint      `json:"retention"`
-	NudgeRate        NudgeRateSummary      `json:"nudge_rate"`
-	AIUsage          AIUsageSummary        `json:"ai_usage"`
-	ABComparison     any                   `json:"ab_comparison"`
+	Retention        []RetentionPoint        `json:"retention"`
+	NudgeRate        NudgeRateSummary        `json:"nudge_rate"`
+	AIUsage          AIUsageSummary          `json:"ai_usage"`
+	ABComparison     any                     `json:"ab_comparison"`
 }
 
 type ClassStudent struct {
@@ -140,6 +163,13 @@ type Service struct {
 	pool       *pgxpool.Pool
 	tenantID   string
 	allTenants bool
+}
+
+type tokenBudgetWindow struct {
+	BudgetTokens int64
+	UsedTokens   int64
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
 }
 
 type retentionCohortSample struct {
@@ -458,6 +488,59 @@ func (s *Service) GetAIUsage() (AIUsageSummary, error) {
 	if err := rows.Err(); err != nil {
 		return AIUsageSummary{}, fmt.Errorf("iterate ai usage: %w", err)
 	}
+
+	dailyRows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			DATE(m.created_at AT TIME ZONE 'UTC') AS usage_date,
+			COUNT(*) AS message_count,
+			COALESCE(SUM(m.input_tokens), 0) + COALESCE(SUM(m.output_tokens), 0) AS total_tokens
+		FROM messages m
+		WHERE %s
+			AND m.model IS NOT NULL
+			AND m.model <> ''
+			AND m.created_at >= NOW() - INTERVAL '7 day'
+		GROUP BY usage_date
+		ORDER BY usage_date ASC
+	`, s.tenantPredicate("m.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return AIUsageSummary{}, fmt.Errorf("query ai usage daily trend: %w", err)
+	}
+	defer dailyRows.Close()
+
+	for dailyRows.Next() {
+		var day time.Time
+		var point AIDailyUsagePoint
+		if err := dailyRows.Scan(&day, &point.Messages, &point.Tokens); err != nil {
+			return AIUsageSummary{}, fmt.Errorf("scan ai usage daily trend: %w", err)
+		}
+		point.Date = day.UTC().Format("2006-01-02")
+		summary.DailyUsage = append(summary.DailyUsage, point)
+	}
+	if err := dailyRows.Err(); err != nil {
+		return AIUsageSummary{}, fmt.Errorf("iterate ai usage daily trend: %w", err)
+	}
+
+	var activeLearners int
+	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT COUNT(DISTINCT c.user_id)
+		FROM messages m
+		JOIN conversations c ON c.id = m.conversation_id
+		JOIN users u ON u.id = c.user_id
+		WHERE %s
+			AND m.model IS NOT NULL
+			AND m.model <> ''
+			AND u.role = 'student'
+	`, s.tenantPredicate("m.tenant_id", 1)), s.tenantArg()).Scan(&activeLearners); err != nil {
+		return AIUsageSummary{}, fmt.Errorf("query ai usage active learners: %w", err)
+	}
+
+	finalizeAIUsageSummary(&summary, activeLearners)
+
+	window, err := s.loadActiveTokenBudgetWindow(ctx)
+	if err != nil {
+		return AIUsageSummary{}, err
+	}
+	applyTokenBudgetWindow(&summary, window)
 
 	return summary, nil
 }
@@ -1030,6 +1113,83 @@ func splitProviderModel(raw string) (provider string, model string) {
 		return "unknown", parts[0]
 	}
 	return "unknown", ""
+}
+
+func finalizeAIUsageSummary(summary *AIUsageSummary, activeLearners int) {
+	if summary == nil {
+		return
+	}
+
+	if activeLearners > 0 {
+		avg := float64(summary.TotalInputTokens+summary.TotalOutputTokens) / float64(activeLearners)
+		summary.PerStudentAverageTokens = &avg
+	}
+}
+
+func applyTokenBudgetWindow(summary *AIUsageSummary, window *tokenBudgetWindow) {
+	if summary == nil || window == nil {
+		return
+	}
+
+	remaining := window.BudgetTokens - window.UsedTokens
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	summary.BudgetLimitTokens = &window.BudgetTokens
+	summary.BudgetUsedTokens = &window.UsedTokens
+	summary.BudgetRemainingTokens = &remaining
+	summary.BudgetPeriodStart = window.PeriodStart.UTC().Format("2006-01-02")
+	summary.BudgetPeriodEnd = window.PeriodEnd.UTC().Format("2006-01-02")
+}
+
+func (s *Service) loadActiveTokenBudgetWindow(ctx context.Context) (*tokenBudgetWindow, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			tb.budget_tokens,
+			tb.period_start,
+			tb.period_end
+		FROM token_budgets tb
+		WHERE %s
+			AND tb.user_id IS NULL
+			AND NOW() >= tb.period_start
+			AND NOW() < tb.period_end
+		ORDER BY tb.period_start DESC
+		LIMIT 1
+	`, s.tenantPredicate("tb.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query active token budget window: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate active token budget window: %w", err)
+		}
+		return nil, nil
+	}
+
+	var window tokenBudgetWindow
+	if err := rows.Scan(&window.BudgetTokens, &window.PeriodStart, &window.PeriodEnd); err != nil {
+		return nil, fmt.Errorf("scan active token budget window: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active token budget window: %w", err)
+	}
+
+	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT COALESCE(SUM(COALESCE(m.input_tokens, 0) + COALESCE(m.output_tokens, 0)), 0)
+		FROM messages m
+		WHERE %s
+			AND m.model IS NOT NULL
+			AND m.model <> ''
+			AND m.created_at >= $2
+			AND m.created_at < $3
+	`, s.tenantPredicate("m.tenant_id", 1)), s.tenantArg(), window.PeriodStart, window.PeriodEnd).Scan(&window.UsedTokens); err != nil {
+		return nil, fmt.Errorf("query token budget usage: %w", err)
+	}
+
+	return &window, nil
 }
 
 func computeStreakSummary(dates []time.Time) (int, int) {

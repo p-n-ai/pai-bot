@@ -88,6 +88,43 @@ test("getAIUsageBudgetViewModel reports pending status when budget data is missi
   assert.equal(view.hasPerStudentAverages, false);
 });
 
+test("getAIUsageBudgetViewModel keeps token-centric signals when budget fields are absent", () => {
+  const view = getAIUsageBudgetViewModel({
+    total_messages: 8,
+    total_input_tokens: 120,
+    total_output_tokens: 30,
+    per_student_average_tokens: 50,
+    daily_usage: [
+      { date: "2026-03-30", messages: 3, tokens: 45 },
+      { date: "2026-03-31", messages: 5, tokens: 105 },
+    ],
+  });
+
+  assert.equal(view.totalTokens, 150);
+  assert.equal(view.hasDailyTrend, true);
+  assert.equal(view.dailyTrendPeak, 105);
+  assert.equal(view.hasPerStudentAverages, true);
+  assert.equal(view.per_student_average_tokens, 50);
+  assert.equal(view.budgetStatus.label, "Pending backend budget fields");
+});
+
+test("getAIUsageBudgetViewModel reports token budget status when token limits are present", () => {
+  const view = getAIUsageBudgetViewModel({
+    total_input_tokens: 120,
+    total_output_tokens: 30,
+    budget_limit_tokens: 500,
+    budget_used_tokens: 425,
+    budget_remaining_tokens: 75,
+    budget_period_start: "2026-03-01",
+    budget_period_end: "2026-03-31",
+  });
+
+  assert.equal(view.budgetTokenLimit, 500);
+  assert.equal(view.budgetTokenUsed, 425);
+  assert.equal(view.budgetTokenRemaining, 75);
+  assert.equal(view.budgetStatus.label, "Near token budget limit");
+});
+
 test("formatUSD returns a fallback label when cost data is missing", () => {
   assert.equal(formatUSD(19.25), "$19.25");
   assert.equal(formatUSD(null), "Pending");

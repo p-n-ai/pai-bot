@@ -261,6 +261,20 @@ SET content = EXCLUDED.content,
     output_tokens = EXCLUDED.output_tokens
 `, defaultTenantID, secondTenantID),
 		fmt.Sprintf(`
+INSERT INTO token_budgets (id, tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
+VALUES
+('70000000-0000-0000-0000-000000000001', '%[1]s', NULL, 5000, 0, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month'),
+('70000000-0000-0000-0000-000000000002', '%[2]s', NULL, 3500, 0, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month')
+ON CONFLICT (id) DO UPDATE
+SET tenant_id = EXCLUDED.tenant_id,
+    user_id = EXCLUDED.user_id,
+    budget_tokens = EXCLUDED.budget_tokens,
+    used_tokens = EXCLUDED.used_tokens,
+    period_start = EXCLUDED.period_start,
+    period_end = EXCLUDED.period_end,
+    updated_at = NOW()
+`, defaultTenantID, secondTenantID),
+		fmt.Sprintf(`
 INSERT INTO learning_progress (id, user_id, tenant_id, syllabus_id, topic_id, mastery_score, ease_factor, interval_days, repetitions, next_review_at, last_studied_at)
 VALUES
 ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '%[1]s', 'kssm-form-1', 'linear-equations', 0.86, 2.5, 6, 4, NOW() + INTERVAL '1 day', NOW() - INTERVAL '1 day'),
