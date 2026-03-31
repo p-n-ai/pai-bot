@@ -36,6 +36,19 @@ const (
 	MsgMilestoneXP            Key = "milestone_xp"
 	MsgMilestoneSubjectDone   Key = "milestone_subject_done"
 	MsgMilestoneStreakRecord   Key = "milestone_streak_record"
+
+	MsgGroupCreated          Key = "group_created"
+	MsgGroupJoined           Key = "group_joined"
+	MsgGroupLeft             Key = "group_left"
+	MsgGroupList             Key = "group_list"
+	MsgGroupListEmpty        Key = "group_list_empty"
+	MsgGroupNotFound         Key = "group_not_found"
+	MsgGroupAlreadyMember    Key = "group_already_member"
+	MsgGroupOwnerCannotLeave Key = "group_owner_cannot_leave"
+	MsgGroupArchived         Key = "group_archived"
+	MsgGroupCreateDenied     Key = "group_create_denied"
+	MsgGroupSyllabusMismatch Key = "group_syllabus_mismatch"
+	MsgGroupUsage            Key = "group_usage"
 )
 
 var catalog = map[string]map[Key]string{
@@ -89,6 +102,18 @@ Tingkatan berapa anda sekarang?`,
 		MsgMilestoneXP:            "🌟 *Pencapaian XP!*\n\nAnda telah mencapai *%d XP*!\n\nKerja keras anda membuahkan hasil! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *LUAR BIASA!*\n\nAnda telah menguasai semua topik dalam *%s*!\n\nAnda seorang juara matematik! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *Rekod Baru!*\n\nStreak terpanjang anda: *%d hari*!\n\nDedikasi yang mengagumkan! 🏅",
+		MsgGroupCreated:          "Kumpulan berjaya dicipta!\n\nNama: %s\nKod: *%s*\n\nKongsi kod ini dengan pelajar anda.",
+		MsgGroupJoined:           "Berjaya menyertai *%s*! Anda kini mempunyai %d rakan sekelas.",
+		MsgGroupLeft:             "Anda telah keluar dari *%s*.",
+		MsgGroupList:             "Kumpulan anda:\n%s",
+		MsgGroupListEmpty:        "Anda belum menyertai sebarang kumpulan. Guna /join <kod> untuk menyertai.",
+		MsgGroupNotFound:         "Kod kumpulan tidak dijumpai. Sila semak dan cuba lagi.",
+		MsgGroupAlreadyMember:    "Anda sudah menjadi ahli kumpulan ini.",
+		MsgGroupOwnerCannotLeave: "Pemilik tidak boleh keluar dari kumpulan. Arkibkan kumpulan ini dahulu.",
+		MsgGroupArchived:         "Kumpulan ini telah diarkibkan.",
+		MsgGroupCreateDenied:     "Hanya guru dan pentadbir boleh mencipta kumpulan.",
+		MsgGroupSyllabusMismatch: "Kumpulan ini untuk pelajar %s. Profil anda ditetapkan kepada %s.",
+		MsgGroupUsage:            "Guna:\n/group create <nama> — Cipta kumpulan\n/group join <kod> atau /join <kod> — Sertai kumpulan\n/group leave — Keluar dari kumpulan\n/group list — Senarai kumpulan anda",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -140,6 +165,18 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP Milestone!*\n\nYou've reached *%d XP*!\n\nYour hard work is paying off! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *AMAZING!*\n\nYou've mastered all topics in *%s*!\n\nYou're a math champion! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *New Record!*\n\nYour longest streak: *%d days*!\n\nIncredible dedication! 🏅",
+		MsgGroupCreated:          "Group created!\n\nName: %s\nCode: *%s*\n\nShare this code with your students.",
+		MsgGroupJoined:           "Joined *%s*! You now have %d classmates.",
+		MsgGroupLeft:             "You've left *%s*.",
+		MsgGroupList:             "Your groups:\n%s",
+		MsgGroupListEmpty:        "You haven't joined any groups yet. Use /join <code> to join one.",
+		MsgGroupNotFound:         "Group code not found. Please check and try again.",
+		MsgGroupAlreadyMember:    "You're already a member of this group.",
+		MsgGroupOwnerCannotLeave: "Owner cannot leave the group. Archive it instead.",
+		MsgGroupArchived:         "This group has been archived.",
+		MsgGroupCreateDenied:     "Only teachers and admins can create groups.",
+		MsgGroupSyllabusMismatch: "This group is for %s students. Your profile is set to %s.",
+		MsgGroupUsage:            "Usage:\n/group create <name> — Create a group\n/group join <code> or /join <code> — Join a group\n/group leave — Leave a group\n/group list — List your groups",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -191,6 +228,18 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP 里程碑！*\n\n你已达到 *%d XP*！\n\n你的努力正在得到回报！🎉",
 		MsgMilestoneSubjectDone:   "🎓 *太厉害了！*\n\n你已掌握 *%s* 的所有主题！\n\n你是数学冠军！🏅",
 		MsgMilestoneStreakRecord:   "🔥 *新纪录！*\n\n你最长的连续学习记录：*%d 天*！\n\n令人敬佩的毅力！🏅",
+		MsgGroupCreated:          "群组创建成功！\n\n名称：%s\n代码：*%s*\n\n将此代码分享给你的学生。",
+		MsgGroupJoined:           "已加入 *%s*！你现在有 %d 位同学。",
+		MsgGroupLeft:             "你已退出 *%s*。",
+		MsgGroupList:             "你的群组：\n%s",
+		MsgGroupListEmpty:        "你还没有加入任何群组。使用 /join <代码> 加入。",
+		MsgGroupNotFound:         "找不到群组代码。请检查后重试。",
+		MsgGroupAlreadyMember:    "你已经是这个群组的成员了。",
+		MsgGroupOwnerCannotLeave: "群主不能退出群组。请先归档群组。",
+		MsgGroupArchived:         "这个群组已被归档。",
+		MsgGroupCreateDenied:     "只有老师和管理员可以创建群组。",
+		MsgGroupSyllabusMismatch: "这个群组是为 %s 的学生设立的。你的资料设置为 %s。",
+		MsgGroupUsage:            "用法：\n/group create <名称> — 创建群组\n/group join <代码> 或 /join <代码> — 加入群组\n/group leave — 退出群组\n/group list — 列出你的群组",
 	},
 }
 
