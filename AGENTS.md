@@ -291,8 +291,8 @@ just install-deps      # Install Go modules + frontend packages
 just install-local-runtime  # Install missing Postgres client tools via Homebrew when available
 just go                # Turnkey local boot: deps + local runtime + safe default-dev seed + Go server
 just backend           # Same as just go
-just next              # Same turnkey boot, then Next.js admin + Agentation MCP
-just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP
+just next              # Same turnkey boot, then Next.js admin + Agentation MCP; Ctrl-C stops what it started
+just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP; Ctrl-C stops Agentation it started
 just test              # Run Go unit tests
 just test-integration  # Integration tests (testcontainers)
 just lint              # golangci-lint
@@ -301,7 +301,7 @@ just migrate           # Run database migrations
 just build             # Build Go binary + admin static
 just docker            # Build Docker image
 just start             # docker compose up -d
-just stop              # docker compose down
+just stop              # Stop docker services + local backend/frontend/Agentation listeners
 just logs              # Tail logs
 just analytics         # Quick metrics
 just ollama-pull       # Download free AI model

@@ -465,8 +465,11 @@ just seed-docker
 just go
 
 # Start the admin panel + Agentation MCP, and boot the Go server if needed
-# Same turnkey local setup as just go
+# Same turnkey local setup as just go; Ctrl-C also stops backend + Agentation started by this command
 just next
+
+# Stop docker services plus local backend/frontend/Agentation listeners
+just stop
 ```
 
 ### Running Tests
