@@ -297,7 +297,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 | ⬜ | |
+| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/group create [name]` | 🤖 | ✅ | `internal/group` package, `/group create|join|leave|list` + `/join` alias, admin API at `/api/admin/classes`, tenant-scoped join codes, membership_role (owner/admin/member) |
 | `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 | ⬜ | |
 | `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 | ⬜ | |
 | `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human | ✅ | Setup telegram group from existing users|
