@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -138,6 +139,77 @@ func TestSeedDemo_RollsBackOnTenantLookupError(t *testing.T) {
 	}
 	if tx.committed {
 		t.Fatal("did not expect commit on tenant lookup error")
+	}
+}
+
+func TestSeedTokenBudget_SucceedsAndCommits(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		queryRowValues: [][]any{
+			{"11111111-1111-1111-1111-111111111111"},
+		},
+	}
+	db := &fakeBeginner{tx: tx}
+
+	err := seedTokenBudget(ctx, db, TokenBudgetSeedParams{
+		TenantSlug:   "default",
+		BudgetTokens: 9000,
+		PeriodStart:  time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("seedTokenBudget() error = %v", err)
+	}
+	if !tx.committed {
+		t.Fatal("expected token budget seed transaction to commit")
+	}
+	if len(tx.queryRowSQL) != 1 || !strings.Contains(tx.queryRowSQL[0], "FROM tenants") {
+		t.Fatalf("tenant lookup SQL = %#v, want tenant lookup query", tx.queryRowSQL)
+	}
+	if len(tx.execSQL) != 1 || !strings.Contains(tx.execSQL[0], "INSERT INTO token_budgets") {
+		t.Fatalf("token budget SQL = %#v, want token budget upsert", tx.execSQL)
+	}
+}
+
+func TestSeedTokenBudget_ValidatesInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		params TokenBudgetSeedParams
+	}{
+		{
+			name: "missing tenant slug",
+			params: TokenBudgetSeedParams{
+				BudgetTokens: 100,
+				PeriodStart:  time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+				PeriodEnd:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "non-positive budget",
+			params: TokenBudgetSeedParams{
+				TenantSlug:   "default",
+				BudgetTokens: 0,
+				PeriodStart:  time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+				PeriodEnd:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "invalid period",
+			params: TokenBudgetSeedParams{
+				TenantSlug:   "default",
+				BudgetTokens: 100,
+				PeriodStart:  time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+				PeriodEnd:    time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := seedTokenBudget(context.Background(), &fakeBeginner{tx: &fakeTx{}}, tt.params); err == nil {
+				t.Fatal("seedTokenBudget() error = nil, want validation error")
+			}
+		})
 	}
 }
 
