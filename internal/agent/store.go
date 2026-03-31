@@ -68,6 +68,9 @@ type ConversationStore interface {
 	SetUserPreferredQuizIntensity(userID, intensity string) error
 	GetUserABGroup(userID string) (string, bool)
 	SetUserABGroup(userID, group string) error
+	GetUserTenantID(userID string) (string, bool)
+	GetUserRole(userID string) (string, bool)
+	GetUserInternalID(userID string) (string, bool)
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
@@ -91,6 +94,8 @@ type MemoryStore struct {
 	userLang      map[string]string
 	userQuizLevel map[string]string
 	userABGroup   map[string]string
+	userTenantID  map[string]string
+	userRole      map[string]string
 	mu            sync.RWMutex
 }
 
@@ -103,6 +108,8 @@ func NewMemoryStore() *MemoryStore {
 		userLang:      make(map[string]string),
 		userQuizLevel: make(map[string]string),
 		userABGroup:   make(map[string]string),
+		userTenantID:  make(map[string]string),
+		userRole:      make(map[string]string),
 	}
 }
 
@@ -136,6 +143,12 @@ func (s *MemoryStore) UserExists(userID string) bool {
 		return true
 	}
 	if _, ok := s.userABGroup[userID]; ok {
+		return true
+	}
+	if _, ok := s.userTenantID[userID]; ok {
+		return true
+	}
+	if _, ok := s.userRole[userID]; ok {
 		return true
 	}
 	for _, conv := range s.conversations {
@@ -251,6 +264,81 @@ func (s *MemoryStore) SetUserABGroup(userID, group string) error {
 	}
 	s.userABGroup[userID] = group
 	return nil
+}
+
+func (s *MemoryStore) GetUserTenantID(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tenantID, ok := s.userTenantID[userID]
+	return tenantID, ok
+}
+
+func (s *MemoryStore) SetUserTenantID(userID, tenantID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if tenantID == "" {
+		delete(s.userTenantID, userID)
+		return nil
+	}
+	s.userTenantID[userID] = tenantID
+	return nil
+}
+
+func (s *MemoryStore) GetUserRole(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	role, ok := s.userRole[userID]
+	return role, ok
+}
+
+func (s *MemoryStore) SetUserRole(userID, role string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+	if role == "" {
+		delete(s.userRole, userID)
+		return nil
+	}
+	s.userRole[userID] = role
+	return nil
+}
+
+func (s *MemoryStore) GetUserInternalID(userID string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// MemoryStore uses external IDs as-is; return the userID itself if it exists.
+	if _, ok := s.userName[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userForm[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userLang[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userQuizLevel[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userABGroup[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userTenantID[userID]; ok {
+		return userID, true
+	}
+	if _, ok := s.userRole[userID]; ok {
+		return userID, true
+	}
+	for _, conv := range s.conversations {
+		if conv.UserID == userID {
+			return userID, true
+		}
+	}
+	return "", false
 }
 
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
