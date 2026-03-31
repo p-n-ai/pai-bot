@@ -53,6 +53,11 @@ export function normalizeAIUsage(payload) {
     budget_limit_usd: readNumber(source.budget_limit_usd),
     per_student_average_tokens: readNumber(source.per_student_average_tokens),
     per_student_average_cost_usd: readNumber(source.per_student_average_cost_usd),
+    budget_limit_tokens: readNumber(source.budget_limit_tokens),
+    budget_used_tokens: readNumber(source.budget_used_tokens),
+    budget_remaining_tokens: readNumber(source.budget_remaining_tokens),
+    budget_period_start: typeof source.budget_period_start === "string" ? source.budget_period_start : "",
+    budget_period_end: typeof source.budget_period_end === "string" ? source.budget_period_end : "",
     daily_usage,
     provider_costs,
   };
@@ -94,12 +99,32 @@ export function getAIUsageBudgetViewModel(usage) {
   const totalTokens = normalized.total_input_tokens + normalized.total_output_tokens;
   const monthlyCost = normalized.monthly_cost_usd;
   const budgetLimit = normalized.budget_limit_usd;
+  const budgetTokenLimit = normalized.budget_limit_tokens;
+  const budgetTokenUsed = normalized.budget_used_tokens;
+  const budgetTokenRemaining = normalized.budget_remaining_tokens;
   const remainingBudget =
     monthlyCost !== null && budgetLimit !== null ? Math.max(budgetLimit - monthlyCost, 0) : null;
   const usageRatio =
     monthlyCost !== null && budgetLimit !== null && budgetLimit > 0 ? monthlyCost / budgetLimit : null;
+  const tokenUsageRatio =
+    budgetTokenLimit !== null && budgetTokenUsed !== null && budgetTokenLimit > 0 ? budgetTokenUsed / budgetTokenLimit : null;
   const budgetStatus =
-    usageRatio === null
+    tokenUsageRatio !== null
+      ? tokenUsageRatio >= 1
+        ? {
+            label: "Token budget exceeded",
+            tone: "text-rose-600 dark:text-rose-300",
+          }
+        : tokenUsageRatio >= 0.8
+          ? {
+              label: "Near token budget limit",
+              tone: "text-amber-600 dark:text-amber-300",
+            }
+          : {
+              label: "Within token budget",
+              tone: "text-emerald-600 dark:text-emerald-300",
+            }
+      : usageRatio === null
       ? {
           label: "Pending backend budget fields",
           tone: "text-slate-500 dark:text-slate-400",
@@ -127,8 +152,12 @@ export function getAIUsageBudgetViewModel(usage) {
     topProvider: getTopProvider(normalized),
     monthlyCost,
     budgetLimit,
+    budgetTokenLimit,
+    budgetTokenUsed,
+    budgetTokenRemaining,
     remainingBudget,
     usageRatio,
+    tokenUsageRatio,
     budgetStatus,
     hasDailyTrend: normalized.daily_usage.length > 0,
     dailyTrendPeak,

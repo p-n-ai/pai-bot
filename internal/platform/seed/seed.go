@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -37,6 +38,21 @@ func SeedDemo(ctx context.Context, pool *pgxpool.Pool) error {
 	return seedDemo(ctx, poolBeginner{pool: pool})
 }
 
+type TokenBudgetSeedParams struct {
+	TenantSlug   string
+	BudgetTokens int64
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
+}
+
+// SeedTokenBudget upserts a tenant-level token budget window for a specific tenant slug.
+func SeedTokenBudget(ctx context.Context, pool *pgxpool.Pool, params TokenBudgetSeedParams) error {
+	if pool == nil {
+		return fmt.Errorf("pool is nil")
+	}
+	return seedTokenBudget(ctx, poolBeginner{pool: pool}, params)
+}
+
 func seedDemo(ctx context.Context, db beginner) (err error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
@@ -68,6 +84,56 @@ func seedDemo(ctx context.Context, db beginner) (err error) {
 
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit seed transaction: %w", err)
+	}
+
+	return nil
+}
+
+func seedTokenBudget(ctx context.Context, db beginner, params TokenBudgetSeedParams) (err error) {
+	if params.TenantSlug == "" {
+		return fmt.Errorf("tenant slug is required")
+	}
+	if params.BudgetTokens <= 0 {
+		return fmt.Errorf("budget tokens must be greater than zero")
+	}
+	if !params.PeriodEnd.After(params.PeriodStart) {
+		return fmt.Errorf("period end must be after period start")
+	}
+
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = tx.Rollback(ctx)
+	}()
+
+	var tenantID string
+	if err := tx.QueryRow(ctx, `
+SELECT id::text
+FROM tenants
+WHERE slug = $1
+LIMIT 1
+`, params.TenantSlug).Scan(&tenantID); err != nil {
+		return fmt.Errorf("lookup tenant by slug: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+INSERT INTO token_budgets (tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
+VALUES ($1::uuid, NULL, $2, 0, $3, $4)
+ON CONFLICT (tenant_id, user_id, period_start, period_end) DO UPDATE
+SET budget_tokens = EXCLUDED.budget_tokens,
+    updated_at = NOW()
+`, tenantID, params.BudgetTokens, params.PeriodStart.UTC(), params.PeriodEnd.UTC()); err != nil {
+		return fmt.Errorf("upsert token budget: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit token budget seed transaction: %w", err)
 	}
 
 	return nil
@@ -259,6 +325,20 @@ SET content = EXCLUDED.content,
     model = EXCLUDED.model,
     input_tokens = EXCLUDED.input_tokens,
     output_tokens = EXCLUDED.output_tokens
+`, defaultTenantID, secondTenantID),
+		fmt.Sprintf(`
+INSERT INTO token_budgets (id, tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
+VALUES
+('70000000-0000-0000-0000-000000000001', '%[1]s', NULL, 5000, 0, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month'),
+('70000000-0000-0000-0000-000000000002', '%[2]s', NULL, 3500, 0, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month')
+ON CONFLICT (id) DO UPDATE
+SET tenant_id = EXCLUDED.tenant_id,
+    user_id = EXCLUDED.user_id,
+    budget_tokens = EXCLUDED.budget_tokens,
+    used_tokens = EXCLUDED.used_tokens,
+    period_start = EXCLUDED.period_start,
+    period_end = EXCLUDED.period_end,
+    updated_at = NOW()
 `, defaultTenantID, secondTenantID),
 		fmt.Sprintf(`
 INSERT INTO learning_progress (id, user_id, tenant_id, syllabus_id, topic_id, mastery_score, ease_factor, interval_days, repetitions, next_review_at, last_studied_at)

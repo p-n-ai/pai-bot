@@ -96,6 +96,11 @@ export interface AIUsageSummary {
   budget_limit_usd?: number | null;
   per_student_average_tokens?: number | null;
   per_student_average_cost_usd?: number | null;
+  budget_limit_tokens?: number | null;
+  budget_used_tokens?: number | null;
+  budget_remaining_tokens?: number | null;
+  budget_period_start?: string;
+  budget_period_end?: string;
   daily_usage?: {
     date: string;
     messages: number;

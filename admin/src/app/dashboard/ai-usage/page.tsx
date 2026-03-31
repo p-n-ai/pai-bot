@@ -46,7 +46,7 @@ export default async function AIUsagePage() {
       <PageHero
         eyebrow="AI operations"
         title="Budget and provider usage"
-        description="Track message volume, token load, and the current budget contract as the admin API grows into a full cost dashboard."
+        description="Track model traffic, token load, and the current budget contract. Token analytics are live now; cost limits can slot in as backend budget fields land."
         aside={
           <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
           <div>
@@ -64,16 +64,26 @@ export default async function AIUsagePage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={MessagesSquare} title="AI messages" value={formatCompactNumber(view.total_messages)} note="Messages with a recorded model" />
-        <StatCard icon={Coins} title="Monthly cost" value={formatUSD(view.monthlyCost)} note="Real amount once backend budget fields are exposed" />
-        <StatCard icon={Cpu} title="Budget limit" value={formatUSD(view.budgetLimit)} note={view.budgetStatus.label} />
-        <StatCard icon={Orbit} title="Remaining budget" value={formatUSD(view.remainingBudget)} note="Derived when cost and limit are both available" />
+        <StatCard icon={Cpu} title="Total tokens" value={formatCompactNumber(view.totalTokens)} note="Aggregate input and output tokens across tracked models" />
+        <StatCard
+          icon={Orbit}
+          title="Avg tokens / student"
+          value={view.per_student_average_tokens !== null ? formatCompactNumber(view.per_student_average_tokens) : "Pending"}
+          note={view.hasPerStudentAverages ? "Derived from students with recorded model traffic" : "Waiting for student-level activity to accumulate"}
+        />
+        <StatCard
+          icon={Coins}
+          title="Budget status"
+          value={view.budgetStatus.label}
+          note={view.budgetTokenLimit !== null ? "Active tenant token budget window" : "Cost limits remain pending backend budget fields"}
+        />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <AdminSurface>
           <AdminSurfaceHeader
             title="Budget trend"
-            description="Daily token and cost trend once the admin API exposes time-series budget fields."
+            description="Daily token activity is live now. Cost overlays can join this trend once the admin API exposes budget fields."
           />
           <div className="mt-6 space-y-4">
             {view.hasDailyTrend ? (
@@ -89,7 +99,8 @@ export default async function AIUsagePage() {
                       <div className="h-full rounded-full bg-sky-500" style={{ width }} />
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Cost {formatUSD(point.cost_usd)} {point.messages > 0 ? `• ${formatCompactNumber(point.messages)} messages` : ""}
+                      {point.messages > 0 ? `${formatCompactNumber(point.messages)} messages` : "Messages pending"}
+                      {point.cost_usd !== null && point.cost_usd !== undefined ? ` | Cost ${formatUSD(point.cost_usd)}` : ""}
                     </p>
                   </div>
                 );
@@ -109,23 +120,36 @@ export default async function AIUsagePage() {
 
         <AdminSurface>
           <AdminSurfaceHeader
-            title="Per-student averages"
-            description="Average cost and token load per learner once the backend exposes student-level budget aggregates."
+            title="Budget contract"
+            description={
+              view.budgetTokenLimit !== null
+                ? "The active tenant budget window is now tracked in tokens. USD cost overlays can be added later without changing the page structure."
+                : "The cost and limit card set is ready. Token analytics now flow from the live API; hard budget controls still need dedicated backend fields."
+            }
           />
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-1">
             <StatCard
-              title="Avg tokens / student"
-              value={
-                view.per_student_average_tokens !== null
-                  ? formatCompactNumber(view.per_student_average_tokens)
-                  : "Pending"
+              title="Token budget"
+              value={view.budgetTokenLimit !== null ? formatCompactNumber(view.budgetTokenLimit) : "Pending"}
+              note={
+                view.budget_period_start && view.budget_period_end
+                  ? `${view.budget_period_start} to ${view.budget_period_end}`
+                  : "Seed or configure a tenant token budget to activate this card"
               }
-              note="Requires per-student budget aggregation from the admin API"
             />
             <StatCard
-              title="Avg cost / student"
-              value={formatUSD(view.per_student_average_cost_usd)}
-              note="Requires cost attribution from the admin API"
+              title="Used in window"
+              value={view.budgetTokenUsed !== null ? formatCompactNumber(view.budgetTokenUsed) : "Pending"}
+              note={view.budgetStatus.label}
+            />
+            <StatCard
+              title="Remaining tokens"
+              value={view.budgetTokenRemaining !== null ? formatCompactNumber(view.budgetTokenRemaining) : "Pending"}
+              note={
+                view.tokenUsageRatio !== null
+                  ? `${Math.round(view.tokenUsageRatio * 100)}% of the current token budget is already used`
+                  : "Derived when an active tenant budget window exists"
+              }
             />
           </div>
         </AdminSurface>

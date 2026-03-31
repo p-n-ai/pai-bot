@@ -4786,10 +4786,10 @@ Follow the same pattern:
 
 - **Day 17:** Admin API endpoints (GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage). Parent view with child summary. Form/syllabus selection after /start.
 - **Day 18:** Deploy admin panel via docker-compose with nginx reverse proxy. Class management page.
-- **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page.
+- **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Real-money USD cost attribution stays planned follow-up work.
 - **Day 20:** Week 4 retro.
 
-Status (2026-03-30): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection.
+Status (2026-03-31): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; do not describe it as real-money spend tracking until USD/provider cost attribution exists.
 
 Planned follow-up after Week 4 scaffolding:
 
@@ -4976,11 +4976,11 @@ echo ""
 | `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
 | `20260318100400_auth_identity_tenant_consistency` | Day 15 follow-up | enforce `(user_id, tenant_id)` auth identity foreign-key consistency |
 | `20260318100500_global_platform_admins` | Day 15 follow-up | allow global `platform_admin` records and tenant-less auth identities/refresh tokens |
+| `20260318100600_token_budgets` | Day 19 | token_budgets (tenant token allowance windows; current budget tracking is token-based, not USD-based) |
 | `20260318102000_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
 | `20260318102100_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
 | `20260318102200_challenge_matchmaking_question_count` | Day 11 slice follow-up | persisted matchmaking `question_count` for AI-fallback claim correctness |
 | `just migration-create NAME=add_assessments` | Day 7 (planned) | assessments (quiz results) |
-| `just migration-create NAME=add_token_budgets` | Day 8 (planned) | token_budgets (AI cost tracking) |
 | `just migration-create NAME=add_groups` | Day 12 (planned) | groups, group_members (class groups) |
 | `just migration-create NAME=add_user_flags` | Day 13 (planned) | add `user_flags` JSONB to users for A/B testing |
 

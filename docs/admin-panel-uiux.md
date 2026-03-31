@@ -580,6 +580,11 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 **Access:** Admin, Platform Admin
 **Status:** Planned (Week 4, Day 19)
 
+Current implementation note:
+- The shipped admin budget surface is token-allowance based, not real-money based.
+- Current scope covers token budget windows, used/remaining tokens, daily token trend, and per-student average tokens on the AI usage screen.
+- The mockup below is a planned future-state dashboard once USD/provider cost attribution exists.
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  BUDGET & COSTS                                                  │

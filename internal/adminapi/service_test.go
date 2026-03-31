@@ -193,3 +193,94 @@ func TestBuildNudgeRateSummary(t *testing.T) {
 		t.Fatalf("response rate = %v, want 0.275", got.ResponseRate)
 	}
 }
+
+func TestFinalizeAIUsageSummary(t *testing.T) {
+	summary := AIUsageSummary{
+		TotalMessages:     6,
+		TotalInputTokens:  180,
+		TotalOutputTokens: 120,
+		Providers: []AIProviderUsage{
+			{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 120, OutputTokens: 80, TotalTokens: 200},
+			{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 60, OutputTokens: 40, TotalTokens: 100},
+		},
+		DailyUsage: []AIDailyUsagePoint{
+			{Date: "2026-03-10", Messages: 2, Tokens: 75},
+			{Date: "2026-03-11", Messages: 4, Tokens: 225},
+		},
+	}
+
+	finalizeAIUsageSummary(&summary, 3)
+
+	if summary.PerStudentAverageTokens == nil {
+		t.Fatal("PerStudentAverageTokens = nil, want computed value")
+	}
+	if *summary.PerStudentAverageTokens != 100 {
+		t.Fatalf("PerStudentAverageTokens = %v, want 100", *summary.PerStudentAverageTokens)
+	}
+	if got := summary.DailyUsage[0].CostUSD; got != nil {
+		t.Fatalf("DailyUsage[0].CostUSD = %v, want nil when cost attribution is absent", *got)
+	}
+	if len(summary.ProviderCosts) != 0 {
+		t.Fatalf("ProviderCosts len = %d, want 0 when cost attribution is absent", len(summary.ProviderCosts))
+	}
+}
+
+func TestFinalizeAIUsageSummarySkipsPerStudentAverageWithoutLearners(t *testing.T) {
+	summary := AIUsageSummary{
+		TotalInputTokens:  20,
+		TotalOutputTokens: 10,
+	}
+
+	finalizeAIUsageSummary(&summary, 0)
+
+	if summary.PerStudentAverageTokens != nil {
+		t.Fatalf("PerStudentAverageTokens = %v, want nil without active learners", *summary.PerStudentAverageTokens)
+	}
+}
+
+func TestApplyTokenBudgetWindow(t *testing.T) {
+	summary := AIUsageSummary{
+		TotalInputTokens:  180,
+		TotalOutputTokens: 120,
+	}
+	window := &tokenBudgetWindow{
+		BudgetTokens: 800,
+		UsedTokens:   300,
+		PeriodStart:  time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:    time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC),
+	}
+
+	applyTokenBudgetWindow(&summary, window)
+
+	if summary.BudgetLimitTokens == nil || *summary.BudgetLimitTokens != 800 {
+		t.Fatalf("BudgetLimitTokens = %v, want 800", summary.BudgetLimitTokens)
+	}
+	if summary.BudgetUsedTokens == nil || *summary.BudgetUsedTokens != 300 {
+		t.Fatalf("BudgetUsedTokens = %v, want 300", summary.BudgetUsedTokens)
+	}
+	if summary.BudgetRemainingTokens == nil || *summary.BudgetRemainingTokens != 500 {
+		t.Fatalf("BudgetRemainingTokens = %v, want 500", summary.BudgetRemainingTokens)
+	}
+	if summary.BudgetPeriodStart != "2026-03-01" {
+		t.Fatalf("BudgetPeriodStart = %q, want 2026-03-01", summary.BudgetPeriodStart)
+	}
+	if summary.BudgetPeriodEnd != "2026-03-31" {
+		t.Fatalf("BudgetPeriodEnd = %q, want 2026-03-31", summary.BudgetPeriodEnd)
+	}
+}
+
+func TestApplyTokenBudgetWindowClampsRemainingToZero(t *testing.T) {
+	summary := AIUsageSummary{}
+	window := &tokenBudgetWindow{
+		BudgetTokens: 100,
+		UsedTokens:   160,
+		PeriodStart:  time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:    time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC),
+	}
+
+	applyTokenBudgetWindow(&summary, window)
+
+	if summary.BudgetRemainingTokens == nil || *summary.BudgetRemainingTokens != 0 {
+		t.Fatalf("BudgetRemainingTokens = %v, want 0", summary.BudgetRemainingTokens)
+	}
+}
