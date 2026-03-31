@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.docker-local
+.gocache
+.golangci-cache
+.gomodcache
+node_modules
+admin/node_modules
+admin/.next
+admin/coverage
+admin/out
+admin/.vercel
+admin/*.tsbuildinfo
+dist
+tmp
+*.log
