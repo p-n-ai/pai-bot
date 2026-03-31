@@ -70,20 +70,20 @@ git clone https://github.com/p-n-ai/pai-bot.git
 cd pai-bot
 
 # 2. First-time setup (copies .env.example → .env, downloads Go modules)
-make setup
+just setup
 
 # 3. Edit .env — add your Telegram bot token and at least one AI provider key
 #    LEARN_TELEGRAM_BOT_TOKEN=<your-token>
 #    LEARN_AI_OPENAI_API_KEY=<key>   (or any other provider)
 
 # 4. Verify all tests pass
-make test
+just test
 
 # 5. Start infrastructure (Postgres, Dragonfly, NATS)
 docker compose up -d postgres dragonfly nats
 
 # 6. Apply database migrations (goose; version-tracked via goose_db_version)
-make migrate
+just migrate
 
 # 7. Verify the server runs and health check works
 go run ./cmd/server &
@@ -111,7 +111,7 @@ Engineer mapping:
 
 **Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
 
-**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `make test-all`. Never commit until the full suite passes.
+**Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `just test-all`. Never commit until the full suite passes.
 
 ---
 
@@ -263,7 +263,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 Status (2026-03-12): `/goal` shipped with natural-language parsing, pending confirmation for vague goals, multiple active goals, `/goal clear`, and `/progress` goal sync. `/challenge` deferred to the next slice.
 
-Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `make migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
+Migration note (2026-03-18): the repo now uses `goose` with single-file timestamped SQL migrations tracked in `goose_db_version`. `just migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges. Existing databases that were previously managed by `golang-migrate` should either recreate the local Postgres volume or be explicitly baselined before switching tools. Do not run both migration tools against the same database long-term.
 
 Status (2026-03-18): current `/challenge` surface now covers invite-code challenge creation/join, human matchmaking, bounded human acceptance, and AI fallback after unmatched queue timeout. Shipped scope: challenge migration groundwork now tracked in timestamped goose files (`20260318102000_challenges`, `20260318102100_challenge_acceptance`, `20260318102200_challenge_matchmaking_question_count`), in-memory + Postgres challenge stores, `/challenge invite <topic>`, `/challenge <code>`, bare `/challenge` search/resume, `/challenge cancel`, `/challenge accept`, queue pairing into `pending_acceptance`, timeout-to-AI fallback, and hardening for search expiry, stale matched-ticket cleanup, one-live-challenge/search exclusivity across invite + queue flows, and idempotent same-user search reopening. AI fallback now also preserves the original stored search input, including question count. Terminal-chat smoke verification now passes after fixing persistent store channel alignment and Postgres invite-join locking. Attempt runtime, settlement, XP, and review remain pending.
 
@@ -287,7 +287,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `A-W3D11-INFRA-1` | Migration workflow moved from `golang-migrate` to `goose`: single-file timestamped SQL migrations, explicit CLI-driven migration step, `make migrate-status`/`make migration-create`, and removal of startup auto-migration with dirty-state auto-force logic. | 🤖 | ✅ | |
+| `A-W3D11-INFRA-1` | Migration workflow moved from `golang-migrate` to `goose`: single-file timestamped SQL migrations, explicit CLI-driven migration step, `just migrate-status`/`just migration-create`, and removal of startup auto-migration with dirty-state auto-force logic. | 🤖 | ✅ | |
 | `A-W3D11-CH-1` | Challenge groundwork slice: add `20260318102000_challenges` migration (`challenges`, `challenge_attempts`, `challenge_matchmaking_tickets`), introduce memory/Postgres challenge stores, and ship invite-code `/challenge invite <topic>` create + `/challenge <code>` join command flow with tests. | 🤖 | ✅ | |
 | `A-W3D11-CH-2` | Thin human-matchmaking slice: make bare `/challenge` start or resume human matchmaking for a resolved topic, prompt for topic selection when resolution is ambiguous, support `/challenge cancel` to leave search, and pair compatible searchers. | 🤖 | ✅ | |
 | `A-W3D11-CH-3` | Challenge hardening slice: enforce matchmaking expiry, expire stale matched tickets before reopening search, enforce one-live-challenge/search exclusivity across invite + queue flows, and make same-user `/challenge` reopen idempotent under store-level races. | 🤖 | ✅ | |
@@ -336,19 +336,23 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 14 + TypeScript + Tailwind + shadcn/ui + Refine. Protect Go admin API with JWT + RBAC, support invite-based web auth and frontend route guards, sidebar layout. | 🤖 | ✅ | |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the shared public gate on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | |
 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ | |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
+
+Status (2026-03-30): Week 4 admin is ahead of the original scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
 
 ### Day 17 — API Endpoints + Parent View
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Parent summary and metrics endpoints also shipped with the admin API slice. |
+| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Also shipping GET /api/admin/metrics, GET /api/admin/parents/{id}, POST /api/admin/students/{id}/nudge, and POST /api/admin/invites |
 | `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 | ✅ | |
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
+
+Implementation note (2026-03-30): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes for teacher/parent/admin/platform-admin. Still pending: bot-side form selection.
 
 ### Day 18 — Deploy Admin + Class Management
 

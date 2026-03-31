@@ -29,17 +29,25 @@ The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specificall
 - **Auth:** JWT via `golang-jwt/jwt/v5` (short-lived access + refresh tokens)
 - **Logging:** `log/slog` (structured JSON)
 - **Telemetry:** OpenTelemetry SDK
-- **Migrations:** `golang-migrate/migrate/v4`
+- **Migrations:** `goose` via `github.com/pressly/goose/v3`
 - **Linting:** `golangci-lint`
 - **Testing:** stdlib `testing` + `testcontainers-go` for integration tests
 
 ### Frontend (Admin Panel)
-- **Framework:** Next.js 14 (App Router) + TypeScript
-- **Admin framework:** Refine v4+
-- **UI:** shadcn/ui + Tailwind CSS 3
+- **Framework:** Next.js 16 (App Router) + TypeScript
+- **Admin framework:** Refine v5+
+- **UI:** shadcn/ui + Tailwind CSS 4
 - **Charts:** Recharts or Tremor
 - **State:** TanStack Query v5
 - **Validation:** Zod
+
+Frontend working note:
+- When doing frontend/UI work, use `pnpm` for package management and scripts.
+- Do not spam `pnpm build`; run it only when build verification is needed for the task or handoff gate.
+- For visual tuning loops on motion/color-heavy UI (for example Aurora backgrounds), temporary DialKit usage is OK for local adjustment, but do not commit the DialKit library/dependency changes.
+- When building frontend/UI work, install and enable Agentation in dev and prefer running Agentation MCP alongside it for visual critique/annotation workflows.
+- Keep the toolbar dev-only. If Agentation is missing in the admin app, add `<Agentation />` in the root layout and wire an explicit local MCP endpoint so annotations auto-sync in development.
+- If the user asks whether you can "see the annotation", interpret that as MCP/automation visibility by default, not browser-visible markers. Only use browser inspection for annotations when the user explicitly asks for browser/UI verification.
 
 ### Infrastructure
 - Docker Compose (dev/single-server) and Helm (Kubernetes)
@@ -77,7 +85,7 @@ pai-bot/
 │   ├── tenant/                 # Multi-tenancy isolation
 │   └── platform/               # Shared: config, database, cache, messaging, storage, telemetry, health
 ├── admin/                      # Next.js admin panel
-├── migrations/                 # SQL migrations (golang-migrate)
+├── migrations/                 # SQL migrations (goose)
 ├── deploy/
 │   ├── docker/                 # Dockerfiles
 │   └── helm/pai/               # Helm chart
@@ -85,7 +93,8 @@ pai-bot/
 ├── scripts/                    # setup.sh, deploy.sh, analytics.sh
 ├── docker-compose.yml          # Local dev
 ├── docker-compose.prod.yml     # Production single-server
-├── Makefile                    # Dev shortcuts
+├── Makefile                    # Legacy task runner parity
+├── justfile                    # Preferred task runner
 └── .env.example                # All config documented
 ```
 
@@ -102,6 +111,8 @@ Use these files as primary references:
 7. `docs/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
 
 If you change one doc and it affects others, update all impacted docs in the same task.
+
+Before changing curriculum contracts, shared API shapes, bot workflows, or OSS sync behavior, also inspect the relevant `p-n-ai` sibling/core repos listed in [Related Repositories](#related-repositories). Reuse existing patterns and data contracts when they already exist there instead of inventing local variants.
 
 ## Agent Rules of Engagement
 
@@ -137,7 +148,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 - Backend: Go 1.22+, stdlib `net/http`
 - DB: PostgreSQL, Cache: Dragonfly, Messaging: NATS + JetStream
 - Auth: JWT (access + refresh), Logging: `log/slog`, Telemetry: OpenTelemetry
-- Migrations: `golang-migrate`
+- Migrations: `goose`
 - Admin: Next.js + TypeScript + Refine + shadcn/ui + Tailwind
 
 ### 4) Maintain security and tenancy assumptions
@@ -150,7 +161,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 
 ### 5) Test-first development (TDD) — mandatory
 
-**MANDATORY: After finishing ANY implementation, always run `make test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
+**MANDATORY: After finishing ANY implementation, always run `just test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
 **MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` using the task table format `| Task ID | Task | Owner | Status | Remark |`. Set `Status` to `✅` when completed (otherwise `⬜`), and put any notes in the `Remark` column. Never consider a task done until the timeline is updated.**
 
@@ -160,17 +171,17 @@ If one doc changes these boundaries, propagate the same model everywhere.
 2. **Run tests, confirm RED** — Verify tests fail for the right reason (missing implementation)
 3. **Write the minimum implementation** to make tests pass
 4. **Run tests for the new feature** — Confirm the new tests pass
-5. **Run `make test-all`** — Run the FULL test suite to ensure no earlier code is broken
+5. **Run `just test-all`** — Run the FULL test suite to ensure no earlier code is broken
 6. **Fix any regressions** before moving on — if anything broke, fix it now
-7. **Refactor** if needed, re-run `make test-all` to confirm nothing breaks
-8. **Commit only when `make test-all` is fully green**
+7. **Refactor** if needed, re-run `just test-all` to confirm nothing breaks
+8. **Commit only when `just test-all` is fully green**
 
 **Go backend testing rules:**
 - Every `.go` file gets a corresponding `_test.go` in the same package
 - Use table-driven tests for all tests with multiple cases
 - Use `testcontainers-go` for integration tests needing real PostgreSQL/Dragonfly/NATS
 - All external dependencies (AI providers, chat channels, database) behind interfaces for mocking
-- `make test` = unit tests, `make test-integration` = integration tests, `make test-all` = everything + lint
+- `just test` = unit tests, `just test-integration` = integration tests, `just test-all` = everything + lint
 
 **Admin panel (Next.js) testing rules:**
 - Jest + React Testing Library for component tests
@@ -179,22 +190,22 @@ If one doc changes these boundaries, propagate the same model everywhere.
 **When adding a new feature:**
 ```
 1. Write _test.go with test cases       → defines the contract
-2. Run `make test` → confirm RED         → tests fail (not yet implemented)
+2. Run `just test` → confirm RED         → tests fail (not yet implemented)
 3. Write implementation .go              → make tests pass
-4. Run `make test` → confirm GREEN       → new tests pass
-5. Run `make test-all` → full suite      → ALL tests pass, no regressions
-6. If anything broke → fix it now, re-run `make test-all`
-7. Commit only when `make test-all` is fully green
+4. Run `just test` → confirm GREEN       → new tests pass
+5. Run `just test-all` → full suite      → ALL tests pass, no regressions
+6. If anything broke → fix it now, re-run `just test-all`
+7. Commit only when `just test-all` is fully green
 ```
 
 **When fixing a bug:**
 ```
 1. Write a test that reproduces the bug  → proves the bug exists
-2. Run `make test` → confirm RED         → test fails, bug confirmed
+2. Run `just test` → confirm RED         → test fails, bug confirmed
 3. Fix the bug
-4. Run `make test` → confirm GREEN       → bug is fixed
-5. Run `make test-all` → full suite      → ALL tests pass, no regressions
-6. Commit only when `make test-all` is fully green
+4. Run `just test` → confirm GREEN       → bug is fixed
+5. Run `just test-all` → full suite      → ALL tests pass, no regressions
+6. Commit only when `just test-all` is fully green
 ```
 
 ### 6) Prefer incremental bootstrap
@@ -206,7 +217,7 @@ If asked to start implementation, scaffold in this order unless user specifies o
 3. `internal/ai` provider interface + router
 4. `internal/chat` Telegram adapter skeleton
 5. `internal/agent` engine skeleton
-6. `migrations/` + `docker-compose.yml` + `Makefile`
+6. `migrations/` + `docker-compose.yml` + `justfile`
 7. `admin/` Next.js scaffold
 
 Keep commits/doc changes small and verifiable.
@@ -234,6 +245,8 @@ Keep commits/doc changes small and verifiable.
 
 ### Admin Panel (Next.js)
 - App Router (not Pages Router)
+- Use `pnpm` for install, dev, build, test, and lint commands
+- Avoid redundant `pnpm build` runs during implementation; reserve builds for verification checkpoints
 - Refine for CRUD/data management
 - shadcn/ui components (copied into codebase, not imported as dependency)
 - Tailwind for styling
@@ -268,21 +281,30 @@ Inspired by [DeepTutor](https://github.com/HKUDS/DeepTutor)'s multi-agent reason
 
 ## Common Commands
 
+Prefer `just <recipe>` over `make <target>`. Keep `Makefile` only for parity/compatibility.
+If the user explicitly says "use just", prefer repo `just` recipes over raw Docker commands for local lifecycle work.
+`just` recipes are macOS/Linux-oriented for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
+
 ```bash
-make setup          # First-time setup
-make dev            # Start Go server with hot reload
-make test           # Run Go unit tests
-make test-integration  # Integration tests (testcontainers)
-make lint           # golangci-lint
-make test-all       # All tests + lint
-make migrate        # Run database migrations
-make build          # Build Go binary + admin static
-make docker         # Build Docker image
-make start          # docker compose up -d
-make stop           # docker compose down
-make logs           # Tail logs
-make analytics      # Quick metrics
-make ollama-pull    # Download free AI model
+just setup             # First-time setup
+just install-deps      # Install Go modules + frontend packages
+just install-local-runtime  # Install missing Postgres client tools via Homebrew when available
+just go                # Turnkey local boot: deps + local runtime + safe default-dev seed + Go server
+just backend           # Same as just go
+just next              # Same turnkey boot, then Next.js admin + Agentation MCP
+just frontend          # Start only Next.js admin on :3000 and boot Agentation MCP
+just test              # Run Go unit tests
+just test-integration  # Integration tests (testcontainers)
+just lint              # golangci-lint
+just test-all          # All tests + lint
+just migrate           # Run database migrations
+just build             # Build Go binary + admin static
+just docker            # Build Docker image
+just start             # docker compose up -d
+just stop              # docker compose down
+just logs              # Tail logs
+just analytics         # Quick metrics
+just ollama-pull       # Download free AI model
 ```
 
 ## Environment Variables
@@ -335,6 +357,10 @@ Before finishing any documentation change, verify:
 
 - [p-n-ai/oss](https://github.com/p-n-ai/oss) — Open School Syllabus: structured curriculum YAML consumed as Git submodule
 - [p-n-ai/oss-bot](https://github.com/p-n-ai/oss-bot) — GitHub bot + CLI for contributing to OSS
+
+Agent note:
+- Treat sibling `p-n-ai` repos as context sources when work touches curriculum content, content ingestion, shared contracts, contribution flows, or sync tooling.
+- If this repo depends on behavior or data shape from another `p-n-ai` repo, verify that repo before changing code/docs here and keep naming/contracts aligned.
 
 ## Documentation
 

@@ -1,3 +1,12 @@
+---
+title: "Admin Panel UI/UX Specification"
+summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the public gate/login entry."
+read_when:
+  - You are redesigning the admin landing or login gate
+  - You are changing admin shell layout, responsive behavior, or navigation
+  - You need the UI/UX reference before building or refactoring admin-facing pages
+---
+
 # Admin Panel — UI/UX Specification & Wireframes
 
 > **Status:** Partially implemented (scaffold complete), ongoing development
@@ -149,7 +158,7 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 
 ## Login Page
 
-**Route:** `/login`
+**Routes:** `/`, `/login`
 **Access:** All roles (unauthenticated)
 **Status:** Implemented
 
@@ -182,11 +191,17 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 └───────────────────────────────────────────────────┘
 ```
 
+The root route `/` is the first-run gate page. `/login` remains as a direct auth URL and renders the same gate layout.
+
 **Interactions:**
-- On success → redirect to `/` (role-based landing)
-- Teachers/admins land on `/dashboard`
+- On success → redirect to the role-appropriate workspace
+- Teachers/admins/platform admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
-- Tenant selector appears if email maps to multiple schools
+- If email maps to multiple schools, the form switches into a guided school-pick state:
+  - keep email/password visible as locked summaries
+  - show a non-destructive info callout
+  - use shadcn `Select` for school choice
+  - unlock either credential field by clicking the locked field if the user needs to edit it
 
 ---
 
@@ -1015,7 +1030,10 @@ Score < 40%:  [  23%  ] rose bg
 | Component / Page | File Path |
 |------------------|-----------|
 | Admin Shell | `admin/src/components/admin-shell.tsx` |
+| Home Gate | `admin/src/app/page.tsx` |
 | Login Page | `admin/src/app/login/page.tsx` |
+| Login Gate Entry | `admin/src/components/login-gate.tsx` |
+| Login Gate Components | `admin/src/components/login-gate/` |
 | Teacher Dashboard | `admin/src/app/dashboard/page.tsx` |
 | Student Detail | `admin/src/app/students/[id]/page.tsx` |
 | Metrics Page | `admin/src/app/dashboard/metrics/page.tsx` |
@@ -1027,6 +1045,7 @@ Score < 40%:  [  23%  ] rose bg
 | Navigation Logic | `admin/src/lib/navigation.mjs` |
 | RBAC Logic | `admin/src/lib/rbac.mjs` |
 | Dashboard View Model | `admin/src/lib/dashboard-view.mjs` |
+| Async Resource Hook | `admin/src/hooks/use-async-resource.ts` |
 | Student View Model | `admin/src/lib/student-view.mjs` |
 | Parent View Model | `admin/src/lib/parent-view.mjs` |
 | Shared Components | `admin/src/components/` (page-hero, stat-card, state-panel, metric) |

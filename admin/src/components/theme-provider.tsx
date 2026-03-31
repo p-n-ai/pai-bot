@@ -1,8 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { THEME_STORAGE_KEY } from "@/lib/theme.mjs";
 
 type Theme = "light" | "dark";
@@ -14,22 +13,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       defaultTheme="system"
       enableSystem
       enableColorScheme
-      storageKey={THEME_STORAGE_KEY}
       disableTransitionOnChange
+      storageKey={THEME_STORAGE_KEY}
     >
       {children}
     </NextThemesProvider>
   );
 }
 
-export function useTheme() {
-  const isHydrated = useHydrated();
+export function useTheme(): { theme: Theme; mounted: boolean; toggle: () => void } {
   const { resolvedTheme, setTheme } = useNextTheme();
-  const theme: Theme = resolvedTheme === "dark" ? "dark" : "light";
+  const [mounted, setMounted] = useState(false);
 
-  return {
-    isHydrated,
-    theme,
-    toggle: () => setTheme(theme === "dark" ? "light" : "dark"),
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const theme = useMemo<Theme>(() => (resolvedTheme === "dark" ? "dark" : "light"), [resolvedTheme]);
+
+  const toggle = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
   };
+
+  return { theme, mounted, toggle };
 }
