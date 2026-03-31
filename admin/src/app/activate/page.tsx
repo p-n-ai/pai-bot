@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState, useTransition } from "react";
+import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InviteAcceptanceCard } from "@/components/invite-acceptance-card";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useSessionRedirect } from "@/hooks/use-session-redirect";
 import { acceptInvite, getStoredUser, hasStoredSession, persistSession } from "@/lib/api";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 
@@ -27,15 +28,11 @@ function ActivatePageContent() {
   const currentUser = isHydrated ? getStoredUser() : null;
   const hasActiveSession = Boolean(currentUser && hasStoredSession() && hasAdminUIAccess(currentUser));
 
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    if (hasActiveSession && currentUser) {
-      router.replace(getSafeNextPath(currentUser, null));
-    }
-  }, [currentUser, hasActiveSession, isHydrated, router]);
+  useSessionRedirect({
+    enabled: isHydrated,
+    router,
+    user: hasActiveSession ? currentUser : null,
+  });
 
   if (!isHydrated) {
     return <ActivatePageFallback />;

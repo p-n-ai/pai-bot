@@ -35,8 +35,6 @@ export function useAsyncResource<T>(load: () => Promise<T>, deps: readonly unkno
     return () => {
       active = false;
     };
-    // The hook intentionally accepts a caller-provided dependency list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps]);
 
   return { data, loading, error, setData, setError };
