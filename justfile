@@ -4,6 +4,8 @@ alias migration := migrate
 alias backend := go
 alias dev := go
 
+dev-state-dir := join(env_var_or_default("TMPDIR", "/tmp"), "pai-bot-dev")
+
 default:
   @just --list
 
@@ -182,50 +184,116 @@ frontend-deps:
   cd admin && pnpm install
 
 frontend:
-  frontend_port="${FRONTEND_PORT:-3000}"; \
-  agentation_port="${AGENTATION_PORT:-4747}"; \
-  if ! lsof -nP -iTCP:"$agentation_port" -sTCP:LISTEN >/dev/null 2>&1; then \
-    echo "starting Agentation MCP on http://127.0.0.1:$agentation_port"; \
-    cd admin && nohup pnpm exec agentation-mcp server --port "$agentation_port" >/tmp/pai-agentation.log 2>&1 & \
-    disown || true; \
-  fi; \
-  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then \
-    if curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then \
-      echo "frontend already running on http://127.0.0.1:$frontend_port"; \
-      echo "agentation mcp on http://127.0.0.1:$agentation_port"; \
-      exit 0; \
-    fi; \
-    echo "port $frontend_port is already in use"; \
-    lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN; \
-    exit 1; \
-  fi; \
-  cd admin && NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" pnpm dev --hostname 127.0.0.1 --port "$frontend_port"
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state_dir="{{dev-state-dir}}"
+  frontend_port="${FRONTEND_PORT:-3000}"
+  agentation_port="${AGENTATION_PORT:-4747}"
+  started_agentation="no"
+  agentation_pid=""
+  frontend_pid=""
+  mkdir -p "$state_dir"
+  cleanup() {
+    code="$?"
+    rm -f "$state_dir/frontend.pid"
+    if [ -n "$frontend_pid" ] && kill -0 "$frontend_pid" >/dev/null 2>&1; then
+      kill "$frontend_pid" >/dev/null 2>&1 || true
+      wait "$frontend_pid" >/dev/null 2>&1 || true
+    fi
+    if [ "$started_agentation" = "yes" ] && [ -n "$agentation_pid" ] && kill -0 "$agentation_pid" >/dev/null 2>&1; then
+      kill "$agentation_pid" >/dev/null 2>&1 || true
+      wait "$agentation_pid" >/dev/null 2>&1 || true
+    fi
+    rm -f "$state_dir/agentation.pid"
+    exit "$code"
+  }
+  trap cleanup INT TERM EXIT
+  if ! lsof -nP -iTCP:"$agentation_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "starting Agentation MCP on http://127.0.0.1:$agentation_port"
+    (
+      cd admin
+      pnpm exec agentation-mcp server --port "$agentation_port"
+    ) >/tmp/pai-agentation.log 2>&1 &
+    agentation_pid="$!"
+    printf '%s\n' "$agentation_pid" >"$state_dir/agentation.pid"
+    started_agentation="yes"
+  fi
+  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    if curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then
+      echo "frontend already running on http://127.0.0.1:$frontend_port"
+      echo "agentation mcp on http://127.0.0.1:$agentation_port"
+      if [ "$started_agentation" = "yes" ]; then
+        echo "press Ctrl-C to stop Agentation started by this command"
+        wait "$agentation_pid"
+      fi
+      exit 0
+    fi
+    echo "port $frontend_port is already in use"
+    lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN
+    exit 1
+  fi
+  cd admin
+  NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" \
+    pnpm dev --hostname 127.0.0.1 --port "$frontend_port" &
+  frontend_pid="$!"
+  printf '%s\n' "$frontend_pid" >"$state_dir/frontend.pid"
+  wait "$frontend_pid"
 
 next:
-  just prepare-local-dev; \
-  backend_port="${BACKEND_PORT:-8080}"; \
-  if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
-    echo "backend already running on http://127.0.0.1:$backend_port"; \
-  elif lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then \
-    echo "port $backend_port is already in use"; \
-    lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN; \
-    exit 1; \
-  else \
-    echo "starting Go server on http://127.0.0.1:$backend_port"; \
-    nohup just go >/tmp/pai-go.log 2>&1 & \
-    disown || true; \
-    for _ in {1..20}; do \
-      if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
-        break; \
-      fi; \
-      sleep 1; \
-    done; \
-    if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then \
-      echo "backend failed to start; check /tmp/pai-go.log"; \
-      exit 1; \
-    fi; \
-  fi; \
-  just frontend
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state_dir="{{dev-state-dir}}"
+  mkdir -p "$state_dir"
+  just prepare-local-dev
+  backend_port="${BACKEND_PORT:-8080}"
+  frontend_port="${FRONTEND_PORT:-3000}"
+  agentation_port="${AGENTATION_PORT:-4747}"
+  started_backend="no"
+  backend_pid=""
+  cleanup() {
+    code="$?"
+    rm -f "$state_dir/backend.pid"
+    if [ "$started_backend" = "yes" ] && [ -n "$backend_pid" ] && kill -0 "$backend_pid" >/dev/null 2>&1; then
+      kill "$backend_pid" >/dev/null 2>&1 || true
+      wait "$backend_pid" >/dev/null 2>&1 || true
+    fi
+    exit "$code"
+  }
+  trap cleanup INT TERM EXIT
+  if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+    echo "backend already running on http://127.0.0.1:$backend_port"
+  elif lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port $backend_port is already in use"
+    lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN
+    exit 1
+  else
+    echo "starting Go server on http://127.0.0.1:$backend_port"
+    just go >/tmp/pai-go.log 2>&1 &
+    backend_pid="$!"
+    printf '%s\n' "$backend_pid" >"$state_dir/backend.pid"
+    started_backend="yes"
+    for _ in {1..20}; do
+      if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+      echo "backend failed to start; check /tmp/pai-go.log"
+      exit 1
+    fi
+  fi
+  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1 && \
+    curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then
+    echo "frontend already running on http://127.0.0.1:$frontend_port"
+    echo "agentation mcp on http://127.0.0.1:$agentation_port"
+    if [ "$started_backend" = "yes" ]; then
+      echo "press Ctrl-C to stop backend started by this command"
+      wait "$backend_pid"
+    fi
+    exit 0
+  fi
+  FRONTEND_PORT="$frontend_port" AGENTATION_PORT="$agentation_port" just frontend
 
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app
@@ -297,7 +365,44 @@ start:
   docker compose up -d
 
 stop:
+  just stop-local
   docker compose down
+
+stop-local:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state_dir="{{dev-state-dir}}"
+  repo_root="$(pwd)"
+  stopped_any="no"
+  if [ ! -d "$state_dir" ]; then
+    echo "no local dev processes found"
+    exit 0
+  fi
+  cwd_for_pid() {
+    lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+  }
+  for name in frontend agentation backend; do
+    pid_file="$state_dir/$name.pid"
+    if [ ! -f "$pid_file" ]; then
+      continue
+    fi
+    pid="$(tr -d '[:space:]' <"$pid_file")"
+    rm -f "$pid_file"
+    if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
+      continue
+    fi
+    proc_cwd="$(cwd_for_pid "$pid")"
+    case "$proc_cwd" in
+      "$repo_root"|"$repo_root"/*)
+        echo "stopping $name ($pid)"
+        kill "$pid" >/dev/null 2>&1 || true
+        stopped_any="yes"
+        ;;
+    esac
+  done
+  if [ "$stopped_any" = "no" ]; then
+    echo "no local dev processes found"
+  fi
 
 logs:
   docker compose logs -f app

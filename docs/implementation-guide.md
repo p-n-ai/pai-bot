@@ -4684,7 +4684,7 @@ Follow the same TDD pattern for:
 
 **Entry criteria:** Week 3 complete. Motivation features live. `just test-all` passes.
 
-Status (2026-03-30): this slice is beyond the original bare scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
+Status (2026-03-30): this slice is beyond the original bare scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
 
 #### Tasks
 
