@@ -4,7 +4,12 @@ import { Agentation } from "agentation";
 import { AdminShell } from "@/components/admin-shell";
 import { RefineProvider } from "@/components/refine-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "P&AI Admin",
@@ -20,14 +25,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <body className="antialiased">
         <ThemeProvider>
-          <Suspense fallback={null}>
-            <RefineProvider>
-              <AdminShell>{children}</AdminShell>
-            </RefineProvider>
-          </Suspense>
+          <TooltipProvider>
+            <Suspense fallback={null}>
+              <RefineProvider>
+                <AdminShell>{children}</AdminShell>
+              </RefineProvider>
+            </Suspense>
+          </TooltipProvider>
         </ThemeProvider>
         {showAgentation ? <Agentation endpoint={agentationEndpoint} /> : null}
       </body>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { CheckCircle2, MailCheck, ShieldCheck } from "lucide-react";
+import { IconCircleCheck, IconMailCheck, IconShieldCheck } from "@tabler/icons-react";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -33,7 +33,7 @@ export function InviteAcceptanceCard({
     <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
       <section className="space-y-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700 shadow-sm dark:border-emerald-400/20 dark:bg-slate-950/40 dark:text-emerald-200">
-          <ShieldCheck className="size-4" />
+          <IconShieldCheck className="size-4" />
           Invite Activation
         </div>
         <div className="space-y-4">
@@ -46,14 +46,14 @@ export function InviteAcceptanceCard({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/45">
-            <MailCheck className="size-5 text-emerald-600 dark:text-emerald-300" />
+            <IconMailCheck className="size-5 text-emerald-600 dark:text-emerald-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">One-time activation</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
               The invite link identifies the tenant-scoped account that is being activated.
             </p>
           </div>
           <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/45">
-            <CheckCircle2 className="size-5 text-sky-600 dark:text-sky-300" />
+            <IconCircleCheck className="size-5 text-sky-600 dark:text-sky-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Immediate sign-in</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
               Once accepted, the session is stored and the user is redirected into the correct admin view automatically.

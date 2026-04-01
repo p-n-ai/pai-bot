@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, LockKeyhole } from "lucide-react";
+import { IconAlertCircle, IconLock } from "@tabler/icons-react";
 import { useState } from "react";
 import { useLoginGate } from "@/components/login-gate/use-login-gate";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -71,7 +71,7 @@ export function LoginGateForm() {
           />
           {showTenantChooser && emailLocked ? (
             <>
-              <LockKeyhole className="pointer-events-none absolute top-1/2 right-4 z-10 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <IconLock className="pointer-events-none absolute top-1/2 right-4 z-10 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <div
                 onClick={unlockEmail}
                 className="absolute inset-0 z-20 rounded-2xl bg-slate-950/10 transition-colors duration-150 ease-out hover:bg-slate-950/4 active:bg-white/45 dark:bg-black/18 dark:hover:bg-black/10 dark:active:bg-white/12"
@@ -106,7 +106,7 @@ export function LoginGateForm() {
           />
           {showTenantChooser && passwordLocked ? (
             <>
-              <LockKeyhole className="pointer-events-none absolute top-1/2 right-4 z-10 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <IconLock className="pointer-events-none absolute top-1/2 right-4 z-10 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <div
                 onClick={unlockPassword}
                 className="absolute inset-0 z-20 rounded-2xl bg-slate-950/10 transition-colors duration-150 ease-out hover:bg-slate-950/4 active:bg-white/45 dark:bg-black/18 dark:hover:bg-black/10 dark:active:bg-white/12"
@@ -119,7 +119,7 @@ export function LoginGateForm() {
 
       {showTenantChooser ? (
         <Alert className="animate-in fade-in-0 slide-in-from-top-1 gap-y-1 rounded-2xl border-sky-200/80 bg-sky-50/90 px-4 py-3 text-sky-950 shadow-none duration-200 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-50">
-          <CircleAlert className="text-sky-600 dark:text-sky-300" />
+          <IconAlertCircle className="text-sky-600 dark:text-sky-300" />
           <AlertTitle>Choose one school to continue.</AlertTitle>
           <AlertDescription className="leading-6 text-sky-800 dark:text-sky-100">
             We kept your email and password. Pick the school name below, then sign in.
@@ -175,7 +175,7 @@ export function LoginGateForm() {
           variant="destructive"
           className="animate-in fade-in-0 slide-in-from-top-1 gap-y-1 rounded-2xl border-rose-200/80 bg-rose-50/90 px-4 py-3 shadow-none duration-200 dark:border-rose-400/25 dark:bg-rose-500/10"
         >
-          <CircleAlert />
+          <IconAlertCircle />
           <AlertTitle>{"We couldn't sign you in yet."}</AlertTitle>
           <AlertDescription className="leading-6 text-rose-700 dark:text-rose-200">
             {errorMessage}

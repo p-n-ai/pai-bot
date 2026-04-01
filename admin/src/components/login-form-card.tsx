@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { ArrowRight, KeyRound, ShieldCheck } from "lucide-react";
+import { IconArrowRight, IconKey, IconShieldCheck } from "@tabler/icons-react";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -39,7 +39,7 @@ export function LoginFormCard({
     <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
       <section className="space-y-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 shadow-sm dark:border-sky-400/20 dark:bg-slate-950/40 dark:text-sky-200">
-          <ShieldCheck className="size-4" />
+          <IconShieldCheck className="size-4" />
           Admin Login
         </div>
         <div className="space-y-4">
@@ -53,14 +53,14 @@ export function LoginFormCard({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/45">
-            <KeyRound className="size-5 text-sky-600 dark:text-sky-300" />
+            <IconKey className="size-5 text-sky-600 dark:text-sky-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Invite-first onboarding</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
               New teacher, parent, and admin accounts are created through an admin-issued invite.
             </p>
           </div>
           <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/45">
-            <ArrowRight className="size-5 text-amber-600 dark:text-amber-300" />
+            <IconArrowRight className="size-5 text-amber-600 dark:text-amber-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Direct dashboard access</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
               After login, the session is stored locally so the admin API can authorize dashboard requests.
