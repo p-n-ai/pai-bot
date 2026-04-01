@@ -222,7 +222,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 
 ### Current Admin Auth
 
-- Teachers, parents, school admins, and platform admins now enter through the session-aware root redirect on `/` or the direct login route on `/login`.
+- Teachers, parents, school admins, and platform admins sign in through `/login`; visiting `/` routes signed-in users to their workspace and everyone else to the login flow.
 - Ongoing login uses `email + password`; if the same email belongs to multiple schools, the UI asks the user to pick the correct school before finishing sign-in.
 - The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
 - Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
