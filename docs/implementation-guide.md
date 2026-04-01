@@ -16,7 +16,18 @@ Admin UI note as of April 1, 2026:
 - the sidebar school switch trigger should always render the tenant name, never the raw tenant id
 - school switching should reissue the session in place for the new tenant; do not bounce the user through logout/login just to swap schools
 - keep the active school visually prominent near the sidebar brand block, not buried in the footer
+- the main sidebar brand block should double as the school switcher when multiple schools are available
+- keep that brand switcher sharp, not pill-shaped; prefer a flatter editorial treatment over soft rounded cards
+- keep that switcher inside normal shadcn select language; avoid one-off accent bars, extra product taglines, and over-styled dropdown rows
 - successful school switching should show a toast, then route back to `/dashboard`
+- before routing, show a short blur overlay handoff for about half a second with the destination school name
+- the desktop sidebar open/collapsed state should be read from the sidebar cookie on the server so refreshes do not flicker back to the default state
+- the server should also read the current user cookie and the school-switch snapshot cookie so the sidebar brand/switcher hydrates without tree mismatches
+- when switching schools, prefer a client transition plus page-level refetch on the session-change event instead of forcing a full `router.refresh()` that remounts the shell
+- keep shadcn `components/ui/sidebar.tsx` stock; move app-specific sidebar behavior into `components/app-sidebar.tsx`
+- use a single Zustand app store surface (`useAppStore`) across the admin app for session and shell state
+- session state now belongs to that Zustand app store, while tenant-sensitive dashboard data should refetch through TanStack Query keyed by tenant id
+- prefill the next tenant's dashboard query cache before navigating so the shell stays mounted and the page swap does not flicker through an empty state
 - dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
 - the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
 - deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source

@@ -79,12 +79,14 @@ This document provides UI/UX specifications, layout wireframes, and interaction 
 
 Installed: `Button`, `Card`, `Dialog`, `Input`, `Label`, `Select`, `Table`, `Tabs`, `Badge`, `Textarea`
 
-Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AdminShell`
+Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AppShell`, `AppSidebar`
 
 Theme note:
 - Shared overlay primitives should stay on semantic tokens (`bg-popover`, `text-foreground`, `bg-accent`) and must not force a literal `dark` class on popup surfaces.
 - Shell surfaces should read clearly in both modes; the desktop sidebar should stay genuinely light in light mode instead of relying on dark-tinted custom overrides.
 - Theme changes should interpolate with short color/border/shadow transitions instead of snapping between light and dark.
+- School switching should keep the sidebar mounted, prewarm the destination dashboard data, and avoid flashing through empty shell fallback content during the route handoff.
+- Keep the shared shadcn sidebar primitive stock. App brand, school-switch, and role-aware nav belong in the app-owned sidebar layer.
 
 ---
 
@@ -231,7 +233,10 @@ Interaction notes:
 - Page-to-page navigation should use a short opacity/y/blur transition at the content frame, not heavy full-screen wipes.
 - Numeric stat cards can animate upward on first paint, but only for the values that benefit from comparison (`Average mastery`, `Coverage`).
 - Heatmap topic headers should truncate in-cell and reveal the full topic label on hover/focus with shadcn `Tooltip`.
-- When the signed-in email belongs to multiple tenants, the sidebar should keep the school switcher prominent near the brand block. Switching schools should reissue the session in place for the selected tenant, show a success toast, and return the user to `/dashboard` without bouncing through `/login`.
+- When the signed-in email belongs to multiple tenants, the main sidebar brand block should become the school switcher. Keep the school name primary, use the icon tile as the visual anchor, and do not add redundant product sublabels under the school name.
+- Style that main brand switcher as a sharper, flatter block rather than a soft rounded pill.
+- Keep the school dropdown in normal shadcn select language: semantic surfaces, grouped items, restrained hover states.
+- On successful school change, add a brief blur-overlay handoff that reads `Switched to <school>` before the dashboard reload lands.
 - Dashboard stat notes can use semantic emphasis: learner alerts in amber/green, average mastery by mastery band, and weakest/strongest topic labels split into risk/success tones.
 
 ```
@@ -1055,7 +1060,7 @@ Score < 40%:  [  23%  ] rose bg
 
 | Component / Page | File Path |
 |------------------|-----------|
-| Admin Shell | `admin/src/components/admin-shell.tsx` |
+| Admin Shell | `admin/src/components/app-shell.tsx` |
 | Root Redirect | `admin/src/app/page.tsx` |
 | Login Page | `admin/src/app/login/page.tsx` |
 | Login Gate Entry | `admin/src/components/login-gate.tsx` |

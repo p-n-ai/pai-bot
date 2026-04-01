@@ -1,5 +1,6 @@
 "use client";
 
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
@@ -11,11 +12,11 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
-import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
-import { getMockClassProgress } from "@/lib/mock-classes.mjs";
+import { sendStudentNudge } from "@/lib/api";
+import { fetchDashboardProgress, getDashboardProgressQueryKey, type DashboardProgressResult } from "@/lib/dashboard-progress-query";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
+import { useAppStore } from "@/stores/app-store";
 
 const dashboardEase = [0.22, 1, 0.36, 1] as const;
 
@@ -48,26 +49,16 @@ function masteryTone(score: number) {
 
 export default function DashboardPage() {
   const prefersReducedMotion = useReducedMotion();
-  const { data, loading } = useAsyncResource<{
-    progress: ClassProgress;
-    source: "live" | "preview";
-    issue?: string;
-  }>(async () => {
-    try {
-      return {
-        progress: await getClassProgress("all-students"),
-        source: "live" as const,
-      };
-    } catch (error) {
-      return {
-        progress: getMockClassProgress("all-students"),
-        source: "preview" as const,
-        issue: error instanceof Error ? error.message : "Class data is unavailable right now.",
-      };
-    }
-  }, []);
+  const currentTenantID = useAppStore((state) => state.currentUser?.tenant_id ?? "all-students");
+  const dashboardQuery = useQuery<DashboardProgressResult>({
+    queryKey: getDashboardProgressQueryKey(currentTenantID),
+    queryFn: () => fetchDashboardProgress(currentTenantID),
+    placeholderData: keepPreviousData,
+  });
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
+  const data = dashboardQuery.data ?? null;
+  const loading = dashboardQuery.isPending && !dashboardQuery.data;
   const progress = data?.progress ?? null;
   const summary = getDashboardSummary(progress);
   const isPreview = data?.source === "preview";
