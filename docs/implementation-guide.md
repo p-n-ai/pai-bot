@@ -17,6 +17,7 @@ Admin UI note as of April 1, 2026:
 - the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
 - deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source
 - AI usage should keep its two-column hero layout but drop the outer card shell; only the provider snapshot aside should read as a highlighted surface
+- Class management should follow the same plain-hero rule, place the stat row directly under the header without an extra scaffold-warning card, and keep the class selector trigger on the human class name instead of the internal id
 
 ## How to Use This Guide
 

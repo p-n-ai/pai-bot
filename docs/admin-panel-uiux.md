@@ -524,6 +524,10 @@ Interaction notes:
 **Access:** Admin, Platform Admin
 **Status:** Scaffold with mock data (no backend yet)
 
+- Keep the hero row as a plain header layout, not a boxed page card. The dark mock-data summary can stay as the only emphasized surface in that row.
+- Do not stack an extra scaffold-warning card under the hero; let the stat row follow immediately.
+- The class picker trigger must render the current class name, never the internal class id.
+
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │  TEACHING OPERATIONS                                              │
