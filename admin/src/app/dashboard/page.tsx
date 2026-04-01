@@ -158,12 +158,17 @@ export default function DashboardPage() {
                             </Link>
                           </TableCell>
                           {progress.topic_ids.map((topicId) => {
-                            const score = student.topics[topicId] ?? 0;
+                            const score = student.topics[topicId];
+                            const hasScore = typeof score === "number";
                             return (
                               <TableCell key={`${student.id}-${topicId}`} className="bg-muted/40 px-3 py-3">
-                                <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
-                                  {Math.round(score * 100)}%
-                                </span>
+                                {hasScore ? (
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
+                                    {Math.round(score * 100)}%
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex px-3 py-1 text-sm font-medium text-muted-foreground">--</span>
+                                )}
                               </TableCell>
                             );
                           })}

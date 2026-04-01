@@ -16,16 +16,16 @@ test("getDashboardSummary returns dashboard counts and heatmap readiness", () =>
     studentCount: 2,
     topicCount: 2,
     trackedScores: 3,
-    averageMastery: 45,
+    averageMastery: 60,
     hasHeatmap: true,
     coveragePercent: 75,
     attentionCount: 1,
     weakestTopic: {
-      topicId: "equations",
-      score: 30,
+      topicId: "algebra",
+      score: 60,
     },
     strongestTopic: {
-      topicId: "algebra",
+      topicId: "equations",
       score: 60,
     },
   });

@@ -242,10 +242,10 @@ function AdminSidebar({
       className="border-r-0 p-0 [&>[data-slot=sidebar-inner]]:border-r [&>[data-slot=sidebar-inner]]:border-sidebar-border [&>[data-slot=sidebar-inner]]:bg-sidebar"
     >
       <SidebarHeader className="gap-4 px-4 pb-5 pt-6">
-        <Badge variant="outline" className="w-fit rounded-full border-sidebar-border/80 bg-white/55 text-sidebar-foreground dark:bg-white/5">
+        <Badge variant="outline" className="w-fit rounded-full border-sidebar-border bg-background/80 text-sidebar-foreground">
           P&AI Bot
         </Badge>
-        <Link href="/dashboard" onClick={handleNavigate} className="flex items-start gap-3 rounded-xl transition hover:opacity-90">
+        <Link href="/dashboard" onClick={handleNavigate} className="flex items-start gap-3 rounded-xl text-sidebar-foreground transition hover:opacity-90">
           <div className="mt-0.5 flex size-10 items-center justify-center rounded-[18px] bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_28px_rgba(2,8,23,0.4)]">
             <ClassroomHubMark className="size-5" />
           </div>
@@ -277,7 +277,7 @@ function AdminSidebar({
                         isActive={active}
                         tooltip={item.title}
                         size="default"
-                        className="rounded-xl px-3 data-[active=true]:bg-white/80 data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm hover:bg-white/60 dark:data-[active=true]:bg-white/10 dark:hover:bg-white/5"
+                        className="rounded-xl px-3 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-sm hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                       >
                         <Icon />
                         <span className="truncate font-medium">{item.title}</span>
@@ -304,7 +304,7 @@ function AdminSidebar({
               {hydrated ? currentUser?.role?.replaceAll("_", " ") || "not signed in" : "not signed in"}
             </p>
           </div>
-          <ThemeToggle className="rounded-xl border border-sidebar-border/80 bg-white/50 dark:bg-white/5" />
+          <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
         {hydrated && currentUser?.tenant_name ? (
           <p className="truncate text-sm text-sidebar-foreground/70">{currentUser.tenant_name}</p>

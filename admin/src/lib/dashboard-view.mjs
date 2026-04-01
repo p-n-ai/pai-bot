@@ -7,28 +7,30 @@ export function getDashboardSummary(progress) {
   const totalSlots = students.length * topicIds.length;
   const topicAverages = topicIds
     .map((topicId) => {
-      const total = students.reduce((sum, student) => {
+      const scores = students.flatMap((student) => {
         const score = student?.topics?.[topicId];
-        return sum + (typeof score === "number" ? score : 0);
-      }, 0);
+        return typeof score === "number" ? [score] : [];
+      });
 
       return {
         topicId,
-        score: students.length > 0 ? Math.round((total / students.length) * 100) : 0,
+        score: scores.length > 0 ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100) : null,
       };
     })
+    .filter((topic) => typeof topic.score === "number")
     .sort((left, right) => left.score - right.score);
   const studentAverages = students.map((student) => {
-    if (topicIds.length === 0) {
-      return 0;
+    const scores = topicIds.flatMap((topicId) => {
+      const score = student?.topics?.[topicId];
+      return typeof score === "number" ? [score] : [];
+    });
+
+    if (scores.length === 0) {
+      return null;
     }
 
-    const total = topicIds.reduce((sum, topicId) => {
-      const score = student?.topics?.[topicId];
-      return sum + (typeof score === "number" ? score : 0);
-    }, 0);
-
-    return Math.round((total / topicIds.length) * 100);
+    const total = scores.reduce((sum, score) => sum + score, 0);
+    return Math.round((total / scores.length) * 100);
   });
 
   return {
@@ -38,7 +40,7 @@ export function getDashboardSummary(progress) {
     averageMastery: getAverageMastery(progress),
     hasHeatmap: students.length > 0 && topicIds.length > 0,
     coveragePercent: totalSlots > 0 ? Math.round((trackedScores / totalSlots) * 100) : 0,
-    attentionCount: studentAverages.filter((score) => score < 50).length,
+    attentionCount: studentAverages.filter((score) => typeof score === "number" && score < 50).length,
     weakestTopic: topicAverages[0] ?? null,
     strongestTopic: topicAverages.at(-1) ?? null,
   };

@@ -81,6 +81,10 @@ Installed: `Button`, `Card`, `Dialog`, `Input`, `Label`, `Select`, `Table`, `Tab
 
 Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AdminShell`
 
+Theme note:
+- Shared overlay primitives should stay on semantic tokens (`bg-popover`, `text-foreground`, `bg-accent`) and must not force a literal `dark` class on popup surfaces.
+- Shell surfaces should read clearly in both modes; the desktop sidebar should stay genuinely light in light mode instead of relying on dark-tinted custom overrides.
+
 ---
 
 ## Shell & Navigation
@@ -255,6 +259,7 @@ The root route `/` is now redirect-only. It sends signed-in users to their role-
 - Click student name → navigate to `/students/{id}`
 - Click Nudge → sends Telegram notification, shows confirmation message
 - Click "Open AI usage" → navigate to `/dashboard/ai-usage`
+- If a learner has no tracked score for a topic yet, render `--` in a muted style instead of a red `0%` badge
 
 ---
 
