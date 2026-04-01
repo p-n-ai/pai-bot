@@ -35,10 +35,11 @@ export function LoginGateHeroSection({
                   <motion.span
                     key={word}
                     variants={{
-                      hidden: { opacity: 0, y: "0.6em" },
+                      hidden: { opacity: 0, y: "0.6em", filter: "blur(10px)" },
                       visible: {
                         opacity: 1,
                         y: 0,
+                        filter: "blur(0px)",
                         transition: {
                           duration: 0.48,
                           delay: 0.08 + index * 0.05,

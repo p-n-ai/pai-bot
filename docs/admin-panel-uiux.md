@@ -196,7 +196,7 @@ The root route `/` is now redirect-only. It sends signed-in users to their role-
 - On success → redirect to the role-appropriate workspace
 - Teachers/admins/platform admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
-- The hero headline should use a short one-time mount reveal with transform/opacity only, Emil-style ease-out timing, and a reduced-motion fallback.
+- The hero headline should use a short one-time mount reveal with Emil-style ease-out timing, reduced-motion fallback, and only a very small entry blur that resolves immediately.
 - If email maps to multiple schools, the form switches into a guided school-pick state:
   - keep email/password visible as locked summaries
   - show a non-destructive info callout

@@ -143,7 +143,7 @@ export function LoginGateForm() {
             >
               {selectedTenant ? (
                 <span className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
-                  <span className="truncate font-medium">{selectedTenant.tenant_name}</span>
+                  <span className="truncate font-medium text-slate-950 dark:text-slate-100">{selectedTenant.tenant_name}</span>
                 </span>
               ) : (
                 <SelectValue placeholder="Choose school" />

@@ -4798,7 +4798,10 @@ Planned follow-up after Week 4 scaffolding:
 - Treat `admin/src/app/globals.css` as the single owner for admin design tokens (color, radius, typography, focus, sidebar, and chart palette).
 - Current admin shell baseline favors a narrower neutral single-surface sidebar, simpler account footer, tighter top bar padding, no top-bar divider line, and a dashboard root that hides the duplicate shell breadcrumb/title layer while using a plain page header instead of a boxed hero card.
 - Current dashboard summary row should read as: learner count with the attention callout tucked underneath, class-grade letter derived from average mastery, average mastery with weakest/strongest topic context, and coverage as the final operational metric.
-- Login hero note: the main headline on `/login` should use a single entrance animation via `framer-motion`, limited to transform/opacity, and must disable itself when reduced motion is preferred.
+- Login hero note: the main headline on `/login` should use a single entrance animation via `framer-motion`, keep motion restrained, allow only a small temporary blur on entry, and disable the effect when reduced motion is preferred.
+- Login tenant-picker note: when the multi-school chooser is shown, the selected school label should set its foreground explicitly so it stays readable in both light and dark themes.
+- Shared select note: option rows should also set explicit base and focus foreground colors so light-theme dropdown items never inherit white-on-white text from generic accent tokens.
+- Shared select note: do not force a literal `dark` class on the popup surface; let the app theme control dark variants, otherwise light-theme dropdown content can render with dark-theme text colors.
 - Standardize remaining feature pages on shared `@/components/ui` primitives and thin wrappers instead of repeating page-level card, table, and dialog styling.
 - Initial migration slices should cover dashboard surfaces first, then auth forms (login, invite acceptance, password setup) so new admin entry points share the same shadcn-based form contract.
 - Invite acceptance should be a public Next.js route that reads the invite token from the URL, posts to `POST /api/auth/invitations/accept`, persists the returned session, and redirects to the role-safe default route.
