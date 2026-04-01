@@ -1,18 +1,23 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
 import { IconBellRinging, IconChevronRight } from "@tabler/icons-react";
+import { AnimatedNumber } from "@/components/animated-number";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
 import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
 import { getMockClassProgress } from "@/lib/mock-classes.mjs";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
+
+const dashboardEase = [0.22, 1, 0.36, 1] as const;
 
 function scoreTone(score: number) {
   if (score >= 0.8) return "border border-emerald-200 bg-emerald-100 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/18 dark:text-emerald-50";
@@ -30,7 +35,19 @@ function masteryGrade(averageMastery: number) {
   return "F";
 }
 
+function attentionTone(attentionCount: number) {
+  if (attentionCount > 0) return "text-amber-700 dark:text-amber-300";
+  return "text-emerald-700 dark:text-emerald-300";
+}
+
+function masteryTone(score: number) {
+  if (score >= 80) return "text-emerald-700 dark:text-emerald-300";
+  if (score >= 60) return "text-amber-700 dark:text-amber-300";
+  return "text-rose-700 dark:text-rose-300";
+}
+
 export default function DashboardPage() {
+  const prefersReducedMotion = useReducedMotion();
   const { data, loading } = useAsyncResource<{
     progress: ClassProgress;
     source: "live" | "preview";
@@ -62,6 +79,13 @@ export default function DashboardPage() {
       ? `${summary.attentionCount} learner${summary.attentionCount === 1 ? "" : "s"} need attention`
       : "No learners flagged right now";
   const classGrade = masteryGrade(summary.averageMastery);
+  const sectionMotion = prefersReducedMotion
+    ? { initial: false, animate: { opacity: 1 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 14, filter: "blur(12px)" },
+        animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+        transition: { duration: 0.42, ease: dashboardEase },
+      };
 
   async function handleNudge(studentID: string, studentName: string) {
     if (isPreview) {
@@ -84,31 +108,53 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-        <header className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground">Dashboard</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              {heroDescription}
-            </p>
-          </div>
-        </header>
+      <motion.header {...sectionMotion} transition={{ ...sectionMotion.transition, delay: 0.03 }} className="space-y-3">
+        <div className="space-y-2">
+          <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground">Dashboard</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            {heroDescription}
+          </p>
+        </div>
+      </motion.header>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Learners" value={String(summary.studentCount)} note={learnerNote} />
-          <StatCard
-            title="Class grade"
-            value={classGrade}
-            note={`${summary.averageMastery}% average mastery`}
-          />
-          <StatCard title="Average mastery" value={`${summary.averageMastery}%`} note={`Weakest: ${weakestTopicLabel} · strongest: ${strongestTopicLabel}`} />
-          <StatCard
-            title="Coverage"
-            value={`${summary.coveragePercent}%`}
-            note={`${summary.trackedScores} of ${summary.studentCount * summary.topicCount} score slots filled`}
-          />
-        </section>
+      <motion.section
+        {...sectionMotion}
+        transition={{ ...sectionMotion.transition, delay: 0.08 }}
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      >
+        <StatCard
+          title="Learners"
+          value={String(summary.studentCount)}
+          note={learnerNote}
+          noteClassName={attentionTone(summary.attentionCount)}
+        />
+        <StatCard
+          title="Class grade"
+          value={classGrade}
+          note={`${summary.averageMastery}% average mastery`}
+          noteClassName={masteryTone(summary.averageMastery)}
+        />
+        <StatCard
+          title="Average mastery"
+          value={<AnimatedNumber value={summary.averageMastery} delay={0.12} formatter={(value) => `${value}%`} />}
+          note={
+            <>
+              <span className="text-rose-700 dark:text-rose-300">Weakest: {weakestTopicLabel}</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-emerald-700 dark:text-emerald-300">Strongest: {strongestTopicLabel}</span>
+            </>
+          }
+          noteClassName="flex flex-wrap gap-1"
+        />
+        <StatCard
+          title="Coverage"
+          value={<AnimatedNumber value={summary.coveragePercent} delay={0.18} formatter={(value) => `${value}%`} />}
+          note={`${summary.trackedScores} of ${summary.studentCount * summary.topicCount} score slots filled`}
+        />
+      </motion.section>
 
+      <motion.div {...sectionMotion} transition={{ ...sectionMotion.transition, delay: 0.14 }}>
         <AdminSurface>
           <AdminSurfaceHeader
             title="Mastery heatmap"
@@ -139,7 +185,18 @@ export default function DashboardPage() {
                             key={topicId}
                             className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
                           >
-                            {formatTopicLabel(topicId)}
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="inline-block max-w-28 truncate align-middle outline-none focus-visible:ring-0" tabIndex={0} />
+                                }
+                              >
+                                {formatTopicLabel(topicId)}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{formatTopicLabel(topicId)}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           </TableHead>
                         ))}
                       <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Nudge</TableHead>
@@ -199,6 +256,7 @@ export default function DashboardPage() {
             )}
           </div>
         </AdminSurface>
+      </motion.div>
     </div>
   );
 }

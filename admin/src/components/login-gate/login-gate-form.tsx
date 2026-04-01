@@ -30,18 +30,20 @@ export function LoginGateForm() {
       : error;
   const showTenantChooser = tenantChoices.length > 0;
   const selectedTenant = tenantChoices.find((tenant) => tenant.tenant_id === tenantID) ?? tenantChoices[0] ?? null;
-  const [emailLocked, setEmailLocked] = useState(true);
-  const [passwordLocked, setPasswordLocked] = useState(true);
+  const [emailUnlocked, setEmailUnlocked] = useState(false);
+  const [passwordUnlocked, setPasswordUnlocked] = useState(false);
+  const emailLocked = showTenantChooser && !emailUnlocked && Boolean(password);
+  const passwordLocked = showTenantChooser && !passwordUnlocked && Boolean(password);
 
   function unlockEmail() {
     if (showTenantChooser && emailLocked) {
-      setEmailLocked(false);
+      setEmailUnlocked(true);
     }
   }
 
   function unlockPassword() {
     if (showTenantChooser && passwordLocked) {
-      setPasswordLocked(false);
+      setPasswordUnlocked(true);
     }
   }
 

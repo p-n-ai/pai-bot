@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { LoginGateContext } from "@/components/login-gate/login-gate-context";
 import { LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { clearSchoolSwitchState, readSchoolSwitchState, writeSchoolSwitchState } from "@/lib/school-switch-state";
 
 export function LoginGateProvider({
   children,
@@ -14,11 +15,12 @@ export function LoginGateProvider({
   nextPath: string | null;
 }) {
   const router = useRouter();
+  const [initialSchoolSwitchState] = useState(() => readSchoolSwitchState());
   const [isPending, startTransition] = useTransition();
-  const [email, setEmailState] = useState("");
+  const [email, setEmailState] = useState(initialSchoolSwitchState?.email ?? "");
   const [password, setPassword] = useState("");
-  const [tenantID, setTenantID] = useState("");
-  const [tenantChoices, setTenantChoices] = useState<TenantChoice[]>([]);
+  const [tenantID, setTenantID] = useState(initialSchoolSwitchState?.currentTenantID ?? "");
+  const [tenantChoices, setTenantChoices] = useState<TenantChoice[]>(initialSchoolSwitchState?.tenantChoices ?? []);
   const [error, setError] = useState("");
 
   function setEmail(value: string) {
@@ -28,6 +30,7 @@ export function LoginGateProvider({
       setTenantID("");
       setError("");
     }
+    clearSchoolSwitchState();
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -56,18 +59,35 @@ export function LoginGateProvider({
           return;
         }
 
+        if (tenantChoices.length > 0) {
+          writeSchoolSwitchState({
+            email: session.user.email,
+            currentTenantID: tenantID || session.user.tenant_id,
+            tenantChoices,
+          });
+        } else {
+          clearSchoolSwitchState();
+        }
+
         persistSession(session);
         router.push(getSafeNextPath(session.user, nextPath));
       } catch (err) {
         if (err instanceof LoginError && err.code === "tenant_required") {
           setTenantChoices(err.tenants);
-          setTenantID((current) => current || err.tenants[0]?.tenant_id || "");
+          const resolvedTenantID = tenantID || err.tenants[0]?.tenant_id || "";
+          setTenantID(resolvedTenantID);
+          writeSchoolSwitchState({
+            email: email.trim(),
+            currentTenantID: resolvedTenantID,
+            tenantChoices: err.tenants,
+          });
           setError("");
           return;
         }
 
         setTenantChoices([]);
         setTenantID("");
+        clearSchoolSwitchState();
         setError(err instanceof Error ? err.message : "Login failed");
       }
     });

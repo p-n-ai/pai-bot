@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, type CSSProperties, useEffect, useRef, useState } from "react";
@@ -11,7 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -38,9 +39,10 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
-import { getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
+import { clearSession, getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
 import { getBreadcrumbs, getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { isPublicEntryRoute } from "@/lib/rbac.mjs";
+import { readSchoolSwitchState, writeSchoolSwitchState, type SchoolSwitchState } from "@/lib/school-switch-state";
 import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
 
 const navIcons: Record<string, typeof IconChartBar> = {
@@ -49,6 +51,7 @@ const navIcons: Record<string, typeof IconChartBar> = {
   "/dashboard/ai-usage": IconCoins,
   "/parents/parent-1": IconUsers,
 };
+const shellEase = [0.22, 1, 0.36, 1] as const;
 
 function ClassroomHubMark({ className }: { className?: string }) {
   return (
@@ -76,10 +79,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [schoolSwitchState, setSchoolSwitchState] = useState<SchoolSwitchState | null>(null);
   const section = getCurrentSection(pathname);
   const breadcrumbs = getBreadcrumbs(pathname, currentUser);
   const isPublicRoute = isPublicEntryRoute(pathname);
   const isDashboardRoot = pathname === "/dashboard";
+  const prefersReducedMotion = useReducedMotion();
   const sidebarLayoutStyle = {
     "--sidebar-width": "16.75rem",
     "--sidebar-width-icon": "4rem",
@@ -102,6 +107,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       setCurrentUser(snapshot.currentUser);
       setIsLoggedIn(snapshot.isLoggedIn && hasStoredSession());
+      setSchoolSwitchState(readSchoolSwitchState());
       setHydrated(true);
 
       if (syncedCookies) {
@@ -131,7 +137,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (isPublicRoute) {
     return (
-      <div className="relative min-h-screen bg-background text-foreground">
+      <div className="theme-transition relative min-h-screen bg-background text-foreground">
         <div className="pointer-events-none fixed right-3 top-3 z-20 lg:right-6 lg:top-3.5">
           <div className="pointer-events-auto">
             <ThemeToggle />
@@ -146,32 +152,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <SidebarProvider
       defaultOpen
       style={sidebarLayoutStyle}
-      className="isolate min-h-screen bg-background text-foreground"
+      className="theme-transition isolate min-h-screen bg-background text-foreground"
     >
       <AdminSidebar
         pathname={pathname}
         currentUser={currentUser}
         hydrated={hydrated}
         isLoggedIn={isLoggedIn}
+        schoolSwitchState={schoolSwitchState}
       />
 
       <SidebarInset className="min-h-screen bg-transparent shadow-none md:m-0 md:rounded-none">
-        <div className="sticky top-0 z-40 bg-background/88 px-4 py-2 backdrop-blur lg:px-6">
-          <div className="mx-auto flex max-w-7xl items-center gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <SidebarTrigger className="rounded-xl" />
-              {!isDashboardRoot ? (
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{section.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{section.eyebrow}</p>
-                </div>
-              ) : null}
-            </div>
+        <div className="sticky top-0 z-40 bg-background/88 px-3 py-1.5 backdrop-blur lg:px-3">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="rounded-xl" />
           </div>
         </div>
 
         {!isDashboardRoot ? (
-          <div className="relative z-30 px-4 pb-3 pt-4 lg:px-6 lg:pb-0 lg:pt-6">
+          <div className="relative z-30 px-4 pb-2 pt-3 lg:px-6 lg:pb-0 lg:pt-4">
             <div className="mx-auto max-w-7xl">
               <div className="flex flex-col gap-3">
                 <Breadcrumb>
@@ -199,8 +198,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
 
-        <main className="relative z-10 flex-1 px-4 pb-8 pt-4 lg:px-6 lg:pt-4">
-          <div className="mx-auto max-w-7xl">{children}</div>
+        <main className="relative z-10 flex-1 px-4 pb-8 pt-2 lg:px-6 lg:pt-2">
+          <div className="mx-auto max-w-7xl">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pathname ?? "shell"}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 12, filter: "blur(14px)" }}
+                animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10, filter: "blur(10px)" }}
+                transition={{ duration: 0.26, ease: shellEase }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>
@@ -212,14 +223,22 @@ function AdminSidebar({
   currentUser,
   hydrated,
   isLoggedIn,
+  schoolSwitchState,
 }: {
   pathname: string | null;
   currentUser: ReturnType<typeof getStoredUser>;
   hydrated: boolean;
   isLoggedIn: boolean;
+  schoolSwitchState: SchoolSwitchState | null;
 }) {
+  const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const navigationItems = getNavigationForUser(currentUser);
+  const schoolChoices =
+    hydrated && isLoggedIn && currentUser?.email && schoolSwitchState?.email === currentUser.email
+      ? schoolSwitchState.tenantChoices
+      : [];
+  const canSwitchSchools = schoolChoices.length > 1 && Boolean(currentUser?.tenant_id);
   type NavigationItem = (typeof navigationItems)[number];
   const groupedNavigation = navigationItems.reduce<Record<string, NavigationItem[]>>((result, item) => {
     const group = item.group || "Workspace";
@@ -236,17 +255,28 @@ function AdminSidebar({
     }
   }
 
+  function handleSchoolSwitch(nextTenantID: string) {
+    if (!currentUser || !canSwitchSchools || nextTenantID === currentUser.tenant_id) {
+      return;
+    }
+
+    writeSchoolSwitchState({
+      email: currentUser.email,
+      currentTenantID: nextTenantID,
+      tenantChoices: schoolChoices,
+    });
+    clearSession();
+    router.push(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+  }
+
   return (
     <Sidebar
       collapsible="offcanvas"
       className="border-r-0 p-0 [&>[data-slot=sidebar-inner]]:border-r [&>[data-slot=sidebar-inner]]:border-sidebar-border [&>[data-slot=sidebar-inner]]:bg-sidebar"
     >
-      <SidebarHeader className="gap-4 px-4 pb-5 pt-6">
-        <Badge variant="outline" className="w-fit rounded-full border-sidebar-border bg-background/80 text-sidebar-foreground">
-          P&AI Bot
-        </Badge>
-        <Link href="/dashboard" onClick={handleNavigate} className="flex items-start gap-3 rounded-xl text-sidebar-foreground transition hover:opacity-90">
-          <div className="mt-0.5 flex size-10 items-center justify-center rounded-[18px] bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_28px_rgba(2,8,23,0.4)]">
+      <SidebarHeader className="gap-3 px-4 pb-5 pt-4">
+        <Link href="/dashboard" onClick={handleNavigate} className="flex items-center gap-3 rounded-xl text-sidebar-foreground transition hover:opacity-90">
+          <div className="flex size-9 items-center justify-center rounded-[18px] bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_28px_rgba(2,8,23,0.4)]">
             <ClassroomHubMark className="size-5" />
           </div>
           <div className="min-w-0">
@@ -256,7 +286,7 @@ function AdminSidebar({
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="scrollbar-thin-subtle gap-4 px-0 py-0">
+      <SidebarContent className="scrollbar-thin-subtle gap-4 px-0 py-1">
         {Object.entries(groupedNavigation).map(([group, items]) => (
           <SidebarGroup key={group} className="px-3 py-0">
             {Object.keys(groupedNavigation).length > 1 ? (
@@ -306,7 +336,26 @@ function AdminSidebar({
           </div>
           <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
-        {hydrated && currentUser?.tenant_name ? (
+        {canSwitchSchools ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55">School</p>
+            <Select value={currentUser?.tenant_id ?? ""} onValueChange={(value) => handleSchoolSwitch(value ?? "")}>
+              <SelectTrigger
+                aria-label="Switch school"
+                className="h-10 w-full rounded-xl border-sidebar-border bg-background/70 text-sidebar-foreground hover:bg-sidebar-accent"
+              >
+                <SelectValue placeholder="Choose school" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {schoolChoices.map((tenant) => (
+                  <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
+                    {tenant.tenant_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : hydrated && currentUser?.tenant_name ? (
           <p className="truncate text-sm text-sidebar-foreground/70">{currentUser.tenant_name}</p>
         ) : null}
 

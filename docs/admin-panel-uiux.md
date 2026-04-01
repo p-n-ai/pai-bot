@@ -84,6 +84,7 @@ Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AdminShell`
 Theme note:
 - Shared overlay primitives should stay on semantic tokens (`bg-popover`, `text-foreground`, `bg-accent`) and must not force a literal `dark` class on popup surfaces.
 - Shell surfaces should read clearly in both modes; the desktop sidebar should stay genuinely light in light mode instead of relying on dark-tinted custom overrides.
+- Theme changes should interpolate with short color/border/shadow transitions instead of snapping between light and dark.
 
 ---
 
@@ -216,6 +217,18 @@ The root route `/` is now redirect-only. It sends signed-in users to their role-
 **Route:** `/dashboard`
 **Access:** Teacher, Admin, Platform Admin
 **Status:** Implemented
+
+Interaction notes:
+- The shell should sit tight to the sticky top bar; avoid extra dead air above the dashboard header.
+- The sticky top-bar trigger should align to the shell edge instead of sitting inside the centered content max-width.
+- The sticky top bar should stay minimal; remove duplicated section title/eyebrow copy there and leave page identity to the page header/breadcrumb layer.
+- Keep a small visual buffer between the sidebar brand block and the first nav item so the workspace mark does not collide with navigation.
+- The desktop sidebar header should lead with the custom Classroom Hub mark and workspace label only; the extra `P&AI Bot` badge is removed.
+- Page-to-page navigation should use a short opacity/y/blur transition at the content frame, not heavy full-screen wipes.
+- Numeric stat cards can animate upward on first paint, but only for the values that benefit from comparison (`Average mastery`, `Coverage`).
+- Heatmap topic headers should truncate in-cell and reveal the full topic label on hover/focus with shadcn `Tooltip`.
+- When the signed-in email belongs to multiple tenants, the sidebar footer should expose a school switcher. Switching schools should send the user back to `/login` with email + school context preserved, but not the password.
+- Dashboard stat notes can use semantic emphasis: learner alerts in amber/green, average mastery by mastery band, and weakest/strongest topic labels split into risk/success tones.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

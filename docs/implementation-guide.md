@@ -7,6 +7,15 @@
 
 This guide provides step-by-step executable instructions for every day of the pai-bot development timeline. Each day includes entry criteria, exact file paths, code templates, test specifications, validation commands, and exit checklists.
 
+Admin UI note as of April 1, 2026:
+- theme switching in the admin panel should use semantic tokens plus short color transitions, not literal `dark:` surface overrides
+- the dashboard shell now uses a restrained route enter animation with light blur
+- only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
+- long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip
+- school switching in the sidebar should preserve email + tenant choices only; do not persist passwords just to enable a faster tenant switch
+- dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
+- the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
+
 ## How to Use This Guide
 
 1. Work through days sequentially — each day builds on the previous

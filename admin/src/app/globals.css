@@ -100,6 +100,13 @@
 }
 
 @layer utilities {
+  .theme-transition,
+  .theme-transition * {
+    transition-duration: 240ms;
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity, filter;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .scrollbar-thin-subtle {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklch, var(--muted-foreground) 22%, transparent) transparent;

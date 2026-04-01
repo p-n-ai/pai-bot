@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -7,13 +7,15 @@ export function StatCard({
   title,
   value,
   note,
+  noteClassName,
   className,
   headerClassName,
 }: {
   icon?: ComponentType<{ className?: string }>;
   title: string;
-  value: string;
-  note: string;
+  value: ReactNode;
+  note: ReactNode;
+  noteClassName?: string;
   className?: string;
   headerClassName?: string;
 }) {
@@ -32,7 +34,7 @@ export function StatCard({
         ) : null}
         <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground">{title}</p>
         <CardTitle className="text-3xl tracking-tight text-foreground">{value}</CardTitle>
-        <p className="text-sm text-muted-foreground">{note}</p>
+        <div className={cn("text-sm text-muted-foreground", noteClassName)}>{note}</div>
       </CardHeader>
     </Card>
   );
