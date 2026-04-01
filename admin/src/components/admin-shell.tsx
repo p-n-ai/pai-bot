@@ -89,7 +89,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     : {
         initial: { opacity: 0, y: 10, filter: "blur(10px)" },
         animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-        transition: { duration: 0.24, ease: shellEase },
+        transition: { duration: 0.18, ease: shellEase },
       };
   const sidebarLayoutStyle = {
     "--sidebar-width": "16.75rem",
@@ -211,7 +211,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 initial={prefersReducedMotion ? false : { opacity: 0, y: 12, filter: "blur(14px)" }}
                 animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
                 exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10, filter: "blur(10px)" }}
-                transition={{ duration: 0.26, ease: shellEase }}
+                transition={{ duration: 0.18, ease: shellEase }}
               >
                 {children}
               </motion.div>

@@ -167,7 +167,7 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 **Status:** Implemented
 
 Current shell note:
-- Keep the AI Usage hero as a plain two-column header, not a boxed page card. The dark provider snapshot can stay as the only emphasized surface in that row.
+- Keep the AI Usage hero as a plain header, not a boxed page card or split summary row.
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -414,7 +414,7 @@ Interaction notes:
 **Access:** Teacher, Admin, Platform Admin
 **Status:** Implemented
 
-- Keep the top row as a plain header layout, not a boxed page card. Only the provider snapshot aside should feel like a surfaced panel.
+- Keep the top row as a plain header layout, not a boxed page card, and remove the extra provider snapshot panel entirely.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

@@ -45,7 +45,7 @@ export default function ClassManagementPage() {
     : {
         initial: { opacity: 0, y: 14, filter: "blur(12px)" },
         animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-        transition: { duration: 0.42, ease: classPageEase },
+        transition: { duration: 0.32, ease: classPageEase },
       };
 
   function buildInviteLink(token: string) {

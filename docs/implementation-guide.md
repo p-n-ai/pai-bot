@@ -9,14 +9,14 @@ This guide provides step-by-step executable instructions for every day of the pa
 
 Admin UI note as of April 1, 2026:
 - theme switching in the admin panel should use semantic tokens plus short color transitions, not literal `dark:` surface overrides
-- the dashboard shell now uses a restrained route enter animation with light blur
+- the dashboard shell now uses a restrained but brief route enter animation with light blur
 - only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
 - long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip
 - school switching in the sidebar should preserve email + tenant choices only; do not persist passwords just to enable a faster tenant switch
 - dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
 - the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
 - deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source
-- AI usage should keep its two-column hero layout but drop the outer card shell; only the provider snapshot aside should read as a highlighted surface
+- AI usage should use a plain header with no extra provider snapshot panel in the hero row
 - Class management should follow the same plain-hero rule, place the stat row directly under the header without an extra scaffold-warning card, and keep the class selector trigger on the human class name instead of the internal id
 
 ## How to Use This Guide
