@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { BookOpenText, Plus, Users, WandSparkles } from "lucide-react";
+import { IconBook2, IconPlus, IconUsers, IconWand } from "@tabler/icons-react";
 import { AdminHighlightPanel } from "@/components/admin-highlight-panel";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { ClassListItem } from "@/components/class-list-item";
@@ -85,7 +85,7 @@ export default function ClassManagementPage() {
         <div className="flex flex-wrap gap-3">
           <Dialog>
             <DialogTrigger render={<Button className="gap-2" />}>
-              <Plus className="size-4" />
+              <IconPlus data-icon="inline-start" />
               New class
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -127,13 +127,13 @@ export default function ClassManagementPage() {
           </Dialog>
 
           <Button variant="outline" disabled className="gap-2">
-            <WandSparkles className="size-4" />
+            <IconWand data-icon="inline-start" />
             Assign topics
           </Button>
 
           <Dialog>
             <DialogTrigger render={<Button variant="outline" className="gap-2" />}>
-              <Users className="size-4" />
+              <IconUsers data-icon="inline-start" />
               Invite user
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -165,10 +165,10 @@ export default function ClassManagementPage() {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Users} title="Classes" value={String(summary.classCount)} note="Mock classes represented in this scaffold" />
-        <StatCard icon={Users} title="Members" value={String(summary.totalMembers)} note="Total learners across the mock roster" />
-        <StatCard icon={BookOpenText} title="Active learners" value={String(summary.activeStudents)} note="Students active in the latest mock snapshot" />
-        <StatCard icon={WandSparkles} title="Avg mastery" value={`${summary.averageMastery}%`} note="Average mastery across the mock classes" />
+        <StatCard icon={IconUsers} title="Classes" value={String(summary.classCount)} note="Mock classes represented in this scaffold" />
+        <StatCard icon={IconUsers} title="Members" value={String(summary.totalMembers)} note="Total learners across the mock roster" />
+        <StatCard icon={IconBook2} title="Active learners" value={String(summary.activeStudents)} note="Students active in the latest mock snapshot" />
+        <StatCard icon={IconWand} title="Avg mastery" value={`${summary.averageMastery}%`} note="Average mastery across the mock classes" />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">

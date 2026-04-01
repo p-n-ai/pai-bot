@@ -1,8 +1,8 @@
 ---
 title: "Admin Panel UI/UX Specification"
-summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the public gate/login entry."
+summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the root redirect and login entry."
 read_when:
-  - You are redesigning the admin landing or login gate
+  - You are redesigning the admin root redirect behavior or login entry
   - You are changing admin shell layout, responsive behavior, or navigation
   - You need the UI/UX reference before building or refactoring admin-facing pages
 ---
@@ -94,17 +94,16 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 │                        max-w-[1600px] centered                      │
 ├────────────────────┬────────────────────────────────────────────────┤
 │                    │  ┌──────────────────────────────────────────┐  │
-│  SIDEBAR (w-80)    │  │  Section Bar (breadcrumbs + title)       │  │
-│  ┌──────────────┐  │  │  eyebrow · Home / Dashboard / Metrics    │  │
-│  │ ✨ P&AI Bot  │  │  │  "Daily learning metrics"         🌙 👤   │  │
-│  │ Admin cockpit│  │  └──────────────────────────────────────────┘  │
+│  SIDEBAR (~268px)  │  │  Section Bar (toggle + context)          │  │
+│  ┌──────────────┐  │  │  eyebrow · Dashboard / AI Usage          │  │
+│  │ Custom mark  │  │  │  "Budget and provider usage"     🌙 👤   │  │
+│  │ Classroom Hub│  │  └──────────────────────────────────────────┘  │
 │  └──────────────┘  │                                                │
 │                    │  ┌──────────────────────────────────────────┐  │
 │  WORKSPACE         │  │                                          │  │
 │  ┌──────────────┐  │  │           PAGE CONTENT                   │  │
 │  │ 📊 Dashboard │  │  │           (max-w-7xl)                    │  │
 │  │ 📚 Classes   │  │  │                                          │  │
-│  │ 📈 Metrics   │  │  │                                          │  │
 │  │ 🪙 AI usage  │  │  │                                          │  │
 │  └──────────────┘  │  │                                          │  │
 │                    │  │                                          │  │
@@ -149,9 +148,9 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 
 | Role | Visible Nav Items |
 |------|-------------------|
-| `teacher` | Home, Dashboard, Classes, Metrics, AI Usage |
-| `parent` | Home, Child Summary |
-| `admin` | Home, Dashboard, Classes, Metrics, AI Usage, Budget, Users, Export |
+| `teacher` | Dashboard, Classes, AI Usage |
+| `parent` | Child Summary |
+| `admin` | Dashboard, Classes, AI Usage, Budget, Users, Export |
 | `platform_admin` | All admin items + Tenants, Providers, Global Analytics |
 
 ---
@@ -191,12 +190,13 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 └───────────────────────────────────────────────────┘
 ```
 
-The root route `/` is the first-run gate page. `/login` remains as a direct auth URL and renders the same gate layout.
+The root route `/` is now redirect-only. It sends signed-in users to their role-safe default route and sends signed-out users to `/login`. `/login` remains the direct auth URL and renders the login layout.
 
 **Interactions:**
 - On success → redirect to the role-appropriate workspace
 - Teachers/admins/platform admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
+- The hero headline should use a short one-time mount reveal with transform/opacity only, Emil-style ease-out timing, and a reduced-motion fallback.
 - If email maps to multiple schools, the form switches into a guided school-pick state:
   - keep email/password visible as locked summaries
   - show a non-destructive info callout
@@ -215,30 +215,20 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  TEACHER COCKPIT                                                 │
-│  "Class mastery at a glance"                                     │
-│  Review topic-by-topic mastery and open each           ┌───────┐ │
-│  learner profile for a closer look.                    │Avg    │ │
-│                                                        │mastery│ │
-│                                                        │ 64%   │ │
-│                                                        └───────┘ │
-├──────────────────────────────────────────────────────────────────┤
+│  DASHBOARD                                                        │
+│  Track who needs support today across the class.                 │
 │                                                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
-│  │ Students    │  │ Topics      │  │ Tracked     │               │
-│  │    12       │  │    6        │  │ Scores      │               │
-│  │ Tracked in  │  │ Algebra     │  │    72       │               │
-│  │ this view   │  │ sequence    │  │ Real mastery│               │
-│  └─────────────┘  └─────────────┘  └─────────────┘               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │
+│  │ Learners    │  │ Class grade │  │ Avg mastery │  │ Coverage │ │
+│  │    12       │  │     B       │  │    74%      │  │   92%    │ │
+│  │ 2 learners  │  │ 74% average │  │ Weakest:    │  │ 66 of 72 │ │
+│  │ need attn   │  │ mastery     │  │ Fractions   │  │ tracked  │ │
+│  │             │  │             │  │ Strongest:  │  │          │ │
+│  │             │  │             │  │ Geometry    │  │          │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └──────────┘ │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────────┐│
-│  │ OPERATIONS                                                   ││
-│  │ Check AI usage before costs drift.                           ││
-│  │ Open the usage view to inspect token volume...  [Open AI ↗]  ││
-│  └──────────────────────────────────────────────────────────────┘│
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────────┐│
-│  │ MASTERY HEATMAP                                    Back home ││
+│  │ MASTERY HEATMAP                                              ││
 │  │ Students by topic with direct navigation                     ││
 │  │                                                              ││
 │  │  Student      │ Algebra │Fractions│Geometry │ Stats │ Nudge  ││
@@ -347,7 +337,7 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 
 **Route:** `/dashboard/metrics`
 **Access:** Teacher, Admin, Platform Admin
-**Status:** Implemented
+**Status:** Legacy redirect to `/dashboard/ai-usage`
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -984,7 +974,7 @@ Score < 40%:  [  23%  ] rose bg
 |------------|----------|
 | `< 768px` (mobile) | Single column, sidebar hidden, hamburger menu, full-width cards |
 | `768px–1023px` (tablet) | 2-column grids for stat cards, sidebar hidden |
-| `≥ 1024px` (desktop) | Sticky sidebar (w-80), 3-4 column stat grids, side-by-side layouts |
+| `≥ 1024px` (desktop) | Sticky neutral sidebar (~16.75rem), tighter top bar, 3-card summary row, side-by-side layouts where content earns it |
 | `≥ 1280px` (xl) | Full 3-column layouts for student detail, wider tables |
 
 ### Key responsive patterns:
@@ -1009,7 +999,7 @@ Score < 40%:  [  23%  ] rose bg
 - Student name in heatmap → `/students/{id}` (client-side navigation)
 - "Back to dashboard" link on detail pages
 - Sidebar items highlight active route
-- Breadcrumbs show: Home / Section / Page
+- Dashboard root suppresses the duplicate shell breadcrumb/title block; deeper pages still show breadcrumb + page title.
 
 ### Data Loading
 - Server components use `force-dynamic` for SSR data fetching
@@ -1035,13 +1025,13 @@ Score < 40%:  [  23%  ] rose bg
 | Component / Page | File Path |
 |------------------|-----------|
 | Admin Shell | `admin/src/components/admin-shell.tsx` |
-| Home Gate | `admin/src/app/page.tsx` |
+| Root Redirect | `admin/src/app/page.tsx` |
 | Login Page | `admin/src/app/login/page.tsx` |
 | Login Gate Entry | `admin/src/components/login-gate.tsx` |
 | Login Gate Components | `admin/src/components/login-gate/` |
 | Teacher Dashboard | `admin/src/app/dashboard/page.tsx` |
 | Student Detail | `admin/src/app/students/[id]/page.tsx` |
-| Metrics Page | `admin/src/app/dashboard/metrics/page.tsx` |
+| Metrics Redirect | `admin/src/app/dashboard/metrics/page.tsx` |
 | AI Usage Page | `admin/src/app/dashboard/ai-usage/page.tsx` |
 | Class Management | `admin/src/app/dashboard/classes/page.tsx` |
 | Parent Summary | `admin/src/app/parents/[id]/page.tsx` |

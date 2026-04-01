@@ -315,7 +315,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W3D14-1` | Metrics page at `/dashboard/metrics`: DAU, retention snapshots, AI usage/token activity, nudge response rate. A/B comparison remains deferred until experiment flags are persisted. | 🤖 | ✅ | |
+| `P-W3D14-1` | Metrics page at `/dashboard/metrics`: DAU, retention snapshots, AI usage/token activity, nudge response rate. A/B comparison remains deferred until experiment flags are persisted. | 🤖 | ✅ | Later consolidated into AI Usage; route kept as redirect |
 | `P-W3D14-2` | Smart nudge personalization: include streak, goal, struggle area, and XP in nudge context. Leaderboard rank remains deferred until a stable rank source exists. | 🤖 | ✅ | |
 | `P-W3D14-3` | 🧑 Observe school group: are students challenging each other? Call teacher for feedback | 🧑 Human | ✅ | Called Cikgu Akmallina, receive positive feedback|
 
@@ -336,12 +336,12 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the shared public gate on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the root redirect on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | |
 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ | |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
 
-Status (2026-03-30): Week 4 admin is ahead of the original scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
+Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
 
 ### Day 17 — API Endpoints + Parent View
 
@@ -352,7 +352,7 @@ Status (2026-03-30): Week 4 admin is ahead of the original scaffold. Current shi
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
 
-Implementation note (2026-03-30): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes for teacher/parent/admin/platform-admin. Still pending: bot-side form selection.
+Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes for teacher/parent/admin/platform-admin. Still pending: bot-side form selection.
 
 ### Day 18 — Deploy Admin + Class Management
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coins, Cpu, MessagesSquare, Orbit } from "lucide-react";
+import { IconAtom, IconCoins, IconCpu, IconMessages } from "@tabler/icons-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { StatePanel } from "@/components/state-panel";
@@ -63,16 +63,16 @@ export default async function AIUsagePage() {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={MessagesSquare} title="AI messages" value={formatCompactNumber(view.total_messages)} note="Messages with a recorded model" />
-        <StatCard icon={Cpu} title="Total tokens" value={formatCompactNumber(view.totalTokens)} note="Aggregate input and output tokens across tracked models" />
+        <StatCard icon={IconMessages} title="AI messages" value={formatCompactNumber(view.total_messages)} note="Messages with a recorded model" />
+        <StatCard icon={IconCpu} title="Total tokens" value={formatCompactNumber(view.totalTokens)} note="Aggregate input and output tokens across tracked models" />
         <StatCard
-          icon={Orbit}
+          icon={IconAtom}
           title="Avg tokens / student"
           value={view.per_student_average_tokens !== null ? formatCompactNumber(view.per_student_average_tokens) : "Pending"}
           note={view.hasPerStudentAverages ? "Derived from students with recorded model traffic" : "Waiting for student-level activity to accumulate"}
         />
         <StatCard
-          icon={Coins}
+          icon={IconCoins}
           title="Budget status"
           value={view.budgetStatus.label}
           note={view.budgetTokenLimit !== null ? "Active tenant token budget window" : "Cost limits remain pending backend budget fields"}

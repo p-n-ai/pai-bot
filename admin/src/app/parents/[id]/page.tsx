@@ -5,7 +5,7 @@ import { PageHero } from "@/components/page-hero";
 import { Metric } from "@/components/metric";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
-import { HeartHandshake, MessageSquareText, Trophy, Zap } from "lucide-react";
+import { IconBolt, IconHeartHandshake, IconMessages, IconTrophy } from "@tabler/icons-react";
 import { formatAdminDateTime } from "@/lib/dates.mjs";
 import { getParentViewModel } from "@/lib/parent-view.mjs";
 import { getServerParentSummary } from "@/lib/server-api";
@@ -48,15 +48,15 @@ export default async function ParentPage({
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Zap} title="Active days" value={String(summary?.weekly_stats.days_active ?? 0)} note="Days with study activity in the last 7 days" />
+        <StatCard icon={IconBolt} title="Active days" value={String(summary?.weekly_stats.days_active ?? 0)} note="Days with study activity in the last 7 days" />
         <StatCard
-          icon={MessageSquareText}
+          icon={IconMessages}
           title="Messages"
           value={String(summary?.weekly_stats.messages_exchanged ?? 0)}
           note="Student and AI exchanges this week"
         />
-        <StatCard icon={Trophy} title="Quizzes" value={String(summary?.weekly_stats.quizzes_completed ?? 0)} note="Quiz completions logged this week" />
-        <StatCard icon={HeartHandshake} title="Needs review" value={String(summary?.weekly_stats.needs_review_count ?? 0)} note="Topics asking for parent encouragement" />
+        <StatCard icon={IconTrophy} title="Quizzes" value={String(summary?.weekly_stats.quizzes_completed ?? 0)} note="Quiz completions logged this week" />
+        <StatCard icon={IconHeartHandshake} title="Needs review" value={String(summary?.weekly_stats.needs_review_count ?? 0)} note="Topics asking for parent encouragement" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">

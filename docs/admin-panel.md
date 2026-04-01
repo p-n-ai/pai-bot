@@ -42,13 +42,14 @@ This document describes all planned features for the P&AI Bot admin panel, organ
 | `platform_admin` | Multi-tenant management + all admin features | Web (admin panel) |
 
 ---
-Unauthenticated entry now starts at a public gate page on `/`, with `/login` kept as a direct login entrypoint rendering the same gate experience.
+The root route `/` now resolves immediately to the role-safe workspace when a session exists, otherwise it redirects to `/login`.
 
 ## Authentication & Authorization
 
 ### Flow
 
 1. **Enter** — User lands on `/` or `/login`
+   Root `/` redirects to `/login` when no session exists
 2. **Login** — Email + password → JWT access token (15 min) + refresh token (7 days, rotated on use)
 3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in
 4. **Route guards** — Next.js enforces role-based page access on the frontend
@@ -187,11 +188,11 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 
 | Page | Route | Accessible By | Status |
 |------|-------|---------------|--------|
-| Home Gate | `/` | All web roles | Current |
+| Root Redirect | `/` | All web roles | Current |
 | Login | `/login` | All web roles | Current |
 | Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Current |
 | Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Current |
-| Analytics | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Current |
+| Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to AI Usage |
 | AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Current |
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
@@ -241,7 +242,7 @@ All endpoints are under `/api/admin/` and require JWT authentication with RBAC v
 
 | Week | Day | Milestone |
 |------|-----|-----------|
-| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage |
+| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage. Current repo keeps this route as a redirect into AI usage. |
 | 4 | 16 | Admin panel scaffold, teacher dashboard, mastery heatmap, student detail, login + route guards |
 | 4 | 17 | Admin API endpoints, parent view, form/syllabus selection |
 | 4 | 18 | nginx reverse proxy, Docker Compose integration, class management page |

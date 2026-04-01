@@ -222,7 +222,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 
 ### Current Admin Auth
 
-- Teachers, parents, school admins, and platform admins can enter through the shared public gate on `/` or the direct login route on `/login`.
+- Teachers, parents, school admins, and platform admins now enter through the session-aware root redirect on `/` or the direct login route on `/login`.
 - Ongoing login uses `email + password`; if the same email belongs to multiple schools, the UI asks the user to pick the correct school before finishing sign-in.
 - The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
 - Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
@@ -464,8 +464,9 @@ just seed-docker
 # Start the Go server (turnkey deps + local Postgres/Dragonfly; auto-seeds only for the default local dev DB target)
 just go
 
-# Start the admin panel + Agentation MCP, and boot the Go server if needed
-# Same turnkey local setup as just go; Ctrl-C also stops backend + Agentation started by this command
+# Start the admin panel + Agentation MCP, and try to boot the Go server if needed
+# If backend boot fails, Next.js still starts; check /tmp/pai-go.log for backend errors
+# Ctrl-C also stops backend + Agentation started by this command
 just next
 
 # Stop docker services plus local backend/frontend/Agentation listeners
