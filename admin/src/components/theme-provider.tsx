@@ -13,7 +13,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       defaultTheme="system"
       enableSystem
       enableColorScheme
-      disableTransitionOnChange
       storageKey={THEME_STORAGE_KEY}
     >
       {children}

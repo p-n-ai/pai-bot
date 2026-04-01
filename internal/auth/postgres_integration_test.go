@@ -154,6 +154,74 @@ func TestPostgresService_LoginRequiresTenantWhenEmailExistsAcrossTenants(t *test
 	}
 }
 
+func TestPostgresService_SwitchTenantReissuesSessionWithoutLogout(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+
+	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
+	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
+
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
+	secondUserID := seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-123")
+
+	loginPair, err := svc.Login(ctx, LoginRequest{
+		TenantID: defaultTenantID,
+		Email:    "shared@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	switchedPair, err := svc.SwitchTenant(ctx, loginPair.RefreshToken, secondTenantID, "secret-123")
+	if err != nil {
+		t.Fatalf("SwitchTenant() error = %v", err)
+	}
+	if switchedPair.User.UserID != secondUserID {
+		t.Fatalf("user_id = %q, want %q", switchedPair.User.UserID, secondUserID)
+	}
+	if switchedPair.User.TenantID != secondTenantID {
+		t.Fatalf("tenant_id = %q, want %q", switchedPair.User.TenantID, secondTenantID)
+	}
+	if switchedPair.RefreshToken == loginPair.RefreshToken {
+		t.Fatal("SwitchTenant() should rotate the refresh token")
+	}
+
+	assertRefreshTokenStored(t, ctx, pool, loginPair.RefreshToken, true)
+	assertRefreshTokenStored(t, ctx, pool, switchedPair.RefreshToken, false)
+}
+
+func TestPostgresService_SwitchTenantRequiresTargetTenantPassword(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+
+	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
+	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
+
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "different-secret")
+
+	loginPair, err := svc.Login(ctx, LoginRequest{
+		TenantID: defaultTenantID,
+		Email:    "shared@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	_, err = svc.SwitchTenant(ctx, loginPair.RefreshToken, secondTenantID, "secret-123")
+	if err != ErrInvalidCredentials {
+		t.Fatalf("SwitchTenant() error = %v, want ErrInvalidCredentials", err)
+	}
+
+	assertRefreshTokenStored(t, ctx, pool, loginPair.RefreshToken, false)
+}
+
 func TestAuthIdentityTenantConstraintRejectsMismatchedTenant(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)

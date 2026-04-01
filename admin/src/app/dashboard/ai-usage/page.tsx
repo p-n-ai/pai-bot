@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coins, Cpu, MessagesSquare, Orbit } from "lucide-react";
+import { IconAtom, IconCoins, IconCpu, IconMessages } from "@tabler/icons-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { StatePanel } from "@/components/state-panel";
@@ -47,32 +47,20 @@ export default async function AIUsagePage() {
         eyebrow="AI operations"
         title="Budget and provider usage"
         description="Track model traffic, token load, and the current budget contract. Token analytics are live now; cost limits can slot in as backend budget fields land."
-        aside={
-          <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Top provider</p>
-            <p className="mt-2 text-3xl font-semibold">
-              {view.topProvider ? `${view.topProvider.provider} / ${view.topProvider.model}` : "Usage snapshot pending"}
-            </p>
-          </div>
-          <div className="text-sm text-slate-300">
-            {view.topProvider ? `${formatCompactNumber(view.topProvider.total_tokens)} tokens handled in this snapshot.` : "Usage details will appear once model activity has been recorded."}
-          </div>
-        </div>
-        }
+        surface="plain"
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={MessagesSquare} title="AI messages" value={formatCompactNumber(view.total_messages)} note="Messages with a recorded model" />
-        <StatCard icon={Cpu} title="Total tokens" value={formatCompactNumber(view.totalTokens)} note="Aggregate input and output tokens across tracked models" />
+        <StatCard icon={IconMessages} title="AI messages" value={formatCompactNumber(view.total_messages)} note="Messages with a recorded model" />
+        <StatCard icon={IconCpu} title="Total tokens" value={formatCompactNumber(view.totalTokens)} note="Aggregate input and output tokens across tracked models" />
         <StatCard
-          icon={Orbit}
+          icon={IconAtom}
           title="Avg tokens / student"
           value={view.per_student_average_tokens !== null ? formatCompactNumber(view.per_student_average_tokens) : "Pending"}
           note={view.hasPerStudentAverages ? "Derived from students with recorded model traffic" : "Waiting for student-level activity to accumulate"}
         />
         <StatCard
-          icon={Coins}
+          icon={IconCoins}
           title="Budget status"
           value={view.budgetStatus.label}
           note={view.budgetTokenLimit !== null ? "Active tenant token budget window" : "Cost limits remain pending backend budget fields"}

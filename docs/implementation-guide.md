@@ -7,6 +7,36 @@
 
 This guide provides step-by-step executable instructions for every day of the pai-bot development timeline. Each day includes entry criteria, exact file paths, code templates, test specifications, validation commands, and exit checklists.
 
+Admin UI note as of April 1, 2026:
+- theme switching in the admin panel should use semantic tokens plus short color transitions, not literal `dark:` surface overrides
+- the dashboard shell now uses a restrained but brief route enter animation with light blur
+- only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
+- long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip
+- school switching in the sidebar should preserve email + tenant choices only; do not persist passwords just to enable a faster tenant switch
+- the sidebar school switch trigger should always render the tenant name, never the raw tenant id
+- school switching should reissue the session in place for the new tenant; do not bounce the user through logout/login just to swap schools
+- school switching must require the destination tenant password before minting a new session; matching email alone is not sufficient authorization
+- keep the active school visually prominent near the sidebar brand block, not buried in the footer
+- the main sidebar brand block should double as the school switcher when multiple schools are available
+- keep that brand switcher sharp, not pill-shaped; prefer a flatter editorial treatment over soft rounded cards
+- keep that switcher inside normal shadcn select language; avoid one-off accent bars, extra product taglines, and over-styled dropdown rows
+- successful school switching should show a toast, then route back to `/dashboard`
+- before routing, show a short blur overlay handoff for about half a second with the destination school name
+- the desktop sidebar open/collapsed state should be read from the sidebar cookie on the server so refreshes do not flicker back to the default state
+- the server should also read the current user cookie and the school-switch snapshot cookie so the sidebar brand/switcher hydrates without tree mismatches
+- when switching schools, prefer a client transition plus page-level refetch on the session-change event instead of forcing a full `router.refresh()` that remounts the shell
+- keep shadcn `components/ui/sidebar.tsx` stock; move app-specific sidebar behavior into `components/app-sidebar.tsx`
+- use a single Zustand app store surface (`useAppStore`) across the admin app for session and shell state
+- session state now belongs to that Zustand app store, while tenant-sensitive dashboard data should refetch through TanStack Query keyed by tenant id
+- prefill the next tenant's dashboard query cache before navigating so the shell stays mounted and the page swap does not flicker through an empty state
+- tenant-sensitive dashboard queries must never reuse the previous tenant's data as placeholder content during a school switch
+- logout must clear the school-switch snapshot from both localStorage and cookies so the next visitor never sees the previous user's tenant list
+- dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
+- the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
+- deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source
+- AI usage should use a plain header with no extra provider snapshot panel in the hero row
+- Class management should follow the same plain-hero rule, place the stat row directly under the header without an extra scaffold-warning card, and keep the class selector trigger on the human class name instead of the internal id
+
 ## How to Use This Guide
 
 1. Work through days sequentially — each day builds on the previous
@@ -4665,7 +4695,7 @@ Follow the same TDD pattern for:
 
 - **Day 12:** Class groups (`groups` + `group_members` tables), `/join [code]`, `/create_group [name]`, `/leaderboard` showing top 10 by weekly mastery gain
 - **Day 13:** A/B test infrastructure (`user_flags` JSONB), post-challenge learning review, milestone celebrations
-- **Day 14:** Metrics page at `/dashboard/metrics` (DAU, retention snapshots, AI usage/token activity, nudge response rate; A/B comparison deferred until experiment flags are persisted), plus smart nudge personalization using streak, goal, struggle area, and XP context
+- **Day 14:** Metrics dashboard planning at `/dashboard/metrics` (DAU, retention snapshots, AI usage/token activity, nudge response rate; A/B comparison deferred until experiment flags are persisted), plus smart nudge personalization using streak, goal, struggle area, and XP context. Current repo keeps `/dashboard/metrics` only as a redirect into AI usage.
 - **Day 15:** Week 3 retro
 
 **Week 3 Targets:**
@@ -4673,8 +4703,6 @@ Follow the same TDD pattern for:
 - [ ] ≥1 school group active
 - [ ] Challenge participation ≥20%
 - [ ] 80+ students active
-
-**Week 3 Progress:** 8 packages | Goals + challenges + leaderboards + A/B test | 80+ students
 
 ---
 
@@ -4684,7 +4712,7 @@ Follow the same TDD pattern for:
 
 **Entry criteria:** Week 3 complete. Motivation features live. `just test-all` passes.
 
-Status (2026-03-30): this slice is beyond the original bare scaffold. Current shipped scope: shared public gate on `/` + `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
+Status (2026-04-01): this slice is beyond the original bare scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, password-confirmed school switching with in-place session reissue, shared `useAppStore` session state, tenant-keyed dashboard refetching without previous-tenant placeholder bleed, logout cleanup for stored school-switch metadata, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, falls back to frontend-only boot if backend startup fails, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
 
 #### Tasks
 
@@ -4775,10 +4803,11 @@ function getToken(): string {
 
 Current implementation note:
 
-- Day 16 scope is now broader than the original scaffold note: the admin app ships both `/` and `/login` as working public entry routes.
+- Day 16 scope is now broader than the original scaffold note: the admin app ships `/login` as the public entry route while `/` acts as a session-aware redirect into the correct workspace.
 - Backend bearer-token enforcement plus RBAC still protects the Go admin API, but the frontend also ships cookie-aware redirects and protected route handling now.
 - Multi-school logins use the backend `tenant_required` response to switch the UI into a guided school-picker state instead of treating that step like an error.
 - Invite acceptance and password setup remain part of the broader auth model, but ongoing email/password login, refresh-token-backed session persistence, logout, and guarded frontend routes are already live in the admin app.
+- Sidebar branding note: the desktop shell now uses a custom Classroom Hub mark in the header instead of a stock school icon so the admin workspace reads as product branding, not default iconography.
 
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
 
@@ -4789,19 +4818,27 @@ Follow the same pattern:
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Real-money USD cost attribution stays planned follow-up work.
 - **Day 20:** Week 4 retro.
 
-Status (2026-03-31): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; do not describe it as real-money spend tracking until USD/provider cost attribution exists.
+Status (2026-04-01): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; do not describe it as real-money spend tracking until USD/provider cost attribution exists.
 
 Planned follow-up after Week 4 scaffolding:
 
 - Keep students on Telegram identity until a separate student web portal is explicitly introduced.
 - Treat `admin/src/app/globals.css` as the single owner for admin design tokens (color, radius, typography, focus, sidebar, and chart palette).
+- Current admin shell baseline favors a narrower true-light sidebar in light mode, simpler account footer, tighter top bar padding, no top-bar divider line, and a dashboard root that hides the duplicate shell breadcrumb/title layer while using a plain page header instead of a boxed hero card.
+- Current dashboard summary row should read as: learner count with the attention callout tucked underneath, class-grade letter derived from average mastery, average mastery with weakest/strongest topic context, and coverage as the final operational metric.
+- Dashboard mastery note: missing topic scores should render as an explicit empty state (`--`), not `0%`, and summary averages/attention counts should only use tracked scores instead of treating missing data as failed mastery.
+- Login hero note: the main headline on `/login` should use a single entrance animation via `framer-motion`, keep motion restrained, allow only a small temporary blur on entry, and disable the effect when reduced motion is preferred.
+- Login tenant-picker note: when the multi-school chooser is shown, the selected school label should set its foreground explicitly so it stays readable in both light and dark themes.
+- Shared select note: keep popup items on theme tokens (`text-foreground`, `focus:bg-accent`, `focus:text-accent-foreground`) and do not force a literal `dark` class on the popup surface; that keeps school-picker styling consistent across light and dark mode.
+- Popup primitive note: the same no-literal-`dark` rule applies to shared dropdown, context-menu, and menubar surfaces so route-level light mode does not silently fall back to dark popup styling.
 - Standardize remaining feature pages on shared `@/components/ui` primitives and thin wrappers instead of repeating page-level card, table, and dialog styling.
 - Initial migration slices should cover dashboard surfaces first, then auth forms (login, invite acceptance, password setup) so new admin entry points share the same shadcn-based form contract.
 - Invite acceptance should be a public Next.js route that reads the invite token from the URL, posts to `POST /api/auth/invitations/accept`, persists the returned session, and redirects to the role-safe default route.
 - Admin invite issuance should reuse the same form primitives from an authenticated workspace surface and expose the generated `/activate?token=...` link so backend-issued invites and frontend onboarding stay coupled to one activation path.
 - After auth flows are aligned, migrate analytics pages and shell support panels onto shared shadcn-backed wrappers before touching more bespoke feature pages; that removes repeated card/layout styling with lower behavior risk than the student detail pages.
-- The remaining page-level migration should then cover the home view plus student and parent detail pages, replacing repeated highlight blocks and content cards with shared wrappers rather than introducing page-specific variants.
+- The remaining page-level migration should then cover the dashboard, student, and parent detail pages, replacing repeated highlight blocks and content cards with shared wrappers rather than introducing page-specific variants.
 - The last high-signal page-level migration in the current repo is class management: class selector tiles, selected-class summary, and topic progress rows should all use shared wrappers/components rather than remain bespoke to that screen.
+- Teacher dashboard runtime note: `/dashboard` should prefer live `GET /api/admin/classes/all-students/progress`, but when that endpoint or auth context is unavailable the main subtitle should stay task-focused and the UI should avoid extra preview/error chrome rather than leaking a raw fetch error or dead-end error card.
 - Migrate in this order: form controls and form wrappers first, layout/navigation shell second, data-display surfaces and table-based views third.
 - After each migration slice, remove superseded bespoke UI so the admin app does not accumulate parallel component systems.
 - Every migration slice still follows TDD: component tests first, feature tests second, then `make test-all` before the slice is considered complete.

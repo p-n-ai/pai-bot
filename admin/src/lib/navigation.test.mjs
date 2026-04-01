@@ -12,8 +12,7 @@ test("isRouteActive matches exact and nested routes", () => {
 test("isRouteActive prefers the most specific dashboard route", () => {
   assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard"), false);
   assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
-  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), false);
-  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard/metrics"), true);
+  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), true);
   assert.equal(isRouteActive("/dashboard/classes", "/dashboard"), false);
   assert.equal(isRouteActive("/dashboard/classes", "/dashboard/classes"), true);
 });
@@ -42,11 +41,11 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
   });
 });
 
-test("getCurrentSection returns metrics metadata for dashboard metrics routes", () => {
+test("getCurrentSection falls back to dashboard metadata for the legacy metrics route", () => {
   assert.deepEqual(getCurrentSection("/dashboard/metrics"), {
     eyebrow: "Admin panel",
-    title: "Metrics",
-    description: "Review DAU, retention, nudge response, and token activity across the workspace.",
+    title: "Dashboard",
+    description: "Mastery heatmap, nudges, and learner drill-down.",
   });
 });
 
@@ -61,8 +60,8 @@ test("getCurrentSection returns class management metadata for dashboard classes 
 test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
   assert.deepEqual(getCurrentSection(), {
     eyebrow: "Admin panel",
-    title: "Overview",
-    description: "Open the teacher workspace and monitor daily activity.",
+    title: "Dashboard",
+    description: "Review mastery, nudges, and learner drill-down.",
   });
 });
 
@@ -80,28 +79,26 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/", "/dashboard", "/dashboard/classes", "/dashboard/metrics", "/dashboard/ai-usage"],
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage"],
   );
 });
 
 test("getBreadcrumbs returns learner detail hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/students/student-1"), [
-    { label: "Home", href: "/" },
-    { label: "Class Dashboard", href: "/dashboard" },
+    { label: "Dashboard", href: "/dashboard" },
     { label: "Learner profile", href: "/students/student-1" },
   ]);
 });
 
 test("getBreadcrumbs returns parent hierarchy for a parent user", () => {
   assert.deepEqual(getBreadcrumbs("/parents/parent-1", { role: "parent", user_id: "parent-1" }), [
-    { label: "Home", href: "/" },
     { label: "Child summary", href: "/parents/parent-1" },
   ]);
 });
 
 test("getBreadcrumbs returns class management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/dashboard/classes"), [
-    { label: "Home", href: "/" },
+    { label: "Dashboard", href: "/dashboard" },
     { label: "Classes", href: "/dashboard/classes" },
   ]);
 });

@@ -279,8 +279,8 @@ next:
       sleep 1
     done
     if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
-      echo "backend failed to start; check /tmp/pai-go.log"
-      exit 1
+      echo "backend failed to start; continuing with frontend only"
+      echo "check /tmp/pai-go.log for backend boot errors"
     fi
   fi
   if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1 && \

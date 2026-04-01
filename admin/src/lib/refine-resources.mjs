@@ -8,13 +8,6 @@ export function getAdminResources() {
       },
     },
     {
-      name: "metrics",
-      list: "/dashboard/metrics",
-      meta: {
-        label: "Metrics",
-      },
-    },
-    {
       name: "ai-usage",
       list: "/dashboard/ai-usage",
       meta: {

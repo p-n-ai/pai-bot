@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogOut } from "lucide-react";
+import { IconLogout2 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/api";
 
@@ -24,14 +24,14 @@ export function LogoutButton() {
   return (
     <Button
       type="button"
-      variant="outline"
-      size="sm"
+      variant="destructive"
+      size="default"
       onClick={handleLogout}
       disabled={pending}
-      className="w-full rounded-full border-white/50 bg-white/75 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur hover:bg-white dark:border-white/10 dark:bg-slate-950/75 dark:text-slate-100 dark:hover:bg-slate-900"
+      className="w-full justify-center rounded-xl"
     >
-      <LogOut className="size-4" />
-      {pending ? "Signing out..." : "Logout"}
+      <IconLogout2 data-icon="inline-start" />
+      {pending ? "Signing out..." : "Log out"}
     </Button>
   );
 }

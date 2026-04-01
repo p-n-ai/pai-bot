@@ -64,12 +64,41 @@ const mockClasses = [
   },
 ];
 
+function clampScore(value) {
+  return Math.max(0, Math.min(1, Math.round(value * 100) / 100));
+}
+
 export function getMockClasses() {
   return mockClasses.map((item) => ({
     ...item,
     assignedTopics: item.assignedTopics.map((topic) => ({ ...topic })),
     members: item.members.map((member) => ({ ...member })),
   }));
+}
+
+export function getMockClassProgress(classId = "all-students") {
+  const classes = getMockClasses();
+  const selectedClasses = classId === "all-students" ? classes : classes.filter((item) => item.id === classId);
+  const topicIds = [...new Set(selectedClasses.flatMap((item) => item.assignedTopics.map((topic) => topic.id)))];
+
+  return {
+    topic_ids: topicIds,
+    students: selectedClasses.flatMap((item, classIndex) =>
+      item.members.map((member, memberIndex) => ({
+        id: member.id,
+        name: member.name,
+        topics: Object.fromEntries(
+          topicIds.map((topicId, topicIndex) => {
+            const assignedTopic = item.assignedTopics.find((topic) => topic.id === topicId);
+            const topicProgress = assignedTopic?.progress ?? member.mastery;
+            const offset = ((classIndex + memberIndex + topicIndex) % 3 - 1) * 0.05;
+            const score = clampScore(member.mastery * 0.65 + topicProgress * 0.35 + offset);
+            return [topicId, score];
+          }),
+        ),
+      })),
+    ),
+  };
 }
 
 export function getClassManagementSummary(classes) {

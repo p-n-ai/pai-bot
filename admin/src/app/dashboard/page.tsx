@@ -1,18 +1,24 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
-import { BellRing, ChevronRight, Sparkles } from "lucide-react";
+import { IconBellRinging, IconChevronRight } from "@tabler/icons-react";
+import { AnimatedNumber } from "@/components/animated-number";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
-import { PageHero } from "@/components/page-hero";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAsyncResource } from "@/hooks/use-async-resource";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
-import { getClassProgress, sendStudentNudge, type ClassProgress } from "@/lib/api";
+import { sendStudentNudge } from "@/lib/api";
+import { fetchDashboardProgress, fetchPreviewDashboardProgress, getDashboardProgressQueryKey, type DashboardProgressResult } from "@/lib/dashboard-progress-query";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
+import { useAppStore } from "@/stores/app-store";
+
+const dashboardEase = [0.22, 1, 0.36, 1] as const;
 
 function scoreTone(score: number) {
   if (score >= 0.8) return "border border-emerald-200 bg-emerald-100 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/18 dark:text-emerald-50";
@@ -21,13 +27,73 @@ function scoreTone(score: number) {
   return "border border-rose-200 bg-rose-100 text-rose-900 dark:border-rose-400/20 dark:bg-rose-400/18 dark:text-rose-50";
 }
 
+function masteryGrade(averageMastery: number) {
+  if (averageMastery >= 90) return "A";
+  if (averageMastery >= 80) return "B";
+  if (averageMastery >= 70) return "C";
+  if (averageMastery >= 60) return "D";
+  if (averageMastery >= 50) return "E";
+  return "F";
+}
+
+function attentionTone(attentionCount: number) {
+  if (attentionCount > 0) return "text-amber-700 dark:text-amber-300";
+  return "text-emerald-700 dark:text-emerald-300";
+}
+
+function masteryTone(score: number) {
+  if (score >= 80) return "text-emerald-700 dark:text-emerald-300";
+  if (score >= 60) return "text-amber-700 dark:text-amber-300";
+  return "text-rose-700 dark:text-rose-300";
+}
+
 export default function DashboardPage() {
-  const { data, loading, error } = useAsyncResource<ClassProgress>(() => getClassProgress("all-students"), []);
+  const prefersReducedMotion = useReducedMotion();
+  const currentTenantID = useAppStore((state) => state.currentUser?.tenant_id ?? "all-students");
+  const dashboardQuery = useQuery<DashboardProgressResult>({
+    queryKey: getDashboardProgressQueryKey(currentTenantID),
+    queryFn: () => fetchDashboardProgress(currentTenantID),
+    retry: 0,
+  });
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
-  const summary = getDashboardSummary(data);
+  const previewQuery = useQuery<DashboardProgressResult>({
+    queryKey: ["dashboard-progress-preview"],
+    queryFn: fetchPreviewDashboardProgress,
+    enabled: dashboardQuery.isError,
+    staleTime: Infinity,
+  });
+  const data = dashboardQuery.data ?? (dashboardQuery.isError ? previewQuery.data ?? null : null);
+  const loading = (dashboardQuery.isPending && !dashboardQuery.data) || (dashboardQuery.isError && previewQuery.isPending);
+  const progress = data?.progress ?? null;
+  const summary = getDashboardSummary(progress);
+  const isPreview = data?.source === "preview";
+  const dashboardIssue =
+    dashboardQuery.error instanceof Error
+      ? dashboardQuery.error.message
+      : previewQuery.data?.issue || "";
+  const weakestTopicLabel = summary.weakestTopic ? formatTopicLabel(summary.weakestTopic.topicId) : "No topic data";
+  const strongestTopicLabel = summary.strongestTopic ? formatTopicLabel(summary.strongestTopic.topicId) : "No topic data";
+  const heroDescription = "Track who needs support today across the class.";
+  const learnerNote =
+    summary.attentionCount > 0
+      ? `${summary.attentionCount} learner${summary.attentionCount === 1 ? "" : "s"} need attention`
+      : "No learners flagged right now";
+  const classGrade = masteryGrade(summary.averageMastery);
+  const sectionMotion = prefersReducedMotion
+    ? { initial: false, animate: { opacity: 1 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 14, filter: "blur(12px)" },
+        animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+        transition: { duration: 0.32, ease: dashboardEase },
+      };
 
   async function handleNudge(studentID: string, studentName: string) {
+    if (isPreview) {
+      setNudgeMessage("Preview mode only. Connect the live admin API to send nudges.");
+      return;
+    }
+
     setSendingStudentID(studentID);
     setNudgeMessage("");
     try {
@@ -43,57 +109,57 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-        <PageHero
-          eyebrow="Teacher cockpit"
-          title="Class mastery at a glance"
-          description="Review topic-by-topic mastery and open each learner profile for a closer look."
-          aside={
-            <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Average mastery</p>
-              <p className="mt-2 text-4xl font-semibold">{summary.averageMastery}%</p>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-slate-300">
-              <Sparkles className="size-4 text-amber-300" />
-              Live data from the Go admin API
-            </div>
-          </div>
-          }
+      <motion.header {...sectionMotion} transition={{ ...sectionMotion.transition, delay: 0.03 }} className="space-y-3">
+        <div className="space-y-2">
+          <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground">Dashboard</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            {heroDescription}
+          </p>
+        </div>
+      </motion.header>
+
+      <motion.section
+        {...sectionMotion}
+        transition={{ ...sectionMotion.transition, delay: 0.08 }}
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      >
+        <StatCard
+          title="Learners"
+          value={String(summary.studentCount)}
+          note={learnerNote}
+          noteClassName={attentionTone(summary.attentionCount)}
         />
+        <StatCard
+          title="Class grade"
+          value={classGrade}
+          note={`${summary.averageMastery}% average mastery`}
+          noteClassName={masteryTone(summary.averageMastery)}
+        />
+        <StatCard
+          title="Average mastery"
+          value={<AnimatedNumber value={summary.averageMastery} delay={0.12} formatter={(value) => `${value}%`} />}
+          note={
+            <>
+              <span className="text-rose-700 dark:text-rose-300">Weakest: {weakestTopicLabel}</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-emerald-700 dark:text-emerald-300">Strongest: {strongestTopicLabel}</span>
+            </>
+          }
+          noteClassName="flex flex-wrap gap-1"
+        />
+        <StatCard
+          title="Coverage"
+          value={<AnimatedNumber value={summary.coveragePercent} delay={0.18} formatter={(value) => `${value}%`} />}
+          note={`${summary.trackedScores} of ${summary.studentCount * summary.topicCount} score slots filled`}
+        />
+      </motion.section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Students" value={String(summary.studentCount)} note="Tracked in this view" />
-          <StatCard title="Topics" value={String(summary.topicCount)} note="Algebra sequence" />
-          <StatCard title="Tracked Scores" value={String(summary.trackedScores)} note="Real mastery entries loaded" />
-        </section>
-
-        <AdminSurface className="border-white/60 bg-slate-950 text-white dark:bg-slate-900/85">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">Operations</p>
-              <h2 className="text-2xl font-semibold tracking-tight">Check AI usage before costs drift.</h2>
-              <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                Open the usage view to inspect token volume by provider and model across the current admin API snapshot.
-              </p>
-            </div>
-            <Link
-              href="/dashboard/ai-usage"
-              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-sky-100"
-            >
-              Open AI usage
-            </Link>
-          </div>
-        </AdminSurface>
-
+      <motion.div {...sectionMotion} transition={{ ...sectionMotion.transition, delay: 0.14 }}>
         <AdminSurface>
           <AdminSurfaceHeader
             title="Mastery heatmap"
             description="Students by topic with direct navigation into detail views."
-            action={
-              <Link href="/" className="text-sm font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
-                Back home
-              </Link>
-            }
           />
           <div className="mt-6">
             {loading ? (
@@ -102,79 +168,100 @@ export default function DashboardPage() {
                 title="Preparing the latest class snapshot"
                 description="Pulling student mastery, tracked topics, and direct links into the learner detail pages."
               />
-            ) : data ? (
+            ) : progress ? (
               !summary.hasHeatmap ? (
                 <StatePanel
-                  tone="empty"
-                  title="No class heatmap yet"
-                  description="Class progress will appear here once students start working through assigned topics."
+                  tone={isPreview && dashboardIssue ? "error" : "empty"}
+                  title={isPreview && dashboardIssue ? "Live class data is unavailable" : "No class heatmap yet"}
+                  description={
+                    isPreview && dashboardIssue
+                      ? `${dashboardIssue} Showing preview data until the admin API is reachable again.`
+                      : "Class progress will appear here once students start working through assigned topics."
+                  }
                 />
               ) : (
               <div className="space-y-5">
                 <Table className="min-w-[760px] border-separate border-spacing-y-2">
                   <TableHeader>
                     <TableRow className="border-none hover:bg-transparent">
-                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Student</TableHead>
-                        {data.topic_ids.map((topicId) => (
+                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Student</TableHead>
+                        {progress.topic_ids.map((topicId) => (
                           <TableHead
                             key={topicId}
-                            className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"
+                            className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
                           >
-                            {formatTopicLabel(topicId)}
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="inline-block max-w-28 truncate align-middle outline-none focus-visible:ring-0" tabIndex={0} />
+                                }
+                              >
+                                {formatTopicLabel(topicId)}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{formatTopicLabel(topicId)}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           </TableHead>
                         ))}
-                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Nudge</TableHead>
+                      <TableHead className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Nudge</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {data.students.map((student) => (
+                      {progress.students.map((student) => (
                         <TableRow key={student.id} className="border-none hover:bg-transparent">
-                          <TableCell className="rounded-l-2xl bg-slate-50/80 px-3 py-3 text-sm font-medium text-slate-900 dark:bg-slate-900/70 dark:text-slate-100">
+                          <TableCell className="rounded-l-2xl bg-muted/40 px-3 py-3 text-sm font-medium text-foreground">
                             <Link
                               href={`/students/${student.id}`}
-                              className="inline-flex items-center gap-2 hover:text-sky-700 dark:hover:text-sky-300"
+                              className="inline-flex items-center gap-2 hover:text-primary"
                             >
                               {student.name}
-                              <ChevronRight className="size-4" />
+                              <IconChevronRight />
                             </Link>
                           </TableCell>
-                          {data.topic_ids.map((topicId) => {
-                            const score = student.topics[topicId] ?? 0;
+                          {progress.topic_ids.map((topicId) => {
+                            const score = student.topics[topicId];
+                            const hasScore = typeof score === "number";
                             return (
-                              <TableCell key={`${student.id}-${topicId}`} className="bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
-                                <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
-                                  {Math.round(score * 100)}%
-                                </span>
+                              <TableCell key={`${student.id}-${topicId}`} className="bg-muted/40 px-3 py-3">
+                                {hasScore ? (
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${scoreTone(score)}`}>
+                                    {Math.round(score * 100)}%
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex px-3 py-1 text-sm font-medium text-muted-foreground">--</span>
+                                )}
                               </TableCell>
                             );
                           })}
-                          <TableCell className="rounded-r-2xl bg-slate-50/80 px-3 py-3 dark:bg-slate-900/70">
+                          <TableCell className="rounded-r-2xl bg-muted/40 px-3 py-3">
                             <Button
                               size="sm"
                               className="gap-2"
-                              disabled={sendingStudentID === student.id}
+                              disabled={sendingStudentID === student.id || isPreview}
                               onClick={() => handleNudge(student.id, student.name)}
                             >
-                              <BellRing className="size-4" />
-                              {sendingStudentID === student.id ? "Sending..." : "Nudge"}
+                              <IconBellRinging data-icon="inline-start" />
+                              {isPreview ? "Preview" : sendingStudentID === student.id ? "Sending..." : "Nudge"}
                             </Button>
                           </TableCell>
                         </TableRow>
                       ))}
                   </TableBody>
                 </Table>
-                {nudgeMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{nudgeMessage}</p> : null}
+                {nudgeMessage ? <p className="text-sm text-muted-foreground">{nudgeMessage}</p> : null}
               </div>
               )
             ) : (
               <StatePanel
-                tone={error ? "error" : "empty"}
-                title={error ? "Class data is unavailable" : "Waiting for class data"}
-                description={error ? "Class data isn't available right now. Please try again in a moment." : "Class data will appear here once it is available."}
+                tone="empty"
+                title="Waiting for class data"
+                description="Class data will appear here once it is available."
               />
             )}
           </div>
         </AdminSurface>
+      </motion.div>
     </div>
   );
 }

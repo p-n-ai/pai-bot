@@ -1,13 +1,13 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState, useTransition } from "react";
-import { BookOpenText, Plus, Users, WandSparkles } from "lucide-react";
+import { IconBook2, IconPlus, IconUsers, IconWand } from "@tabler/icons-react";
 import { AdminHighlightPanel } from "@/components/admin-highlight-panel";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { ClassListItem } from "@/components/class-list-item";
 import { InviteIssueForm } from "@/components/invite-issue-form";
 import { PageHero } from "@/components/page-hero";
-import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { TopicProgressRow } from "@/components/topic-progress-row";
 import {
@@ -27,6 +27,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { issueInvite } from "@/lib/api";
 import { getClassManagementSummary, getMockClasses } from "@/lib/mock-classes.mjs";
 
+const classPageEase = [0.22, 1, 0.36, 1] as const;
+
 export default function ClassManagementPage() {
   const classes = useMemo(() => getMockClasses(), []);
   const summary = getClassManagementSummary(classes);
@@ -37,6 +39,14 @@ export default function ClassManagementPage() {
   const [inviteLink, setInviteLink] = useState("");
   const [isInvitePending, startInviteTransition] = useTransition();
   const selectedClass = classes.find((item) => item.id === selectedClassID) ?? classes[0] ?? null;
+  const prefersReducedMotion = useReducedMotion();
+  const sectionMotion = prefersReducedMotion
+    ? { initial: false, animate: { opacity: 1 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 14, filter: "blur(12px)" },
+        animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+        transition: { duration: 0.32, ease: classPageEase },
+      };
 
   function buildInviteLink(token: string) {
     if (typeof window === "undefined") {
@@ -66,112 +76,117 @@ export default function ClassManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageHero
-        eyebrow="Teaching operations"
-        title="Class management"
-        description="Frontend scaffold with mock data for class setup, join codes, member roster, and topic assignment. The real class backend contract is not implemented yet."
-        aside={
-          <AdminHighlightPanel>
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Current scaffold</p>
-              <p className="mt-2 text-3xl font-semibold">Mock data only</p>
-            </div>
-            <p className="text-sm text-slate-300">
-              Use this page to validate layout and information architecture only. None of the class-management actions below persist yet.
-            </p>
-          </AdminHighlightPanel>
-        }
-      >
-        <div className="flex flex-wrap gap-3">
-          <Dialog>
-            <DialogTrigger render={<Button className="gap-2" />}>
-              <Plus className="size-4" />
-              New class
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Create class</DialogTitle>
-                <DialogDescription>
-                  This dialog is currently a UI scaffold. Submission is intentionally disabled until create-class and class-edit APIs exist.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="class-name">Class name</Label>
-                  <Input id="class-name" placeholder="Form 1 Algebra A" />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Syllabus</Label>
-                    <Select defaultValue="KSSM Form 1">
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="KSSM Form 1">KSSM Form 1</SelectItem>
-                        <SelectItem value="KSSM Form 2">KSSM Form 2</SelectItem>
-                        <SelectItem value="KSSM Form 3">KSSM Form 3</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cadence</Label>
-                    <Input placeholder="Mon, Wed, Fri" />
-                  </div>
-                </div>
+      <motion.div {...sectionMotion} transition={{ ...sectionMotion.transition, delay: 0.03 }}>
+        <PageHero
+          eyebrow="Teaching operations"
+          title="Class management"
+          description="Frontend scaffold with mock data for class setup, join codes, member roster, and topic assignment. The real class backend contract is not implemented yet."
+          surface="plain"
+          aside={
+            <AdminHighlightPanel>
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Current scaffold</p>
+                <p className="mt-2 text-3xl font-semibold">Mock data only</p>
               </div>
-              <DialogFooter showCloseButton>
-                <Button disabled>Create class</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              <p className="text-sm text-slate-300">
+                Use this page to validate layout and information architecture only. None of the class-management actions below persist yet.
+              </p>
+            </AdminHighlightPanel>
+          }
+        >
+          <div className="flex flex-wrap gap-3">
+            <Dialog>
+              <DialogTrigger render={<Button className="gap-2" />}>
+                <IconPlus data-icon="inline-start" />
+                New class
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Create class</DialogTitle>
+                  <DialogDescription>
+                    This dialog is currently a UI scaffold. Submission is intentionally disabled until create-class and class-edit APIs exist.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="class-name">Class name</Label>
+                    <Input id="class-name" placeholder="Form 1 Algebra A" />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Syllabus</Label>
+                      <Select defaultValue="KSSM Form 1">
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="KSSM Form 1">KSSM Form 1</SelectItem>
+                          <SelectItem value="KSSM Form 2">KSSM Form 2</SelectItem>
+                          <SelectItem value="KSSM Form 3">KSSM Form 3</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cadence</Label>
+                      <Input placeholder="Mon, Wed, Fri" />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter showCloseButton>
+                  <Button disabled>Create class</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-          <Button variant="outline" disabled className="gap-2">
-            <WandSparkles className="size-4" />
-            Assign topics
-          </Button>
+            <Button variant="outline" disabled className="gap-2">
+              <IconWand data-icon="inline-start" />
+              Assign topics
+            </Button>
 
-          <Dialog>
-            <DialogTrigger render={<Button variant="outline" className="gap-2" />}>
-              <Users className="size-4" />
-              Invite user
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Invite teacher, parent, or admin</DialogTitle>
-                <DialogDescription>
-                  This action uses the live admin invite endpoint. The returned activation link opens the new `/activate` flow.
-                </DialogDescription>
-              </DialogHeader>
-              <InviteIssueForm
-                email={inviteEmail}
-                role={inviteRole}
-                error={inviteError}
-                inviteLink={inviteLink}
-                isPending={isInvitePending}
-                onEmailChange={setInviteEmail}
-                onRoleChange={setInviteRole}
-                onSubmit={handleInviteSubmit}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
-      </PageHero>
+            <Dialog>
+              <DialogTrigger render={<Button variant="outline" className="gap-2" />}>
+                <IconUsers data-icon="inline-start" />
+                Invite user
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Invite teacher, parent, or admin</DialogTitle>
+                  <DialogDescription>
+                    This action uses the live admin invite endpoint. The returned activation link opens the new `/activate` flow.
+                  </DialogDescription>
+                </DialogHeader>
+                <InviteIssueForm
+                  email={inviteEmail}
+                  role={inviteRole}
+                  error={inviteError}
+                  inviteLink={inviteLink}
+                  isPending={isInvitePending}
+                  onEmailChange={setInviteEmail}
+                  onRoleChange={setInviteRole}
+                  onSubmit={handleInviteSubmit}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </PageHero>
+      </motion.div>
 
-      <StatePanel
-        tone="empty"
-        title="Mock-data scaffold"
-        description="The class list, join codes, member roster, and topic assignment panels below are static mock data for Day 18 frontend planning. They are not backed by live class, membership, join-code, or topic-assignment APIs yet."
-      />
+      <motion.section
+        {...sectionMotion}
+        transition={{ ...sectionMotion.transition, delay: 0.08 }}
+        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      >
+        <StatCard icon={IconUsers} title="Classes" value={String(summary.classCount)} note="Mock classes represented in this scaffold" />
+        <StatCard icon={IconUsers} title="Members" value={String(summary.totalMembers)} note="Total learners across the mock roster" />
+        <StatCard icon={IconBook2} title="Active learners" value={String(summary.activeStudents)} note="Students active in the latest mock snapshot" />
+        <StatCard icon={IconWand} title="Avg mastery" value={`${summary.averageMastery}%`} note="Average mastery across the mock classes" />
+      </motion.section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Users} title="Classes" value={String(summary.classCount)} note="Mock classes represented in this scaffold" />
-        <StatCard icon={Users} title="Members" value={String(summary.totalMembers)} note="Total learners across the mock roster" />
-        <StatCard icon={BookOpenText} title="Active learners" value={String(summary.activeStudents)} note="Students active in the latest mock snapshot" />
-        <StatCard icon={WandSparkles} title="Avg mastery" value={`${summary.averageMastery}%`} note="Average mastery across the mock classes" />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <motion.section
+        {...sectionMotion}
+        transition={{ ...sectionMotion.transition, delay: 0.14 }}
+        className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]"
+      >
         <AdminSurface>
           <AdminSurfaceHeader title="Classes" description="Switch between mock classes to inspect the intended management layout." />
           <div className="mt-6 space-y-4">
@@ -180,7 +195,9 @@ export default function ClassManagementPage() {
               onValueChange={(value) => setSelectedClassID(value ?? classes[0]?.id ?? "")}
             >
               <SelectTrigger className="w-full dark:border-white/15 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-900">
-                <SelectValue placeholder="Select a class" />
+                <SelectValue placeholder="Select a class">
+                  {selectedClass?.name ?? "Select a class"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="dark:border-white/10 dark:bg-slate-900 dark:text-slate-100">
                 {classes.map((item) => (
@@ -280,14 +297,12 @@ export default function ClassManagementPage() {
               </section>
             </>
           ) : (
-            <StatePanel
-              tone="empty"
-              title="No classes selected"
-              description="Choose a mock class from the list to inspect the planned class-management layout."
-            />
+            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+              Choose a mock class from the list to inspect the planned class-management layout.
+            </p>
           )}
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 }
