@@ -40,7 +40,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
 import { clearSession, getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
-import { getBreadcrumbs, getCurrentSection, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
+import { getBreadcrumbs, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { isPublicEntryRoute } from "@/lib/rbac.mjs";
 import { readSchoolSwitchState, writeSchoolSwitchState, type SchoolSwitchState } from "@/lib/school-switch-state";
 import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
@@ -80,11 +80,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [schoolSwitchState, setSchoolSwitchState] = useState<SchoolSwitchState | null>(null);
-  const section = getCurrentSection(pathname);
   const breadcrumbs = getBreadcrumbs(pathname, currentUser);
   const isPublicRoute = isPublicEntryRoute(pathname);
   const isDashboardRoot = pathname === "/dashboard";
   const prefersReducedMotion = useReducedMotion();
+  const shellHeaderMotion = prefersReducedMotion
+    ? { initial: false, animate: { opacity: 1 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 10, filter: "blur(10px)" },
+        animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+        transition: { duration: 0.24, ease: shellEase },
+      };
   const sidebarLayoutStyle = {
     "--sidebar-width": "16.75rem",
     "--sidebar-width-icon": "4rem",
@@ -170,9 +176,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {!isDashboardRoot ? (
-          <div className="relative z-30 px-4 pb-2 pt-3 lg:px-6 lg:pb-0 lg:pt-4">
+          <motion.div
+            {...shellHeaderMotion}
+            className="relative z-30 px-4 pb-2 pt-3 lg:px-6 lg:pb-0 lg:pt-4"
+          >
             <div className="mx-auto max-w-7xl">
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
                 <Breadcrumb>
                   <BreadcrumbList className="text-xs">
                     {breadcrumbs.map((item, index) => (
@@ -189,13 +198,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     ))}
                   </BreadcrumbList>
                 </Breadcrumb>
-                <div className="flex flex-col gap-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-foreground">{section.title}</h1>
-                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{section.description}</p>
-                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         ) : null}
 
         <main className="relative z-10 flex-1 px-4 pb-8 pt-2 lg:px-6 lg:pt-2">

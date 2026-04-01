@@ -166,6 +166,9 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 **Access:** All roles (unauthenticated)
 **Status:** Implemented
 
+Current shell note:
+- Keep the AI Usage hero as a plain two-column header, not a boxed page card. The dark provider snapshot can stay as the only emphasized surface in that row.
+
 ```
 ┌───────────────────────────────────────────────────┐
 │                                            🌙     │
@@ -223,6 +226,7 @@ Interaction notes:
 - The sticky top-bar trigger should align to the shell edge instead of sitting inside the centered content max-width.
 - The sticky top bar should stay minimal; remove duplicated section title/eyebrow copy there and leave page identity to the page header/breadcrumb layer.
 - Keep a small visual buffer between the sidebar brand block and the first nav item so the workspace mark does not collide with navigation.
+- On deeper routes, the shell header should only carry the breadcrumb and should animate in with the same restrained blur/fade language as the dashboard.
 - The desktop sidebar header should lead with the custom Classroom Hub mark and workspace label only; the extra `P&AI Bot` badge is removed.
 - Page-to-page navigation should use a short opacity/y/blur transition at the content frame, not heavy full-screen wipes.
 - Numeric stat cards can animate upward on first paint, but only for the values that benefit from comparison (`Average mastery`, `Coverage`).
@@ -409,6 +413,8 @@ Interaction notes:
 **Route:** `/dashboard/ai-usage`
 **Access:** Teacher, Admin, Platform Admin
 **Status:** Implemented
+
+- Keep the top row as a plain header layout, not a boxed page card. Only the provider snapshot aside should feel like a surfaced panel.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -932,6 +938,9 @@ Step 1 of 4                    ● ○ ○ ○
 ### PageHero
 
 Used at the top of every page. Contains eyebrow label, title, description, and an optional dark aside card.
+
+- Default mode: boxed card surface
+- Plain mode: same grid/layout, but no outer border/background/shadow; use this when the page should read more like a dashboard header than a standalone card
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

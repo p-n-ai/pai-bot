@@ -47,18 +47,19 @@ export default async function AIUsagePage() {
         eyebrow="AI operations"
         title="Budget and provider usage"
         description="Track model traffic, token load, and the current budget contract. Token analytics are live now; cost limits can slot in as backend budget fields land."
+        surface="plain"
         aside={
           <div className="grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Top provider</p>
-            <p className="mt-2 text-3xl font-semibold">
-              {view.topProvider ? `${view.topProvider.provider} / ${view.topProvider.model}` : "Usage snapshot pending"}
-            </p>
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Top provider</p>
+              <p className="mt-2 text-3xl font-semibold">
+                {view.topProvider ? `${view.topProvider.provider} / ${view.topProvider.model}` : "Usage snapshot pending"}
+              </p>
+            </div>
+            <div className="text-sm text-slate-300">
+              {view.topProvider ? `${formatCompactNumber(view.topProvider.total_tokens)} tokens handled in this snapshot.` : "Usage details will appear once model activity has been recorded."}
+            </div>
           </div>
-          <div className="text-sm text-slate-300">
-            {view.topProvider ? `${formatCompactNumber(view.topProvider.total_tokens)} tokens handled in this snapshot.` : "Usage details will appear once model activity has been recorded."}
-          </div>
-        </div>
         }
       />
 

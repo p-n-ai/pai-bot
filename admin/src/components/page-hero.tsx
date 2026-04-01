@@ -7,6 +7,7 @@ export function PageHero({
   description,
   children,
   aside,
+  surface = "card",
   className,
   contentClassName,
 }: {
@@ -15,13 +16,15 @@ export function PageHero({
   description: ReactNode;
   children?: ReactNode;
   aside?: ReactNode;
+  surface?: "card" | "plain";
   className?: string;
   contentClassName?: string;
 }) {
   return (
     <header
       className={cn(
-        "grid gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-xs",
+        "grid gap-4 text-card-foreground",
+        surface === "card" ? "rounded-xl border bg-card p-6 shadow-xs" : "p-0",
         aside ? "lg:grid-cols-[1.3fr_0.7fr]" : undefined,
         className,
       )}
