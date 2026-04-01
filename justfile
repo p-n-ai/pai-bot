@@ -317,10 +317,13 @@ lint:
 admin-lint:
   cd admin && pnpm lint
 
+admin-lockfile:
+  cd admin && pnpm install --frozen-lockfile --ignore-scripts
+
 admin-test:
   cd admin && pnpm test
 
-test-all: lint test admin-lint admin-test
+test-all: lint test admin-lockfile admin-lint admin-test
 
 test-cover:
   go test -coverprofile=coverage.out ./...
