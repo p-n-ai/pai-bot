@@ -15,6 +15,7 @@ Admin UI note as of April 1, 2026:
 - school switching in the sidebar should preserve email + tenant choices only; do not persist passwords just to enable a faster tenant switch
 - the sidebar school switch trigger should always render the tenant name, never the raw tenant id
 - school switching should reissue the session in place for the new tenant; do not bounce the user through logout/login just to swap schools
+- school switching must require the destination tenant password before minting a new session; matching email alone is not sufficient authorization
 - keep the active school visually prominent near the sidebar brand block, not buried in the footer
 - the main sidebar brand block should double as the school switcher when multiple schools are available
 - keep that brand switcher sharp, not pill-shaped; prefer a flatter editorial treatment over soft rounded cards
@@ -28,6 +29,8 @@ Admin UI note as of April 1, 2026:
 - use a single Zustand app store surface (`useAppStore`) across the admin app for session and shell state
 - session state now belongs to that Zustand app store, while tenant-sensitive dashboard data should refetch through TanStack Query keyed by tenant id
 - prefill the next tenant's dashboard query cache before navigating so the shell stays mounted and the page swap does not flicker through an empty state
+- tenant-sensitive dashboard queries must never reuse the previous tenant's data as placeholder content during a school switch
+- logout must clear the school-switch snapshot from both localStorage and cookies so the next visitor never sees the previous user's tenant list
 - dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
 - the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
 - deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source

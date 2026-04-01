@@ -444,11 +444,11 @@ func (s *PostgresService) Refresh(ctx context.Context, refreshToken string) (Tok
 	return pair, nil
 }
 
-func (s *PostgresService) SwitchTenant(ctx context.Context, refreshToken, tenantID string) (TokenPair, error) {
+func (s *PostgresService) SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (TokenPair, error) {
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()
 
-	if strings.TrimSpace(refreshToken) == "" || strings.TrimSpace(tenantID) == "" {
+	if strings.TrimSpace(refreshToken) == "" || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(password) == "" {
 		return TokenPair{}, ErrInvalidCredentials
 	}
 
@@ -487,15 +487,16 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, refreshToken, tenant
 	}
 
 	var (
-		userID      string
-		resolvedTID string
-		tenantSlug  string
-		tenantName  string
-		role        string
-		name        string
+		userID       string
+		resolvedTID  string
+		tenantSlug   string
+		tenantName   string
+		role         string
+		name         string
+		passwordHash string
 	)
 	err = tx.QueryRow(ctx, `
-		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name
+		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
 		FROM auth_identities ai
 		JOIN users u ON u.id = ai.user_id
 		LEFT JOIN tenants t ON t.id = u.tenant_id
@@ -503,12 +504,15 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, refreshToken, tenant
 		  AND ai.provider = 'password'
 		  AND ai.identifier_normalized = $2
 		LIMIT 1
-	`, tenantID, currentEmail).Scan(&userID, &resolvedTID, &tenantSlug, &tenantName, &role, &name)
+	`, tenantID, currentEmail).Scan(&userID, &resolvedTID, &tenantSlug, &tenantName, &role, &name, &passwordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return TokenPair{}, ErrInvalidCredentials
 		}
 		return TokenPair{}, fmt.Errorf("query target tenant identity: %w", err)
+	}
+	if err := ComparePassword(passwordHash, password); err != nil {
+		return TokenPair{}, ErrInvalidCredentials
 	}
 
 	if _, err := tx.Exec(ctx, `

@@ -11,6 +11,17 @@ import { IconBooks, IconChartBar, IconCoins, IconUsers } from "@tabler/icons-rea
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sidebar,
   SidebarContent,
@@ -27,7 +38,7 @@ import {
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select";
 import type { AuthUser } from "@/lib/api";
 import { persistSession, switchTenantSession } from "@/lib/api";
-import { fetchDashboardProgress, getDashboardProgressQueryKey } from "@/lib/dashboard-progress-query";
+import { fetchDashboardProgress, fetchPreviewDashboardProgress, getDashboardProgressQueryKey } from "@/lib/dashboard-progress-query";
 import { getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { type SchoolSwitchState, writeSchoolSwitchState } from "@/lib/school-switch-state";
 import { useAppStore } from "@/stores/app-store";
@@ -78,6 +89,8 @@ export function AppSidebar({
   const sessionReady = hasMounted ? hydrated : Boolean(initialCurrentUser);
   const [schoolSwitchError, setSchoolSwitchError] = useState("");
   const [schoolSwitchOverlayLabel, setSchoolSwitchOverlayLabel] = useState("");
+  const [switchTargetTenantID, setSwitchTargetTenantID] = useState("");
+  const [switchPassword, setSwitchPassword] = useState("");
   const selectedTenantID = pendingTenantID ?? currentUser?.tenant_id ?? "";
   const selectedSchool =
     schoolChoices.find((tenant) => tenant.tenant_id === selectedTenantID) ??
@@ -105,7 +118,7 @@ export function AppSidebar({
   }
 
   const switchSchoolMutation = useMutation({
-    mutationFn: async (nextTenantID: string) => {
+    mutationFn: async ({ nextTenantID, password }: { nextTenantID: string; password: string }) => {
       if (!currentUser) {
         throw new Error("A signed-in session is required to switch schools");
       }
@@ -118,7 +131,7 @@ export function AppSidebar({
       writeSchoolSwitchState(nextState);
       setSchoolSwitchState(nextState);
       startTenantSwitch(nextTenantID, nextState);
-      return switchTenantSession(nextTenantID);
+      return switchTenantSession(nextTenantID, password);
     },
     onMutate: () => {
       setSchoolSwitchError("");
@@ -126,14 +139,21 @@ export function AppSidebar({
     },
     onSuccess: async (nextSession) => {
       persistSession(nextSession);
+      setSwitchPassword("");
+      setSwitchTargetTenantID("");
       if (isMobile) {
         setOpenMobile(false);
       }
       setSchoolSwitchOverlayLabel(nextSession.user.tenant_name || "your school");
-      await queryClient.ensureQueryData({
-        queryKey: getDashboardProgressQueryKey(nextSession.user.tenant_id),
-        queryFn: () => fetchDashboardProgress(nextSession.user.tenant_id),
-      });
+      const dashboardQueryKey = getDashboardProgressQueryKey(nextSession.user.tenant_id);
+      try {
+        await queryClient.ensureQueryData({
+          queryKey: dashboardQueryKey,
+          queryFn: () => fetchDashboardProgress(nextSession.user.tenant_id),
+        });
+      } catch {
+        queryClient.setQueryData(dashboardQueryKey, await fetchPreviewDashboardProgress());
+      }
       toast.success(`School changed to ${nextSession.user.tenant_name}.`, { id: "school-switch" });
       await new Promise((resolve) => window.setTimeout(resolve, 500));
       startTransition(() => {
@@ -142,6 +162,7 @@ export function AppSidebar({
     },
     onError: (error) => {
       finishTenantSwitch();
+      setSwitchPassword("");
       const message = error instanceof Error ? error.message : "Couldn't switch schools right now.";
       setSchoolSwitchError(message);
       toast.error(message, { id: "school-switch" });
@@ -156,14 +177,69 @@ export function AppSidebar({
       return;
     }
 
-    switchSchoolMutation.mutate(nextTenantID);
+    setSchoolSwitchError("");
+    setSwitchPassword("");
+    setSwitchTargetTenantID(nextTenantID);
+  }
+
+  const switchTargetSchool = schoolChoices.find((tenant) => tenant.tenant_id === switchTargetTenantID) ?? null;
+
+  function closeSwitchDialog() {
+    if (switchSchoolMutation.isPending) {
+      return;
+    }
+
+    setSwitchTargetTenantID("");
+    setSwitchPassword("");
+  }
+
+  function confirmSchoolSwitch() {
+    if (!switchTargetTenantID || !switchPassword.trim()) {
+      return;
+    }
+
+    switchSchoolMutation.mutate({
+      nextTenantID: switchTargetTenantID,
+      password: switchPassword,
+    });
   }
 
   return (
     <Sidebar
       collapsible="offcanvas"
       className="border-r-0 p-0 [&>[data-slot=sidebar-inner]]:border-r [&>[data-slot=sidebar-inner]]:border-sidebar-border [&>[data-slot=sidebar-inner]]:bg-sidebar"
-    >
+      >
+      <Dialog open={Boolean(switchTargetTenantID)} onOpenChange={(open) => (!open ? closeSwitchDialog() : undefined)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm school switch</DialogTitle>
+            <DialogDescription>
+              {switchTargetSchool
+                ? `Enter your password to switch this session to ${switchTargetSchool.tenant_name}.`
+                : "Enter your password to switch schools."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="school-switch-password">Password</Label>
+            <Input
+              id="school-switch-password"
+              type="password"
+              value={switchPassword}
+              onChange={(event) => setSwitchPassword(event.target.value)}
+              placeholder="Enter password"
+              autoComplete="current-password"
+              disabled={switchSchoolMutation.isPending}
+            />
+            {schoolSwitchError ? <p className="text-sm text-destructive">{schoolSwitchError}</p> : null}
+          </div>
+          <DialogFooter showCloseButton>
+            <Button onClick={confirmSchoolSwitch} disabled={switchSchoolMutation.isPending || !switchPassword.trim()}>
+              {switchSchoolMutation.isPending ? "Switching..." : "Switch school"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AnimatePresence>
         {schoolSwitchOverlayLabel ? (
           <motion.div

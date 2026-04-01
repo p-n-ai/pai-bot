@@ -539,7 +539,7 @@ func TestAuthSwitchTenantEndpoint(t *testing.T) {
 			},
 		},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"refresh_token":"refresh-old","tenant_id":"tenant-b"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"refresh_token":"refresh-old","tenant_id":"tenant-b","password":"secret-123"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -553,6 +553,9 @@ func TestAuthSwitchTenantEndpoint(t *testing.T) {
 	}
 	if authSvc.switchTenantID != "tenant-b" {
 		t.Fatalf("switch tenant id = %q, want tenant-b", authSvc.switchTenantID)
+	}
+	if authSvc.switchPassword != "secret-123" {
+		t.Fatalf("switch password = %q, want secret-123", authSvc.switchPassword)
 	}
 }
 
@@ -871,6 +874,7 @@ type stubAuthService struct {
 	refreshErr     error
 	switchToken    string
 	switchTenantID string
+	switchPassword string
 	switchResp     auth.TokenPair
 	switchErr      error
 	logoutToken    string
@@ -897,9 +901,10 @@ func (s *stubAuthService) Refresh(_ context.Context, refreshToken string) (auth.
 	return s.refreshResp, s.refreshErr
 }
 
-func (s *stubAuthService) SwitchTenant(_ context.Context, refreshToken, tenantID string) (auth.TokenPair, error) {
+func (s *stubAuthService) SwitchTenant(_ context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error) {
 	s.switchToken = refreshToken
 	s.switchTenantID = tenantID
+	s.switchPassword = password
 	return s.switchResp, s.switchErr
 }
 

@@ -8,6 +8,7 @@ import {
   removeStoredSession,
   writeStoredSession,
 } from "@/lib/client-session";
+import { clearSchoolSwitchState } from "@/lib/school-switch-state";
 import { applyAdminSessionToStore, clearAdminSessionStore } from "@/stores/app-store";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 
@@ -345,13 +346,13 @@ export async function issueInvite(input: {
   return postJSONWithBody("/api/admin/invites", input);
 }
 
-export async function switchTenantSession(tenantID: string): Promise<AuthSession> {
+export async function switchTenantSession(tenantID: string, password: string): Promise<AuthSession> {
   if (typeof window === "undefined") {
     throw new Error("Tenant switching is only available in the browser");
   }
 
   const refreshToken = readStoredRefreshToken() || "";
-  if (!refreshToken || !tenantID.trim()) {
+  if (!refreshToken || !tenantID.trim() || !password.trim()) {
     throw new Error("A stored session is required to switch schools");
   }
 
@@ -363,6 +364,7 @@ export async function switchTenantSession(tenantID: string): Promise<AuthSession
     body: JSON.stringify({
       refresh_token: refreshToken,
       tenant_id: tenantID,
+      password,
     }),
   });
 
@@ -385,6 +387,7 @@ export function clearSession(): void {
   if (typeof window === "undefined") return;
 
   removeStoredSession();
+  clearSchoolSwitchState();
   clearAdminSessionStore();
 }
 

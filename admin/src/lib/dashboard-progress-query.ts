@@ -15,14 +15,22 @@ export function getDashboardProgressQueryKey(tenantID: string) {
 
 export async function fetchDashboardProgress(tenantID: string): Promise<DashboardProgressResult> {
   void tenantID;
+  const liveProgress = await getClassProgress("all-students");
+  return {
+    progress: liveProgress,
+    source: "live",
+  };
+}
+
+export async function fetchPreviewDashboardProgress(): Promise<DashboardProgressResult> {
   try {
     return {
-      progress: await getClassProgress("all-students"),
-      source: "live",
+      progress: getMockClassProgress("all-students"),
+      source: "preview",
     };
   } catch (error) {
     return {
-      progress: getMockClassProgress("all-students"),
+      progress: { students: [], topic_ids: [] },
       source: "preview",
       issue: error instanceof Error ? error.message : "Class data is unavailable right now.",
     };

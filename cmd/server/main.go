@@ -280,7 +280,7 @@ type authService interface {
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
 	Refresh(ctx context.Context, refreshToken string) (auth.TokenPair, error)
-	SwitchTenant(ctx context.Context, refreshToken, tenantID string) (auth.TokenPair, error)
+	SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
 
@@ -716,6 +716,7 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 	type request struct {
 		RefreshToken string `json:"refresh_token"`
 		TenantID     string `json:"tenant_id"`
+		Password     string `json:"password"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -732,8 +733,12 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 			http.Error(w, "tenant_id is required", http.StatusBadRequest)
 			return
 		}
+		if strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "password is required", http.StatusBadRequest)
+			return
+		}
 
-		resp, err := authSvc.SwitchTenant(r.Context(), body.RefreshToken, body.TenantID)
+		resp, err := authSvc.SwitchTenant(r.Context(), body.RefreshToken, body.TenantID, body.Password)
 		if err != nil {
 			writeAuthError(w, err)
 			return

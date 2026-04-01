@@ -103,7 +103,7 @@ type Service interface {
 	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (TokenPair, error)
 	IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error)
 	Refresh(ctx context.Context, refreshToken string) (TokenPair, error)
-	SwitchTenant(ctx context.Context, refreshToken, tenantID string) (TokenPair, error)
+	SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
 
@@ -130,7 +130,7 @@ func (noopService) Refresh(_ context.Context, _ string) (TokenPair, error) {
 	return TokenPair{}, ErrNotImplemented
 }
 
-func (noopService) SwitchTenant(_ context.Context, _, _ string) (TokenPair, error) {
+func (noopService) SwitchTenant(_ context.Context, _, _, _ string) (TokenPair, error) {
 	return TokenPair{}, ErrNotImplemented
 }
 

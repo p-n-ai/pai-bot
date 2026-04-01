@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDashboardSummary } from "@/lib/dashboard-view.mjs";
 import { sendStudentNudge } from "@/lib/api";
-import { fetchDashboardProgress, getDashboardProgressQueryKey, type DashboardProgressResult } from "@/lib/dashboard-progress-query";
+import { fetchDashboardProgress, fetchPreviewDashboardProgress, getDashboardProgressQueryKey, type DashboardProgressResult } from "@/lib/dashboard-progress-query";
 import { formatTopicLabel } from "@/lib/topic-labels.mjs";
 import { useAppStore } from "@/stores/app-store";
 
@@ -53,15 +53,25 @@ export default function DashboardPage() {
   const dashboardQuery = useQuery<DashboardProgressResult>({
     queryKey: getDashboardProgressQueryKey(currentTenantID),
     queryFn: () => fetchDashboardProgress(currentTenantID),
-    placeholderData: keepPreviousData,
+    retry: 0,
   });
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingStudentID, setSendingStudentID] = useState("");
-  const data = dashboardQuery.data ?? null;
-  const loading = dashboardQuery.isPending && !dashboardQuery.data;
+  const previewQuery = useQuery<DashboardProgressResult>({
+    queryKey: ["dashboard-progress-preview"],
+    queryFn: fetchPreviewDashboardProgress,
+    enabled: dashboardQuery.isError,
+    staleTime: Infinity,
+  });
+  const data = dashboardQuery.data ?? (dashboardQuery.isError ? previewQuery.data ?? null : null);
+  const loading = (dashboardQuery.isPending && !dashboardQuery.data) || (dashboardQuery.isError && previewQuery.isPending);
   const progress = data?.progress ?? null;
   const summary = getDashboardSummary(progress);
   const isPreview = data?.source === "preview";
+  const dashboardIssue =
+    dashboardQuery.error instanceof Error
+      ? dashboardQuery.error.message
+      : previewQuery.data?.issue || "";
   const weakestTopicLabel = summary.weakestTopic ? formatTopicLabel(summary.weakestTopic.topicId) : "No topic data";
   const strongestTopicLabel = summary.strongestTopic ? formatTopicLabel(summary.strongestTopic.topicId) : "No topic data";
   const heroDescription = "Track who needs support today across the class.";
@@ -161,9 +171,13 @@ export default function DashboardPage() {
             ) : progress ? (
               !summary.hasHeatmap ? (
                 <StatePanel
-                  tone="empty"
-                  title="No class heatmap yet"
-                  description="Class progress will appear here once students start working through assigned topics."
+                  tone={isPreview && dashboardIssue ? "error" : "empty"}
+                  title={isPreview && dashboardIssue ? "Live class data is unavailable" : "No class heatmap yet"}
+                  description={
+                    isPreview && dashboardIssue
+                      ? `${dashboardIssue} Showing preview data until the admin API is reachable again.`
+                      : "Class progress will appear here once students start working through assigned topics."
+                  }
                 />
               ) : (
               <div className="space-y-5">
