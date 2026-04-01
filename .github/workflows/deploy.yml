@@ -11,9 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+
+      - name: Validate admin lockfile
+        working-directory: admin
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.26.2 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Download dependencies
         run: go mod download
