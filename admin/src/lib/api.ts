@@ -207,6 +207,19 @@ export class LoginError extends Error {
   }
 }
 
+function parseErrorMessage(raw: string, fallback: string): string {
+  if (!raw.trim()) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(raw) as { error?: string };
+    return payload.error || fallback;
+  } catch {
+    return raw;
+  }
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -299,7 +312,7 @@ export async function login(input: {
       if (error instanceof LoginError) {
         throw error;
       }
-      throw new LoginError(raw || `Login failed: ${res.status}`);
+      throw new LoginError(parseErrorMessage(raw, `Login failed: ${res.status}`));
     }
   }
 
@@ -321,16 +334,7 @@ export async function acceptInvite(input: {
 
   if (!res.ok) {
     const raw = await res.text();
-
-    try {
-      const payload = JSON.parse(raw) as { error?: string };
-      throw new Error(payload.error || `Invite activation failed: ${res.status}`);
-    } catch (error) {
-      if (error instanceof Error && error.message !== raw) {
-        throw error;
-      }
-      throw new Error(raw || `Invite activation failed: ${res.status}`);
-    }
+    throw new Error(parseErrorMessage(raw, `Invite activation failed: ${res.status}`));
   }
 
   return (await readJSONResponse(res)) as AuthSession;
@@ -341,6 +345,35 @@ export async function issueInvite(input: {
   role: "teacher" | "parent" | "admin";
 }): Promise<InviteRecord> {
   return postJSONWithBody("/api/admin/invites", input);
+}
+
+export async function switchTenantSession(tenantID: string): Promise<AuthSession> {
+  if (typeof window === "undefined") {
+    throw new Error("Tenant switching is only available in the browser");
+  }
+
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || "";
+  if (!refreshToken || !tenantID.trim()) {
+    throw new Error("A stored session is required to switch schools");
+  }
+
+  const res = await fetch(`${API_BASE}/api/auth/switch-tenant`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+      tenant_id: tenantID,
+    }),
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(parseErrorMessage(raw, `Tenant switch failed: ${res.status}`));
+  }
+
+  return (await readJSONResponse(res)) as AuthSession;
 }
 
 export function persistSession(session: AuthSession): void {

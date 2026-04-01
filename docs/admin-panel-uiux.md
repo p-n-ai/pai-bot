@@ -231,7 +231,7 @@ Interaction notes:
 - Page-to-page navigation should use a short opacity/y/blur transition at the content frame, not heavy full-screen wipes.
 - Numeric stat cards can animate upward on first paint, but only for the values that benefit from comparison (`Average mastery`, `Coverage`).
 - Heatmap topic headers should truncate in-cell and reveal the full topic label on hover/focus with shadcn `Tooltip`.
-- When the signed-in email belongs to multiple tenants, the sidebar footer should expose a school switcher. Switching schools should send the user back to `/login` with email + school context preserved, but not the password.
+- When the signed-in email belongs to multiple tenants, the sidebar should keep the school switcher prominent near the brand block. Switching schools should reissue the session in place for the selected tenant, show a success toast, and return the user to `/dashboard` without bouncing through `/login`.
 - Dashboard stat notes can use semantic emphasis: learner alerts in amber/green, average mastery by mastery band, and weakest/strongest topic labels split into risk/success tones.
 
 ```

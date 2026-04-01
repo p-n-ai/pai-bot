@@ -444,6 +444,113 @@ func (s *PostgresService) Refresh(ctx context.Context, refreshToken string) (Tok
 	return pair, nil
 }
 
+func (s *PostgresService) SwitchTenant(ctx context.Context, refreshToken, tenantID string) (TokenPair, error) {
+	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	if strings.TrimSpace(refreshToken) == "" || strings.TrimSpace(tenantID) == "" {
+		return TokenPair{}, ErrInvalidCredentials
+	}
+
+	now := s.now().UTC()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("begin switch tenant transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var (
+		tokenID      string
+		currentEmail string
+		expiresAt    time.Time
+		revokedAt    *time.Time
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT rt.id::text, COALESCE(ai.identifier_normalized, ''), rt.expires_at, rt.revoked_at
+		FROM auth_refresh_tokens rt
+		JOIN users u ON u.id = rt.user_id
+		LEFT JOIN auth_identities ai
+		  ON ai.user_id = u.id
+		 AND ai.provider = 'password'
+		WHERE rt.token_hash = $1
+		LIMIT 1
+		FOR UPDATE OF rt, u
+	`, HashOpaqueToken(refreshToken)).Scan(&tokenID, &currentEmail, &expiresAt, &revokedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TokenPair{}, ErrInvalidCredentials
+		}
+		return TokenPair{}, fmt.Errorf("query switch tenant token: %w", err)
+	}
+	if revokedAt != nil || !expiresAt.After(now) || strings.TrimSpace(currentEmail) == "" {
+		return TokenPair{}, ErrInvalidCredentials
+	}
+
+	var (
+		userID      string
+		resolvedTID string
+		tenantSlug  string
+		tenantName  string
+		role        string
+		name        string
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name
+		FROM auth_identities ai
+		JOIN users u ON u.id = ai.user_id
+		LEFT JOIN tenants t ON t.id = u.tenant_id
+		WHERE ai.tenant_id = $1::uuid
+		  AND ai.provider = 'password'
+		  AND ai.identifier_normalized = $2
+		LIMIT 1
+	`, tenantID, currentEmail).Scan(&userID, &resolvedTID, &tenantSlug, &tenantName, &role, &name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TokenPair{}, ErrInvalidCredentials
+		}
+		return TokenPair{}, fmt.Errorf("query target tenant identity: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_identities
+		SET last_login_at = $3,
+		    updated_at = $3
+		WHERE tenant_id = $1::uuid
+		  AND provider = 'password'
+		  AND identifier_normalized = $2
+	`, resolvedTID, currentEmail, now); err != nil {
+		return TokenPair{}, fmt.Errorf("update switch tenant last_login_at: %w", err)
+	}
+
+	pair, newTokenID, err := s.issueSessionWithID(ctx, tx, sessionUser{
+		UserID:     userID,
+		TenantID:   resolvedTID,
+		TenantSlug: tenantSlug,
+		TenantName: tenantName,
+		Role:       Role(role),
+		Name:       name,
+		Email:      currentEmail,
+	}, now)
+	if err != nil {
+		return TokenPair{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_refresh_tokens
+		SET revoked_at = $2,
+		    replaced_by = $3::uuid
+		WHERE id = $1::uuid
+	`, tokenID, now, newTokenID); err != nil {
+		return TokenPair{}, fmt.Errorf("revoke previous refresh token: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return TokenPair{}, fmt.Errorf("commit switch tenant transaction: %w", err)
+	}
+
+	return pair, nil
+}
+
 func (s *PostgresService) Logout(ctx context.Context, refreshToken string) error {
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()

@@ -4,6 +4,7 @@ import { Agentation } from "agentation";
 import { AdminShell } from "@/components/admin-shell";
 import { RefineProvider } from "@/components/refine-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import { Geist } from "next/font/google";
@@ -34,6 +35,7 @@ export default function RootLayout({
                 <AdminShell>{children}</AdminShell>
               </RefineProvider>
             </Suspense>
+            <Toaster richColors position="top-right" />
           </TooltipProvider>
         </ThemeProvider>
         {showAgentation ? <Agentation endpoint={agentationEndpoint} /> : null}

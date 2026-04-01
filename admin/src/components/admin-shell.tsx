@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, type CSSProperties, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   IconBooks,
   IconChartBar,
@@ -39,7 +40,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_CHANGED_EVENT } from "@/lib/auth-session";
-import { clearSession, getStoredAccessToken, getStoredUser, hasStoredSession } from "@/lib/api";
+import { getStoredAccessToken, getStoredUser, hasStoredSession, persistSession, switchTenantSession } from "@/lib/api";
 import { getBreadcrumbs, getNavigationForUser, isRouteActive } from "@/lib/navigation.mjs";
 import { isPublicEntryRoute } from "@/lib/rbac.mjs";
 import { readSchoolSwitchState, writeSchoolSwitchState, type SchoolSwitchState } from "@/lib/school-switch-state";
@@ -244,6 +245,8 @@ function AdminSidebar({
       ? schoolSwitchState.tenantChoices
       : [];
   const canSwitchSchools = schoolChoices.length > 1 && Boolean(currentUser?.tenant_id);
+  const [isSchoolSwitchPending, setIsSchoolSwitchPending] = useState(false);
+  const [schoolSwitchError, setSchoolSwitchError] = useState("");
   const selectedSchool =
     schoolChoices.find((tenant) => tenant.tenant_id === currentUser?.tenant_id) ??
     (currentUser?.tenant_id
@@ -269,18 +272,36 @@ function AdminSidebar({
     }
   }
 
-  function handleSchoolSwitch(nextTenantID: string) {
+async function handleSchoolSwitch(nextTenantID: string) {
     if (!currentUser || !canSwitchSchools || nextTenantID === currentUser.tenant_id) {
       return;
     }
 
-    writeSchoolSwitchState({
-      email: currentUser.email,
-      currentTenantID: nextTenantID,
-      tenantChoices: schoolChoices,
-    });
-    clearSession();
-    router.push(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+    setIsSchoolSwitchPending(true);
+    setSchoolSwitchError("");
+    toast.loading("Switching school...", { id: "school-switch" });
+
+    try {
+      const nextSession = await switchTenantSession(nextTenantID);
+      writeSchoolSwitchState({
+        email: currentUser.email,
+        currentTenantID: nextTenantID,
+        tenantChoices: schoolChoices,
+      });
+      persistSession(nextSession);
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+      toast.success(`School changed to ${nextSession.user.tenant_name}.`, { id: "school-switch" });
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Couldn't switch schools right now.";
+      setSchoolSwitchError(message);
+      toast.error(message, { id: "school-switch" });
+    } finally {
+      setIsSchoolSwitchPending(false);
+    }
   }
 
   return (
@@ -288,7 +309,7 @@ function AdminSidebar({
       collapsible="offcanvas"
       className="border-r-0 p-0 [&>[data-slot=sidebar-inner]]:border-r [&>[data-slot=sidebar-inner]]:border-sidebar-border [&>[data-slot=sidebar-inner]]:bg-sidebar"
     >
-      <SidebarHeader className="gap-3 px-4 pb-5 pt-4">
+      <SidebarHeader className="gap-3 px-4 pb-4 pt-4">
         <Link href="/dashboard" onClick={handleNavigate} className="flex items-center gap-3 rounded-xl text-sidebar-foreground transition hover:opacity-90">
           <div className="flex size-9 items-center justify-center rounded-[18px] bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_10px_24px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_28px_rgba(2,8,23,0.4)]">
             <ClassroomHubMark className="size-5" />
@@ -298,6 +319,38 @@ function AdminSidebar({
             <p className="text-sm text-sidebar-foreground/70">Teacher workspace</p>
           </div>
         </Link>
+        {hydrated && currentUser?.tenant_name ? (
+          <div className="space-y-2 rounded-2xl border border-sidebar-border/80 bg-background/65 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55">School</p>
+            {canSwitchSchools ? (
+              <Select value={currentUser?.tenant_id ?? ""} onValueChange={(value) => handleSchoolSwitch(value ?? "")}>
+                <SelectTrigger
+                  aria-label="Switch school"
+                  className="h-11 w-full rounded-xl border-sidebar-border bg-background text-sidebar-foreground hover:bg-sidebar-accent"
+                  disabled={isSchoolSwitchPending}
+                >
+                  {selectedSchool ? (
+                    <span className="truncate text-left text-sm font-semibold">{selectedSchool.tenant_name}</span>
+                  ) : (
+                    <SelectValue placeholder="Choose school" />
+                  )}
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {schoolChoices.map((tenant) => (
+                    <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
+                      {tenant.tenant_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="truncate text-sm font-semibold text-sidebar-foreground">{currentUser.tenant_name}</p>
+            )}
+            {schoolSwitchError ? (
+              <p className="text-xs leading-5 text-sidebar-foreground/65">{schoolSwitchError}</p>
+            ) : null}
+          </div>
+        ) : null}
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin-subtle gap-4 px-0 py-1">
@@ -350,33 +403,6 @@ function AdminSidebar({
           </div>
           <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
-        {canSwitchSchools ? (
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55">School</p>
-            <Select value={currentUser?.tenant_id ?? ""} onValueChange={(value) => handleSchoolSwitch(value ?? "")}>
-              <SelectTrigger
-                aria-label="Switch school"
-                className="h-10 w-full rounded-xl border-sidebar-border bg-background/70 text-sidebar-foreground hover:bg-sidebar-accent"
-              >
-                {selectedSchool ? (
-                  <span className="truncate text-left font-medium">{selectedSchool.tenant_name}</span>
-                ) : (
-                  <SelectValue placeholder="Choose school" />
-                )}
-              </SelectTrigger>
-              <SelectContent align="start">
-                {schoolChoices.map((tenant) => (
-                  <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
-                    {tenant.tenant_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : hydrated && currentUser?.tenant_name ? (
-          <p className="truncate text-sm text-sidebar-foreground/70">{currentUser.tenant_name}</p>
-        ) : null}
-
         {hydrated && isLoggedIn ? (
           <LogoutButton />
         ) : (
