@@ -4704,8 +4704,6 @@ Follow the same TDD pattern for:
 - [ ] Challenge participation ≥20%
 - [ ] 80+ students active
 
-**Week 3 Progress:** 8 packages | Goals + challenges + leaderboards + A/B test | 80+ students
-
 ---
 
 ## WEEK 4 — ADMIN PANEL + FORM SELECTION
@@ -4714,7 +4712,7 @@ Follow the same TDD pattern for:
 
 **Entry criteria:** Week 3 complete. Motivation features live. `just test-all` passes.
 
-Status (2026-04-01): this slice is beyond the original bare scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, falls back to frontend-only boot if backend startup fails, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
+Status (2026-04-01): this slice is beyond the original bare scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, password-confirmed school switching with in-place session reissue, shared `useAppStore` session state, tenant-keyed dashboard refetching without previous-tenant placeholder bleed, logout cleanup for stored school-switch metadata, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, falls back to frontend-only boot if backend startup fails, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
 
 #### Tasks
 

@@ -12,7 +12,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 
 **Curriculum scope (first 6 months):** KSSM Matematik only — Form 1, Form 2, Form 3. Algebra topics are the primary validation target because they are sequential (clear prerequisites), assessable (right/wrong answers), and high-demand (students struggle most here).
 
-**TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in CLAUDE.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
+**TDD note:** All 🤖 tasks include writing tests as part of the task per the TDD workflow in AGENTS.md. Test-writing is not counted as a separate task — it is embedded in each feature task.
 
 ---
 
@@ -336,23 +336,23 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the root redirect on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | |
-| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ | |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the root redirect on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | Root redirect on `/`, direct `/login`, SSR cookie-aware shell hydration, shared sidebar shell, theme-aware auth UI, and guided multi-school picker via `tenant_required` are shipped. |
+| `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ | Tenant-keyed dashboard data via TanStack Query is shipped; live nudge actions remain in place, and preview fallback no longer reuses the previous tenant's heatmap during school switches. |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
 
-Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
+Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, password-confirmed school switching, tenant-keyed dashboard refetching, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
 
 ### Day 17 — API Endpoints + Parent View
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Also shipping GET /api/admin/metrics, GET /api/admin/parents/{id}, POST /api/admin/students/{id}/nudge, and POST /api/admin/invites |
+| `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Also shipping GET /api/admin/metrics, GET /api/admin/parents/{id}, POST /api/admin/students/{id}/nudge, POST /api/admin/invites, and POST /api/auth/switch-tenant with refresh-token rotation. |
 | `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 | ✅ | |
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
 
-Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes for teacher/parent/admin/platform-admin. Still pending: bot-side form selection.
+Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, protected Next.js routes for teacher/parent/admin/platform-admin, and password-confirmed school switching with session reissue. Still pending: bot-side form selection.
 
 ### Day 18 — Deploy Admin + Class Management
 
@@ -398,6 +398,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W4D16-UI-10` | Admin shell hydration fix: move theme hydration state into the provider and keep `ThemeToggle` as a thin consumer while preserving deterministic pre-hydration markup so SSR and client output stay aligned. | ✅ | 🤖 |
 | `A-W4D16-UI-11` | Shared hydration hardening: add a reusable `useHydrated` hook and apply it to invite activation so client-stored session reads stay behind a deterministic hydration boundary instead of running during SSR/client reconciliation. | ✅ | 🤖 |
 | `A-W4D16-UI-12` | Replace the custom admin theme store and inline boot script with `next-themes`, keeping the existing toggle UX while delegating class, storage, and color-scheme synchronization to the maintained provider to reduce hydration mismatch risk. | ✅ | 🤖 |
+| `A-W4D16-UI-13` | School-switch runtime hardening: move admin session state to a shared Zustand store, key tenant-sensitive dashboard queries by tenant id, require password confirmation before switching tenants, avoid previous-tenant placeholder bleed on `/dashboard`, and clear stored school-switch metadata on logout. | ✅ | 🤖 |
 | `A-W4D19-BUDGET-NOTE` | Optional follow-up note: the token-allowance implementation is sufficient for the current Week 4 scope. The budget items below are suggestions for a later expansion into USD attribution, provider cost overlays, and admin budget editing. | ✅ | 🤖 |
 | `A-W4D19-BUDGET-1` | Budget tracking follow-up: add real-money USD attribution to `/api/admin/ai/usage` and the admin AI usage page so monthly cost, daily cost trend, and per-student cost averages stop showing deferred placeholders. | ⬜ | 🤖 |
 | `A-W4D19-BUDGET-2` | Budget tracking follow-up: add by-provider cost attribution and provider cost breakdown visuals so the current token-by-provider table gains real cost overlays. | ⬜ | 🤖 |
