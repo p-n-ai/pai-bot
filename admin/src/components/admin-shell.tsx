@@ -244,6 +244,15 @@ function AdminSidebar({
       ? schoolSwitchState.tenantChoices
       : [];
   const canSwitchSchools = schoolChoices.length > 1 && Boolean(currentUser?.tenant_id);
+  const selectedSchool =
+    schoolChoices.find((tenant) => tenant.tenant_id === currentUser?.tenant_id) ??
+    (currentUser?.tenant_id
+      ? {
+          tenant_id: currentUser.tenant_id,
+          tenant_name: currentUser.tenant_name || "Current school",
+          tenant_slug: currentUser.tenant_slug || "",
+        }
+      : null);
   type NavigationItem = (typeof navigationItems)[number];
   const groupedNavigation = navigationItems.reduce<Record<string, NavigationItem[]>>((result, item) => {
     const group = item.group || "Workspace";
@@ -349,7 +358,11 @@ function AdminSidebar({
                 aria-label="Switch school"
                 className="h-10 w-full rounded-xl border-sidebar-border bg-background/70 text-sidebar-foreground hover:bg-sidebar-accent"
               >
-                <SelectValue placeholder="Choose school" />
+                {selectedSchool ? (
+                  <span className="truncate text-left font-medium">{selectedSchool.tenant_name}</span>
+                ) : (
+                  <SelectValue placeholder="Choose school" />
+                )}
               </SelectTrigger>
               <SelectContent align="start">
                 {schoolChoices.map((tenant) => (

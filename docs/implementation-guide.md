@@ -13,6 +13,7 @@ Admin UI note as of April 1, 2026:
 - only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
 - long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip
 - school switching in the sidebar should preserve email + tenant choices only; do not persist passwords just to enable a faster tenant switch
+- the sidebar school switch trigger should always render the tenant name, never the raw tenant id
 - dashboard stat-note color should stay semantic: attention callouts warn, healthy states reassure, and weakest/strongest topic labels should visually separate risk from strength
 - the sticky shell bar should carry the sidebar trigger only; do not duplicate section title/eyebrow copy there when a page-level header already exists
 - deeper page shell headers should animate in like dashboard, but stay breadcrumb-only so the page hero remains the single title source
