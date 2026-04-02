@@ -296,6 +296,34 @@ func TestAdminMetricsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminTokenBudgetWindowEndpoint(t *testing.T) {
+	admin := &budgetAdminStub{}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/ai/budget-window", strings.NewReader(`{"budget_tokens":250000,"period_start":"2026-04-01","period_end":"2026-04-30"}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(admin, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if admin.req.BudgetTokens != 250000 || admin.req.PeriodStart != "2026-04-01" || admin.req.PeriodEnd != "2026-04-30" {
+		t.Fatalf("request = %#v, want parsed token budget window payload", admin.req)
+	}
+}
+
+func TestAdminTokenBudgetWindowEndpointRejectsTeacherRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/ai/budget-window", strings.NewReader(`{"budget_tokens":250000,"period_start":"2026-04-01","period_end":"2026-04-30"}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
 func TestAdminAPIOptionsPreflight(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/api/admin/students/stu_1", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -807,6 +835,16 @@ func (stubAdminAPI) GetAIUsage() (adminapi.AIUsageSummary, error) {
 	}, nil
 }
 
+func (stubAdminAPI) UpsertTenantTokenBudgetWindow(_ adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error) {
+	return adminapi.AIUsageSummary{
+		BudgetLimitTokens:     int64Ptr(250000),
+		BudgetUsedTokens:      int64Ptr(0),
+		BudgetRemainingTokens: int64Ptr(250000),
+		BudgetPeriodStart:     "2026-04-01",
+		BudgetPeriodEnd:       "2026-04-30",
+	}, nil
+}
+
 func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
 	return adminapi.MetricsSummary{
 		WindowDays: 14,
@@ -852,6 +890,22 @@ func (p *recordingAdminProvider) ForRequest(r *http.Request) (adminDataSource, e
 
 type chatGatewayStub struct {
 	messages []outboundMessage
+}
+
+type budgetAdminStub struct {
+	stubAdminAPI
+	req adminapi.UpsertTokenBudgetWindowRequest
+}
+
+func (s *budgetAdminStub) UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error) {
+	s.req = req
+	return adminapi.AIUsageSummary{
+		BudgetLimitTokens:     int64Ptr(req.BudgetTokens),
+		BudgetUsedTokens:      int64Ptr(0),
+		BudgetRemainingTokens: int64Ptr(req.BudgetTokens),
+		BudgetPeriodStart:     req.PeriodStart,
+		BudgetPeriodEnd:       req.PeriodEnd,
+	}, nil
 }
 
 func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
@@ -906,6 +960,10 @@ func (s *stubAuthService) SwitchTenant(_ context.Context, refreshToken, tenantID
 	s.switchTenantID = tenantID
 	s.switchPassword = password
 	return s.switchResp, s.switchErr
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func (s *stubAuthService) Logout(_ context.Context, refreshToken string) error {

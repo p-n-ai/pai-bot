@@ -112,6 +112,12 @@ export interface AIUsageSummary {
   }[];
 }
 
+export interface UpsertTokenBudgetWindowInput {
+  budget_tokens: number;
+  period_start: string;
+  period_end: string;
+}
+
 export interface MetricsSummary {
   window_days: number;
   daily_active_users: { date: string; users: number }[];
@@ -272,6 +278,10 @@ export async function getParentSummary(parentId: string): Promise<ParentSummary>
 
 export async function getAIUsage(): Promise<AIUsageSummary> {
   return fetchJSON(`/api/admin/ai/usage`);
+}
+
+export async function upsertTokenBudgetWindow(input: UpsertTokenBudgetWindowInput): Promise<AIUsageSummary> {
+  return postJSONWithBody(`/api/admin/ai/budget-window`, input);
 }
 
 export async function getMetrics(): Promise<MetricsSummary> {

@@ -126,7 +126,7 @@ export function getAIUsageBudgetViewModel(usage) {
             }
       : usageRatio === null
       ? {
-          label: "Pending backend budget fields",
+          label: "No token budget configured",
           tone: "text-slate-500 dark:text-slate-400",
         }
       : usageRatio >= 1

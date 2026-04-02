@@ -605,7 +605,7 @@ Interaction notes:
 
 Current implementation note:
 - The shipped admin budget surface is token-allowance based, not real-money based.
-- Current scope covers token budget windows, used/remaining tokens, daily token trend, and per-student average tokens on the AI usage screen.
+- Current scope covers token budget windows, used/remaining tokens, daily token trend, per-student average tokens, and admin create/update flows for tenant token budget windows on the AI usage screen.
 - The mockup below is a planned future-state dashboard once USD/provider cost attribution exists.
 
 ```
