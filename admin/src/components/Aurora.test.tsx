@@ -5,6 +5,13 @@ import Aurora from "@/components/Aurora";
 const oglState = vi.hoisted(() => ({
   rendererCreations: 0,
   loseContext: vi.fn(),
+  setSize: vi.fn(),
+}));
+
+const resizeObserverState = vi.hoisted(() => ({
+  observe: vi.fn(),
+  disconnect: vi.fn(),
+  callback: null as ResizeObserverCallback | null,
 }));
 
 vi.mock("ogl", () => {
@@ -24,7 +31,7 @@ vi.mock("ogl", () => {
       oglState.rendererCreations += 1;
     }
 
-    setSize = vi.fn();
+    setSize = oglState.setSize;
     render = vi.fn();
   }
 
@@ -61,8 +68,23 @@ describe("Aurora", () => {
   beforeEach(() => {
     oglState.rendererCreations = 0;
     oglState.loseContext.mockReset();
+    oglState.setSize.mockReset();
+    resizeObserverState.observe.mockReset();
+    resizeObserverState.disconnect.mockReset();
+    resizeObserverState.callback = null;
     vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserver {
+        constructor(callback: ResizeObserverCallback) {
+          resizeObserverState.callback = callback;
+        }
+
+        observe = resizeObserverState.observe;
+        disconnect = resizeObserverState.disconnect;
+      },
+    );
   });
 
   afterEach(() => {
@@ -78,5 +100,33 @@ describe("Aurora", () => {
 
     expect(oglState.rendererCreations).toBe(1);
     expect(oglState.loseContext).not.toHaveBeenCalled();
+  });
+
+  it("resizes when the container becomes visible after mount", () => {
+    let width = 0;
+    let height = 0;
+    const widthSpy = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(() => width);
+    const heightSpy = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(() => height);
+
+    try {
+      const { unmount } = render(
+        <Aurora colorStops={["#43aedf", "#057aff", "#ffffff"]} amplitude={0.96} blend={0.39} speed={0.97} />,
+      );
+
+      expect(resizeObserverState.observe).toHaveBeenCalled();
+
+      width = 560;
+      height = 420;
+      resizeObserverState.callback?.([], {} as ResizeObserver);
+
+      expect(oglState.setSize).toHaveBeenLastCalledWith(560, 420);
+
+      unmount();
+
+      expect(resizeObserverState.disconnect).toHaveBeenCalled();
+    } finally {
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
   });
 });

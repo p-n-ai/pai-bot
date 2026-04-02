@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -232,7 +233,8 @@ export function AppSidebar({
             />
             {schoolSwitchError ? <p className="text-sm text-destructive">{schoolSwitchError}</p> : null}
           </div>
-          <DialogFooter showCloseButton>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" disabled={switchSchoolMutation.isPending} />}>Close</DialogClose>
             <Button onClick={confirmSchoolSwitch} disabled={switchSchoolMutation.isPending || !switchPassword.trim()}>
               {switchSchoolMutation.isPending ? "Switching..." : "Switch school"}
             </Button>

@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LoginGate } from "@/components/login-gate";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -28,5 +29,28 @@ describe("LoginGate", () => {
     expect(container.querySelectorAll("form")).toHaveLength(1);
     expect(screen.getByTestId("login-gate-light-backdrop")).toBeInTheDocument();
     expect(screen.getByTestId("login-gate-dark-backdrop")).toBeInTheDocument();
+  });
+
+  it("flips active backdrop state when the theme changes", async () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+        <LoginGate />
+      </ThemeProvider>,
+    );
+
+    const lightBackdrop = screen.getByTestId("login-gate-light-backdrop");
+    const darkBackdrop = screen.getByTestId("login-gate-dark-backdrop");
+    const toggle = await screen.findByRole("button", { name: "Switch to dark theme" });
+
+    expect(lightBackdrop).toHaveAttribute("aria-hidden", "false");
+    expect(darkBackdrop).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("login-gate-light-backdrop")).toHaveAttribute("aria-hidden", "true");
+      expect(screen.getByTestId("login-gate-dark-backdrop")).toHaveAttribute("aria-hidden", "false");
+    });
   });
 });

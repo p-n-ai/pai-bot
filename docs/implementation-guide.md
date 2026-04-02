@@ -9,6 +9,8 @@ This guide provides step-by-step executable instructions for every day of the pa
 
 Admin UI note as of April 1, 2026:
 - theme switching in the admin panel should use semantic tokens plus short color transitions, not literal `dark:` surface overrides
+- theme-driven Aurora/WebGL backdrops must observe their container size directly so dark<->light flips repaint immediately without needing a manual refresh
+- the login gate should swap dark/light Aurora states with paired backdrop motion instead of a hard visibility snap when the theme toggle flips
 - the dashboard shell now uses a restrained but brief route enter animation with light blur
 - only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
 - long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip
@@ -16,6 +18,7 @@ Admin UI note as of April 1, 2026:
 - the sidebar school switch trigger should always render the tenant name, never the raw tenant id
 - school switching should reissue the session in place for the new tenant; do not bounce the user through logout/login just to swap schools
 - school switching must require the destination tenant password before minting a new session; matching email alone is not sufficient authorization
+- in the school-switch confirmation dialog, keep `Close` to the left and the primary `Switch school` action on the right
 - keep the active school visually prominent near the sidebar brand block, not buried in the footer
 - the main sidebar brand block should double as the school switcher when multiple schools are available
 - keep that brand switcher sharp, not pill-shaped; prefer a flatter editorial treatment over soft rounded cards
