@@ -224,7 +224,8 @@ All endpoints are under `/api/admin/` and require JWT authentication with RBAC v
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends, and current token budget window. USD cost attribution remains planned. |
+| `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends, and the current tenant token budget window. Current scope is AI-token-only. |
+| `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window from the admin AI usage screen. |
 | `GET` | `/api/admin/analytics/report` | Admin, Platform Admin | Comprehensive analytics report |
 
 ### Data Export

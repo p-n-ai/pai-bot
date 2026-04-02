@@ -4786,10 +4786,10 @@ Follow the same pattern:
 
 - **Day 17:** Admin API endpoints (GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage). Parent view with child summary. Form/syllabus selection after /start.
 - **Day 18:** Deploy admin panel via docker-compose with nginx reverse proxy. Class management page.
-- **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Real-money USD cost attribution stays planned follow-up work.
+- **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Week 4 budget scope is AI-token-only, not real-money spend tracking.
 - **Day 20:** Week 4 retro.
 
-Status (2026-03-31): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, and `POST /api/admin/invites`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; do not describe it as real-money spend tracking until USD/provider cost attribution exists.
+Status (2026-03-31): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, `POST /api/admin/invites`, and `POST /api/admin/ai/budget-window`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; document it as AI-token budgeting only, not real-money spend tracking.
 
 Planned follow-up after Week 4 scaffolding:
 

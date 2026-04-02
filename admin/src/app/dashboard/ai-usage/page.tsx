@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Coins, Cpu, MessagesSquare, Orbit } from "lucide-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
 import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
+import { TokenBudgetEditor } from "@/components/token-budget-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { AIUsageSummary } from "@/lib/api";
+import type { AIUsageSummary, AuthUser } from "@/lib/api";
+import { USER_COOKIE, parseCookieJSON } from "@/lib/auth-session";
 import { formatCompactNumber, formatUSD, getAIUsageBudgetViewModel } from "@/lib/ai-usage.mjs";
 import { getServerAIUsage } from "@/lib/server-api";
 
@@ -30,6 +33,9 @@ function providerTone(provider: string) {
 export const dynamic = "force-dynamic";
 
 export default async function AIUsagePage() {
+  const cookieStore = await cookies();
+  const currentUser = parseCookieJSON<AuthUser>(cookieStore.get(USER_COOKIE)?.value);
+  const canManageBudget = currentUser?.role === "admin";
   let usage: AIUsageSummary | null = null;
   let loadError = "";
 
@@ -75,7 +81,7 @@ export default async function AIUsagePage() {
           icon={Coins}
           title="Budget status"
           value={view.budgetStatus.label}
-          note={view.budgetTokenLimit !== null ? "Active tenant token budget window" : "Cost limits remain pending backend budget fields"}
+          note={view.budgetTokenLimit !== null ? "Active tenant token budget window" : "Create a tenant token budget window to activate tracking"}
         />
       </section>
 
@@ -123,34 +129,43 @@ export default async function AIUsagePage() {
             title="Budget contract"
             description={
               view.budgetTokenLimit !== null
-                ? "The active tenant budget window is now tracked in tokens. USD cost overlays can be added later without changing the page structure."
-                : "The cost and limit card set is ready. Token analytics now flow from the live API; hard budget controls still need dedicated backend fields."
+                ? "The active tenant budget window is tracked in tokens and can be updated directly from this screen."
+                : "Token analytics are live. Configure the first tenant budget window here when you are ready to enforce a limit."
             }
           />
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-            <StatCard
-              title="Token budget"
-              value={view.budgetTokenLimit !== null ? formatCompactNumber(view.budgetTokenLimit) : "Pending"}
-              note={
-                view.budget_period_start && view.budget_period_end
-                  ? `${view.budget_period_start} to ${view.budget_period_end}`
-                  : "Seed or configure a tenant token budget to activate this card"
-              }
-            />
-            <StatCard
-              title="Used in window"
-              value={view.budgetTokenUsed !== null ? formatCompactNumber(view.budgetTokenUsed) : "Pending"}
-              note={view.budgetStatus.label}
-            />
-            <StatCard
-              title="Remaining tokens"
-              value={view.budgetTokenRemaining !== null ? formatCompactNumber(view.budgetTokenRemaining) : "Pending"}
-              note={
-                view.tokenUsageRatio !== null
-                  ? `${Math.round(view.tokenUsageRatio * 100)}% of the current token budget is already used`
-                  : "Derived when an active tenant budget window exists"
-              }
-            />
+          <div className="mt-6 space-y-4">
+            {canManageBudget ? (
+              <TokenBudgetEditor
+                initialBudgetTokens={view.budgetTokenLimit}
+                initialPeriodStart={view.budget_period_start}
+                initialPeriodEnd={view.budget_period_end}
+              />
+            ) : null}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <StatCard
+                title="Token budget"
+                value={view.budgetTokenLimit !== null ? formatCompactNumber(view.budgetTokenLimit) : "Pending"}
+                note={
+                  view.budget_period_start && view.budget_period_end
+                    ? `${view.budget_period_start} to ${view.budget_period_end}`
+                    : "Configure a tenant token budget window to activate this card"
+                }
+              />
+              <StatCard
+                title="Used in window"
+                value={view.budgetTokenUsed !== null ? formatCompactNumber(view.budgetTokenUsed) : "Pending"}
+                note={view.budgetStatus.label}
+              />
+              <StatCard
+                title="Remaining tokens"
+                value={view.budgetTokenRemaining !== null ? formatCompactNumber(view.budgetTokenRemaining) : "Pending"}
+                note={
+                  view.tokenUsageRatio !== null
+                    ? `${Math.round(view.tokenUsageRatio * 100)}% of the current token budget is already used`
+                    : "Derived when an active tenant budget window exists"
+                }
+              />
+            </div>
           </div>
         </AdminSurface>
       </section>

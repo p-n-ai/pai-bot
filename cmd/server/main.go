@@ -239,6 +239,7 @@ type adminDataSource interface {
 	GetStudentConversations(studentID string) ([]adminapi.StudentConversation, error)
 	GetParentSummary(parentID string) (adminapi.ParentSummary, error)
 	GetAIUsage() (adminapi.AIUsageSummary, error)
+	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
 }
 
@@ -395,6 +396,10 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 		auth.Authenticate(manager, time.Now),
 		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
+	adminOnly := chain(
+		auth.Authenticate(manager, time.Now),
+		auth.RequireRoles(auth.RoleAdmin),
+	)
 
 	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
 	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
@@ -407,6 +412,7 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
 	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
+	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
 
 	return withCORS(mux)
@@ -522,6 +528,29 @@ func handleAdminAIUsage(adminProvider adminDataSourceProvider) http.HandlerFunc 
 			writeAdminError(w, err)
 			return
 		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminUpsertTokenBudgetWindow(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		var body adminapi.UpsertTokenBudgetWindowRequest
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		payload, err := admin.UpsertTenantTokenBudgetWindow(body)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+
 		writeJSON(w, http.StatusOK, payload)
 	}
 }
@@ -758,6 +787,10 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 func writeAdminError(w http.ResponseWriter, err error) {
 	if errors.Is(err, adminapi.ErrNotFound) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, adminapi.ErrInvalidArgument) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

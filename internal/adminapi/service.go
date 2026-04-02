@@ -14,6 +14,7 @@ import (
 )
 
 var ErrNotFound = errors.New("admin resource not found")
+var ErrInvalidArgument = errors.New("admin invalid argument")
 
 type Student struct {
 	ID         string    `json:"id"`
@@ -120,6 +121,12 @@ type AIUsageSummary struct {
 	ProviderCosts            []AIProviderCost    `json:"provider_costs,omitempty"`
 }
 
+type UpsertTokenBudgetWindowRequest struct {
+	BudgetTokens int64  `json:"budget_tokens"`
+	PeriodStart  string `json:"period_start"`
+	PeriodEnd    string `json:"period_end"`
+}
+
 type DailyActiveUsersPoint struct {
 	Date  string `json:"date"`
 	Users int    `json:"users"`
@@ -168,6 +175,12 @@ type Service struct {
 type tokenBudgetWindow struct {
 	BudgetTokens int64
 	UsedTokens   int64
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
+}
+
+type tokenBudgetWindowConfig struct {
+	BudgetTokens int64
 	PeriodStart  time.Time
 	PeriodEnd    time.Time
 }
@@ -543,6 +556,72 @@ func (s *Service) GetAIUsage() (AIUsageSummary, error) {
 	applyTokenBudgetWindow(&summary, window)
 
 	return summary, nil
+}
+
+func (s *Service) UpsertTenantTokenBudgetWindow(req UpsertTokenBudgetWindowRequest) (AIUsageSummary, error) {
+	if s.allTenants {
+		return AIUsageSummary{}, fmt.Errorf("%w: tenant-scoped admin context is required", ErrInvalidArgument)
+	}
+
+	config, err := normalizeTokenBudgetWindowRequest(req)
+	if err != nil {
+		return AIUsageSummary{}, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return AIUsageSummary{}, fmt.Errorf("begin token budget window transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	var overlappingCount int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM token_budgets tb
+		WHERE tb.tenant_id = $1::uuid
+			AND tb.user_id IS NULL
+			AND tb.period_start < $3
+			AND tb.period_end > $2
+			AND NOT (tb.period_start = $2 AND tb.period_end = $3)
+	`, s.tenantID, config.PeriodStart, config.PeriodEnd).Scan(&overlappingCount); err != nil {
+		return AIUsageSummary{}, fmt.Errorf("query overlapping token budget windows: %w", err)
+	}
+	if overlappingCount > 0 {
+		return AIUsageSummary{}, fmt.Errorf("%w: token budget windows cannot overlap", ErrInvalidArgument)
+	}
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE token_budgets
+		SET budget_tokens = $4,
+			updated_at = NOW()
+		WHERE tenant_id = $1::uuid
+			AND user_id IS NULL
+			AND period_start = $2
+			AND period_end = $3
+	`, s.tenantID, config.PeriodStart, config.PeriodEnd, config.BudgetTokens)
+	if err != nil {
+		return AIUsageSummary{}, fmt.Errorf("update token budget window: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO token_budgets (tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
+			VALUES ($1::uuid, NULL, $2, 0, $3, $4)
+		`, s.tenantID, config.BudgetTokens, config.PeriodStart, config.PeriodEnd); err != nil {
+			return AIUsageSummary{}, fmt.Errorf("insert token budget window: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return AIUsageSummary{}, fmt.Errorf("commit token budget window transaction: %w", err)
+	}
+
+	return s.GetAIUsage()
 }
 
 func (s *Service) GetMetrics() (MetricsSummary, error) {
@@ -1141,6 +1220,33 @@ func applyTokenBudgetWindow(summary *AIUsageSummary, window *tokenBudgetWindow) 
 	summary.BudgetRemainingTokens = &remaining
 	summary.BudgetPeriodStart = window.PeriodStart.UTC().Format("2006-01-02")
 	summary.BudgetPeriodEnd = window.PeriodEnd.UTC().Format("2006-01-02")
+}
+
+func normalizeTokenBudgetWindowRequest(req UpsertTokenBudgetWindowRequest) (tokenBudgetWindowConfig, error) {
+	if req.BudgetTokens <= 0 {
+		return tokenBudgetWindowConfig{}, fmt.Errorf("%w: budget_tokens must be greater than zero", ErrInvalidArgument)
+	}
+
+	startDate, err := time.Parse("2006-01-02", strings.TrimSpace(req.PeriodStart))
+	if err != nil {
+		return tokenBudgetWindowConfig{}, fmt.Errorf("%w: period_start must use YYYY-MM-DD", ErrInvalidArgument)
+	}
+	endDate, err := time.Parse("2006-01-02", strings.TrimSpace(req.PeriodEnd))
+	if err != nil {
+		return tokenBudgetWindowConfig{}, fmt.Errorf("%w: period_end must use YYYY-MM-DD", ErrInvalidArgument)
+	}
+
+	start := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.UTC)
+	end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 0, time.UTC)
+	if !end.After(start) {
+		return tokenBudgetWindowConfig{}, fmt.Errorf("%w: period_end must be on or after period_start", ErrInvalidArgument)
+	}
+
+	return tokenBudgetWindowConfig{
+		BudgetTokens: req.BudgetTokens,
+		PeriodStart:  start,
+		PeriodEnd:    end,
+	}, nil
 }
 
 func (s *Service) loadActiveTokenBudgetWindow(ctx context.Context) (*tokenBudgetWindow, error) {

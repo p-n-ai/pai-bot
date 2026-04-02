@@ -367,7 +367,7 @@ Implementation note (2026-03-30): auth/session work is ahead of the original seq
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 | ⬜ | |
-| `P-W4D19-2` | Token budget tracking page: daily trend, per-student avg, budget limits, and planned cost overlays | 🤖 | ✅ | Current shipped scope is token-allowance tracking: tenant token budget window, used/remaining tokens, daily token trend, and per-student average tokens. Real-money USD attribution and by-provider cost breakdown remain planned follow-up work. |
+| `P-W4D19-2` | Token budget tracking page: daily trend, per-student avg, and budget limits for AI token allowance tracking | 🤖 | ✅ | Current shipped scope is token-allowance tracking: tenant token budget window, used/remaining tokens, daily token trend, and per-student average tokens. This Week 4 scope is AI-token-only, not real-money spend tracking. |
 | `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human | ⬜ | |
 
 ### Day 20 — Week 4 Retro
@@ -398,10 +398,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W4D16-UI-10` | Admin shell hydration fix: move theme hydration state into the provider and keep `ThemeToggle` as a thin consumer while preserving deterministic pre-hydration markup so SSR and client output stay aligned. | ✅ | 🤖 |
 | `A-W4D16-UI-11` | Shared hydration hardening: add a reusable `useHydrated` hook and apply it to invite activation so client-stored session reads stay behind a deterministic hydration boundary instead of running during SSR/client reconciliation. | ✅ | 🤖 |
 | `A-W4D16-UI-12` | Replace the custom admin theme store and inline boot script with `next-themes`, keeping the existing toggle UX while delegating class, storage, and color-scheme synchronization to the maintained provider to reduce hydration mismatch risk. | ✅ | 🤖 |
-| `A-W4D19-BUDGET-NOTE` | Optional follow-up note: the token-allowance implementation is sufficient for the current Week 4 scope. The budget items below are suggestions for a later expansion into USD attribution, provider cost overlays, and admin budget editing. | ✅ | 🤖 |
-| `A-W4D19-BUDGET-1` | Budget tracking follow-up: add real-money USD attribution to `/api/admin/ai/usage` and the admin AI usage page so monthly cost, daily cost trend, and per-student cost averages stop showing deferred placeholders. | ⬜ | 🤖 |
-| `A-W4D19-BUDGET-2` | Budget tracking follow-up: add by-provider cost attribution and provider cost breakdown visuals so the current token-by-provider table gains real cost overlays. | ⬜ | 🤖 |
-| `A-W4D19-BUDGET-3` | Budget tracking follow-up: add admin write flows for tenant token budget windows (create/update limits and alert thresholds) instead of relying on seeded or manually inserted `token_budgets` rows. | ⬜ | 🤖 |
+| `A-W4D19-BUDGET-3` | Budget tracking follow-up: add admin write flows for tenant token budget windows so admins can create or update token limits from the AI usage screen instead of relying on seeded or manually inserted `token_budgets` rows. | ✅ | 🤖 | `POST /api/admin/ai/budget-window` is live for admin users, and the AI usage screen now exposes a tenant token budget editor. |
 
 ---
 

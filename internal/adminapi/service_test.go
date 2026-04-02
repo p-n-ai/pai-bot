@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -282,5 +283,73 @@ func TestApplyTokenBudgetWindowClampsRemainingToZero(t *testing.T) {
 
 	if summary.BudgetRemainingTokens == nil || *summary.BudgetRemainingTokens != 0 {
 		t.Fatalf("BudgetRemainingTokens = %v, want 0", summary.BudgetRemainingTokens)
+	}
+}
+
+func TestNormalizeTokenBudgetWindowRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     UpsertTokenBudgetWindowRequest
+		wantErr bool
+	}{
+		{
+			name: "valid request",
+			req: UpsertTokenBudgetWindowRequest{
+				BudgetTokens: 250000,
+				PeriodStart:  "2026-04-01",
+				PeriodEnd:    "2026-04-30",
+			},
+		},
+		{
+			name: "budget must be positive",
+			req: UpsertTokenBudgetWindowRequest{
+				BudgetTokens: 0,
+				PeriodStart:  "2026-04-01",
+				PeriodEnd:    "2026-04-30",
+			},
+			wantErr: true,
+		},
+		{
+			name: "start date must parse",
+			req: UpsertTokenBudgetWindowRequest{
+				BudgetTokens: 500,
+				PeriodStart:  "04/01/2026",
+				PeriodEnd:    "2026-04-30",
+			},
+			wantErr: true,
+		},
+		{
+			name: "end date must parse",
+			req: UpsertTokenBudgetWindowRequest{
+				BudgetTokens: 500,
+				PeriodStart:  "2026-04-01",
+				PeriodEnd:    "04/30/2026",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeTokenBudgetWindowRequest(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("normalizeTokenBudgetWindowRequest() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if !errors.Is(err, ErrInvalidArgument) {
+					t.Fatalf("normalizeTokenBudgetWindowRequest() error = %v, want ErrInvalidArgument", err)
+				}
+				return
+			}
+			if got.BudgetTokens != tt.req.BudgetTokens {
+				t.Fatalf("BudgetTokens = %d, want %d", got.BudgetTokens, tt.req.BudgetTokens)
+			}
+			if got.PeriodStart.Format(time.RFC3339) != "2026-04-01T00:00:00Z" {
+				t.Fatalf("PeriodStart = %s, want 2026-04-01T00:00:00Z", got.PeriodStart.Format(time.RFC3339))
+			}
+			if got.PeriodEnd.Format(time.RFC3339) != "2026-04-30T23:59:59Z" {
+				t.Fatalf("PeriodEnd = %s, want 2026-04-30T23:59:59Z", got.PeriodEnd.Format(time.RFC3339))
+			}
+		})
 	}
 }

@@ -83,7 +83,7 @@ test("getAIUsageBudgetViewModel reports pending status when budget data is missi
 
   assert.equal(view.remainingBudget, null);
   assert.equal(view.usageRatio, null);
-  assert.equal(view.budgetStatus.label, "Pending backend budget fields");
+  assert.equal(view.budgetStatus.label, "No token budget configured");
   assert.equal(view.hasDailyTrend, false);
   assert.equal(view.hasPerStudentAverages, false);
 });
@@ -105,7 +105,7 @@ test("getAIUsageBudgetViewModel keeps token-centric signals when budget fields a
   assert.equal(view.dailyTrendPeak, 105);
   assert.equal(view.hasPerStudentAverages, true);
   assert.equal(view.per_student_average_tokens, 50);
-  assert.equal(view.budgetStatus.label, "Pending backend budget fields");
+  assert.equal(view.budgetStatus.label, "No token budget configured");
 });
 
 test("getAIUsageBudgetViewModel reports token budget status when token limits are present", () => {
