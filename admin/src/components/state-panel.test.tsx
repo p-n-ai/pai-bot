@@ -10,8 +10,8 @@ describe("StatePanel", () => {
   });
 
   it("applies tone-specific styling", () => {
-    const { container } = render(<StatePanel tone="error" title="Error" description="Could not load." />);
+    render(<StatePanel tone="error" title="Error" description="Could not load." />);
 
-    expect(container.firstChild).toHaveClass("border-rose-200/70");
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

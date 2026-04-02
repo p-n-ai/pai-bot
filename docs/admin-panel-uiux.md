@@ -1,8 +1,8 @@
 ---
 title: "Admin Panel UI/UX Specification"
-summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the public gate/login entry."
+summary: "Wireframes, shell behavior, responsive rules, and interaction guidance for the P&AI Bot admin panel, including the root redirect and login entry."
 read_when:
-  - You are redesigning the admin landing or login gate
+  - You are redesigning the admin root redirect behavior or login entry
   - You are changing admin shell layout, responsive behavior, or navigation
   - You need the UI/UX reference before building or refactoring admin-facing pages
 ---
@@ -79,7 +79,14 @@ This document provides UI/UX specifications, layout wireframes, and interaction 
 
 Installed: `Button`, `Card`, `Dialog`, `Input`, `Label`, `Select`, `Table`, `Tabs`, `Badge`, `Textarea`
 
-Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AdminShell`
+Custom components: `PageHero`, `StatCard`, `StatePanel`, `Metric`, `AppShell`, `AppSidebar`
+
+Theme note:
+- Shared overlay primitives should stay on semantic tokens (`bg-popover`, `text-foreground`, `bg-accent`) and must not force a literal `dark` class on popup surfaces.
+- Shell surfaces should read clearly in both modes; the desktop sidebar should stay genuinely light in light mode instead of relying on dark-tinted custom overrides.
+- Theme changes should interpolate with short color/border/shadow transitions instead of snapping between light and dark.
+- School switching should keep the sidebar mounted, prewarm the destination dashboard data, and avoid flashing through empty shell fallback content during the route handoff.
+- Keep the shared shadcn sidebar primitive stock. App brand, school-switch, and role-aware nav belong in the app-owned sidebar layer.
 
 ---
 
@@ -94,17 +101,16 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 │                        max-w-[1600px] centered                      │
 ├────────────────────┬────────────────────────────────────────────────┤
 │                    │  ┌──────────────────────────────────────────┐  │
-│  SIDEBAR (w-80)    │  │  Section Bar (breadcrumbs + title)       │  │
-│  ┌──────────────┐  │  │  eyebrow · Home / Dashboard / Metrics    │  │
-│  │ ✨ P&AI Bot  │  │  │  "Daily learning metrics"         🌙 👤   │  │
-│  │ Admin cockpit│  │  └──────────────────────────────────────────┘  │
+│  SIDEBAR (~268px)  │  │  Section Bar (toggle + context)          │  │
+│  ┌──────────────┐  │  │  eyebrow · Dashboard / AI Usage          │  │
+│  │ Custom mark  │  │  │  "Budget and provider usage"     🌙 👤   │  │
+│  │ Classroom Hub│  │  └──────────────────────────────────────────┘  │
 │  └──────────────┘  │                                                │
 │                    │  ┌──────────────────────────────────────────┐  │
 │  WORKSPACE         │  │                                          │  │
 │  ┌──────────────┐  │  │           PAGE CONTENT                   │  │
 │  │ 📊 Dashboard │  │  │           (max-w-7xl)                    │  │
 │  │ 📚 Classes   │  │  │                                          │  │
-│  │ 📈 Metrics   │  │  │                                          │  │
 │  │ 🪙 AI usage  │  │  │                                          │  │
 │  └──────────────┘  │  │                                          │  │
 │                    │  │                                          │  │
@@ -149,9 +155,9 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 
 | Role | Visible Nav Items |
 |------|-------------------|
-| `teacher` | Home, Dashboard, Classes, Metrics, AI Usage |
-| `parent` | Home, Child Summary |
-| `admin` | Home, Dashboard, Classes, Metrics, AI Usage, Budget, Users, Export |
+| `teacher` | Dashboard, Classes, AI Usage |
+| `parent` | Child Summary |
+| `admin` | Dashboard, Classes, AI Usage, Budget, Users, Export |
 | `platform_admin` | All admin items + Tenants, Providers, Global Analytics |
 
 ---
@@ -161,6 +167,9 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 **Routes:** `/`, `/login`
 **Access:** All roles (unauthenticated)
 **Status:** Implemented
+
+Current shell note:
+- Keep the AI Usage hero as a plain header, not a boxed page card or split summary row.
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -191,12 +200,13 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 └───────────────────────────────────────────────────┘
 ```
 
-The root route `/` is the first-run gate page. `/login` remains as a direct auth URL and renders the same gate layout.
+The root route `/` is now redirect-only. It sends signed-in users to their role-safe default route and sends signed-out users to `/login`. `/login` remains the direct auth URL and renders the login layout.
 
 **Interactions:**
 - On success → redirect to the role-appropriate workspace
 - Teachers/admins/platform admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
+- The hero headline should use a short one-time mount reveal with Emil-style ease-out timing, reduced-motion fallback, and only a very small entry blur that resolves immediately.
 - If email maps to multiple schools, the form switches into a guided school-pick state:
   - keep email/password visible as locked summaries
   - show a non-destructive info callout
@@ -213,32 +223,38 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 **Access:** Teacher, Admin, Platform Admin
 **Status:** Implemented
 
+Interaction notes:
+- The shell should sit tight to the sticky top bar; avoid extra dead air above the dashboard header.
+- The sticky top-bar trigger should align to the shell edge instead of sitting inside the centered content max-width.
+- The sticky top bar should stay minimal; remove duplicated section title/eyebrow copy there and leave page identity to the page header/breadcrumb layer.
+- Keep a small visual buffer between the sidebar brand block and the first nav item so the workspace mark does not collide with navigation.
+- On deeper routes, the shell header should only carry the breadcrumb and should animate in with the same restrained blur/fade language as the dashboard.
+- The desktop sidebar header should lead with the custom Classroom Hub mark and workspace label only; the extra `P&AI Bot` badge is removed.
+- Page-to-page navigation should use a short opacity/y/blur transition at the content frame, not heavy full-screen wipes.
+- Numeric stat cards can animate upward on first paint, but only for the values that benefit from comparison (`Average mastery`, `Coverage`).
+- Heatmap topic headers should truncate in-cell and reveal the full topic label on hover/focus with shadcn `Tooltip`.
+- When the signed-in email belongs to multiple tenants, the main sidebar brand block should become the school switcher. Keep the school name primary, use the icon tile as the visual anchor, and do not add redundant product sublabels under the school name.
+- Style that main brand switcher as a sharper, flatter block rather than a soft rounded pill.
+- Keep the school dropdown in normal shadcn select language: semantic surfaces, grouped items, restrained hover states.
+- On successful school change, add a brief blur-overlay handoff that reads `Switched to <school>` before the dashboard reload lands.
+- Dashboard stat notes can use semantic emphasis: learner alerts in amber/green, average mastery by mastery band, and weakest/strongest topic labels split into risk/success tones.
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  TEACHER COCKPIT                                                 │
-│  "Class mastery at a glance"                                     │
-│  Review topic-by-topic mastery and open each           ┌───────┐ │
-│  learner profile for a closer look.                    │Avg    │ │
-│                                                        │mastery│ │
-│                                                        │ 64%   │ │
-│                                                        └───────┘ │
-├──────────────────────────────────────────────────────────────────┤
+│  DASHBOARD                                                        │
+│  Track who needs support today across the class.                 │
 │                                                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
-│  │ Students    │  │ Topics      │  │ Tracked     │               │
-│  │    12       │  │    6        │  │ Scores      │               │
-│  │ Tracked in  │  │ Algebra     │  │    72       │               │
-│  │ this view   │  │ sequence    │  │ Real mastery│               │
-│  └─────────────┘  └─────────────┘  └─────────────┘               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │
+│  │ Learners    │  │ Class grade │  │ Avg mastery │  │ Coverage │ │
+│  │    12       │  │     B       │  │    74%      │  │   92%    │ │
+│  │ 2 learners  │  │ 74% average │  │ Weakest:    │  │ 66 of 72 │ │
+│  │ need attn   │  │ mastery     │  │ Fractions   │  │ tracked  │ │
+│  │             │  │             │  │ Strongest:  │  │          │ │
+│  │             │  │             │  │ Geometry    │  │          │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └──────────┘ │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────────┐│
-│  │ OPERATIONS                                                   ││
-│  │ Check AI usage before costs drift.                           ││
-│  │ Open the usage view to inspect token volume...  [Open AI ↗]  ││
-│  └──────────────────────────────────────────────────────────────┘│
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────────┐│
-│  │ MASTERY HEATMAP                                    Back home ││
+│  │ MASTERY HEATMAP                                              ││
 │  │ Students by topic with direct navigation                     ││
 │  │                                                              ││
 │  │  Student      │ Algebra │Fractions│Geometry │ Stats │ Nudge  ││
@@ -265,6 +281,7 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 - Click student name → navigate to `/students/{id}`
 - Click Nudge → sends Telegram notification, shows confirmation message
 - Click "Open AI usage" → navigate to `/dashboard/ai-usage`
+- If a learner has no tracked score for a topic yet, render `--` in a muted style instead of a red `0%` badge
 
 ---
 
@@ -347,7 +364,7 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 
 **Route:** `/dashboard/metrics`
 **Access:** Teacher, Admin, Platform Admin
-**Status:** Implemented
+**Status:** Legacy redirect to `/dashboard/ai-usage`
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -401,6 +418,8 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 **Route:** `/dashboard/ai-usage`
 **Access:** Teacher, Admin, Platform Admin
 **Status:** Implemented
+
+- Keep the top row as a plain header layout, not a boxed page card, and remove the extra provider snapshot panel entirely.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -509,6 +528,10 @@ The root route `/` is the first-run gate page. `/login` remains as a direct auth
 **Route:** `/dashboard/classes`
 **Access:** Admin, Platform Admin
 **Status:** Scaffold with mock data (no backend yet)
+
+- Keep the hero row as a plain header layout, not a boxed page card. The dark mock-data summary can stay as the only emphasized surface in that row.
+- Do not stack an extra scaffold-warning card under the hero; let the stat row follow immediately.
+- The class picker trigger must render the current class name, never the internal class id.
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -925,6 +948,9 @@ Step 1 of 4                    ● ○ ○ ○
 
 Used at the top of every page. Contains eyebrow label, title, description, and an optional dark aside card.
 
+- Default mode: boxed card surface
+- Plain mode: same grid/layout, but no outer border/background/shadow; use this when the page should read more like a dashboard header than a standalone card
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  EYEBROW LABEL                                                   │
@@ -984,7 +1010,7 @@ Score < 40%:  [  23%  ] rose bg
 |------------|----------|
 | `< 768px` (mobile) | Single column, sidebar hidden, hamburger menu, full-width cards |
 | `768px–1023px` (tablet) | 2-column grids for stat cards, sidebar hidden |
-| `≥ 1024px` (desktop) | Sticky sidebar (w-80), 3-4 column stat grids, side-by-side layouts |
+| `≥ 1024px` (desktop) | Sticky neutral sidebar (~16.75rem), tighter top bar, 3-card summary row, side-by-side layouts where content earns it |
 | `≥ 1280px` (xl) | Full 3-column layouts for student detail, wider tables |
 
 ### Key responsive patterns:
@@ -1009,7 +1035,7 @@ Score < 40%:  [  23%  ] rose bg
 - Student name in heatmap → `/students/{id}` (client-side navigation)
 - "Back to dashboard" link on detail pages
 - Sidebar items highlight active route
-- Breadcrumbs show: Home / Section / Page
+- Dashboard root suppresses the duplicate shell breadcrumb/title block; deeper pages still show breadcrumb + page title.
 
 ### Data Loading
 - Server components use `force-dynamic` for SSR data fetching
@@ -1034,14 +1060,14 @@ Score < 40%:  [  23%  ] rose bg
 
 | Component / Page | File Path |
 |------------------|-----------|
-| Admin Shell | `admin/src/components/admin-shell.tsx` |
-| Home Gate | `admin/src/app/page.tsx` |
+| Admin Shell | `admin/src/components/app-shell.tsx` |
+| Root Redirect | `admin/src/app/page.tsx` |
 | Login Page | `admin/src/app/login/page.tsx` |
 | Login Gate Entry | `admin/src/components/login-gate.tsx` |
 | Login Gate Components | `admin/src/components/login-gate/` |
 | Teacher Dashboard | `admin/src/app/dashboard/page.tsx` |
 | Student Detail | `admin/src/app/students/[id]/page.tsx` |
-| Metrics Page | `admin/src/app/dashboard/metrics/page.tsx` |
+| Metrics Redirect | `admin/src/app/dashboard/metrics/page.tsx` |
 | AI Usage Page | `admin/src/app/dashboard/ai-usage/page.tsx` |
 | Class Management | `admin/src/app/dashboard/classes/page.tsx` |
 | Parent Summary | `admin/src/app/parents/[id]/page.tsx` |

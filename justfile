@@ -279,8 +279,8 @@ next:
       sleep 1
     done
     if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
-      echo "backend failed to start; check /tmp/pai-go.log"
-      exit 1
+      echo "backend failed to start; continuing with frontend only"
+      echo "check /tmp/pai-go.log for backend boot errors"
     fi
   fi
   if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1 && \
@@ -317,10 +317,13 @@ lint:
 admin-lint:
   cd admin && pnpm lint
 
+admin-lockfile:
+  cd admin && pnpm install --frozen-lockfile --ignore-scripts
+
 admin-test:
   cd admin && pnpm test
 
-test-all: lint test admin-lint admin-test
+test-all: lint test admin-lockfile admin-lint admin-test
 
 test-cover:
   go test -coverprofile=coverage.out ./...

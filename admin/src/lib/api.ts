@@ -1,17 +1,16 @@
 import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { normalizeMetrics } from "@/lib/metrics.mjs";
 import {
-  ACCESS_TOKEN_COOKIE,
-  ACCESS_TOKEN_KEY,
-  buildCookieRemoval,
-  buildCookieValue,
-  REFRESH_TOKEN_KEY,
-  SESSION_CHANGED_EVENT,
-  USER_COOKIE,
-  USER_KEY,
-} from "@/lib/auth-session";
+  hasStoredSession as hasPersistedSession,
+  readStoredAccessToken,
+  readStoredRefreshToken,
+  readStoredUser,
+  removeStoredSession,
+  writeStoredSession,
+} from "@/lib/client-session";
+import { clearSchoolSwitchState } from "@/lib/school-switch-state";
+import { applyAdminSessionToStore, clearAdminSessionStore } from "@/stores/app-store";
 import { readJSONResponse } from "@/lib/http-response.mjs";
-import { hasClientSession } from "@/lib/session-state.mjs";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -213,6 +212,19 @@ export class LoginError extends Error {
   }
 }
 
+function parseErrorMessage(raw: string, fallback: string): string {
+  if (!raw.trim()) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(raw) as { error?: string };
+    return payload.error || fallback;
+  } catch {
+    return raw;
+  }
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -309,7 +321,7 @@ export async function login(input: {
       if (error instanceof LoginError) {
         throw error;
       }
-      throw new LoginError(raw || `Login failed: ${res.status}`);
+      throw new LoginError(parseErrorMessage(raw, `Login failed: ${res.status}`));
     }
   }
 
@@ -331,16 +343,7 @@ export async function acceptInvite(input: {
 
   if (!res.ok) {
     const raw = await res.text();
-
-    try {
-      const payload = JSON.parse(raw) as { error?: string };
-      throw new Error(payload.error || `Invite activation failed: ${res.status}`);
-    } catch (error) {
-      if (error instanceof Error && error.message !== raw) {
-        throw error;
-      }
-      throw new Error(raw || `Invite activation failed: ${res.status}`);
-    }
+    throw new Error(parseErrorMessage(raw, `Invite activation failed: ${res.status}`));
   }
 
   return (await readJSONResponse(res)) as AuthSession;
@@ -353,60 +356,67 @@ export async function issueInvite(input: {
   return postJSONWithBody("/api/admin/invites", input);
 }
 
+export async function switchTenantSession(tenantID: string, password: string): Promise<AuthSession> {
+  if (typeof window === "undefined") {
+    throw new Error("Tenant switching is only available in the browser");
+  }
+
+  const refreshToken = readStoredRefreshToken() || "";
+  if (!refreshToken || !tenantID.trim() || !password.trim()) {
+    throw new Error("A stored session is required to switch schools");
+  }
+
+  const res = await fetch(`${API_BASE}/api/auth/switch-tenant`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+      tenant_id: tenantID,
+      password,
+    }),
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(parseErrorMessage(raw, `Tenant switch failed: ${res.status}`));
+  }
+
+  return (await readJSONResponse(res)) as AuthSession;
+}
+
 export function persistSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
 
-  localStorage.setItem(ACCESS_TOKEN_KEY, session.access_token);
-  localStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
-  localStorage.setItem(USER_KEY, JSON.stringify(session.user));
-  document.cookie = buildCookieValue(ACCESS_TOKEN_COOKIE, session.access_token, 60 * 60 * 24 * 7);
-  document.cookie = buildCookieValue(USER_COOKIE, JSON.stringify(session.user), 60 * 60 * 24 * 7);
-  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+  writeStoredSession(session);
+  applyAdminSessionToStore(session);
 }
 
 export function clearSession(): void {
   if (typeof window === "undefined") return;
 
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  document.cookie = buildCookieRemoval(ACCESS_TOKEN_COOKIE);
-  document.cookie = buildCookieRemoval(USER_COOKIE);
-  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+  removeStoredSession();
+  clearSchoolSwitchState();
+  clearAdminSessionStore();
 }
 
 export function getStoredUser(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    return null;
-  }
+  return readStoredUser();
 }
 
 export function getStoredAccessToken(): string {
-  if (typeof window === "undefined") return "";
-
-  return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
+  return readStoredAccessToken();
 }
 
 export function hasStoredSession(): boolean {
-  if (typeof window === "undefined") return false;
-
-  return hasClientSession({
-    accessToken: getStoredAccessToken(),
-    user: getStoredUser(),
-  });
+  return hasPersistedSession();
 }
 
 export async function logout(): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || "";
+  const refreshToken = readStoredRefreshToken() || "";
 
   try {
     if (refreshToken) {

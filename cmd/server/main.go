@@ -281,6 +281,7 @@ type authService interface {
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
 	Refresh(ctx context.Context, refreshToken string) (auth.TokenPair, error)
+	SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
 
@@ -404,6 +405,7 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
 	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
 	mux.Handle("POST /api/auth/refresh", handleAuthRefresh(authSvc))
+	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
@@ -730,6 +732,42 @@ func handleAuthRefresh(authSvc authService) http.HandlerFunc {
 		}
 
 		resp, err := authSvc.Refresh(r.Context(), body.RefreshToken)
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
+	type request struct {
+		RefreshToken string `json:"refresh_token"`
+		TenantID     string `json:"tenant_id"`
+		Password     string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.RefreshToken) == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.TenantID) == "" {
+			http.Error(w, "tenant_id is required", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Password) == "" {
+			http.Error(w, "password is required", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := authSvc.SwitchTenant(r.Context(), body.RefreshToken, body.TenantID, body.Password)
 		if err != nil {
 			writeAuthError(w, err)
 			return

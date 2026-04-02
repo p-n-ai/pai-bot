@@ -551,6 +551,42 @@ func TestAuthRefreshEndpoint(t *testing.T) {
 	}
 }
 
+func TestAuthSwitchTenantEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		switchResp: auth.TokenPair{
+			AccessToken:      "access-switched",
+			RefreshToken:     "refresh-switched",
+			AccessExpiresAt:  time.Date(2026, 3, 16, 11, 15, 0, 0, time.UTC),
+			RefreshExpiresAt: time.Date(2026, 3, 23, 11, 0, 0, 0, time.UTC),
+			User: auth.UserSession{
+				UserID:   "teacher-2",
+				TenantID: "tenant-b",
+				Role:     auth.RoleTeacher,
+				Name:     "Teacher One",
+				Email:    "teacher@example.com",
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"refresh_token":"refresh-old","tenant_id":"tenant-b","password":"secret-123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.switchToken != "refresh-old" {
+		t.Fatalf("switch refresh token = %q, want refresh-old", authSvc.switchToken)
+	}
+	if authSvc.switchTenantID != "tenant-b" {
+		t.Fatalf("switch tenant id = %q, want tenant-b", authSvc.switchTenantID)
+	}
+	if authSvc.switchPassword != "secret-123" {
+		t.Fatalf("switch password = %q, want secret-123", authSvc.switchPassword)
+	}
+}
+
 func TestAuthLogoutEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{}
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{"refresh_token":"refresh-old"}`))
@@ -878,20 +914,25 @@ func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
 }
 
 type stubAuthService struct {
-	loginReq     auth.LoginRequest
-	loginResp    auth.TokenPair
-	loginErr     error
-	inviteReq    auth.IssueInviteRequest
-	inviteResp   auth.InviteRecord
-	inviteErr    error
-	acceptReq    auth.AcceptInviteRequest
-	acceptResp   auth.TokenPair
-	acceptErr    error
-	refreshToken string
-	refreshResp  auth.TokenPair
-	refreshErr   error
-	logoutToken  string
-	logoutErr    error
+	loginReq       auth.LoginRequest
+	loginResp      auth.TokenPair
+	loginErr       error
+	inviteReq      auth.IssueInviteRequest
+	inviteResp     auth.InviteRecord
+	inviteErr      error
+	acceptReq      auth.AcceptInviteRequest
+	acceptResp     auth.TokenPair
+	acceptErr      error
+	refreshToken   string
+	refreshResp    auth.TokenPair
+	refreshErr     error
+	switchToken    string
+	switchTenantID string
+	switchPassword string
+	switchResp     auth.TokenPair
+	switchErr      error
+	logoutToken    string
+	logoutErr      error
 }
 
 func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.TokenPair, error) {
@@ -912,6 +953,13 @@ func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteReq
 func (s *stubAuthService) Refresh(_ context.Context, refreshToken string) (auth.TokenPair, error) {
 	s.refreshToken = refreshToken
 	return s.refreshResp, s.refreshErr
+}
+
+func (s *stubAuthService) SwitchTenant(_ context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error) {
+	s.switchToken = refreshToken
+	s.switchTenantID = tenantID
+	s.switchPassword = password
+	return s.switchResp, s.switchErr
 }
 
 func int64Ptr(v int64) *int64 {

@@ -14,7 +14,7 @@ export function AdminSurface({
   return (
     <Card
       className={cn(
-        "rounded-[28px] border-white/70 bg-white/85 shadow-[0_18px_60px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_24px_80px_rgba(2,8,23,0.35)]",
+        "rounded-xl border bg-card shadow-xs",
         className,
       )}
     >
@@ -37,8 +37,8 @@ export function AdminSurfaceHeader({
   return (
     <CardHeader className={cn("flex flex-row items-center justify-between gap-3 p-0", className)}>
       <div>
-        <CardTitle className="text-xl tracking-tight text-slate-950 dark:text-slate-50">{title}</CardTitle>
-        {description ? <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{description}</p> : null}
+        <CardTitle className="text-xl tracking-tight text-foreground">{title}</CardTitle>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {action}
     </CardHeader>

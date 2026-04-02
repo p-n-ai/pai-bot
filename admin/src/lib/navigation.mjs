@@ -1,13 +1,6 @@
 export const primaryNavigation = [
   {
-    title: "Home",
-    href: "/",
-    description: "Workspace overview and role-based entry points.",
-    group: "Workspace",
-    roles: ["teacher", "admin", "platform_admin"],
-  },
-  {
-    title: "Class Dashboard",
+    title: "Dashboard",
     href: "/dashboard",
     description: "Mastery heatmap, nudges, and learner drill-down.",
     group: "Teaching",
@@ -21,17 +14,10 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
-    title: "Metrics",
-    href: "/dashboard/metrics",
-    description: "Review DAU, retention, nudge response, and token activity across the workspace.",
-    group: "Operations",
-    roles: ["teacher", "admin", "platform_admin"],
-  },
-  {
     title: "AI Usage",
     href: "/dashboard/ai-usage",
     description: "Review token volume by provider and model across the teacher workspace.",
-    group: "Operations",
+    group: "Teaching",
     roles: ["teacher", "admin", "platform_admin"],
   },
 ];
@@ -77,8 +63,8 @@ export function getCurrentSection(pathname) {
   if (!pathname) {
     return {
       eyebrow: "Admin panel",
-      title: "Overview",
-      description: "Open the teacher workspace and monitor daily activity.",
+      title: "Dashboard",
+      description: "Review mastery, nudges, and learner drill-down.",
     };
   }
 
@@ -103,14 +89,6 @@ export function getCurrentSection(pathname) {
       eyebrow: "Admin panel",
       title: "AI Usage",
       description: "Review token volume by provider and model across the teacher workspace.",
-    };
-  }
-
-  if (pathname.startsWith("/dashboard/metrics")) {
-    return {
-      eyebrow: "Admin panel",
-      title: "Metrics",
-      description: "Review DAU, retention, nudge response, and token activity across the workspace.",
     };
   }
 
@@ -140,39 +118,37 @@ export function getCurrentSection(pathname) {
 
 export function getBreadcrumbs(pathname, user) {
   if (!pathname) {
-    return [{ label: "Home", href: "/" }];
+    return [{ label: "Dashboard", href: "/dashboard" }];
   }
 
   if (pathname.startsWith("/students/")) {
     return [
-      { label: "Home", href: "/" },
-      { label: "Class Dashboard", href: "/dashboard" },
+      { label: "Dashboard", href: "/dashboard" },
       { label: "Learner profile", href: pathname },
     ];
   }
 
   if (pathname.startsWith("/parents/")) {
     const parentHref = user?.role === "parent" && user?.user_id ? `/parents/${user.user_id}` : pathname;
-    return [
-      { label: "Home", href: "/" },
-      { label: "Child summary", href: parentHref },
-    ];
+    return [{ label: "Child summary", href: parentHref }];
   }
 
   if (pathname.startsWith("/dashboard/classes")) {
     return [
-      { label: "Home", href: "/" },
+      { label: "Dashboard", href: "/dashboard" },
       { label: "Classes", href: "/dashboard/classes" },
     ];
   }
 
   const activeItem = primaryNavigation.find((item) => isRouteActive(pathname, item.href));
   if (activeItem) {
-    return [
-      { label: "Home", href: "/" },
-      ...(activeItem.href === "/" ? [] : [{ label: activeItem.title, href: activeItem.href }]),
-    ];
+    return activeItem.href === "/dashboard"
+      ? [{ label: activeItem.title, href: activeItem.href }]
+      : [
+          { label: "Dashboard", href: "/dashboard" },
+          { label: activeItem.title, href: activeItem.href },
+        ];
   }
 
-  return [{ label: "Home", href: "/" }];
+  return [{ label: "Dashboard", href: "/dashboard" }];
 }

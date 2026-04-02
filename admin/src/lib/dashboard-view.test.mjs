@@ -16,8 +16,18 @@ test("getDashboardSummary returns dashboard counts and heatmap readiness", () =>
     studentCount: 2,
     topicCount: 2,
     trackedScores: 3,
-    averageMastery: 45,
+    averageMastery: 60,
     hasHeatmap: true,
+    coveragePercent: 75,
+    attentionCount: 1,
+    weakestTopic: {
+      topicId: "algebra",
+      score: 60,
+    },
+    strongestTopic: {
+      topicId: "equations",
+      score: 60,
+    },
   });
 });
 
@@ -28,5 +38,9 @@ test("getDashboardSummary handles an empty class snapshot", () => {
     trackedScores: 0,
     averageMastery: 0,
     hasHeatmap: false,
+    coveragePercent: 0,
+    attentionCount: 0,
+    weakestTopic: null,
+    strongestTopic: null,
   });
 });
