@@ -18,6 +18,7 @@ Admin UI note as of April 1, 2026:
 - the sidebar school switch trigger should always render the tenant name, never the raw tenant id
 - school switching should reissue the session in place for the new tenant; do not bounce the user through logout/login just to swap schools
 - school switching must require the destination tenant password before minting a new session; matching email alone is not sufficient authorization
+- in the school-switch confirmation dialog, keep `Close` to the left and the primary `Switch school` action on the right
 - keep the active school visually prominent near the sidebar brand block, not buried in the footer
 - the main sidebar brand block should double as the school switcher when multiple schools are available
 - keep that brand switcher sharp, not pill-shaped; prefer a flatter editorial treatment over soft rounded cards
