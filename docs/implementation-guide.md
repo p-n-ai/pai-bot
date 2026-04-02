@@ -9,6 +9,8 @@ This guide provides step-by-step executable instructions for every day of the pa
 
 Admin UI note as of April 1, 2026:
 - theme switching in the admin panel should use semantic tokens plus short color transitions, not literal `dark:` surface overrides
+- theme-driven Aurora/WebGL backdrops must observe their container size directly so dark<->light flips repaint immediately without needing a manual refresh
+- the login gate should swap dark/light Aurora states with paired backdrop motion instead of a hard visibility snap when the theme toggle flips
 - the dashboard shell now uses a restrained but brief route enter animation with light blur
 - only high-signal numbers (`Average mastery`, `Coverage`) should counter-animate; avoid animating every stat for no reason
 - long dashboard heatmap topic labels should truncate in the table header and expose the full label via tooltip

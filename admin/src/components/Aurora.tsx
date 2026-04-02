@@ -171,6 +171,15 @@ export default function Aurora(props: AuroraProps) {
       renderer.setSize(width, height);
       program.uniforms.uResolution.value = [width, height];
     }
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            resize();
+          });
+
+    resizeObserver?.observe(ctn);
     window.addEventListener("resize", resize);
 
     const geometry = new Triangle(gl);
@@ -225,6 +234,7 @@ export default function Aurora(props: AuroraProps) {
 
     return () => {
       cancelAnimationFrame(animateId);
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", resize);
       if (ctn && gl.canvas.parentNode === ctn) {
         ctn.removeChild(gl.canvas);
