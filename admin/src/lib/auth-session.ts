@@ -4,6 +4,7 @@ export const USER_KEY = "pai_user";
 export const SESSION_CHANGED_EVENT = "pai-admin-session-change";
 
 export const ACCESS_TOKEN_COOKIE = "pai_admin_access";
+export const REFRESH_TOKEN_COOKIE = "pai_admin_refresh";
 export const USER_COOKIE = "pai_admin_user";
 
 export function buildCookieValue(name: string, value: string, maxAgeSeconds: number): string {

@@ -259,7 +259,13 @@ func (e *Engine) resolveChallengeTopic(conv *Conversation, raw string) (*curricu
 
 	raw = strings.TrimSpace(raw)
 	if raw != "" {
-		if topic, _ := e.contextResolver.Resolve(raw); challengeTopicAvailable(e.curriculumLoader, topic) {
+		userID := ""
+		topicID := ""
+		if conv != nil {
+			userID = conv.UserID
+			topicID = conv.TopicID
+		}
+		if topic, _ := e.resolveCurriculumContext(userID, topicID, raw); challengeTopicAvailable(e.curriculumLoader, topic) {
 			return topic, true
 		}
 	}
@@ -276,7 +282,7 @@ func (e *Engine) resolveChallengeTopic(conv *Conversation, raw string) (*curricu
 			if text == "" {
 				continue
 			}
-			topic, _ := e.contextResolver.Resolve(text)
+			topic, _ := e.resolveCurriculumContext(conv.UserID, conv.TopicID, text)
 			if challengeTopicAvailable(e.curriculumLoader, topic) {
 				return topic, true
 			}

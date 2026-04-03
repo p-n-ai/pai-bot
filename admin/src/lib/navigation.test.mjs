@@ -41,6 +41,19 @@ test("getCurrentSection returns AI usage metadata for dashboard analytics routes
   });
 });
 
+test("getCurrentSection returns retrieval lab metadata for both canonical and typo routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/retrieval-lab"), {
+    eyebrow: "Retrieval",
+    title: "BM25 query lab",
+    description: "Try search queries, filters, and repeat runs against the shared retrieval service.",
+  });
+  assert.deepEqual(getCurrentSection("/dashboard/retreival-lab"), {
+    eyebrow: "Retrieval",
+    title: "BM25 query lab",
+    description: "Try search queries, filters, and repeat runs against the shared retrieval service.",
+  });
+});
+
 test("getCurrentSection falls back to dashboard metadata for the legacy metrics route", () => {
   assert.deepEqual(getCurrentSection("/dashboard/metrics"), {
     eyebrow: "Admin panel",
@@ -79,7 +92,7 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage"],
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/dashboard/retrieval-lab"],
   );
 });
 

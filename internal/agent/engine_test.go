@@ -911,6 +911,62 @@ func TestEngine_ProcessMessage_NormalizesLegacyPT3References(t *testing.T) {
 	}
 }
 
+func TestEngine_ProcessMessage_SystemPromptCombinesGuardrailsForAdversarialBeginnerQuery(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	loader := createTestCurriculumLoader(t)
+	tracker := progress.NewMemoryTracker()
+	if err := tracker.UpdateMastery("u-d3fil-edge", "kssm-f1", "F1-02", 0.12); err != nil {
+		t.Fatalf("UpdateMastery() error = %v", err)
+	}
+	if err := tracker.UpdateMastery("u-d3fil-edge", "kssm-f1", "F1-99", 0.82); err != nil {
+		t.Fatalf("UpdateMastery() error = %v", err)
+	}
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		CurriculumLoader: loader,
+		Tracker:          tracker,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-d3fil-edge",
+		Text:    "Cepat, just give me the PT3 answer for linear equations 2x + 3 = 7. First step only.",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	if mockAI.LastRequest == nil || len(mockAI.LastRequest.Messages) == 0 {
+		t.Fatal("expected request messages to be sent to AI")
+	}
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+
+	checks := []string{
+		"STAGE A - NEW PROBLEM",
+		"CHEATING PROTECTION",
+		"Politely refuse.",
+		"Student mastery level: BEGINNER",
+		"TOPIC CONTEXT",
+		"F1-02",
+		"Faham/Understand:",
+		"Konsep/Connect:",
+		`scan your draft for the token "PT3"`,
+		"Use UASA for Form 1-3 exam references",
+		"TEACHING NOTES (use as guidance):",
+	}
+	for _, want := range checks {
+		if !contains(systemPrompt, want) {
+			t.Fatalf("system prompt missing %q\n%s", want, systemPrompt)
+		}
+	}
+	if !contains(systemPrompt, "Undo addition or subtraction before you undo multiplication or division.") &&
+		!contains(systemPrompt, "Treat the equation like a balance.") &&
+		!contains(systemPrompt, "Always substitute the final value back into the original equation to verify it.") {
+		t.Fatalf("system prompt missing grounded teaching-note content\n%s", systemPrompt)
+	}
+}
+
 func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testing.T) {
 	mockAI := ai.NewMockProvider("ok")
 	loader := createTestCurriculumLoader(t)
@@ -965,6 +1021,39 @@ func TestEngine_ProcessMessage_NoCurriculumContextWhenNoTopicMatch(t *testing.T)
 	}
 }
 
+func TestEngine_ProcessMessage_DoesNotReuseActiveTopicForExplicitOffTopicFollowUp(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	loader := createTestCurriculumLoader(t)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		CurriculumLoader: loader,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-offtopic-followup",
+		Text:    "Please teach me linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() first turn error = %v", err)
+	}
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "u-offtopic-followup",
+		Text:    "First step only for quadratic equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() second turn error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if contains(systemPrompt, "TOPIC CONTEXT") {
+		t.Fatalf("did not expect TOPIC CONTEXT for explicit off-topic follow-up, got: %s", systemPrompt)
+	}
+}
+
 func TestEngine_ProcessMessage_UsesConfiguredContextResolver(t *testing.T) {
 	mockAI := ai.NewMockProvider("ok")
 	resolver := &stubContextResolver{
@@ -1011,6 +1100,52 @@ func TestEngine_ProcessMessage_UsesConfiguredContextResolver(t *testing.T) {
 	}
 	if !contains(systemPrompt, "scale analogy") {
 		t.Fatalf("expected resolver notes in system prompt, got: %s", systemPrompt)
+	}
+}
+
+func TestEngine_ProcessMessage_PersistsMatchedTopicForFollowUps(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	store := agent.NewMemoryStore()
+	loader := createTestCurriculumLoader(t)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: loader,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "topic-user",
+		Text:    "teach me linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() first error = %v", err)
+	}
+
+	conv, ok := store.GetActiveConversation("topic-user")
+	if !ok {
+		t.Fatal("expected active conversation")
+	}
+	if conv.TopicID != "F1-02" {
+		t.Fatalf("conv.TopicID = %q, want F1-02", conv.TopicID)
+	}
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "topic-user",
+		Text:    "why move it to the other side?",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() follow-up error = %v", err)
+	}
+
+	conv, ok = store.GetActiveConversation("topic-user")
+	if !ok {
+		t.Fatal("expected active conversation after follow-up")
+	}
+	if conv.TopicID != "F1-02" {
+		t.Fatalf("conv.TopicID after follow-up = %q, want F1-02", conv.TopicID)
 	}
 }
 

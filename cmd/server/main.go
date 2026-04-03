@@ -25,6 +25,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
 	"github.com/p-n-ai/pai-bot/internal/progress"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 func main() {
@@ -84,6 +85,7 @@ func main() {
 		topics := loader.AllTopics()
 		slog.Info("curriculum ready", "topics", len(topics))
 	}
+	retrievalService := newBootstrapRetrievalService(loader)
 
 	// Create agent engine with streaks and XP tracking.
 	eventLogger := agent.NewPostgresEventLogger(db.Pool)
@@ -97,6 +99,7 @@ func main() {
 		Store:                store,
 		EventLogger:          eventLogger,
 		CurriculumLoader:     loader,
+		RetrievalService:     retrievalService,
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
 		Tracker:              tracker,
@@ -190,7 +193,7 @@ func main() {
 	)
 
 	// HTTP endpoints.
-	mux := newHandlerWithServicesAndAdminProvider(
+	mux := newHandlerWithAdminProvider(
 		tenantAdminDataSourceProvider{
 			newForTenant: func(tenantID string) adminDataSource {
 				return adminapi.New(db.Pool, tenantID)
@@ -200,6 +203,7 @@ func main() {
 			},
 		},
 		gatewaySender{gw},
+		retrievalService,
 		authService,
 		cfg.Auth.JWTSecret,
 		time.Duration(cfg.Auth.AccessTokenTTL)*time.Minute,
@@ -381,12 +385,17 @@ func newHandler(admin adminDataSource, sender messageSender) http.Handler {
 }
 
 func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
-	return newHandlerWithServicesAndAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, authSvc, jwtSecret, accessTokenTTL)
+	return newHandlerWithRetrievalService(admin, sender, retrieval.NewMemoryService(), authSvc, jwtSecret, accessTokenTTL)
 }
 
-func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
+func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL)
+}
+
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
+	retrievalService = ensureRetrievalService(retrievalService)
 
 	teacherOrAbove := chain(
 		auth.Authenticate(manager, time.Now),
@@ -419,8 +428,60 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
+	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
 	return withCORS(mux)
+}
+
+func newBootstrapRetrievalService(loader *curriculum.Loader) *retrieval.Service {
+	retrievalService := retrieval.NewMemoryService()
+	// Boot flow:
+	//  1. create one shared in-process retrieval service
+	//  2. seed curriculum into it as a normal retrieval source
+	//  3. hand the same instance to both chat-time retrieval and admin APIs
+	if err := retrieval.SeedCurriculum(retrievalService, loader); err != nil {
+		slog.Warn("retrieval seed failed", "error", err)
+	}
+	return retrievalService
+}
+
+func ensureRetrievalService(retrievalService *retrieval.Service) *retrieval.Service {
+	if retrievalService != nil {
+		return retrievalService
+	}
+	return retrieval.NewMemoryService()
+}
+
+func registerRetrievalRoutes(
+	mux *http.ServeMux,
+	retrievalService *retrieval.Service,
+	teacherOrAbove func(http.Handler) http.Handler,
+	adminOrAbove func(http.Handler) http.Handler,
+) {
+	// Entity model:
+	//  1. Source is the real origin of knowledge: curriculum, website, PDF, book, YouTube.
+	//  2. Collection is the grouping/scope unit.
+	//  3. Document is the searchable knowledge unit.
+	// Retrieval now uses only Source / Collection / Document names end to end.
+	mux.Handle("GET /api/admin/retrieval/collections", teacherOrAbove(handleRetrievalListCollections(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/collections", adminOrAbove(handleRetrievalCreateCollection(retrievalService)))
+	mux.Handle("GET /api/admin/retrieval/collections/{id}", teacherOrAbove(handleRetrievalGetCollection(retrievalService)))
+	mux.Handle("PUT /api/admin/retrieval/collections/{id}", adminOrAbove(handleRetrievalUpdateCollection(retrievalService)))
+	mux.Handle("DELETE /api/admin/retrieval/collections/{id}", adminOrAbove(handleRetrievalDeleteCollection(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/collections/{id}/activate", adminOrAbove(handleRetrievalActivateCollection(retrievalService)))
+	mux.Handle("GET /api/admin/retrieval/documents", teacherOrAbove(handleRetrievalListDocuments(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/documents", adminOrAbove(handleRetrievalCreateDocument(retrievalService)))
+	mux.Handle("GET /api/admin/retrieval/documents/{id}", teacherOrAbove(handleRetrievalGetDocument(retrievalService)))
+	mux.Handle("PUT /api/admin/retrieval/documents/{id}", adminOrAbove(handleRetrievalUpdateDocument(retrievalService)))
+	mux.Handle("DELETE /api/admin/retrieval/documents/{id}", adminOrAbove(handleRetrievalDeleteDocument(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/documents/{id}/activate", adminOrAbove(handleRetrievalActivateDocument(retrievalService)))
+	mux.Handle("GET /api/admin/retrieval/sources", teacherOrAbove(handleRetrievalListSources(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/sources", adminOrAbove(handleRetrievalCreateSource(retrievalService)))
+	mux.Handle("GET /api/admin/retrieval/sources/{id}", teacherOrAbove(handleRetrievalGetSource(retrievalService)))
+	mux.Handle("PUT /api/admin/retrieval/sources/{id}", adminOrAbove(handleRetrievalUpdateSource(retrievalService)))
+	mux.Handle("DELETE /api/admin/retrieval/sources/{id}", adminOrAbove(handleRetrievalDeleteSource(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/sources/{id}/activate", adminOrAbove(handleRetrievalActivateSource(retrievalService)))
+	mux.Handle("POST /api/admin/retrieval/search", teacherOrAbove(handleRetrievalSearch(retrievalService)))
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -630,6 +691,395 @@ func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messa
 			"student": detail.Student.ID,
 			"channel": msg.Channel,
 		})
+	}
+}
+
+func handleRetrievalListSources(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		includeInactive := r.URL.Query().Get("include_inactive") == "true"
+		var types []string
+		if sourceType := strings.TrimSpace(r.URL.Query().Get("type")); sourceType != "" {
+			types = []string{sourceType}
+		}
+		payload, err := service.ListSources(retrieval.ListSourcesRequest{
+			Types:           types,
+			IncludeInactive: includeInactive,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleRetrievalGetSource(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		source, err := service.GetSource(r.PathValue("id"))
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, source)
+	}
+}
+
+func handleRetrievalCreateSource(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Type        string            `json:"type"`
+			URI         string            `json:"uri,omitempty"`
+			Title       string            `json:"title"`
+			Description string            `json:"description,omitempty"`
+			Metadata    map[string]string `json:"metadata,omitempty"`
+			Active      *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		source, err := service.UpsertSource(retrieval.UpsertSourceInput{
+			Type:        body.Type,
+			URI:         body.URI,
+			Title:       body.Title,
+			Description: body.Description,
+			Metadata:    body.Metadata,
+			Active:      body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, source)
+	}
+}
+
+func handleRetrievalUpdateSource(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Type        string            `json:"type"`
+			URI         string            `json:"uri,omitempty"`
+			Title       string            `json:"title"`
+			Description string            `json:"description,omitempty"`
+			Metadata    map[string]string `json:"metadata,omitempty"`
+			Active      *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		source, err := service.UpsertSource(retrieval.UpsertSourceInput{
+			ID:          r.PathValue("id"),
+			Type:        body.Type,
+			URI:         body.URI,
+			Title:       body.Title,
+			Description: body.Description,
+			Metadata:    body.Metadata,
+			Active:      body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, source)
+	}
+}
+
+func handleRetrievalActivateSource(service *retrieval.Service) http.HandlerFunc {
+	type request struct {
+		Active bool `json:"active"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		source, err := service.SetSourceActive(r.PathValue("id"), body.Active)
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, source)
+	}
+}
+
+func handleRetrievalDeleteSource(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := service.DeleteSource(r.PathValue("id")); err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleRetrievalListCollections(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		includeInactive := r.URL.Query().Get("include_inactive") == "true"
+		payload := service.ListCollections(retrieval.ListCollectionsRequest{
+			IncludeInactive: includeInactive,
+		})
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleRetrievalGetCollection(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		collection, err := service.GetCollection(r.PathValue("id"))
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, collection)
+	}
+}
+
+func handleRetrievalCreateCollection(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name        string            `json:"name"`
+			Description string            `json:"description"`
+			Metadata    map[string]string `json:"metadata"`
+			Active      *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		collection, err := service.UpsertCollection(retrieval.UpsertCollectionInput{
+			Name:        body.Name,
+			Description: body.Description,
+			Metadata:    body.Metadata,
+			Active:      body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, collection)
+	}
+}
+
+func handleRetrievalUpdateCollection(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name        string            `json:"name"`
+			Description string            `json:"description"`
+			Metadata    map[string]string `json:"metadata"`
+			Active      *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		collection, err := service.UpsertCollection(retrieval.UpsertCollectionInput{
+			ID:          r.PathValue("id"),
+			Name:        body.Name,
+			Description: body.Description,
+			Metadata:    body.Metadata,
+			Active:      body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, collection)
+	}
+}
+
+func handleRetrievalActivateCollection(service *retrieval.Service) http.HandlerFunc {
+	type request struct {
+		Active bool `json:"active"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		collection, err := service.SetCollectionActive(r.PathValue("id"), body.Active)
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, collection)
+	}
+}
+
+func handleRetrievalDeleteCollection(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := service.DeleteCollection(r.PathValue("id")); err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleRetrievalListDocuments(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		includeInactive := r.URL.Query().Get("include_inactive") == "true"
+		var collectionIDs []string
+		collectionID := strings.TrimSpace(r.URL.Query().Get("collection_id"))
+		if collectionID != "" {
+			collectionIDs = []string{collectionID}
+		}
+		var sourceIDs []string
+		if sourceID := strings.TrimSpace(r.URL.Query().Get("source_id")); sourceID != "" {
+			sourceIDs = []string{sourceID}
+		}
+		var sourceTypes []string
+		if sourceType := strings.TrimSpace(r.URL.Query().Get("source_type")); sourceType != "" {
+			sourceTypes = []string{sourceType}
+		}
+		payload, err := service.ListDocument(retrieval.ListDocumentsRequest{
+			CollectionIDs:   collectionIDs,
+			SourceIDs:       sourceIDs,
+			SourceTypes:     sourceTypes,
+			IncludeInactive: includeInactive,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleRetrievalGetDocument(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		document, err := service.GetDocument(r.PathValue("id"))
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, document)
+	}
+}
+
+func handleRetrievalCreateDocument(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			CollectionID string            `json:"collection_id,omitempty"`
+			Kind         string            `json:"kind"`
+			Title        string            `json:"title"`
+			Body         string            `json:"body"`
+			Tags         []string          `json:"tags,omitempty"`
+			SourceID     string            `json:"source_id,omitempty"`
+			SourceType   string            `json:"source_type,omitempty"`
+			Metadata     map[string]string `json:"metadata,omitempty"`
+			Source       string            `json:"source,omitempty"`
+			Active       *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		document, err := service.UpsertDocument(retrieval.UpsertDocumentInput{
+			CollectionID: body.CollectionID,
+			Kind:         body.Kind,
+			Title:        body.Title,
+			Body:         body.Body,
+			Tags:         body.Tags,
+			SourceID:     body.SourceID,
+			SourceType:   body.SourceType,
+			Metadata:     body.Metadata,
+			Source:       body.Source,
+			Active:       body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, document)
+	}
+}
+
+func handleRetrievalUpdateDocument(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			CollectionID string            `json:"collection_id,omitempty"`
+			Kind         string            `json:"kind"`
+			Title        string            `json:"title"`
+			Body         string            `json:"body"`
+			Tags         []string          `json:"tags,omitempty"`
+			SourceID     string            `json:"source_id,omitempty"`
+			SourceType   string            `json:"source_type,omitempty"`
+			Metadata     map[string]string `json:"metadata,omitempty"`
+			Source       string            `json:"source,omitempty"`
+			Active       *bool             `json:"active,omitempty"`
+		}
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		document, err := service.UpsertDocument(retrieval.UpsertDocumentInput{
+			ID:           r.PathValue("id"),
+			CollectionID: body.CollectionID,
+			Kind:         body.Kind,
+			Title:        body.Title,
+			Body:         body.Body,
+			Tags:         body.Tags,
+			SourceID:     body.SourceID,
+			SourceType:   body.SourceType,
+			Metadata:     body.Metadata,
+			Source:       body.Source,
+			Active:       body.Active,
+		})
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, document)
+	}
+}
+
+func handleRetrievalActivateDocument(service *retrieval.Service) http.HandlerFunc {
+	type request struct {
+		Active bool `json:"active"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		document, err := service.SetDocumentActive(r.PathValue("id"), body.Active)
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, document)
+	}
+}
+
+func handleRetrievalDeleteDocument(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := service.DeleteDocument(r.PathValue("id")); err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleRetrievalSearch(service *retrieval.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body retrieval.SearchRequest
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		results, err := service.Search(body)
+		if err != nil {
+			writeRetrievalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, results)
 	}
 }
 
@@ -852,6 +1302,17 @@ func writeAdminError(w http.ResponseWriter, err error) {
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func writeRetrievalError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, retrieval.ErrNotFound):
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	case errors.Is(err, retrieval.ErrInvalidArgument):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func writeAuthError(w http.ResponseWriter, err error) {

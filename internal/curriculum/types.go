@@ -3,10 +3,12 @@ package curriculum
 // Topic represents a curriculum topic loaded from YAML.
 type Topic struct {
 	ID                 string              `yaml:"id"`
+	OfficialRef        string              `yaml:"official_ref"`
 	Name               string              `yaml:"name"`
 	SubjectID          string              `yaml:"subject_id"`
 	SyllabusID         string              `yaml:"syllabus_id"`
 	Difficulty         string              `yaml:"difficulty"`
+	Tier               string              `yaml:"tier"`
 	LearningObjectives []LearningObjective `yaml:"learning_objectives"`
 	Prerequisites      Prerequisites       `yaml:"prerequisites"`
 	QualityLevel       int                 `yaml:"quality_level"`
@@ -38,9 +40,15 @@ type Syllabus struct {
 
 // Subject represents a subject within a syllabus (e.g., Algebra).
 type Subject struct {
-	ID       string   `yaml:"id"`
-	Name     string   `yaml:"name"`
-	TopicIDs []string `yaml:"topic_ids"`
+	ID          string   `yaml:"id"`
+	Name        string   `yaml:"name"`
+	NameEN      string   `yaml:"name_en"`
+	SyllabusID  string   `yaml:"syllabus_id"`
+	GradeID     string   `yaml:"grade_id"`
+	CountryID   string   `yaml:"country_id"`
+	Language    string   `yaml:"language"`
+	Description string   `yaml:"description"`
+	Topics      []string `yaml:"topics"`
 }
 
 // Assessment groups quiz questions for a topic.
