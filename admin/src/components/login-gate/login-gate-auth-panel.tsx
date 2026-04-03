@@ -30,7 +30,7 @@ export function LoginGateAuthPanel({
             <CardDescription className="text-sm leading-7 text-slate-600 dark:text-slate-300">
               {hasTenantChoices
                 ? `We found ${tenantChoices.length} schools for this email. Choose the one you want to enter.`
-                : "See your students' data."}
+                : "Use Google for same-email sign-in, or continue with the invite-based email flow."}
             </CardDescription>
           </div>
           {children}

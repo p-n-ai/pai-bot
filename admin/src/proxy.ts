@@ -17,7 +17,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectURL);
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/students") || pathname.startsWith("/parents")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  }
+  return response;
 }
 
 export const config = {

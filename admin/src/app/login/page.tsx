@@ -17,12 +17,12 @@ export const metadata: Metadata = {
 };
 
 type LoginPageProps = {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; auth_error?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const cookieStore = await cookies();
-  const { next } = await searchParams;
+  const { next, auth_error: authError } = await searchParams;
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
   const currentUser = parseCookieJSON<AuthUser>(
     cookieStore.get(USER_COOKIE)?.value,
@@ -32,5 +32,5 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(getSafeNextPath(currentUser, next));
   }
 
-  return <LoginGate nextPath={next ?? null} />;
+  return <LoginGate nextPath={next ?? null} authError={authError ?? null} />;
 }

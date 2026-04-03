@@ -1,13 +1,5 @@
 import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { normalizeMetrics } from "@/lib/metrics.mjs";
-import {
-  hasStoredSession as hasPersistedSession,
-  readStoredAccessToken,
-  readStoredRefreshToken,
-  readStoredUser,
-  removeStoredSession,
-  writeStoredSession,
-} from "@/lib/client-session";
 import { clearSchoolSwitchState } from "@/lib/school-switch-state";
 import { applyAdminSessionToStore, clearAdminSessionStore } from "@/stores/app-store";
 import { readJSONResponse } from "@/lib/http-response.mjs";
@@ -179,11 +171,16 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
-  access_token: string;
-  refresh_token: string;
   access_expires_at: string;
   refresh_expires_at: string;
   user: AuthUser;
+}
+
+export interface LinkedIdentity {
+  provider: "google" | "password" | "telegram" | "whatsapp" | "microsoft";
+  email: string;
+  linked_at?: string;
+  last_used_at?: string;
 }
 
 export interface TenantChoice {
@@ -225,11 +222,41 @@ function parseErrorMessage(raw: string, fallback: string): string {
   }
 }
 
-async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+async function refreshAuthSession(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
     cache: "no-store",
   });
+
+  return res.ok;
+}
+
+async function fetchWithSession(path: string, init: RequestInit = {}, retryOnUnauthorized = true): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (res.status !== 401 || !retryOnUnauthorized || typeof window === "undefined") {
+    return res;
+  }
+
+  const refreshed = await refreshAuthSession();
+  if (!refreshed) {
+    return res;
+  }
+
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    cache: "no-store",
+  });
+}
+
+async function fetchJSON<T>(path: string): Promise<T> {
+  const res = await fetchWithSession(path);
   if (!res.ok) {
     throw new Error(`Failed to load ${path}: ${res.status}`);
   }
@@ -241,14 +268,17 @@ async function postJSON<T>(path: string): Promise<T> {
 }
 
 async function postJSONWithBody<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithSession(
+    path,
+    {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getToken()}`,
       "Content-Type": "application/json",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+    },
+    path !== "/api/auth/logout",
+  );
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Failed to post ${path}: ${res.status}`);
@@ -302,6 +332,8 @@ export async function login(input: {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
+    cache: "no-store",
     body: JSON.stringify(input),
   });
 
@@ -338,6 +370,8 @@ export async function acceptInvite(input: {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
+    cache: "no-store",
     body: JSON.stringify(input),
   });
 
@@ -357,12 +391,7 @@ export async function issueInvite(input: {
 }
 
 export async function switchTenantSession(tenantID: string, password: string): Promise<AuthSession> {
-  if (typeof window === "undefined") {
-    throw new Error("Tenant switching is only available in the browser");
-  }
-
-  const refreshToken = readStoredRefreshToken() || "";
-  if (!refreshToken || !tenantID.trim() || !password.trim()) {
+  if (!tenantID.trim() || !password.trim()) {
     throw new Error("A stored session is required to switch schools");
   }
 
@@ -371,8 +400,9 @@ export async function switchTenantSession(tenantID: string, password: string): P
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
+    cache: "no-store",
     body: JSON.stringify({
-      refresh_token: refreshToken,
       tenant_id: tenantID,
       password,
     }),
@@ -389,47 +419,65 @@ export async function switchTenantSession(tenantID: string, password: string): P
 export function persistSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
 
-  writeStoredSession(session);
   applyAdminSessionToStore(session);
 }
 
 export function clearSession(): void {
   if (typeof window === "undefined") return;
 
-  removeStoredSession();
   clearSchoolSwitchState();
   clearAdminSessionStore();
 }
 
-export function getStoredUser(): AuthUser | null {
-  return readStoredUser();
+export function buildGoogleLoginURL(nextPath?: string | null): string {
+  const url = new URL(`${API_BASE}/api/auth/google/start`);
+  if (nextPath?.trim()) {
+    url.searchParams.set("next", nextPath);
+  }
+  return url.toString();
 }
 
-export function getStoredAccessToken(): string {
-  return readStoredAccessToken();
+export function buildGoogleLinkURL(nextPath?: string | null): string {
+  const url = new URL(`${API_BASE}/api/auth/google/link/start`);
+  if (nextPath?.trim()) {
+    url.searchParams.set("next", nextPath);
+  }
+  return url.toString();
 }
 
-export function hasStoredSession(): boolean {
-  return hasPersistedSession();
+export async function startGoogleLink(nextPath?: string | null): Promise<string> {
+  const res = await fetch(buildGoogleLinkURL(nextPath), {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(parseErrorMessage(raw, `Google link start failed: ${res.status}`));
+  }
+  const payload = (await readJSONResponse(res)) as { url?: string };
+  if (!payload?.url) {
+    throw new Error("Google link start failed: missing redirect URL");
+  }
+  return payload.url;
+}
+
+export async function getLinkedIdentities(): Promise<LinkedIdentity[]> {
+  const res = await fetchWithSession("/api/auth/identities");
+  if (!res.ok) {
+    throw new Error(`Failed to load linked identities: ${res.status}`);
+  }
+  const payload = (await readJSONResponse(res)) as { identities?: LinkedIdentity[] };
+  return payload.identities ?? [];
 }
 
 export async function logout(): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const refreshToken = readStoredRefreshToken() || "";
-
   try {
-    if (refreshToken) {
-      await postJSONWithBody("/api/auth/logout", { refresh_token: refreshToken });
-    }
-  } finally {
+    await postJSONWithBody("/api/auth/logout");
     clearSession();
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("Logout failed");
   }
-}
-
-function getToken(): string {
-  if (typeof window !== "undefined") {
-    return getStoredAccessToken();
-  }
-  return "";
 }

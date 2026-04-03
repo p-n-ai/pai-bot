@@ -3,16 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { LoginGateContext } from "@/components/login-gate/login-gate-context";
-import { LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
+import { buildGoogleLoginURL, LoginError, login, persistSession, type TenantChoice } from "@/lib/api";
+import { getGoogleAuthErrorMessage } from "@/lib/auth-flow-feedback";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 import { clearSchoolSwitchState, readSchoolSwitchState, writeSchoolSwitchState } from "@/lib/school-switch-state";
+
+function mapGoogleAuthError(code: string | null): string {
+  return getGoogleAuthErrorMessage(code);
+}
 
 export function LoginGateProvider({
   children,
   nextPath,
+  authError,
 }: {
   children: React.ReactNode;
   nextPath: string | null;
+  authError: string | null;
 }) {
   const router = useRouter();
   const [initialSchoolSwitchState] = useState(() => readSchoolSwitchState());
@@ -21,16 +28,26 @@ export function LoginGateProvider({
   const [password, setPassword] = useState("");
   const [tenantID, setTenantID] = useState(initialSchoolSwitchState?.currentTenantID ?? "");
   const [tenantChoices, setTenantChoices] = useState<TenantChoice[]>(initialSchoolSwitchState?.tenantChoices ?? []);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => mapGoogleAuthError(authError));
+  const [isGooglePending, setGooglePending] = useState(false);
 
   function setEmail(value: string) {
     setEmailState(value);
+    setError("");
     if (tenantChoices.length > 0) {
       setTenantChoices([]);
       setTenantID("");
-      setError("");
     }
     clearSchoolSwitchState();
+  }
+
+  function startGoogleLogin() {
+    if (tenantChoices.length > 0 || isPending || isGooglePending) {
+      return;
+    }
+    setError("");
+    setGooglePending(true);
+    window.location.assign(buildGoogleLoginURL(nextPath));
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -88,6 +105,7 @@ export function LoginGateProvider({
         setTenantChoices([]);
         setTenantID("");
         clearSchoolSwitchState();
+        setGooglePending(false);
         setError(err instanceof Error ? err.message : "Login failed");
       }
     });
@@ -102,10 +120,15 @@ export function LoginGateProvider({
         tenantChoices,
         error,
         isPending,
+        isGooglePending,
         setEmail,
-        setPassword,
+        setPassword: (value) => {
+          setPassword(value);
+          setError("");
+        },
         setTenantID,
         submit,
+        startGoogleLogin,
       }}
     >
       {children}

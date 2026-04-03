@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 import { toast } from "sonner";
 import { IconBooks, IconChartBar, IconCoins, IconUsers } from "@tabler/icons-react";
+import { LinkedIdentitiesCard } from "@/components/account/linked-identities-card";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -383,6 +384,7 @@ export function AppSidebar({
           </div>
           <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
+        {sessionReady && isLoggedIn ? <LinkedIdentitiesCard nextPath={pathname} /> : null}
         {sessionReady && isLoggedIn ? <LogoutButton /> : <LoginButton />}
       </SidebarFooter>
     </Sidebar>

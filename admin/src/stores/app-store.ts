@@ -3,8 +3,6 @@
 import { create } from "zustand";
 import type { AuthSession, AuthUser } from "@/lib/api";
 import { readSchoolSwitchState, type SchoolSwitchState } from "@/lib/school-switch-state";
-import { getClientSessionSnapshot, syncSessionCookies } from "@/lib/session-state.mjs";
-import { hasStoredSession, readStoredAccessToken, readStoredUser } from "@/lib/client-session";
 
 type AdminSessionSnapshot = {
   hydrated: boolean;
@@ -16,7 +14,7 @@ type AdminSessionSnapshot = {
 };
 
 type AdminSessionStore = AdminSessionSnapshot & {
-  syncFromStorage: () => void;
+  initializeFromServer: (currentUser: AuthUser | null, schoolSwitchState: SchoolSwitchState | null) => void;
   applySession: (session: AuthSession) => void;
   clearSession: () => void;
   setSchoolSwitchState: (state: SchoolSwitchState | null) => void;
@@ -35,59 +33,29 @@ function getDefaultSnapshot(): AdminSessionSnapshot {
   };
 }
 
-function readSnapshotFromStorage(): AdminSessionSnapshot {
-  if (typeof window === "undefined") {
-    return getDefaultSnapshot();
-  }
-
-  const snapshot = getClientSessionSnapshot({
-    accessToken: readStoredAccessToken(),
-    user: readStoredUser(),
-  });
-
-  syncSessionCookies({
-    accessToken: readStoredAccessToken(),
-    user: snapshot.currentUser,
-    cookieString: document.cookie,
-    writeCookie(value: string) {
-      document.cookie = value;
-    },
-  });
-
+function buildSnapshot(currentUser: AuthUser | null, schoolSwitchState: SchoolSwitchState | null): AdminSessionSnapshot {
   return {
     hydrated: true,
-    currentUser: snapshot.currentUser,
-    isLoggedIn: snapshot.isLoggedIn && hasStoredSession(),
-    schoolSwitchState: readSchoolSwitchState(),
+    currentUser,
+    isLoggedIn: Boolean(currentUser?.user_id && currentUser?.email),
+    schoolSwitchState,
     pendingTenantID: null,
     isSwitchingTenant: false,
   };
 }
 
 export const useAppStore = create<AdminSessionStore>((set) => ({
-  ...readSnapshotFromStorage(),
-  syncFromStorage: () => {
-    set(readSnapshotFromStorage());
+  ...getDefaultSnapshot(),
+  initializeFromServer: (currentUser, schoolSwitchState) => {
+    const nextSchoolSwitchState =
+      schoolSwitchState ?? (typeof window === "undefined" ? null : readSchoolSwitchState());
+    set(buildSnapshot(currentUser, nextSchoolSwitchState));
   },
   applySession: (session) => {
-    set({
-      hydrated: true,
-      isLoggedIn: true,
-      currentUser: session.user,
-      schoolSwitchState: readSchoolSwitchState(),
-      pendingTenantID: null,
-      isSwitchingTenant: false,
-    });
+    set(buildSnapshot(session.user, typeof window === "undefined" ? null : readSchoolSwitchState()));
   },
   clearSession: () => {
-    set({
-      hydrated: true,
-      isLoggedIn: false,
-      currentUser: null,
-      schoolSwitchState: readSchoolSwitchState(),
-      pendingTenantID: null,
-      isSwitchingTenant: false,
-    });
+    set(buildSnapshot(null, typeof window === "undefined" ? null : readSchoolSwitchState()));
   },
   setSchoolSwitchState: (state) => {
     set({ schoolSwitchState: state });
@@ -107,8 +75,8 @@ export const useAppStore = create<AdminSessionStore>((set) => ({
   },
 }));
 
-export function syncAdminSessionStoreFromStorage() {
-  useAppStore.getState().syncFromStorage();
+export function initializeAdminSessionStore(currentUser: AuthUser | null, schoolSwitchState: SchoolSwitchState | null) {
+  useAppStore.getState().initializeFromServer(currentUser, schoolSwitchState);
 }
 
 export function applyAdminSessionToStore(session: AuthSession) {

@@ -1,20 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { clearSession } from "@/lib/api";
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from "@/lib/auth-session";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildGoogleLinkURL, buildGoogleLoginURL, clearSession, startGoogleLink } from "@/lib/api";
 import { SCHOOL_SWITCH_STATE_COOKIE } from "@/lib/school-switch-state";
 
 describe("clearSession", () => {
   beforeEach(() => {
     window.localStorage.clear();
     document.cookie = `${SCHOOL_SWITCH_STATE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
-    document.cookie = "pai_admin_access=; Path=/; Max-Age=0; SameSite=Lax";
-    document.cookie = "pai_admin_user=; Path=/; Max-Age=0; SameSite=Lax";
   });
 
-  it("clears auth and school-switch storage together", () => {
-    window.localStorage.setItem(ACCESS_TOKEN_KEY, "access-token");
-    window.localStorage.setItem(REFRESH_TOKEN_KEY, "refresh-token");
-    window.localStorage.setItem(USER_KEY, JSON.stringify({ user_id: "teacher-1", email: "teacher@example.com" }));
+  it("clears school-switch storage together with the client session store", () => {
     window.localStorage.setItem(
       "pai_school_switch_state",
       JSON.stringify({
@@ -29,10 +23,38 @@ describe("clearSession", () => {
 
     clearSession();
 
-    expect(window.localStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull();
-    expect(window.localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
-    expect(window.localStorage.getItem(USER_KEY)).toBeNull();
     expect(window.localStorage.getItem("pai_school_switch_state")).toBeNull();
     expect(document.cookie).not.toContain(SCHOOL_SWITCH_STATE_COOKIE);
+  });
+
+  it("builds Google login and link URLs with a next path when provided", () => {
+    expect(buildGoogleLoginURL("/dashboard")).toBe("http://localhost:8080/api/auth/google/start?next=%2Fdashboard");
+    expect(buildGoogleLinkURL("/dashboard/settings")).toBe(
+      "http://localhost:8080/api/auth/google/link/start?next=%2Fdashboard%2Fsettings",
+    );
+  });
+
+  it("starts Google link with an authenticated POST and returns the redirect URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: "https://accounts.google.com/o/oauth2/v2/auth?state=abc" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startGoogleLink("/dashboard/settings")).resolves.toBe(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=abc",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8080/api/auth/google/link/start?next=%2Fdashboard%2Fsettings",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      }),
+    );
+
+    vi.unstubAllGlobals();
   });
 });

@@ -2,6 +2,7 @@
 
 import { IconAlertCircle, IconLock } from "@tabler/icons-react";
 import { useState } from "react";
+import { LoginGateGoogleButton } from "@/components/login-gate/login-gate-google-button";
 import { useLoginGate } from "@/components/login-gate/use-login-gate";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ export function LoginGateForm() {
     tenantChoices,
     error,
     isPending,
+    isGooglePending,
     setEmail,
     setPassword,
     setTenantID,
@@ -49,6 +51,19 @@ export function LoginGateForm() {
 
   return (
     <form id="sign-in-form" className="space-y-5 transition-[opacity,transform] duration-200 ease-out" onSubmit={submit}>
+      <div className="space-y-4">
+        <LoginGateGoogleButton />
+        {!showTenantChooser ? (
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              or use email
+            </span>
+            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
+          </div>
+        ) : null}
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="email" className="text-slate-700 dark:text-slate-200">
           Email
@@ -189,7 +204,7 @@ export function LoginGateForm() {
         type="submit"
         size="lg"
         className="h-12 w-full rounded-full bg-slate-950 text-white transition-all duration-150 ease-out hover:bg-slate-800 active:translate-y-px dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
-        disabled={isPending}
+        disabled={isPending || isGooglePending}
       >
         {isPending ? "Signing in..." : "Sign in"}
       </Button>

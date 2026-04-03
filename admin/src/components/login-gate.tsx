@@ -12,13 +12,19 @@ import { useTheme } from "@/components/theme-provider";
 
 const backdropEase = [0.22, 1, 0.36, 1] as const;
 
-export function LoginGate({ nextPath = null }: { nextPath?: string | null }) {
+export function LoginGate({
+  nextPath = null,
+  authError = null,
+}: {
+  nextPath?: string | null;
+  authError?: string | null;
+}) {
   const { theme, mounted } = useTheme();
   const prefersReducedMotion = useReducedMotion();
   const isDark = mounted && theme === "dark";
 
   return (
-    <LoginGateProvider nextPath={nextPath}>
+    <LoginGateProvider nextPath={nextPath} authError={authError}>
       <LoginGateShell>
         <LoginGateHeroSection heroSectionClassName="bg-[#edf4ff] dark:bg-[#06101d]">
           <motion.div

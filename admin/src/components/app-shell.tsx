@@ -4,7 +4,9 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, type CSSProperties } from "react";
+import { AuthRedirectNotice } from "@/components/auth-redirect-notice";
 import { AppSidebar } from "@/components/app-sidebar";
+import { useAdminSessionBootstrap } from "@/hooks/use-admin-session-bootstrap";
 import { useHydrated } from "@/hooks/use-hydrated";
 import {
   Breadcrumb,
@@ -60,6 +62,8 @@ export function AppShell({
     "--sidebar-width-icon": "4rem",
   } as CSSProperties;
 
+  useAdminSessionBootstrap(initialCurrentUser, initialSchoolSwitchState);
+
   if (isPublicRoute) {
     return (
       <div className="theme-transition relative min-h-screen bg-background text-foreground">
@@ -79,6 +83,7 @@ export function AppShell({
       style={sidebarLayoutStyle}
       className="theme-transition isolate min-h-screen bg-background text-foreground"
     >
+      <AuthRedirectNotice />
       <AppSidebar
         pathname={pathname}
         hydrated={hydrated}
