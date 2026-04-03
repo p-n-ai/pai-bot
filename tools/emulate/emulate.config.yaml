@@ -1,0 +1,50 @@
+tokens:
+  test_token_admin:
+    login: admin
+    scopes: []
+
+google:
+  users:
+    - email: teacher@gmail.com
+      name: Demo Teacher
+      given_name: Demo
+      family_name: Teacher
+      email_verified: true
+      locale: en
+    - email: platform-admin@example.com
+      name: Platform Admin
+      given_name: Platform
+      family_name: Admin
+      email_verified: true
+      locale: en
+  oauth_clients:
+    - client_id: pai-google-local.apps.googleusercontent.com
+      client_secret: emulate-google-secret
+      name: PAI Bot Local Auth
+      redirect_uris:
+        - http://127.0.0.1:8080/api/auth/google/callback
+        - http://127.0.0.1:8082/api/auth/google/callback
+        - http://localhost:8080/api/auth/google/callback
+        - http://127.0.0.1:3000/api/auth/callback/google
+        - http://localhost:3000/api/auth/callback/google
+
+vercel:
+  users:
+    - username: developer
+      name: Developer
+      email: dev@example.com
+  teams:
+    - slug: pai-bot
+      name: PAI Bot
+      description: Local dev team
+  projects:
+    - name: pai-admin
+      team: pai-bot
+      framework: nextjs
+  integrations:
+    - client_id: oac_pai_local
+      client_secret: emulate-vercel-secret
+      name: PAI Bot Local Integration
+      redirect_uris:
+        - http://127.0.0.1:3000/api/auth/callback/vercel
+        - http://localhost:3000/api/auth/callback/vercel

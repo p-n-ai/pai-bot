@@ -5,6 +5,7 @@ alias backend := go
 alias dev := go
 
 dev-state-dir := join(env_var_or_default("TMPDIR", "/tmp"), "pai-bot-dev")
+emulate_version := "0.4.1"
 
 default:
   @just --list
@@ -182,6 +183,15 @@ go:
 
 frontend-deps:
   cd admin && pnpm install
+
+emulate-auth:
+  npx -y emulate@{{emulate_version}} --service google,vercel --port 4000 --seed tools/emulate/emulate.config.yaml
+
+emulate-google:
+  npx -y emulate@{{emulate_version}} --service google --port 4002 --seed tools/emulate/emulate.config.yaml
+
+emulate-vercel:
+  npx -y emulate@{{emulate_version}} --service vercel --port 4000 --seed tools/emulate/emulate.config.yaml
 
 frontend:
   #!/usr/bin/env bash
