@@ -5,11 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useLoginGate } from "@/components/login-gate/use-login-gate";
 
 export function LoginGateGoogleButton() {
-  const { tenantChoices, isPending, isGooglePending, startGoogleLogin } = useLoginGate();
-
-  if (tenantChoices.length > 0) {
-    return null;
-  }
+  const { isPending, isGooglePending, startGoogleLogin } = useLoginGate();
 
   return (
     <Button

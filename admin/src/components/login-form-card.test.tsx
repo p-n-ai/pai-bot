@@ -7,13 +7,10 @@ describe("LoginFormCard", () => {
       <LoginFormCard
         email=""
         password=""
-        tenantID=""
-        tenantChoices={[]}
         error=""
         isPending={false}
         onEmailChange={() => {}}
         onPasswordChange={() => {}}
-        onTenantChange={() => {}}
         onSubmit={(event) => event.preventDefault()}
       />,
     );
@@ -24,28 +21,21 @@ describe("LoginFormCard", () => {
     expect(screen.queryByText("School")).not.toBeInTheDocument();
   });
 
-  it("shows tenant selection and error state when tenant context is required", () => {
+  it("does not render a school selector even when tenant choices exist", () => {
     render(
       <LoginFormCard
         email="teacher@example.com"
         password="secret"
-        tenantID="tenant-1"
-        tenantChoices={[
-          { tenant_id: "tenant-1", tenant_name: "Sekolah Pandai", tenant_slug: "pandai" },
-          { tenant_id: "tenant-2", tenant_name: "Sekolah Beta", tenant_slug: "beta" },
-        ]}
         error="Choose the correct school to continue."
         isPending={false}
         onEmailChange={() => {}}
         onPasswordChange={() => {}}
-        onTenantChange={() => {}}
         onSubmit={(event) => event.preventDefault()}
       />,
     );
 
-    expect(screen.getByText("School")).toBeInTheDocument();
     expect(screen.getByText("Choose the correct school to continue.")).toBeInTheDocument();
-    expect(screen.getByLabelText("School")).toBeInTheDocument();
+    expect(screen.queryByLabelText("School")).not.toBeInTheDocument();
   });
 
   it("submits the form through the shared action button", () => {
@@ -55,13 +45,10 @@ describe("LoginFormCard", () => {
       <LoginFormCard
         email="teacher@example.com"
         password="secret"
-        tenantID=""
-        tenantChoices={[]}
         error=""
         isPending={false}
         onEmailChange={() => {}}
         onPasswordChange={() => {}}
-        onTenantChange={() => {}}
         onSubmit={(event) => {
           event.preventDefault();
           submitted = true;

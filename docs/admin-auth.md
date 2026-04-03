@@ -1,6 +1,6 @@
 ---
 title: "Admin Auth Runtime"
-summary: "Current admin authentication model: cookies, login flows, Google linking, refresh, tenant switching, and POST-only logout."
+summary: "Current admin authentication model: one session cookie, login flows, Google linking, tenant switching, and POST-only logout."
 read_when:
   - You are changing admin login, logout, refresh, or session-cookie behavior
   - You are changing Google sign-in or identity-linking behavior
@@ -13,11 +13,18 @@ Current.
 
 This doc describes the auth model that is live today for the admin app.
 
+Current direction:
+
+- Better Auth-inspired shape
+- Google-only OIDC provider for now
+- one server-owned session cookie
+- frontend never owns auth tokens
+
 ## Source Of Truth
 
 - Go backend owns auth state and cookie issuance
 - Next.js admin reads session state from server-owned cookies
-- browser JavaScript does not own access tokens
+- browser JavaScript does not own auth tokens
 
 Main files:
 
@@ -30,20 +37,17 @@ Main files:
 
 ## Cookie Model
 
-Go sets and clears these cookies:
+Go sets and clears one cookie:
 
-- `pai_admin_access`
-  short-lived JWT access token, `HttpOnly`
-- `pai_admin_refresh`
-  opaque refresh token, `HttpOnly`
-- `pai_admin_user`
-  URL-escaped SSR/profile cookie for frontend hydration
+- `pai_session`
+  opaque server-owned session token, `HttpOnly`
 
 Frontend rule:
 
 - no auth tokens in `localStorage`
 - browser requests use `credentials: include`
 - protected auth responses send `Cache-Control: private, no-store`
+- SSR bootstrap reads session state from the backend, not from a frontend-owned user cookie
 
 ## Login Flows
 
@@ -51,7 +55,7 @@ Frontend rule:
 
 1. Frontend sends `POST /api/auth/login`
 2. Go validates password identity from `auth_identities`
-3. If one account matches, Go issues cookies and returns session payload
+3. If one account matches, Go issues the session cookie and returns session payload
 4. If multiple tenant matches exist, Go returns `tenant_required`
 5. Frontend asks user to choose school, then retries login with `tenant_id`
 
@@ -80,12 +84,36 @@ Account resolution rules:
   reject with `tenant_required`
 - no authoritative single match
   reject with `link_required`
+- configured domain restriction mismatch
+  reject with `domain_not_allowed`
 
 Authoritative email rule:
 
 - `@gmail.com` verified addresses qualify
 - hosted-domain Google identities can also qualify
 - arbitrary verified non-Google emails do not auto-link
+
+Optional domain restriction:
+
+- set the policy in Go auth wiring, currently via `auth.AllowGoogleHostedDomains("pandai.org")`
+- Go sends `hd=pandai.org` on the Google authorization URL
+- Go still enforces the restriction on callback before any link or session is issued
+- accounts outside the allowed domain fail with `domain_not_allowed`
+
+Google env surface:
+
+- normal setup:
+  - `PAI_AUTH_GOOGLE_CLIENT_ID`
+  - `PAI_AUTH_GOOGLE_CLIENT_SECRET`
+- advanced/local-emulate only:
+  - `PAI_AUTH_GOOGLE_DISCOVERY_URL`
+  - `PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET`
+
+Redirect URI rule:
+
+- preferred config is explicit base auth URL (`PAI_AUTH_URL`)
+- request-derived callback URLs are tolerated for local/dev fallback only
+- no Google-specific redirect env is required
 
 That means:
 
@@ -108,18 +136,18 @@ Rules:
 - one Google link per local user; re-link replaces the previous Google identity for that user
 - Google `sub` is the stable identity key; provider email is metadata only
 
-## Refresh
+## Session Read
 
 Endpoint:
 
-- `POST /api/auth/refresh`
+- `GET /api/auth/session`
 
 Flow:
 
-1. Frontend receives `401`
-2. frontend calls refresh once
-3. Go validates refresh token from cookie or body
-4. Go rotates refresh token, reissues access token, resets cookies
+1. Frontend or SSR calls `GET /api/auth/session`
+2. Go reads `pai_session`
+3. Go loads session state server-side
+4. Go extends the cookie expiry and returns `{ expires_at, user }`
 
 ## Tenant Switch
 
@@ -130,7 +158,7 @@ Endpoint:
 Rules:
 
 - requires password confirmation
-- reissues session in place for the selected tenant
+- reissues the session in place for the selected tenant
 - does not force a logout/login round trip
 
 ## Logout
@@ -148,8 +176,8 @@ Important:
 Flow:
 
 1. Frontend calls `POST /api/auth/logout`
-2. Go reads refresh token from cookie or optional body
-3. Go revokes the refresh token server-side
+2. Go reads the session token from cookie or optional body fallback
+3. Go revokes the server-side session
 4. Go clears auth cookies
 5. Frontend clears local UI/session metadata and redirects to `/login`
 
@@ -175,6 +203,6 @@ Short version:
 
 - Go owns identity
 - cookies own session
-- Next hydrates state from cookies
+- Next hydrates state from backend session reads
 - Google `sub` owns provider identity
 - logout is POST, not GET

@@ -4,7 +4,7 @@ import { clearSchoolSwitchState } from "@/lib/school-switch-state";
 import { applyAdminSessionToStore, clearAdminSessionStore } from "@/stores/app-store";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export interface Student {
   id: string;
@@ -171,9 +171,9 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
-  access_expires_at: string;
-  refresh_expires_at: string;
+  expires_at: string;
   user: AuthUser;
+  tenant_choices?: TenantChoice[];
 }
 
 export interface LinkedIdentity {
@@ -197,18 +197,6 @@ export interface InviteRecord {
   invited_by_user_id: string;
 }
 
-export class LoginError extends Error {
-  code: "tenant_required" | "generic";
-  tenants: TenantChoice[];
-
-  constructor(message: string, options?: { code?: "tenant_required" | "generic"; tenants?: TenantChoice[] }) {
-    super(message);
-    this.name = "LoginError";
-    this.code = options?.code ?? "generic";
-    this.tenants = options?.tenants ?? [];
-  }
-}
-
 function parseErrorMessage(raw: string, fallback: string): string {
   if (!raw.trim()) {
     return fallback;
@@ -222,37 +210,20 @@ function parseErrorMessage(raw: string, fallback: string): string {
   }
 }
 
-async function refreshAuthSession(): Promise<boolean> {
-  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-    cache: "no-store",
-  });
-
-  return res.ok;
+function resolveAPIPath(path: string): string {
+  if (!API_BASE) {
+    return path;
+  }
+  return `${API_BASE}${path}`;
 }
 
-async function fetchWithSession(path: string, init: RequestInit = {}, retryOnUnauthorized = true): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
+async function fetchWithSession(path: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(resolveAPIPath(path), {
     ...init,
     credentials: "include",
     cache: "no-store",
   });
-
-  if (res.status !== 401 || !retryOnUnauthorized || typeof window === "undefined") {
-    return res;
-  }
-
-  const refreshed = await refreshAuthSession();
-  if (!refreshed) {
-    return res;
-  }
-
-  return fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    cache: "no-store",
-  });
+  return res;
 }
 
 async function fetchJSON<T>(path: string): Promise<T> {
@@ -277,7 +248,6 @@ async function postJSONWithBody<T>(path: string, body?: unknown): Promise<T> {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     },
-    path !== "/api/auth/logout",
   );
   if (!res.ok) {
     const text = await res.text();
@@ -327,7 +297,7 @@ export async function login(input: {
   email: string;
   password: string;
 }): Promise<AuthSession> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await fetch(resolveAPIPath("/api/auth/login"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -339,22 +309,7 @@ export async function login(input: {
 
   if (!res.ok) {
     const raw = await res.text();
-
-    try {
-      const payload = JSON.parse(raw) as { error?: string; tenants?: TenantChoice[] };
-      if (res.status === 400 && Array.isArray(payload.tenants) && payload.tenants.length > 0) {
-        throw new LoginError(payload.error || "Select a tenant to continue", {
-          code: "tenant_required",
-          tenants: payload.tenants,
-        });
-      }
-      throw new LoginError(payload.error || `Login failed: ${res.status}`);
-    } catch (error) {
-      if (error instanceof LoginError) {
-        throw error;
-      }
-      throw new LoginError(parseErrorMessage(raw, `Login failed: ${res.status}`));
-    }
+    throw new Error(parseErrorMessage(raw, `Login failed: ${res.status}`));
   }
 
   return (await readJSONResponse(res)) as AuthSession;
@@ -365,7 +320,7 @@ export async function acceptInvite(input: {
   name: string;
   password: string;
 }): Promise<AuthSession> {
-  const res = await fetch(`${API_BASE}/api/auth/invitations/accept`, {
+  const res = await fetch(resolveAPIPath("/api/auth/invitations/accept"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -395,7 +350,7 @@ export async function switchTenantSession(tenantID: string, password: string): P
     throw new Error("A stored session is required to switch schools");
   }
 
-  const res = await fetch(`${API_BASE}/api/auth/switch-tenant`, {
+  const res = await fetch(resolveAPIPath("/api/auth/switch-tenant"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -430,19 +385,19 @@ export function clearSession(): void {
 }
 
 export function buildGoogleLoginURL(nextPath?: string | null): string {
-  const url = new URL(`${API_BASE}/api/auth/google/start`);
+  const url = new URL(resolveAPIPath("/api/auth/google/start"), "http://localhost");
   if (nextPath?.trim()) {
     url.searchParams.set("next", nextPath);
   }
-  return url.toString();
+  return `${url.pathname}${url.search}`;
 }
 
 export function buildGoogleLinkURL(nextPath?: string | null): string {
-  const url = new URL(`${API_BASE}/api/auth/google/link/start`);
+  const url = new URL(resolveAPIPath("/api/auth/google/link/start"), "http://localhost");
   if (nextPath?.trim()) {
     url.searchParams.set("next", nextPath);
   }
-  return url.toString();
+  return `${url.pathname}${url.search}`;
 }
 
 export async function startGoogleLink(nextPath?: string | null): Promise<string> {

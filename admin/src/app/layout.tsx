@@ -4,15 +4,15 @@ import { Suspense } from "react";
 import { Agentation } from "agentation";
 import { APP_SIDEBAR_COOKIE_NAME } from "@/components/app-sidebar";
 import { AppShell } from "@/components/app-shell";
-import { RefineProvider } from "@/components/refine-provider";
+import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import type { AuthUser } from "@/lib/api";
-import { USER_COOKIE, parseCookieJSON } from "@/lib/auth-session";
-import { SCHOOL_SWITCH_STATE_COOKIE, type SchoolSwitchState } from "@/lib/school-switch-state";
+import { parseCookieJSON } from "@/lib/auth-session";
+import { getServerAuthSession } from "@/lib/server-api";
+import { buildSchoolSwitchState, SCHOOL_SWITCH_STATE_COOKIE, type SchoolSwitchState } from "@/lib/school-switch-state";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -31,11 +31,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
+  const session = await getServerAuthSession();
   const defaultSidebarOpen = cookieStore.get(APP_SIDEBAR_COOKIE_NAME)?.value !== "false";
-  const initialCurrentUser = parseCookieJSON<AuthUser>(cookieStore.get(USER_COOKIE)?.value);
-  const initialSchoolSwitchState = parseCookieJSON<SchoolSwitchState>(
-    cookieStore.get(SCHOOL_SWITCH_STATE_COOKIE)?.value,
-  );
+  const initialCurrentUser = session?.user ?? null;
+  const initialSchoolSwitchState =
+    parseCookieJSON<SchoolSwitchState>(cookieStore.get(SCHOOL_SWITCH_STATE_COOKIE)?.value) ??
+    (session
+      ? buildSchoolSwitchState(session.user.email, session.user.tenant_id, session.tenant_choices ?? [])
+      : null);
 
   return (
     <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
@@ -43,7 +46,7 @@ export default async function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <Suspense fallback={null}>
-              <RefineProvider>
+              <QueryProvider>
                 <AppShell
                   defaultSidebarOpen={defaultSidebarOpen}
                   initialCurrentUser={initialCurrentUser}
@@ -51,7 +54,7 @@ export default async function RootLayout({
                 >
                   {children}
                 </AppShell>
-              </RefineProvider>
+              </QueryProvider>
             </Suspense>
             <Toaster richColors position="top-right" />
           </TooltipProvider>

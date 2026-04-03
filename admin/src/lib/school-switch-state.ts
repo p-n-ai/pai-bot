@@ -10,6 +10,17 @@ export type SchoolSwitchState = {
   tenantChoices: TenantChoice[];
 };
 
+export function buildSchoolSwitchState(email: string, currentTenantID: string, tenantChoices: TenantChoice[]): SchoolSwitchState | null {
+  if (!email.trim() || !currentTenantID.trim() || tenantChoices.length <= 1) {
+    return null;
+  }
+  return {
+    email,
+    currentTenantID,
+    tenantChoices,
+  };
+}
+
 export function readSchoolSwitchState(): SchoolSwitchState | null {
   if (typeof window === "undefined") return null;
 
