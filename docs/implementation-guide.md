@@ -4778,7 +4778,8 @@ export interface ClassProgress {
 
 export async function getClassProgress(classId: string): Promise<ClassProgress> {
   const res = await fetch(`${API_BASE}/api/admin/classes/${classId}/progress`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: 'include',
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Failed: ${res.statusText}`);
   return res.json();
@@ -4790,17 +4791,11 @@ export async function getStudentDetail(studentId: string): Promise<{
   streak: { current: number; longest: number; total_xp: number };
 }> {
   const res = await fetch(`${API_BASE}/api/admin/students/${studentId}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: 'include',
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Failed: ${res.statusText}`);
   return res.json();
-}
-
-function getToken(): string {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('pai_token') || '';
-  }
-  return '';
 }
 ```
 
@@ -4810,6 +4805,9 @@ Current implementation note:
 - Backend bearer-token enforcement plus RBAC still protects the Go admin API, but the frontend also ships cookie-aware redirects and protected route handling now.
 - Multi-school logins use the backend `tenant_required` response to switch the UI into a guided school-picker state instead of treating that step like an error.
 - Invite acceptance and password setup remain part of the broader auth model, but ongoing email/password login, refresh-token-backed session persistence, logout, and guarded frontend routes are already live in the admin app.
+- Auth hardening now keeps tokens out of `localStorage`: Go issues `HttpOnly` cookies for access + refresh + SSR profile hydration, admin fetches use `credentials: 'include'`, protected API responses ship `Cache-Control: private, no-store`, and the client store hydrates from server cookies instead of browser storage.
+- Admin login now also supports Google OIDC: `/login` shows `Continue with Google`, Go owns the OIDC callback/session cookies, same-email auto-linking only happens for exact single-account verified matches, and cross-email Google linking only happens from an authenticated workspace flow.
+- The signed-in shell now exposes linked-provider state via `GET /api/auth/identities` and a sidebar `Link Google` action instead of asking users to manage provider linking from the public login page.
 - Sidebar branding note: the desktop shell now uses a custom Classroom Hub mark in the header instead of a stock school icon so the admin workspace reads as product branding, not default iconography.
 
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
@@ -4821,11 +4819,12 @@ Follow the same pattern:
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Week 4 budget scope is AI-token-only, not real-money spend tracking.
 - **Day 20:** Week 4 retro.
 
-Status (2026-04-01): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, `POST /api/admin/invites`, and `POST /api/admin/ai/budget-window`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; document it as AI-token budgeting only, not real-money spend tracking.
+Status (2026-04-03): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, `POST /api/admin/invites`, `POST /api/admin/ai/budget-window`, and `GET /api/auth/identities`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, `auth_oidc_flows`, invite acceptance, email/password login, Google OIDC login/linking, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; document it as AI-token budgeting only, not real-money spend tracking.
 
 Planned follow-up after Week 4 scaffolding:
 
 - Keep students on Telegram identity until a separate student web portal is explicitly introduced.
+- Use repo-local provider emulation for future Google/Vercel auth work and integration tests instead of depending on live provider calls during local dev. See [local-auth-emulation.md](local-auth-emulation.md).
 - Treat `admin/src/app/globals.css` as the single owner for admin design tokens (color, radius, typography, focus, sidebar, and chart palette).
 - Current admin shell baseline favors a narrower true-light sidebar in light mode, simpler account footer, tighter top bar padding, no top-bar divider line, and a dashboard root that hides the duplicate shell breadcrumb/title layer while using a plain page header instead of a boxed hero card.
 - Current dashboard summary row should read as: learner count with the attention callout tucked underneath, class-grade letter derived from average mastery, average mastery with weakest/strongest topic context, and coverage as the final operational metric.

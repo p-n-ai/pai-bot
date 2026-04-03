@@ -431,9 +431,16 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 | ⬜ | |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 | ⬜ | |
 | `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 | ⬜ | |
-| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_refresh_tokens`; invite acceptance; email/password login; refresh/logout endpoints; Next.js route guards for teacher/parent/admin views | 🤖 | ⬜ | |
+| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_refresh_tokens`; invite acceptance; email/password login; refresh/logout endpoints; Next.js route guards for teacher/parent/admin views | 🤖 | ✅ | Session cookies now come from Go as `HttpOnly`; admin auth no longer stores tokens in `localStorage`; protected API/page responses use `no-store`. |
 | `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human | ⬜ | |
 | `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human | ⬜ | |
+
+#### Additional Tasks (Out of Initial Plan)
+
+| Task ID | Task | Owner | Status | Remark |
+|---------|------|-------|--------|--------|
+| `A-W5D24-AUTH-EMULATE-1` | Add repo-local `emulate` support for Google/Vercel provider emulation: pinned `just` recipes, shared seed config, and auth-dev docs | 🤖 | ✅ | Dev/test support only; production auth remains Go-owned. |
+| `A-W5D24-AUTH-GOOGLE-1` | Add Google OIDC admin sign-in/linking: Go start/callback/identity endpoints, `auth_oidc_flows` state storage, explicit cross-email linking, constrained same-email auto-link, admin UI Google CTA, linked-identity card, and emulate-backed integration coverage | 🤖 | ✅ | Subject-based identity keys (`sub`), PKCE/state/nonce, no self-signup, HS256 accepted only for local emulator issuers, silent auto-link limited to exact one-account Gmail/Workspace-style matches, successful callbacks promote `/login` back to the role-safe workspace, and the `pai_admin_user` cookie is URL-escaped so frontend guards can hydrate from it. |
 
 **Week 5 Targets:** Fresh `docker compose up` works in <10min. README + docs complete. Helm chart exists. Security audit done. 150+ students active.
 

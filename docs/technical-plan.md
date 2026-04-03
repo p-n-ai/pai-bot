@@ -127,6 +127,10 @@ Each channel adapter normalizes platform-specific message formats into a common 
 - **School Admin** — Multi-class management, token budget allocation, data export
 - **Platform Admin** — Multi-tenant management, AI provider configuration, usage analytics
 
+Local development note:
+
+- External OAuth/provider work should use repo-local emulation support where possible instead of calling real third-party APIs during routine local dev. See [local-auth-emulation.md](local-auth-emulation.md).
+
 ### 2.6 Pedagogical Prompt Strategies
 
 The Agent Engine uses structured prompt patterns to ensure consistent, high-quality teaching. These are implemented in `internal/agent/prompts.go` as system prompt templates — no additional infrastructure required.
@@ -341,12 +345,32 @@ CREATE TABLE auth_identities (
     provider              TEXT NOT NULL CHECK (provider IN ('password', 'telegram', 'whatsapp', 'google', 'microsoft')),
     identifier            TEXT NOT NULL,
     identifier_normalized TEXT NOT NULL,
+    provider_account_id   TEXT,          -- stable external subject (Google `sub`)
+    provider_email        TEXT,
+    provider_email_normalized TEXT,
+    provider_profile      JSONB DEFAULT '{}',
     password_hash         TEXT,
     email_verified_at     TIMESTAMPTZ,
+    linked_at             TIMESTAMPTZ,
+    last_used_at          TIMESTAMPTZ,
     last_login_at         TIMESTAMPTZ,
     created_at            TIMESTAMPTZ DEFAULT NOW(),
     updated_at            TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (tenant_id, provider, identifier_normalized)
+);
+
+CREATE TABLE auth_oidc_flows (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider      TEXT NOT NULL CHECK (provider IN ('google')),
+    flow_type     TEXT NOT NULL CHECK (flow_type IN ('login', 'link')),
+    state_hash    TEXT NOT NULL UNIQUE,
+    nonce         TEXT NOT NULL,
+    pkce_verifier TEXT NOT NULL,
+    user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
+    next_path     TEXT,
+    expires_at    TIMESTAMPTZ NOT NULL,
+    used_at       TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Invite-only provisioning for teacher/parent/admin users.

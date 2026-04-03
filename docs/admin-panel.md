@@ -46,14 +46,20 @@ The root route `/` now resolves immediately to the role-safe workspace when a se
 
 ## Authentication & Authorization
 
+Detailed runtime reference:
+
+- [docs/admin-auth.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/admin-auth.md)
+
 ### Flow
 
 1. **Enter** — User lands on `/` or `/login`
    Root `/` redirects to `/login` when no session exists
-2. **Login** — Email + password → JWT access token (15 min) + refresh token (7 days, rotated on use)
-3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in
-4. **Route guards** — Next.js enforces role-based page access on the frontend
-5. **API middleware** — Go backend enforces RBAC on all `/api/admin/*` endpoints
+2. **Login** — Email + password, or `Continue with Google` for linked Google identities and exact single-account verified-email matches
+3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in. Google callback flows do not silently pick a tenant when the email maps to multiple schools.
+4. **Link sign-in methods** — Authenticated admins can link Google from the signed-in workspace shell. Same-email auto-linking is limited to exact one-account matches; different-email Google accounts require an explicit authenticated link flow.
+5. **Route guards** — Next.js enforces role-based page access on the frontend
+6. **API middleware** — Go backend enforces RBAC on all `/api/admin/*` endpoints
+7. **Logout** — Frontend triggers `POST /api/auth/logout`; logout is not exposed as a GET link or navigation route
 
 ### Database Tables
 
@@ -63,11 +69,13 @@ The root route `/` now resolves immediately to the role-safe workspace when a se
 | `auth_identities` | Login credentials (provider: `password`, `telegram`, `whatsapp`, `google`, `microsoft`) |
 | `auth_invites` | Invite tokens with email, role, expiry, acceptance tracking |
 | `auth_refresh_tokens` | Rotating refresh tokens (hashed), with user agent and IP |
+| `auth_oidc_flows` | Short-lived Google OIDC state, nonce, PKCE verifier, link/login flow metadata |
 
 ### Security
 
 - JWT access tokens: 15-minute expiry
 - Refresh tokens: 7-day expiry, single-use rotation, stored hashed in PostgreSQL
+- Google identity matching uses `provider_account_id = sub`; provider email is matching/display metadata, not the stable account key
 - All admin endpoints require `Authorization: Bearer <token>` header
 - RBAC middleware validates user role against endpoint requirements
 - Tenant isolation via `tenant_id` on all queries
@@ -190,6 +198,7 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 |------|-------|---------------|--------|
 | Root Redirect | `/` | All web roles | Current |
 | Login | `/login` | All web roles | Current |
+| Linked Sign-in Methods | Sidebar footer card | Teacher, Parent, Admin, Platform Admin | Current |
 | Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Current |
 | Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Current |
 | Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to AI Usage |
