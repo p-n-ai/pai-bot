@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/p-n-ai/pai-bot/internal/group"
 )
 
 var ErrNotFound = errors.New("admin resource not found")
@@ -166,10 +167,32 @@ type ClassProgress struct {
 	TopicIDs []string       `json:"topic_ids"`
 }
 
+type ClassListItem struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	SyllabusID  string    `json:"syllabus_id,omitempty"`
+	JoinCode    string    `json:"join_code"`
+	Status      string    `json:"status"`
+	MemberCount int       `json:"member_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ClassDetail struct {
+	ClassListItem
+	Members []ClassMember `json:"members"`
+}
+
+type ClassMember struct {
+	UserID         string    `json:"user_id"`
+	MembershipRole string    `json:"membership_role"`
+	JoinedAt       time.Time `json:"joined_at"`
+}
+
 type Service struct {
 	pool       *pgxpool.Pool
 	tenantID   string
 	allTenants bool
+	groupStore group.Store
 }
 
 type tokenBudgetWindow struct {
@@ -193,12 +216,12 @@ type retentionCohortSample struct {
 	Day14Users int
 }
 
-func New(pool *pgxpool.Pool, tenantID string) *Service {
-	return &Service{pool: pool, tenantID: tenantID}
+func New(pool *pgxpool.Pool, tenantID string, groupStore group.Store) *Service {
+	return &Service{pool: pool, tenantID: tenantID, groupStore: groupStore}
 }
 
-func NewPlatform(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool, allTenants: true}
+func NewPlatform(pool *pgxpool.Pool, groupStore group.Store) *Service {
+	return &Service{pool: pool, allTenants: true, groupStore: groupStore}
 }
 
 func (s *Service) tenantPredicate(column string, argPos int) string {
@@ -1341,4 +1364,147 @@ func computeStreakSummary(dates []time.Time) (int, int) {
 	}
 
 	return current, longest
+}
+
+// ListClasses returns all active classes (groups) for the tenant with member counts.
+func (s *Service) ListClasses(ctx context.Context) ([]ClassListItem, error) {
+	if s.groupStore == nil {
+		return nil, fmt.Errorf("group store not configured")
+	}
+	if s.allTenants {
+		return nil, fmt.Errorf("ListClasses requires a tenant-scoped service")
+	}
+
+	groups, err := s.groupStore.ListByTenant(ctx, s.tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list classes: %w", err)
+	}
+
+	items := make([]ClassListItem, 0, len(groups))
+	for _, g := range groups {
+		count, err := s.groupStore.MemberCount(ctx, g.ID)
+		if err != nil {
+			return nil, fmt.Errorf("member count for %s: %w", g.ID, err)
+		}
+		items = append(items, ClassListItem{
+			ID:          g.ID,
+			Name:        g.Name,
+			SyllabusID:  g.SyllabusID,
+			JoinCode:    g.JoinCode,
+			Status:      g.Status,
+			MemberCount: count,
+			CreatedAt:   g.CreatedAt,
+		})
+	}
+	return items, nil
+}
+
+// CreateClass creates a new class for the tenant.
+func (s *Service) CreateClass(ctx context.Context, name, syllabusID, createdByUserID string) (*ClassListItem, error) {
+	if s.groupStore == nil {
+		return nil, fmt.Errorf("group store not configured")
+	}
+	if s.allTenants {
+		return nil, fmt.Errorf("CreateClass requires a tenant-scoped service")
+	}
+
+	created, err := s.groupStore.Create(ctx, group.Group{
+		TenantID:   s.tenantID,
+		Name:       name,
+		SyllabusID: syllabusID,
+		CreatedBy:  createdByUserID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create class: %w", err)
+	}
+
+	count, err := s.groupStore.MemberCount(ctx, created.ID)
+	if err != nil {
+		return nil, fmt.Errorf("member count after create: %w", err)
+	}
+
+	return &ClassListItem{
+		ID:          created.ID,
+		Name:        created.Name,
+		SyllabusID:  created.SyllabusID,
+		JoinCode:    created.JoinCode,
+		Status:      created.Status,
+		MemberCount: count,
+		CreatedAt:   created.CreatedAt,
+	}, nil
+}
+
+// GetClassDetail returns a class with its member list.
+func (s *Service) GetClassDetail(ctx context.Context, classID string) (*ClassDetail, error) {
+	if s.groupStore == nil {
+		return nil, fmt.Errorf("group store not configured")
+	}
+	if s.allTenants {
+		return nil, fmt.Errorf("GetClassDetail requires a tenant-scoped service")
+	}
+
+	g, err := s.groupStore.GetByID(ctx, s.tenantID, classID)
+	if err != nil {
+		if errors.Is(err, group.ErrGroupNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get class: %w", err)
+	}
+
+	rawMembers, err := s.groupStore.GetMembers(ctx, classID)
+	if err != nil {
+		return nil, fmt.Errorf("get members: %w", err)
+	}
+
+	members := make([]ClassMember, 0, len(rawMembers))
+	for _, m := range rawMembers {
+		members = append(members, ClassMember{
+			UserID:         m.UserID,
+			MembershipRole: m.MembershipRole,
+			JoinedAt:       m.JoinedAt,
+		})
+	}
+
+	return &ClassDetail{
+		ClassListItem: ClassListItem{
+			ID:          g.ID,
+			Name:        g.Name,
+			SyllabusID:  g.SyllabusID,
+			JoinCode:    g.JoinCode,
+			Status:      g.Status,
+			MemberCount: len(members),
+			CreatedAt:   g.CreatedAt,
+		},
+		Members: members,
+	}, nil
+}
+
+// UpdateClass renames or archives a class.
+func (s *Service) UpdateClass(ctx context.Context, classID string, name *string, status *string) error {
+	if s.groupStore == nil {
+		return fmt.Errorf("group store not configured")
+	}
+	if s.allTenants {
+		return fmt.Errorf("UpdateClass requires a tenant-scoped service")
+	}
+
+	if name != nil {
+		if err := s.groupStore.Rename(ctx, s.tenantID, classID, *name); err != nil {
+			if errors.Is(err, group.ErrGroupNotFound) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("rename class: %w", err)
+		}
+	}
+
+	if status != nil && *status == "archived" {
+		if err := s.groupStore.Archive(ctx, s.tenantID, classID); err != nil {
+			if errors.Is(err, group.ErrGroupNotFound) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("archive class: %w", err)
+		}
+	}
+
+	return nil
 }

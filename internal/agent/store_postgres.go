@@ -398,6 +398,54 @@ func (s *PostgresStore) SetUserABGroup(externalID, group string) error {
 	return nil
 }
 
+func (s *PostgresStore) GetUserTenantID(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	var tenantID *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT tenant_id::text FROM users
+		 WHERE tenant_id = $1::uuid AND channel = $2 AND external_id = $3
+		 ORDER BY created_at ASC LIMIT 1`,
+		s.tenantID, s.channel, externalID,
+	).Scan(&tenantID)
+	if err != nil || tenantID == nil || *tenantID == "" {
+		return "", false
+	}
+	return *tenantID, true
+}
+
+func (s *PostgresStore) GetUserRole(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	var role *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT NULLIF(role, '') FROM users
+		 WHERE tenant_id = $1::uuid AND channel = $2 AND external_id = $3
+		 ORDER BY created_at ASC LIMIT 1`,
+		s.tenantID, s.channel, externalID,
+	).Scan(&role)
+	if err != nil || role == nil || *role == "" {
+		return "", false
+	}
+	return *role, true
+}
+
+func (s *PostgresStore) GetUserInternalID(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	var id *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT id::text FROM users
+		 WHERE tenant_id = $1::uuid AND channel = $2 AND external_id = $3
+		 ORDER BY created_at ASC LIMIT 1`,
+		s.tenantID, s.channel, externalID,
+	).Scan(&id)
+	if err != nil || id == nil || *id == "" {
+		return "", false
+	}
+	return *id, true
+}
+
 // NewPostgresStore creates a PostgreSQL-backed conversation store for the default channel.
 func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, error) {
 	return NewPostgresStoreForChannel(ctx, pool, defaultChannel)

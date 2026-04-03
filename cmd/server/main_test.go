@@ -155,6 +155,141 @@ func TestAdminClassProgressEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminListClassesEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("classes count = %d, want 1", len(payload))
+	}
+	if payload[0].ID != "cls_1" {
+		t.Fatalf("classes[0].id = %q, want cls_1", payload[0].ID)
+	}
+}
+
+func TestAdminCreateClassEndpoint(t *testing.T) {
+	body := `{"name":"Form 2 Geometry","syllabus_id":"kssm-form-2"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/classes", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var payload struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Name != "Form 2 Geometry" {
+		t.Fatalf("name = %q, want Form 2 Geometry", payload.Name)
+	}
+}
+
+func TestAdminCreateClassEndpointRequiresName(t *testing.T) {
+	body := `{"syllabus_id":"kssm-form-2"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/classes", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAdminGetClassDetailEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/cls_1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		ID      string `json:"id"`
+		Members []struct {
+			UserID string `json:"user_id"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.ID != "cls_1" {
+		t.Fatalf("id = %q, want cls_1", payload.ID)
+	}
+	if len(payload.Members) != 1 {
+		t.Fatalf("members count = %d, want 1", len(payload.Members))
+	}
+}
+
+func TestAdminGetClassDetailNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAdminUpdateClassEndpoint(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{name: "rename", body: `{"name":"New Name"}`, wantStatus: http.StatusNoContent},
+		{name: "archive", body: `{"status":"archived"}`, wantStatus: http.StatusNoContent},
+		{name: "rename and archive", body: `{"name":"New Name","status":"archived"}`, wantStatus: http.StatusNoContent},
+		{name: "empty body", body: `{}`, wantStatus: http.StatusBadRequest},
+		{name: "invalid status", body: `{"status":"active"}`, wantStatus: http.StatusBadRequest},
+		{name: "empty name", body: `{"name":""}`, wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPatch, "/api/admin/classes/cls_1", strings.NewReader(tt.body))
+			req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestAdminStudentDetailEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
@@ -938,6 +1073,48 @@ func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
 			},
 		},
 	}, nil
+}
+
+func (stubAdminAPI) ListClasses(_ context.Context) ([]adminapi.ClassListItem, error) {
+	return []adminapi.ClassListItem{
+		{ID: "cls_1", Name: "Form 1 Algebra", JoinCode: "ABC123", Status: "active", MemberCount: 3},
+	}, nil
+}
+
+func (stubAdminAPI) CreateClass(_ context.Context, name, syllabusID, createdByUserID string) (*adminapi.ClassListItem, error) {
+	return &adminapi.ClassListItem{
+		ID:         "cls_new",
+		Name:       name,
+		SyllabusID: syllabusID,
+		JoinCode:   "XYZ789",
+		Status:     "active",
+		MemberCount: 1,
+	}, nil
+}
+
+func (stubAdminAPI) GetClassDetail(_ context.Context, classID string) (*adminapi.ClassDetail, error) {
+	if classID == "missing" {
+		return nil, adminapi.ErrNotFound
+	}
+	return &adminapi.ClassDetail{
+		ClassListItem: adminapi.ClassListItem{
+			ID:          classID,
+			Name:        "Form 1 Algebra",
+			JoinCode:    "ABC123",
+			Status:      "active",
+			MemberCount: 1,
+		},
+		Members: []adminapi.ClassMember{
+			{UserID: "usr_1", MembershipRole: "owner", JoinedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)},
+		},
+	}, nil
+}
+
+func (stubAdminAPI) UpdateClass(_ context.Context, classID string, _ *string, _ *string) error {
+	if classID == "missing" {
+		return adminapi.ErrNotFound
+	}
+	return nil
 }
 
 var _ adminDataSource = stubAdminAPI{}

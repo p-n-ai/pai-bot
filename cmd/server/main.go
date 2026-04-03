@@ -21,6 +21,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/group"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
@@ -76,6 +77,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	groupStore := group.NewPostgresStore(db.Pool)
+
 	// Load curriculum (warn if unavailable, don't fail).
 	loader, err := curriculum.NewLoader(cfg.CurriculumPath)
 	if err != nil {
@@ -104,6 +107,7 @@ func main() {
 		XP:                   xpTracker,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
+		Groups:               groupStore,
 		DevMode:              cfg.Features.DevMode,
 	})
 
@@ -193,10 +197,10 @@ func main() {
 	mux := newHandlerWithServicesAndAdminProvider(
 		tenantAdminDataSourceProvider{
 			newForTenant: func(tenantID string) adminDataSource {
-				return adminapi.New(db.Pool, tenantID)
+				return adminapi.New(db.Pool, tenantID, groupStore)
 			},
 			newForPlatform: func() adminDataSource {
-				return adminapi.NewPlatform(db.Pool)
+				return adminapi.NewPlatform(db.Pool, groupStore)
 			},
 		},
 		gatewaySender{gw},
@@ -242,6 +246,10 @@ type adminDataSource interface {
 	GetAIUsage() (adminapi.AIUsageSummary, error)
 	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
+	ListClasses(ctx context.Context) ([]adminapi.ClassListItem, error)
+	CreateClass(ctx context.Context, name, syllabusID, createdByUserID string) (*adminapi.ClassListItem, error)
+	GetClassDetail(ctx context.Context, classID string) (*adminapi.ClassDetail, error)
+	UpdateClass(ctx context.Context, classID string, name *string, status *string) error
 }
 
 type adminDataSourceProvider interface {
@@ -411,6 +419,10 @@ func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvide
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
+	mux.Handle("GET /api/admin/classes", teacherOrAbove(handleAdminListClasses(adminProvider)))
+	mux.Handle("POST /api/admin/classes", teacherOrAbove(handleAdminCreateClass(adminProvider)))
+	mux.Handle("GET /api/admin/classes/{id}", teacherOrAbove(handleAdminGetClassDetail(adminProvider)))
+	mux.Handle("PATCH /api/admin/classes/{id}", teacherOrAbove(handleAdminUpdateClass(adminProvider)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(adminProvider)))
@@ -630,6 +642,116 @@ func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messa
 			"student": detail.Student.ID,
 			"channel": msg.Channel,
 		})
+	}
+}
+
+func handleAdminListClasses(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.ListClasses(r.Context())
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminCreateClass(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	type request struct {
+		Name            string `json:"name"`
+		SyllabusID      string `json:"syllabus_id"`
+		CreatedByUserID string `json:"created_by_user_id"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(body.Name) == "" {
+			http.Error(w, "name is required", http.StatusBadRequest)
+			return
+		}
+
+		// Default created_by_user_id to the authenticated user if not provided.
+		if strings.TrimSpace(body.CreatedByUserID) == "" {
+			if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+				body.CreatedByUserID = claims.Subject
+			}
+		}
+
+		payload, err := admin.CreateClass(r.Context(), body.Name, body.SyllabusID, body.CreatedByUserID)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, payload)
+	}
+}
+
+func handleAdminGetClassDetail(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetClassDetail(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminUpdateClass(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	type request struct {
+		Name   *string `json:"name"`
+		Status *string `json:"status"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		var body request
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if body.Name == nil && body.Status == nil {
+			http.Error(w, "at least one of name or status is required", http.StatusBadRequest)
+			return
+		}
+		if body.Status != nil && *body.Status != "archived" {
+			http.Error(w, "status must be 'archived'", http.StatusBadRequest)
+			return
+		}
+		if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
+			http.Error(w, "name must not be empty", http.StatusBadRequest)
+			return
+		}
+
+		if err := admin.UpdateClass(r.Context(), r.PathValue("id"), body.Name, body.Status); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -884,7 +1006,7 @@ func withCORS(next http.Handler) http.Handler {
 		if slices.Contains(allowedOrigins, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		}
 
