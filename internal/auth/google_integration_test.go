@@ -19,11 +19,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const googleTestRedirectURL = "http://localhost:8080/api/auth/google/callback"
+
 func TestPostgresService_GoogleLoginAutoLinksSingleVerifiedEmail(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@gmail.com", RoleTeacher, "secret-123")
@@ -33,13 +35,12 @@ func TestPostgresService_GoogleLoginAutoLinksSingleVerifiedEmail(t *testing.T) {
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",
 		ClientSecret:          "google-secret",
-		RedirectURL:           "http://localhost:8080/api/auth/google/callback",
 		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
 		AdminBaseURL:          "http://localhost:3000",
 		EmulatorSigningSecret: google.signingSecret,
 	})
 
-	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard"})
+	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard", RedirectURL: googleTestRedirectURL})
 	if err != nil {
 		t.Fatalf("StartGoogleLogin() error = %v", err)
 	}
@@ -55,17 +56,18 @@ func TestPostgresService_GoogleLoginAutoLinksSingleVerifiedEmail(t *testing.T) {
 	google.nonce = nonce
 
 	result, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: state,
-		Code:  "google-code-1",
+		State:       state,
+		Code:        "google-code-1",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("CompleteGoogleCallback() error = %v", err)
 	}
-	if result.Pair == nil {
-		t.Fatal("CompleteGoogleCallback() pair = nil, want session")
+	if result.Session == nil {
+		t.Fatal("CompleteGoogleCallback() session = nil, want session")
 	}
-	if result.Pair.User.UserID != userID {
-		t.Fatalf("user_id = %q, want %q", result.Pair.User.UserID, userID)
+	if result.Session.User.UserID != userID {
+		t.Fatalf("user_id = %q, want %q", result.Session.User.UserID, userID)
 	}
 	if !result.Linked {
 		t.Fatal("result.Linked = false, want true for auto-link")
@@ -84,7 +86,7 @@ func TestPostgresService_GoogleLinkAllowsDifferentEmail(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-123")
@@ -94,15 +96,15 @@ func TestPostgresService_GoogleLinkAllowsDifferentEmail(t *testing.T) {
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",
 		ClientSecret:          "google-secret",
-		RedirectURL:           "http://localhost:8080/api/auth/google/callback",
 		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
 		AdminBaseURL:          "http://localhost:3000",
 		EmulatorSigningSecret: google.signingSecret,
 	})
 
 	linkURL, err := svc.StartGoogleLink(ctx, StartGoogleFlowRequest{
-		UserID:   userID,
-		NextPath: "/dashboard",
+		UserID:      userID,
+		NextPath:    "/dashboard",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("StartGoogleLink() error = %v", err)
@@ -119,17 +121,18 @@ func TestPostgresService_GoogleLinkAllowsDifferentEmail(t *testing.T) {
 	google.nonce = nonce
 
 	result, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: state,
-		Code:  "google-code-2",
+		State:       state,
+		Code:        "google-code-2",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("CompleteGoogleCallback(link) error = %v", err)
 	}
-	if result.Pair == nil || result.Pair.User.UserID != userID {
-		t.Fatalf("link result pair = %#v, want linked user", result.Pair)
+	if result.Session == nil || result.Session.User.UserID != userID {
+		t.Fatalf("link result session = %#v, want linked user", result.Session)
 	}
 
-	loginURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard"})
+	loginURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard", RedirectURL: googleTestRedirectURL})
 	if err != nil {
 		t.Fatalf("StartGoogleLogin() error = %v", err)
 	}
@@ -137,17 +140,18 @@ func TestPostgresService_GoogleLinkAllowsDifferentEmail(t *testing.T) {
 	google.nonce = loadOIDCFlowNonce(t, ctx, pool, loginState)
 
 	loginResult, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: loginState,
-		Code:  "google-code-3",
+		State:       loginState,
+		Code:        "google-code-3",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("CompleteGoogleCallback(login) error = %v", err)
 	}
-	if loginResult.Pair == nil || loginResult.Pair.User.UserID != userID {
-		t.Fatalf("login result pair = %#v, want linked user", loginResult.Pair)
+	if loginResult.Session == nil || loginResult.Session.User.UserID != userID {
+		t.Fatalf("login result session = %#v, want linked user", loginResult.Session)
 	}
-	if loginResult.Pair.User.Email != "teacher@yahoo.com" {
-		t.Fatalf("session email = %q, want primary local email", loginResult.Pair.User.Email)
+	if loginResult.Session.User.Email != "teacher@yahoo.com" {
+		t.Fatalf("session email = %q, want primary local email", loginResult.Session.User.Email)
 	}
 }
 
@@ -155,7 +159,7 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-123")
@@ -165,15 +169,15 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",
 		ClientSecret:          "google-secret",
-		RedirectURL:           "http://localhost:8080/api/auth/google/callback",
 		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
 		AdminBaseURL:          "http://localhost:3000",
 		EmulatorSigningSecret: google.signingSecret,
 	})
 
 	linkFirstURL, err := svc.StartGoogleLink(ctx, StartGoogleFlowRequest{
-		UserID:   userID,
-		NextPath: "/dashboard",
+		UserID:      userID,
+		NextPath:    "/dashboard",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("StartGoogleLink(first) error = %v", err)
@@ -187,15 +191,17 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 		Name:          "Teacher Old",
 	}
 	if _, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: firstState,
-		Code:  "google-code-old",
+		State:       firstState,
+		Code:        "google-code-old",
+		RedirectURL: googleTestRedirectURL,
 	}); err != nil {
 		t.Fatalf("CompleteGoogleCallback(first link) error = %v", err)
 	}
 
 	linkSecondURL, err := svc.StartGoogleLink(ctx, StartGoogleFlowRequest{
-		UserID:   userID,
-		NextPath: "/dashboard",
+		UserID:      userID,
+		NextPath:    "/dashboard",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("StartGoogleLink(second) error = %v", err)
@@ -209,8 +215,9 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 		Name:          "Teacher New",
 	}
 	if _, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: secondState,
-		Code:  "google-code-new",
+		State:       secondState,
+		Code:        "google-code-new",
+		RedirectURL: googleTestRedirectURL,
 	}); err != nil {
 		t.Fatalf("CompleteGoogleCallback(second link) error = %v", err)
 	}
@@ -226,7 +233,7 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 		t.Fatalf("linked email = %q, want teacher.new@gmail.com", identities[0].Email)
 	}
 
-	loginURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard"})
+	loginURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{NextPath: "/dashboard", RedirectURL: googleTestRedirectURL})
 	if err != nil {
 		t.Fatalf("StartGoogleLogin() error = %v", err)
 	}
@@ -239,14 +246,15 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 		Name:          "Teacher New",
 	}
 	loginResult, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: loginState,
-		Code:  "google-code-login",
+		State:       loginState,
+		Code:        "google-code-login",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != nil {
 		t.Fatalf("CompleteGoogleCallback(login) error = %v", err)
 	}
-	if loginResult.Pair == nil || loginResult.Pair.User.UserID != userID {
-		t.Fatalf("login result pair = %#v, want relinked user", loginResult.Pair)
+	if loginResult.Session == nil || loginResult.Session.User.UserID != userID {
+		t.Fatalf("login result session = %#v, want relinked user", loginResult.Session)
 	}
 }
 
@@ -254,20 +262,19 @@ func TestPostgresService_GoogleLoginRequiresExistingAccountWhenNoMatch(t *testin
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 	google := newGoogleOIDCTestServer(t)
 	defer google.Close()
 
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",
 		ClientSecret:          "google-secret",
-		RedirectURL:           "http://localhost:8080/api/auth/google/callback",
 		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
 		AdminBaseURL:          "http://localhost:3000",
 		EmulatorSigningSecret: google.signingSecret,
 	})
 
-	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{})
+	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{RedirectURL: googleTestRedirectURL})
 	if err != nil {
 		t.Fatalf("StartGoogleLogin() error = %v", err)
 	}
@@ -281,19 +288,20 @@ func TestPostgresService_GoogleLoginRequiresExistingAccountWhenNoMatch(t *testin
 	}
 
 	_, err = svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: state,
-		Code:  "google-code-4",
+		State:       state,
+		Code:        "google-code-4",
+		RedirectURL: googleTestRedirectURL,
 	})
 	if err != ErrIdentityLinkRequired {
 		t.Fatalf("CompleteGoogleCallback() error = %v, want ErrIdentityLinkRequired", err)
 	}
 }
 
-func TestPostgresService_GoogleLoginRequiresTenantWhenEmailMatchesMultipleSchools(t *testing.T) {
+func TestPostgresService_GoogleLoginReturnsTenantChoicesWhenEmailMatchesMultipleSchools(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 	google := newGoogleOIDCTestServer(t)
 	defer google.Close()
 
@@ -305,13 +313,12 @@ func TestPostgresService_GoogleLoginRequiresTenantWhenEmailMatchesMultipleSchool
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",
 		ClientSecret:          "google-secret",
-		RedirectURL:           "http://localhost:8080/api/auth/google/callback",
 		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
 		AdminBaseURL:          "http://localhost:3000",
 		EmulatorSigningSecret: google.signingSecret,
 	})
 
-	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{})
+	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{RedirectURL: googleTestRedirectURL})
 	if err != nil {
 		t.Fatalf("StartGoogleLogin() error = %v", err)
 	}
@@ -324,12 +331,65 @@ func TestPostgresService_GoogleLoginRequiresTenantWhenEmailMatchesMultipleSchool
 		Name:          "Shared Teacher",
 	}
 
-	_, err = svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
-		State: state,
-		Code:  "google-code-5",
+	result, err := svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
+		State:       state,
+		Code:        "google-code-5",
+		RedirectURL: googleTestRedirectURL,
 	})
-	if !errors.Is(err, ErrTenantRequired) {
-		t.Fatalf("CompleteGoogleCallback() error = %v, want ErrTenantRequired", err)
+	if err != nil {
+		t.Fatalf("CompleteGoogleCallback() error = %v", err)
+	}
+	if result.Session == nil {
+		t.Fatal("CompleteGoogleCallback() session = nil, want session")
+	}
+	if result.Session.User.TenantID != defaultTenantID {
+		t.Fatalf("tenant_id = %q, want %q", result.Session.User.TenantID, defaultTenantID)
+	}
+	if len(result.Session.TenantChoices) != 2 {
+		t.Fatalf("tenant_choices = %#v, want 2 options", result.Session.TenantChoices)
+	}
+}
+
+func TestPostgresService_GoogleLoginRejectsWrongAllowedDomain(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+	google := newGoogleOIDCTestServer(t)
+	defer google.Close()
+
+	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
+		ClientID:              "google-client",
+		ClientSecret:          "google-secret",
+		DiscoveryURL:          google.URL + "/.well-known/openid-configuration",
+		Policy:                AllowGoogleHostedDomains("pandai.org"),
+		AdminBaseURL:          "http://localhost:3000",
+		EmulatorSigningSecret: google.signingSecret,
+	})
+
+	authURL, err := svc.StartGoogleLogin(ctx, StartGoogleFlowRequest{RedirectURL: googleTestRedirectURL})
+	if err != nil {
+		t.Fatalf("StartGoogleLogin() error = %v", err)
+	}
+	if got := mustQueryParam(t, authURL, "hd"); got != "pandai.org" {
+		t.Fatalf("hd = %q, want pandai.org", got)
+	}
+	state := mustQueryParam(t, authURL, "state")
+	google.nonce = loadOIDCFlowNonce(t, ctx, pool, state)
+	google.identity = googleIdentity{
+		Sub:           "google-sub-pandai-blocked",
+		Email:         "teacher@gmail.com",
+		EmailVerified: true,
+		Name:          "Teacher Gmail",
+	}
+
+	_, err = svc.CompleteGoogleCallback(ctx, GoogleCallbackRequest{
+		State:       state,
+		Code:        "google-code-pandai-blocked",
+		RedirectURL: googleTestRedirectURL,
+	})
+	if !errors.Is(err, ErrGoogleDomainNotAllowed) {
+		t.Fatalf("CompleteGoogleCallback() error = %v, want ErrGoogleDomainNotAllowed", err)
 	}
 }
 

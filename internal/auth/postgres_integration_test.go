@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,11 +16,12 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-func TestPostgresService_AcceptInviteLoginRefreshAndLogout(t *testing.T) {
+func TestPostgresService_AcceptInviteLoginSessionAndLogout(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	nowFn := func() time.Time { return now }
+	svc := newPostgresService(pool, 7*24*time.Hour, nowFn)
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	seedInvite(t, ctx, pool, tenantID, "teacher@example.com", RoleTeacher, "invite-token", now.Add(24*time.Hour))
@@ -40,7 +40,7 @@ func TestPostgresService_AcceptInviteLoginRefreshAndLogout(t *testing.T) {
 	if pair.User.Role != RoleTeacher {
 		t.Fatalf("accept role = %q, want %q", pair.User.Role, RoleTeacher)
 	}
-	assertRefreshTokenStored(t, ctx, pool, pair.RefreshToken, false)
+	assertSessionStored(t, ctx, pool, pair.Token, false)
 	assertInviteAccepted(t, ctx, pool, "teacher@example.com")
 
 	loginPair, err := svc.Login(ctx, LoginRequest{
@@ -55,27 +55,30 @@ func TestPostgresService_AcceptInviteLoginRefreshAndLogout(t *testing.T) {
 		t.Fatalf("login user_id = %q, want %q", loginPair.User.UserID, pair.User.UserID)
 	}
 
-	refreshPair, err := svc.Refresh(ctx, loginPair.RefreshToken)
+	now = now.Add(30 * time.Minute)
+	session, err := svc.Session(ctx, loginPair.Token)
 	if err != nil {
-		t.Fatalf("Refresh() error = %v", err)
+		t.Fatalf("Session() error = %v", err)
 	}
-	if refreshPair.RefreshToken == loginPair.RefreshToken {
-		t.Fatal("Refresh() should rotate the refresh token")
+	if session.Token != loginPair.Token {
+		t.Fatalf("session token = %q, want %q", session.Token, loginPair.Token)
 	}
-	assertRefreshTokenStored(t, ctx, pool, loginPair.RefreshToken, true)
-	assertRefreshTokenStored(t, ctx, pool, refreshPair.RefreshToken, false)
+	if session.User.UserID != loginPair.User.UserID {
+		t.Fatalf("session user_id = %q, want %q", session.User.UserID, loginPair.User.UserID)
+	}
+	assertSessionStored(t, ctx, pool, loginPair.Token, false)
 
-	if err := svc.Logout(ctx, refreshPair.RefreshToken); err != nil {
+	if err := svc.Logout(ctx, loginPair.Token); err != nil {
 		t.Fatalf("Logout() error = %v", err)
 	}
-	assertRefreshTokenStored(t, ctx, pool, refreshPair.RefreshToken, true)
+	assertSessionStored(t, ctx, pool, loginPair.Token, true)
 }
 
 func TestPostgresService_LoginRejectsInvalidPassword(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	userID := seedPasswordUser(t, ctx, pool, tenantID, "parent@example.com", RoleParent, "secret-123")
@@ -96,7 +99,7 @@ func TestPostgresService_IssueInvitePersistsHashedToken(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
 	adminUserID := seedWebUser(t, ctx, pool, tenantID, RoleAdmin, "Admin Inviter")
@@ -116,11 +119,11 @@ func TestPostgresService_IssueInvitePersistsHashedToken(t *testing.T) {
 	assertInviteTokenStored(t, ctx, pool, "newteacher@example.com", invite.Token)
 }
 
-func TestPostgresService_LoginRequiresTenantWhenEmailExistsAcrossTenants(t *testing.T) {
+func TestPostgresService_LoginReturnsTenantChoicesWhenEmailExistsAcrossTenants(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
@@ -128,20 +131,21 @@ func TestPostgresService_LoginRequiresTenantWhenEmailExistsAcrossTenants(t *test
 	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
 	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-123")
 
-	_, err := svc.Login(ctx, LoginRequest{
+	pair, err := svc.Login(ctx, LoginRequest{
 		Email:    "shared@example.com",
 		Password: "secret-123",
 	})
-	if !errors.Is(err, ErrTenantRequired) {
-		t.Fatalf("Login() error = %v, want ErrTenantRequired", err)
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if pair.User.TenantID != defaultTenantID {
+		t.Fatalf("tenant_id = %q, want %q", pair.User.TenantID, defaultTenantID)
+	}
+	if len(pair.TenantChoices) != 2 {
+		t.Fatalf("tenant_choices = %#v, want 2 options", pair.TenantChoices)
 	}
 
-	options, ok := TenantRequiredOptions(err)
-	if !ok || len(options) != 2 {
-		t.Fatalf("TenantRequiredOptions() = %#v, %v", options, ok)
-	}
-
-	pair, err := svc.Login(ctx, LoginRequest{
+	pair, err = svc.Login(ctx, LoginRequest{
 		TenantID: secondTenantID,
 		Email:    "shared@example.com",
 		Password: "secret-123",
@@ -158,7 +162,7 @@ func TestPostgresService_SwitchTenantReissuesSessionWithoutLogout(t *testing.T) 
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
@@ -175,7 +179,7 @@ func TestPostgresService_SwitchTenantReissuesSessionWithoutLogout(t *testing.T) 
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	switchedPair, err := svc.SwitchTenant(ctx, loginPair.RefreshToken, secondTenantID, "secret-123")
+	switchedPair, err := svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-123")
 	if err != nil {
 		t.Fatalf("SwitchTenant() error = %v", err)
 	}
@@ -185,19 +189,19 @@ func TestPostgresService_SwitchTenantReissuesSessionWithoutLogout(t *testing.T) 
 	if switchedPair.User.TenantID != secondTenantID {
 		t.Fatalf("tenant_id = %q, want %q", switchedPair.User.TenantID, secondTenantID)
 	}
-	if switchedPair.RefreshToken == loginPair.RefreshToken {
-		t.Fatal("SwitchTenant() should rotate the refresh token")
+	if switchedPair.Token == loginPair.Token {
+		t.Fatal("SwitchTenant() should rotate the session token")
 	}
 
-	assertRefreshTokenStored(t, ctx, pool, loginPair.RefreshToken, true)
-	assertRefreshTokenStored(t, ctx, pool, switchedPair.RefreshToken, false)
+	assertSessionStored(t, ctx, pool, loginPair.Token, true)
+	assertSessionStored(t, ctx, pool, switchedPair.Token, false)
 }
 
 func TestPostgresService_SwitchTenantRequiresTargetTenantPassword(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
@@ -214,12 +218,12 @@ func TestPostgresService_SwitchTenantRequiresTargetTenantPassword(t *testing.T) 
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	_, err = svc.SwitchTenant(ctx, loginPair.RefreshToken, secondTenantID, "secret-123")
+	_, err = svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-123")
 	if err != ErrInvalidCredentials {
 		t.Fatalf("SwitchTenant() error = %v, want ErrInvalidCredentials", err)
 	}
 
-	assertRefreshTokenStored(t, ctx, pool, loginPair.RefreshToken, false)
+	assertSessionStored(t, ctx, pool, loginPair.Token, false)
 }
 
 func TestAuthIdentityTenantConstraintRejectsMismatchedTenant(t *testing.T) {
@@ -250,7 +254,7 @@ func TestPostgresService_PlatformAdminLoginWithoutTenant(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 	now := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC)
-	svc := newPostgresService(pool, "test-secret", 15*time.Minute, 7*24*time.Hour, func() time.Time { return now })
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	userID := seedGlobalPasswordUser(t, ctx, pool, "platform-admin@example.com", RolePlatformAdmin, "secret-123")
 
@@ -271,15 +275,14 @@ func TestPostgresService_PlatformAdminLoginWithoutTenant(t *testing.T) {
 		t.Fatalf("tenant_id = %q, want empty", pair.User.TenantID)
 	}
 
-	refreshed, err := svc.Refresh(ctx, pair.RefreshToken)
+	session, err := svc.Session(ctx, pair.Token)
 	if err != nil {
-		t.Fatalf("Refresh() error = %v", err)
+		t.Fatalf("Session() error = %v", err)
 	}
-	if refreshed.User.TenantID != "" {
-		t.Fatalf("refreshed tenant_id = %q, want empty", refreshed.User.TenantID)
+	if session.User.TenantID != "" {
+		t.Fatalf("session tenant_id = %q, want empty", session.User.TenantID)
 	}
-	assertRefreshTokenStored(t, ctx, pool, pair.RefreshToken, true)
-	assertRefreshTokenStored(t, ctx, pool, refreshed.RefreshToken, false)
+	assertSessionStored(t, ctx, pool, pair.Token, false)
 }
 
 func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
@@ -540,21 +543,21 @@ func assertInviteTokenStored(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 }
 
-func assertRefreshTokenStored(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rawToken string, wantRevoked bool) {
+func assertSessionStored(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rawToken string, wantRevoked bool) {
 	t.Helper()
 
 	var revokedAt *time.Time
 	if err := pool.QueryRow(ctx,
-		`SELECT revoked_at FROM auth_refresh_tokens WHERE token_hash = $1`,
+		`SELECT revoked_at FROM auth_sessions WHERE token_hash = $1`,
 		HashOpaqueToken(rawToken),
 	).Scan(&revokedAt); err != nil {
-		t.Fatalf("query refresh token: %v", err)
+		t.Fatalf("query session: %v", err)
 	}
 	if wantRevoked && revokedAt == nil {
-		t.Fatal("refresh token should be revoked")
+		t.Fatal("session should be revoked")
 	}
 	if !wantRevoked && revokedAt != nil {
-		t.Fatal("refresh token should be active")
+		t.Fatal("session should be active")
 	}
 }
 

@@ -45,7 +45,7 @@ func TestAuthenticateMiddleware(t *testing.T) {
 	}
 }
 
-func TestAuthenticateMiddlewareAcceptsAccessCookie(t *testing.T) {
+func TestAuthenticateMiddlewareAcceptsSessionCookie(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 3, 13, 10, 0, 0, 0, time.UTC)
@@ -72,7 +72,7 @@ func TestAuthenticateMiddlewareAcceptsAccessCookie(t *testing.T) {
 
 	handler := Authenticate(manager, func() time.Time { return now.Add(30 * time.Second) })(next)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
-	req.AddCookie(&http.Cookie{Name: AccessTokenCookieName, Value: token})
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

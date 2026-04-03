@@ -1,12 +1,11 @@
-const ACCESS_TOKEN_COOKIE = "pai_admin_access";
-const USER_COOKIE = "pai_admin_user";
+const SESSION_COOKIE = "pai_session";
 
-export function hasClientSession({ accessToken, user }) {
-  return Boolean(accessToken && user?.user_id && user?.email);
+export function hasClientSession({ sessionToken, user }) {
+  return Boolean(sessionToken && user?.user_id && user?.email);
 }
 
-export function getClientSessionSnapshot({ accessToken, user }) {
-  const isLoggedIn = hasClientSession({ accessToken, user });
+export function getClientSessionSnapshot({ sessionToken, user }) {
+  const isLoggedIn = hasClientSession({ sessionToken, user });
 
   return {
     isLoggedIn,
@@ -26,19 +25,16 @@ export function hasSessionCookies(cookieString) {
       .filter(Boolean),
   );
 
-  return cookies.has(ACCESS_TOKEN_COOKIE) && cookies.has(USER_COOKIE);
+  return cookies.has(SESSION_COOKIE);
 }
 
-export function syncSessionCookies({ accessToken, user, cookieString, writeCookie }) {
-  if (!hasClientSession({ accessToken, user }) || hasSessionCookies(cookieString)) {
+export function syncSessionCookies({ sessionToken, user, cookieString, writeCookie }) {
+  if (!hasClientSession({ sessionToken, user }) || hasSessionCookies(cookieString)) {
     return false;
   }
 
   writeCookie(
-    `${ACCESS_TOKEN_COOKIE}=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`,
-  );
-  writeCookie(
-    `${USER_COOKIE}=${encodeURIComponent(JSON.stringify(user))}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`,
+    `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`,
   );
 
   return true;

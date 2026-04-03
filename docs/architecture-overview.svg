@@ -21,7 +21,7 @@
   <!-- Admin Panel (right) -->
   <rect x="760" y="52" width="240" height="48" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="1.4"/>
   <text x="880" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#9a3412">Admin Panel</text>
-  <text x="880" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">Next.js 16 · Refine v5 · shadcn/ui</text>
+  <text x="880" y="88" text-anchor="middle" font-size="8.5" fill="#64748b">Next.js 16 · TanStack Query · shadcn/ui</text>
 
   <!-- Arrows: channels → gateway -->
   <line x1="174" y1="100" x2="366" y2="122" stroke="#93c5fd" stroke-width="1.4" marker-end="url(#arr-blue)"/>

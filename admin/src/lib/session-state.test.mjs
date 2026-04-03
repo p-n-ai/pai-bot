@@ -6,17 +6,17 @@ import { getClientSessionSnapshot, hasClientSession, hasSessionCookies, syncSess
 test("hasClientSession returns true when token and user are present", () => {
   assert.equal(
     hasClientSession({
-      accessToken: "token-123",
+      sessionToken: "token-123",
       user: { user_id: "u1", name: "Teacher", email: "teacher@example.com" },
     }),
     true,
   );
 });
 
-test("hasClientSession returns false when access token is missing", () => {
+test("hasClientSession returns false when the session token is missing", () => {
   assert.equal(
     hasClientSession({
-      accessToken: "",
+      sessionToken: "",
       user: { user_id: "u1", name: "Teacher", email: "teacher@example.com" },
     }),
     false,
@@ -26,7 +26,7 @@ test("hasClientSession returns false when access token is missing", () => {
 test("hasClientSession returns false when user is missing", () => {
   assert.equal(
     hasClientSession({
-      accessToken: "token-123",
+      sessionToken: "token-123",
       user: null,
     }),
     false,
@@ -36,7 +36,7 @@ test("hasClientSession returns false when user is missing", () => {
 test("getClientSessionSnapshot returns the active user for a valid session", () => {
   assert.deepEqual(
     getClientSessionSnapshot({
-      accessToken: "token-123",
+      sessionToken: "token-123",
       user: { user_id: "u1", role: "teacher", name: "Teacher", email: "teacher@example.com" },
     }),
     {
@@ -48,12 +48,12 @@ test("getClientSessionSnapshot returns the active user for a valid session", () 
 
 test("getClientSessionSnapshot replaces the old role when a different user signs in", () => {
   const previous = getClientSessionSnapshot({
-    accessToken: "teacher-token",
+    sessionToken: "teacher-token",
     user: { user_id: "teacher-1", role: "teacher", name: "Teacher", email: "teacher@example.com" },
   });
 
   const next = getClientSessionSnapshot({
-    accessToken: "parent-token",
+    sessionToken: "parent-token",
     user: { user_id: "parent-1", role: "parent", name: "Parent", email: "parent@example.com" },
   });
 
@@ -61,19 +61,19 @@ test("getClientSessionSnapshot replaces the old role when a different user signs
   assert.equal(next.currentUser.role, "parent");
 });
 
-test("hasSessionCookies returns true when both auth cookies are present", () => {
+test("hasSessionCookies returns true when the session cookie is present", () => {
   assert.equal(
-    hasSessionCookies("theme=dark; pai_admin_access=token-123; pai_admin_user=%7B%22user_id%22%3A%22u1%22%7D"),
+    hasSessionCookies("theme=dark; pai_session=token-123"),
     true,
   );
 });
 
-test("syncSessionCookies writes missing auth cookies from a valid client session", () => {
+test("syncSessionCookies writes the missing session cookie from a valid client session", () => {
   const writes = [];
 
   assert.equal(
     syncSessionCookies({
-      accessToken: "token-123",
+      sessionToken: "token-123",
       user: { user_id: "u1", name: "Teacher", email: "teacher@example.com" },
       cookieString: "theme=dark",
       writeCookie(value) {
@@ -82,9 +82,8 @@ test("syncSessionCookies writes missing auth cookies from a valid client session
     }),
     true,
   );
-  assert.equal(writes.length, 2);
-  assert.match(writes[0], /^pai_admin_access=token-123;/);
-  assert.match(writes[1], /^pai_admin_user=%7B/);
+  assert.equal(writes.length, 1);
+  assert.match(writes[0], /^pai_session=token-123;/);
 });
 
 test("syncSessionCookies skips writes when auth cookies already exist", () => {
@@ -92,9 +91,9 @@ test("syncSessionCookies skips writes when auth cookies already exist", () => {
 
   assert.equal(
     syncSessionCookies({
-      accessToken: "token-123",
+      sessionToken: "token-123",
       user: { user_id: "u1", name: "Teacher", email: "teacher@example.com" },
-      cookieString: "pai_admin_access=token-123; pai_admin_user=%7B%22user_id%22%3A%22u1%22%7D",
+      cookieString: "pai_session=token-123",
       writeCookie(value) {
         writes.push(value);
       },

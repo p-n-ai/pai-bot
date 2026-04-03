@@ -7,16 +7,17 @@ import (
 )
 
 var (
-	ErrInvalidCredentials    = errors.New("invalid credentials")
-	ErrInvalidInvite         = errors.New("invalid invite")
-	ErrInviteExpired         = errors.New("invite expired")
-	ErrNotImplemented        = errors.New("not implemented")
-	ErrInviteConflict        = errors.New("invite already exists")
-	ErrTenantRequired        = errors.New("tenant is required for this account")
-	ErrProviderNotConfigured = errors.New("auth provider is not configured")
-	ErrIdentityAlreadyLinked = errors.New("identity is already linked to another account")
-	ErrIdentityLinkRequired  = errors.New("sign in with email once, then link Google")
-	ErrAuthFlowInvalid       = errors.New("auth flow is invalid or expired")
+	ErrInvalidCredentials     = errors.New("invalid credentials")
+	ErrInvalidInvite          = errors.New("invalid invite")
+	ErrInviteExpired          = errors.New("invite expired")
+	ErrNotImplemented         = errors.New("not implemented")
+	ErrInviteConflict         = errors.New("invite already exists")
+	ErrTenantRequired         = errors.New("tenant is required for this account")
+	ErrProviderNotConfigured  = errors.New("auth provider is not configured")
+	ErrIdentityAlreadyLinked  = errors.New("identity is already linked to another account")
+	ErrIdentityLinkRequired   = errors.New("sign in with email once, then link Google")
+	ErrAuthFlowInvalid        = errors.New("auth flow is invalid or expired")
+	ErrGoogleDomainNotAllowed = errors.New("google account domain is not allowed")
 )
 
 type TenantOption struct {
@@ -60,13 +61,12 @@ type UserSession struct {
 	Email      string `json:"email"`
 }
 
-// TokenPair contains the access and refresh tokens returned after successful auth.
-type TokenPair struct {
-	AccessToken      string      `json:"access_token"`
-	RefreshToken     string      `json:"refresh_token"`
-	AccessExpiresAt  time.Time   `json:"access_expires_at"`
-	RefreshExpiresAt time.Time   `json:"refresh_expires_at"`
-	User             UserSession `json:"user"`
+// Session is the Better-Auth-style browser session contract used by the admin UI.
+type Session struct {
+	Token         string         `json:"-"`
+	ExpiresAt     time.Time      `json:"expires_at"`
+	User          UserSession    `json:"user"`
+	TenantChoices []TenantOption `json:"tenant_choices,omitempty"`
 }
 
 // LoginRequest is the email/password login payload for web users.
@@ -109,29 +109,31 @@ type LinkedIdentity struct {
 }
 
 type StartGoogleFlowRequest struct {
-	UserID   string
-	NextPath string
+	UserID      string
+	NextPath    string
+	RedirectURL string
 }
 
 type GoogleCallbackRequest struct {
-	State string
-	Code  string
+	State       string
+	Code        string
+	RedirectURL string
 }
 
 type GoogleCallbackResult struct {
 	RedirectPath string
 	Linked       bool
-	Pair         *TokenPair
+	Session      *Session
 }
 
 // Service defines the auth flows needed by the HTTP layer.
 type Service interface {
-	Login(ctx context.Context, req LoginRequest) (TokenPair, error)
-	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (TokenPair, error)
+	Login(ctx context.Context, req LoginRequest) (Session, error)
+	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (Session, error)
 	IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error)
-	Refresh(ctx context.Context, refreshToken string) (TokenPair, error)
-	SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (TokenPair, error)
-	Logout(ctx context.Context, refreshToken string) error
+	Session(ctx context.Context, sessionToken string) (Session, error)
+	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (Session, error)
+	Logout(ctx context.Context, sessionToken string) error
 	StartGoogleLogin(ctx context.Context, req StartGoogleFlowRequest) (string, error)
 	StartGoogleLink(ctx context.Context, req StartGoogleFlowRequest) (string, error)
 	CompleteGoogleCallback(ctx context.Context, req GoogleCallbackRequest) (GoogleCallbackResult, error)
@@ -145,24 +147,24 @@ func NewNoopService() Service {
 	return noopService{}
 }
 
-func (noopService) Login(_ context.Context, _ LoginRequest) (TokenPair, error) {
-	return TokenPair{}, ErrNotImplemented
+func (noopService) Login(_ context.Context, _ LoginRequest) (Session, error) {
+	return Session{}, ErrNotImplemented
 }
 
-func (noopService) AcceptInvite(_ context.Context, _ AcceptInviteRequest) (TokenPair, error) {
-	return TokenPair{}, ErrNotImplemented
+func (noopService) AcceptInvite(_ context.Context, _ AcceptInviteRequest) (Session, error) {
+	return Session{}, ErrNotImplemented
 }
 
 func (noopService) IssueInvite(_ context.Context, _ IssueInviteRequest) (InviteRecord, error) {
 	return InviteRecord{}, ErrNotImplemented
 }
 
-func (noopService) Refresh(_ context.Context, _ string) (TokenPair, error) {
-	return TokenPair{}, ErrNotImplemented
+func (noopService) Session(_ context.Context, _ string) (Session, error) {
+	return Session{}, ErrNotImplemented
 }
 
-func (noopService) SwitchTenant(_ context.Context, _, _, _ string) (TokenPair, error) {
-	return TokenPair{}, ErrNotImplemented
+func (noopService) SwitchTenant(_ context.Context, _, _, _ string) (Session, error) {
+	return Session{}, ErrNotImplemented
 }
 
 func (noopService) Logout(_ context.Context, _ string) error {

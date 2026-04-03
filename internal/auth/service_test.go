@@ -35,11 +35,6 @@ func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 		t.Fatalf("AcceptInvite() error = %v, want ErrNotImplemented", err)
 	}
 
-	_, err = svc.Refresh(context.Background(), "")
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Refresh() error = %v, want ErrNotImplemented", err)
-	}
-
 	_, err = svc.SwitchTenant(context.Background(), "", "", "")
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("SwitchTenant() error = %v, want ErrNotImplemented", err)

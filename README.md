@@ -200,7 +200,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 │  └───────────────┘                                  │
 │                                                     │
 │  ┌──────────────────────────────────────────┐       │
-│  │  Admin Panel (Next.js + Refine)          │       │
+│  │  Admin Panel (Next.js + TanStack Query)  │       │
 │  │  Teacher Dashboard · Parent View · Admin │       │
 │  └──────────────────────────────────────────┘       │
 └─────────────────────────────────────────────────────┘
@@ -216,7 +216,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 | **Messaging** | NATS + JetStream | Proactive nudge scheduling, background jobs, event-driven communication. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
-| **Admin Panel** | Next.js 16, TypeScript, Refine v5, shadcn/ui | Teacher dashboards, parent views, school admin. |
+| **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
 
@@ -224,7 +224,7 @@ Open `http://localhost:3000` to access the admin panel. Current scaffolding keep
 
 - Teachers, parents, school admins, and platform admins sign in through `/login`; visiting `/` routes signed-in users to their workspace and everyone else to the login flow.
 - Ongoing login uses `email + password`; if the same email belongs to multiple schools, the UI asks the user to pick the correct school before finishing sign-in.
-- The Go backend issues short-lived JWT access tokens plus rotating refresh tokens.
+- The Go backend owns admin auth with one server session cookie (`pai_session`); bearer JWT parsing remains only as a compatibility lane.
 - Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
 
 ### Project Structure
@@ -407,7 +407,7 @@ P&AI is designed to run on any cloud without lock-in:
 
 ## Configuration Reference
 
-All configuration is via environment variables with `LEARN_` prefix. See [`.env.example`](.env.example) for the complete list.
+Configuration is environment-driven. Core app variables use `LEARN_`; auth variables use `PAI_AUTH_` only. See [`.env.example`](.env.example) for the complete list.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -423,7 +423,7 @@ All configuration is via environment variables with `LEARN_` prefix. See [`.env.
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama server URL |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
-| `LEARN_AUTH_JWT_SECRET` | No | Auto-generated | JWT signing secret |
+| `PAI_AUTH_SECRET` | No | Auto-generated | Root auth secret; currently used for JWT signing |
 | `LEARN_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 

@@ -34,7 +34,7 @@ func ComparePassword(hash, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
-// HashOpaqueToken hashes invite and refresh tokens before they are persisted.
+// HashOpaqueToken hashes invite and session tokens before they are persisted.
 func HashOpaqueToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

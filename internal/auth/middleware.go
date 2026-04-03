@@ -81,7 +81,7 @@ func requestToken(r *http.Request) (string, error) {
 		return token, nil
 	}
 
-	cookie, err := r.Cookie(AccessTokenCookieName)
+	cookie, err := r.Cookie(SessionCookieName)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return "", errors.New("missing auth token")
 	}

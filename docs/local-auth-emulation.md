@@ -26,6 +26,7 @@ Why:
 ## Commands
 
 ```bash
+just next-dev
 just emulate-auth
 just emulate-google
 just emulate-vercel
@@ -40,11 +41,18 @@ Default local URLs from the current recipes:
 - Vercel emulator: `http://127.0.0.1:4000`
 - Google emulator: `http://127.0.0.1:4002`
 
+`just next-dev` starts:
+
+- Google emulator on `:4002`
+- Go backend on `:8080`
+- Next admin frontend on `:3000`
+
 ## Seeded identities
 
 Google:
 
-- `teacher@gmail.com`
+- `teacher@example.com`
+- `admin@example.com`
 - `platform-admin@example.com`
 
 Google OAuth client:
@@ -68,20 +76,25 @@ Seeded redirect URIs:
 
 ## Current env contract
 
-The Go admin auth slice now switches Google OIDC transport through config instead of hardcoding provider URLs:
+Normal production/staging Google setup:
 
-- `LEARN_AUTH_GOOGLE_CLIENT_ID`
-- `LEARN_AUTH_GOOGLE_CLIENT_SECRET`
-- `LEARN_AUTH_GOOGLE_REDIRECT_URL`
-- `LEARN_AUTH_GOOGLE_DISCOVERY_URL`
-- `LEARN_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET`
-- `LEARN_AUTH_ADMIN_BASE_URL`
+- `PAI_AUTH_GOOGLE_CLIENT_ID`
+- `PAI_AUTH_GOOGLE_CLIENT_SECRET`
+- optional: `PAI_AUTH_GOOGLE_ALLOWED_DOMAIN`
+
+If `PAI_AUTH_GOOGLE_ALLOWED_DOMAIN` is unset, Google sign-in accepts any verified Google email and relies on app-side identity linking/RBAC.
+
+Advanced/local-emulate overrides:
+
+- `PAI_AUTH_GOOGLE_DISCOVERY_URL`
+- `PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET`
 
 For local `emulate`:
 
 - discovery endpoint: `http://127.0.0.1:4002/.well-known/openid-configuration`
 - emulator signing secret: `emulate-google-jwt-secret`
+- recommended local dev toggle: `LEARN_DEV_MODE=true`
 
-The callback, token exchange, and userinfo fetch all derive from discovery. The emulator signing secret is only for local HS256 ID-token verification; real Google still uses discovery issuer + JWKS.
+The callback URL is derived from the incoming request host/scheme, not a dedicated Google redirect env. Token exchange, userinfo, and JWKS still derive from discovery. The emulator signing secret is only for local HS256 ID-token verification; real Google still uses discovery issuer + JWKS.
 
 Do not bake emulator-specific assumptions into the core auth model. Keep the provider transport switchable.

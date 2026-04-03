@@ -305,6 +305,50 @@ next:
   fi
   FRONTEND_PORT="$frontend_port" AGENTATION_PORT="$agentation_port" just frontend
 
+next-dev:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state_dir="{{dev-state-dir}}"
+  mkdir -p "$state_dir"
+  google_emulator_port="${GOOGLE_EMULATOR_PORT:-4002}"
+  started_google_emulator="no"
+  google_emulator_pid=""
+  cleanup() {
+    code="$?"
+    rm -f "$state_dir/google-emulator.pid"
+    if [ "$started_google_emulator" = "yes" ] && [ -n "$google_emulator_pid" ] && kill -0 "$google_emulator_pid" >/dev/null 2>&1; then
+      kill "$google_emulator_pid" >/dev/null 2>&1 || true
+      wait "$google_emulator_pid" >/dev/null 2>&1 || true
+    fi
+    exit "$code"
+  }
+  trap cleanup INT TERM EXIT
+  if curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
+    echo "google emulator already running on http://127.0.0.1:$google_emulator_port"
+  elif lsof -nP -iTCP:"$google_emulator_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port $google_emulator_port is already in use"
+    lsof -nP -iTCP:"$google_emulator_port" -sTCP:LISTEN
+    exit 1
+  else
+    echo "starting Google emulator on http://127.0.0.1:$google_emulator_port"
+    just emulate-google >/tmp/pai-google-emulate.log 2>&1 &
+    google_emulator_pid="$!"
+    printf '%s\n' "$google_emulator_pid" >"$state_dir/google-emulator.pid"
+    started_google_emulator="yes"
+    for _ in {1..20}; do
+      if curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
+      echo "google emulator failed to start"
+      echo "check /tmp/pai-google-emulate.log for details"
+      exit 1
+    fi
+  fi
+  just next
+
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app
 
@@ -394,7 +438,7 @@ stop-local:
   cwd_for_pid() {
     lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
   }
-  for name in frontend agentation backend; do
+  for name in frontend agentation backend google-emulator; do
     pid_file="$state_dir/$name.pid"
     if [ ! -f "$pid_file" ]; then
       continue

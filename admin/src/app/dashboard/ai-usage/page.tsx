@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { IconAtom, IconCoins, IconCpu, IconMessages } from "@tabler/icons-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { PageHero } from "@/components/page-hero";
@@ -7,10 +6,9 @@ import { StatePanel } from "@/components/state-panel";
 import { StatCard } from "@/components/stat-card";
 import { TokenBudgetEditor } from "@/components/token-budget-editor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { AIUsageSummary, AuthUser } from "@/lib/api";
-import { USER_COOKIE, parseCookieJSON } from "@/lib/auth-session";
+import type { AIUsageSummary } from "@/lib/api";
 import { formatCompactNumber, formatUSD, getAIUsageBudgetViewModel } from "@/lib/ai-usage.mjs";
-import { getServerAIUsage } from "@/lib/server-api";
+import { getServerAIUsage, getServerAuthSession } from "@/lib/server-api";
 
 type DailyUsagePoint = NonNullable<AIUsageSummary["daily_usage"]>[number];
 type ProviderCostItem = NonNullable<AIUsageSummary["provider_costs"]>[number];
@@ -33,8 +31,8 @@ function providerTone(provider: string) {
 export const dynamic = "force-dynamic";
 
 export default async function AIUsagePage() {
-  const cookieStore = await cookies();
-  const currentUser = parseCookieJSON<AuthUser>(cookieStore.get(USER_COOKIE)?.value);
+  const session = await getServerAuthSession();
+  const currentUser = session?.user ?? null;
   const canManageBudget = currentUser?.role === "admin";
   let usage: AIUsageSummary | null = null;
   let loadError = "";

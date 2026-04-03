@@ -39,10 +39,31 @@ func (c *httpClient) Do(req *http.Request) (*http.Response, error) {
 type GoogleOAuthProviderConfig struct {
 	ClientID              string
 	ClientSecret          string
-	RedirectURL           string
 	DiscoveryURL          string
+	Policy                GoogleOAuthPolicy
 	AdminBaseURL          string
 	EmulatorSigningSecret string
+}
+
+type GoogleOAuthPolicy struct {
+	AllowedDomains []string
+}
+
+func AllowGoogleHostedDomains(domains ...string) GoogleOAuthPolicy {
+	normalized := make([]string, 0, len(domains))
+	seen := make(map[string]struct{}, len(domains))
+	for _, domain := range domains {
+		domain = normalizeHostedDomain(domain)
+		if domain == "" {
+			continue
+		}
+		if _, ok := seen[domain]; ok {
+			continue
+		}
+		seen[domain] = struct{}{}
+		normalized = append(normalized, domain)
+	}
+	return GoogleOAuthPolicy{AllowedDomains: normalized}
 }
 
 type GoogleOAuthProvider struct {
@@ -83,6 +104,7 @@ type googleIdentity struct {
 	Email         string
 	EmailVerified bool
 	HostedDomain  string
+	LocalIssuer   bool
 	Name          string
 	Picture       string
 }
@@ -125,50 +147,64 @@ func NewGoogleOAuthProvider(cfg GoogleOAuthProviderConfig, doer HTTPDoer, now fu
 
 func (p *GoogleOAuthProvider) Configured() bool {
 	return strings.TrimSpace(p.cfg.ClientID) != "" &&
-		strings.TrimSpace(p.cfg.RedirectURL) != "" &&
-		strings.TrimSpace(p.cfg.DiscoveryURL) != "" &&
-		strings.TrimSpace(p.cfg.AdminBaseURL) != ""
+		strings.TrimSpace(p.cfg.ClientSecret) != "" &&
+		strings.TrimSpace(p.cfg.DiscoveryURL) != ""
 }
 
 func (p *GoogleOAuthProvider) AdminRedirect(path string) string {
+	sanitized := sanitizeNextPath(path, "/login")
+	if strings.TrimSpace(p.cfg.AdminBaseURL) == "" {
+		return sanitized
+	}
 	base, err := url.Parse(strings.TrimRight(p.cfg.AdminBaseURL, "/"))
 	if err != nil {
-		return p.cfg.AdminBaseURL
+		return sanitized
 	}
-	rel, err := url.Parse(sanitizeNextPath(path, "/login"))
+	rel, err := url.Parse(sanitized)
 	if err != nil {
-		return p.cfg.AdminBaseURL
+		return sanitized
 	}
 	return base.ResolveReference(rel).String()
 }
 
-func (p *GoogleOAuthProvider) AuthorizationURL(ctx context.Context, state, nonce, challenge, nextPath string) (string, error) {
+func (p *GoogleOAuthProvider) AuthorizationURL(ctx context.Context, redirectURL, state, nonce, challenge, nextPath string) (string, error) {
 	discovery, err := p.discoveryDocument(ctx)
 	if err != nil {
 		return "", err
 	}
+	redirectURL = strings.TrimSpace(redirectURL)
+	if redirectURL == "" {
+		return "", ErrAuthFlowInvalid
+	}
 	values := url.Values{}
 	values.Set("client_id", p.cfg.ClientID)
-	values.Set("redirect_uri", p.cfg.RedirectURL)
+	values.Set("redirect_uri", redirectURL)
 	values.Set("response_type", "code")
 	values.Set("scope", "openid email profile")
 	values.Set("state", state)
 	values.Set("nonce", nonce)
 	values.Set("code_challenge", challenge)
 	values.Set("code_challenge_method", "S256")
+	if hostedDomain, ok := p.authorizationHostedDomainHint(); ok {
+		values.Set("hd", hostedDomain)
+	}
 	return discovery.AuthorizationEndpoint + "?" + values.Encode(), nil
 }
 
-func (p *GoogleOAuthProvider) ExchangeCode(ctx context.Context, code, verifier string) (googleTokenResponse, error) {
+func (p *GoogleOAuthProvider) ExchangeCode(ctx context.Context, code, verifier, redirectURL string) (googleTokenResponse, error) {
 	discovery, err := p.discoveryDocument(ctx)
 	if err != nil {
 		return googleTokenResponse{}, err
+	}
+	redirectURL = strings.TrimSpace(redirectURL)
+	if redirectURL == "" {
+		return googleTokenResponse{}, ErrAuthFlowInvalid
 	}
 
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("client_id", p.cfg.ClientID)
-	form.Set("redirect_uri", p.cfg.RedirectURL)
+	form.Set("redirect_uri", redirectURL)
 	form.Set("code", code)
 	form.Set("code_verifier", verifier)
 	if strings.TrimSpace(p.cfg.ClientSecret) != "" {
@@ -217,6 +253,7 @@ func (p *GoogleOAuthProvider) ResolveIdentity(ctx context.Context, rawIDToken, a
 		Email:         claims.Email,
 		EmailVerified: googleEmailVerified(claims.EmailVerified),
 		HostedDomain:  claims.HostedDomain,
+		LocalIssuer:   isLocalOIDCIssuer(discovery.Issuer),
 		Name:          claims.Name,
 		Picture:       claims.Picture,
 	}
@@ -243,6 +280,56 @@ func (p *GoogleOAuthProvider) ResolveIdentity(ctx context.Context, rawIDToken, a
 	}
 
 	return identity, nil
+}
+
+func (p *GoogleOAuthProvider) ValidateIdentity(identity googleIdentity) error {
+	if len(p.cfg.Policy.AllowedDomains) == 0 {
+		return nil
+	}
+	if !identity.EmailVerified {
+		return ErrGoogleDomainNotAllowed
+	}
+	emailDomain := googleEmailDomain(identity.Email)
+	hostedDomain := normalizeHostedDomain(identity.HostedDomain)
+	if containsGoogleAllowedDomain(p.cfg.Policy.AllowedDomains, hostedDomain) {
+		return nil
+	}
+	if hostedDomain != "" {
+		return ErrGoogleDomainNotAllowed
+	}
+	if containsGoogleAllowedDomain(p.cfg.Policy.AllowedDomains, emailDomain) {
+		return nil
+	}
+	return ErrGoogleDomainNotAllowed
+}
+
+func (p *GoogleOAuthProvider) authorizationHostedDomainHint() (string, bool) {
+	if len(p.cfg.Policy.AllowedDomains) != 1 {
+		return "", false
+	}
+	return p.cfg.Policy.AllowedDomains[0], true
+}
+
+func containsGoogleAllowedDomain(allowed []string, domain string) bool {
+	domain = normalizeHostedDomain(domain)
+	if domain == "" {
+		return false
+	}
+	for _, allowedDomain := range allowed {
+		if normalizeHostedDomain(allowedDomain) == domain {
+			return true
+		}
+	}
+	return false
+}
+
+func googleEmailDomain(email string) string {
+	email = NormalizeIdentifier(email)
+	at := strings.LastIndex(email, "@")
+	if at == -1 || at == len(email)-1 {
+		return ""
+	}
+	return normalizeHostedDomain(email[at+1:])
 }
 
 func (p *GoogleOAuthProvider) discoveryDocument(ctx context.Context) (googleDiscoveryDocument, error) {
@@ -504,11 +591,20 @@ func googleAuthoritativeEmail(identity googleIdentity) bool {
 	if !identity.EmailVerified {
 		return false
 	}
+	if identity.LocalIssuer {
+		return true
+	}
 	email := NormalizeIdentifier(identity.Email)
 	if strings.HasSuffix(email, "@gmail.com") {
 		return true
 	}
 	return strings.TrimSpace(identity.HostedDomain) != ""
+}
+
+func normalizeHostedDomain(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	value = strings.TrimPrefix(value, "@")
+	return value
 }
 
 func isLocalOIDCIssuer(issuer string) bool {
@@ -571,6 +667,9 @@ func (s *PostgresService) startGoogleFlow(ctx context.Context, flowType string, 
 	if s.google == nil || !s.google.Configured() {
 		return "", ErrProviderNotConfigured
 	}
+	if strings.TrimSpace(req.RedirectURL) == "" {
+		return "", ErrAuthFlowInvalid
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()
@@ -598,7 +697,7 @@ func (s *PostgresService) startGoogleFlow(ctx context.Context, flowType string, 
 		return "", fmt.Errorf("persist Google OIDC flow: %w", err)
 	}
 
-	return s.google.AuthorizationURL(ctx, state, nonce, challenge, nextPath)
+	return s.google.AuthorizationURL(ctx, req.RedirectURL, state, nonce, challenge, nextPath)
 }
 
 func (s *PostgresService) CompleteGoogleCallback(ctx context.Context, req GoogleCallbackRequest) (GoogleCallbackResult, error) {
@@ -608,6 +707,11 @@ func (s *PostgresService) CompleteGoogleCallback(ctx context.Context, req Google
 		}, ErrProviderNotConfigured
 	}
 	if strings.TrimSpace(req.State) == "" || strings.TrimSpace(req.Code) == "" {
+		return GoogleCallbackResult{
+			RedirectPath: s.googleLoginRedirectPath(),
+		}, ErrAuthFlowInvalid
+	}
+	if strings.TrimSpace(req.RedirectURL) == "" {
 		return GoogleCallbackResult{
 			RedirectPath: s.googleLoginRedirectPath(),
 		}, ErrAuthFlowInvalid
@@ -626,7 +730,7 @@ func (s *PostgresService) CompleteGoogleCallback(ctx context.Context, req Google
 		RedirectPath: s.google.AdminRedirect(flow.NextPath),
 	}
 
-	tokenResponse, err := s.google.ExchangeCode(ctx, req.Code, flow.PKCEVerifier)
+	tokenResponse, err := s.google.ExchangeCode(ctx, req.Code, flow.PKCEVerifier, req.RedirectURL)
 	if err != nil {
 		return result, err
 	}
@@ -635,23 +739,26 @@ func (s *PostgresService) CompleteGoogleCallback(ctx context.Context, req Google
 	if err != nil {
 		return result, err
 	}
+	if err := s.google.ValidateIdentity(identity); err != nil {
+		return result, err
+	}
 
 	switch flow.FlowType {
 	case "link":
-		pair, err := s.completeGoogleLink(ctx, flow.UserID, identity)
+		session, err := s.completeGoogleLink(ctx, flow.UserID, identity)
 		if err != nil {
 			return result, err
 		}
 		result.Linked = true
-		result.Pair = &pair
+		result.Session = &session
 		return result, nil
 	default:
-		pair, linked, err := s.completeGoogleLogin(ctx, identity)
+		session, linked, err := s.completeGoogleLogin(ctx, identity)
 		if err != nil {
 			return result, err
 		}
 		result.Linked = linked
-		result.Pair = &pair
+		result.Session = &session
 		return result, nil
 	}
 }
@@ -707,94 +814,96 @@ func (s *PostgresService) consumeGoogleFlow(ctx context.Context, state string) (
 	return flow, nil
 }
 
-func (s *PostgresService) completeGoogleLink(ctx context.Context, userID string, identity googleIdentity) (TokenPair, error) {
+func (s *PostgresService) completeGoogleLink(ctx context.Context, userID string, identity googleIdentity) (Session, error) {
 	if strings.TrimSpace(userID) == "" {
-		return TokenPair{}, ErrAuthFlowInvalid
+		return Session{}, ErrAuthFlowInvalid
 	}
 
 	now := s.now().UTC()
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("begin Google link transaction: %w", err)
+		return Session{}, fmt.Errorf("begin Google link transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	user, err := loadSessionUserByUserID(ctx, tx, userID)
 	if err != nil {
-		return TokenPair{}, err
+		return Session{}, err
 	}
 	if err := s.linkGoogleIdentityTx(ctx, tx, user, identity, now); err != nil {
-		return TokenPair{}, err
+		return Session{}, err
 	}
-	pair, err := s.issueSession(ctx, tx, user, now)
+	session, err := s.issueSession(ctx, tx, user, now)
 	if err != nil {
-		return TokenPair{}, err
+		return Session{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return TokenPair{}, fmt.Errorf("commit Google link transaction: %w", err)
+		return Session{}, fmt.Errorf("commit Google link transaction: %w", err)
 	}
-	return pair, nil
+	return session, nil
 }
 
-func (s *PostgresService) completeGoogleLogin(ctx context.Context, identity googleIdentity) (TokenPair, bool, error) {
+func (s *PostgresService) completeGoogleLogin(ctx context.Context, identity googleIdentity) (Session, bool, error) {
 	now := s.now().UTC()
 
 	if user, ok, err := s.googleUserBySubject(ctx, identity.Sub); err != nil {
-		return TokenPair{}, false, err
+		return Session{}, false, err
 	} else if ok {
 		tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 		if err != nil {
-			return TokenPair{}, false, fmt.Errorf("begin Google login transaction: %w", err)
+			return Session{}, false, fmt.Errorf("begin Google login transaction: %w", err)
 		}
 		defer func() { _ = tx.Rollback(ctx) }()
 		if err := s.touchGoogleIdentityTx(ctx, tx, user.UserID, identity, now); err != nil {
-			return TokenPair{}, false, err
+			return Session{}, false, err
 		}
-		pair, err := s.issueSession(ctx, tx, user, now)
+		session, err := s.issueSession(ctx, tx, user, now)
 		if err != nil {
-			return TokenPair{}, false, err
+			return Session{}, false, err
 		}
 		if err := tx.Commit(ctx); err != nil {
-			return TokenPair{}, false, fmt.Errorf("commit Google login transaction: %w", err)
+			return Session{}, false, fmt.Errorf("commit Google login transaction: %w", err)
 		}
-		return pair, false, nil
+		return session, false, nil
 	}
 
 	if !identity.EmailVerified || strings.TrimSpace(identity.Email) == "" {
-		return TokenPair{}, false, ErrIdentityLinkRequired
+		return Session{}, false, ErrIdentityLinkRequired
 	}
 	if !googleAuthoritativeEmail(identity) {
-		return TokenPair{}, false, ErrIdentityLinkRequired
+		return Session{}, false, ErrIdentityLinkRequired
 	}
 
 	candidates, err := s.passwordUsersByEmail(ctx, identity.Email)
 	if err != nil {
-		return TokenPair{}, false, err
+		return Session{}, false, err
 	}
 	if len(candidates) == 0 {
-		return TokenPair{}, false, ErrIdentityLinkRequired
+		return Session{}, false, ErrIdentityLinkRequired
 	}
-	if len(candidates) > 1 {
-		return TokenPair{}, false, NewTenantRequiredError(buildTenantOptions(candidates))
-	}
+	chosen := candidates[0]
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return TokenPair{}, false, fmt.Errorf("begin Google auto-link transaction: %w", err)
+		return Session{}, false, fmt.Errorf("begin Google auto-link transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := s.linkGoogleIdentityTx(ctx, tx, candidates[0], identity, now); err != nil {
-		return TokenPair{}, false, err
+	if err := s.linkGoogleIdentityTx(ctx, tx, chosen, identity, now); err != nil {
+		return Session{}, false, err
 	}
-	pair, err := s.issueSession(ctx, tx, candidates[0], now)
+	session, err := s.issueSession(ctx, tx, chosen, now)
 	if err != nil {
-		return TokenPair{}, false, err
+		return Session{}, false, err
+	}
+	session.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, chosen.Email)
+	if err != nil {
+		return Session{}, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return TokenPair{}, false, fmt.Errorf("commit Google auto-link transaction: %w", err)
+		return Session{}, false, fmt.Errorf("commit Google auto-link transaction: %w", err)
 	}
-	return pair, true, nil
+	return session, true, nil
 }
 
 func (s *PostgresService) googleUserBySubject(ctx context.Context, subject string) (sessionUser, bool, error) {
@@ -1031,18 +1140,6 @@ func loadSessionUserByUserID(ctx context.Context, tx pgx.Tx, userID string) (ses
 	return user, nil
 }
 
-func buildTenantOptions(users []sessionUser) []TenantOption {
-	options := make([]TenantOption, 0, len(users))
-	for _, user := range users {
-		options = append(options, TenantOption{
-			TenantID:   user.TenantID,
-			TenantSlug: user.TenantSlug,
-			TenantName: user.TenantName,
-		})
-	}
-	return options
-}
-
 func sanitizeNextPath(raw, fallback string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1093,6 +1190,8 @@ func GoogleCallbackErrorCode(err error) string {
 		return "already_linked"
 	case errors.Is(err, ErrAuthFlowInvalid):
 		return "flow_invalid"
+	case errors.Is(err, ErrGoogleDomainNotAllowed):
+		return "domain_not_allowed"
 	case errors.Is(err, ErrProviderNotConfigured):
 		return "provider_unavailable"
 	default:

@@ -6,14 +6,6 @@ export function readStoredUser(): AuthUser | null {
   return null;
 }
 
-export function readStoredAccessToken(): string {
-  return "";
-}
-
-export function readStoredRefreshToken(): string {
-  return "";
-}
-
 export function hasStoredSession(): boolean {
   return false;
 }

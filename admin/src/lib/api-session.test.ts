@@ -28,10 +28,8 @@ describe("clearSession", () => {
   });
 
   it("builds Google login and link URLs with a next path when provided", () => {
-    expect(buildGoogleLoginURL("/dashboard")).toBe("http://localhost:8080/api/auth/google/start?next=%2Fdashboard");
-    expect(buildGoogleLinkURL("/dashboard/settings")).toBe(
-      "http://localhost:8080/api/auth/google/link/start?next=%2Fdashboard%2Fsettings",
-    );
+    expect(buildGoogleLoginURL("/dashboard")).toBe("/api/auth/google/start?next=%2Fdashboard");
+    expect(buildGoogleLinkURL("/dashboard/settings")).toBe("/api/auth/google/link/start?next=%2Fdashboard%2Fsettings");
   });
 
   it("starts Google link with an authenticated POST and returns the redirect URL", async () => {
@@ -47,7 +45,7 @@ describe("clearSession", () => {
       "https://accounts.google.com/o/oauth2/v2/auth?state=abc",
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8080/api/auth/google/link/start?next=%2Fdashboard%2Fsettings",
+      "/api/auth/google/link/start?next=%2Fdashboard%2Fsettings",
       expect.objectContaining({
         method: "POST",
         credentials: "include",

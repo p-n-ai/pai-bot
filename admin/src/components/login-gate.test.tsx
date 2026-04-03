@@ -65,4 +65,14 @@ describe("LoginGate", () => {
     expect(screen.getByText("We couldn't sign you in yet.")).toBeInTheDocument();
     expect(screen.getByText(/sign in with email once, then link Google/i)).toBeInTheDocument();
   });
+
+  it("surfaces Google domain restriction errors in the form panel", () => {
+    render(
+      <ThemeProvider>
+        <LoginGate authError="domain_not_allowed" />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText(/allowed workspace domain/i)).toBeInTheDocument();
+  });
 });

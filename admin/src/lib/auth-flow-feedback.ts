@@ -8,6 +8,8 @@ export function getGoogleAuthErrorMessage(code: string | null): string {
       return "That Google account is already linked to a different admin account.";
     case "flow_invalid":
       return "Your Google sign-in session expired. Start again.";
+    case "domain_not_allowed":
+      return "That Google account is outside the allowed workspace domain for this admin.";
     case "provider_unavailable":
       return "Google sign-in is not configured in this environment yet.";
     case "google_auth_failed":

@@ -11,7 +11,7 @@ read_when:
 
 > **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), metrics, AI usage, class dashboard, student detail, and parent summary. The current budget view is token-allowance based (`token_budgets` window, used/remaining tokens, daily token trend, per-student average tokens); real-money USD attribution and provider cost reporting remain planned. Remaining sections below stay planned until implemented.
 >
-> **Stack:** Next.js 16 (App Router) · TypeScript · Refine v5+ · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
+> **Stack:** Next.js 16 (App Router) · TypeScript · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
 
 This document describes all planned features for the P&AI Bot admin panel, organized by user role. The admin panel serves teachers, parents, school administrators, and platform operators — students interact exclusively via chat (Telegram / WhatsApp / WebSocket).
 
@@ -54,7 +54,7 @@ Detailed runtime reference:
 
 1. **Enter** — User lands on `/` or `/login`
    Root `/` redirects to `/login` when no session exists
-2. **Login** — Email + password, or `Continue with Google` for linked Google identities and exact single-account verified-email matches
+2. **Login** — Email + password, or `Continue with Google` for linked Google identities and exact single-account verified-email matches. Google workspace/domain restriction is code-level auth policy, not env; current admin wiring limits Google login to `pandai.org`.
 3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in. Google callback flows do not silently pick a tenant when the email maps to multiple schools.
 4. **Link sign-in methods** — Authenticated admins can link Google from the signed-in workspace shell. Same-email auto-linking is limited to exact one-account matches; different-email Google accounts require an explicit authenticated link flow.
 5. **Route guards** — Next.js enforces role-based page access on the frontend
@@ -68,15 +68,15 @@ Detailed runtime reference:
 | `users` | Profile + role (`student`, `teacher`, `parent`, `admin`, `platform_admin`) |
 | `auth_identities` | Login credentials (provider: `password`, `telegram`, `whatsapp`, `google`, `microsoft`) |
 | `auth_invites` | Invite tokens with email, role, expiry, acceptance tracking |
-| `auth_refresh_tokens` | Rotating refresh tokens (hashed), with user agent and IP |
+| `auth_sessions` | Backing store for server sessions (hashed opaque tokens, with user agent and IP) |
 | `auth_oidc_flows` | Short-lived Google OIDC state, nonce, PKCE verifier, link/login flow metadata |
 
 ### Security
 
-- JWT access tokens: 15-minute expiry
-- Refresh tokens: 7-day expiry, single-use rotation, stored hashed in PostgreSQL
+- Browser auth uses one `pai_session` `HttpOnly` cookie
+- Session expiry is 7 days with server-side sliding extension
 - Google identity matching uses `provider_account_id = sub`; provider email is matching/display metadata, not the stable account key
-- All admin endpoints require `Authorization: Bearer <token>` header
+- SSR and browser requests rely on cookies; bearer JWTs remain a compatibility lane, not the primary admin contract
 - RBAC middleware validates user role against endpoint requirements
 - Tenant isolation via `tenant_id` on all queries
 
@@ -213,7 +213,7 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 
 ## API Endpoints
 
-All endpoints are under `/api/admin/` and require JWT authentication with RBAC validation.
+All endpoints are under `/api/admin/` and require authenticated session state with RBAC validation.
 
 ### Class & Progress
 
