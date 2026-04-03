@@ -8,6 +8,7 @@ describe("clearSession", () => {
     window.localStorage.clear();
     document.cookie = `${SCHOOL_SWITCH_STATE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
     document.cookie = "pai_admin_access=; Path=/; Max-Age=0; SameSite=Lax";
+    document.cookie = "pai_admin_refresh=; Path=/; Max-Age=0; SameSite=Lax";
     document.cookie = "pai_admin_user=; Path=/; Max-Age=0; SameSite=Lax";
   });
 
@@ -34,5 +35,6 @@ describe("clearSession", () => {
     expect(window.localStorage.getItem(USER_KEY)).toBeNull();
     expect(window.localStorage.getItem("pai_school_switch_state")).toBeNull();
     expect(document.cookie).not.toContain(SCHOOL_SWITCH_STATE_COOKIE);
+    expect(document.cookie).not.toContain("pai_admin_refresh");
   });
 });

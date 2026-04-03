@@ -377,7 +377,11 @@ func (e *Engine) maybeHandlePendingGoal(ctx context.Context, msg chat.InboundMes
 }
 
 func (e *Engine) applyGoalText(ctx context.Context, msg chat.InboundMessage, conv *Conversation, raw string) (string, error) {
-	topic, _ := e.contextResolver.Resolve(raw)
+	topicID := ""
+	if conv != nil {
+		topicID = conv.TopicID
+	}
+	topic, _ := e.resolveCurriculumContext(msg.UserID, topicID, raw)
 	if topic == nil {
 		_ = e.store.ClearConversationPendingGoal(conv.ID)
 		return unresolvedGoalMessage(), nil

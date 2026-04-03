@@ -341,7 +341,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
 
-Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, password-confirmed school switching, tenant-keyed dashboard refetching, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP.
+Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school picker via `tenant_required`, password-confirmed school switching, tenant-keyed dashboard refetching, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. Local dev boot now also reclaims stale Next listeners on `3000` and auto-runs migrations for the default local database when auth tables are missing.
 
 ### Day 17 — API Endpoints + Parent View
 
@@ -482,6 +482,15 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 **Week 6 Targets:** Public launch. 500+ GitHub stars. 10+ schools. 500-1,000 students. A/B test conclusive.
 
 ---
+
+### Additional Tasks (Out of Initial Plan)
+
+Use this section for completed or in-progress work that was not listed in the original weekly/day plan.
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task tables.
+
+| Task ID | Task | Owner | Status | Remark |
+|---------|------|-------|--------|--------|
+| `A-W2D7-RETR-1` | Replace flat keyword topic resolution with metadata-aware BM25 curriculum retrieval over topic cards, teaching-note sections, and assessment material; add form-aware ranking, active-topic follow-up handling, ambiguity rejection, and retriever regression tests | 🤖 | ✅ | `ContextResolver` now uses chunked BM25 retrieval with user/form and conversation priors; added shared `internal/retrieval` CRUD/search service plus admin retrieval API endpoints; generalized the module toward `source -> collection -> document` so curriculum is one source type, not the architectural center; promoted `collection/document` to the only retrieval API language end to end and removed the old `group/content` shim; added adversarial coverage for off-topic follow-up, inactive collection/document/source filtering, and safe non-empty collection deletion. |
 
 ## Task Count Summary
 

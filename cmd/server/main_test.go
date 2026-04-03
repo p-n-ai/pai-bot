@@ -13,6 +13,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/auth"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 func TestHealthEndpoints(t *testing.T) {
@@ -1068,7 +1069,7 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
 	rec := httptest.NewRecorder()
 
-	newHandlerWithServicesAndAdminProvider(provider, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+	newHandlerWithAdminProvider(provider, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -1104,6 +1105,175 @@ func TestPlatformAdminRequestsUseGlobalAdminSource(t *testing.T) {
 	}
 	if _, ok := admin.(stubAdminAPI); !ok {
 		t.Fatalf("admin source = %T, want stubAdminAPI", admin)
+	}
+}
+
+func TestRetrievalEndpoints_CollectionActivationHidesListAndSearchButDirectGetStillWorks(t *testing.T) {
+	// API edge case:
+	// 1. deactivate the collection
+	// 2. list/search should hide its documents
+	// 3. direct fetch by ID should still work for admin tooling/debugging
+	// 4. reactivating should make the document searchable again
+	service := retrieval.NewMemoryService()
+	_, _ = service.UpsertCollection(retrieval.UpsertCollectionInput{ID: "math-f1", Name: "Math F1"})
+	_, _ = service.UpsertDocument(retrieval.UpsertDocumentInput{
+		ID:           "c1",
+		CollectionID: "math-f1",
+		Kind:         "teaching_note",
+		Title:        "Balance Method",
+		Body:         "Subtract on both sides.",
+	})
+
+	handler := newHandlerWithRetrievalService(stubAdminAPI{}, &chatGatewayStub{}, service, &stubAuthService{}, "change-me-in-production", time.Hour)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/retrieval/collections/math-f1/activate", strings.NewReader(`{"active":false}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("deactivate status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/retrieval/documents", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var listed []retrieval.Document
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("json.Unmarshal(list) error = %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("len(listed) = %d, want 0 while collection inactive", len(listed))
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/retrieval/search", strings.NewReader(`{"query":"balance method"}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("search status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var hits []retrieval.SearchResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &hits); err != nil {
+		t.Fatalf("json.Unmarshal(search) error = %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("len(hits) = %d, want 0 while collection inactive", len(hits))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/retrieval/documents/c1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get document status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var document retrieval.Document
+	if err := json.Unmarshal(rec.Body.Bytes(), &document); err != nil {
+		t.Fatalf("json.Unmarshal(document) error = %v", err)
+	}
+	if document.ID != "c1" {
+		t.Fatalf("document.ID = %q, want c1", document.ID)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/retrieval/collections/math-f1/activate", strings.NewReader(`{"active":true}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reactivate status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/retrieval/search", strings.NewReader(`{"query":"balance method"}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("search after reactivation status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hits); err != nil {
+		t.Fatalf("json.Unmarshal(search after reactivation) error = %v", err)
+	}
+	if len(hits) != 1 || hits[0].Document.ID != "c1" {
+		t.Fatalf("hits after reactivation = %#v, want c1", hits)
+	}
+}
+
+func TestRetrievalDeleteCollectionRejectsNonEmptyCollection(t *testing.T) {
+	// The HTTP contract mirrors the service safety rule:
+	// deleting a non-empty collection returns 400 and leaves the record intact.
+	service := retrieval.NewMemoryService()
+	_, _ = service.UpsertCollection(retrieval.UpsertCollectionInput{ID: "math-f1", Name: "Math F1"})
+	_, _ = service.UpsertDocument(retrieval.UpsertDocumentInput{
+		ID:           "c1",
+		CollectionID: "math-f1",
+		Kind:         "teaching_note",
+		Title:        "Balance Method",
+		Body:         "Subtract on both sides.",
+	})
+
+	handler := newHandlerWithRetrievalService(stubAdminAPI{}, &chatGatewayStub{}, service, &stubAuthService{}, "change-me-in-production", time.Hour)
+	req := httptest.NewRequest(http.MethodDelete, "/api/admin/retrieval/collections/math-f1", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("delete status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if _, err := service.GetCollection("math-f1"); err != nil {
+		t.Fatalf("GetCollection() after rejected delete error = %v", err)
+	}
+}
+
+func TestRetrievalSourceEndpoints_CreateListAndDelete(t *testing.T) {
+	// Source API smoke test:
+	// create a source, list it through typed filtering, then delete it once it is
+	// no longer referenced by any document.
+	service := retrieval.NewMemoryService()
+	handler := newHandlerWithRetrievalService(stubAdminAPI{}, &chatGatewayStub{}, service, &stubAuthService{}, "change-me-in-production", time.Hour)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/retrieval/sources", strings.NewReader(`{"type":"website","title":"Math Blog","uri":"https://example.com/math"}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create source status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var created retrieval.Source
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("json.Unmarshal(create source) error = %v", err)
+	}
+	if created.Type != "website" {
+		t.Fatalf("created.Type = %q, want website", created.Type)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/retrieval/sources?type=website", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list sources status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var listed []retrieval.Source
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("json.Unmarshal(list sources) error = %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != created.ID {
+		t.Fatalf("listed = %#v, want created source", listed)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/admin/retrieval/sources/"+created.ID, nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete source status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
 }
 

@@ -29,7 +29,7 @@ func (e *Engine) handleLearnCommand(_ context.Context, msg chat.InboundMessage, 
 	raw := strings.Join(args, " ")
 
 	// Resolve topic from text.
-	topic, _ := e.contextResolver.Resolve(raw)
+	topic, _ := e.resolveCurriculumContext(msg.UserID, "", raw)
 	if topic == nil {
 		return i18n.S(locale, i18n.MsgLearnTopicNotFound, raw), nil
 	}

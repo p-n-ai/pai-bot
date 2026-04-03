@@ -4,6 +4,7 @@ import type { AuthSession, AuthUser } from "@/lib/api";
 import {
   ACCESS_TOKEN_COOKIE,
   ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_COOKIE,
   REFRESH_TOKEN_KEY,
   USER_COOKIE,
   USER_KEY,
@@ -53,6 +54,7 @@ export function writeStoredSession(session: AuthSession): void {
   localStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
   localStorage.setItem(USER_KEY, JSON.stringify(session.user));
   document.cookie = buildCookieValue(ACCESS_TOKEN_COOKIE, session.access_token, 60 * 60 * 24 * 7);
+  document.cookie = buildCookieValue(REFRESH_TOKEN_COOKIE, session.refresh_token, 60 * 60 * 24 * 7);
   document.cookie = buildCookieValue(USER_COOKIE, JSON.stringify(session.user), 60 * 60 * 24 * 7);
 }
 
@@ -63,5 +65,6 @@ export function removeStoredSession(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   document.cookie = buildCookieRemoval(ACCESS_TOKEN_COOKIE);
+  document.cookie = buildCookieRemoval(REFRESH_TOKEN_COOKIE);
   document.cookie = buildCookieRemoval(USER_COOKIE);
 }

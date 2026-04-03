@@ -8,7 +8,7 @@ test("getAdminResources exposes the admin workspace routes to Refine", () => {
 
   assert.deepEqual(
     resources.map((item) => item.name),
-    ["dashboard", "ai-usage", "students", "parents"],
+    ["dashboard", "ai-usage", "retrieval-lab", "students", "parents"],
   );
   assert.equal(resources.find((item) => item.name === "students")?.show, "/students/:id");
   assert.equal(resources.find((item) => item.name === "parents")?.show, "/parents/:id");

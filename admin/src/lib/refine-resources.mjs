@@ -15,6 +15,13 @@ export function getAdminResources() {
       },
     },
     {
+      name: "retrieval-lab",
+      list: "/dashboard/retrieval-lab",
+      meta: {
+        label: "Retrieval Lab",
+      },
+    },
+    {
       name: "students",
       list: "/dashboard",
       show: "/students/:id",
