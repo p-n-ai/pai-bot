@@ -1882,7 +1882,7 @@ docker compose down
 
 | Package | Key Files | What It Does |
 |---------|-----------|--------------|
-| `cmd/server/` | `main.go`, `main_test.go` | HTTP server with `/healthz` + `/readyz`, graceful shutdown |
+| `cmd/server/` | `main.go`, `main_test.go` | HTTP server with `/healthz`, `/readyz`, `/openapi.json`, and `/docs`, graceful shutdown. OpenAPI JSON generated from explicit Go request/response schemas |
 | `internal/platform/config/` | `config.go`, `config_test.go` | Loads `LEARN_` env vars into nested config structs |
 | `internal/platform/database/` | `database.go`, `database_test.go` | `DB` struct wrapping `pgxpool.Pool` |
 | `internal/platform/cache/` | `cache.go`, `cache_test.go` | `Cache` struct wrapping `redis.Client` |
