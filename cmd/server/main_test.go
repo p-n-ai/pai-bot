@@ -55,6 +55,74 @@ func TestHealthEndpoints(t *testing.T) {
 	}
 }
 
+func TestAPIDocumentationEndpoints(t *testing.T) {
+	mux := newMux(stubAdminAPI{}, &chatGatewayStub{})
+
+	t.Run("openapi json returns spec", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+			t.Fatalf("content-type = %q, want application/json", got)
+		}
+
+		var payload struct {
+			OpenAPI string `json:"openapi"`
+			Info    struct {
+				Title string `json:"title"`
+			} `json:"info"`
+			Paths      map[string]any `json:"paths"`
+			Components struct {
+				Schemas map[string]any `json:"schemas"`
+			} `json:"components"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("json.Unmarshal() error = %v", err)
+		}
+		if payload.OpenAPI != "3.1.0" {
+			t.Fatalf("openapi = %q, want 3.1.0", payload.OpenAPI)
+		}
+		if payload.Info.Title != "P&AI Bot API" {
+			t.Fatalf("info.title = %q, want P&AI Bot API", payload.Info.Title)
+		}
+		if _, ok := payload.Paths["/healthz"]; !ok {
+			t.Fatal("paths missing /healthz")
+		}
+		if _, ok := payload.Paths["/api/auth/login"]; !ok {
+			t.Fatal("paths missing /api/auth/login")
+		}
+		if _, ok := payload.Components.Schemas["TokenPair"]; !ok {
+			t.Fatal("components.schemas missing TokenPair")
+		}
+	})
+
+	t.Run("scalar docs returns html shell", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+			t.Fatalf("content-type = %q, want text/html", got)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "Scalar.createApiReference") {
+			t.Fatal("docs page missing Scalar.createApiReference bootstrap")
+		}
+		if !strings.Contains(body, `url: "/openapi.json"`) {
+			t.Fatal("docs page missing openapi url")
+		}
+	})
+}
+
 func TestAdminClassProgressEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/form-1-algebra/progress", nil)
 	req.Header.Set("Origin", "http://localhost:3000")

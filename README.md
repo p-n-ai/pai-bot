@@ -123,6 +123,10 @@ Open Telegram, find your bot, and send `/start`. That's it — you're learning.
 
 Open `http://localhost:3000` to access the admin panel. Current scaffolding keeps the shell publicly reachable in local development, but the planned production model is invite-based account activation followed by email + password login for teacher, parent, and admin roles.
 
+### 6. Browse the API docs
+
+Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw OpenAPI document is served at `http://localhost:8080/openapi.json` and is generated directly from explicit Go request/response schemas.
+
 ---
 
 ## Features

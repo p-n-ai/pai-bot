@@ -37,7 +37,7 @@ pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapte
 - 6 AI providers: OpenAI, DeepSeek (via OpenAI base URL), Anthropic, Google Gemini, Ollama, OpenRouter
 - Docker Compose: Postgres 17, Dragonfly, NATS 2.10 (JetStream), app, Ollama (optional `--profile ollama`)
 - Dockerfile: Go 1.22 builder → Alpine 3.20 runtime (~25MB)
-- HTTP server: `/healthz` + `/readyz` endpoints, graceful SIGTERM shutdown
+- HTTP server: `/healthz`, `/readyz`, `/openapi.json`, and `/docs` endpoints, graceful SIGTERM shutdown. OpenAPI JSON is generated from explicit Go request/response schemas.
 
 ---
 

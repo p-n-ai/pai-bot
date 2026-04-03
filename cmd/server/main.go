@@ -17,6 +17,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/apidocs"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
@@ -370,6 +371,8 @@ func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /readyz", handleReadyz)
+	mux.HandleFunc("GET /openapi.json", handleOpenAPI)
+	mux.HandleFunc("GET /docs", handleScalarDocs)
 	return mux
 }
 
@@ -430,6 +433,23 @@ func handleReadyz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ready"}`))
+}
+
+func handleOpenAPI(w http.ResponseWriter, r *http.Request) {
+	data, err := apidocs.JSON()
+	if err != nil {
+		http.Error(w, "failed to build OpenAPI document", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func handleScalarDocs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(apidocs.ScalarHTML("/openapi.json")))
 }
 
 func resolveAdminDataSource(w http.ResponseWriter, r *http.Request, provider adminDataSourceProvider) (adminDataSource, bool) {
