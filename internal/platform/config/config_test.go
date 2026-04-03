@@ -27,6 +27,12 @@ func clearEnv(t *testing.T) {
 		"LEARN_AUTH_JWT_SECRET",
 		"LEARN_AUTH_ACCESS_TOKEN_TTL",
 		"LEARN_AUTH_REFRESH_TOKEN_TTL",
+		"LEARN_AUTH_ADMIN_BASE_URL",
+		"LEARN_AUTH_GOOGLE_CLIENT_ID",
+		"LEARN_AUTH_GOOGLE_CLIENT_SECRET",
+		"LEARN_AUTH_GOOGLE_REDIRECT_URL",
+		"LEARN_AUTH_GOOGLE_DISCOVERY_URL",
+		"LEARN_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET",
 		"LEARN_TENANT_MODE",
 		"LEARN_WHATSAPP_ENABLED",
 		"LEARN_LOG_LEVEL",
@@ -75,6 +81,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Auth.RefreshTokenTTL != 7 {
 		t.Errorf("Auth.RefreshTokenTTL = %d, want 7", cfg.Auth.RefreshTokenTTL)
 	}
+	if cfg.Auth.AdminBaseURL != "http://localhost:3000" {
+		t.Errorf("Auth.AdminBaseURL = %q, want http://localhost:3000", cfg.Auth.AdminBaseURL)
+	}
+	if cfg.Auth.Google.DiscoveryURL != "https://accounts.google.com/.well-known/openid-configuration" {
+		t.Errorf("Auth.Google.DiscoveryURL = %q, want Google discovery URL", cfg.Auth.Google.DiscoveryURL)
+	}
 	if cfg.CurriculumPath != "./oss" {
 		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
 	}
@@ -92,6 +104,12 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
 	t.Setenv("LEARN_AUTH_JWT_SECRET", "super-secret")
+	t.Setenv("LEARN_AUTH_ADMIN_BASE_URL", "http://localhost:3001")
+	t.Setenv("LEARN_AUTH_GOOGLE_CLIENT_ID", "google-client")
+	t.Setenv("LEARN_AUTH_GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("LEARN_AUTH_GOOGLE_REDIRECT_URL", "http://localhost:8080/api/auth/google/callback")
+	t.Setenv("LEARN_AUTH_GOOGLE_DISCOVERY_URL", "http://127.0.0.1:4002/.well-known/openid-configuration")
+	t.Setenv("LEARN_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", "emu-secret")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
 	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
 	t.Setenv("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "false")
@@ -118,6 +136,24 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.JWTSecret != "super-secret" {
 		t.Errorf("Auth.JWTSecret = %q, want super-secret", cfg.Auth.JWTSecret)
+	}
+	if cfg.Auth.AdminBaseURL != "http://localhost:3001" {
+		t.Errorf("Auth.AdminBaseURL = %q, want http://localhost:3001", cfg.Auth.AdminBaseURL)
+	}
+	if cfg.Auth.Google.ClientID != "google-client" {
+		t.Errorf("Auth.Google.ClientID = %q, want google-client", cfg.Auth.Google.ClientID)
+	}
+	if cfg.Auth.Google.ClientSecret != "google-secret" {
+		t.Errorf("Auth.Google.ClientSecret = %q, want google-secret", cfg.Auth.Google.ClientSecret)
+	}
+	if cfg.Auth.Google.RedirectURL != "http://localhost:8080/api/auth/google/callback" {
+		t.Errorf("Auth.Google.RedirectURL = %q, want local callback", cfg.Auth.Google.RedirectURL)
+	}
+	if cfg.Auth.Google.DiscoveryURL != "http://127.0.0.1:4002/.well-known/openid-configuration" {
+		t.Errorf("Auth.Google.DiscoveryURL = %q, want emulator discovery URL", cfg.Auth.Google.DiscoveryURL)
+	}
+	if cfg.Auth.Google.EmulatorSigningSecret != "emu-secret" {
+		t.Errorf("Auth.Google.EmulatorSigningSecret = %q, want emu-secret", cfg.Auth.Google.EmulatorSigningSecret)
 	}
 	if cfg.Tenant.Mode != "multi" {
 		t.Errorf("Tenant.Mode = %q, want multi", cfg.Tenant.Mode)

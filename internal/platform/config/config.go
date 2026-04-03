@@ -115,6 +115,17 @@ type AuthConfig struct {
 	JWTSecret       string
 	AccessTokenTTL  int // minutes
 	RefreshTokenTTL int // days
+	AdminBaseURL    string
+	Google          GoogleOAuthConfig
+}
+
+// GoogleOAuthConfig holds Google OIDC settings for admin login/linking.
+type GoogleOAuthConfig struct {
+	ClientID              string
+	ClientSecret          string
+	RedirectURL           string
+	DiscoveryURL          string
+	EmulatorSigningSecret string
 }
 
 // TenantConfig holds multi-tenancy settings.
@@ -180,6 +191,14 @@ func Load() (*Config, error) {
 			JWTSecret:       envStr("LEARN_AUTH_JWT_SECRET", "change-me-in-production"),
 			AccessTokenTTL:  envInt("LEARN_AUTH_ACCESS_TOKEN_TTL", 15),
 			RefreshTokenTTL: envInt("LEARN_AUTH_REFRESH_TOKEN_TTL", 7),
+			AdminBaseURL:    envStr("LEARN_AUTH_ADMIN_BASE_URL", "http://localhost:3000"),
+			Google: GoogleOAuthConfig{
+				ClientID:              envStr("LEARN_AUTH_GOOGLE_CLIENT_ID", ""),
+				ClientSecret:          envStr("LEARN_AUTH_GOOGLE_CLIENT_SECRET", ""),
+				RedirectURL:           envStr("LEARN_AUTH_GOOGLE_REDIRECT_URL", "http://localhost:8080/api/auth/google/callback"),
+				DiscoveryURL:          envStr("LEARN_AUTH_GOOGLE_DISCOVERY_URL", "https://accounts.google.com/.well-known/openid-configuration"),
+				EmulatorSigningSecret: envStr("LEARN_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", ""),
+			},
 		},
 		Tenant: TenantConfig{
 			Mode: envStr("LEARN_TENANT_MODE", "single"),

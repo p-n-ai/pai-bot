@@ -19,6 +19,8 @@ type PostgresService struct {
 	pool            *pgxpool.Pool
 	tokenManager    *TokenManager
 	refreshTokenTTL time.Duration
+	httpClient      HTTPDoer
+	google          *GoogleOAuthProvider
 	now             func() time.Time
 }
 
@@ -35,8 +37,13 @@ func newPostgresService(pool *pgxpool.Pool, jwtSecret string, accessTokenTTL, re
 		pool:            pool,
 		tokenManager:    NewTokenManager(jwtSecret, accessTokenTTL),
 		refreshTokenTTL: refreshTokenTTL,
+		httpClient:      &httpClient{client: &defaultHTTPClient},
 		now:             now,
 	}
+}
+
+func (s *PostgresService) ConfigureGoogleOAuth(cfg GoogleOAuthProviderConfig) {
+	s.google = NewGoogleOAuthProvider(cfg, s.httpClient, s.now)
 }
 
 func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (TokenPair, error) {

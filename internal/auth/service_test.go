@@ -54,4 +54,24 @@ func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("Logout() error = %v, want ErrNotImplemented", err)
 	}
+
+	_, err = svc.StartGoogleLogin(context.Background(), StartGoogleFlowRequest{})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("StartGoogleLogin() error = %v, want ErrNotImplemented", err)
+	}
+
+	_, err = svc.StartGoogleLink(context.Background(), StartGoogleFlowRequest{})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("StartGoogleLink() error = %v, want ErrNotImplemented", err)
+	}
+
+	_, err = svc.CompleteGoogleCallback(context.Background(), GoogleCallbackRequest{})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("CompleteGoogleCallback() error = %v, want ErrNotImplemented", err)
+	}
+
+	_, err = svc.ListLinkedIdentities(context.Background(), "user-1")
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Fatalf("ListLinkedIdentities() error = %v, want ErrNotImplemented", err)
+	}
 }

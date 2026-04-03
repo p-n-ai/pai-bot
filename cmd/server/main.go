@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"slices"
@@ -187,6 +189,14 @@ func main() {
 		time.Duration(cfg.Auth.AccessTokenTTL)*time.Minute,
 		time.Duration(cfg.Auth.RefreshTokenTTL)*24*time.Hour,
 	)
+	authService.ConfigureGoogleOAuth(auth.GoogleOAuthProviderConfig{
+		ClientID:              cfg.Auth.Google.ClientID,
+		ClientSecret:          cfg.Auth.Google.ClientSecret,
+		RedirectURL:           cfg.Auth.Google.RedirectURL,
+		DiscoveryURL:          cfg.Auth.Google.DiscoveryURL,
+		AdminBaseURL:          cfg.Auth.AdminBaseURL,
+		EmulatorSigningSecret: cfg.Auth.Google.EmulatorSigningSecret,
+	})
 
 	// HTTP endpoints.
 	mux := newHandlerWithServicesAndAdminProvider(
@@ -283,6 +293,10 @@ type authService interface {
 	Refresh(ctx context.Context, refreshToken string) (auth.TokenPair, error)
 	SwitchTenant(ctx context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
+	StartGoogleLogin(ctx context.Context, req auth.StartGoogleFlowRequest) (string, error)
+	StartGoogleLink(ctx context.Context, req auth.StartGoogleFlowRequest) (string, error)
+	CompleteGoogleCallback(ctx context.Context, req auth.GoogleCallbackRequest) (auth.GoogleCallbackResult, error)
+	ListLinkedIdentities(ctx context.Context, userID string) ([]auth.LinkedIdentity, error)
 }
 
 type outboundMessage struct {
@@ -384,25 +398,30 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 func newHandlerWithServicesAndAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
+	authenticated := auth.Authenticate(manager, time.Now)
 
 	teacherOrAbove := chain(
-		auth.Authenticate(manager, time.Now),
+		authenticated,
 		auth.RequireRoles(auth.RoleTeacher, auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
 	parentOrAbove := chain(
-		auth.Authenticate(manager, time.Now),
+		authenticated,
 		auth.RequireRoles(auth.RoleParent, auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
 	adminOrAbove := chain(
-		auth.Authenticate(manager, time.Now),
+		authenticated,
 		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
 	adminOnly := chain(
-		auth.Authenticate(manager, time.Now),
+		authenticated,
 		auth.RequireRoles(auth.RoleAdmin),
 	)
 
 	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
+	mux.Handle("GET /api/auth/google/start", handleAuthGoogleStart(authSvc))
+	mux.Handle("GET /api/auth/google/callback", handleAuthGoogleCallback(authSvc))
+	mux.Handle("POST /api/auth/google/link/start", authenticated(handleAuthGoogleLinkStart(authSvc)))
+	mux.Handle("GET /api/auth/identities", authenticated(handleAuthIdentities(authSvc)))
 	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
 	mux.Handle("POST /api/auth/refresh", handleAuthRefresh(authSvc))
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
@@ -679,7 +698,88 @@ func handleAuthLogin(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp)
+	}
+}
+
+func handleAuthGoogleStart(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		target, err := authSvc.StartGoogleLogin(r.Context(), auth.StartGoogleFlowRequest{
+			NextPath: r.URL.Query().Get("next"),
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	}
+}
+
+func handleAuthGoogleLinkStart(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isAllowedBrowserOrigin(r.Header.Get("Origin")) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		target, err := authSvc.StartGoogleLink(r.Context(), auth.StartGoogleFlowRequest{
+			UserID:   claims.Subject,
+			NextPath: r.URL.Query().Get("next"),
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"url": target})
+	}
+}
+
+func handleAuthGoogleCallback(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result, err := authSvc.CompleteGoogleCallback(r.Context(), auth.GoogleCallbackRequest{
+			State: r.URL.Query().Get("state"),
+			Code:  r.URL.Query().Get("code"),
+		})
+		if err != nil {
+			target := result.RedirectPath
+			if strings.TrimSpace(target) == "" {
+				http.Error(w, "auth redirect target missing", http.StatusBadGateway)
+				return
+			}
+			http.Redirect(w, r, addQueryValue(target, "auth_error", auth.GoogleCallbackErrorCode(err)), http.StatusSeeOther)
+			return
+		}
+		if result.Pair != nil {
+			setSessionCookies(w, r, *result.Pair)
+		}
+		target := addQueryValue(resolvePostAuthRedirect(result.RedirectPath, result.Pair), "auth_provider", "google")
+		if result.Linked {
+			target = addQueryValue(target, "identity_linked", "google")
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
+	}
+}
+
+func handleAuthIdentities(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		identities, err := authSvc.ListLinkedIdentities(r.Context(), claims.Subject)
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"identities": identities})
 	}
 }
 
@@ -711,7 +811,7 @@ func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, resp)
+		writeAuthSessionResponse(w, r, http.StatusCreated, resp)
 	}
 }
 
@@ -722,22 +822,26 @@ func handleAuthRefresh(authSvc authService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body request
-		if err := decodeJSONBody(r, &body); err != nil {
+		if err := decodeOptionalJSONBody(r, &body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if strings.TrimSpace(body.RefreshToken) == "" {
+		refreshToken := strings.TrimSpace(body.RefreshToken)
+		if refreshToken == "" {
+			refreshToken = readCookieValue(r, auth.RefreshTokenCookieName)
+		}
+		if refreshToken == "" {
 			http.Error(w, "refresh_token is required", http.StatusBadRequest)
 			return
 		}
 
-		resp, err := authSvc.Refresh(r.Context(), body.RefreshToken)
+		resp, err := authSvc.Refresh(r.Context(), refreshToken)
 		if err != nil {
 			writeAuthError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp)
 	}
 }
 
@@ -750,11 +854,15 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body request
-		if err := decodeJSONBody(r, &body); err != nil {
+		if err := decodeOptionalJSONBody(r, &body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if strings.TrimSpace(body.RefreshToken) == "" {
+		refreshToken := strings.TrimSpace(body.RefreshToken)
+		if refreshToken == "" {
+			refreshToken = readCookieValue(r, auth.RefreshTokenCookieName)
+		}
+		if refreshToken == "" {
 			http.Error(w, "refresh_token is required", http.StatusBadRequest)
 			return
 		}
@@ -767,13 +875,13 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		resp, err := authSvc.SwitchTenant(r.Context(), body.RefreshToken, body.TenantID, body.Password)
+		resp, err := authSvc.SwitchTenant(r.Context(), refreshToken, body.TenantID, body.Password)
 		if err != nil {
 			writeAuthError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp)
 	}
 }
 
@@ -784,20 +892,25 @@ func handleAuthLogout(authSvc authService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body request
-		if err := decodeJSONBody(r, &body); err != nil {
+		if err := decodeOptionalJSONBody(r, &body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if strings.TrimSpace(body.RefreshToken) == "" {
+		refreshToken := strings.TrimSpace(body.RefreshToken)
+		if refreshToken == "" {
+			refreshToken = readCookieValue(r, auth.RefreshTokenCookieName)
+		}
+		if refreshToken == "" {
 			http.Error(w, "refresh_token is required", http.StatusBadRequest)
 			return
 		}
 
-		if err := authSvc.Logout(r.Context(), body.RefreshToken); err != nil {
+		if err := authSvc.Logout(r.Context(), refreshToken); err != nil {
 			writeAuthError(w, err)
 			return
 		}
 
+		clearSessionCookies(w, r)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -816,10 +929,159 @@ func decodeJSONBody(r *http.Request, target any) (err error) {
 	return nil
 }
 
+func decodeOptionalJSONBody(r *http.Request, target any) (err error) {
+	if r.Body == nil || r.ContentLength == 0 {
+		return nil
+	}
+
+	defer func() {
+		closeErr := r.Body.Close()
+		if err == nil && closeErr != nil {
+			err = fmt.Errorf("close request body: %w", closeErr)
+		}
+	}()
+
+	if err = json.NewDecoder(r.Body).Decode(target); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return fmt.Errorf("invalid json body")
+	}
+	return nil
+}
+
+type authSessionResponse struct {
+	AccessExpiresAt  time.Time        `json:"access_expires_at"`
+	RefreshExpiresAt time.Time        `json:"refresh_expires_at"`
+	User             auth.UserSession `json:"user"`
+}
+
+func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, pair auth.TokenPair) {
+	setSessionCookies(w, r, pair)
+	writeJSON(w, status, authSessionResponse{
+		AccessExpiresAt:  pair.AccessExpiresAt,
+		RefreshExpiresAt: pair.RefreshExpiresAt,
+		User:             pair.User,
+	})
+}
+
+func setSessionCookies(w http.ResponseWriter, r *http.Request, pair auth.TokenPair) {
+	now := time.Now().UTC()
+	secure := requestUsesHTTPS(r)
+
+	http.SetCookie(w, buildSessionCookie(auth.AccessTokenCookieName, pair.AccessToken, pair.AccessExpiresAt, now, secure))
+	http.SetCookie(w, buildSessionCookie(auth.RefreshTokenCookieName, pair.RefreshToken, pair.RefreshExpiresAt, now, secure))
+
+	userPayload, err := json.Marshal(pair.User)
+	if err == nil {
+		http.SetCookie(w, buildSessionCookie(auth.UserCookieName, url.PathEscape(string(userPayload)), pair.RefreshExpiresAt, now, secure))
+	}
+}
+
+func clearSessionCookies(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	secure := requestUsesHTTPS(r)
+
+	for _, name := range []string{auth.AccessTokenCookieName, auth.RefreshTokenCookieName, auth.UserCookieName} {
+		http.SetCookie(w, buildExpiredCookie(name, now, secure))
+	}
+}
+
+func buildSessionCookie(name, value string, expiresAt, now time.Time, secure bool) *http.Cookie {
+	maxAge := int(expiresAt.Sub(now).Seconds())
+	if maxAge < 0 {
+		maxAge = 0
+	}
+
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		Expires:  expiresAt,
+		MaxAge:   maxAge,
+	}
+}
+
+func buildExpiredCookie(name string, now time.Time, secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		Expires:  now.Add(-time.Hour),
+		MaxAge:   -1,
+	}
+}
+
+func requestUsesHTTPS(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func readCookieValue(r *http.Request, name string) string {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func addQueryValue(rawURL, key, value string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	query := parsed.Query()
+	query.Set(key, value)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func resolvePostAuthRedirect(rawURL string, pair *auth.TokenPair) string {
+	if pair == nil {
+		return rawURL
+	}
+
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return rawURL
+	}
+	if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/login" {
+		return rawURL
+	}
+
+	defaultPath := defaultPostAuthPath(pair.User)
+	if parsed.IsAbs() {
+		parsed.Path = defaultPath
+		parsed.RawPath = ""
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		return parsed.String()
+	}
+	return defaultPath
+}
+
+func defaultPostAuthPath(user auth.UserSession) string {
+	if user.Role == auth.RoleParent && strings.TrimSpace(user.UserID) != "" {
+		return "/parents/" + user.UserID
+	}
+	return "/dashboard"
 }
 
 func writeAdminError(w http.ResponseWriter, err error) {
@@ -838,6 +1100,12 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrInvalidInvite), errors.Is(err, auth.ErrInviteExpired):
 		http.Error(w, err.Error(), http.StatusUnauthorized)
+	case errors.Is(err, auth.ErrProviderNotConfigured):
+		http.Error(w, err.Error(), http.StatusNotImplemented)
+	case errors.Is(err, auth.ErrIdentityAlreadyLinked):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, auth.ErrIdentityLinkRequired), errors.Is(err, auth.ErrAuthFlowInvalid):
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, auth.ErrInviteConflict):
 		http.Error(w, err.Error(), http.StatusConflict)
 	case errors.Is(err, auth.ErrTenantRequired):
@@ -854,18 +1122,18 @@ func writeAuthError(w http.ResponseWriter, err error) {
 }
 
 func withCORS(next http.Handler) http.Handler {
-	allowedOrigins := []string{
-		"http://localhost:3000",
-		"http://127.0.0.1:3000",
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			setPrivateNoStoreHeaders(w)
+		}
+
 		origin := r.Header.Get("Origin")
-		if slices.Contains(allowedOrigins, origin) {
+		if isAllowedBrowserOrigin(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
+			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
 		if r.Method == http.MethodOptions && strings.HasPrefix(r.URL.Path, "/api/") {
@@ -875,6 +1143,19 @@ func withCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAllowedBrowserOrigin(origin string) bool {
+	return slices.Contains([]string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+	}, origin)
+}
+
+func setPrivateNoStoreHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 }
 
 func chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) http.Handler {
