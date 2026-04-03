@@ -93,6 +93,40 @@ func TestLoader_GetAssessment(t *testing.T) {
 	}
 }
 
+func TestLoader_LoadsSubjectMetadata(t *testing.T) {
+	dir := setupTestCurriculum(t)
+
+	loader, err := curriculum.NewLoader(dir)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+
+	subject, found := loader.GetSubject("malaysia-kssm-matematik-tingkatan-1")
+	if !found {
+		t.Fatal("GetSubject() not found")
+	}
+	if subject.GradeID != "tingkatan-1" {
+		t.Fatalf("subject.GradeID = %q, want tingkatan-1", subject.GradeID)
+	}
+}
+
+func TestLoader_DoesNotTreatSubjectOrSyllabusAsTopics(t *testing.T) {
+	dir := setupTestCurriculum(t)
+
+	loader, err := curriculum.NewLoader(dir)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+
+	topics := loader.AllTopics()
+	if len(topics) != 1 {
+		t.Fatalf("AllTopics() = %d, want 1 real topic", len(topics))
+	}
+	if topics[0].ID != "F1-01" {
+		t.Fatalf("topics[0].ID = %q, want F1-01", topics[0].ID)
+	}
+}
+
 func TestLoader_SkipsNonTopicYAML(t *testing.T) {
 	dir := setupTestCurriculum(t)
 
@@ -163,15 +197,36 @@ func setupTestCurriculum(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	topicsDir := filepath.Join(dir, "curricula", "malaysia", "kssm", "topics", "algebra")
+	curriculumDir := filepath.Join(dir, "curricula", "malaysia", "kssm")
+	topicsDir := filepath.Join(curriculumDir, "topics", "algebra")
 	_ = os.MkdirAll(topicsDir, 0o755)
+
+	_ = os.WriteFile(filepath.Join(curriculumDir, "syllabus.yaml"), []byte(`
+id: malaysia-kssm
+name: "Kurikulum Standard Sekolah Menengah"
+country: malaysia
+board: kssm
+level: secondary
+`), 0o644)
+
+	_ = os.WriteFile(filepath.Join(curriculumDir, "subject.yaml"), []byte(`
+id: malaysia-kssm-matematik-tingkatan-1
+name: "Matematik Tingkatan 1"
+name_en: "Mathematics Form 1"
+syllabus_id: malaysia-kssm
+grade_id: tingkatan-1
+country_id: malaysia
+language: ms
+topics:
+  - F1-01
+`), 0o644)
 
 	// Topic YAML
 	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.yaml"), []byte(`
 id: F1-01
 name: "Variables & Algebraic Expressions"
-subject_id: algebra
-syllabus_id: malaysia-kssm-matematik-tingkatan1
+subject_id: malaysia-kssm-matematik-tingkatan-1
+syllabus_id: malaysia-kssm
 difficulty: beginner
 learning_objectives:
   - id: LO1

@@ -1878,7 +1878,7 @@ docker compose down
 
 | Package | Key Files | What It Does |
 |---------|-----------|--------------|
-| `cmd/server/` | `main.go`, `main_test.go` | HTTP server with `/healthz` + `/readyz`, graceful shutdown |
+| `cmd/server/` | `main.go`, `main_test.go` | HTTP server with `/healthz`, `/readyz`, `/openapi.json`, and `/docs`, graceful shutdown. OpenAPI JSON generated from explicit Go request/response schemas |
 | `internal/platform/config/` | `config.go`, `config_test.go` | Loads `LEARN_` env vars into nested config structs |
 | `internal/platform/database/` | `database.go`, `database_test.go` | `DB` struct wrapping `pgxpool.Pool` |
 | `internal/platform/cache/` | `cache.go`, `cache_test.go` | `Cache` struct wrapping `redis.Client` |
@@ -4711,7 +4711,7 @@ Follow the same TDD pattern for:
 
 **Entry criteria:** Week 3 complete. Motivation features live. `just test-all` passes.
 
-Status (2026-04-01): this slice is beyond the original bare scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, password-confirmed school switching with in-place session reissue, shared `useAppStore` session state, tenant-keyed dashboard refetching without previous-tenant placeholder bleed, logout cleanup for stored school-switch metadata, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, falls back to frontend-only boot if backend startup fails, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env` instead of silently falling back to the default DSN or a shell override.
+Status (2026-04-01): this slice is beyond the original bare scaffold. Current shipped scope: root redirect on `/`, direct login on `/login`, theme-aware login UI, cookie-aware route protection, guided multi-school selection via `tenant_required`, password-confirmed school switching with in-place session reissue, shared `useAppStore` session state, tenant-keyed dashboard refetching without previous-tenant placeholder bleed, logout cleanup for stored school-switch metadata, `just go`, and `just next` for backend-if-needed + Next.js + Agentation MCP. `just next` now keeps the backend/Agentation it starts attached to the terminal so Ctrl-C cleans them up, falls back to frontend-only boot if backend startup fails, reclaims stale local Next dev listeners on `3000`, and `just stop` now stops docker services plus repo-owned local dev processes instead of killing arbitrary listeners on common ports. Local `just` boot now requires `LEARN_DATABASE_URL` in `.env`, auto-runs `just migrate` for the default local database when auth tables are missing, and no longer waits for login-time refresh-token writes to reveal auth schema drift.
 
 #### Tasks
 

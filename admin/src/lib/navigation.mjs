@@ -20,6 +20,13 @@ export const primaryNavigation = [
     group: "Teaching",
     roles: ["teacher", "admin", "platform_admin"],
   },
+  {
+    title: "Retrieval Lab",
+    href: "/dashboard/retrieval-lab",
+    description: "Probe BM25 queries, filters, and latency from inside the admin workspace.",
+    group: "Teaching",
+    roles: ["teacher", "admin", "platform_admin"],
+  },
 ];
 
 export function getNavigationForUser(user) {
@@ -89,6 +96,14 @@ export function getCurrentSection(pathname) {
       eyebrow: "Admin panel",
       title: "AI Usage",
       description: "Review token volume by provider and model across the teacher workspace.",
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/retrieval-lab") || pathname.startsWith("/dashboard/retreival-lab")) {
+    return {
+      eyebrow: "Retrieval",
+      title: "BM25 query lab",
+      description: "Try search queries, filters, and repeat runs against the shared retrieval service.",
     };
   }
 

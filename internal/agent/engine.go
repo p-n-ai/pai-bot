@@ -15,6 +15,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
 	"github.com/p-n-ai/pai-bot/internal/progress"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 const (
@@ -36,6 +37,7 @@ type EngineConfig struct {
 	Store                 ConversationStore
 	EventLogger           EventLogger
 	CurriculumLoader      *curriculum.Loader
+	RetrievalService      *retrieval.Service
 	ContextResolver       ContextResolver
 	CompactThreshold      int // messages before compaction triggers (default 20)
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
@@ -99,11 +101,18 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if eventLogger == nil {
 		eventLogger = NopEventLogger{}
 	}
+	prereqGraph := buildPrereqGraph(cfg.CurriculumLoader)
 
 	contextResolver := cfg.ContextResolver
 	if contextResolver == nil {
 		if cfg.CurriculumLoader != nil {
-			contextResolver = NewCurriculumContextResolver(cfg.CurriculumLoader)
+			contextResolver = NewCurriculumContextResolver(
+				cfg.CurriculumLoader,
+				WithResolverRetrievalService(cfg.RetrievalService),
+				WithResolverStore(store),
+				WithResolverTracker(cfg.Tracker),
+				WithResolverPrereqGraph(prereqGraph),
+			)
 		} else {
 			contextResolver = NoopContextResolver{}
 		}
@@ -129,7 +138,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		goals:                 cfg.Goals,
 		challenges:            challenges,
 		devMode:               cfg.DevMode,
-		prereqGraph:           buildPrereqGraph(cfg.CurriculumLoader),
+		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
 	}
@@ -234,7 +243,14 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	// Compact if needed (summarize older messages).
 	e.maybeCompact(ctx, conv)
 
-	matchedTopic, teachingNotes := e.contextResolver.Resolve(msg.Text)
+	matchedTopic, teachingNotes := e.resolveCurriculumContext(msg.UserID, conv.TopicID, msg.Text)
+	if matchedTopic != nil && matchedTopic.ID != "" && matchedTopic.ID != conv.TopicID {
+		if err := e.store.UpdateConversationTopicID(conv.ID, matchedTopic.ID); err != nil {
+			slog.Warn("failed to persist matched topic", "conversation_id", conv.ID, "topic_id", matchedTopic.ID, "error", err)
+		} else {
+			conv.TopicID = matchedTopic.ID
+		}
+	}
 	replyCount := countTutoringReplies(conv.Messages) + 1
 	promptRequested := shouldRequestRatingAfterReply(replyCount, e.ratingPromptEvery)
 

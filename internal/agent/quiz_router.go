@@ -50,7 +50,7 @@ func (e *Engine) resolveQuizStartTopic(msg chat.InboundMessage, conv *Conversati
 		return "", false
 	}
 
-	if topic, _ := e.contextResolver.Resolve(msg.Text); topic != nil {
+	if topic, _ := e.resolveCurriculumContext(msg.UserID, conv.TopicID, msg.Text); topic != nil {
 		if _, found := e.curriculumLoader.GetAssessment(topic.ID); found {
 			return topic.ID, true
 		}
@@ -65,7 +65,7 @@ func (e *Engine) resolveQuizStartTopic(msg chat.InboundMessage, conv *Conversati
 		if text == "" {
 			continue
 		}
-		topic, _ := e.contextResolver.Resolve(text)
+		topic, _ := e.resolveCurriculumContext(msg.UserID, conv.TopicID, text)
 		if topic == nil {
 			continue
 		}
@@ -210,7 +210,7 @@ func (e *Engine) maybeGenerateQuizQuestions(ctx context.Context, session *QuizSe
 		Intensity:     session.Intensity,
 		N:             n,
 		TeachingNotes: teachingNotes,
-		AllQuestions:   allStatic,
+		AllQuestions:  allStatic,
 	})
 	if err != nil {
 		slog.Warn("quiz question generation failed", "topic_id", session.TopicID, "error", err)

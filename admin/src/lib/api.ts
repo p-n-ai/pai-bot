@@ -371,6 +371,34 @@ export async function switchTenantSession(tenantID: string, password: string): P
   return (await readJSONResponse(res)) as AuthSession;
 }
 
+export async function refreshSession(): Promise<AuthSession> {
+  if (typeof window === "undefined") {
+    throw new Error("Session refresh is only available in the browser");
+  }
+
+  const refreshToken = readStoredRefreshToken() || "";
+  if (!refreshToken) {
+    throw new Error("No refresh token available");
+  }
+
+  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(parseErrorMessage(raw, `Session refresh failed: ${res.status}`));
+  }
+
+  return (await readJSONResponse(res)) as AuthSession;
+}
+
 export function persistSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
 

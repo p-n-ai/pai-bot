@@ -97,7 +97,7 @@ db-seed-state:
     printf 'unreachable\n'; \
     exit 0; \
   fi; \
-  "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL THEN 'missing_auth_identities' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
+  "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL OR to_regclass('public.auth_invites') IS NULL OR to_regclass('public.auth_refresh_tokens') IS NULL THEN 'missing_auth_schema' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
 
 check-local-db:
   @db_url="$(just db-url)"; \
@@ -115,7 +115,7 @@ check-local-db:
       echo "start it first, then retry"; \
       exit 1; \
       ;; \
-    missing_auth_identities) \
+    missing_auth_schema) \
       echo "database schema is not ready (missing auth tables)"; \
       echo "run 'just migrate' before 'just go' or 'just next'"; \
       exit 1; \
@@ -167,6 +167,14 @@ prepare-local-dev:
   db_url_redacted="$(just db-url-redacted)"; \
   db_allows_auto_seed="$(just db-target-allows-auto-seed)"; \
   seed_state="$(just db-seed-state)"; \
+  if [ "$seed_state" = "missing_auth_schema" ]; then \
+    if [ "$db_allows_auto_seed" = "yes" ]; then \
+      just migrate; \
+      seed_state="$(just db-seed-state)"; \
+    else \
+      echo "database schema is incomplete and auto-migrate is disabled for target $db_url_redacted"; \
+    fi; \
+  fi; \
   if [ "$seed_state" = "not_seeded" ]; then \
     if [ "$db_allows_auto_seed" = "yes" ]; then \
       just seed; \
@@ -199,6 +207,49 @@ frontend:
   state_dir="{{dev-state-dir}}"
   frontend_port="${FRONTEND_PORT:-3000}"
   agentation_port="${AGENTATION_PORT:-4747}"
+  find_frontend_listener() {
+    lsof -tiTCP:"$frontend_port" -sTCP:LISTEN 2>/dev/null | head -n 1
+  }
+  reclaim_stale_frontend() {
+    listener_pid="$(find_frontend_listener)"
+    if [ -z "$listener_pid" ]; then
+      return 1
+    fi
+    listener_cmd="$(ps -p "$listener_pid" -o command= 2>/dev/null || true)"
+    listener_cwd="$(lsof -a -p "$listener_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)"
+    parent_pid="$(ps -p "$listener_pid" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+    parent_cmd=""
+    if [ -n "$parent_pid" ]; then
+      parent_cmd="$(ps -p "$parent_pid" -o command= 2>/dev/null || true)"
+    fi
+    case "$listener_cwd" in
+      */pai-bot/admin)
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    case "$listener_cmd $parent_cmd" in
+      *next*)
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    echo "reclaiming stale Next dev listener on port $frontend_port (pid $listener_pid)"
+    if [ -n "$parent_pid" ]; then
+      kill "$parent_pid" "$listener_pid" >/dev/null 2>&1 || kill "$listener_pid" >/dev/null 2>&1 || return 1
+    else
+      kill "$listener_pid" >/dev/null 2>&1 || return 1
+    fi
+    for _ in {1..10}; do
+      if ! lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+        return 0
+      fi
+      sleep 1
+    done
+    return 1
+  }
   started_agentation="no"
   agentation_pid=""
   frontend_pid=""
@@ -238,6 +289,11 @@ frontend:
       fi
       exit 0
     fi
+    if reclaim_stale_frontend; then
+      echo "stale frontend listener cleared; starting fresh on http://127.0.0.1:$frontend_port"
+    fi
+  fi
+  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "port $frontend_port is already in use"
     lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN
     exit 1

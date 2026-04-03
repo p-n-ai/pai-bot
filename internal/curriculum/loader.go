@@ -15,6 +15,8 @@ import (
 type Loader struct {
 	rootDir       string
 	topics        map[string]Topic
+	subjects      map[string]Subject
+	syllabi       map[string]Syllabus
 	assessments   map[string]Assessment
 	teachingNotes map[string]string
 	mu            sync.RWMutex
@@ -25,6 +27,8 @@ func NewLoader(rootDir string) (*Loader, error) {
 	l := &Loader{
 		rootDir:       rootDir,
 		topics:        make(map[string]Topic),
+		subjects:      make(map[string]Subject),
+		syllabi:       make(map[string]Syllabus),
 		assessments:   make(map[string]Assessment),
 		teachingNotes: make(map[string]string),
 	}
@@ -43,6 +47,22 @@ func (l *Loader) GetTopic(id string) (Topic, bool) {
 	defer l.mu.RUnlock()
 	t, ok := l.topics[id]
 	return t, ok
+}
+
+// GetSubject returns a subject by ID.
+func (l *Loader) GetSubject(id string) (Subject, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	subject, ok := l.subjects[id]
+	return subject, ok
+}
+
+// GetSyllabus returns a syllabus by ID.
+func (l *Loader) GetSyllabus(id string) (Syllabus, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	syllabus, ok := l.syllabi[id]
+	return syllabus, ok
 }
 
 // GetTeachingNotes returns teaching notes for a topic ID.
@@ -78,9 +98,14 @@ func (l *Loader) loadAll() error {
 			return nil
 		}
 
+		base := filepath.Base(path)
 		switch {
 		case strings.HasSuffix(path, ".teaching.md"):
 			return l.loadTeachingNotes(path)
+		case base == "subject.yaml" || base == "subject.yml":
+			return l.loadSubject(path)
+		case base == "syllabus.yaml" || base == "syllabus.yml":
+			return l.loadSyllabus(path)
 		case isAssessmentPath(path):
 			return l.loadAssessment(path)
 		case strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"):
@@ -117,6 +142,48 @@ func (l *Loader) loadTopic(path string) error {
 	l.topics[topic.ID] = topic
 	l.mu.Unlock()
 
+	return nil
+}
+
+func (l *Loader) loadSubject(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var subject Subject
+	if err := yaml.Unmarshal(data, &subject); err != nil {
+		slog.Warn("skipping invalid subject YAML", "path", path, "error", err)
+		return nil
+	}
+	if subject.ID == "" {
+		return nil
+	}
+
+	l.mu.Lock()
+	l.subjects[subject.ID] = subject
+	l.mu.Unlock()
+	return nil
+}
+
+func (l *Loader) loadSyllabus(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var syllabus Syllabus
+	if err := yaml.Unmarshal(data, &syllabus); err != nil {
+		slog.Warn("skipping invalid syllabus YAML", "path", path, "error", err)
+		return nil
+	}
+	if syllabus.ID == "" {
+		return nil
+	}
+
+	l.mu.Lock()
+	l.syllabi[syllabus.ID] = syllabus
+	l.mu.Unlock()
 	return nil
 }
 
