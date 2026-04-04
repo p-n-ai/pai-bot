@@ -19,6 +19,10 @@ vi.mock("@/components/login-gate/light-login-gate-backdrop", () => ({
 }));
 
 describe("LoginGate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("renders a stable login shell with one form and both themed backdrops", () => {
     const { container } = render(
       <ThemeProvider>
@@ -27,9 +31,21 @@ describe("LoginGate", () => {
     );
 
     expect(container.querySelectorAll("form")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
     expect(screen.getByTestId("login-gate-light-backdrop")).toBeInTheDocument();
     expect(screen.getByTestId("login-gate-dark-backdrop")).toBeInTheDocument();
+  });
+
+  it("shows the Google button only when the public login flag is enabled", () => {
+    vi.stubEnv("NEXT_PUBLIC_PAI_AUTH_GOOGLE_LOGIN_ENABLED", "true");
+
+    render(
+      <ThemeProvider>
+        <LoginGate />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
   });
 
   it("flips active backdrop state when the theme changes", async () => {

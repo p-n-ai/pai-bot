@@ -4801,7 +4801,7 @@ Current implementation note:
 - Multi-school logins use the backend `tenant_required` response to switch the UI into a guided school-picker state instead of treating that step like an error.
 - Invite acceptance and password setup remain part of the broader auth model, but ongoing email/password login, refresh-token-backed session persistence, logout, and guarded frontend routes are already live in the admin app.
 - Auth hardening now keeps tokens out of `localStorage`: Go issues `HttpOnly` cookies for access + refresh + SSR profile hydration, admin fetches use `credentials: 'include'`, protected API responses ship `Cache-Control: private, no-store`, and the client store hydrates from server cookies instead of browser storage.
-- Admin login now also supports Google OIDC: `/login` shows `Continue with Google`, Go owns the OIDC callback/session cookies, same-email auto-linking only happens for exact single-account verified matches, and cross-email Google linking only happens from an authenticated workspace flow.
+- Admin login now also supports Google OIDC, but the public `/login` button is opt-in via `NEXT_PUBLIC_PAI_AUTH_GOOGLE_LOGIN_ENABLED=true`; Go owns the OIDC callback/session cookies, same-email auto-linking only happens for exact single-account verified matches, and cross-email Google linking only happens from an authenticated workspace flow.
 - The signed-in shell now exposes linked-provider state via `GET /api/auth/identities` and a sidebar `Link Google` action instead of asking users to manage provider linking from the public login page.
 - Sidebar branding note: the desktop shell now uses a custom Classroom Hub mark in the header instead of a stock school icon so the admin workspace reads as product branding, not default iconography.
 
