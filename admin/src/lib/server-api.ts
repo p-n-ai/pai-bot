@@ -37,7 +37,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
     headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
     cache: "no-store",
   });
-  if (res.status === 401) {
+  if (res.status >= 400 && res.status < 500) {
     return null;
   }
   if (!res.ok) {

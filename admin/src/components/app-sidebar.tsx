@@ -4,6 +4,7 @@ import { Buildings } from "@phosphor-icons/react";
 import { IconBooks, IconChartBar, IconCoins, IconUsers } from "@tabler/icons-react";
 import Link from "next/link";
 import { AccountSettingsDialog } from "@/components/account/account-settings-dialog";
+import { SchoolSwitchDialog } from "@/components/account/school-switch-dialog";
 import { LoginButton } from "@/components/login-button";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -80,21 +81,26 @@ export function AppSidebar({
     >
       <SidebarHeader className="gap-3 px-4 pb-4 pt-4">
         {sessionReady && currentUser?.tenant_name ? (
-          <Link
-            href="/dashboard"
-            onClick={handleNavigate}
-            className="flex items-center gap-3 rounded-xl border border-sidebar-border bg-background/70 p-3 text-sidebar-foreground shadow-none transition hover:bg-sidebar-accent/50"
-          >
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <Buildings className="size-5" weight="duotone" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">{currentUser.tenant_name}</p>
-              {schoolChoices.length > 1 ? (
-                <p className="text-xs text-sidebar-foreground/65">Switch school from settings</p>
-              ) : null}
-            </div>
-          </Link>
+          <div className="rounded-xl border border-sidebar-border bg-background/70 p-3 text-sidebar-foreground shadow-none">
+            <Link href="/dashboard" onClick={handleNavigate} className="flex items-center gap-3 rounded-lg transition hover:bg-sidebar-accent/40">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                <Buildings className="size-5" weight="duotone" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">{currentUser.tenant_name}</p>
+                <p className="text-xs text-sidebar-foreground/65">
+                  {schoolChoices.length > 1 ? "Active school" : "Teacher workspace"}
+                </p>
+              </div>
+            </Link>
+            {schoolChoices.length > 1 ? (
+              <SchoolSwitchDialog
+                currentUser={currentUser}
+                schoolChoices={schoolChoices}
+                triggerClassName="mt-3 w-full justify-center rounded-xl border-sidebar-border bg-background/80 hover:bg-sidebar-accent"
+              />
+            ) : null}
+          </div>
         ) : (
           <Link
             href="/dashboard"
@@ -162,7 +168,7 @@ export function AppSidebar({
           </div>
           <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
-        {sessionReady && isLoggedIn ? <AccountSettingsDialog currentUser={currentUser} schoolChoices={schoolChoices} nextPath={pathname} /> : null}
+        {sessionReady && isLoggedIn ? <AccountSettingsDialog currentUser={currentUser} nextPath={pathname} /> : null}
         {sessionReady && isLoggedIn ? <LogoutButton /> : <LoginButton />}
       </SidebarFooter>
     </Sidebar>
