@@ -47,7 +47,8 @@ Frontend rule:
 - no auth tokens in `localStorage`
 - browser requests use `credentials: include`
 - protected auth responses send `Cache-Control: private, no-store`
-- SSR bootstrap reads session state from the backend, not from a frontend-owned user cookie
+- SSR bootstrap reads session state from `GET /api/auth/session`
+- optional school choices come from the session payload, not a separate auth cookie
 
 ## Login Flows
 
@@ -147,7 +148,7 @@ Flow:
 1. Frontend or SSR calls `GET /api/auth/session`
 2. Go reads `pai_session`
 3. Go loads session state server-side
-4. Go extends the cookie expiry and returns `{ expires_at, user }`
+4. Go extends the cookie expiry and returns `{ expires_at, user, tenant_choices? }`
 
 ## Tenant Switch
 
@@ -160,6 +161,7 @@ Rules:
 - requires password confirmation
 - reissues the session in place for the selected tenant
 - does not force a logout/login round trip
+- frontend school-switch UI uses the current session payload as its source of truth
 
 ## Logout
 

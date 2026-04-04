@@ -524,6 +524,10 @@ func TestAuthLoginEndpoint(t *testing.T) {
 				Name:     "Teacher One",
 				Email:    "teacher@example.com",
 			},
+			TenantChoices: []auth.TenantOption{
+				{TenantID: "tenant-abc", TenantSlug: "school-a", TenantName: "School A"},
+				{TenantID: "tenant-def", TenantSlug: "school-b", TenantName: "School B"},
+			},
 		},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"teacher@example.com","password":"secret-123"}`))
@@ -545,6 +549,7 @@ func TestAuthLoginEndpoint(t *testing.T) {
 			UserID string `json:"user_id"`
 			Role   string `json:"role"`
 		} `json:"user"`
+		TenantChoices []auth.TenantOption `json:"tenant_choices"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
@@ -554,6 +559,9 @@ func TestAuthLoginEndpoint(t *testing.T) {
 	}
 	if payload.User.UserID != "teacher-1" || payload.User.Role != string(auth.RoleTeacher) {
 		t.Fatalf("user payload = %#v", payload.User)
+	}
+	if len(payload.TenantChoices) != 2 {
+		t.Fatalf("tenant choices = %#v, want 2", payload.TenantChoices)
 	}
 	assertAuthCookies(t, rec.Result().Cookies(), "session-123")
 }
@@ -569,6 +577,10 @@ func TestAuthSessionEndpointReturnsUserAndRefreshesCookie(t *testing.T) {
 				Role:     auth.RoleTeacher,
 				Name:     "Teacher One",
 				Email:    "teacher@example.com",
+			},
+			TenantChoices: []auth.TenantOption{
+				{TenantID: "tenant-abc", TenantSlug: "school-a", TenantName: "School A"},
+				{TenantID: "tenant-def", TenantSlug: "school-b", TenantName: "School B"},
 			},
 		},
 	}
@@ -591,6 +603,7 @@ func TestAuthSessionEndpointReturnsUserAndRefreshesCookie(t *testing.T) {
 			UserID string `json:"user_id"`
 			Role   string `json:"role"`
 		} `json:"user"`
+		TenantChoices []auth.TenantOption `json:"tenant_choices"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
@@ -600,6 +613,9 @@ func TestAuthSessionEndpointReturnsUserAndRefreshesCookie(t *testing.T) {
 	}
 	if payload.User.UserID != "teacher-1" || payload.User.Role != string(auth.RoleTeacher) {
 		t.Fatalf("user payload = %#v", payload.User)
+	}
+	if len(payload.TenantChoices) != 2 {
+		t.Fatalf("tenant choices = %#v, want 2", payload.TenantChoices)
 	}
 	assertAuthCookies(t, rec.Result().Cookies(), "session-next")
 }

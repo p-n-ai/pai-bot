@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { LoginGateContext } from "@/components/login-gate/login-gate-context";
-import { buildGoogleLoginURL, login, persistSession } from "@/lib/api";
+import { buildGoogleLoginURL, loginWithPassword, persistSession } from "@/lib/api";
 import { getGoogleAuthErrorMessage } from "@/lib/auth-flow-feedback";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 import { clearSchoolSwitchState } from "@/lib/school-switch-state";
@@ -48,7 +48,7 @@ export function LoginGateProvider({
 
     startTransition(async () => {
       try {
-        const session = await login({
+        const session = await loginWithPassword({
           email: email.trim(),
           password,
         });

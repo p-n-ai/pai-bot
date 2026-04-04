@@ -4,8 +4,6 @@ import { create } from "zustand";
 import type { AuthSession, AuthUser } from "@/lib/api";
 import {
   buildSchoolSwitchState,
-  clearSchoolSwitchState,
-  readSchoolSwitchState,
   type SchoolSwitchState,
   writeSchoolSwitchState,
 } from "@/lib/school-switch-state";
@@ -44,9 +42,7 @@ function buildSnapshot(currentUser: AuthUser | null, schoolSwitchState: SchoolSw
 export const useAppStore = create<AdminSessionStore>((set) => ({
   ...getDefaultSnapshot(),
   initializeFromServer: (currentUser, schoolSwitchState) => {
-    const nextSchoolSwitchState =
-      schoolSwitchState ?? (typeof window === "undefined" ? null : readSchoolSwitchState());
-    set(buildSnapshot(currentUser, nextSchoolSwitchState));
+    set(buildSnapshot(currentUser, schoolSwitchState));
   },
   applySession: (session) => {
     const nextSchoolSwitchState = buildSchoolSwitchState(
@@ -57,14 +53,12 @@ export const useAppStore = create<AdminSessionStore>((set) => ({
     if (typeof window !== "undefined") {
       if (nextSchoolSwitchState) {
         writeSchoolSwitchState(nextSchoolSwitchState);
-      } else {
-        clearSchoolSwitchState();
       }
     }
     set(buildSnapshot(session.user, nextSchoolSwitchState));
   },
   clearSession: () => {
-    set(buildSnapshot(null, typeof window === "undefined" ? null : readSchoolSwitchState()));
+    set(buildSnapshot(null, null));
   },
 }));
 

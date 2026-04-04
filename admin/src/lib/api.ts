@@ -173,7 +173,7 @@ export interface AuthUser {
 export interface AuthSession {
   expires_at: string;
   user: AuthUser;
-  tenant_choices?: TenantChoice[];
+  tenant_choices?: SchoolChoice[];
 }
 
 export interface LinkedIdentity {
@@ -183,7 +183,7 @@ export interface LinkedIdentity {
   last_used_at?: string;
 }
 
-export interface TenantChoice {
+export interface SchoolChoice {
   tenant_id: string;
   tenant_slug: string;
   tenant_name: string;
@@ -292,8 +292,7 @@ export async function sendStudentNudge(studentId: string): Promise<NudgeResponse
   return postJSON(`/api/admin/students/${studentId}/nudge`);
 }
 
-export async function login(input: {
-  tenant_id?: string;
+export async function loginWithPassword(input: {
   email: string;
   password: string;
 }): Promise<AuthSession> {
@@ -345,9 +344,9 @@ export async function issueInvite(input: {
   return postJSONWithBody("/api/admin/invites", input);
 }
 
-export async function switchTenantSession(tenantID: string, password: string): Promise<AuthSession> {
-  if (!tenantID.trim() || !password.trim()) {
-    throw new Error("A stored session is required to switch schools");
+export async function switchSchool(schoolID: string, password: string): Promise<AuthSession> {
+  if (!schoolID.trim() || !password.trim()) {
+    throw new Error("A school and password are required to switch schools");
   }
 
   const res = await fetch(resolveAPIPath("/api/auth/switch-tenant"), {
@@ -358,7 +357,7 @@ export async function switchTenantSession(tenantID: string, password: string): P
     credentials: "include",
     cache: "no-store",
     body: JSON.stringify({
-      tenant_id: tenantID,
+      tenant_id: schoolID,
       password,
     }),
   });
@@ -366,34 +365,6 @@ export async function switchTenantSession(tenantID: string, password: string): P
   if (!res.ok) {
     const raw = await res.text();
     throw new Error(parseErrorMessage(raw, `Tenant switch failed: ${res.status}`));
-  }
-
-  return (await readJSONResponse(res)) as AuthSession;
-}
-
-export async function refreshSession(): Promise<AuthSession> {
-  if (typeof window === "undefined") {
-    throw new Error("Session refresh is only available in the browser");
-  }
-
-  const refreshToken = readStoredRefreshToken() || "";
-  if (!refreshToken) {
-    throw new Error("No refresh token available");
-  }
-
-  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      refresh_token: refreshToken,
-    }),
-  });
-
-  if (!res.ok) {
-    const raw = await res.text();
-    throw new Error(parseErrorMessage(raw, `Session refresh failed: ${res.status}`));
   }
 
   return (await readJSONResponse(res)) as AuthSession;

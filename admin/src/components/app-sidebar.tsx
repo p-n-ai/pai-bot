@@ -54,6 +54,7 @@ export function AppSidebar({
   const currentUser = hasMounted ? storeCurrentUser : initialCurrentUser;
   const isLoggedIn = hasMounted ? storeIsLoggedIn : Boolean(initialCurrentUser);
   const schoolSwitchState = hasMounted ? storeSchoolSwitchState : initialSchoolSwitchState;
+  const schoolChoices = schoolSwitchState?.tenantChoices ?? [];
   const navigationItems = getNavigationForUser(currentUser);
   const sessionReady = hasMounted ? hydrated : Boolean(initialCurrentUser);
 
@@ -89,7 +90,7 @@ export function AppSidebar({
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">{currentUser.tenant_name}</p>
-              {schoolSwitchState?.tenantChoices?.length > 1 ? (
+              {schoolChoices.length > 1 ? (
                 <p className="text-xs text-sidebar-foreground/65">Switch school from settings</p>
               ) : null}
             </div>
@@ -161,9 +162,7 @@ export function AppSidebar({
           </div>
           <ThemeToggle className="rounded-xl border border-sidebar-border bg-background/70 hover:bg-sidebar-accent" />
         </div>
-        {sessionReady && isLoggedIn ? (
-          <AccountSettingsDialog currentUser={currentUser} schoolSwitchState={schoolSwitchState} nextPath={pathname} />
-        ) : null}
+        {sessionReady && isLoggedIn ? <AccountSettingsDialog currentUser={currentUser} schoolChoices={schoolChoices} nextPath={pathname} /> : null}
         {sessionReady && isLoggedIn ? <LogoutButton /> : <LoginButton />}
       </SidebarFooter>
     </Sidebar>

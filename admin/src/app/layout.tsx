@@ -10,9 +10,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { parseCookieJSON } from "@/lib/auth-session";
 import { getServerAuthSession } from "@/lib/server-api";
-import { buildSchoolSwitchState, SCHOOL_SWITCH_STATE_COOKIE, type SchoolSwitchState } from "@/lib/school-switch-state";
+import { buildSchoolSwitchState } from "@/lib/school-switch-state";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -35,10 +34,7 @@ export default async function RootLayout({
   const defaultSidebarOpen = cookieStore.get(APP_SIDEBAR_COOKIE_NAME)?.value !== "false";
   const initialCurrentUser = session?.user ?? null;
   const initialSchoolSwitchState =
-    parseCookieJSON<SchoolSwitchState>(cookieStore.get(SCHOOL_SWITCH_STATE_COOKIE)?.value) ??
-    (session
-      ? buildSchoolSwitchState(session.user.email, session.user.tenant_id, session.tenant_choices ?? [])
-      : null);
+    session ? buildSchoolSwitchState(session.user.email, session.user.tenant_id, session.tenant_choices ?? []) : null;
 
   return (
     <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>

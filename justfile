@@ -97,7 +97,7 @@ db-seed-state:
     printf 'unreachable\n'; \
     exit 0; \
   fi; \
-  "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL OR to_regclass('public.auth_invites') IS NULL OR to_regclass('public.auth_refresh_tokens') IS NULL THEN 'missing_auth_schema' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
+  "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL OR to_regclass('public.auth_invites') IS NULL OR to_regclass('public.auth_sessions') IS NULL OR to_regclass('public.auth_oidc_flows') IS NULL THEN 'missing_auth_schema' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
 
 check-local-db:
   @db_url="$(just db-url)"; \

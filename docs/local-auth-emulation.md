@@ -65,8 +65,8 @@ Seeded redirect URIs:
 - `http://127.0.0.1:8080/api/auth/google/callback`
 - `http://127.0.0.1:8082/api/auth/google/callback`
 - `http://localhost:8080/api/auth/google/callback`
-- `http://127.0.0.1:3000/api/auth/callback/google`
-- `http://localhost:3000/api/auth/callback/google`
+- `http://127.0.0.1:3000/api/auth/google/callback`
+- `http://localhost:3000/api/auth/google/callback`
 
 ## Recommended boundary
 

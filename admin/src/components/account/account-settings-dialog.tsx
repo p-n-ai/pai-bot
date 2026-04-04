@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Buildings, GearSix } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useState } from "react";
 import { toast } from "sonner";
 import { LinkedIdentitiesCard } from "@/components/account/linked-identities-card";
 import { Button } from "@/components/ui/button";
@@ -19,42 +19,34 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { AuthUser, TenantChoice } from "@/lib/api";
-import { persistSession, switchTenantSession } from "@/lib/api";
+import type { AuthUser, SchoolChoice } from "@/lib/api";
+import { persistSession, switchSchool } from "@/lib/api";
 import { fetchDashboardProgress, fetchPreviewDashboardProgress, getDashboardProgressQueryKey } from "@/lib/dashboard-progress-query";
-import { type SchoolSwitchState } from "@/lib/school-switch-state";
 
 export function AccountSettingsDialog({
   currentUser,
-  schoolSwitchState,
+  schoolChoices,
   nextPath,
 }: {
   currentUser: AuthUser | null;
-  schoolSwitchState: SchoolSwitchState | null;
+  schoolChoices: SchoolChoice[];
   nextPath: string | null;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [tenantID, setTenantID] = useState(currentUser?.tenant_id ?? "");
+  const [selectedSchoolID, setSelectedSchoolID] = useState(currentUser?.tenant_id ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-
-  const schoolChoices = useMemo<TenantChoice[]>(() => {
-    if (!currentUser?.email || schoolSwitchState?.email !== currentUser.email) {
-      return [];
-    }
-    return schoolSwitchState.tenantChoices;
-  }, [currentUser?.email, schoolSwitchState]);
 
   const canSwitchSchools = schoolChoices.length > 1 && Boolean(currentUser?.tenant_id);
 
   const switchSchoolMutation = useMutation({
-    mutationFn: async ({ nextTenantID, currentPassword }: { nextTenantID: string; currentPassword: string }) => {
+    mutationFn: async ({ nextSchoolID, currentPassword }: { nextSchoolID: string; currentPassword: string }) => {
       if (!currentUser) {
         throw new Error("A signed-in session is required to switch schools");
       }
-      return switchTenantSession(nextTenantID, currentPassword);
+      return switchSchool(nextSchoolID, currentPassword);
     },
     onMutate: () => {
       setError("");
@@ -63,7 +55,7 @@ export function AccountSettingsDialog({
     onSuccess: async (session) => {
       persistSession(session);
       setPassword("");
-      setTenantID(session.user.tenant_id);
+      setSelectedSchoolID(session.user.tenant_id);
       setOpen(false);
       const dashboardQueryKey = getDashboardProgressQueryKey(session.user.tenant_id);
       try {
@@ -89,18 +81,18 @@ export function AccountSettingsDialog({
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen) {
-      setTenantID(currentUser?.tenant_id ?? "");
+      setSelectedSchoolID(currentUser?.tenant_id ?? "");
       setPassword("");
       setError("");
     }
   }
 
   function handleSwitchSchool() {
-    if (!currentUser || !canSwitchSchools || !tenantID || tenantID === currentUser.tenant_id || !password.trim()) {
+    if (!currentUser || !canSwitchSchools || !selectedSchoolID || selectedSchoolID === currentUser.tenant_id || !password.trim()) {
       return;
     }
     switchSchoolMutation.mutate({
-      nextTenantID: tenantID,
+      nextSchoolID: selectedSchoolID,
       currentPassword: password,
     });
   }
@@ -161,7 +153,7 @@ export function AccountSettingsDialog({
               <div className="mt-4 space-y-3">
                 <div className="space-y-2">
                   <Label htmlFor="settings-tenant">School</Label>
-                  <Select value={tenantID} onValueChange={(value) => setTenantID(value ?? "")}>
+                  <Select value={selectedSchoolID} onValueChange={(value) => setSelectedSchoolID(value ?? "")}>
                     <SelectTrigger id="settings-tenant" className="rounded-xl">
                       <SelectValue placeholder="Choose school" />
                     </SelectTrigger>
@@ -193,8 +185,8 @@ export function AccountSettingsDialog({
                   disabled={
                     switchSchoolMutation.isPending ||
                     !password.trim() ||
-                    !tenantID ||
-                    tenantID === currentUser?.tenant_id
+                    !selectedSchoolID ||
+                    selectedSchoolID === currentUser?.tenant_id
                   }
                   className="rounded-xl"
                 >

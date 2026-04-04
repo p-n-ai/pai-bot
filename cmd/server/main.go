@@ -1360,11 +1360,7 @@ func handleAuthSession(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		http.SetCookie(w, buildSessionCookie(auth.SessionCookieName, session.Token, session.ExpiresAt, time.Now().UTC(), requestUsesHTTPS(r)))
-		writeJSON(w, http.StatusOK, authSessionResponse{
-			ExpiresAt: session.ExpiresAt,
-			User:      session.User,
-		})
+		writeAuthSessionResponse(w, r, http.StatusOK, session)
 	}
 }
 
@@ -1480,15 +1476,17 @@ func decodeOptionalJSONBody(r *http.Request, target any) (err error) {
 }
 
 type authSessionResponse struct {
-	ExpiresAt time.Time        `json:"expires_at"`
-	User      auth.UserSession `json:"user"`
+	ExpiresAt     time.Time           `json:"expires_at"`
+	User          auth.UserSession    `json:"user"`
+	TenantChoices []auth.TenantOption `json:"tenant_choices,omitempty"`
 }
 
 func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, session auth.Session) {
 	setSessionCookies(w, r, session)
 	writeJSON(w, status, authSessionResponse{
-		ExpiresAt: session.ExpiresAt,
-		User:      session.User,
+		ExpiresAt:     session.ExpiresAt,
+		User:          session.User,
+		TenantChoices: session.TenantChoices,
 	})
 }
 
