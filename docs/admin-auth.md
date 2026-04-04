@@ -106,6 +106,7 @@ Google env surface:
 - normal setup:
   - `PAI_AUTH_GOOGLE_CLIENT_ID`
   - `PAI_AUTH_GOOGLE_CLIENT_SECRET`
+  - `NEXT_PUBLIC_PAI_AUTH_GOOGLE_LOGIN_ENABLED=true` only when `/login` should show the public Google button
 - advanced/local-emulate only:
   - `PAI_AUTH_GOOGLE_DISCOVERY_URL`
   - `PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET`

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 
 export function LoginGateForm() {
   const { email, password, error, isPending, isGooglePending, setEmail, setPassword, submit } = useLoginGate();
+  const showGoogleLogin = process.env.NEXT_PUBLIC_PAI_AUTH_GOOGLE_LOGIN_ENABLED === "true";
 
   const errorMessage =
     error === "Failed to fetch"
@@ -18,16 +19,18 @@ export function LoginGateForm() {
 
   return (
     <form id="sign-in-form" className="space-y-5 transition-[opacity,transform] duration-200 ease-out" onSubmit={submit}>
-      <div className="space-y-4">
-        <LoginGateGoogleButton />
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-            or use email
-          </span>
-          <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
+      {showGoogleLogin ? (
+        <div className="space-y-4">
+          <LoginGateGoogleButton />
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              or use email
+            </span>
+            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="email" className="text-slate-700 dark:text-slate-200">
