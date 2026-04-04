@@ -118,7 +118,7 @@
       <g class="node" onclick="showDetail('admin-panel')">
         <rect x="760" y="50" width="200" height="60" class="box box-admin"/>
         <text x="860" y="75" text-anchor="middle" class="label">🖥️ Admin Panel</text>
-        <text x="860" y="93" text-anchor="middle" class="sublabel">Next.js 16 · Refine v5 · shadcn/ui</text>
+        <text x="860" y="93" text-anchor="middle" class="sublabel">Next.js 16 · TanStack Query · shadcn/ui</text>
       </g>
 
       <!-- Arrows from channels to Chat Gateway -->
@@ -913,7 +913,7 @@ const details = {
   'auth': {
     title: '🔐 Authentication',
     content: `<span class="file-path">internal/auth/</span><br><br>
-    JWT with 15-minute access tokens + 7-day refresh token rotation. RBAC roles: student, teacher, parent, admin, platform_admin. Middleware validates JWT on every request with zero database calls.`
+    Server-owned session cookie for admin auth, with bearer JWT parsing kept as a compatibility lane during migration. RBAC roles: student, teacher, parent, admin, platform_admin. Middleware validates auth state before every admin request.`
   },
   'tenant': {
     title: '🏢 Multi-Tenancy',
@@ -923,7 +923,7 @@ const details = {
   'admin-panel': {
     title: '🖥️ Admin Panel',
     content: `<span class="file-path">admin/</span><br><br>
-    Next.js 16 (App Router) + TypeScript + Refine v5 + shadcn/ui + Tailwind CSS 4.<br><br>
+    Next.js 16 (App Router) + TypeScript + TanStack Query + shadcn/ui + Tailwind CSS 4.<br><br>
     Views: Teacher Dashboard (mastery heatmap, nudge controls), Student Detail (radar chart, activity grid), Parent View (weekly stats), School Admin (class management, budget), Platform Admin (usage analytics).`
   },
   'platform': {

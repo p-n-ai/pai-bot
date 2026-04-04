@@ -116,7 +116,7 @@ Institutions that need scalable, sovereign learning infrastructure. They care ab
 **Hypothesis:** Schools will adopt P&AI if teachers get visibility and control, and if it's self-hostable.
 
 **Features Added:**
-- Admin panel (Next.js + Refine) with teacher dashboard, student detail, parent view
+- Admin panel (Next.js + TanStack Query) with teacher dashboard, student detail, parent view
 - Second syllabus (Malaysia KSSM Form 3)
 - Multi-tenancy (single-school and multi-school modes)
 - Token budget management (auto-degrade to cheaper models)

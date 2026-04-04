@@ -7,34 +7,24 @@ import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { TenantChoice } from "@/lib/api";
 
 export function LoginFormCard({
   email,
   password,
-  tenantID,
-  tenantChoices,
   error,
   isPending,
   onEmailChange,
   onPasswordChange,
-  onTenantChange,
   onSubmit,
 }: {
   email: string;
   password: string;
-  tenantID: string;
-  tenantChoices: TenantChoice[];
   error: string;
   isPending: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
-  onTenantChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const tenantRequired = tenantChoices.length > 0;
-
   return (
     <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
       <section className="space-y-6">
@@ -89,27 +79,6 @@ export function LoginFormCard({
                 required
               />
             </FormField>
-
-            {tenantRequired ? (
-              <FormField
-                label="School"
-                htmlFor="tenant_id"
-                description="The same email is linked to multiple tenant-scoped accounts, so the backend needs the school context."
-              >
-                <Select value={tenantID} onValueChange={(value) => onTenantChange(value ?? "")}>
-                  <SelectTrigger id="tenant_id" className="h-10 w-full bg-white text-slate-950 dark:bg-slate-900 dark:text-slate-100">
-                    <SelectValue placeholder="Choose a school" />
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {tenantChoices.map((tenant) => (
-                      <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
-                        {tenant.tenant_name} ({tenant.tenant_slug})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-            ) : null}
 
             <FormField label="Password" htmlFor="password">
               <Input

@@ -30,7 +30,7 @@ git clone https://github.com/p-n-ai/pai-bot.git .
 # Configure
 cp .env.example .env
 nano .env
-# Set: LEARN_TELEGRAM_BOT_TOKEN, LEARN_AUTH_JWT_SECRET, AI provider keys
+# Set: LEARN_TELEGRAM_BOT_TOKEN, PAI_AUTH_SECRET, AI provider keys
 # Change DB/cache/nats URLs to use container names: postgres, dragonfly, nats
 
 # Set postgres password and start

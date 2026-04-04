@@ -1049,10 +1049,12 @@ Score < 40%:  [  23%  ] rose bg
 - All components support light and dark via Tailwind `dark:` classes
 
 ### Session Management
-- Access token stored in `localStorage`, synced to cookies for SSR
-- `SESSION_CHANGED_EVENT` triggers UI refresh across tabs
-- Account dropdown shows: name, email, role, tenant name
-- Logout clears all stored session data
+- Go auth endpoints issue `HttpOnly` session cookies for access, refresh, and SSR profile state
+- `/login` now shows a first-class `Continue with Google` action above the email/password form; multi-school chooser mode keeps the user focused by suppressing the Google CTA until tenant resolution is complete
+- Frontend auth state hydrates from server cookies into the Zustand app store; auth tokens are not persisted in `localStorage`
+- The signed-in shell exposes linked-provider state plus a `Link Google` action in the sidebar footer, so different-email Google linking happens only from an authenticated session
+- Logout is a button-triggered `POST /api/auth/logout` action, never a `GET` navigation
+- Logout clears the server-owned auth cookies and the local school-switch snapshot
 
 ---
 

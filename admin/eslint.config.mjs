@@ -35,6 +35,8 @@ const legacyUseEffectFiles = [
   "src/components/ui/carousel.tsx",
   "src/components/ui/sidebar.tsx",
   "src/hooks/use-async-resource.ts",
+  "src/hooks/use-auth-redirect-notice.ts",
+  "src/hooks/use-admin-session-bootstrap.ts",
   "src/hooks/use-mobile.ts",
   "src/hooks/use-session-redirect.ts",
 ];

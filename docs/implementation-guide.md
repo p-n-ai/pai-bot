@@ -383,8 +383,6 @@ type WhatsAppConfig struct {
 
 type AuthConfig struct {
 	JWTSecret         string
-	AccessTokenTTL    int // minutes
-	RefreshTokenTTL   int // days
 }
 
 type TenantConfig struct {
@@ -439,9 +437,7 @@ func Load() (*Config, error) {
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
 		},
 		Auth: AuthConfig{
-			JWTSecret:       envStr("LEARN_AUTH_JWT_SECRET", "change-me-in-production"),
-			AccessTokenTTL:  envInt("LEARN_AUTH_ACCESS_TOKEN_TTL", 15),
-			RefreshTokenTTL: envInt("LEARN_AUTH_REFRESH_TOKEN_TTL", 7),
+			JWTSecret:       envStr("PAI_AUTH_SECRET", "change-me-in-production"),
 		},
 		Tenant: TenantConfig{
 			Mode: envStr("LEARN_TENANT_MODE", "single"),
@@ -1758,7 +1754,7 @@ LEARN_AI_OLLAMA_URL=http://localhost:11434
 LEARN_AI_OPENROUTER_API_KEY=
 
 # --- Auth ---
-LEARN_AUTH_JWT_SECRET=change-me-in-production
+PAI_AUTH_SECRET=change-me-in-production
 
 # --- Tenancy ---
 LEARN_TENANT_MODE=single
@@ -4721,7 +4717,7 @@ Status (2026-04-01): this slice is beyond the original bare scaffold. Current sh
 
 | # | Task ID | Task | Owner | Files Created |
 |---|---------|------|-------|---------------|
-| 16.1 | `P-W4D16-1` | Scaffold Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine | 🤖 | `admin/` directory |
+| 16.1 | `P-W4D16-1` | Scaffold Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + TanStack Query | 🤖 | `admin/` directory |
 | 16.2 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid, "Nudge" button per student | 🤖 | `admin/src/app/dashboard/page.tsx` |
 | 16.3 | `P-W4D16-3` | Student detail page: profile, mastery radar, activity grid, conversations | 🤖 | `admin/src/app/students/[id]/page.tsx` |
 | 16.4 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views | 🧑 | Manual |
@@ -4733,12 +4729,11 @@ Implementation boundary for auth:
 - Current: Day 16 JWT/RBAC applies to the Go admin API under `/api/admin/*`.
 - Current: the Next.js admin shell now has a login screen plus route guards for teacher, parent, admin, and platform admin views.
 - Current: teachers, parents, admins, and platform admins are provisioned by email invite, accept the invite by setting a password, then use email + password for future logins.
-- Current: auth storage uses `users` for profile and role data plus `auth_identities`, `auth_invites`, and `auth_refresh_tokens` for login credentials and session state.
+- Current: auth storage uses `users` for profile and role data plus `auth_identities`, `auth_invites`, and `auth_sessions` for login credentials and session state.
 
 ```bash
 cd admin
 pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir --use-pnpm
-pnpm add @refinedev/core @refinedev/nextjs-router @refinedev/react-hook-form
 pnpm add @tanstack/react-query@5 recharts zod @hookform/resolvers date-fns lucide-react
 pnpm dlx shadcn@latest init
 pnpm dlx shadcn@latest add button card input label select textarea tabs badge table dialog
@@ -4778,7 +4773,8 @@ export interface ClassProgress {
 
 export async function getClassProgress(classId: string): Promise<ClassProgress> {
   const res = await fetch(`${API_BASE}/api/admin/classes/${classId}/progress`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: 'include',
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Failed: ${res.statusText}`);
   return res.json();
@@ -4790,17 +4786,11 @@ export async function getStudentDetail(studentId: string): Promise<{
   streak: { current: number; longest: number; total_xp: number };
 }> {
   const res = await fetch(`${API_BASE}/api/admin/students/${studentId}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+    credentials: 'include',
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Failed: ${res.statusText}`);
   return res.json();
-}
-
-function getToken(): string {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('pai_token') || '';
-  }
-  return '';
 }
 ```
 
@@ -4810,6 +4800,9 @@ Current implementation note:
 - Backend bearer-token enforcement plus RBAC still protects the Go admin API, but the frontend also ships cookie-aware redirects and protected route handling now.
 - Multi-school logins use the backend `tenant_required` response to switch the UI into a guided school-picker state instead of treating that step like an error.
 - Invite acceptance and password setup remain part of the broader auth model, but ongoing email/password login, refresh-token-backed session persistence, logout, and guarded frontend routes are already live in the admin app.
+- Auth hardening now keeps tokens out of `localStorage`: Go issues `HttpOnly` cookies for access + refresh + SSR profile hydration, admin fetches use `credentials: 'include'`, protected API responses ship `Cache-Control: private, no-store`, and the client store hydrates from server cookies instead of browser storage.
+- Admin login now also supports Google OIDC: `/login` shows `Continue with Google`, Go owns the OIDC callback/session cookies, same-email auto-linking only happens for exact single-account verified matches, and cross-email Google linking only happens from an authenticated workspace flow.
+- The signed-in shell now exposes linked-provider state via `GET /api/auth/identities` and a sidebar `Link Google` action instead of asking users to manage provider linking from the public login page.
 - Sidebar branding note: the desktop shell now uses a custom Classroom Hub mark in the header instead of a stock school icon so the admin workspace reads as product branding, not default iconography.
 
 ### Day 17-20 — API Endpoints, Parent View, Form Selection, Reports, Budget Tracking
@@ -4821,11 +4814,12 @@ Follow the same pattern:
 - **Day 19:** Weekly parent reports (Sunday 20:00 scheduler). Token budget tracking page. Current implementation is token-allowance based (budget window, used tokens, remaining tokens, daily token trend, per-student average tokens). Week 4 budget scope is AI-token-only, not real-money spend tracking.
 - **Day 20:** Week 4 retro.
 
-Status (2026-04-01): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, `POST /api/admin/invites`, and `POST /api/admin/ai/budget-window`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; document it as AI-token budgeting only, not real-money spend tracking.
+Status (2026-04-03): the Day 17 API slice is live. Beyond the original endpoints, the repo also serves `GET /api/admin/metrics`, `GET /api/admin/parents/{id}`, `POST /api/admin/students/{id}/nudge`, `POST /api/admin/invites`, `POST /api/admin/ai/budget-window`, and `GET /api/auth/identities`. Auth/session is ahead of plan: `auth_identities`, `auth_invites`, `auth_sessions`, `auth_oidc_flows`, invite acceptance, email/password login, Google OIDC login/linking, logout, and protected Next.js routes are in place. Still pending: bot-side form selection. The current Day 19 budget implementation uses token allowances via `token_budgets`; document it as AI-token budgeting only, not real-money spend tracking.
 
 Planned follow-up after Week 4 scaffolding:
 
 - Keep students on Telegram identity until a separate student web portal is explicitly introduced.
+- Use repo-local provider emulation for future Google/Vercel auth work and integration tests instead of depending on live provider calls during local dev. See [local-auth-emulation.md](local-auth-emulation.md).
 - Treat `admin/src/app/globals.css` as the single owner for admin design tokens (color, radius, typography, focus, sidebar, and chart palette).
 - Current admin shell baseline favors a narrower true-light sidebar in light mode, simpler account footer, tighter top bar padding, no top-bar divider line, and a dashboard root that hides the duplicate shell breadcrumb/title layer while using a plain page header instead of a boxed hero card.
 - Current dashboard summary row should read as: learner count with the attention callout tucked underneath, class-grade letter derived from average mastery, average mastery with weakest/strongest topic context, and coverage as the final operational metric.
@@ -5001,7 +4995,7 @@ echo ""
 | `internal/curriculum` | Day 1 | `loader.go`, `types.go` | YAML curriculum loader |
 | `internal/progress` | Day 6 | `tracker.go`, `spaced_rep.go`, `display.go`, `streaks.go`, `xp.go` | Mastery tracking, SM-2, streaks, XP |
 | `internal/auth` | Day 16 | `jwt.go`, `middleware.go` | JWT auth + RBAC middleware |
-| `internal/auth` | Planned auth-hardening pass | `password.go`, `invites.go`, `sessions.go` | Password login, invite onboarding, refresh token rotation |
+| `internal/auth` | Planned auth-hardening pass | `password.go`, `invites.go`, `sessions.go` | Password login, invite onboarding, session-store cleanup and simplification |
 | `internal/tenant` | Day 23 | `tenant.go`, `middleware.go` | Multi-tenancy isolation |
 
 ---
@@ -5013,9 +5007,9 @@ echo ""
 | `20260318100000_initial` | Day 0 | tenants, users, conversations, messages, learning_progress, events |
 | `20260318100100_streaks_xp` | Day 8 | streaks, xp_ledger, nudge_log |
 | `20260318100200_goals` | Day 11 | goals |
-| `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_refresh_tokens |
+| `20260318100300_auth_tables` | Day 15 | auth_identities, auth_invites, auth_sessions |
 | `20260318100400_auth_identity_tenant_consistency` | Day 15 follow-up | enforce `(user_id, tenant_id)` auth identity foreign-key consistency |
-| `20260318100500_global_platform_admins` | Day 15 follow-up | allow global `platform_admin` records and tenant-less auth identities/refresh tokens |
+| `20260318100500_global_platform_admins` | Day 15 follow-up | allow global `platform_admin` records and tenant-less auth identities/session records |
 | `20260318100600_token_budgets` | Day 19 | token_budgets (tenant token allowance windows; current budget tracking is token-based, not USD-based) |
 | `20260318102000_challenges` | Day 11 | challenges, challenge_attempts, challenge_matchmaking_tickets |
 | `20260318102100_challenge_acceptance` | Day 11 slice follow-up | acceptance timestamps and ready gating for queue-created challenges |
@@ -5040,7 +5034,7 @@ echo ""
 | `LEARN_AI_OLLAMA_ENABLED` | 0 | No* | `false` |
 | `LEARN_AI_OLLAMA_URL` | 0 | No | `http://localhost:11434` |
 | `LEARN_AI_OPENROUTER_API_KEY` | 0 | No* | — |
-| `LEARN_AUTH_JWT_SECRET` | 16 | No | `change-me-in-production` |
+| `PAI_AUTH_SECRET` | 16 | No | `change-me-in-production` |
 | `LEARN_TENANT_MODE` | 23 | No | `single` |
 | `LEARN_WHATSAPP_ENABLED` | 24 | No | `false` |
 | `LEARN_LOG_LEVEL` | 0 | No | `info` |

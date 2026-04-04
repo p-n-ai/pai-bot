@@ -45,6 +45,43 @@ func TestAuthenticateMiddleware(t *testing.T) {
 	}
 }
 
+func TestAuthenticateMiddlewareAcceptsSessionCookie(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 13, 10, 0, 0, 0, time.UTC)
+	manager := NewTokenManager("test-secret", time.Minute)
+	token, err := manager.Issue(TokenClaims{
+		Subject:  "user-123",
+		TenantID: "tenant-abc",
+		Role:     RoleTeacher,
+	}, now)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := ClaimsFromContext(r.Context())
+		if !ok {
+			t.Fatal("ClaimsFromContext() ok = false, want true")
+		}
+		if claims.Subject != "user-123" {
+			t.Fatalf("Subject = %q, want user-123", claims.Subject)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	handler := Authenticate(manager, func() time.Time { return now.Add(30 * time.Second) })(next)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_1", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
 func TestAuthenticateMiddlewareRejectsInvalidRequests(t *testing.T) {
 	t.Parallel()
 
@@ -61,13 +98,13 @@ func TestAuthenticateMiddlewareRejectsInvalidRequests(t *testing.T) {
 			name:         "missing header",
 			header:       "",
 			wantStatus:   http.StatusUnauthorized,
-			wantContains: "missing bearer token",
+			wantContains: "missing auth token",
 		},
 		{
 			name:         "wrong scheme",
 			header:       "Basic abc",
 			wantStatus:   http.StatusUnauthorized,
-			wantContains: "missing bearer token",
+			wantContains: "missing auth token",
 		},
 		{
 			name:         "malformed token",

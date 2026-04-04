@@ -29,7 +29,7 @@ func Authenticate(manager *TokenManager, now func() time.Time) func(http.Handler
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, err := bearerToken(r.Header.Get("Authorization"))
+			token, err := requestToken(r)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
@@ -71,7 +71,20 @@ func RequireRoles(allowed ...Role) func(http.Handler) http.Handler {
 func bearerToken(header string) (string, error) {
 	parts := strings.Fields(header)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
-		return "", errors.New("missing bearer token")
+		return "", errors.New("missing auth token")
 	}
 	return parts[1], nil
+}
+
+func requestToken(r *http.Request) (string, error) {
+	if token, err := bearerToken(r.Header.Get("Authorization")); err == nil {
+		return token, nil
+	}
+
+	cookie, err := r.Cookie(SessionCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return "", errors.New("missing auth token")
+	}
+
+	return cookie.Value, nil
 }

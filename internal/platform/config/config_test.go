@@ -24,9 +24,12 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_OPENROUTER_API_KEY",
 		"LEARN_AI_OLLAMA_ENABLED",
 		"LEARN_AI_OLLAMA_URL",
-		"LEARN_AUTH_JWT_SECRET",
-		"LEARN_AUTH_ACCESS_TOKEN_TTL",
-		"LEARN_AUTH_REFRESH_TOKEN_TTL",
+		"PAI_AUTH_SECRET",
+		"PAI_AUTH_GOOGLE_CLIENT_ID",
+		"PAI_AUTH_GOOGLE_CLIENT_SECRET",
+		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
+		"PAI_AUTH_GOOGLE_DISCOVERY_URL",
+		"PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET",
 		"LEARN_TENANT_MODE",
 		"LEARN_WHATSAPP_ENABLED",
 		"LEARN_LOG_LEVEL",
@@ -69,11 +72,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Tenant.Mode != "single" {
 		t.Errorf("Tenant.Mode = %q, want single", cfg.Tenant.Mode)
 	}
-	if cfg.Auth.AccessTokenTTL != 15 {
-		t.Errorf("Auth.AccessTokenTTL = %d, want 15", cfg.Auth.AccessTokenTTL)
-	}
-	if cfg.Auth.RefreshTokenTTL != 7 {
-		t.Errorf("Auth.RefreshTokenTTL = %d, want 7", cfg.Auth.RefreshTokenTTL)
+	if cfg.Auth.Google.DiscoveryURL != "https://accounts.google.com/.well-known/openid-configuration" {
+		t.Errorf("Auth.Google.DiscoveryURL = %q, want Google discovery URL", cfg.Auth.Google.DiscoveryURL)
 	}
 	if cfg.CurriculumPath != "./oss" {
 		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
@@ -91,7 +91,12 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token-123")
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
-	t.Setenv("LEARN_AUTH_JWT_SECRET", "super-secret")
+	t.Setenv("PAI_AUTH_SECRET", "super-secret")
+	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_ID", "google-client")
+	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_SECRET", "google-secret")
+	t.Setenv("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", "pandai.org")
+	t.Setenv("PAI_AUTH_GOOGLE_DISCOVERY_URL", "http://127.0.0.1:4002/.well-known/openid-configuration")
+	t.Setenv("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", "emu-secret")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
 	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
 	t.Setenv("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "false")
@@ -118,6 +123,21 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.JWTSecret != "super-secret" {
 		t.Errorf("Auth.JWTSecret = %q, want super-secret", cfg.Auth.JWTSecret)
+	}
+	if cfg.Auth.Google.ClientID != "google-client" {
+		t.Errorf("Auth.Google.ClientID = %q, want google-client", cfg.Auth.Google.ClientID)
+	}
+	if cfg.Auth.Google.ClientSecret != "google-secret" {
+		t.Errorf("Auth.Google.ClientSecret = %q, want google-secret", cfg.Auth.Google.ClientSecret)
+	}
+	if cfg.Auth.Google.AllowedDomain != "pandai.org" {
+		t.Errorf("Auth.Google.AllowedDomain = %q, want pandai.org", cfg.Auth.Google.AllowedDomain)
+	}
+	if cfg.Auth.Google.DiscoveryURL != "http://127.0.0.1:4002/.well-known/openid-configuration" {
+		t.Errorf("Auth.Google.DiscoveryURL = %q, want emulator discovery URL", cfg.Auth.Google.DiscoveryURL)
+	}
+	if cfg.Auth.Google.EmulatorSigningSecret != "emu-secret" {
+		t.Errorf("Auth.Google.EmulatorSigningSecret = %q, want emu-secret", cfg.Auth.Google.EmulatorSigningSecret)
 	}
 	if cfg.Tenant.Mode != "multi" {
 		t.Errorf("Tenant.Mode = %q, want multi", cfg.Tenant.Mode)
@@ -216,6 +236,20 @@ func TestValidate_MissingAIProvider(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error when no AI provider is configured")
+	}
+}
+
+func TestValidate_DevModeAllowsMissingTelegramAndAI(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_DEV_MODE", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v; should pass in dev mode", err)
 	}
 }
 

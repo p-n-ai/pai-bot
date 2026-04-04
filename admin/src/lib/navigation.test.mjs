@@ -92,7 +92,7 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/dashboard/retrieval-lab"],
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage"],
   );
 });
 

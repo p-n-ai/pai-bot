@@ -1,5 +1,5 @@
 // Package config loads application configuration from environment variables.
-// All variables use the LEARN_ prefix.
+// Core app variables use the LEARN_ prefix; auth variables use PAI_AUTH_.
 package config
 
 import (
@@ -112,9 +112,17 @@ type WhatsAppConfig struct {
 
 // AuthConfig holds authentication settings.
 type AuthConfig struct {
-	JWTSecret       string
-	AccessTokenTTL  int // minutes
-	RefreshTokenTTL int // days
+	JWTSecret string
+	Google    GoogleOAuthConfig
+}
+
+// GoogleOAuthConfig holds Google OIDC settings for admin login/linking.
+type GoogleOAuthConfig struct {
+	ClientID              string
+	ClientSecret          string
+	AllowedDomain         string
+	DiscoveryURL          string
+	EmulatorSigningSecret string
 }
 
 // TenantConfig holds multi-tenancy settings.
@@ -128,7 +136,7 @@ type LogConfig struct {
 	Format string
 }
 
-// Load reads configuration from environment variables with LEARN_ prefix.
+// Load reads configuration from environment variables.
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
@@ -177,9 +185,14 @@ func Load() (*Config, error) {
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
 		},
 		Auth: AuthConfig{
-			JWTSecret:       envStr("LEARN_AUTH_JWT_SECRET", "change-me-in-production"),
-			AccessTokenTTL:  envInt("LEARN_AUTH_ACCESS_TOKEN_TTL", 15),
-			RefreshTokenTTL: envInt("LEARN_AUTH_REFRESH_TOKEN_TTL", 7),
+			JWTSecret: envStr("PAI_AUTH_SECRET", "change-me-in-production"),
+			Google: GoogleOAuthConfig{
+				ClientID:              envStr("PAI_AUTH_GOOGLE_CLIENT_ID", ""),
+				ClientSecret:          envStr("PAI_AUTH_GOOGLE_CLIENT_SECRET", ""),
+				AllowedDomain:         envStr("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", ""),
+				DiscoveryURL:          envStr("PAI_AUTH_GOOGLE_DISCOVERY_URL", "https://accounts.google.com/.well-known/openid-configuration"),
+				EmulatorSigningSecret: envStr("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", ""),
+			},
 		},
 		Tenant: TenantConfig{
 			Mode: envStr("LEARN_TENANT_MODE", "single"),
@@ -202,11 +215,11 @@ func Load() (*Config, error) {
 
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
-	if c.Telegram.BotToken == "" {
+	if c.Telegram.BotToken == "" && !c.Features.DevMode {
 		return fmt.Errorf("LEARN_TELEGRAM_BOT_TOKEN is required")
 	}
 
-	if !c.HasAIProvider() {
+	if !c.HasAIProvider() && !c.Features.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
 	}
 

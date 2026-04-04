@@ -323,7 +323,7 @@ All prefixed with `LEARN_`. Key ones:
 | `LEARN_AI_GOOGLE_API_KEY` | No* | Google Gemini API key |
 | `LEARN_AI_OPENROUTER_API_KEY` | No* | OpenRouter API key (access to 100+ models) |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
-| `LEARN_AUTH_JWT_SECRET` | No | JWT signing secret |
+| `PAI_AUTH_SECRET` | No | Root auth secret (currently used for JWT signing) |
 | `LEARN_TENANT_MODE` | No | `single` or `multi` |
 
 *At least one AI provider must be configured.

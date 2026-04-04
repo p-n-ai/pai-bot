@@ -34,7 +34,7 @@ For the current quiz runtime design and the OpenClaw-inspired rationale behind i
 | **Cache Client** | `go-redis/redis` | v9 | Redis-protocol client. Works with both Redis and Dragonfly without code changes. |
 | **Messaging Client** | `nats-io/nats.go` | ≥2.10 | Native Go client for NATS. JetStream support for persistent message streams. |
 | **WebSocket** | `nhooyr.io/websocket` | v1 | Lightweight, idiomatic Go WebSocket library. A single Go instance maintains hundreds of thousands of persistent connections. |
-| **JWT** | `golang-jwt/jwt` | v5 | Short-lived access tokens (15 min) issued after invite activation or email/password login. Refresh tokens rotate every 7 days and are stored hashed in PostgreSQL. |
+| **Auth Sessions** | Opaque session cookie + `golang-jwt/jwt` compatibility lane | current | Admin auth now uses one server-owned `pai_session` cookie with a 7-day sliding session. Existing bearer JWT parsing remains only as a compatibility lane while the slice is being simplified. |
 | **Configuration** | Environment variables | — | All config via `LEARN_` prefixed env vars. `envconfig` or `viper` for parsing. |
 | **Linting** | `golangci-lint` | latest | Static analysis with a curated set of linters enforced in CI. |
 | **Testing** | Go stdlib `testing` | — | Table-driven tests. `testcontainers-go` for integration tests against real Postgres/Dragonfly. |
@@ -113,12 +113,12 @@ Each channel adapter normalizes platform-specific message formats into a common 
 |-----------|-----------|---------|-----------|
 | **Framework** | Next.js (App Router) | 16 | SSR for SEO, API routes for BFF patterns, edge middleware. AI agents write excellent Next.js code — strongest ecosystem support. |
 | **Language** | TypeScript | 5.x | Type safety, excellent agentic coding support. |
-| **Admin Framework** | Refine | ≥4 | Filament-equivalent for React. Rapid CRUD generation, headless architecture, data provider abstraction. |
+| **Admin Data/UI** | TanStack Query + Next.js App Router | Current | Route-native admin UI with explicit data fetching and cache control, without an extra admin framework layer. |
 | **UI Components** | shadcn/ui | latest | Copy-paste component library built on Radix. Not a dependency — components live in your codebase. Tailwind-based styling. |
 | **Styling** | Tailwind CSS | 3.x | Utility-first. Consistent design system without custom CSS. |
 | **Charts** | Recharts or Tremor | — | For mastery heatmaps, progress charts, leaderboard visualizations. |
 | **State Management** | React Query (TanStack Query) | v5 | Server state management. Automatic caching, refetching, and invalidation. |
-| **Auth** | Invite bootstrap + email/password + JWT from Go backend | — | Teacher, parent, and admin accounts are provisioned by invite, activate by setting a password, then use email/password login with refresh token rotation. |
+| **Auth** | Invite bootstrap + email/password + Google OIDC from Go backend | — | Teacher, parent, and admin accounts are provisioned by invite, activate by setting a password, then sign in against a server-owned session cookie. Google OIDC follows a Better Auth-like pattern: minimal provider config, backend-owned callback, and one session contract. |
 
 **Admin panel views:**
 
@@ -126,6 +126,10 @@ Each channel adapter normalizes platform-specific message formats into a common 
 - **Parent View** — Child progress, weekly reports, streak/XP tracking
 - **School Admin** — Multi-class management, token budget allocation, data export
 - **Platform Admin** — Multi-tenant management, AI provider configuration, usage analytics
+
+Local development note:
+
+- External OAuth/provider work should use repo-local emulation support where possible instead of calling real third-party APIs during routine local dev. See [local-auth-emulation.md](local-auth-emulation.md).
 
 ### 2.6 Pedagogical Prompt Strategies
 
@@ -260,7 +264,7 @@ pai-bot/
 │   │   │   ├── progress-radar.tsx
 │   │   │   ├── leaderboard.tsx
 │   │   │   └── ...
-│   │   └── providers/               # Refine data provider, auth provider
+│   │   └── providers/               # Query provider, auth/session providers
 │   ├── package.json
 │   ├── next.config.js
 │   ├── tailwind.config.ts
@@ -341,12 +345,32 @@ CREATE TABLE auth_identities (
     provider              TEXT NOT NULL CHECK (provider IN ('password', 'telegram', 'whatsapp', 'google', 'microsoft')),
     identifier            TEXT NOT NULL,
     identifier_normalized TEXT NOT NULL,
+    provider_account_id   TEXT,          -- stable external subject (Google `sub`)
+    provider_email        TEXT,
+    provider_email_normalized TEXT,
+    provider_profile      JSONB DEFAULT '{}',
     password_hash         TEXT,
     email_verified_at     TIMESTAMPTZ,
+    linked_at             TIMESTAMPTZ,
+    last_used_at          TIMESTAMPTZ,
     last_login_at         TIMESTAMPTZ,
     created_at            TIMESTAMPTZ DEFAULT NOW(),
     updated_at            TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (tenant_id, provider, identifier_normalized)
+);
+
+CREATE TABLE auth_oidc_flows (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider      TEXT NOT NULL CHECK (provider IN ('google')),
+    flow_type     TEXT NOT NULL CHECK (flow_type IN ('login', 'link')),
+    state_hash    TEXT NOT NULL UNIQUE,
+    nonce         TEXT NOT NULL,
+    pkce_verifier TEXT NOT NULL,
+    user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
+    next_path     TEXT,
+    expires_at    TIMESTAMPTZ NOT NULL,
+    used_at       TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Invite-only provisioning for teacher/parent/admin users.
@@ -363,8 +387,8 @@ CREATE TABLE auth_invites (
     created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Long-lived session state for refresh token rotation.
-CREATE TABLE auth_refresh_tokens (
+-- Long-lived server session state for the admin app.
+CREATE TABLE auth_sessions (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id    UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -373,7 +397,7 @@ CREATE TABLE auth_refresh_tokens (
     ip_address   TEXT,
     expires_at   TIMESTAMPTZ NOT NULL,
     revoked_at   TIMESTAMPTZ,
-    replaced_by  UUID REFERENCES auth_refresh_tokens(id),
+    replaced_by  UUID REFERENCES auth_sessions(id),
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -554,7 +578,7 @@ ArgoCD (running in K8s cluster)
 
 | Concern | Approach |
 |---------|----------|
-| **Authentication** | Invite-only account provisioning for teacher/parent/admin users, followed by email/password login. Go issues JWT access tokens (15 min) plus rotating refresh tokens (7 days, hashed in PostgreSQL). Students continue using Telegram identity unless a student web portal is added later. |
+| **Authentication** | Invite-only account provisioning for teacher/parent/admin users, followed by email/password or Google sign-in. Go owns the admin session and issues one opaque `pai_session` cookie backed by PostgreSQL. Students continue using Telegram identity unless a student web portal is added later. |
 | **Authorization** | Role-based access control (RBAC). Roles: `student`, `teacher`, `parent`, `admin`, `platform_admin`. Enforced in middleware. |
 | **Data Isolation** | Multi-tenant with tenant_id on every table. Row-level security in PostgreSQL. Tenant resolved from JWT claims. |
 | **Data Sovereignty** | Self-hostable by design. No student data leaves the deployment unless explicitly configured. |
@@ -590,9 +614,6 @@ ArgoCD (running in K8s cluster)
   "dependencies": {
     "next": "^16",
     "react": "^19",
-    "@refinedev/core": "^4",
-    "@refinedev/nextjs-router": "^6",
-    "@refinedev/react-hook-form": "^4",
     "tailwindcss": "^4",
     "@radix-ui/react-*": "latest",
     "recharts": "^2",
@@ -640,7 +661,7 @@ make migrate
 make dev
 
 # Start admin panel (separate terminal)
-cd admin && npm install && npm run dev
+cd admin && pnpm install && pnpm dev
 
 # Run tests
 make test                            # Unit tests

@@ -20,13 +20,6 @@ export const primaryNavigation = [
     group: "Teaching",
     roles: ["teacher", "admin", "platform_admin"],
   },
-  {
-    title: "Retrieval Lab",
-    href: "/dashboard/retrieval-lab",
-    description: "Probe BM25 queries, filters, and latency from inside the admin workspace.",
-    group: "Teaching",
-    roles: ["teacher", "admin", "platform_admin"],
-  },
 ];
 
 export function getNavigationForUser(user) {

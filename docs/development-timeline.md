@@ -336,7 +336,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + Refine v5. Protect Go admin API with JWT + RBAC, ship the root redirect on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | Root redirect on `/`, direct `/login`, SSR cookie-aware shell hydration, shared sidebar shell, theme-aware auth UI, and guided multi-school picker via `tenant_required` are shipped. |
+| `P-W4D16-1` | Scaffold `admin/`: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui + TanStack Query. Protect Go admin API with JWT + RBAC, ship the root redirect on `/` and direct `/login` entrypoint, plus frontend route guards and sidebar layout. | 🤖 | ✅ | Root redirect on `/`, direct `/login`, SSR cookie-aware shell hydration, shared sidebar shell, theme-aware auth UI, and guided multi-school picker via `tenant_required` are shipped. |
 | `P-W4D16-2` | Teacher dashboard: mastery heatmap grid (students × topics), color-coded, "Nudge" button per student | 🤖 | ✅ | Tenant-keyed dashboard data via TanStack Query is shipped; live nudge actions remain in place, and preview fallback no longer reuses the previous tenant's heatmap during school switches. |
 | `P-W4D16-3` | Student detail page: profile card, mastery radar chart, activity grid, recent conversations, struggle areas | 🤖 | ✅ | |
 | `P-W4D16-4` | 🧑 Brief frontend engineer on 3 dashboard views: teacher, student detail, parent | 🧑 Human | ✅ | |
@@ -352,7 +352,7 @@ Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shi
 | `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
 
-Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_refresh_tokens`, invite acceptance, email/password login, refresh, logout, protected Next.js routes for teacher/parent/admin/platform-admin, and password-confirmed school switching with session reissue. Still pending: bot-side form selection.
+Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_sessions`, invite acceptance, email/password login, logout, protected Next.js routes for teacher/parent/admin/platform-admin, and password-confirmed school switching with session reissue. Still pending: bot-side form selection.
 
 ### Day 18 — Deploy Admin + Class Management
 
@@ -431,9 +431,16 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 | ⬜ | |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 | ⬜ | |
 | `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 | ⬜ | |
-| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_refresh_tokens`; invite acceptance; email/password login; refresh/logout endpoints; Next.js route guards for teacher/parent/admin views | 🤖 | ⬜ | |
+| `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_sessions`; invite acceptance; email/password login; logout endpoint; Next.js route guards for teacher/parent/admin views | 🤖 | ✅ | Session cookies now come from Go as `HttpOnly`; admin auth no longer stores tokens in `localStorage`; protected API/page responses use `no-store`. |
 | `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human | ⬜ | |
 | `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human | ⬜ | |
+
+#### Additional Tasks (Out of Initial Plan)
+
+| Task ID | Task | Owner | Status | Remark |
+|---------|------|-------|--------|--------|
+| `A-W5D24-AUTH-EMULATE-1` | Add repo-local `emulate` support for Google/Vercel provider emulation: pinned `just` recipes, shared seed config, and auth-dev docs | 🤖 | ✅ | Dev/test support only; production auth remains Go-owned. |
+| `A-W5D24-AUTH-GOOGLE-1` | Add Google OIDC admin sign-in/linking: Go start/callback/identity endpoints, `auth_oidc_flows` state storage, explicit cross-email linking, constrained same-email auto-link, admin UI Google CTA, linked-identity card, and emulate-backed integration coverage | 🤖 | ✅ | Subject-based identity keys (`sub`), PKCE/state/nonce, no self-signup, HS256 accepted only for local emulator issuers, silent auto-link limited to exact one-account Gmail/Workspace-style matches, successful callbacks promote `/login` back to the role-safe workspace, and the admin app now hydrates from backend-owned session reads instead of a frontend-owned user cookie. |
 
 **Week 5 Targets:** Fresh `docker compose up` works in <10min. README + docs complete. Helm chart exists. Security audit done. 150+ students active.
 

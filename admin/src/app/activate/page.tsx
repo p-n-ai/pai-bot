@@ -3,10 +3,10 @@
 import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InviteAcceptanceCard } from "@/components/invite-acceptance-card";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { useSessionRedirect } from "@/hooks/use-session-redirect";
-import { acceptInvite, getStoredUser, hasStoredSession, persistSession } from "@/lib/api";
+import { acceptInvite, persistSession } from "@/lib/api";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { useAppStore } from "@/stores/app-store";
 
 export default function ActivatePage() {
   return (
@@ -19,14 +19,14 @@ export default function ActivatePage() {
 function ActivatePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isHydrated = useHydrated();
+  const isHydrated = useAppStore((state) => state.hydrated);
+  const currentUser = useAppStore((state) => state.currentUser);
+  const hasActiveSession = useAppStore((state) => state.isLoggedIn) && Boolean(currentUser && hasAdminUIAccess(currentUser));
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const token = searchParams.get("token") || "";
-  const currentUser = isHydrated ? getStoredUser() : null;
-  const hasActiveSession = Boolean(currentUser && hasStoredSession() && hasAdminUIAccess(currentUser));
 
   useSessionRedirect({
     enabled: isHydrated,

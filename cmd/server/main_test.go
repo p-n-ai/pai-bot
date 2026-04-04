@@ -97,8 +97,8 @@ func TestAPIDocumentationEndpoints(t *testing.T) {
 		if _, ok := payload.Paths["/api/auth/login"]; !ok {
 			t.Fatal("paths missing /api/auth/login")
 		}
-		if _, ok := payload.Components.Schemas["TokenPair"]; !ok {
-			t.Fatal("components.schemas missing TokenPair")
+		if _, ok := payload.Components.Schemas["Session"]; !ok {
+			t.Fatal("components.schemas missing Session")
 		}
 	})
 
@@ -514,17 +514,19 @@ func TestAdminMetricsEndpointRejectsStudentRole(t *testing.T) {
 
 func TestAuthLoginEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{
-		loginResp: auth.TokenPair{
-			AccessToken:      "access-123",
-			RefreshToken:     "refresh-123",
-			AccessExpiresAt:  time.Date(2026, 3, 16, 10, 15, 0, 0, time.UTC),
-			RefreshExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+		loginResp: auth.Session{
+			Token:     "session-123",
+			ExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
 			User: auth.UserSession{
 				UserID:   "teacher-1",
 				TenantID: "tenant-abc",
 				Role:     auth.RoleTeacher,
 				Name:     "Teacher One",
 				Email:    "teacher@example.com",
+			},
+			TenantChoices: []auth.TenantOption{
+				{TenantID: "tenant-abc", TenantSlug: "school-a", TenantName: "School A"},
+				{TenantID: "tenant-def", TenantSlug: "school-b", TenantName: "School B"},
 			},
 		},
 	}
@@ -542,31 +544,87 @@ func TestAuthLoginEndpoint(t *testing.T) {
 	}
 
 	var payload struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		User         struct {
+		ExpiresAt time.Time `json:"expires_at"`
+		User      struct {
 			UserID string `json:"user_id"`
 			Role   string `json:"role"`
 		} `json:"user"`
+		TenantChoices []auth.TenantOption `json:"tenant_choices"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if payload.AccessToken != "access-123" || payload.RefreshToken != "refresh-123" {
-		t.Fatalf("tokens = %#v", payload)
+	if payload.ExpiresAt.IsZero() {
+		t.Fatalf("expiry payload = %#v", payload)
 	}
 	if payload.User.UserID != "teacher-1" || payload.User.Role != string(auth.RoleTeacher) {
 		t.Fatalf("user payload = %#v", payload.User)
 	}
+	if len(payload.TenantChoices) != 2 {
+		t.Fatalf("tenant choices = %#v, want 2", payload.TenantChoices)
+	}
+	assertAuthCookies(t, rec.Result().Cookies(), "session-123")
+}
+
+func TestAuthSessionEndpointReturnsUserAndRefreshesCookie(t *testing.T) {
+	authSvc := &stubAuthService{
+		sessionResp: auth.Session{
+			Token:     "session-next",
+			ExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			User: auth.UserSession{
+				UserID:   "teacher-1",
+				TenantID: "tenant-abc",
+				Role:     auth.RoleTeacher,
+				Name:     "Teacher One",
+				Email:    "teacher@example.com",
+			},
+			TenantChoices: []auth.TenantOption{
+				{TenantID: "tenant-abc", TenantSlug: "school-a", TenantName: "School A"},
+				{TenantID: "tenant-def", TenantSlug: "school-b", TenantName: "School B"},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "session-old"})
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.sessionToken != "session-old" {
+		t.Fatalf("session token = %q, want session-old", authSvc.sessionToken)
+	}
+
+	var payload struct {
+		ExpiresAt time.Time `json:"expires_at"`
+		User      struct {
+			UserID string `json:"user_id"`
+			Role   string `json:"role"`
+		} `json:"user"`
+		TenantChoices []auth.TenantOption `json:"tenant_choices"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if !payload.ExpiresAt.Equal(authSvc.sessionResp.ExpiresAt) {
+		t.Fatalf("expires_at = %v, want %v", payload.ExpiresAt, authSvc.sessionResp.ExpiresAt)
+	}
+	if payload.User.UserID != "teacher-1" || payload.User.Role != string(auth.RoleTeacher) {
+		t.Fatalf("user payload = %#v", payload.User)
+	}
+	if len(payload.TenantChoices) != 2 {
+		t.Fatalf("tenant choices = %#v, want 2", payload.TenantChoices)
+	}
+	assertAuthCookies(t, rec.Result().Cookies(), "session-next")
 }
 
 func TestAuthAcceptInviteEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{
-		acceptResp: auth.TokenPair{
-			AccessToken:      "access-accept",
-			RefreshToken:     "refresh-accept",
-			AccessExpiresAt:  time.Date(2026, 3, 16, 10, 15, 0, 0, time.UTC),
-			RefreshExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+		acceptResp: auth.Session{
+			Token:     "session-accept",
+			ExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
 			User: auth.UserSession{
 				UserID:   "parent-1",
 				TenantID: "tenant-abc",
@@ -588,45 +646,14 @@ func TestAuthAcceptInviteEndpoint(t *testing.T) {
 	if authSvc.acceptReq.Token != "invite-token" {
 		t.Fatalf("accept token = %q, want invite-token", authSvc.acceptReq.Token)
 	}
-}
-
-func TestAuthRefreshEndpoint(t *testing.T) {
-	authSvc := &stubAuthService{
-		refreshResp: auth.TokenPair{
-			AccessToken:      "access-next",
-			RefreshToken:     "refresh-next",
-			AccessExpiresAt:  time.Date(2026, 3, 16, 11, 15, 0, 0, time.UTC),
-			RefreshExpiresAt: time.Date(2026, 3, 23, 11, 0, 0, 0, time.UTC),
-			User: auth.UserSession{
-				UserID:   "admin-1",
-				TenantID: "tenant-abc",
-				Role:     auth.RoleAdmin,
-				Name:     "Admin One",
-				Email:    "admin@example.com",
-			},
-		},
-	}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{"refresh_token":"refresh-old"}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if authSvc.refreshToken != "refresh-old" {
-		t.Fatalf("refresh token = %q, want refresh-old", authSvc.refreshToken)
-	}
+	assertAuthCookies(t, rec.Result().Cookies(), "session-accept")
 }
 
 func TestAuthSwitchTenantEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{
-		switchResp: auth.TokenPair{
-			AccessToken:      "access-switched",
-			RefreshToken:     "refresh-switched",
-			AccessExpiresAt:  time.Date(2026, 3, 16, 11, 15, 0, 0, time.UTC),
-			RefreshExpiresAt: time.Date(2026, 3, 23, 11, 0, 0, 0, time.UTC),
+		switchResp: auth.Session{
+			Token:     "session-switched",
+			ExpiresAt: time.Date(2026, 3, 23, 11, 0, 0, 0, time.UTC),
 			User: auth.UserSession{
 				UserID:   "teacher-2",
 				TenantID: "tenant-b",
@@ -636,8 +663,9 @@ func TestAuthSwitchTenantEndpoint(t *testing.T) {
 			},
 		},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"refresh_token":"refresh-old","tenant_id":"tenant-b","password":"secret-123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/switch-tenant", strings.NewReader(`{"tenant_id":"tenant-b","password":"secret-123"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "refresh-old"})
 	rec := httptest.NewRecorder()
 
 	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
@@ -646,7 +674,7 @@ func TestAuthSwitchTenantEndpoint(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	if authSvc.switchToken != "refresh-old" {
-		t.Fatalf("switch refresh token = %q, want refresh-old", authSvc.switchToken)
+		t.Fatalf("switch session token = %q, want refresh-old", authSvc.switchToken)
 	}
 	if authSvc.switchTenantID != "tenant-b" {
 		t.Fatalf("switch tenant id = %q, want tenant-b", authSvc.switchTenantID)
@@ -654,12 +682,13 @@ func TestAuthSwitchTenantEndpoint(t *testing.T) {
 	if authSvc.switchPassword != "secret-123" {
 		t.Fatalf("switch password = %q, want secret-123", authSvc.switchPassword)
 	}
+	assertAuthCookies(t, rec.Result().Cookies(), "session-switched")
 }
 
 func TestAuthLogoutEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{}
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{"refresh_token":"refresh-old"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "refresh-old"})
 	rec := httptest.NewRecorder()
 
 	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
@@ -669,6 +698,338 @@ func TestAuthLogoutEndpoint(t *testing.T) {
 	}
 	if authSvc.logoutToken != "refresh-old" {
 		t.Fatalf("logout token = %q, want refresh-old", authSvc.logoutToken)
+	}
+	assertExpiredAuthCookies(t, rec.Result().Cookies())
+}
+
+func TestAuthLogoutEndpointClearsCookiesForInvalidTokens(t *testing.T) {
+	authSvc := &stubAuthService{logoutErr: auth.ErrInvalidCredentials}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "refresh-stale"})
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if authSvc.logoutToken != "refresh-stale" {
+		t.Fatalf("logout token = %q, want refresh-stale", authSvc.logoutToken)
+	}
+	assertExpiredAuthCookies(t, rec.Result().Cookies())
+}
+
+func TestAuthLogoutEndpointClearsCookiesWhenTokenMissing(t *testing.T) {
+	authSvc := &stubAuthService{}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if authSvc.logoutToken != "" {
+		t.Fatalf("logout token = %q, want empty when no session token is present", authSvc.logoutToken)
+	}
+	assertExpiredAuthCookies(t, rec.Result().Cookies())
+}
+
+func TestAuthLogoutClearsSessionForFollowupRequests(t *testing.T) {
+	authSvc := &stubAuthService{
+		sessionErr: auth.ErrInvalidCredentials,
+	}
+	logoutReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	logoutReq.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "session-old"})
+	logoutRec := httptest.NewRecorder()
+
+	handler := newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour)
+	handler.ServeHTTP(logoutRec, logoutReq)
+
+	if logoutRec.Code != http.StatusNoContent {
+		t.Fatalf("logout status = %d, want %d", logoutRec.Code, http.StatusNoContent)
+	}
+	expiredCookie := findCookie(logoutRec.Result().Cookies(), auth.SessionCookieName)
+	if expiredCookie == nil {
+		t.Fatal("logout response missing expired session cookie")
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionReq.AddCookie(expiredCookie)
+	sessionRec := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRec, sessionReq)
+
+	if sessionRec.Code != http.StatusUnauthorized {
+		t.Fatalf("session status = %d, want %d", sessionRec.Code, http.StatusUnauthorized)
+	}
+	if authSvc.sessionToken != "" {
+		t.Fatalf("session token = %q, want empty because expired cookie should not authenticate", authSvc.sessionToken)
+	}
+}
+
+func TestAuthLogoutEndpointRejectsGET(t *testing.T) {
+	authSvc := &stubAuthService{}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "refresh-old"})
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+	if authSvc.logoutToken != "" {
+		t.Fatalf("logout token = %q, want empty because GET must not hit logout handler", authSvc.logoutToken)
+	}
+}
+
+func TestAuthGoogleStartEndpointRedirectsToProvider(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleStartURL: "https://accounts.google.com/o/oauth2/v2/auth?state=abc",
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/start?next=%2Fdashboard", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := rec.Header().Get("Location"); got != authSvc.googleStartURL {
+		t.Fatalf("location = %q, want %q", got, authSvc.googleStartURL)
+	}
+	if authSvc.googleStartReq.NextPath != "/dashboard" {
+		t.Fatalf("next_path = %q, want /dashboard", authSvc.googleStartReq.NextPath)
+	}
+	if authSvc.googleStartReq.RedirectURL != "http://example.com/api/auth/google/callback" {
+		t.Fatalf("redirect_url = %q, want request-derived callback", authSvc.googleStartReq.RedirectURL)
+	}
+}
+
+func TestAuthGoogleLinkStartEndpointRequiresSession(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/google/link/start?next=%2Fdashboard", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthGoogleLinkStartEndpointRequiresAllowedOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/google/link/start?next=%2Fdashboard", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestAuthGoogleLinkStartEndpointReturnsGoogleURL(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleLinkURL: "https://accounts.google.com/o/oauth2/v2/auth?state=link-123",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/google/link/start?next=%2Fdashboard", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	req.Header.Set("Origin", "http://localhost:3000")
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.googleLinkReq.UserID != "user-123" {
+		t.Fatalf("google link user_id = %q, want user-123", authSvc.googleLinkReq.UserID)
+	}
+	if authSvc.googleLinkReq.NextPath != "/dashboard" {
+		t.Fatalf("google link next_path = %q, want /dashboard", authSvc.googleLinkReq.NextPath)
+	}
+	if authSvc.googleLinkReq.RedirectURL != "http://example.com/api/auth/google/callback" {
+		t.Fatalf("google link redirect_url = %q, want request-derived callback", authSvc.googleLinkReq.RedirectURL)
+	}
+
+	var payload struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.URL != authSvc.googleLinkURL {
+		t.Fatalf("payload url = %q, want %q", payload.URL, authSvc.googleLinkURL)
+	}
+}
+
+func TestAuthGoogleCallbackEndpointSetsCookiesAndRedirects(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleCBResp: auth.GoogleCallbackResult{
+			RedirectPath: "http://localhost:3000/dashboard",
+			Linked:       true,
+			Session: &auth.Session{
+				Token:     "google-session",
+				ExpiresAt: time.Date(2026, 4, 10, 10, 0, 0, 0, time.UTC),
+				User: auth.UserSession{
+					UserID:   "teacher-1",
+					TenantID: "tenant-abc",
+					Role:     auth.RoleTeacher,
+					Name:     "Teacher One",
+					Email:    "teacher@example.com",
+				},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/callback?state=state-123&code=code-123", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "http://localhost:3000/dashboard?auth_provider=google&identity_linked=google" {
+		t.Fatalf("location = %q, want google success redirect", got)
+	}
+	if authSvc.googleCBReq.State != "state-123" || authSvc.googleCBReq.Code != "code-123" {
+		t.Fatalf("callback request = %#v", authSvc.googleCBReq)
+	}
+	if authSvc.googleCBReq.RedirectURL != "http://example.com/api/auth/google/callback" {
+		t.Fatalf("callback redirect_url = %q, want request-derived callback", authSvc.googleCBReq.RedirectURL)
+	}
+	assertAuthCookies(t, rec.Result().Cookies(), "google-session")
+}
+
+func TestGoogleCallbackURLUsesForwardedHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/start", nil)
+	req.Host = "internal:8080"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "admin.pandai.org")
+
+	if got := googleCallbackURL(req); got != "https://admin.pandai.org/api/auth/google/callback" {
+		t.Fatalf("googleCallbackURL() = %q, want forwarded public callback", got)
+	}
+}
+
+func TestAuthGoogleCallbackEndpointPromotesLoginRedirectToDefaultRoute(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleCBResp: auth.GoogleCallbackResult{
+			RedirectPath: "http://localhost:3000/login",
+			Linked:       true,
+			Session: &auth.Session{
+				Token:     "google-session",
+				ExpiresAt: time.Date(2026, 4, 10, 10, 0, 0, 0, time.UTC),
+				User: auth.UserSession{
+					UserID:   "teacher-1",
+					TenantID: "tenant-abc",
+					Role:     auth.RoleTeacher,
+					Name:     "Teacher One",
+					Email:    "teacher@example.com",
+				},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/callback?state=state-123&code=code-123", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "http://localhost:3000/dashboard?auth_provider=google&identity_linked=google" {
+		t.Fatalf("location = %q, want promoted dashboard redirect", got)
+	}
+	assertAuthCookies(t, rec.Result().Cookies(), "google-session")
+}
+
+func TestAuthGoogleCallbackEndpointKeepsSafeWorkspaceRedirect(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleCBResp: auth.GoogleCallbackResult{
+			RedirectPath: "http://localhost:3000/parents/parent-1?tab=progress",
+			Linked:       true,
+			Session: &auth.Session{
+				Token:     "google-session",
+				ExpiresAt: time.Date(2026, 4, 10, 10, 0, 0, 0, time.UTC),
+				User: auth.UserSession{
+					UserID:   "parent-1",
+					TenantID: "tenant-abc",
+					Role:     auth.RoleParent,
+					Name:     "Parent One",
+					Email:    "parent@example.com",
+				},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/callback?state=state-123&code=code-123", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "http://localhost:3000/parents/parent-1?auth_provider=google&identity_linked=google&tab=progress" {
+		t.Fatalf("location = %q, want safe workspace redirect", got)
+	}
+	assertAuthCookies(t, rec.Result().Cookies(), "google-session")
+}
+
+func TestAuthGoogleCallbackEndpointRedirectsErrorsToFrontend(t *testing.T) {
+	authSvc := &stubAuthService{
+		googleCBResp: auth.GoogleCallbackResult{
+			RedirectPath: "http://localhost:3000/dashboard",
+		},
+		googleCBErr: auth.ErrAuthFlowInvalid,
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/google/callback?state=state-123&code=code-123", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "http://localhost:3000/dashboard?auth_error=flow_invalid" {
+		t.Fatalf("location = %q, want frontend error redirect", got)
+	}
+}
+
+func TestAuthIdentitiesEndpointReturnsLinkedProviders(t *testing.T) {
+	linkedAt := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
+	authSvc := &stubAuthService{
+		identitiesResp: []auth.LinkedIdentity{
+			{
+				Provider: "google",
+				Email:    "teacher@gmail.com",
+				LinkedAt: &linkedAt,
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/identities", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.identitiesUserID != "user-123" {
+		t.Fatalf("identities user_id = %q, want user-123", authSvc.identitiesUserID)
+	}
+	var payload struct {
+		Identities []auth.LinkedIdentity `json:"identities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(payload.Identities) != 1 || payload.Identities[0].Provider != "google" {
+		t.Fatalf("payload identities = %#v, want one google identity", payload.Identities)
 	}
 }
 
@@ -777,8 +1138,7 @@ func TestAuthEndpointsValidateJSONBody(t *testing.T) {
 	}{
 		{name: "login missing password", path: "/api/auth/login", body: `{"email":"teacher@example.com"}`},
 		{name: "accept invite missing token", path: "/api/auth/invitations/accept", body: `{"name":"Teacher","password":"secret-123"}`},
-		{name: "refresh missing token", path: "/api/auth/refresh", body: `{}`},
-		{name: "logout missing token", path: "/api/auth/logout", body: `{}`},
+		{name: "switch tenant missing token", path: "/api/auth/switch-tenant", body: `{"tenant_id":"tenant-b","password":"secret-123"}`},
 	}
 
 	for _, tt := range tests {
@@ -794,6 +1154,42 @@ func TestAuthEndpointsValidateJSONBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertAuthCookies(t *testing.T, cookies []*http.Cookie, wantSession string) {
+	t.Helper()
+
+	session := findCookie(cookies, auth.SessionCookieName)
+	if session == nil || session.Value != wantSession || !session.HttpOnly {
+		t.Fatalf("session cookie = %#v, want value %q and HttpOnly", session, wantSession)
+	}
+	authCookieCount := 0
+	for _, cookie := range cookies {
+		if cookie.Name == auth.SessionCookieName {
+			authCookieCount++
+		}
+	}
+	if authCookieCount != 1 {
+		t.Fatalf("auth cookie count = %d, want 1", authCookieCount)
+	}
+}
+
+func assertExpiredAuthCookies(t *testing.T, cookies []*http.Cookie) {
+	t.Helper()
+
+	cookie := findCookie(cookies, auth.SessionCookieName)
+	if cookie == nil || cookie.MaxAge != -1 {
+		t.Fatalf("cookie %q = %#v, want expired cookie", auth.SessionCookieName, cookie)
+	}
+}
+
+func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
 }
 
 type stubAdminAPI struct{}
@@ -983,33 +1379,45 @@ func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
 }
 
 type stubAuthService struct {
-	loginReq       auth.LoginRequest
-	loginResp      auth.TokenPair
-	loginErr       error
-	inviteReq      auth.IssueInviteRequest
-	inviteResp     auth.InviteRecord
-	inviteErr      error
-	acceptReq      auth.AcceptInviteRequest
-	acceptResp     auth.TokenPair
-	acceptErr      error
-	refreshToken   string
-	refreshResp    auth.TokenPair
-	refreshErr     error
-	switchToken    string
-	switchTenantID string
-	switchPassword string
-	switchResp     auth.TokenPair
-	switchErr      error
-	logoutToken    string
-	logoutErr      error
+	loginReq         auth.LoginRequest
+	loginResp        auth.Session
+	loginErr         error
+	inviteReq        auth.IssueInviteRequest
+	inviteResp       auth.InviteRecord
+	inviteErr        error
+	acceptReq        auth.AcceptInviteRequest
+	acceptResp       auth.Session
+	acceptErr        error
+	sessionToken     string
+	sessionResp      auth.Session
+	sessionErr       error
+	switchToken      string
+	switchTenantID   string
+	switchPassword   string
+	switchResp       auth.Session
+	switchErr        error
+	googleStartReq   auth.StartGoogleFlowRequest
+	googleStartURL   string
+	googleStartErr   error
+	googleLinkReq    auth.StartGoogleFlowRequest
+	googleLinkURL    string
+	googleLinkErr    error
+	googleCBReq      auth.GoogleCallbackRequest
+	googleCBResp     auth.GoogleCallbackResult
+	googleCBErr      error
+	identitiesUserID string
+	identitiesResp   []auth.LinkedIdentity
+	identitiesErr    error
+	logoutToken      string
+	logoutErr        error
 }
 
-func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.TokenPair, error) {
+func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.Session, error) {
 	s.loginReq = req
 	return s.loginResp, s.loginErr
 }
 
-func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteRequest) (auth.TokenPair, error) {
+func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteRequest) (auth.Session, error) {
 	s.acceptReq = req
 	return s.acceptResp, s.acceptErr
 }
@@ -1019,24 +1427,44 @@ func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteReq
 	return s.inviteResp, s.inviteErr
 }
 
-func (s *stubAuthService) Refresh(_ context.Context, refreshToken string) (auth.TokenPair, error) {
-	s.refreshToken = refreshToken
-	return s.refreshResp, s.refreshErr
+func (s *stubAuthService) Session(_ context.Context, sessionToken string) (auth.Session, error) {
+	s.sessionToken = sessionToken
+	return s.sessionResp, s.sessionErr
 }
 
-func (s *stubAuthService) SwitchTenant(_ context.Context, refreshToken, tenantID, password string) (auth.TokenPair, error) {
-	s.switchToken = refreshToken
+func (s *stubAuthService) SwitchTenant(_ context.Context, sessionToken, tenantID, password string) (auth.Session, error) {
+	s.switchToken = sessionToken
 	s.switchTenantID = tenantID
 	s.switchPassword = password
 	return s.switchResp, s.switchErr
+}
+
+func (s *stubAuthService) StartGoogleLogin(_ context.Context, req auth.StartGoogleFlowRequest) (string, error) {
+	s.googleStartReq = req
+	return s.googleStartURL, s.googleStartErr
+}
+
+func (s *stubAuthService) StartGoogleLink(_ context.Context, req auth.StartGoogleFlowRequest) (string, error) {
+	s.googleLinkReq = req
+	return s.googleLinkURL, s.googleLinkErr
+}
+
+func (s *stubAuthService) CompleteGoogleCallback(_ context.Context, req auth.GoogleCallbackRequest) (auth.GoogleCallbackResult, error) {
+	s.googleCBReq = req
+	return s.googleCBResp, s.googleCBErr
+}
+
+func (s *stubAuthService) ListLinkedIdentities(_ context.Context, userID string) ([]auth.LinkedIdentity, error) {
+	s.identitiesUserID = userID
+	return s.identitiesResp, s.identitiesErr
 }
 
 func int64Ptr(v int64) *int64 {
 	return &v
 }
 
-func (s *stubAuthService) Logout(_ context.Context, refreshToken string) error {
-	s.logoutToken = refreshToken
+func (s *stubAuthService) Logout(_ context.Context, sessionToken string) error {
+	s.logoutToken = sessionToken
 	return s.logoutErr
 }
 
@@ -1050,6 +1478,11 @@ func TestWriteAuthError(t *testing.T) {
 		{name: "invalid invite", err: auth.ErrInvalidInvite, wantStatus: http.StatusUnauthorized},
 		{name: "expired invite", err: auth.ErrInviteExpired, wantStatus: http.StatusUnauthorized},
 		{name: "not implemented", err: auth.ErrNotImplemented, wantStatus: http.StatusNotImplemented},
+		{name: "provider unavailable", err: auth.ErrProviderNotConfigured, wantStatus: http.StatusNotImplemented},
+		{name: "identity already linked", err: auth.ErrIdentityAlreadyLinked, wantStatus: http.StatusConflict},
+		{name: "domain not allowed", err: auth.ErrGoogleDomainNotAllowed, wantStatus: http.StatusForbidden},
+		{name: "link required", err: auth.ErrIdentityLinkRequired, wantStatus: http.StatusBadRequest},
+		{name: "flow invalid", err: auth.ErrAuthFlowInvalid, wantStatus: http.StatusBadRequest},
 		{name: "tenant required", err: auth.NewTenantRequiredError([]auth.TenantOption{{TenantID: "tenant-a", TenantSlug: "school-a", TenantName: "School A"}}), wantStatus: http.StatusBadRequest},
 		{name: "validation", err: errors.New("bad request"), wantStatus: http.StatusBadRequest},
 	}

@@ -27,6 +27,7 @@ describe("LoginGate", () => {
     );
 
     expect(container.querySelectorAll("form")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByTestId("login-gate-light-backdrop")).toBeInTheDocument();
     expect(screen.getByTestId("login-gate-dark-backdrop")).toBeInTheDocument();
   });
@@ -52,5 +53,26 @@ describe("LoginGate", () => {
       expect(screen.getByTestId("login-gate-light-backdrop")).toHaveAttribute("aria-hidden", "true");
       expect(screen.getByTestId("login-gate-dark-backdrop")).toHaveAttribute("aria-hidden", "false");
     });
+  });
+
+  it("surfaces Google auth callback errors in the form panel", () => {
+    render(
+      <ThemeProvider>
+        <LoginGate authError="link_required" />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("We couldn't sign you in yet.")).toBeInTheDocument();
+    expect(screen.getByText(/sign in with email once, then link Google/i)).toBeInTheDocument();
+  });
+
+  it("surfaces Google domain restriction errors in the form panel", () => {
+    render(
+      <ThemeProvider>
+        <LoginGate authError="domain_not_allowed" />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText(/allowed workspace domain/i)).toBeInTheDocument();
   });
 });

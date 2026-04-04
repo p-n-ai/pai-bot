@@ -24,12 +24,12 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 		t.Fatal("missing /api/admin/ai/usage path")
 	}
 
-	tokenPair, ok := doc.Components.Schemas["TokenPair"]
+	sessionSchema, ok := doc.Components.Schemas["Session"]
 	if !ok {
-		t.Fatal("missing TokenPair schema")
+		t.Fatal("missing Session schema")
 	}
-	if tokenPair.Properties["user"].Ref != "#/components/schemas/UserSession" {
-		t.Fatalf("TokenPair.user ref = %q", tokenPair.Properties["user"].Ref)
+	if sessionSchema.Properties["user"].Ref != "#/components/schemas/UserSession" {
+		t.Fatalf("Session.user ref = %q", sessionSchema.Properties["user"].Ref)
 	}
 
 	userSession, ok := doc.Components.Schemas["UserSession"]

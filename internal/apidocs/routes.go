@@ -77,7 +77,7 @@ func Build() (*Document, error) {
 		Tags:        []string{"Auth"},
 		RequestBody: jsonBody(registry.refFor(auth.LoginRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Authentication succeeded.", registry.refFor(auth.TokenPair{})),
+			responseJSON("200", "Authentication succeeded.", registry.refFor(auth.Session{})),
 			responseMixed400(registry.refFor(tenantRequiredErrorResponse{})),
 			responseText("401", "Credentials are invalid."),
 			responseText("501", "Auth service is not implemented."),
@@ -88,7 +88,7 @@ func Build() (*Document, error) {
 		Tags:        []string{"Auth"},
 		RequestBody: jsonBody(registry.refFor(auth.AcceptInviteRequest{})),
 		Responses: mergeResponses(
-			responseJSON("201", "Invitation accepted.", registry.refFor(auth.TokenPair{})),
+			responseJSON("201", "Invitation accepted.", registry.refFor(auth.Session{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Invite token is invalid or expired."),
 			responseText("501", "Auth service is not implemented."),
@@ -99,7 +99,7 @@ func Build() (*Document, error) {
 		Tags:        []string{"Auth"},
 		RequestBody: jsonBody(registry.refFor(refreshTokenRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Token refresh succeeded.", registry.refFor(auth.TokenPair{})),
+			responseJSON("200", "Token refresh succeeded.", registry.refFor(auth.Session{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Refresh token is invalid."),
 			responseText("501", "Auth service is not implemented."),
@@ -110,7 +110,7 @@ func Build() (*Document, error) {
 		Tags:        []string{"Auth"},
 		RequestBody: jsonBody(registry.refFor(switchTenantRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Tenant switch succeeded.", registry.refFor(auth.TokenPair{})),
+			responseJSON("200", "Tenant switch succeeded.", registry.refFor(auth.Session{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Refresh token or password is invalid."),
 			responseText("501", "Auth service is not implemented."),

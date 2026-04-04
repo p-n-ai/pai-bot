@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { AuthUser } from "@/lib/api";
-import { ACCESS_TOKEN_COOKIE, parseCookieJSON, USER_COOKIE } from "@/lib/auth-session";
+import { getServerAuthSession } from "@/lib/server-api";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +14,11 @@ type RootPageProps = {
 };
 
 export default async function RootPage({ searchParams }: RootPageProps) {
-  const cookieStore = await cookies();
   const { next } = await searchParams;
-  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
-  const currentUser = parseCookieJSON<AuthUser>(cookieStore.get(USER_COOKIE)?.value);
+  const session = await getServerAuthSession();
+  const currentUser = session?.user ?? null;
 
-  if (accessToken && currentUser && hasAdminUIAccess(currentUser)) {
+  if (currentUser && hasAdminUIAccess(currentUser)) {
     redirect(getSafeNextPath(currentUser, next));
   }
 
