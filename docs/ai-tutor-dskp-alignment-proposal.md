@@ -27,5 +27,13 @@ The framework emphasizes translating ideas across forms (words $\rightarrow$ sym
 ### 4. Cross-Curricular Elements (EMK) & HOTS
 *Impact on Bot:* The AI's dynamically generated word problems should explicitly rotate through EMK themes (e.g., *Sains dan Teknologi*, *Pendidikan Kewangan*, *Kelestarian Alam Sekitar*). For TP5/TP6 questions, the AI must engage Higher Order Thinking Skills (Evaluating, Creating) rather than just Applying formulas.
 
+### 5. Technology & STEM Integration
+The DSKP heavily emphasizes the use of technological tools like dynamic geometry software and spreadsheets.
+*Impact on Bot:* The AI should actively suggest digital tools for visualization. For example, "Imagine plotting this in GeoGebra..." or "If we put this sequence in an Excel spreadsheet..." to bridge the gap between abstract math and technical modeling.
+
+### 6. Interactive "Projek Mini" (Holistic TP6 Assessment)
+School assessment should be holistic, taking forms like presentations and projects.
+*Impact on Bot:* To achieve TP6 (Creative Non-Routine), the AI must design a chat-friendly "Projek Mini". The AI should instruct the student to use household items or observe their surroundings, construct a model, and then send a photo back to the AI via chat. *Note: This requires robust image processing capabilities from the underlying LLM.*
+
 ## Next Steps
 This document is for the Education Lead and engineering team to review. If approved, these directives should be merged into `pai-bot`'s core system architecture prompts (e.g. `docs/implementation-guide.md`).
