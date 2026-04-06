@@ -97,4 +97,25 @@ describe("UserManagementPanel", () => {
     );
     expect(screen.getByDisplayValue("http://localhost:3000/activate?token=invite-token")).toBeInTheDocument();
   });
+
+  it("does not crash when the API returns null lists", () => {
+    render(
+      <UserManagementPanel
+        data={
+          {
+            summary: {
+              teachers: 0,
+              parents: 0,
+              pending_invites: 0,
+              total_users: 0,
+            },
+            active_users: null,
+            pending_invites: null,
+          } as any
+        }
+      />,
+    );
+
+    expect(screen.getByText("No active users match this search")).toBeInTheDocument();
+  });
 });

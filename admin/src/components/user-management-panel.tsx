@@ -51,18 +51,30 @@ export function UserManagementPanel({
     );
   }
 
+  const summary = data.summary ?? {
+    teachers: 0,
+    parents: 0,
+    pending_invites: 0,
+    total_users: 0,
+  };
+  const activeUserList = Array.isArray(data.active_users) ? data.active_users : [];
+  const pendingInviteList = Array.isArray(data.pending_invites) ? data.pending_invites : [];
   const query = search.trim().toLowerCase();
-  const activeUsers = data.active_users.filter((item) => {
+  const activeUsers = activeUserList.filter((item) => {
     if (!query) {
       return true;
     }
-    return [item.name, item.email, item.role, item.tenant_name ?? ""].some((value) => value.toLowerCase().includes(query));
+    return [item.name, item.email, item.role, item.tenant_name ?? ""].some((value) =>
+      String(value ?? "").toLowerCase().includes(query),
+    );
   });
-  const pendingInvites = data.pending_invites.filter((item) => {
+  const pendingInvites = pendingInviteList.filter((item) => {
     if (!query) {
       return true;
     }
-    return [item.email, item.role, item.invited_by, item.tenant_name ?? ""].some((value) => value.toLowerCase().includes(query));
+    return [item.email, item.role, item.invited_by, item.tenant_name ?? ""].some((value) =>
+      String(value ?? "").toLowerCase().includes(query),
+    );
   });
 
   function handleInviteSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -86,10 +98,10 @@ export function UserManagementPanel({
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={IconUsers} title="Teachers" value={String(data.summary.teachers)} note="Active teacher accounts in this workspace" />
-        <StatCard icon={IconUsers} title="Parents" value={String(data.summary.parents)} note="Active parent accounts with access to summaries" />
-        <StatCard icon={IconMailPlus} title="Pending invites" value={String(data.summary.pending_invites)} note="Outstanding invite links that have not been accepted" />
-        <StatCard icon={IconUsers} title="Total users" value={String(data.summary.total_users)} note="All active teacher, parent, admin, and platform-admin users" />
+        <StatCard icon={IconUsers} title="Teachers" value={String(summary.teachers)} note="Active teacher accounts in this workspace" />
+        <StatCard icon={IconUsers} title="Parents" value={String(summary.parents)} note="Active parent accounts with access to summaries" />
+        <StatCard icon={IconMailPlus} title="Pending invites" value={String(summary.pending_invites)} note="Outstanding invite links that have not been accepted" />
+        <StatCard icon={IconUsers} title="Total users" value={String(summary.total_users)} note="All active teacher, parent, admin, and platform-admin users" />
       </section>
 
       <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white/85 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-slate-950/55 dark:shadow-[0_24px_70px_rgba(2,8,23,0.32)]">
