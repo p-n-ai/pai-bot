@@ -157,7 +157,7 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 | **Multi-Class Management** | Create/manage multiple classes, assign Form 1/2/3 KSSM syllabi, view consolidated metrics |
 | **Teacher Management** | Invite teachers via email, assign to classes, revoke access |
 | **Parent Provisioning** | Invite and manage parent accounts, link to students |
-| **User & Invite Management** | Review active teacher, parent, admin, and platform-admin access plus pending invites in one workspace view, with invite-link reissue for pending records |
+| **User & Invite Management** | Review active teacher, parent, admin, and platform-admin access plus pending invites in one workspace view, with invite-email delivery status and resend for pending records |
 | **Class Configuration** | Create classes, generate join codes, assign curriculum |
 | **Token Budget Management** | Set tenant-level token allowance windows, monitor token consumption by class/student, configure AI fallback strategies, and later add USD cost projections |
 | **School Onboarding Wizard** | Interactive setup: school name → curriculum selection → bot setup → class creation → teacher invitation |
@@ -245,8 +245,8 @@ All endpoints are under `/api/admin/` and require authenticated session state wi
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/admin/users` | Admin, Platform Admin | Active teacher, parent, admin, and platform-admin users plus pending invite records for the current workspace scope |
-| `POST` | `/api/admin/invites` | Admin, Platform Admin | Create an invite and return the activation token for the `/activate` flow |
-| `POST` | `/api/admin/invites/{id}/reissue` | Admin, Platform Admin | Rotate the token for a pending invite and return a fresh activation token for the `/activate` flow |
+| `POST` | `/api/admin/invites` | Admin, Platform Admin | Create an invite, attempt invite-email delivery, and return the `/activate` token/link payload plus delivery status |
+| `POST` | `/api/admin/invites/{id}/reissue` | Admin, Platform Admin | Rotate the token for a pending invite, resend the invite email, and return the refreshed `/activate` token/link payload plus delivery status |
 
 ### Data Export
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -117,6 +118,70 @@ func TestPostgresService_IssueInvitePersistsHashedToken(t *testing.T) {
 		t.Fatal("invite token should not be empty")
 	}
 	assertInviteTokenStored(t, ctx, pool, "newteacher@example.com", invite.Token)
+}
+
+func TestPostgresService_IssueInviteMarksDeliverySentWhenMailerSucceeds(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 4, 6, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+
+	recorder := &recordingInviteMailer{}
+	svc.ConfigureInviteEmail(recorder)
+
+	tenantID := loadDefaultTenantID(t, ctx, pool)
+	adminUserID := seedWebUser(t, ctx, pool, tenantID, RoleAdmin, "Admin Inviter")
+
+	invite, err := svc.IssueInvite(ctx, IssueInviteRequest{
+		InvitedByUserID:   adminUserID,
+		TenantID:          tenantID,
+		Email:             "newteacher@example.com",
+		Role:              RoleTeacher,
+		ActivationBaseURL: "https://admin.example.com",
+	})
+	if err != nil {
+		t.Fatalf("IssueInvite() error = %v", err)
+	}
+	if invite.DeliveryStatus != "sent" {
+		t.Fatalf("delivery_status = %q, want sent", invite.DeliveryStatus)
+	}
+	if invite.ActivationURL != "https://admin.example.com/activate?token="+invite.Token {
+		t.Fatalf("activation_url = %q, want generated activation url", invite.ActivationURL)
+	}
+	if len(recorder.messages) != 1 {
+		t.Fatalf("sent messages = %d, want 1", len(recorder.messages))
+	}
+	assertInviteDeliveryState(t, ctx, pool, "newteacher@example.com", "sent")
+}
+
+func TestPostgresService_IssueInviteMarksDeliveryFailedWhenMailerFails(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 4, 6, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+
+	svc.ConfigureInviteEmail(failingInviteMailer{err: fmt.Errorf("smtp offline")})
+
+	tenantID := loadDefaultTenantID(t, ctx, pool)
+	adminUserID := seedWebUser(t, ctx, pool, tenantID, RoleAdmin, "Admin Inviter")
+
+	invite, err := svc.IssueInvite(ctx, IssueInviteRequest{
+		InvitedByUserID:   adminUserID,
+		TenantID:          tenantID,
+		Email:             "newteacher@example.com",
+		Role:              RoleTeacher,
+		ActivationBaseURL: "https://admin.example.com",
+	})
+	if err != nil {
+		t.Fatalf("IssueInvite() error = %v", err)
+	}
+	if invite.DeliveryStatus != "failed" {
+		t.Fatalf("delivery_status = %q, want failed", invite.DeliveryStatus)
+	}
+	if invite.DeliveryError != "smtp offline" {
+		t.Fatalf("delivery_error = %q, want smtp offline", invite.DeliveryError)
+	}
+	assertInviteDeliveryState(t, ctx, pool, "newteacher@example.com", "failed")
 }
 
 func TestPostgresService_ReissueInviteRotatesToken(t *testing.T) {
@@ -374,6 +439,7 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100500_global_platform_admins.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260403110000_google_auth_oidc.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260406110000_invite_delivery.sql"))
 
 	return pool
 }
@@ -596,6 +662,31 @@ func assertInviteTokenStored(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 }
 
+func assertInviteDeliveryState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, email, wantStatus string) {
+	t.Helper()
+
+	var (
+		status    string
+		sentAt    *time.Time
+		lastError *string
+	)
+	if err := pool.QueryRow(ctx,
+		`SELECT delivery_status, delivery_sent_at, delivery_error FROM auth_invites WHERE email_normalized = $1`,
+		NormalizeIdentifier(email),
+	).Scan(&status, &sentAt, &lastError); err != nil {
+		t.Fatalf("query invite delivery status: %v", err)
+	}
+	if status != wantStatus {
+		t.Fatalf("delivery_status = %q, want %q", status, wantStatus)
+	}
+	if wantStatus == "sent" && sentAt == nil {
+		t.Fatal("delivery_sent_at should be set when invite email is sent")
+	}
+	if wantStatus == "failed" && (lastError == nil || strings.TrimSpace(*lastError) == "") {
+		t.Fatal("delivery_error should be set when invite email fails")
+	}
+}
+
 func assertSessionStored(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rawToken string, wantRevoked bool) {
 	t.Helper()
 
@@ -612,6 +703,23 @@ func assertSessionStored(t *testing.T, ctx context.Context, pool *pgxpool.Pool, 
 	if !wantRevoked && revokedAt != nil {
 		t.Fatal("session should be active")
 	}
+}
+
+type recordingInviteMailer struct {
+	messages []mailer.InviteMessage
+}
+
+func (m *recordingInviteMailer) SendInvite(_ context.Context, msg mailer.InviteMessage) error {
+	m.messages = append(m.messages, msg)
+	return nil
+}
+
+type failingInviteMailer struct {
+	err error
+}
+
+func (m failingInviteMailer) SendInvite(_ context.Context, _ mailer.InviteMessage) error {
+	return m.err
 }
 
 func assertUserStillExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, userID string) {

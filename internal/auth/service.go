@@ -86,26 +86,32 @@ type AcceptInviteRequest struct {
 
 // IssueInviteRequest creates a new invite for a teacher, parent, or admin user.
 type IssueInviteRequest struct {
-	InvitedByUserID string `json:"invited_by_user_id"`
-	TenantID        string `json:"tenant_id"`
-	Email           string `json:"email"`
-	Role            Role   `json:"role"`
+	InvitedByUserID   string `json:"invited_by_user_id"`
+	TenantID          string `json:"tenant_id"`
+	Email             string `json:"email"`
+	Role              Role   `json:"role"`
+	ActivationBaseURL string `json:"-"`
 }
 
 // ReissueInviteRequest rotates the token for an existing pending invite.
 type ReissueInviteRequest struct {
-	InviteID         string `json:"invite_id"`
-	InvitedByUserID  string `json:"invited_by_user_id"`
-	TenantID         string `json:"tenant_id"`
+	InviteID          string `json:"invite_id"`
+	InvitedByUserID   string `json:"invited_by_user_id"`
+	TenantID          string `json:"tenant_id"`
+	ActivationBaseURL string `json:"-"`
 }
 
 // InviteRecord is returned when an invite is created.
 type InviteRecord struct {
-	Email       string    `json:"email"`
-	Role        Role      `json:"role"`
-	Token       string    `json:"invite_token"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	InvitedByID string    `json:"invited_by_user_id"`
+	ID             string    `json:"id,omitempty"`
+	Email          string    `json:"email"`
+	Role           Role      `json:"role"`
+	Token          string    `json:"invite_token"`
+	ActivationURL  string    `json:"activation_url,omitempty"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	InvitedByID    string    `json:"invited_by_user_id"`
+	DeliveryStatus string    `json:"delivery_status,omitempty"`
+	DeliveryError  string    `json:"delivery_error,omitempty"`
 }
 
 type LinkedIdentity struct {

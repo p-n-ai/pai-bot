@@ -56,6 +56,7 @@ const data: UserManagementView = {
       email: "newteacher@example.com",
       role: "teacher",
       status: "pending",
+      delivery_status: "sent",
       expires_at: "2026-04-13T10:00:00Z",
       created_at: "2026-04-06T10:00:00Z",
       invited_by: "Admin User",
@@ -94,7 +95,10 @@ describe("UserManagementPanel", () => {
 
   it("issues an invite and shows the activation link", async () => {
     issueInvite.mockResolvedValue({
+      email: "newteacher@example.com",
       invite_token: "invite-token",
+      activation_url: "http://localhost:3000/activate?token=invite-token",
+      delivery_status: "sent",
     });
 
     render(<UserManagementPanel data={data} />);
@@ -110,17 +114,21 @@ describe("UserManagementPanel", () => {
       }),
     );
     expect(screen.getByLabelText("Latest activation link")).toHaveValue("http://localhost:3000/activate?token=invite-token");
+    expect(screen.getByText("Invite email sent to newteacher@example.com.")).toBeInTheDocument();
   });
 
   it("reissues a pending invite and shows the fresh activation link", async () => {
     reissueInvite.mockResolvedValue({
+      email: "newteacher@example.com",
       invite_token: "invite-token-reissued",
+      activation_url: "http://localhost:3000/activate?token=invite-token-reissued",
+      delivery_status: "sent",
     });
 
     render(<UserManagementPanel data={data} />);
 
     fireEvent.click(screen.getByRole("tab", { name: "Pending invites" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reissue link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend email" }));
 
     await waitFor(() => expect(reissueInvite).toHaveBeenCalledWith("invite-1"));
     expect(screen.getByLabelText("Latest activation link")).toHaveValue("http://localhost:3000/activate?token=invite-token-reissued");
@@ -128,14 +136,17 @@ describe("UserManagementPanel", () => {
 
   it("copies the latest activation link", async () => {
     reissueInvite.mockResolvedValue({
+      email: "newteacher@example.com",
       invite_token: "invite-token-reissued",
+      activation_url: "http://localhost:3000/activate?token=invite-token-reissued",
+      delivery_status: "sent",
     });
     writeText.mockResolvedValue(undefined);
 
     render(<UserManagementPanel data={data} />);
 
     fireEvent.click(screen.getByRole("tab", { name: "Pending invites" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reissue link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend email" }));
 
     await waitFor(() => expect(screen.getByLabelText("Latest activation link")).toHaveValue("http://localhost:3000/activate?token=invite-token-reissued"));
 
@@ -143,6 +154,24 @@ describe("UserManagementPanel", () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("http://localhost:3000/activate?token=invite-token-reissued"));
     await waitFor(() => expect(screen.getByText("Copied")).toBeInTheDocument());
+  });
+
+  it("shows invite delivery failures from the API result", async () => {
+    issueInvite.mockResolvedValue({
+      email: "newteacher@example.com",
+      invite_token: "invite-token",
+      activation_url: "http://localhost:3000/activate?token=invite-token",
+      delivery_status: "failed",
+      delivery_error: "smtp offline",
+    });
+
+    render(<UserManagementPanel data={data} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Invite user" }));
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "newteacher@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
+
+    await waitFor(() => expect(screen.getAllByText("smtp offline")).toHaveLength(2));
   });
 
   it("does not crash when the API returns null lists", () => {

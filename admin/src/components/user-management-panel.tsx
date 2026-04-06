@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { issueInvite, reissueInvite, type UserManagementView } from "@/lib/api";
+import { issueInvite, reissueInvite, type InviteRecord, type UserManagementView } from "@/lib/api";
 
 function buildInviteLink(token: string) {
   if (typeof window === "undefined") {
@@ -25,6 +25,13 @@ function buildInviteLink(token: string) {
   }
 
   return `${window.location.origin}/activate?token=${encodeURIComponent(token)}`;
+}
+
+function resolveInviteLink(invite: Pick<InviteRecord, "activation_url" | "invite_token">) {
+  if (invite.activation_url?.trim()) {
+    return invite.activation_url;
+  }
+  return buildInviteLink(invite.invite_token);
 }
 
 export function UserManagementPanel({
@@ -38,7 +45,7 @@ export function UserManagementPanel({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"teacher" | "parent" | "admin">("teacher");
   const [inviteError, setInviteError] = useState("");
-  const [inviteLink, setInviteLink] = useState("");
+  const [latestInvite, setLatestInvite] = useState<InviteRecord | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [isInvitePending, startInviteTransition] = useTransition();
 
@@ -81,7 +88,7 @@ export function UserManagementPanel({
   function handleInviteSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setInviteError("");
-    setInviteLink("");
+    setLatestInvite(null);
     setCopyFeedback("");
 
     startInviteTransition(async () => {
@@ -90,7 +97,7 @@ export function UserManagementPanel({
           email: inviteEmail.trim(),
           role: inviteRole,
         });
-        setInviteLink(buildInviteLink(invite.invite_token));
+        setLatestInvite(invite);
       } catch (error) {
         setInviteError(error instanceof Error ? error.message : "Invite issuance failed");
       }
@@ -99,13 +106,13 @@ export function UserManagementPanel({
 
   function handleInviteReissue(inviteID: string) {
     setInviteError("");
-    setInviteLink("");
+    setLatestInvite(null);
     setCopyFeedback("");
 
     startInviteTransition(async () => {
       try {
         const invite = await reissueInvite(inviteID);
-        setInviteLink(buildInviteLink(invite.invite_token));
+        setLatestInvite(invite);
       } catch (error) {
         setInviteError(error instanceof Error ? error.message : "Invite reissue failed");
       }
@@ -113,6 +120,7 @@ export function UserManagementPanel({
   }
 
   async function handleCopyInviteLink() {
+    const inviteLink = latestInvite ? resolveInviteLink(latestInvite) : "";
     if (!inviteLink) {
       return;
     }
@@ -158,14 +166,16 @@ export function UserManagementPanel({
               <DialogHeader>
                 <DialogTitle>Invite teacher, parent, or admin</DialogTitle>
                 <DialogDescription>
-                  Create a new invite and share the generated activation link through your existing email or messaging flow.
+                  Send a workspace invite email and keep the activation link available as an admin fallback.
                 </DialogDescription>
               </DialogHeader>
               <InviteIssueForm
                 email={inviteEmail}
                 role={inviteRole}
                 error={inviteError}
-                inviteLink={inviteLink}
+                inviteLink={latestInvite ? resolveInviteLink(latestInvite) : ""}
+                deliveryStatus={latestInvite?.delivery_status}
+                deliveryError={latestInvite?.delivery_error}
                 copyFeedback={copyFeedback}
                 isPending={isInvitePending}
                 onEmailChange={setInviteEmail}
@@ -183,19 +193,24 @@ export function UserManagementPanel({
           </div>
         ) : null}
 
-        {inviteLink ? (
+        {latestInvite ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-4 dark:border-emerald-400/30 dark:bg-emerald-500/10">
-            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Latest activation link</p>
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Latest invite result</p>
             <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
-              Share this fresh invite link through your existing email or messaging flow.
+              {latestInvite.delivery_status === "sent"
+                ? `Invite email sent to ${latestInvite.email}.`
+                : latestInvite.delivery_status === "failed"
+                  ? `Invite created for ${latestInvite.email}, but email delivery failed.`
+                  : `Invite created for ${latestInvite.email}.`}
             </p>
-            <Input className="mt-3" value={inviteLink} readOnly aria-label="Latest activation link" />
+            <Input className="mt-3" value={resolveInviteLink(latestInvite)} readOnly aria-label="Latest activation link" />
             <div className="mt-3 flex items-center gap-3">
               <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyInviteLink()}>
                 Copy link
               </Button>
               {copyFeedback ? <p className="text-sm text-emerald-800 dark:text-emerald-200">{copyFeedback}</p> : null}
             </div>
+            {latestInvite.delivery_error ? <p className="mt-2 text-sm text-rose-700 dark:text-rose-200">{latestInvite.delivery_error}</p> : null}
           </div>
         ) : null}
 
@@ -251,6 +266,7 @@ export function UserManagementPanel({
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Invited by</TableHead>
+                    <TableHead>Email delivery</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Action</TableHead>
@@ -267,6 +283,9 @@ export function UserManagementPanel({
                       </TableCell>
                       <TableCell className="capitalize">{item.role.replaceAll("_", " ")}</TableCell>
                       <TableCell>{item.invited_by || "System"}</TableCell>
+                      <TableCell className="capitalize">
+                        {item.delivery_status ? item.delivery_status.replaceAll("_", " ") : "pending"}
+                      </TableCell>
                       <TableCell>{item.expires_at.slice(0, 10)}</TableCell>
                       <TableCell className="capitalize">{item.status}</TableCell>
                       <TableCell className="text-right">
@@ -277,7 +296,7 @@ export function UserManagementPanel({
                           disabled={isInvitePending}
                           onClick={() => handleInviteReissue(item.id)}
                         >
-                          Reissue link
+                          Resend email
                         </Button>
                       </TableCell>
                     </TableRow>

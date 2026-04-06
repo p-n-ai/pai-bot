@@ -16,6 +16,7 @@ type Config struct {
 	Cache          CacheConfig
 	NATS           NATSConfig
 	AI             AIConfig
+	Email          EmailConfig
 	Telegram       TelegramConfig
 	WhatsApp       WhatsAppConfig
 	Auth           AuthConfig
@@ -102,6 +103,16 @@ type TelegramConfig struct {
 	BotToken string
 }
 
+// EmailConfig holds invite email delivery settings.
+type EmailConfig struct {
+	SMTPAddr     string
+	SMTPUsername string
+	SMTPPassword string
+	FromAddress  string
+	FromName     string
+	BaseURL      string
+}
+
 // WhatsAppConfig holds WhatsApp Cloud API settings.
 type WhatsAppConfig struct {
 	Enabled     bool
@@ -175,6 +186,14 @@ func Load() (*Config, error) {
 				APIKey: envStr("LEARN_AI_OPENROUTER_API_KEY", ""),
 			},
 		},
+		Email: EmailConfig{
+			SMTPAddr:     envStr("LEARN_EMAIL_SMTP_ADDR", ""),
+			SMTPUsername: envStr("LEARN_EMAIL_SMTP_USERNAME", ""),
+			SMTPPassword: envStr("LEARN_EMAIL_SMTP_PASSWORD", ""),
+			FromAddress:  envStr("LEARN_EMAIL_FROM_ADDRESS", ""),
+			FromName:     envStr("LEARN_EMAIL_FROM_NAME", "P&AI Bot"),
+			BaseURL:      envStr("LEARN_EMAIL_BASE_URL", ""),
+		},
 		Telegram: TelegramConfig{
 			BotToken: envStr("LEARN_TELEGRAM_BOT_TOKEN", ""),
 		},
@@ -225,6 +244,14 @@ func (c *Config) Validate() error {
 
 	if c.Tenant.Mode != "single" && c.Tenant.Mode != "multi" {
 		return fmt.Errorf("LEARN_TENANT_MODE must be 'single' or 'multi', got %q", c.Tenant.Mode)
+	}
+	if c.Email.SMTPAddr != "" || c.Email.FromAddress != "" || c.Email.SMTPUsername != "" || c.Email.SMTPPassword != "" || c.Email.BaseURL != "" {
+		if strings.TrimSpace(c.Email.SMTPAddr) == "" {
+			return fmt.Errorf("LEARN_EMAIL_SMTP_ADDR is required when email delivery is configured")
+		}
+		if strings.TrimSpace(c.Email.FromAddress) == "" {
+			return fmt.Errorf("LEARN_EMAIL_FROM_ADDRESS is required when email delivery is configured")
+		}
 	}
 
 	return nil
