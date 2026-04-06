@@ -69,6 +69,22 @@ export interface ParentSummary {
   encouragement: EncouragementSuggestion;
 }
 
+export interface ConversationExportMessage {
+  message_id: string;
+  role: "student" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ConversationExportRecord {
+  conversation_id: string;
+  student_id: string;
+  student_name: string;
+  channel: string;
+  started_at: string;
+  messages: ConversationExportMessage[];
+}
+
 export interface AIProviderUsage {
   provider: string;
   model: string;
