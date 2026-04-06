@@ -6,21 +6,24 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 )
 
 const authDBTimeout = 5 * time.Second
 
 type PostgresService struct {
-	pool       *pgxpool.Pool
-	sessionTTL time.Duration
-	httpClient HTTPDoer
-	google     *GoogleOAuthProvider
-	now        func() time.Time
+	pool             *pgxpool.Pool
+	sessionTTL       time.Duration
+	httpClient       HTTPDoer
+	google           *GoogleOAuthProvider
+	inviteMailSender mailer.Sender
+	now              func() time.Time
 }
 
 func NewPostgresService(pool *pgxpool.Pool, sessionTTL time.Duration) *PostgresService {
@@ -42,6 +45,10 @@ func newPostgresService(pool *pgxpool.Pool, sessionTTL time.Duration, now func()
 
 func (s *PostgresService) ConfigureGoogleOAuth(cfg GoogleOAuthProviderConfig) {
 	s.google = NewGoogleOAuthProvider(cfg, s.httpClient, s.now)
+}
+
+func (s *PostgresService) ConfigureInviteEmail(sender mailer.Sender) {
+	s.inviteMailSender = sender
 }
 
 func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session, error) {
@@ -358,21 +365,105 @@ func (s *PostgresService) IssueInvite(ctx context.Context, req IssueInviteReques
 	}
 
 	expiresAt := s.now().UTC().Add(7 * 24 * time.Hour)
-	_, err = s.pool.Exec(ctx, `
+	var inviteID string
+	err = s.pool.QueryRow(ctx, `
 		INSERT INTO auth_invites (tenant_id, email, email_normalized, role, token_hash, invited_by, expires_at)
 		VALUES ($1::uuid, $2, $3, $4, $5, $6::uuid, $7)
-	`, tenantID, email, email, string(req.Role), HashOpaqueToken(token), req.InvitedByUserID, expiresAt)
+		RETURNING id::text
+	`, tenantID, email, email, string(req.Role), HashOpaqueToken(token), req.InvitedByUserID, expiresAt).Scan(&inviteID)
 	if err != nil {
 		return InviteRecord{}, fmt.Errorf("insert invite: %w", err)
 	}
 
-	return InviteRecord{
-		Email:       email,
-		Role:        req.Role,
-		Token:       token,
-		ExpiresAt:   expiresAt,
-		InvitedByID: req.InvitedByUserID,
-	}, nil
+	record := InviteRecord{
+		ID:             inviteID,
+		Email:          email,
+		Role:           req.Role,
+		Token:          token,
+		ExpiresAt:      expiresAt,
+		InvitedByID:    req.InvitedByUserID,
+		DeliveryStatus: "pending",
+	}
+	if err := s.deliverInviteEmail(ctx, inviteID, tenantID, req.InvitedByUserID, req.ActivationBaseURL, &record); err != nil {
+		record.DeliveryStatus = "failed"
+		record.DeliveryError = err.Error()
+	}
+	return record, nil
+}
+
+func (s *PostgresService) ReissueInvite(ctx context.Context, req ReissueInviteRequest) (InviteRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	tenantID := strings.TrimSpace(req.TenantID)
+	inviteID := strings.TrimSpace(req.InviteID)
+	invitedByUserID := strings.TrimSpace(req.InvitedByUserID)
+	if tenantID == "" || inviteID == "" || invitedByUserID == "" {
+		return InviteRecord{}, ErrInvalidInvite
+	}
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return InviteRecord{}, fmt.Errorf("begin reissue invite transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var (
+		email      string
+		role       string
+		acceptedAt *time.Time
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT email_normalized, role, accepted_at
+		FROM auth_invites
+		WHERE id = $1::uuid
+		  AND tenant_id = $2::uuid
+		FOR UPDATE
+	`, inviteID, tenantID).Scan(&email, &role, &acceptedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return InviteRecord{}, ErrInvalidInvite
+		}
+		return InviteRecord{}, fmt.Errorf("query invite for reissue: %w", err)
+	}
+	if acceptedAt != nil || !isInvitableRole(Role(role)) {
+		return InviteRecord{}, ErrInvalidInvite
+	}
+
+	token, err := generateOpaqueToken()
+	if err != nil {
+		return InviteRecord{}, fmt.Errorf("generate invite token: %w", err)
+	}
+
+	expiresAt := s.now().UTC().Add(7 * 24 * time.Hour)
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_invites
+		SET token_hash = $2,
+		    invited_by = $3::uuid,
+		    expires_at = $4
+		WHERE id = $1::uuid
+	`, inviteID, HashOpaqueToken(token), invitedByUserID, expiresAt); err != nil {
+		return InviteRecord{}, fmt.Errorf("update invite for reissue: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return InviteRecord{}, fmt.Errorf("commit reissue invite transaction: %w", err)
+	}
+
+	record := InviteRecord{
+		ID:             inviteID,
+		Email:          email,
+		Role:           Role(role),
+		Token:          token,
+		ExpiresAt:      expiresAt,
+		InvitedByID:    invitedByUserID,
+		DeliveryStatus: "pending",
+	}
+	if err := s.deliverInviteEmail(ctx, inviteID, tenantID, invitedByUserID, req.ActivationBaseURL, &record); err != nil {
+		record.DeliveryStatus = "failed"
+		record.DeliveryError = err.Error()
+	}
+	return record, nil
 }
 
 func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Session, error) {
@@ -714,4 +805,94 @@ func isInvitableRole(role Role) bool {
 	default:
 		return false
 	}
+}
+
+type inviteEmailContext struct {
+	tenantName  string
+	inviterName string
+}
+
+func (s *PostgresService) deliverInviteEmail(ctx context.Context, inviteID, tenantID, invitedByUserID, baseURL string, record *InviteRecord) error {
+	if record == nil {
+		return errors.New("invite record is required")
+	}
+
+	record.ActivationURL = buildInviteActivationURL(baseURL, record.Token)
+	if s.inviteMailSender == nil {
+		return nil
+	}
+
+	if strings.TrimSpace(record.ActivationURL) == "" {
+		return s.markInviteDeliveryFailure(ctx, inviteID, "activation base url is required")
+	}
+
+	deliveryCtx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	emailCtx, err := s.loadInviteEmailContext(deliveryCtx, tenantID, invitedByUserID)
+	if err != nil {
+		return s.markInviteDeliveryFailure(deliveryCtx, inviteID, err.Error())
+	}
+
+	if err := s.inviteMailSender.SendInvite(deliveryCtx, mailer.InviteMessage{
+		ToEmail:       record.Email,
+		TenantName:    emailCtx.tenantName,
+		InviterName:   emailCtx.inviterName,
+		RoleLabel:     string(record.Role),
+		ActivationURL: record.ActivationURL,
+		ExpiresAt:     record.ExpiresAt,
+	}); err != nil {
+		return s.markInviteDeliveryFailure(deliveryCtx, inviteID, err.Error())
+	}
+
+	if _, err := s.pool.Exec(deliveryCtx, `
+		UPDATE auth_invites
+		SET delivery_status = 'sent',
+		    delivery_attempted_at = $2,
+		    delivery_sent_at = $2,
+		    delivery_error = NULL
+		WHERE id = $1::uuid
+	`, inviteID, s.now().UTC()); err != nil {
+		return fmt.Errorf("update invite delivery sent status: %w", err)
+	}
+
+	record.DeliveryStatus = "sent"
+	record.DeliveryError = ""
+	return nil
+}
+
+func (s *PostgresService) markInviteDeliveryFailure(ctx context.Context, inviteID, reason string) error {
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE auth_invites
+		SET delivery_status = 'failed',
+		    delivery_attempted_at = $2,
+		    delivery_error = $3
+		WHERE id = $1::uuid
+	`, inviteID, s.now().UTC(), strings.TrimSpace(reason)); err != nil {
+		return fmt.Errorf("update invite delivery failure: %w", err)
+	}
+	return fmt.Errorf("%s", strings.TrimSpace(reason))
+}
+
+func (s *PostgresService) loadInviteEmailContext(ctx context.Context, tenantID, invitedByUserID string) (inviteEmailContext, error) {
+	var result inviteEmailContext
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(t.name, ''), COALESCE(u.name, '')
+		FROM tenants t
+		LEFT JOIN users u ON u.id = $2::uuid
+		WHERE t.id = $1::uuid
+		LIMIT 1
+	`, tenantID, invitedByUserID).Scan(&result.tenantName, &result.inviterName); err != nil {
+		return inviteEmailContext{}, fmt.Errorf("load invite email context: %w", err)
+	}
+	return result, nil
+}
+
+func buildInviteActivationURL(baseURL, token string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	token = strings.TrimSpace(token)
+	if baseURL == "" || token == "" {
+		return ""
+	}
+	return strings.TrimRight(baseURL, "/") + "/activate?token=" + url.QueryEscape(token)
 }

@@ -1155,11 +1155,13 @@ func TestAuthIdentitiesEndpointReturnsLinkedProviders(t *testing.T) {
 func TestAdminInviteEndpoint(t *testing.T) {
 	authSvc := &stubAuthService{
 		inviteResp: auth.InviteRecord{
-			Email:       "newteacher@example.com",
-			Role:        auth.RoleTeacher,
-			Token:       "invite-token-123",
-			ExpiresAt:   time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
-			InvitedByID: "user-123",
+			Email:          "newteacher@example.com",
+			Role:           auth.RoleTeacher,
+			Token:          "invite-token-123",
+			ActivationURL:  "http://localhost/activate?token=invite-token-123",
+			ExpiresAt:      time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+			InvitedByID:    "user-123",
+			DeliveryStatus: "sent",
 		},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
@@ -1177,6 +1179,41 @@ func TestAdminInviteEndpoint(t *testing.T) {
 	}
 	if authSvc.inviteReq.InvitedByUserID != "user-123" {
 		t.Fatalf("invited_by = %q, want user-123", authSvc.inviteReq.InvitedByUserID)
+	}
+	if authSvc.inviteReq.ActivationBaseURL != "http://example.com" {
+		t.Fatalf("activation base url = %q, want http://example.com", authSvc.inviteReq.ActivationBaseURL)
+	}
+}
+
+func TestAdminInviteReissueEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		reissueResp: auth.InviteRecord{
+			Email:          "newteacher@example.com",
+			Role:           auth.RoleTeacher,
+			Token:          "invite-token-456",
+			ActivationURL:  "http://localhost/activate?token=invite-token-456",
+			ExpiresAt:      time.Date(2026, 3, 24, 10, 0, 0, 0, time.UTC),
+			InvitedByID:    "user-123",
+			DeliveryStatus: "sent",
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites/invite-123/reissue", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.reissueReq.InviteID != "invite-123" {
+		t.Fatalf("invite id = %q, want invite-123", authSvc.reissueReq.InviteID)
+	}
+	if authSvc.reissueReq.InvitedByUserID != "user-123" {
+		t.Fatalf("invited_by = %q, want user-123", authSvc.reissueReq.InvitedByUserID)
+	}
+	if authSvc.reissueReq.ActivationBaseURL != "http://example.com" {
+		t.Fatalf("activation base url = %q, want http://example.com", authSvc.reissueReq.ActivationBaseURL)
 	}
 }
 
@@ -1493,13 +1530,14 @@ func (stubAdminAPI) GetUserManagement() (adminapi.UserManagementView, error) {
 		},
 		PendingInvites: []adminapi.PendingInvite{
 			{
-				ID:        "invite-1",
-				Email:     "newteacher@example.com",
-				Role:      "teacher",
-				Status:    "pending",
-				ExpiresAt: now.Add(7 * 24 * time.Hour),
-				CreatedAt: now,
-				InvitedBy: "Admin User",
+				ID:             "invite-1",
+				Email:          "newteacher@example.com",
+				Role:           "teacher",
+				Status:         "pending",
+				DeliveryStatus: "sent",
+				ExpiresAt:      now.Add(7 * 24 * time.Hour),
+				CreatedAt:      now,
+				InvitedBy:      "Admin User",
 			},
 		},
 	}, nil
@@ -1612,6 +1650,9 @@ type stubAuthService struct {
 	inviteReq        auth.IssueInviteRequest
 	inviteResp       auth.InviteRecord
 	inviteErr        error
+	reissueReq       auth.ReissueInviteRequest
+	reissueResp      auth.InviteRecord
+	reissueErr       error
 	acceptReq        auth.AcceptInviteRequest
 	acceptResp       auth.Session
 	acceptErr        error
@@ -1652,6 +1693,11 @@ func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteR
 func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error) {
 	s.inviteReq = req
 	return s.inviteResp, s.inviteErr
+}
+
+func (s *stubAuthService) ReissueInvite(_ context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error) {
+	s.reissueReq = req
+	return s.reissueResp, s.reissueErr
 }
 
 func (s *stubAuthService) Session(_ context.Context, sessionToken string) (auth.Session, error) {
@@ -1797,7 +1843,7 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
 	rec := httptest.NewRecorder()
 
-	newHandlerWithAdminProvider(provider, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+	newHandlerWithAdminProvider(provider, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
