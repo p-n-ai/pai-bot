@@ -891,7 +891,7 @@ func (s *Service) ExportConversations() ([]ConversationExportRecord, error) {
 			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
 			u.name,
 			u.channel,
-			c.created_at,
+			c.started_at,
 			m.id::text,
 			CASE WHEN m.role = 'user' THEN 'student' ELSE m.role END AS role,
 			COALESCE(m.content, ''),
@@ -903,7 +903,7 @@ func (s *Service) ExportConversations() ([]ConversationExportRecord, error) {
 			AND m.role IN ('user', 'assistant')
 		WHERE %s
 			AND u.role = 'student'
-		ORDER BY c.created_at ASC, c.id ASC, m.created_at ASC, m.id ASC
+		ORDER BY c.started_at ASC, c.id ASC, m.created_at ASC, m.id ASC
 	`, s.tenantPredicate("c.tenant_id", 1)), s.tenantArg())
 	if err != nil {
 		return nil, fmt.Errorf("query conversation export: %w", err)
