@@ -157,6 +157,7 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 | **Multi-Class Management** | Create/manage multiple classes, assign Form 1/2/3 KSSM syllabi, view consolidated metrics |
 | **Teacher Management** | Invite teachers via email, assign to classes, revoke access |
 | **Parent Provisioning** | Invite and manage parent accounts, link to students |
+| **User & Invite Management** | Review active teacher, parent, admin, and platform-admin access plus pending invites in one workspace view |
 | **Class Configuration** | Create classes, generate join codes, assign curriculum |
 | **Token Budget Management** | Set tenant-level token allowance windows, monitor token consumption by class/student, configure AI fallback strategies, and later add USD cost projections |
 | **School Onboarding Wizard** | Interactive setup: school name → curriculum selection → bot setup → class creation → teacher invitation |
@@ -205,8 +206,9 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 | AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Current |
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
+| User & Invite Management | `/settings/users` | Admin, Platform Admin | Current |
 | Token Budget | `/settings/budget` | Admin, Platform Admin | Planned |
-| Data Export | `/export` | Admin, Platform Admin | Planned |
+| Data Export | `/export` | Admin, Platform Admin | Current |
 | School Onboarding | `/setup/onboard` | Admin | Planned |
 
 ---
@@ -238,13 +240,20 @@ All endpoints are under `/api/admin/` and require authenticated session state wi
 | `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window from the admin AI usage screen. |
 | `GET` | `/api/admin/analytics/report` | Admin, Platform Admin | Comprehensive analytics report |
 
+### User & Invite Management
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/admin/users` | Admin, Platform Admin | Active teacher, parent, admin, and platform-admin users plus pending invite records for the current workspace scope |
+| `POST` | `/api/admin/invites` | Admin, Platform Admin | Create an invite and return the activation token for the `/activate` flow |
+
 ### Data Export
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/admin/export/students` | Admin | Student data export (CSV) |
-| `GET` | `/api/admin/export/conversations` | Admin | Conversation history export (JSON) |
-| `GET` | `/api/admin/export/progress` | Admin | Mastery progress export (CSV) |
+| `GET` | `/api/admin/export/students` | Admin, Platform Admin | Student data export (CSV) |
+| `GET` | `/api/admin/export/conversations` | Admin, Platform Admin | Conversation history export (JSON) |
+| `GET` | `/api/admin/export/progress` | Admin, Platform Admin | Mastery progress export (CSV) |
 
 ---
 

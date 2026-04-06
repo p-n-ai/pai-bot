@@ -30,6 +30,10 @@ export function canAccessPath(user, pathname) {
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/export" ||
+    pathname.startsWith("/export/") ||
     pathname === "/students" ||
     pathname.startsWith("/students/") ||
     pathname === "/parents" ||

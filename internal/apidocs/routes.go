@@ -153,6 +153,15 @@ func Build() (*Document, error) {
 			responseText("501", "Auth service is not implemented."),
 		),
 	})
+	doc.Paths["/api/admin/users"] = route("GET", Operation{
+		Summary:  "Get active users and pending invites",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseJSON("200", "User and invite management payload.", registry.refFor(adminapi.UserManagementView{})),
+			protectedErrors(),
+		),
+	})
 	doc.Paths["/api/admin/classes/{id}/progress"] = route("GET", Operation{
 		Summary:    "Get class mastery progress",
 		Tags:       []string{"Admin"},
@@ -227,6 +236,33 @@ func Build() (*Document, error) {
 			protectedErrors(),
 			responseText("400", "Request body is invalid."),
 			responseText("404", "Token budget window could not be updated."),
+		),
+	})
+	doc.Paths["/api/admin/export/students"] = route("GET", Operation{
+		Summary:  "Export students as CSV",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseText("200", "CSV export of students."),
+			protectedErrors(),
+		),
+	})
+	doc.Paths["/api/admin/export/conversations"] = route("GET", Operation{
+		Summary:  "Export conversations as JSON",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseJSON("200", "Conversation export payload.", arrayOf(registry.refFor(adminapi.ConversationExportRecord{}))),
+			protectedErrors(),
+		),
+	})
+	doc.Paths["/api/admin/export/progress"] = route("GET", Operation{
+		Summary:  "Export progress as CSV",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseText("200", "CSV export of progress."),
+			protectedErrors(),
 		),
 	})
 	doc.Paths["/api/admin/parents/{id}"] = route("GET", Operation{

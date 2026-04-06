@@ -8,6 +8,10 @@ export function proxy(request: NextRequest) {
   const isProtectedPath =
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/export" ||
+    pathname.startsWith("/export/") ||
     pathname === "/students" ||
     pathname.startsWith("/students/") ||
     pathname === "/parents" ||
@@ -20,12 +24,18 @@ export function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/students") || pathname.startsWith("/parents")) {
+  if (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/export") ||
+    pathname.startsWith("/students") ||
+    pathname.startsWith("/parents")
+  ) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0");
   }
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/students/:path*", "/parents/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/settings/:path*", "/export/:path*", "/students/:path*", "/parents/:path*", "/login"],
 };

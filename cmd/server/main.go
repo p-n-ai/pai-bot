@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -264,6 +265,10 @@ type adminDataSource interface {
 	GetAIUsage() (adminapi.AIUsageSummary, error)
 	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
+	GetUserManagement() (adminapi.UserManagementView, error)
+	ExportStudents() ([]adminapi.StudentExportRow, error)
+	ExportConversations() ([]adminapi.ConversationExportRecord, error)
+	ExportProgress() ([]adminapi.ProgressExportRow, error)
 }
 
 type adminDataSourceProvider interface {
@@ -447,6 +452,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
+	mux.Handle("GET /api/admin/users", adminOrAbove(handleAdminUsers(adminProvider)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(adminProvider)))
@@ -454,6 +460,9 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
+	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
+	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
+	mux.Handle("GET /api/admin/export/progress", adminOrAbove(handleAdminExportProgress(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
@@ -731,6 +740,123 @@ func handleAdminMetrics(adminProvider adminDataSourceProvider) http.HandlerFunc 
 	}
 }
 
+func handleAdminUsers(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetUserManagement()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminExportStudents(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		rows, err := admin.ExportStudents()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+
+		writeCSV(w, "students-export.csv", []string{
+			"student_id",
+			"name",
+			"external_id",
+			"channel",
+			"form",
+			"average_mastery",
+			"tracked_topics",
+			"created_at",
+		}, func(writeRow func([]string) error) error {
+			for _, row := range rows {
+				if err := writeRow([]string{
+					row.StudentID,
+					row.Name,
+					row.ExternalID,
+					row.Channel,
+					row.Form,
+					formatOptionalFloat(row.AverageMastery),
+					fmt.Sprintf("%d", row.TrackedTopics),
+					row.CreatedAt.UTC().Format(time.RFC3339),
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+}
+
+func handleAdminExportConversations(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.ExportConversations()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.Header().Set("Content-Disposition", `attachment; filename="conversations-export.json"`)
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminExportProgress(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		rows, err := admin.ExportProgress()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+
+		writeCSV(w, "progress-export.csv", []string{
+			"student_id",
+			"student_name",
+			"topic_id",
+			"mastery_score",
+			"ease_factor",
+			"interval_days",
+			"next_review_at",
+			"last_studied_at",
+		}, func(writeRow func([]string) error) error {
+			for _, row := range rows {
+				if err := writeRow([]string{
+					row.StudentID,
+					row.StudentName,
+					row.TopicID,
+					fmt.Sprintf("%.4f", row.MasteryScore),
+					fmt.Sprintf("%.4f", row.EaseFactor),
+					fmt.Sprintf("%d", row.IntervalDays),
+					formatOptionalTime(row.NextReviewAt),
+					formatOptionalTime(row.LastStudiedAt),
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+}
+
 func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messageSender) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		admin, ok := resolveAdminDataSource(w, r, adminProvider)
@@ -769,6 +895,37 @@ func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messa
 			"channel": msg.Channel,
 		})
 	}
+}
+
+func writeCSV(w http.ResponseWriter, filename string, header []string, writeRows func(func([]string) error) error) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+
+	writer := csv.NewWriter(w)
+	if err := writer.Write(header); err != nil {
+		http.Error(w, "failed to write export header", http.StatusInternalServerError)
+		return
+	}
+	if err := writeRows(writer.Write); err != nil {
+		http.Error(w, "failed to write export rows", http.StatusInternalServerError)
+		return
+	}
+	writer.Flush()
+}
+
+func formatOptionalFloat(value *float64) string {
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.4f", *value)
+}
+
+func formatOptionalTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func handleRetrievalListSources(service *retrieval.Service) http.HandlerFunc {

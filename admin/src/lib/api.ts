@@ -197,6 +197,40 @@ export interface InviteRecord {
   invited_by_user_id: string;
 }
 
+export interface UserManagementSummary {
+  teachers: number;
+  parents: number;
+  pending_invites: number;
+  total_users: number;
+}
+
+export interface ManagedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "teacher" | "parent" | "admin" | "platform_admin";
+  status: "active";
+  created_at: string;
+  tenant_name?: string;
+}
+
+export interface PendingInvite {
+  id: string;
+  email: string;
+  role: "teacher" | "parent" | "admin" | "platform_admin";
+  status: "pending";
+  expires_at: string;
+  created_at: string;
+  invited_by: string;
+  tenant_name?: string;
+}
+
+export interface UserManagementView {
+  summary: UserManagementSummary;
+  active_users: ManagedUser[];
+  pending_invites: PendingInvite[];
+}
+
 function parseErrorMessage(raw: string, fallback: string): string {
   if (!raw.trim()) {
     return fallback;
@@ -215,6 +249,10 @@ function resolveAPIPath(path: string): string {
     return path;
   }
   return `${API_BASE}${path}`;
+}
+
+export function buildAPIPath(path: string): string {
+  return resolveAPIPath(path);
 }
 
 async function fetchWithSession(path: string, init: RequestInit = {}): Promise<Response> {
@@ -286,6 +324,10 @@ export async function upsertTokenBudgetWindow(input: UpsertTokenBudgetWindowInpu
 
 export async function getMetrics(): Promise<MetricsSummary> {
   return normalizeMetrics(await fetchJSON(`/api/admin/metrics`));
+}
+
+export async function getUserManagement(): Promise<UserManagementView> {
+  return fetchJSON(`/api/admin/users`);
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {

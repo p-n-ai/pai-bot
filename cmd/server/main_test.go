@@ -261,6 +261,125 @@ func TestAdminParentSummaryEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminUserManagementEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		Summary struct {
+			Teachers       int `json:"teachers"`
+			Parents        int `json:"parents"`
+			PendingInvites int `json:"pending_invites"`
+			TotalUsers     int `json:"total_users"`
+		} `json:"summary"`
+		ActiveUsers []struct {
+			ID    string `json:"id"`
+			Email string `json:"email"`
+			Role  string `json:"role"`
+		} `json:"active_users"`
+		PendingInvites []struct {
+			Email  string `json:"email"`
+			Status string `json:"status"`
+		} `json:"pending_invites"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Summary.Teachers != 1 || payload.Summary.Parents != 1 || payload.Summary.PendingInvites != 1 || payload.Summary.TotalUsers != 3 {
+		t.Fatalf("summary = %#v, want teachers=1 parents=1 pending=1 total=3", payload.Summary)
+	}
+	if len(payload.ActiveUsers) != 3 {
+		t.Fatalf("active_users = %d, want 3", len(payload.ActiveUsers))
+	}
+	if payload.ActiveUsers[0].Email == "" {
+		t.Fatal("active_users[0].email = empty, want non-empty")
+	}
+	if len(payload.PendingInvites) != 1 || payload.PendingInvites[0].Status != "pending" {
+		t.Fatalf("pending_invites = %#v, want one pending invite", payload.PendingInvites)
+	}
+}
+
+func TestAdminExportStudentsEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/export/students", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/csv") {
+		t.Fatalf("content-type = %q, want text/csv", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "student_id,name,external_id,channel,form,average_mastery,tracked_topics,created_at") {
+		t.Fatalf("csv header missing, body = %q", body)
+	}
+	if !strings.Contains(body, "stu_1,Alya") {
+		t.Fatalf("csv row missing Alya, body = %q", body)
+	}
+}
+
+func TestAdminExportConversationsEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/export/conversations", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("content-type = %q, want application/json", got)
+	}
+	var payload []struct {
+		ConversationID string `json:"conversation_id"`
+		Messages       []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(payload) != 1 || payload[0].ConversationID != "conv-1" {
+		t.Fatalf("payload = %#v, want one conversation conv-1", payload)
+	}
+	if len(payload[0].Messages) != 2 || payload[0].Messages[0].Role != "student" {
+		t.Fatalf("messages = %#v, want two messages starting with student", payload[0].Messages)
+	}
+}
+
+func TestAdminExportProgressEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/export/progress", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/csv") {
+		t.Fatalf("content-type = %q, want text/csv", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "student_id,student_name,topic_id,mastery_score,ease_factor,interval_days,next_review_at,last_studied_at") {
+		t.Fatalf("csv header missing, body = %q", body)
+	}
+	if !strings.Contains(body, "stu_1,Alya,linear-equations") {
+		t.Fatalf("csv row missing Alya progress, body = %q", body)
+	}
+}
+
 func TestAdminParentSummaryEndpointNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/parents/missing", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
@@ -1333,6 +1452,114 @@ func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
 				{Provider: "openai", Model: "gpt-4o-mini", Messages: 4, InputTokens: 168, OutputTokens: 126, TotalTokens: 294},
 				{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
 			},
+		},
+	}, nil
+}
+
+func (stubAdminAPI) GetUserManagement() (adminapi.UserManagementView, error) {
+	now := time.Date(2026, 4, 6, 10, 0, 0, 0, time.UTC)
+	return adminapi.UserManagementView{
+		Summary: adminapi.UserManagementSummary{
+			Teachers:       1,
+			Parents:        1,
+			PendingInvites: 1,
+			TotalUsers:     3,
+		},
+		ActiveUsers: []adminapi.ManagedUser{
+			{
+				ID:        "admin-1",
+				Name:      "Admin User",
+				Email:     "admin@example.com",
+				Role:      "admin",
+				Status:    "active",
+				CreatedAt: now,
+			},
+			{
+				ID:        "teacher-1",
+				Name:      "Teacher One",
+				Email:     "teacher@example.com",
+				Role:      "teacher",
+				Status:    "active",
+				CreatedAt: now.Add(-2 * time.Hour),
+			},
+			{
+				ID:        "parent-1",
+				Name:      "Parent One",
+				Email:     "parent@example.com",
+				Role:      "parent",
+				Status:    "active",
+				CreatedAt: now.Add(-4 * time.Hour),
+			},
+		},
+		PendingInvites: []adminapi.PendingInvite{
+			{
+				ID:        "invite-1",
+				Email:     "newteacher@example.com",
+				Role:      "teacher",
+				Status:    "pending",
+				ExpiresAt: now.Add(7 * 24 * time.Hour),
+				CreatedAt: now,
+				InvitedBy: "Admin User",
+			},
+		},
+	}, nil
+}
+
+func (stubAdminAPI) ExportStudents() ([]adminapi.StudentExportRow, error) {
+	averageMastery := 0.8125
+	return []adminapi.StudentExportRow{
+		{
+			StudentID:      "stu_1",
+			Name:           "Alya",
+			ExternalID:     "tg_aly-1",
+			Channel:        "telegram",
+			Form:           "Form 1",
+			AverageMastery: &averageMastery,
+			TrackedTopics:  4,
+			CreatedAt:      time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
+		},
+	}, nil
+}
+
+func (stubAdminAPI) ExportConversations() ([]adminapi.ConversationExportRecord, error) {
+	return []adminapi.ConversationExportRecord{
+		{
+			ConversationID: "conv-1",
+			StudentID:      "stu_1",
+			StudentName:    "Alya",
+			Channel:        "telegram",
+			StartedAt:      time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC),
+			Messages: []adminapi.ConversationExportMessage{
+				{
+					MessageID: "msg-1",
+					Role:      "student",
+					Content:   "How do I solve this?",
+					CreatedAt: time.Date(2026, 4, 1, 9, 1, 0, 0, time.UTC),
+				},
+				{
+					MessageID: "msg-2",
+					Role:      "assistant",
+					Content:   "Start by isolating x.",
+					CreatedAt: time.Date(2026, 4, 1, 9, 1, 30, 0, time.UTC),
+				},
+			},
+		},
+	}, nil
+}
+
+func (stubAdminAPI) ExportProgress() ([]adminapi.ProgressExportRow, error) {
+	next := time.Date(2026, 4, 7, 9, 0, 0, 0, time.UTC)
+	last := time.Date(2026, 4, 5, 9, 0, 0, 0, time.UTC)
+	return []adminapi.ProgressExportRow{
+		{
+			StudentID:     "stu_1",
+			StudentName:   "Alya",
+			TopicID:       "linear-equations",
+			MasteryScore:  0.83,
+			EaseFactor:    2.3,
+			IntervalDays:  4,
+			NextReviewAt:  &next,
+			LastStudiedAt: &last,
 		},
 	}, nil
 }

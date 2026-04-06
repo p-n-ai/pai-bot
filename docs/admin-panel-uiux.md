@@ -665,7 +665,11 @@ Current implementation note:
 
 **Route:** `/settings/users`
 **Access:** Admin, Platform Admin
-**Status:** Planned (Week 5, Day 24)
+**Status:** Current (Week 5 UI)
+
+Current implementation note:
+- The shipped page includes summary cards, active users, pending invites, search/filter state, and invite issuance that reuses the shared `/activate` flow.
+- Resend/revoke controls from the original wireframe are still planned follow-up work.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -723,7 +727,11 @@ Current implementation note:
 
 **Route:** `/export`
 **Access:** Admin, Platform Admin
-**Status:** Planned (Week 5, Day 24)
+**Status:** Current (Week 5 UI)
+
+Current implementation note:
+- The shipped page provides direct download actions for students CSV, conversations JSON, and progress CSV.
+- Export history, scheduling, and warehouse-target integrations remain planned follow-up work.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
