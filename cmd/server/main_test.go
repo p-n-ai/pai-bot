@@ -1180,6 +1180,33 @@ func TestAdminInviteEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminInviteReissueEndpoint(t *testing.T) {
+	authSvc := &stubAuthService{
+		reissueResp: auth.InviteRecord{
+			Email:       "newteacher@example.com",
+			Role:        auth.RoleTeacher,
+			Token:       "invite-token-456",
+			ExpiresAt:   time.Date(2026, 3, 24, 10, 0, 0, 0, time.UTC),
+			InvitedByID: "user-123",
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites/invite-123/reissue", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if authSvc.reissueReq.InviteID != "invite-123" {
+		t.Fatalf("invite id = %q, want invite-123", authSvc.reissueReq.InviteID)
+	}
+	if authSvc.reissueReq.InvitedByUserID != "user-123" {
+		t.Fatalf("invited_by = %q, want user-123", authSvc.reissueReq.InvitedByUserID)
+	}
+}
+
 func TestAdminInviteEndpointRequiresAdminRole(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/invites", strings.NewReader(`{"email":"newteacher@example.com","role":"teacher"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -1612,6 +1639,9 @@ type stubAuthService struct {
 	inviteReq        auth.IssueInviteRequest
 	inviteResp       auth.InviteRecord
 	inviteErr        error
+	reissueReq       auth.ReissueInviteRequest
+	reissueResp      auth.InviteRecord
+	reissueErr       error
 	acceptReq        auth.AcceptInviteRequest
 	acceptResp       auth.Session
 	acceptErr        error
@@ -1652,6 +1682,11 @@ func (s *stubAuthService) AcceptInvite(_ context.Context, req auth.AcceptInviteR
 func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error) {
 	s.inviteReq = req
 	return s.inviteResp, s.inviteErr
+}
+
+func (s *stubAuthService) ReissueInvite(_ context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error) {
+	s.reissueReq = req
+	return s.reissueResp, s.reissueErr
 }
 
 func (s *stubAuthService) Session(_ context.Context, sessionToken string) (auth.Session, error) {

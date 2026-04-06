@@ -308,6 +308,7 @@ type authService interface {
 	Login(ctx context.Context, req auth.LoginRequest) (auth.Session, error)
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.Session, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
+	ReissueInvite(ctx context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error)
 	Session(ctx context.Context, sessionToken string) (auth.Session, error)
 	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (auth.Session, error)
 	Logout(ctx context.Context, sessionToken string) error
@@ -452,6 +453,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
+	mux.Handle("POST /api/admin/invites/{id}/reissue", adminOrAbove(handleAdminInviteReissue(authSvc)))
 	mux.Handle("GET /api/admin/users", adminOrAbove(handleAdminUsers(adminProvider)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
@@ -1352,6 +1354,28 @@ func handleAdminInvite(authSvc authService) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func handleAdminInviteReissue(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		resp, err := authSvc.ReissueInvite(r.Context(), auth.ReissueInviteRequest{
+			InviteID:        r.PathValue("id"),
+			InvitedByUserID: claims.Subject,
+			TenantID:        claims.TenantID,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

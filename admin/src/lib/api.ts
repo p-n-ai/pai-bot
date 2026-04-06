@@ -402,6 +402,13 @@ export async function issueInvite(input: {
   return postJSONWithBody("/api/admin/invites", input);
 }
 
+export async function reissueInvite(inviteID: string): Promise<InviteRecord> {
+  if (!inviteID.trim()) {
+    throw new Error("Invite ID is required");
+  }
+  return postJSONWithBody(`/api/admin/invites/${inviteID}/reissue`);
+}
+
 export async function switchSchool(schoolID: string, password: string): Promise<AuthSession> {
   if (!schoolID.trim() || !password.trim()) {
     throw new Error("A school and password are required to switch schools");

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import { InviteIssueForm } from "@/components/invite-issue-form";
 
 describe("InviteIssueForm", () => {
@@ -9,9 +10,11 @@ describe("InviteIssueForm", () => {
         role="teacher"
         error=""
         inviteLink=""
+        copyFeedback=""
         isPending={false}
         onEmailChange={() => {}}
         onRoleChange={() => {}}
+        onCopyLink={() => {}}
         onSubmit={(event) => event.preventDefault()}
       />,
     );
@@ -22,20 +25,26 @@ describe("InviteIssueForm", () => {
   });
 
   it("shows the generated activation link after a successful invite", () => {
+    const onCopyLink = vi.fn();
+
     render(
       <InviteIssueForm
         email="teacher@example.com"
         role="teacher"
         error=""
         inviteLink="http://localhost:3000/activate?token=invite-token"
+        copyFeedback=""
         isPending={false}
         onEmailChange={() => {}}
         onRoleChange={() => {}}
+        onCopyLink={onCopyLink}
         onSubmit={(event) => event.preventDefault()}
       />,
     );
 
     expect(screen.getByDisplayValue("http://localhost:3000/activate?token=invite-token")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(onCopyLink).toHaveBeenCalledTimes(1);
   });
 
   it("submits the invite request", () => {
@@ -47,9 +56,11 @@ describe("InviteIssueForm", () => {
         role="teacher"
         error=""
         inviteLink=""
+        copyFeedback=""
         isPending={false}
         onEmailChange={() => {}}
         onRoleChange={() => {}}
+        onCopyLink={() => {}}
         onSubmit={(event) => {
           event.preventDefault();
           submitted = true;

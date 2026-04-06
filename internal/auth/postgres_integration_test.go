@@ -119,6 +119,59 @@ func TestPostgresService_IssueInvitePersistsHashedToken(t *testing.T) {
 	assertInviteTokenStored(t, ctx, pool, "newteacher@example.com", invite.Token)
 }
 
+func TestPostgresService_ReissueInviteRotatesToken(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+
+	tenantID := loadDefaultTenantID(t, ctx, pool)
+	adminUserID := seedWebUser(t, ctx, pool, tenantID, RoleAdmin, "Admin Inviter")
+
+	firstInvite, err := svc.IssueInvite(ctx, IssueInviteRequest{
+		InvitedByUserID: adminUserID,
+		TenantID:        tenantID,
+		Email:           "newteacher@example.com",
+		Role:            RoleTeacher,
+	})
+	if err != nil {
+		t.Fatalf("IssueInvite() error = %v", err)
+	}
+
+	var inviteID string
+	if err := pool.QueryRow(ctx, `
+		SELECT id::text
+		FROM auth_invites
+		WHERE email_normalized = $1
+	`, NormalizeIdentifier("newteacher@example.com")).Scan(&inviteID); err != nil {
+		t.Fatalf("query invite id: %v", err)
+	}
+
+	reissuedInvite, err := svc.ReissueInvite(ctx, ReissueInviteRequest{
+		InviteID:        inviteID,
+		InvitedByUserID: adminUserID,
+		TenantID:        tenantID,
+	})
+	if err != nil {
+		t.Fatalf("ReissueInvite() error = %v", err)
+	}
+	if reissuedInvite.Token == "" {
+		t.Fatal("reissued token should not be empty")
+	}
+	if reissuedInvite.Token == firstInvite.Token {
+		t.Fatal("reissued token should rotate")
+	}
+	assertInviteTokenStored(t, ctx, pool, "newteacher@example.com", reissuedInvite.Token)
+
+	if _, err := svc.AcceptInvite(ctx, AcceptInviteRequest{
+		Token:    firstInvite.Token,
+		Name:     "Teacher New",
+		Password: "secret-123",
+	}); err != ErrInvalidInvite {
+		t.Fatalf("AcceptInvite(old token) error = %v, want ErrInvalidInvite", err)
+	}
+}
+
 func TestPostgresService_LoginReturnsTenantChoicesWhenEmailExistsAcrossTenants(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)

@@ -375,6 +375,74 @@ func (s *PostgresService) IssueInvite(ctx context.Context, req IssueInviteReques
 	}, nil
 }
 
+func (s *PostgresService) ReissueInvite(ctx context.Context, req ReissueInviteRequest) (InviteRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	tenantID := strings.TrimSpace(req.TenantID)
+	inviteID := strings.TrimSpace(req.InviteID)
+	invitedByUserID := strings.TrimSpace(req.InvitedByUserID)
+	if tenantID == "" || inviteID == "" || invitedByUserID == "" {
+		return InviteRecord{}, ErrInvalidInvite
+	}
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return InviteRecord{}, fmt.Errorf("begin reissue invite transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var (
+		email      string
+		role       string
+		acceptedAt *time.Time
+	)
+	err = tx.QueryRow(ctx, `
+		SELECT email_normalized, role, accepted_at
+		FROM auth_invites
+		WHERE id = $1::uuid
+		  AND tenant_id = $2::uuid
+		FOR UPDATE
+	`, inviteID, tenantID).Scan(&email, &role, &acceptedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return InviteRecord{}, ErrInvalidInvite
+		}
+		return InviteRecord{}, fmt.Errorf("query invite for reissue: %w", err)
+	}
+	if acceptedAt != nil || !isInvitableRole(Role(role)) {
+		return InviteRecord{}, ErrInvalidInvite
+	}
+
+	token, err := generateOpaqueToken()
+	if err != nil {
+		return InviteRecord{}, fmt.Errorf("generate invite token: %w", err)
+	}
+
+	expiresAt := s.now().UTC().Add(7 * 24 * time.Hour)
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_invites
+		SET token_hash = $2,
+		    invited_by = $3::uuid,
+		    expires_at = $4
+		WHERE id = $1::uuid
+	`, inviteID, HashOpaqueToken(token), invitedByUserID, expiresAt); err != nil {
+		return InviteRecord{}, fmt.Errorf("update invite for reissue: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return InviteRecord{}, fmt.Errorf("commit reissue invite transaction: %w", err)
+	}
+
+	return InviteRecord{
+		Email:       email,
+		Role:        Role(role),
+		Token:       token,
+		ExpiresAt:   expiresAt,
+		InvitedByID: invitedByUserID,
+	}, nil
+}
+
 func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()

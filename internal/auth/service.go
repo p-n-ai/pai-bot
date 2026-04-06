@@ -92,6 +92,13 @@ type IssueInviteRequest struct {
 	Role            Role   `json:"role"`
 }
 
+// ReissueInviteRequest rotates the token for an existing pending invite.
+type ReissueInviteRequest struct {
+	InviteID         string `json:"invite_id"`
+	InvitedByUserID  string `json:"invited_by_user_id"`
+	TenantID         string `json:"tenant_id"`
+}
+
 // InviteRecord is returned when an invite is created.
 type InviteRecord struct {
 	Email       string    `json:"email"`
@@ -131,6 +138,7 @@ type Service interface {
 	Login(ctx context.Context, req LoginRequest) (Session, error)
 	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (Session, error)
 	IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error)
+	ReissueInvite(ctx context.Context, req ReissueInviteRequest) (InviteRecord, error)
 	Session(ctx context.Context, sessionToken string) (Session, error)
 	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (Session, error)
 	Logout(ctx context.Context, sessionToken string) error
@@ -156,6 +164,10 @@ func (noopService) AcceptInvite(_ context.Context, _ AcceptInviteRequest) (Sessi
 }
 
 func (noopService) IssueInvite(_ context.Context, _ IssueInviteRequest) (InviteRecord, error) {
+	return InviteRecord{}, ErrNotImplemented
+}
+
+func (noopService) ReissueInvite(_ context.Context, _ ReissueInviteRequest) (InviteRecord, error) {
 	return InviteRecord{}, ErrNotImplemented
 }
 

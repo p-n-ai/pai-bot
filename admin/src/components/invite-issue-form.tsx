@@ -11,18 +11,22 @@ export function InviteIssueForm({
   role,
   error,
   inviteLink,
+  copyFeedback,
   isPending,
   onEmailChange,
   onRoleChange,
+  onCopyLink,
   onSubmit,
 }: {
   email: string;
   role: "teacher" | "parent" | "admin";
   error: string;
   inviteLink: string;
+  copyFeedback?: string;
   isPending: boolean;
   onEmailChange: (value: string) => void;
   onRoleChange: (value: "teacher" | "parent" | "admin") => void;
+  onCopyLink?: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -70,6 +74,12 @@ export function InviteIssueForm({
           description="Copy this link into the invite email or message. The recipient will set their password through this URL."
         >
           <Input id="invite-link" value={inviteLink} readOnly />
+          <div className="mt-3 flex items-center gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={onCopyLink} disabled={!onCopyLink}>
+              Copy link
+            </Button>
+            {copyFeedback ? <p className="text-sm text-muted-foreground">{copyFeedback}</p> : null}
+          </div>
         </FormField>
       ) : null}
 
