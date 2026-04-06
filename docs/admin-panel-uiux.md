@@ -668,8 +668,8 @@ Current implementation note:
 **Status:** Current (Week 5 UI)
 
 Current implementation note:
-- The shipped page includes summary cards, active users, pending invites, search/filter state, and invite issuance that reuses the shared `/activate` flow.
-- Resend/revoke controls from the original wireframe are still planned follow-up work.
+- The shipped page includes summary cards, active users, pending invites, search/filter state, invite issuance that reuses the shared `/activate` flow, direct invite-email delivery status, and pending-invite resend that rotates the token while keeping a fresh activation link available as an admin fallback.
+- Revoke controls from the original wireframe are still planned follow-up work.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

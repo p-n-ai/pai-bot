@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { issueInvite } from "@/lib/api";
+import { issueInvite, type InviteRecord } from "@/lib/api";
 import { getClassManagementSummary, getMockClasses } from "@/lib/mock-classes.mjs";
 
 const classPageEase = [0.22, 1, 0.36, 1] as const;
@@ -36,7 +36,7 @@ export default function ClassManagementPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"teacher" | "parent" | "admin">("teacher");
   const [inviteError, setInviteError] = useState("");
-  const [inviteLink, setInviteLink] = useState("");
+  const [latestInvite, setLatestInvite] = useState<InviteRecord | null>(null);
   const [isInvitePending, startInviteTransition] = useTransition();
   const selectedClass = classes.find((item) => item.id === selectedClassID) ?? classes[0] ?? null;
   const prefersReducedMotion = useReducedMotion();
@@ -56,10 +56,17 @@ export default function ClassManagementPage() {
     return `${window.location.origin}/activate?token=${encodeURIComponent(token)}`;
   }
 
+  function resolveInviteLink(invite: Pick<InviteRecord, "activation_url" | "invite_token">) {
+    if (invite.activation_url?.trim()) {
+      return invite.activation_url;
+    }
+    return buildInviteLink(invite.invite_token);
+  }
+
   function handleInviteSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setInviteError("");
-    setInviteLink("");
+    setLatestInvite(null);
 
     startInviteTransition(async () => {
       try {
@@ -67,7 +74,7 @@ export default function ClassManagementPage() {
           email: inviteEmail.trim(),
           role: inviteRole,
         });
-        setInviteLink(buildInviteLink(invite.invite_token));
+        setLatestInvite(invite);
       } catch (error) {
         setInviteError(error instanceof Error ? error.message : "Invite issuance failed");
       }
@@ -152,14 +159,16 @@ export default function ClassManagementPage() {
                 <DialogHeader>
                   <DialogTitle>Invite teacher, parent, or admin</DialogTitle>
                   <DialogDescription>
-                    This action uses the live admin invite endpoint. The returned activation link opens the new `/activate` flow.
+                    This action uses the live admin invite endpoint and emails the shared `/activate` flow when invite delivery is configured.
                   </DialogDescription>
                 </DialogHeader>
                 <InviteIssueForm
                   email={inviteEmail}
                   role={inviteRole}
                   error={inviteError}
-                  inviteLink={inviteLink}
+                  inviteLink={latestInvite ? resolveInviteLink(latestInvite) : ""}
+                  deliveryStatus={latestInvite?.delivery_status}
+                  deliveryError={latestInvite?.delivery_error}
                   isPending={isInvitePending}
                   onEmailChange={setInviteEmail}
                   onRoleChange={setInviteRole}

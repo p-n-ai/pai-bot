@@ -4976,6 +4976,7 @@ echo ""
 ### Day 27-30 — Respond, Onboard, i18n, Analytics, Report
 
 - **Day 27:** Fix top 5 bugs. School onboarding wizard in admin.
+- **Day 27 follow-up:** Add invite email delivery so admin-issued invites can be sent directly to a provided email address instead of only returning a copyable activation link. Keep `/activate` as the single activation path, record invite-delivery status per pending invite, and expose resend-via-email from user management.
 - **Day 28:** i18n support (detect Telegram language_code, add to system prompt).
 - **Day 29:** Comprehensive analytics API: GET /analytics/report.
 - **Day 30:** 6-week report, final retro.

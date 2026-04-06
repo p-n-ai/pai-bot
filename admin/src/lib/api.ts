@@ -206,11 +206,15 @@ export interface SchoolChoice {
 }
 
 export interface InviteRecord {
+  id?: string;
   email: string;
   role: "teacher" | "parent" | "admin" | "platform_admin";
   invite_token: string;
+  activation_url?: string;
   expires_at: string;
   invited_by_user_id: string;
+  delivery_status?: "pending" | "sent" | "failed";
+  delivery_error?: string;
 }
 
 export interface UserManagementSummary {
@@ -235,6 +239,9 @@ export interface PendingInvite {
   email: string;
   role: "teacher" | "parent" | "admin" | "platform_admin";
   status: "pending";
+  delivery_status?: "pending" | "sent" | "failed";
+  delivery_error?: string;
+  delivery_sent_at?: string | null;
   expires_at: string;
   created_at: string;
   invited_by: string;
@@ -400,6 +407,13 @@ export async function issueInvite(input: {
   role: "teacher" | "parent" | "admin";
 }): Promise<InviteRecord> {
   return postJSONWithBody("/api/admin/invites", input);
+}
+
+export async function reissueInvite(inviteID: string): Promise<InviteRecord> {
+  if (!inviteID.trim()) {
+    throw new Error("Invite ID is required");
+  }
+  return postJSONWithBody(`/api/admin/invites/${inviteID}/reissue`);
 }
 
 export async function switchSchool(schoolID: string, password: string): Promise<AuthSession> {

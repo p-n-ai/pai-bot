@@ -17,6 +17,12 @@ func clearEnv(t *testing.T) {
 		"LEARN_CACHE_URL",
 		"LEARN_NATS_URL",
 		"LEARN_TELEGRAM_BOT_TOKEN",
+		"LEARN_EMAIL_SMTP_ADDR",
+		"LEARN_EMAIL_SMTP_USERNAME",
+		"LEARN_EMAIL_SMTP_PASSWORD",
+		"LEARN_EMAIL_FROM_ADDRESS",
+		"LEARN_EMAIL_FROM_NAME",
+		"LEARN_EMAIL_BASE_URL",
 		"LEARN_AI_OPENAI_API_KEY",
 		"LEARN_AI_ANTHROPIC_API_KEY",
 		"LEARN_AI_DEEPSEEK_API_KEY",
@@ -89,6 +95,12 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_SERVER_PORT", "9090")
 	t.Setenv("LEARN_DATABASE_URL", "postgres://test:test@localhost/testdb")
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token-123")
+	t.Setenv("LEARN_EMAIL_SMTP_ADDR", "smtp.example.com:587")
+	t.Setenv("LEARN_EMAIL_SMTP_USERNAME", "mailer")
+	t.Setenv("LEARN_EMAIL_SMTP_PASSWORD", "mailer-secret")
+	t.Setenv("LEARN_EMAIL_FROM_ADDRESS", "bot@example.com")
+	t.Setenv("LEARN_EMAIL_FROM_NAME", "Pandai Mailer")
+	t.Setenv("LEARN_EMAIL_BASE_URL", "https://admin.example.com")
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
 	t.Setenv("PAI_AUTH_SECRET", "super-secret")
@@ -114,6 +126,24 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Telegram.BotToken != "test-token-123" {
 		t.Errorf("Telegram.BotToken = %q, want test-token-123", cfg.Telegram.BotToken)
+	}
+	if cfg.Email.SMTPAddr != "smtp.example.com:587" {
+		t.Errorf("Email.SMTPAddr = %q, want smtp.example.com:587", cfg.Email.SMTPAddr)
+	}
+	if cfg.Email.SMTPUsername != "mailer" {
+		t.Errorf("Email.SMTPUsername = %q, want mailer", cfg.Email.SMTPUsername)
+	}
+	if cfg.Email.SMTPPassword != "mailer-secret" {
+		t.Errorf("Email.SMTPPassword = %q, want mailer-secret", cfg.Email.SMTPPassword)
+	}
+	if cfg.Email.FromAddress != "bot@example.com" {
+		t.Errorf("Email.FromAddress = %q, want bot@example.com", cfg.Email.FromAddress)
+	}
+	if cfg.Email.FromName != "Pandai Mailer" {
+		t.Errorf("Email.FromName = %q, want Pandai Mailer", cfg.Email.FromName)
+	}
+	if cfg.Email.BaseURL != "https://admin.example.com" {
+		t.Errorf("Email.BaseURL = %q, want https://admin.example.com", cfg.Email.BaseURL)
 	}
 	if cfg.AI.OpenAI.APIKey != "sk-test-key" {
 		t.Errorf("AI.OpenAI.APIKey = %q, want sk-test-key", cfg.AI.OpenAI.APIKey)
@@ -266,6 +296,22 @@ func TestValidate_InvalidTenantMode(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error for invalid tenant mode")
+	}
+}
+
+func TestValidate_EmailDeliveryRequiresSMTPAndFromAddress(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
+	t.Setenv("LEARN_AI_OLLAMA_ENABLED", "true")
+	t.Setenv("LEARN_EMAIL_BASE_URL", "https://admin.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should return error when email delivery is partially configured")
 	}
 }
 

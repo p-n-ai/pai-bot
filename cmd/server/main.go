@@ -27,6 +27,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
+	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
@@ -205,6 +206,20 @@ func main() {
 		Policy:                googleOAuthPolicy(cfg),
 		EmulatorSigningSecret: cfg.Auth.Google.EmulatorSigningSecret,
 	})
+	if strings.TrimSpace(cfg.Email.SMTPAddr) != "" && strings.TrimSpace(cfg.Email.FromAddress) != "" {
+		inviteMailer, err := mailer.NewSMTPSender(mailer.SMTPConfig{
+			Addr:        cfg.Email.SMTPAddr,
+			Username:    cfg.Email.SMTPUsername,
+			Password:    cfg.Email.SMTPPassword,
+			FromAddress: cfg.Email.FromAddress,
+			FromName:    cfg.Email.FromName,
+		})
+		if err != nil {
+			slog.Error("failed to create invite mailer", "error", err)
+			os.Exit(1)
+		}
+		authService.ConfigureInviteEmail(inviteMailer)
+	}
 
 	// HTTP endpoints.
 	mux := newHandlerWithAdminProvider(
@@ -221,6 +236,7 @@ func main() {
 		authService,
 		cfg.Auth.JWTSecret,
 		defaultAccessTokenTTL,
+		cfg.Email.BaseURL,
 	)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
@@ -308,6 +324,7 @@ type authService interface {
 	Login(ctx context.Context, req auth.LoginRequest) (auth.Session, error)
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.Session, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
+	ReissueInvite(ctx context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error)
 	Session(ctx context.Context, sessionToken string) (auth.Session, error)
 	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (auth.Session, error)
 	Logout(ctx context.Context, sessionToken string) error
@@ -416,10 +433,10 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 }
 
 func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL)
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
 }
 
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -451,7 +468,8 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc))
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
-	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc)))
+	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc, inviteBaseURL)))
+	mux.Handle("POST /api/admin/invites/{id}/reissue", adminOrAbove(handleAdminInviteReissue(authSvc, inviteBaseURL)))
 	mux.Handle("GET /api/admin/users", adminOrAbove(handleAdminUsers(adminProvider)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
@@ -1317,7 +1335,7 @@ func handleRetrievalSearch(service *retrieval.Service) http.HandlerFunc {
 	}
 }
 
-func handleAdminInvite(authSvc authService) http.HandlerFunc {
+func handleAdminInvite(authSvc authService, defaultBaseURL string) http.HandlerFunc {
 	type request struct {
 		Email string `json:"email"`
 		Role  string `json:"role"`
@@ -1341,10 +1359,11 @@ func handleAdminInvite(authSvc authService) http.HandlerFunc {
 		}
 
 		resp, err := authSvc.IssueInvite(r.Context(), auth.IssueInviteRequest{
-			InvitedByUserID: claims.Subject,
-			TenantID:        claims.TenantID,
-			Email:           body.Email,
-			Role:            auth.Role(body.Role),
+			InvitedByUserID:   claims.Subject,
+			TenantID:          claims.TenantID,
+			Email:             body.Email,
+			Role:              auth.Role(body.Role),
+			ActivationBaseURL: inviteActivationBaseURL(r, defaultBaseURL),
 		})
 		if err != nil {
 			writeAuthError(w, err)
@@ -1352,6 +1371,29 @@ func handleAdminInvite(authSvc authService) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func handleAdminInviteReissue(authSvc authService, defaultBaseURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			http.Error(w, "missing auth claims", http.StatusUnauthorized)
+			return
+		}
+
+		resp, err := authSvc.ReissueInvite(r.Context(), auth.ReissueInviteRequest{
+			InviteID:          r.PathValue("id"),
+			InvitedByUserID:   claims.Subject,
+			TenantID:          claims.TenantID,
+			ActivationBaseURL: inviteActivationBaseURL(r, defaultBaseURL),
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -1727,6 +1769,14 @@ func googleCallbackURL(r *http.Request) string {
 		return ""
 	}
 	return base + "/api/auth/google/callback"
+}
+
+func inviteActivationBaseURL(r *http.Request, defaultBaseURL string) string {
+	baseURL := requestBaseURL(r)
+	if strings.TrimSpace(baseURL) != "" {
+		return baseURL
+	}
+	return strings.TrimSpace(defaultBaseURL)
 }
 
 func googleOAuthPolicy(cfg *config.Config) auth.GoogleOAuthPolicy {

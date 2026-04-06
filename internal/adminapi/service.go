@@ -184,14 +184,17 @@ type ManagedUser struct {
 }
 
 type PendingInvite struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	Role        string    `json:"role"`
-	Status      string    `json:"status"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	InvitedBy   string    `json:"invited_by"`
-	TenantName  string    `json:"tenant_name,omitempty"`
+	ID             string     `json:"id"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	Status         string     `json:"status"`
+	DeliveryStatus string     `json:"delivery_status,omitempty"`
+	DeliveryError  string     `json:"delivery_error,omitempty"`
+	DeliverySentAt *time.Time `json:"delivery_sent_at,omitempty"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	InvitedBy      string     `json:"invited_by"`
+	TenantName     string     `json:"tenant_name,omitempty"`
 }
 
 type UserManagementView struct {
@@ -228,14 +231,14 @@ type ConversationExportRecord struct {
 }
 
 type ProgressExportRow struct {
-	StudentID      string
-	StudentName    string
-	TopicID        string
-	MasteryScore   float64
-	EaseFactor     float64
-	IntervalDays   int
-	NextReviewAt   *time.Time
-	LastStudiedAt  *time.Time
+	StudentID     string
+	StudentName   string
+	TopicID       string
+	MasteryScore  float64
+	EaseFactor    float64
+	IntervalDays  int
+	NextReviewAt  *time.Time
+	LastStudiedAt *time.Time
 }
 
 type Service struct {
@@ -797,6 +800,9 @@ func (s *Service) GetUserManagement() (UserManagementView, error) {
 			i.id::text,
 			i.email,
 			i.role,
+			i.delivery_status,
+			COALESCE(i.delivery_error, ''),
+			i.delivery_sent_at,
 			i.expires_at,
 			i.created_at,
 			COALESCE(inviter.name, ''),
@@ -816,7 +822,7 @@ func (s *Service) GetUserManagement() (UserManagementView, error) {
 
 	for inviteRows.Next() {
 		var item PendingInvite
-		if err := inviteRows.Scan(&item.ID, &item.Email, &item.Role, &item.ExpiresAt, &item.CreatedAt, &item.InvitedBy, &item.TenantName); err != nil {
+		if err := inviteRows.Scan(&item.ID, &item.Email, &item.Role, &item.DeliveryStatus, &item.DeliveryError, &item.DeliverySentAt, &item.ExpiresAt, &item.CreatedAt, &item.InvitedBy, &item.TenantName); err != nil {
 			return UserManagementView{}, fmt.Errorf("scan pending invite: %w", err)
 		}
 		item.Status = "pending"

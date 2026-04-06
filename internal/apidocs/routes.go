@@ -153,6 +153,18 @@ func Build() (*Document, error) {
 			responseText("501", "Auth service is not implemented."),
 		),
 	})
+	doc.Paths["/api/admin/invites/{id}/reissue"] = route("POST", Operation{
+		Summary:    "Reissue a pending invite link",
+		Tags:       []string{"Admin"},
+		Security:   protected,
+		Parameters: idParam("Pending invite identifier."),
+		Responses: mergeResponses(
+			responseJSON("200", "Invite reissued.", registry.refFor(auth.InviteRecord{})),
+			protectedErrors(),
+			responseText("409", "Invite already exists."),
+			responseText("501", "Auth service is not implemented."),
+		),
+	})
 	doc.Paths["/api/admin/users"] = route("GET", Operation{
 		Summary:  "Get active users and pending invites",
 		Tags:     []string{"Admin"},

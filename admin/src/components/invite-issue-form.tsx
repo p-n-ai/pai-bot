@@ -11,18 +11,26 @@ export function InviteIssueForm({
   role,
   error,
   inviteLink,
+  deliveryStatus,
+  deliveryError,
+  copyFeedback,
   isPending,
   onEmailChange,
   onRoleChange,
+  onCopyLink,
   onSubmit,
 }: {
   email: string;
   role: "teacher" | "parent" | "admin";
   error: string;
   inviteLink: string;
+  deliveryStatus?: "pending" | "sent" | "failed";
+  deliveryError?: string;
+  copyFeedback?: string;
   isPending: boolean;
   onEmailChange: (value: string) => void;
   onRoleChange: (value: "teacher" | "parent" | "admin") => void;
+  onCopyLink?: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -67,9 +75,22 @@ export function InviteIssueForm({
         <FormField
           label="Activation link"
           htmlFor="invite-link"
-          description="Copy this link into the invite email or message. The recipient will set their password through this URL."
+          description={
+            deliveryStatus === "sent"
+              ? "The invite email was sent. Keep this activation link only as an admin fallback."
+              : deliveryStatus === "failed"
+                ? "Invite delivery failed. You can copy the activation link manually or retry from pending invites."
+                : "Copy this link into the invite email or message. The recipient will set their password through this URL."
+          }
         >
           <Input id="invite-link" value={inviteLink} readOnly />
+          <div className="mt-3 flex items-center gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={onCopyLink} disabled={!onCopyLink}>
+              Copy link
+            </Button>
+            {copyFeedback ? <p className="text-sm text-muted-foreground">{copyFeedback}</p> : null}
+          </div>
+          {deliveryError ? <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">{deliveryError}</p> : null}
         </FormField>
       ) : null}
 
