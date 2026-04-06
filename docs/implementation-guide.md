@@ -4943,6 +4943,13 @@ echo ""
 - WhatsApp Cloud API adapter (behind `LEARN_WHATSAPP_ENABLED` flag)
 - Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV)
 - Security audit: auth on all endpoints, tenant isolation, rate limiting, parameterized queries
+- Additional admin UI follow-up for this slice:
+- Add `/settings/users` for admin and platform admin with summary cards, active users, pending invites, and search/filter state
+- Wire `/settings/users` to the invite issuance flow and expose activation links through the existing `/activate` path
+- Add `/export` for admin and platform admin with download actions for students CSV, conversations JSON, and progress CSV
+- Update admin navigation for the new pages while preserving cookie-session auth behavior and `no-store` protected responses
+- Add frontend tests for the new pages plus auth redirects, empty states, and failure states
+- Update `docs/admin-panel.md` and `docs/admin-panel-uiux.md` when the pages ship so planned/current status stays accurate
 
 **Week 5 Targets:**
 - [ ] Fresh `docker compose up` works in <10min
