@@ -3,7 +3,7 @@ import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 import { normalizeAIUsage } from "@/lib/ai-usage.mjs";
 import { normalizeMetrics } from "@/lib/metrics.mjs";
-import type { AIUsageSummary, AuthSession, ClassProgress, MetricsSummary, ParentSummary } from "@/lib/api";
+import type { AIUsageSummary, AuthSession, ClassProgress, MetricsSummary, ParentSummary, UserManagementView } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -60,4 +60,8 @@ export async function getServerMetrics(): Promise<MetricsSummary> {
 
 export async function getServerParentSummary(parentID: string): Promise<ParentSummary> {
   return fetchServerJSON(`/api/admin/parents/${parentID}`);
+}
+
+export async function getServerUserManagement(): Promise<UserManagementView> {
+  return fetchServerJSON(`/api/admin/users`);
 }

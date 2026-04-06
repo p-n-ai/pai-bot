@@ -20,6 +20,20 @@ export const primaryNavigation = [
     group: "Teaching",
     roles: ["teacher", "admin", "platform_admin"],
   },
+  {
+    title: "Users",
+    href: "/settings/users",
+    description: "Manage teacher, parent, and admin access plus invite status.",
+    group: "Administration",
+    roles: ["admin", "platform_admin"],
+  },
+  {
+    title: "Export",
+    href: "/export",
+    description: "Download student, conversation, and progress exports.",
+    group: "Administration",
+    roles: ["admin", "platform_admin"],
+  },
 ];
 
 export function getNavigationForUser(user) {
@@ -92,6 +106,22 @@ export function getCurrentSection(pathname) {
     };
   }
 
+  if (pathname.startsWith("/settings/users")) {
+    return {
+      eyebrow: "Administration",
+      title: "User management",
+      description: "Review active users, invite status, and access operations for the current workspace.",
+    };
+  }
+
+  if (pathname.startsWith("/export")) {
+    return {
+      eyebrow: "Administration",
+      title: "Data export",
+      description: "Download student, conversation, and progress exports for audit and analysis workflows.",
+    };
+  }
+
   if (pathname.startsWith("/dashboard/retrieval-lab") || pathname.startsWith("/dashboard/retreival-lab")) {
     return {
       eyebrow: "Retrieval",
@@ -145,6 +175,20 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Classes", href: "/dashboard/classes" },
+    ];
+  }
+
+  if (pathname.startsWith("/settings/users")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Users", href: "/settings/users" },
+    ];
+  }
+
+  if (pathname.startsWith("/export")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Export", href: "/export" },
     ];
   }
 

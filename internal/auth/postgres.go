@@ -442,6 +442,11 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 		return Session{}, fmt.Errorf("extend session: %w", err)
 	}
 
+	tenantChoices, err := s.tenantOptionsByEmail(ctx, tx, email)
+	if err != nil {
+		return Session{}, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return Session{}, fmt.Errorf("commit session transaction: %w", err)
 	}
@@ -459,10 +464,7 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 			Email:      email,
 		},
 	}
-	session.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, email)
-	if err != nil {
-		return Session{}, err
-	}
+	session.TenantChoices = tenantChoices
 	return session, nil
 }
 

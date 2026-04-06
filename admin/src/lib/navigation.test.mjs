@@ -70,6 +70,22 @@ test("getCurrentSection returns class management metadata for dashboard classes 
   });
 });
 
+test("getCurrentSection returns user management metadata for settings routes", () => {
+  assert.deepEqual(getCurrentSection("/settings/users"), {
+    eyebrow: "Administration",
+    title: "User management",
+    description: "Review active users, invite status, and access operations for the current workspace.",
+  });
+});
+
+test("getCurrentSection returns export metadata for export routes", () => {
+  assert.deepEqual(getCurrentSection("/export"), {
+    eyebrow: "Administration",
+    title: "Data export",
+    description: "Download student, conversation, and progress exports for audit and analysis workflows.",
+  });
+});
+
 test("getCurrentSection returns neutral overview copy when no pathname is provided", () => {
   assert.deepEqual(getCurrentSection(), {
     eyebrow: "Admin panel",
@@ -96,6 +112,13 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
   );
 });
 
+test("getNavigationForUser adds administration links for admins", () => {
+  assert.deepEqual(
+    getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/settings/users", "/export"],
+  );
+});
+
 test("getBreadcrumbs returns learner detail hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/students/student-1"), [
     { label: "Dashboard", href: "/dashboard" },
@@ -113,5 +136,19 @@ test("getBreadcrumbs returns class management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/dashboard/classes"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Classes", href: "/dashboard/classes" },
+  ]);
+});
+
+test("getBreadcrumbs returns user management hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/settings/users"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Users", href: "/settings/users" },
+  ]);
+});
+
+test("getBreadcrumbs returns export hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/export"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Export", href: "/export" },
   ]);
 });

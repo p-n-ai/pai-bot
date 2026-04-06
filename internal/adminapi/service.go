@@ -166,6 +166,78 @@ type ClassProgress struct {
 	TopicIDs []string       `json:"topic_ids"`
 }
 
+type UserManagementSummary struct {
+	Teachers       int `json:"teachers"`
+	Parents        int `json:"parents"`
+	PendingInvites int `json:"pending_invites"`
+	TotalUsers     int `json:"total_users"`
+}
+
+type ManagedUser struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	Role       string    `json:"role"`
+	Status     string    `json:"status"`
+	CreatedAt  time.Time `json:"created_at"`
+	TenantName string    `json:"tenant_name,omitempty"`
+}
+
+type PendingInvite struct {
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	Status      string    `json:"status"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	InvitedBy   string    `json:"invited_by"`
+	TenantName  string    `json:"tenant_name,omitempty"`
+}
+
+type UserManagementView struct {
+	Summary        UserManagementSummary `json:"summary"`
+	ActiveUsers    []ManagedUser         `json:"active_users"`
+	PendingInvites []PendingInvite       `json:"pending_invites"`
+}
+
+type StudentExportRow struct {
+	StudentID      string
+	Name           string
+	ExternalID     string
+	Channel        string
+	Form           string
+	AverageMastery *float64
+	TrackedTopics  int
+	CreatedAt      time.Time
+}
+
+type ConversationExportMessage struct {
+	MessageID string    `json:"message_id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ConversationExportRecord struct {
+	ConversationID string                      `json:"conversation_id"`
+	StudentID      string                      `json:"student_id"`
+	StudentName    string                      `json:"student_name"`
+	Channel        string                      `json:"channel"`
+	StartedAt      time.Time                   `json:"started_at"`
+	Messages       []ConversationExportMessage `json:"messages"`
+}
+
+type ProgressExportRow struct {
+	StudentID      string
+	StudentName    string
+	TopicID        string
+	MasteryScore   float64
+	EaseFactor     float64
+	IntervalDays   int
+	NextReviewAt   *time.Time
+	LastStudiedAt  *time.Time
+}
+
 type Service struct {
 	pool       *pgxpool.Pool
 	tenantID   string
@@ -653,6 +725,298 @@ func (s *Service) GetMetrics() (MetricsSummary, error) {
 		AIUsage:          aiUsage,
 		ABComparison:     nil,
 	}, nil
+}
+
+func (s *Service) GetUserManagement() (UserManagementView, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			u.id::text,
+			u.name,
+			u.role,
+			COALESCE(
+				(SELECT ai.identifier
+				 FROM auth_identities ai
+				 WHERE ai.user_id = u.id
+				   AND ai.provider = 'password'
+				 ORDER BY ai.created_at ASC
+				 LIMIT 1),
+				(SELECT COALESCE(ai.provider_email, ai.identifier)
+				 FROM auth_identities ai
+				 WHERE ai.user_id = u.id
+				   AND ai.provider = 'google'
+				 ORDER BY ai.created_at ASC
+				 LIMIT 1),
+				''
+			) AS email,
+			u.created_at,
+			COALESCE(t.name, '')
+		FROM users u
+		LEFT JOIN tenants t ON t.id = u.tenant_id
+		WHERE %s
+			AND u.role IN ('teacher', 'parent', 'admin', 'platform_admin')
+		ORDER BY
+			CASE u.role
+				WHEN 'admin' THEN 0
+				WHEN 'platform_admin' THEN 1
+				WHEN 'teacher' THEN 2
+				WHEN 'parent' THEN 3
+				ELSE 4
+			END,
+			u.name ASC
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return UserManagementView{}, fmt.Errorf("query managed users: %w", err)
+	}
+	defer rows.Close()
+
+	view := UserManagementView{}
+	for rows.Next() {
+		var item ManagedUser
+		if err := rows.Scan(&item.ID, &item.Name, &item.Role, &item.Email, &item.CreatedAt, &item.TenantName); err != nil {
+			return UserManagementView{}, fmt.Errorf("scan managed user: %w", err)
+		}
+		item.Status = "active"
+		view.ActiveUsers = append(view.ActiveUsers, item)
+		switch item.Role {
+		case "teacher":
+			view.Summary.Teachers++
+		case "parent":
+			view.Summary.Parents++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return UserManagementView{}, fmt.Errorf("iterate managed users: %w", err)
+	}
+	view.Summary.TotalUsers = len(view.ActiveUsers)
+
+	inviteRows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			i.id::text,
+			i.email,
+			i.role,
+			i.expires_at,
+			i.created_at,
+			COALESCE(inviter.name, ''),
+			COALESCE(t.name, '')
+		FROM auth_invites i
+		LEFT JOIN users inviter ON inviter.id = i.invited_by
+		LEFT JOIN tenants t ON t.id = i.tenant_id
+		WHERE %s
+			AND i.accepted_at IS NULL
+			AND i.expires_at >= NOW()
+		ORDER BY i.created_at DESC, i.email ASC
+	`, s.tenantPredicate("i.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return UserManagementView{}, fmt.Errorf("query pending invites: %w", err)
+	}
+	defer inviteRows.Close()
+
+	for inviteRows.Next() {
+		var item PendingInvite
+		if err := inviteRows.Scan(&item.ID, &item.Email, &item.Role, &item.ExpiresAt, &item.CreatedAt, &item.InvitedBy, &item.TenantName); err != nil {
+			return UserManagementView{}, fmt.Errorf("scan pending invite: %w", err)
+		}
+		item.Status = "pending"
+		view.PendingInvites = append(view.PendingInvites, item)
+	}
+	if err := inviteRows.Err(); err != nil {
+		return UserManagementView{}, fmt.Errorf("iterate pending invites: %w", err)
+	}
+	view.Summary.PendingInvites = len(view.PendingInvites)
+
+	return view, nil
+}
+
+func (s *Service) ExportStudents() ([]StudentExportRow, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
+			u.name,
+			COALESCE(u.external_id, ''),
+			u.channel,
+			COALESCE(u.form, ''),
+			AVG(lp.mastery_score),
+			COUNT(lp.topic_id),
+			u.created_at
+		FROM users u
+		LEFT JOIN learning_progress lp
+			ON lp.user_id = u.id
+			AND lp.tenant_id = u.tenant_id
+		WHERE %s
+			AND u.role = 'student'
+		GROUP BY u.id, u.external_id, u.name, u.channel, u.form, u.created_at
+		ORDER BY u.created_at ASC, u.name ASC
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query student export: %w", err)
+	}
+	defer rows.Close()
+
+	var records []StudentExportRow
+	for rows.Next() {
+		var item StudentExportRow
+		if err := rows.Scan(
+			&item.StudentID,
+			&item.Name,
+			&item.ExternalID,
+			&item.Channel,
+			&item.Form,
+			&item.AverageMastery,
+			&item.TrackedTopics,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan student export: %w", err)
+		}
+		records = append(records, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate student export: %w", err)
+	}
+	return records, nil
+}
+
+func (s *Service) ExportConversations() ([]ConversationExportRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			c.id::text,
+			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
+			u.name,
+			u.channel,
+			c.created_at,
+			m.id::text,
+			CASE WHEN m.role = 'user' THEN 'student' ELSE m.role END AS role,
+			COALESCE(m.content, ''),
+			m.created_at
+		FROM conversations c
+		JOIN users u ON u.id = c.user_id
+		LEFT JOIN messages m
+			ON m.conversation_id = c.id
+			AND m.role IN ('user', 'assistant')
+		WHERE %s
+			AND u.role = 'student'
+		ORDER BY c.created_at ASC, c.id ASC, m.created_at ASC, m.id ASC
+	`, s.tenantPredicate("c.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query conversation export: %w", err)
+	}
+	defer rows.Close()
+
+	recordsByID := make(map[string]*ConversationExportRecord)
+	order := make([]string, 0)
+	for rows.Next() {
+		var (
+			conversationID string
+			studentID      string
+			studentName    string
+			channel        string
+			startedAt      time.Time
+			messageID      *string
+			role           *string
+			content        *string
+			messageAt      *time.Time
+		)
+		if err := rows.Scan(
+			&conversationID,
+			&studentID,
+			&studentName,
+			&channel,
+			&startedAt,
+			&messageID,
+			&role,
+			&content,
+			&messageAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan conversation export: %w", err)
+		}
+
+		record, ok := recordsByID[conversationID]
+		if !ok {
+			record = &ConversationExportRecord{
+				ConversationID: conversationID,
+				StudentID:      studentID,
+				StudentName:    studentName,
+				Channel:        channel,
+				StartedAt:      startedAt,
+			}
+			recordsByID[conversationID] = record
+			order = append(order, conversationID)
+		}
+
+		if messageID != nil && role != nil && content != nil && messageAt != nil {
+			record.Messages = append(record.Messages, ConversationExportMessage{
+				MessageID: *messageID,
+				Role:      *role,
+				Content:   *content,
+				CreatedAt: *messageAt,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversation export: %w", err)
+	}
+
+	records := make([]ConversationExportRecord, 0, len(order))
+	for _, id := range order {
+		records = append(records, *recordsByID[id])
+	}
+	return records, nil
+}
+
+func (s *Service) ExportProgress() ([]ProgressExportRow, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
+			u.name,
+			lp.topic_id,
+			lp.mastery_score,
+			lp.ease_factor,
+			lp.interval_days,
+			lp.next_review_at,
+			lp.last_studied_at
+		FROM learning_progress lp
+		JOIN users u ON u.id = lp.user_id
+		WHERE %s
+			AND u.role = 'student'
+		ORDER BY u.name ASC, lp.topic_id ASC
+	`, s.tenantPredicate("lp.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query progress export: %w", err)
+	}
+	defer rows.Close()
+
+	var records []ProgressExportRow
+	for rows.Next() {
+		var item ProgressExportRow
+		if err := rows.Scan(
+			&item.StudentID,
+			&item.StudentName,
+			&item.TopicID,
+			&item.MasteryScore,
+			&item.EaseFactor,
+			&item.IntervalDays,
+			&item.NextReviewAt,
+			&item.LastStudiedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan progress export: %w", err)
+		}
+		records = append(records, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate progress export: %w", err)
+	}
+	return records, nil
 }
 
 func (s *Service) loadParent(ctx context.Context, parentID string) (Parent, string, error) {

@@ -73,10 +73,16 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.admin
+      args:
+        INTERNAL_API_URL: http://app:8080
+        NEXT_PUBLIC_API_URL: ""
     expose:
       - "3000"
     env_file:
       - .env
+    environment:
+      INTERNAL_API_URL: http://app:8080
+      NEXT_PUBLIC_API_URL: ""
     depends_on:
       app:
         condition: service_started
