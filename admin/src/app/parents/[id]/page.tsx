@@ -69,8 +69,7 @@ export default async function ParentPage({
                 title="Parent summary unavailable"
                 description={loadError}
               />
-            ) : null}
-            {view.hasMastery ? (
+            ) : view.hasMastery ? (
               masteryRows.map((item) => {
                 const score = Math.round(item.mastery_score * 100);
                 return (

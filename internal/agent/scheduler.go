@@ -111,8 +111,9 @@ type Scheduler struct {
 	xp       progress.XPTracker
 	goals    GoalStore
 	nudges   NudgeTracker
-	groups   GroupStore
-	tenantID string
+	groups        GroupStore
+	tenantID      string
+	parentReports WeeklyParentReportSource
 	gateway  *chat.Gateway
 	aiRouter *ai.Router
 	store    nudgeLanguageStore
@@ -158,6 +159,7 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 
 	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
 	go s.runDailySummaryTimer(ctx, userIDs)
+	go s.runWeeklyParentReportTimer(ctx)
 
 	// Start weekly leaderboard recap on Monday 8:00 AM MYT.
 	if s.groups != nil {
@@ -263,24 +265,6 @@ func (s *Scheduler) runWeeklyLeaderboardTimer(ctx context.Context) {
 			s.sendWeeklyLeaderboards(ctx)
 		}
 	}
-}
-
-// timeUntilNextWeekday returns the duration until the next given weekday at hour:minute MYT.
-func timeUntilNextWeekday(day time.Weekday, hour, minute int) time.Duration {
-	loc, err := time.LoadLocation("Asia/Kuala_Lumpur")
-	if err != nil {
-		loc = time.FixedZone("MYT", 8*60*60)
-	}
-	now := time.Now().In(loc)
-	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
-
-	// Advance to the target weekday.
-	daysUntil := (int(day) - int(now.Weekday()) + 7) % 7
-	if daysUntil == 0 && !next.After(now) {
-		daysUntil = 7
-	}
-	next = next.AddDate(0, 0, daysUntil)
-	return next.Sub(now)
 }
 
 func (s *Scheduler) sendWeeklyLeaderboards(ctx context.Context) {

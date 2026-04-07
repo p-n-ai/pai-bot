@@ -82,6 +82,21 @@ type ParentSummary struct {
 	Encouragement EncouragementSuggestion `json:"encouragement"`
 }
 
+type WeeklyParentReportSummary struct {
+	ParentExternalID   string
+	ParentChannel      string
+	ParentName         string
+	ChildName          string
+	ChildForm          string
+	CurrentStreak      int
+	TotalXP            int
+	NeedsReviewCount   int
+	WeakestTopicID     string
+	EncouragementTitle string
+	EncouragementText  string
+	WeeklyStats        WeeklyStats
+}
+
 type AIProviderUsage struct {
 	Provider     string `json:"provider"`
 	Model        string `json:"model"`
@@ -557,6 +572,83 @@ func (s *Service) GetParentSummary(parentID string) (ParentSummary, error) {
 			weeklyStats,
 		),
 	}, nil
+}
+
+func (s *Service) ListWeeklyParentReportSummaries(ctx context.Context) ([]WeeklyParentReportSummary, error) {
+	parentRows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			u.id::text,
+			COALESCE(NULLIF(u.external_id, ''), ''),
+			COALESCE(u.channel, ''),
+			COALESCE(u.name, '')
+		FROM users u
+		WHERE %s
+			AND u.role = 'parent'
+			AND COALESCE(NULLIF(u.external_id, ''), '') <> ''
+		ORDER BY u.created_at ASC
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query weekly parent recipients: %w", err)
+	}
+	defer parentRows.Close()
+
+	type parentRecipient struct {
+		id         string
+		externalID string
+		channel    string
+		name       string
+	}
+
+	var recipients []parentRecipient
+	for parentRows.Next() {
+		var item parentRecipient
+		if err := parentRows.Scan(&item.id, &item.externalID, &item.channel, &item.name); err != nil {
+			return nil, fmt.Errorf("scan weekly parent recipient: %w", err)
+		}
+		recipients = append(recipients, item)
+	}
+	if err := parentRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate weekly parent recipients: %w", err)
+	}
+
+	summaries := make([]WeeklyParentReportSummary, 0, len(recipients))
+	for _, recipient := range recipients {
+		parentSummary, err := s.GetParentSummary(recipient.id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, fmt.Errorf("load weekly parent summary for %s: %w", recipient.id, err)
+		}
+
+		weakestTopicID := ""
+		if len(parentSummary.Mastery) > 0 {
+			weakest := parentSummary.Mastery[0]
+			for _, item := range parentSummary.Mastery[1:] {
+				if item.MasteryScore < weakest.MasteryScore {
+					weakest = item
+				}
+			}
+			weakestTopicID = weakest.TopicID
+		}
+
+		summaries = append(summaries, WeeklyParentReportSummary{
+			ParentExternalID:   recipient.externalID,
+			ParentChannel:      recipient.channel,
+			ParentName:         recipient.name,
+			ChildName:          parentSummary.Child.Name,
+			ChildForm:          parentSummary.Child.Form,
+			CurrentStreak:      parentSummary.Streak.Current,
+			TotalXP:            parentSummary.Streak.TotalXP,
+			NeedsReviewCount:   parentSummary.WeeklyStats.NeedsReviewCount,
+			WeakestTopicID:     weakestTopicID,
+			EncouragementTitle: parentSummary.Encouragement.Headline,
+			EncouragementText:  parentSummary.Encouragement.Text,
+			WeeklyStats:        parentSummary.WeeklyStats,
+		})
+	}
+
+	return summaries, nil
 }
 
 func (s *Service) GetAIUsage() (AIUsageSummary, error) {

@@ -151,6 +151,7 @@ func main() {
 		router,
 		store,
 	)
+	scheduler.SetWeeklyParentReportSource(weeklyParentReportSource{admin: adminapi.New(db.Pool, store.TenantID())})
 
 	scheduler.SetGroupStore(groupStore, store.TenantID())
 
@@ -302,6 +303,42 @@ type adminDataSource interface {
 
 type adminDataSourceProvider interface {
 	ForRequest(r *http.Request) (adminDataSource, error)
+}
+
+type weeklyParentReportSource struct {
+	admin *adminapi.Service
+}
+
+func (s weeklyParentReportSource) ListWeeklyParentReportSummaries(ctx context.Context) ([]agent.WeeklyParentReportSummary, error) {
+	items, err := s.admin.ListWeeklyParentReportSummaries(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]agent.WeeklyParentReportSummary, 0, len(items))
+	for _, item := range items {
+		out = append(out, agent.WeeklyParentReportSummary{
+			ParentExternalID:   item.ParentExternalID,
+			ParentChannel:      item.ParentChannel,
+			ParentName:         item.ParentName,
+			ChildName:          item.ChildName,
+			ChildForm:          item.ChildForm,
+			CurrentStreak:      item.CurrentStreak,
+			TotalXP:            item.TotalXP,
+			NeedsReviewCount:   item.NeedsReviewCount,
+			WeakestTopicID:     item.WeakestTopicID,
+			EncouragementTitle: item.EncouragementTitle,
+			EncouragementText:  item.EncouragementText,
+			WeeklyStats: agent.WeeklyParentWeeklyStats{
+				DaysActive:        item.WeeklyStats.DaysActive,
+				MessagesExchanged: item.WeeklyStats.MessagesExchanged,
+				QuizzesCompleted:  item.WeeklyStats.QuizzesCompleted,
+				NeedsReviewCount:  item.WeeklyStats.NeedsReviewCount,
+			},
+		})
+	}
+
+	return out, nil
 }
 
 type fixedAdminDataSourceProvider struct {

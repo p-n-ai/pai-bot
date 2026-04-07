@@ -366,7 +366,7 @@ Implementation note (2026-04-01): auth/session work is ahead of the original seq
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 | ⬜ | |
+| `P-W4D19-1` | Weekly parent reports: scheduler sends Sunday 20:00, AI-generated 3-paragraph summary via Telegram | 🤖 | ✅ | Scheduler now loads tenant-scoped parent recipients, sends Sunday 20:00 MYT Telegram reports, uses AI when available, and falls back to a deterministic 3-paragraph summary. |
 | `P-W4D19-2` | Token budget tracking page: daily trend, per-student avg, and budget limits for AI token allowance tracking | 🤖 | ✅ | Current shipped scope is token-allowance tracking: tenant token budget window, used/remaining tokens, daily token trend, and per-student average tokens. This Week 4 scope is AI-token-only, not real-money spend tracking. |
 | `P-W4D19-3` | 🧑 Test KSSM Form 2 Algebra with 5 Malaysian students. Does teaching quality hold across all 3 forms? | 🧑 Human | ⬜ | |
 
