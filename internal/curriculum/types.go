@@ -64,6 +64,7 @@ type AssessmentQuestion struct {
 	Text              string                 `yaml:"text"`
 	Difficulty        string                 `yaml:"difficulty"`
 	LearningObjective string                 `yaml:"learning_objective"`
+	Working           string                 `yaml:"working"`
 	Answer            AssessmentAnswer       `yaml:"answer"`
 	Marks             int                    `yaml:"marks"`
 	Rubric            []AssessmentRubricItem `yaml:"rubric"`

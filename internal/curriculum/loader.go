@@ -230,6 +230,16 @@ func (l *Loader) loadAssessment(path string) error {
 		return nil
 	}
 
+	for i := range assessment.Questions {
+		question := &assessment.Questions[i]
+		if question.Answer.Working == "" && question.Working != "" {
+			question.Answer.Working = question.Working
+		}
+		if question.Working == "" && question.Answer.Working != "" {
+			question.Working = question.Answer.Working
+		}
+	}
+
 	l.mu.Lock()
 	l.assessments[assessment.TopicID] = assessment
 	l.mu.Unlock()
