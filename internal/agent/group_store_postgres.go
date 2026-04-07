@@ -126,7 +126,6 @@ func (s *PostgresGroupStore) UpdateGroup(id string, input UpdateGroupInput) (*Gr
 	if input.Closed != nil {
 		setClauses = append(setClauses, fmt.Sprintf("closed = $%d", argIdx))
 		args = append(args, *input.Closed)
-		argIdx++
 	}
 
 	query := fmt.Sprintf(

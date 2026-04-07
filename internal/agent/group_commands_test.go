@@ -30,8 +30,8 @@ func TestEngine_CreateGroupCommand_NoArgs(t *testing.T) {
 func TestEngine_CreateGroupCommand_CreatesStudyGroup(t *testing.T) {
 	groupStore := agent.NewMemoryGroupStore()
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-cg-2", "Ali")
-	store.SetUserForm("user-cg-2", "Form 1")
+	_ = store.SetUserName("user-cg-2", "Ali")
+	_ = store.SetUserForm("user-cg-2", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:    store,
@@ -90,8 +90,8 @@ func TestEngine_JoinCommand_NoArgs(t *testing.T) {
 
 func TestEngine_JoinCommand_InvalidCode(t *testing.T) {
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-join-2", "Bob")
-	store.SetUserForm("user-join-2", "Form 1")
+	_ = store.SetUserName("user-join-2", "Bob")
+	_ = store.SetUserForm("user-join-2", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:  store,
@@ -114,8 +114,8 @@ func TestEngine_JoinCommand_InvalidCode(t *testing.T) {
 func TestEngine_JoinCommand_Success(t *testing.T) {
 	groupStore := agent.NewMemoryGroupStore()
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-join-3", "Charlie")
-	store.SetUserForm("user-join-3", "Form 1")
+	_ = store.SetUserName("user-join-3", "Charlie")
+	_ = store.SetUserForm("user-join-3", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:    store,
@@ -145,8 +145,8 @@ func TestEngine_JoinCommand_Success(t *testing.T) {
 
 func TestEngine_LeaderboardCommand_NoGroups(t *testing.T) {
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-lb-1", "Dave")
-	store.SetUserForm("user-lb-1", "Form 1")
+	_ = store.SetUserName("user-lb-1", "Dave")
+	_ = store.SetUserForm("user-lb-1", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:  store,
@@ -169,8 +169,8 @@ func TestEngine_LeaderboardCommand_NoGroups(t *testing.T) {
 func TestEngine_LeaderboardCommand_EmptyLeaderboard(t *testing.T) {
 	groupStore := agent.NewMemoryGroupStore()
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-lb-2", "Eve")
-	store.SetUserForm("user-lb-2", "Form 1")
+	_ = store.SetUserName("user-lb-2", "Eve")
+	_ = store.SetUserForm("user-lb-2", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:    store,
@@ -197,8 +197,8 @@ func TestEngine_LeaderboardCommand_EmptyLeaderboard(t *testing.T) {
 func TestEngine_LeaderboardCommand_NonMemberCodeDenied(t *testing.T) {
 	groupStore := agent.NewMemoryGroupStore()
 	store := agent.NewMemoryStore()
-	store.SetUserName("user-lb-3", "Frank")
-	store.SetUserForm("user-lb-3", "Form 1")
+	_ = store.SetUserName("user-lb-3", "Frank")
+	_ = store.SetUserForm("user-lb-3", "Form 1")
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		Store:    store,

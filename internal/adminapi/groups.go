@@ -261,7 +261,6 @@ func (s *Service) UpdateGroup(id string, input AdminUpdateGroupInput) (AdminGrou
 	if input.Closed != nil {
 		setClauses = append(setClauses, fmt.Sprintf("closed = $%d", argIdx))
 		args = append(args, *input.Closed)
-		argIdx++
 	}
 
 	var g AdminGroup

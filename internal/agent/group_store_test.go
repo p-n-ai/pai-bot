@@ -123,9 +123,9 @@ func TestGroupStore_GetUserGroups(t *testing.T) {
 func TestGroupStore_ListGroups(t *testing.T) {
 	store := agent.NewMemoryGroupStore()
 
-	store.CreateGroup("tenant-1", "Class A", "class", "", "", "", "", "")
-	store.CreateGroup("tenant-1", "Study B", "study_group", "", "", "", "", "")
-	store.CreateGroup("tenant-2", "Class C", "class", "", "", "", "", "")
+	_, _ = store.CreateGroup("tenant-1", "Class A", "class", "", "", "", "", "")
+	_, _ = store.CreateGroup("tenant-1", "Study B", "study_group", "", "", "", "", "")
+	_, _ = store.CreateGroup("tenant-2", "Class C", "class", "", "", "", "", "")
 
 	all, _ := store.ListGroups("tenant-1", "")
 	if len(all) != 2 {
@@ -211,7 +211,7 @@ func TestGroupStore_JoinClosedGroup(t *testing.T) {
 
 	// Close the group
 	closed := true
-	store.UpdateGroup(g.ID, agent.UpdateGroupInput{Closed: &closed})
+	_, _ = store.UpdateGroup(g.ID, agent.UpdateGroupInput{Closed: &closed})
 
 	// Join after closing — should fail with ErrGroupClosed
 	err := store.JoinGroup(g.ID, "user-2", "tenant-1", "member")
