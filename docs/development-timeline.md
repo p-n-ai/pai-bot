@@ -297,9 +297,9 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 | ⬜ | |
-| `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 | ⬜ | |
-| `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 | ⬜ | |
+| `P-W3D12-1` | Class groups: `groups` + `group_members` tables, `/join [code]`, `/create_group [name]` | 🤖 | ✅ | Groups as generic entity; class = type='class'; bot creates study_group only; tenant trigger enforces isolation; closed group support; admin CRUD (8 endpoints) |
+| `P-W3D12-2` | Weekly leaderboard: `/leaderboard` shows top 10 by weekly mastery gain within group | 🤖 | ✅ | Uses mastery_snapshots table for 7-day delta; membership-gated (no cross-tenant leak); student-only filtering |
+| `P-W3D12-3` | Monday recap: scheduler sends weekly leaderboard summary to all group members | 🤖 | ✅ | Monday 8AM MYT via runWeeklyLeaderboardTimer; enumerates all groups with >1 member; sends via gateway |
 | `P-W3D12-4` | 🧑 Set up 2 test groups: pilot school group + Pandai beta group | 🧑 Human | ✅ | Setup telegram group from existing users|
 
 ### Day 13 — A/B Test + Social Features
