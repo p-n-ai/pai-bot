@@ -36,6 +36,16 @@ const (
 	MsgMilestoneXP            Key = "milestone_xp"
 	MsgMilestoneSubjectDone   Key = "milestone_subject_done"
 	MsgMilestoneStreakRecord   Key = "milestone_streak_record"
+
+	MsgGroupCreateUsage  Key = "group_create_usage"
+	MsgGroupCreated      Key = "group_created"
+	MsgGroupJoinUsage    Key = "group_join_usage"
+	MsgGroupJoined       Key = "group_joined"
+	MsgGroupNotFound     Key = "group_not_found"
+	MsgGroupUserNotFound Key = "group_user_not_found"
+	MsgGroupNoGroups     Key = "group_no_groups"
+	MsgLeaderboardEmpty  Key = "leaderboard_empty"
+	MsgGroupClosed       Key = "group_closed"
 )
 
 var catalog = map[string]map[Key]string{
@@ -89,6 +99,15 @@ Tingkatan berapa anda sekarang?`,
 		MsgMilestoneXP:            "🌟 *Pencapaian XP!*\n\nAnda telah mencapai *%d XP*!\n\nKerja keras anda membuahkan hasil! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *LUAR BIASA!*\n\nAnda telah menguasai semua topik dalam *%s*!\n\nAnda seorang juara matematik! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *Rekod Baru!*\n\nStreak terpanjang anda: *%d hari*!\n\nDedikasi yang mengagumkan! 🏅",
+		MsgGroupCreateUsage:  "Guna: /create_group <nama>\nContoh: /create_group Kumpulan Algebra",
+		MsgGroupCreated:      "Kumpulan *%s* telah dibuat!\n\nKod jemputan: *%s*\nKongsi kod ini supaya rakan boleh sertai dengan /join %s",
+		MsgGroupJoinUsage:    "Guna: /join <kod>\nContoh: /join ABC123",
+		MsgGroupJoined:       "Anda telah menyertai *%s*! 🎉",
+		MsgGroupNotFound:     "Kumpulan dengan kod %s tidak dijumpai.",
+		MsgGroupUserNotFound: "Sila mulakan dulu dengan /start.",
+		MsgGroupNoGroups:     "Anda belum menyertai sebarang kumpulan.\nGuna /join <kod> untuk sertai, atau /create_group <nama> untuk buat baru.",
+		MsgLeaderboardEmpty:  "Belum ada data papan pendahulu untuk *%s*.\nTeruskan belajar dan semak semula minggu depan!",
+		MsgGroupClosed:       "*%s* tidak lagi menerima ahli baru.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -140,6 +159,15 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP Milestone!*\n\nYou've reached *%d XP*!\n\nYour hard work is paying off! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *AMAZING!*\n\nYou've mastered all topics in *%s*!\n\nYou're a math champion! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *New Record!*\n\nYour longest streak: *%d days*!\n\nIncredible dedication! 🏅",
+		MsgGroupCreateUsage:  "Usage: /create_group <name>\nExample: /create_group Algebra Squad",
+		MsgGroupCreated:      "Group *%s* created!\n\nJoin code: *%s*\nShare this code so friends can join with /join %s",
+		MsgGroupJoinUsage:    "Usage: /join <code>\nExample: /join ABC123",
+		MsgGroupJoined:       "You've joined *%s*! 🎉",
+		MsgGroupNotFound:     "No group found with code %s.",
+		MsgGroupUserNotFound: "Please start first with /start.",
+		MsgGroupNoGroups:     "You haven't joined any groups yet.\nUse /join <code> to join, or /create_group <name> to create one.",
+		MsgLeaderboardEmpty:  "No leaderboard data yet for *%s*.\nKeep studying and check back next week!",
+		MsgGroupClosed:       "*%s* is no longer accepting new members.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -191,6 +219,15 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP 里程碑！*\n\n你已达到 *%d XP*！\n\n你的努力正在得到回报！🎉",
 		MsgMilestoneSubjectDone:   "🎓 *太厉害了！*\n\n你已掌握 *%s* 的所有主题！\n\n你是数学冠军！🏅",
 		MsgMilestoneStreakRecord:   "🔥 *新纪录！*\n\n你最长的连续学习记录：*%d 天*！\n\n令人敬佩的毅力！🏅",
+		MsgGroupCreateUsage:  "用法：/create_group <名称>\n例如：/create_group 代数小组",
+		MsgGroupCreated:      "小组 *%s* 已创建！\n\n加入代码：*%s*\n分享此代码，好友可以用 /join %s 加入",
+		MsgGroupJoinUsage:    "用法：/join <代码>\n例如：/join ABC123",
+		MsgGroupJoined:       "你已加入 *%s*！🎉",
+		MsgGroupNotFound:     "未找到代码为 %s 的小组。",
+		MsgGroupUserNotFound: "请先使用 /start 开始。",
+		MsgGroupNoGroups:     "你还没有加入任何小组。\n使用 /join <代码> 加入，或 /create_group <名称> 创建一个。",
+		MsgLeaderboardEmpty:  "*%s* 暂无排行榜数据。\n继续学习，下周再来查看！",
+		MsgGroupClosed:       "*%s* 不再接受新成员。",
 	},
 }
 

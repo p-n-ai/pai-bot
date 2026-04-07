@@ -1602,6 +1602,25 @@ func (stubAdminAPI) ExportProgress() ([]adminapi.ProgressExportRow, error) {
 	}, nil
 }
 
+func (stubAdminAPI) ListGroups(_ string) ([]adminapi.AdminGroup, error) {
+	return []adminapi.AdminGroup{}, nil
+}
+func (stubAdminAPI) CreateGroup(_ adminapi.CreateGroupInput, _ string) (adminapi.AdminGroup, error) {
+	return adminapi.AdminGroup{}, nil
+}
+func (stubAdminAPI) GetGroupDetail(_ string) (adminapi.AdminGroupDetail, error) {
+	return adminapi.AdminGroupDetail{}, nil
+}
+func (stubAdminAPI) UpdateGroup(_ string, _ adminapi.AdminUpdateGroupInput) (adminapi.AdminGroup, error) {
+	return adminapi.AdminGroup{}, nil
+}
+func (stubAdminAPI) DeleteGroup(_ string) error { return nil }
+func (stubAdminAPI) AddGroupMember(_, _, _ string) error { return nil }
+func (stubAdminAPI) RemoveGroupMember(_, _ string) error { return nil }
+func (stubAdminAPI) GetGroupLeaderboard(_ string) ([]adminapi.AdminLeaderboardEntry, error) {
+	return []adminapi.AdminLeaderboardEntry{}, nil
+}
+
 var _ adminDataSource = stubAdminAPI{}
 
 type recordingAdminProvider struct {

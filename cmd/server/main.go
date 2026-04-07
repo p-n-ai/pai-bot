@@ -102,6 +102,7 @@ func main() {
 	xpTracker := progress.NewMemoryXPTracker()
 	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
 	challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
+	groupStore := agent.NewPostgresGroupStore(db.Pool)
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -115,6 +116,8 @@ func main() {
 		XP:                   xpTracker,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
+		Groups:               groupStore,
+		TenantID:             store.TenantID(),
 		DevMode:              cfg.Features.DevMode,
 	})
 
@@ -148,6 +151,8 @@ func main() {
 		router,
 		store,
 	)
+
+	scheduler.SetGroupStore(groupStore, store.TenantID())
 
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -285,6 +290,14 @@ type adminDataSource interface {
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
 	ExportProgress() ([]adminapi.ProgressExportRow, error)
+	ListGroups(groupType string) ([]adminapi.AdminGroup, error)
+	CreateGroup(input adminapi.CreateGroupInput, createdByUserID string) (adminapi.AdminGroup, error)
+	GetGroupDetail(id string) (adminapi.AdminGroupDetail, error)
+	UpdateGroup(id string, input adminapi.AdminUpdateGroupInput) (adminapi.AdminGroup, error)
+	DeleteGroup(id string) error
+	AddGroupMember(groupID, userID, role string) error
+	RemoveGroupMember(groupID, userID string) error
+	GetGroupLeaderboard(id string) ([]adminapi.AdminLeaderboardEntry, error)
 }
 
 type adminDataSourceProvider interface {
@@ -482,6 +495,15 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
 	mux.Handle("GET /api/admin/export/progress", adminOrAbove(handleAdminExportProgress(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
+	// Group CRUD
+	mux.Handle("GET /api/admin/groups", teacherOrAbove(handleAdminListGroups(adminProvider)))
+	mux.Handle("POST /api/admin/groups", teacherOrAbove(handleAdminCreateGroup(adminProvider)))
+	mux.Handle("GET /api/admin/groups/{id}", teacherOrAbove(handleAdminGetGroup(adminProvider)))
+	mux.Handle("PATCH /api/admin/groups/{id}", adminOrAbove(handleAdminUpdateGroup(adminProvider)))
+	mux.Handle("DELETE /api/admin/groups/{id}", adminOrAbove(handleAdminDeleteGroup(adminProvider)))
+	mux.Handle("POST /api/admin/groups/{id}/members", adminOrAbove(handleAdminAddGroupMember(adminProvider)))
+	mux.Handle("DELETE /api/admin/groups/{id}/members/{uid}", adminOrAbove(handleAdminRemoveGroupMember(adminProvider)))
+	mux.Handle("GET /api/admin/groups/{id}/leaderboard", teacherOrAbove(handleAdminGroupLeaderboard(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
 	return withCORS(mux)
@@ -1332,6 +1354,149 @@ func handleRetrievalSearch(service *retrieval.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, results)
+	}
+}
+
+func handleAdminListGroups(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		groupType := r.URL.Query().Get("type")
+		payload, err := admin.ListGroups(groupType)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		if payload == nil {
+			payload = []adminapi.AdminGroup{}
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminCreateGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.CreateGroupInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		createdBy := ""
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			createdBy = claims.Subject
+		}
+		payload, err := admin.CreateGroup(input, createdBy)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, payload)
+	}
+}
+
+func handleAdminGetGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		payload, err := admin.GetGroupDetail(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminUpdateGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.AdminUpdateGroupInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		payload, err := admin.UpdateGroup(r.PathValue("id"), input)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminDeleteGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		if err := admin.DeleteGroup(r.PathValue("id")); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminAddGroupMember(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.AddMemberInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := admin.AddGroupMember(r.PathValue("id"), input.UserID, input.Role); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminRemoveGroupMember(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		if err := admin.RemoveGroupMember(r.PathValue("id"), r.PathValue("uid")); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminGroupLeaderboard(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		payload, err := admin.GetGroupLeaderboard(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		if payload == nil {
+			payload = []adminapi.AdminLeaderboardEntry{}
+		}
+		writeJSON(w, http.StatusOK, payload)
 	}
 }
 

@@ -49,6 +49,8 @@ type EngineConfig struct {
 	XP                    progress.XPTracker
 	Goals                 GoalStore
 	Challenges            ChallengeStore
+	Groups                GroupStore
+	TenantID              string // tenant UUID for bot-side group operations
 	DevMode               bool
 }
 
@@ -69,6 +71,8 @@ type Engine struct {
 	xp                    progress.XPTracker
 	goals                 GoalStore
 	challenges            ChallengeStore
+	groups                GroupStore
+	tenantID              string
 	devMode               bool
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
@@ -121,6 +125,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if challenges == nil {
 		challenges = NewMemoryChallengeStore()
 	}
+	groups := cfg.Groups
+	if groups == nil {
+		groups = NewMemoryGroupStore()
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -137,6 +145,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
 		challenges:            challenges,
+		groups:                groups,
+		tenantID:              cfg.TenantID,
 		devMode:               cfg.DevMode,
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
@@ -650,6 +660,12 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleChallengeCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
+	case "/create_group":
+		return e.handleCreateGroupCommand(ctx, msg, fields[1:])
+	case "/join":
+		return e.handleJoinGroupCommand(ctx, msg, fields[1:])
+	case "/leaderboard":
+		return e.handleLeaderboardCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":
 		if !e.devMode {
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
@@ -670,6 +686,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevAB(msg, fields[1:])
+	case "/dev-close-group", "/dev_close_group":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevCloseGroup(fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}

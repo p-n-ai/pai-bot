@@ -81,6 +81,9 @@ type ConversationStore interface {
 	SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error
 	ClearConversationPendingGoal(conversationID string) error
 	EndConversation(id string) error
+	// ResolveUserUUID maps an external chat ID to an internal users.id UUID.
+	// Returns ("", nil) if the user does not exist.
+	ResolveUserUUID(externalID string) (string, error)
 }
 
 // MemoryStore is an in-memory implementation of ConversationStore.
@@ -411,6 +414,11 @@ func (s *MemoryStore) ClearConversationPendingGoal(conversationID string) error 
 	}
 	conv.PendingGoal = nil
 	return nil
+}
+
+func (s *MemoryStore) ResolveUserUUID(externalID string) (string, error) {
+	// In memory store, external ID = internal ID.
+	return externalID, nil
 }
 
 func (s *MemoryStore) EndConversation(id string) error {

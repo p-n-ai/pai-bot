@@ -836,6 +836,34 @@ func (s *PostgresStore) EndConversation(id string) error {
 	return nil
 }
 
+// ResolveUserUUID maps an external chat ID to an internal users.id UUID.
+// Returns ("", nil) if the user does not exist.
+func (s *PostgresStore) ResolveUserUUID(externalID string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var userID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT id::text
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve user UUID: %w", err)
+	}
+	return userID, nil
+}
+
 func (s *PostgresStore) resolveOrCreateUser(ctx context.Context, externalID string) (string, error) {
 	var userID string
 	err := s.pool.QueryRow(ctx,
