@@ -9,6 +9,10 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -50,84 +54,120 @@ jobs:
       - name: Test
         run: go test ./... -short -count=1
 
-  deploy:
+  push-images:
     runs-on: ubuntu-latest
     needs: test
-    environment: production
-
+    outputs:
+      image-tag: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Build Go Docker image
-        run: docker build -f deploy/docker/Dockerfile -t pai-bot:latest .
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Build Admin Docker image
-        run: docker build -f deploy/docker/Dockerfile.admin --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} -t pai-admin:latest .
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Save Docker images
+      - name: Build and push app image
+        env:
+          REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          TAG: ${{ github.sha }}
         run: |
-          docker save pai-bot:latest | gzip > pai-bot.tar.gz
-          docker save pai-admin:latest | gzip > pai-admin.tar.gz
+          docker build -f deploy/docker/Dockerfile \
+            -t $REGISTRY/pai-bot/app:$TAG \
+            -t $REGISTRY/pai-bot/app:latest .
+          docker push $REGISTRY/pai-bot/app:$TAG
+          docker push $REGISTRY/pai-bot/app:latest
 
-      - name: Copy files to server
+      - name: Build and push admin image
+        env:
+          REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f deploy/docker/Dockerfile.admin \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+            -t $REGISTRY/pai-bot/admin:$TAG \
+            -t $REGISTRY/pai-bot/admin:latest .
+          docker push $REGISTRY/pai-bot/admin:$TAG
+          docker push $REGISTRY/pai-bot/admin:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: push-images
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy compose + migrations to server
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "pai-bot.tar.gz,pai-admin.tar.gz,docker-compose.yml,docker-compose.prod.yml,deploy/caddy,migrations"
+          source: "docker-compose.yml,docker-compose.prod.yml,deploy/caddy,migrations"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
-      - name: Write .env and deploy
+      - name: Deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,PAI_AUTH_SECRET,PAI_AUTH_GOOGLE_CLIENT_ID,PAI_AUTH_GOOGLE_CLIENT_SECRET,PAI_AUTH_GOOGLE_ALLOWED_DOMAIN,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD,DOMAIN,LEARN_EMAIL_SMTP_ADDR,LEARN_EMAIL_SMTP_USERNAME,LEARN_EMAIL_SMTP_PASSWORD,LEARN_EMAIL_FROM_ADDRESS,LEARN_EMAIL_FROM_NAME
+          envs: DEPLOY_DIR,REGISTRY,TAG,REGION
           script: |
             set -euo pipefail
             cd $DEPLOY_DIR
 
-            echo "--- Writing .env ---"
+            echo "--- Pulling secrets from AWS Secrets Manager ---"
+            SECRETS=$(aws secretsmanager get-secret-value \
+              --secret-id pai-bot/production-env \
+              --region $REGION \
+              --query SecretString --output text)
+
+            echo "--- Writing .env from Secrets Manager ---"
+            PG_PASS=$(echo "$SECRETS" | jq -r .POSTGRES_PASSWORD)
             printf '%s\n' \
               "LEARN_SERVER_PORT=8080" \
-              "LEARN_DATABASE_URL=postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" \
+              "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
               "LEARN_DATABASE_MAX_CONNS=25" \
               "LEARN_CACHE_URL=redis://dragonfly:6379" \
               "LEARN_NATS_URL=nats://nats:4222" \
-              "LEARN_TELEGRAM_BOT_TOKEN=${LEARN_TELEGRAM_BOT_TOKEN}" \
-              "PAI_AUTH_SECRET=${PAI_AUTH_SECRET}" \
-              "PAI_AUTH_GOOGLE_CLIENT_ID=${PAI_AUTH_GOOGLE_CLIENT_ID}" \
-              "PAI_AUTH_GOOGLE_CLIENT_SECRET=${PAI_AUTH_GOOGLE_CLIENT_SECRET}" \
-              "PAI_AUTH_GOOGLE_ALLOWED_DOMAIN=${PAI_AUTH_GOOGLE_ALLOWED_DOMAIN}" \
-              "LEARN_AI_OPENAI_API_KEY=${LEARN_AI_OPENAI_API_KEY}" \
-              "LEARN_AI_ANTHROPIC_API_KEY=${LEARN_AI_ANTHROPIC_API_KEY}" \
-              "LEARN_AI_DEEPSEEK_API_KEY=${LEARN_AI_DEEPSEEK_API_KEY}" \
-              "LEARN_AI_GOOGLE_API_KEY=${LEARN_AI_GOOGLE_API_KEY}" \
-              "LEARN_AI_OPENROUTER_API_KEY=${LEARN_AI_OPENROUTER_API_KEY}" \
+              "LEARN_TELEGRAM_BOT_TOKEN=$(echo "$SECRETS" | jq -r .LEARN_TELEGRAM_BOT_TOKEN)" \
+              "PAI_AUTH_SECRET=$(echo "$SECRETS" | jq -r .PAI_AUTH_SECRET)" \
+              "PAI_AUTH_GOOGLE_CLIENT_ID=$(echo "$SECRETS" | jq -r '.PAI_AUTH_GOOGLE_CLIENT_ID // empty')" \
+              "PAI_AUTH_GOOGLE_CLIENT_SECRET=$(echo "$SECRETS" | jq -r '.PAI_AUTH_GOOGLE_CLIENT_SECRET // empty')" \
+              "PAI_AUTH_GOOGLE_ALLOWED_DOMAIN=$(echo "$SECRETS" | jq -r '.PAI_AUTH_GOOGLE_ALLOWED_DOMAIN // empty')" \
+              "LEARN_AI_OPENAI_API_KEY=$(echo "$SECRETS" | jq -r .LEARN_AI_OPENAI_API_KEY)" \
+              "LEARN_AI_ANTHROPIC_API_KEY=$(echo "$SECRETS" | jq -r '.LEARN_AI_ANTHROPIC_API_KEY // empty')" \
+              "LEARN_AI_DEEPSEEK_API_KEY=$(echo "$SECRETS" | jq -r '.LEARN_AI_DEEPSEEK_API_KEY // empty')" \
+              "LEARN_AI_GOOGLE_API_KEY=$(echo "$SECRETS" | jq -r '.LEARN_AI_GOOGLE_API_KEY // empty')" \
+              "LEARN_AI_OPENROUTER_API_KEY=$(echo "$SECRETS" | jq -r '.LEARN_AI_OPENROUTER_API_KEY // empty')" \
               "LEARN_AI_OLLAMA_ENABLED=false" \
               "LEARN_TENANT_MODE=single" \
               "LEARN_CURRICULUM_PATH=./oss" \
               "LEARN_DISABLE_MULTI_LANGUAGE=false" \
               "LEARN_RATING_PROMPT_EVERY_REPLIES=5" \
               "LEARN_AI_PERSONALIZED_NUDGES_ENABLED=true" \
-              "LEARN_EMAIL_SMTP_ADDR=${LEARN_EMAIL_SMTP_ADDR}" \
-              "LEARN_EMAIL_SMTP_USERNAME=${LEARN_EMAIL_SMTP_USERNAME}" \
-              "LEARN_EMAIL_SMTP_PASSWORD=${LEARN_EMAIL_SMTP_PASSWORD}" \
-              "LEARN_EMAIL_FROM_ADDRESS=${LEARN_EMAIL_FROM_ADDRESS}" \
-              "LEARN_EMAIL_FROM_NAME=${LEARN_EMAIL_FROM_NAME}" \
+              "LEARN_EMAIL_SMTP_ADDR=$(echo "$SECRETS" | jq -r '.LEARN_EMAIL_SMTP_ADDR // empty')" \
+              "LEARN_EMAIL_SMTP_USERNAME=$(echo "$SECRETS" | jq -r '.LEARN_EMAIL_SMTP_USERNAME // empty')" \
+              "LEARN_EMAIL_SMTP_PASSWORD=$(echo "$SECRETS" | jq -r '.LEARN_EMAIL_SMTP_PASSWORD // empty')" \
+              "LEARN_EMAIL_FROM_ADDRESS=$(echo "$SECRETS" | jq -r '.LEARN_EMAIL_FROM_ADDRESS // empty')" \
+              "LEARN_EMAIL_FROM_NAME=$(echo "$SECRETS" | jq -r '.LEARN_EMAIL_FROM_NAME // empty')" \
               "LEARN_LOG_LEVEL=info" \
               "LEARN_LOG_FORMAT=json" \
-              "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" \
+              "POSTGRES_PASSWORD=${PG_PASS}" \
               > .env
 
-            echo "--- Configuring Caddy ---"
-            if [ -n "${DOMAIN}" ] && [ "${DOMAIN}" != "localhost" ]; then
-              echo "DOMAIN=${DOMAIN}" >> .env
+            DOMAIN_VAL=$(echo "$SECRETS" | jq -r '.DOMAIN // empty')
+            if [ -n "$DOMAIN_VAL" ] && [ "$DOMAIN_VAL" != "localhost" ]; then
+              echo "DOMAIN=${DOMAIN_VAL}" >> .env
               cp deploy/caddy/Caddyfile.https deploy/caddy/Caddyfile
             else
               cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
@@ -137,88 +177,53 @@ jobs:
             sudo systemctl stop nginx 2>/dev/null || true
             sudo systemctl disable nginx 2>/dev/null || true
 
-            echo "--- Loading Docker images ---"
-            docker load < pai-bot.tar.gz
-            docker load < pai-admin.tar.gz
-            rm pai-bot.tar.gz pai-admin.tar.gz
+            echo "--- Pulling images from ECR ---"
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
+            docker pull $REGISTRY/pai-bot/app:$TAG
+            docker pull $REGISTRY/pai-bot/admin:$TAG
+            docker tag $REGISTRY/pai-bot/app:$TAG pai-bot:latest
+            docker tag $REGISTRY/pai-bot/admin:$TAG pai-admin:latest
 
-            echo "--- Ensuring infra services are up ---"
+            echo "--- Ensuring infra services ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
             sleep 3
 
-            echo "--- Running migrations (goose) ---"
+            echo "--- Running migrations ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
               go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 \
               -dir /app/migrations postgres \
-              "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" \
+              "postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
               up -allow-missing
-            echo "Migrations applied successfully"
 
-            echo "--- Rolling out new containers ---"
+            echo "--- Rolling out ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-            echo "--- Waiting for app container health ---"
+            echo "--- Health check ---"
             APP_CONTAINER=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app)
-            if [ -z "$APP_CONTAINER" ]; then
-              echo "ERROR: app container was not created"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-              exit 1
-            fi
-
             APP_HEALTH=""
             for i in $(seq 1 30); do
               APP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$APP_CONTAINER")
               if [ "$APP_HEALTH" = "healthy" ]; then
-                echo "App container is healthy"
+                echo "App healthy after attempt $i"
                 break
               fi
-              echo "Attempt $i/30: app health=$APP_HEALTH"
+              echo "Attempt $i/30: $APP_HEALTH"
               sleep 2
             done
 
             if [ "$APP_HEALTH" != "healthy" ]; then
-              echo "ERROR: app container did not become healthy"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
+              echo "ERROR: app not healthy — rolling back to previous image"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 app
               exit 1
             fi
 
-            echo "--- Verifying app endpoint directly ---"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app curl -sf --max-time 5 http://localhost:8080/healthz > /dev/null
-
-            echo "--- Verifying Caddy route ---"
-            if curl -sf --max-time 10 http://localhost/healthz; then
-              echo "Deploy successful"
-            elif [ -n "${DOMAIN}" ] && [ "${DOMAIN}" != "localhost" ]; then
-              echo "NOTE: Caddy localhost check failed (expected with HTTPS domain config)"
-              echo "App container is healthy — deploy successful"
-            else
-              echo "ERROR: Caddy health check failed"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 caddy
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
-              exit 1
-            fi
-
-            echo "--- Cleaning up old images ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app curl -sf http://localhost:8080/healthz
+            echo ""
+            echo "Deploy successful (image: $TAG)"
             docker image prune -f
-
-            echo "--- Container status ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          LEARN_TELEGRAM_BOT_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
-          PAI_AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET }}
-          PAI_AUTH_GOOGLE_CLIENT_ID: ${{ secrets.PAI_AUTH_GOOGLE_CLIENT_ID }}
-          PAI_AUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.PAI_AUTH_GOOGLE_CLIENT_SECRET }}
-          PAI_AUTH_GOOGLE_ALLOWED_DOMAIN: ${{ secrets.PAI_AUTH_GOOGLE_ALLOWED_DOMAIN }}
-          LEARN_AI_OPENAI_API_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
-          LEARN_AI_ANTHROPIC_API_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
-          LEARN_AI_DEEPSEEK_API_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
-          LEARN_AI_GOOGLE_API_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
-          LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DOMAIN: ${{ secrets.DOMAIN }}
-          LEARN_EMAIL_SMTP_ADDR: ${{ secrets.LEARN_EMAIL_SMTP_ADDR }}
-          LEARN_EMAIL_SMTP_USERNAME: ${{ secrets.LEARN_EMAIL_SMTP_USERNAME }}
-          LEARN_EMAIL_SMTP_PASSWORD: ${{ secrets.LEARN_EMAIL_SMTP_PASSWORD }}
-          LEARN_EMAIL_FROM_ADDRESS: ${{ secrets.LEARN_EMAIL_FROM_ADDRESS }}
-          LEARN_EMAIL_FROM_NAME: ${{ secrets.LEARN_EMAIL_FROM_NAME }}
+          REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          TAG: ${{ github.sha }}
+          REGION: ${{ secrets.AWS_REGION }}
