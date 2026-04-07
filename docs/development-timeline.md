@@ -144,7 +144,7 @@ Engineer mapping:
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W1D3-1` | Deploy script: SSH → pull → build → restart → tail logs | 🤖 | ✅ | |
+| `P-W1D3-1` | Deploy script: SSH → pull → build → restart → tail logs | 🤖 | ✅ | Deployment health gate now waits for Docker app health and then verifies the Caddy `/healthz` route. |
 | `P-W1D3-2` | `/start` onboarding: create user record, welcome message, ask what they want to study | 🤖 | ✅ | |
 | `P-W1D3-3` | User lookup by telegram_id in chat flow, auto-trigger /start if new | 🤖 | ✅ | |
 | `P-W1D3-4` | Error recovery: retry with backoff, provider fallback chain, friendly error messages | 🤖 | ✅ | |
