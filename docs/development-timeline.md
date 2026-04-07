@@ -269,9 +269,9 @@ Status (2026-03-18): current `/challenge` surface now covers invite-code challen
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 | ⬜ | |
-| `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 | ⬜ | |
-| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 | ⬜ | |
+| `P-W3D11-1` | Goal setting: `goals` table, `/goal` command, AI parses natural language goal, store and track | 🤖 | ✅ | GoalStore (Postgres + Memory), /goal command with AI parsing, auto-created from vague goals |
+| `P-W3D11-2` | Goal progress tracking: auto-update after mastery changes, show in /progress and nudges | 🤖 | ✅ | Goals shown in /progress, auto-archived on mastery threshold |
+| `P-W3D11-3` | Peer challenges: `challenges` table, `/challenge` command, 6-char challenge code, 5-question simultaneous quiz, results with XP | 🤖 | ✅ | ChallengeStore (Postgres + Memory), /challenge command, matchmaking, AI fallback for questions, XP awards |
 | `P-W3D11-4` | 🧑 Design battle question sets for all KSSM Algebra topics, standardized per difficulty | 🧑 Human | ✅ | 5-5-5 Rule. Injected new pedagogical schema metadata. |
 
 **Implementation note (Late Mar 2026):** All Form 1, Form 2, and Form 3 Algebra assessment pools have been comprehensively standardized for the Battle Engine. 
@@ -359,7 +359,7 @@ Implementation note (2026-04-01): auth/session work is ahead of the original seq
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W4D18-1` | Deploy admin: add to docker-compose, nginx reverse proxy (api/* → Go, /* → Next.js) | 🤖 | ✅ | Docker Compose, admin image build, and reverse proxy config are in repo under `deploy/caddy` and `deploy/nginx`. |
-| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 | ⬜ | Frontend scaffold exists in `admin/src/app/dashboard/classes/page.tsx`, but it still uses mock data because class CRUD, join-code, membership, and topic-assignment APIs are not implemented yet. |
+| `P-W4D18-2` | Class management page: create class + syllabus, join code, member list, assign topics to class | 🤖 | ✅ | Classes page wired to real groups API (listGroups, createGroup, getGroupDetail). Create class dialog functional. Member roster from live data. Topic assignment kept mocked with "coming soon" label. |
 | `P-W4D18-3` | 🧑 Test all 3 Forms (F1, F2, F3) with bot — does content switch correctly? | 🧑 Human | ⬜ | |
 
 ### Day 19 — Reports + Budget Tracking
