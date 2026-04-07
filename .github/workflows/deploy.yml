@@ -104,30 +104,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Fetch secrets from Secrets Manager
-        id: secrets
-        run: |
-          SECRETS=$(aws secretsmanager get-secret-value \
-            --secret-id pai-bot/production-env \
-            --query SecretString --output text)
-          # Write each secret as a masked output
-          for key in POSTGRES_PASSWORD LEARN_TELEGRAM_BOT_TOKEN PAI_AUTH_SECRET \
-            LEARN_AI_OPENAI_API_KEY LEARN_AI_ANTHROPIC_API_KEY LEARN_AI_DEEPSEEK_API_KEY \
-            LEARN_AI_GOOGLE_API_KEY LEARN_AI_OPENROUTER_API_KEY \
-            PAI_AUTH_GOOGLE_CLIENT_ID PAI_AUTH_GOOGLE_CLIENT_SECRET PAI_AUTH_GOOGLE_ALLOWED_DOMAIN \
-            LEARN_EMAIL_SMTP_ADDR LEARN_EMAIL_SMTP_USERNAME LEARN_EMAIL_SMTP_PASSWORD \
-            LEARN_EMAIL_FROM_ADDRESS LEARN_EMAIL_FROM_NAME DOMAIN; do
-            VAL=$(echo "$SECRETS" | jq -r ".$key // empty")
-            echo "::add-mask::$VAL"
-            echo "$key=$VAL" >> "$GITHUB_OUTPUT"
-          done
-
       - name: Copy files to server
         uses: appleboy/scp-action@v1
         with:
@@ -188,23 +164,23 @@ jobs:
             fi
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          PG_PASS: ${{ steps.secrets.outputs.POSTGRES_PASSWORD }}
-          TG_TOKEN: ${{ steps.secrets.outputs.LEARN_TELEGRAM_BOT_TOKEN }}
-          AUTH_SECRET: ${{ steps.secrets.outputs.PAI_AUTH_SECRET }}
-          OPENAI_KEY: ${{ steps.secrets.outputs.LEARN_AI_OPENAI_API_KEY }}
-          ANTHROPIC_KEY: ${{ steps.secrets.outputs.LEARN_AI_ANTHROPIC_API_KEY }}
-          DEEPSEEK_KEY: ${{ steps.secrets.outputs.LEARN_AI_DEEPSEEK_API_KEY }}
-          GOOGLE_KEY: ${{ steps.secrets.outputs.LEARN_AI_GOOGLE_API_KEY }}
-          OPENROUTER_KEY: ${{ steps.secrets.outputs.LEARN_AI_OPENROUTER_API_KEY }}
-          GOOGLE_CLIENT_ID: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_CLIENT_SECRET }}
-          GOOGLE_ALLOWED_DOMAIN: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_ALLOWED_DOMAIN }}
-          SMTP_ADDR: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_ADDR }}
-          SMTP_USER: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_USERNAME }}
-          SMTP_PASS: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_PASSWORD }}
-          SMTP_FROM: ${{ steps.secrets.outputs.LEARN_EMAIL_FROM_ADDRESS }}
-          SMTP_NAME: ${{ steps.secrets.outputs.LEARN_EMAIL_FROM_NAME }}
-          DOMAIN_VAL: ${{ steps.secrets.outputs.DOMAIN }}
+          PG_PASS: ${{ secrets.POSTGRES_PASSWORD }}
+          TG_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
+          AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET }}
+          OPENAI_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
+          ANTHROPIC_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
+          DEEPSEEK_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}
+          GOOGLE_KEY: ${{ secrets.LEARN_AI_GOOGLE_API_KEY }}
+          OPENROUTER_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.PAI_AUTH_GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.PAI_AUTH_GOOGLE_CLIENT_SECRET }}
+          GOOGLE_ALLOWED_DOMAIN: ${{ secrets.PAI_AUTH_GOOGLE_ALLOWED_DOMAIN }}
+          SMTP_ADDR: ${{ secrets.LEARN_EMAIL_SMTP_ADDR }}
+          SMTP_USER: ${{ secrets.LEARN_EMAIL_SMTP_USERNAME }}
+          SMTP_PASS: ${{ secrets.LEARN_EMAIL_SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.LEARN_EMAIL_FROM_ADDRESS }}
+          SMTP_NAME: ${{ secrets.LEARN_EMAIL_FROM_NAME }}
+          DOMAIN_VAL: ${{ secrets.DOMAIN }}
 
       - name: Deploy
         uses: appleboy/ssh-action@v1
