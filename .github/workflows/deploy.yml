@@ -57,6 +57,8 @@ jobs:
   push-images:
     runs-on: ubuntu-latest
     needs: test
+    outputs:
+      ecr-token: ${{ steps.ecr-token.outputs.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +90,12 @@ jobs:
           docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}
           docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest
 
+      - name: Generate ECR token for server
+        id: ecr-token
+        run: |
+          TOKEN=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
   deploy:
     runs-on: ubuntu-latest
     needs: push-images
@@ -95,6 +103,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Fetch secrets from Secrets Manager
+        id: secrets
+        run: |
+          SECRETS=$(aws secretsmanager get-secret-value \
+            --secret-id pai-bot/production-env \
+            --query SecretString --output text)
+          # Write each secret as a masked output
+          for key in POSTGRES_PASSWORD LEARN_TELEGRAM_BOT_TOKEN PAI_AUTH_SECRET \
+            LEARN_AI_OPENAI_API_KEY LEARN_AI_ANTHROPIC_API_KEY LEARN_AI_DEEPSEEK_API_KEY \
+            LEARN_AI_GOOGLE_API_KEY LEARN_AI_OPENROUTER_API_KEY \
+            PAI_AUTH_GOOGLE_CLIENT_ID PAI_AUTH_GOOGLE_CLIENT_SECRET PAI_AUTH_GOOGLE_ALLOWED_DOMAIN \
+            LEARN_EMAIL_SMTP_ADDR LEARN_EMAIL_SMTP_USERNAME LEARN_EMAIL_SMTP_PASSWORD \
+            LEARN_EMAIL_FROM_ADDRESS LEARN_EMAIL_FROM_NAME DOMAIN; do
+            VAL=$(echo "$SECRETS" | jq -r ".$key // empty")
+            echo "::add-mask::$VAL"
+            echo "$key=$VAL" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Copy files to server
         uses: appleboy/scp-action@v1
@@ -106,17 +138,84 @@ jobs:
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
+      - name: Write .env on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL
+          script: |
+            cd /opt/pai-bot
+            printf '%s\n' \
+              "LEARN_SERVER_PORT=8080" \
+              "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
+              "LEARN_DATABASE_MAX_CONNS=25" \
+              "LEARN_CACHE_URL=redis://dragonfly:6379" \
+              "LEARN_NATS_URL=nats://nats:4222" \
+              "LEARN_TELEGRAM_BOT_TOKEN=${TG_TOKEN}" \
+              "PAI_AUTH_SECRET=${AUTH_SECRET}" \
+              "PAI_AUTH_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
+              "PAI_AUTH_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}" \
+              "PAI_AUTH_GOOGLE_ALLOWED_DOMAIN=${GOOGLE_ALLOWED_DOMAIN}" \
+              "LEARN_AI_OPENAI_API_KEY=${OPENAI_KEY}" \
+              "LEARN_AI_ANTHROPIC_API_KEY=${ANTHROPIC_KEY}" \
+              "LEARN_AI_DEEPSEEK_API_KEY=${DEEPSEEK_KEY}" \
+              "LEARN_AI_GOOGLE_API_KEY=${GOOGLE_KEY}" \
+              "LEARN_AI_OPENROUTER_API_KEY=${OPENROUTER_KEY}" \
+              "LEARN_AI_OLLAMA_ENABLED=false" \
+              "LEARN_TENANT_MODE=single" \
+              "LEARN_CURRICULUM_PATH=./oss" \
+              "LEARN_DISABLE_MULTI_LANGUAGE=false" \
+              "LEARN_RATING_PROMPT_EVERY_REPLIES=5" \
+              "LEARN_AI_PERSONALIZED_NUDGES_ENABLED=true" \
+              "LEARN_EMAIL_SMTP_ADDR=${SMTP_ADDR}" \
+              "LEARN_EMAIL_SMTP_USERNAME=${SMTP_USER}" \
+              "LEARN_EMAIL_SMTP_PASSWORD=${SMTP_PASS}" \
+              "LEARN_EMAIL_FROM_ADDRESS=${SMTP_FROM}" \
+              "LEARN_EMAIL_FROM_NAME=${SMTP_NAME}" \
+              "LEARN_LOG_LEVEL=info" \
+              "LEARN_LOG_FORMAT=json" \
+              "POSTGRES_PASSWORD=${PG_PASS}" \
+              > .env
+
+            if [ -n "${DOMAIN_VAL}" ] && [ "${DOMAIN_VAL}" != "localhost" ]; then
+              echo "DOMAIN=${DOMAIN_VAL}" >> .env
+              cp deploy/caddy/Caddyfile.https deploy/caddy/Caddyfile
+            else
+              cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
+            fi
+        env:
+          PG_PASS: ${{ steps.secrets.outputs.POSTGRES_PASSWORD }}
+          TG_TOKEN: ${{ steps.secrets.outputs.LEARN_TELEGRAM_BOT_TOKEN }}
+          AUTH_SECRET: ${{ steps.secrets.outputs.PAI_AUTH_SECRET }}
+          OPENAI_KEY: ${{ steps.secrets.outputs.LEARN_AI_OPENAI_API_KEY }}
+          ANTHROPIC_KEY: ${{ steps.secrets.outputs.LEARN_AI_ANTHROPIC_API_KEY }}
+          DEEPSEEK_KEY: ${{ steps.secrets.outputs.LEARN_AI_DEEPSEEK_API_KEY }}
+          GOOGLE_KEY: ${{ steps.secrets.outputs.LEARN_AI_GOOGLE_API_KEY }}
+          OPENROUTER_KEY: ${{ steps.secrets.outputs.LEARN_AI_OPENROUTER_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_CLIENT_SECRET }}
+          GOOGLE_ALLOWED_DOMAIN: ${{ steps.secrets.outputs.PAI_AUTH_GOOGLE_ALLOWED_DOMAIN }}
+          SMTP_ADDR: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_ADDR }}
+          SMTP_USER: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_USERNAME }}
+          SMTP_PASS: ${{ steps.secrets.outputs.LEARN_EMAIL_SMTP_PASSWORD }}
+          SMTP_FROM: ${{ steps.secrets.outputs.LEARN_EMAIL_FROM_ADDRESS }}
+          SMTP_NAME: ${{ steps.secrets.outputs.LEARN_EMAIL_FROM_NAME }}
+          DOMAIN_VAL: ${{ steps.secrets.outputs.DOMAIN }}
+
       - name: Deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: REGISTRY,TAG,REGION
+          envs: ECR_TOKEN,REGISTRY,TAG
           script: |
             chmod +x /opt/pai-bot/scripts/deploy-remote.sh
-            REGISTRY=$REGISTRY TAG=$TAG REGION=$REGION /opt/pai-bot/scripts/deploy-remote.sh
+            ECR_TOKEN="$ECR_TOKEN" REGISTRY="$REGISTRY" TAG="$TAG" \
+              /opt/pai-bot/scripts/deploy-remote.sh
         env:
+          ECR_TOKEN: ${{ needs.push-images.outputs.ecr-token }}
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           TAG: ${{ github.sha }}
-          REGION: ${{ secrets.AWS_REGION }}
