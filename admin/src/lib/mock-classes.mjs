@@ -120,3 +120,11 @@ export function getClassManagementSummary(classes) {
     joinCodes,
   };
 }
+
+export function getMockAssignedTopics() {
+  return [
+    { id: "algebraic-expressions", title: "Algebraic Expressions", status: "Live", progress: 0.76 },
+    { id: "linear-equations", title: "Linear Equations", status: "Starting next", progress: 0.42 },
+    { id: "fractions", title: "Fractions", status: "Upcoming", progress: 0 },
+  ];
+}

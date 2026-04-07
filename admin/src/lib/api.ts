@@ -507,3 +507,87 @@ export async function logout(): Promise<void> {
     throw error instanceof Error ? error : new Error("Logout failed");
   }
 }
+
+// ---- Groups ----
+
+export interface GroupRecord {
+  id: string;
+  name: string;
+  type: "class" | "study_group";
+  description: string;
+  syllabus: string;
+  subject: string;
+  cadence: string;
+  join_code: string;
+  member_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupDetail extends GroupRecord {
+  members: GroupMemberRecord[];
+}
+
+export interface GroupMemberRecord {
+  id: string;
+  name: string;
+  role: "member" | "leader" | "teacher";
+  channel: string;
+  mastery: number;
+}
+
+export interface CreateGroupInput {
+  name: string;
+  type?: "class" | "study_group";
+  description?: string;
+  syllabus?: string;
+  subject?: string;
+  cadence?: string;
+}
+
+export async function listGroups(type?: string): Promise<GroupRecord[]> {
+  const query = type ? `?type=${encodeURIComponent(type)}` : "";
+  return fetchJSON<GroupRecord[]>(`/api/admin/groups${query}`);
+}
+
+export async function createGroup(input: CreateGroupInput): Promise<GroupRecord> {
+  return postJSONWithBody<GroupRecord>("/api/admin/groups", input);
+}
+
+export async function getGroupDetail(id: string): Promise<GroupDetail> {
+  return fetchJSON<GroupDetail>(`/api/admin/groups/${id}`);
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  const res = await fetchWithSession(`/api/admin/groups/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to delete group: ${res.status}`);
+  }
+}
+
+export async function addGroupMember(
+  groupId: string,
+  userId: string,
+  role: string = "member",
+): Promise<void> {
+  const res = await fetchWithSession(`/api/admin/groups/${groupId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, role }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to add member: ${res.status}`);
+  }
+}
+
+export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
+  const res = await fetchWithSession(`/api/admin/groups/${groupId}/members/${userId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to remove member: ${res.status}`);
+  }
+}

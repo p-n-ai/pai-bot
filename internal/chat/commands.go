@@ -16,12 +16,16 @@ var RegisteredCommands = []BotCommand{
 	{Command: "progress", Description: "Lihat kemajuan pembelajaran"},
 	{Command: "goal", Description: "Tetapkan matlamat pembelajaran"},
 	{Command: "learn", Description: "Pilih topik untuk belajar"},
+	{Command: "create_group", Description: "Buat kumpulan belajar baru"},
+	{Command: "join", Description: "Sertai kumpulan dengan kod"},
+	{Command: "leaderboard", Description: "Papan pendahulu mingguan kumpulan"},
 }
 
 // DevCommands are only shown when dev mode is enabled.
 var DevCommands = []BotCommand{
 	{Command: "dev_reset", Description: "[DEV] Full reset: mastery, XP, streaks, goals"},
 	{Command: "dev_boost", Description: "[DEV] Boost current topic mastery (default 85%)"},
+	{Command: "dev_close_group", Description: "[DEV] Toggle group open/closed"},
 }
 
 // AllCommands returns RegisteredCommands + DevCommands when devMode is true.

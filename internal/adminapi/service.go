@@ -303,6 +303,12 @@ func (s *Service) tenantArg() any {
 }
 
 func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
+	// If classID looks like a UUID, use real group membership.
+	if looksLikeUUID(classID) {
+		return s.GetGroupClassProgress(classID)
+	}
+
+	// Legacy path: "all-students" or form-based IDs like "form-1".
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -327,6 +333,22 @@ func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
 	}
 	defer rows.Close()
 
+	return scanClassProgressRows(rows)
+}
+
+func looksLikeUUID(s string) bool {
+	// UUID v4: 8-4-4-4-12 hex chars
+	if len(s) != 36 {
+		return false
+	}
+	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
+}
+
+func scanClassProgressRows(rows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}) (ClassProgress, error) {
 	studentsByID := make(map[string]*ClassStudent)
 	var studentOrder []string
 	var topicIDs []string

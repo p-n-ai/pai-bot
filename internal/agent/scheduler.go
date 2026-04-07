@@ -111,6 +111,8 @@ type Scheduler struct {
 	xp       progress.XPTracker
 	goals    GoalStore
 	nudges   NudgeTracker
+	groups        GroupStore
+	tenantID      string
 	parentReports WeeklyParentReportSource
 	gateway  *chat.Gateway
 	aiRouter *ai.Router
@@ -144,6 +146,12 @@ func NewScheduler(
 	}
 }
 
+// SetGroupStore enables the weekly leaderboard recap for the scheduler.
+func (s *Scheduler) SetGroupStore(groups GroupStore, tenantID string) {
+	s.groups = groups
+	s.tenantID = tenantID
+}
+
 // Start begins the scheduler loop. Blocks until context is cancelled.
 func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	ticker := time.NewTicker(s.config.CheckInterval)
@@ -152,6 +160,11 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
 	go s.runDailySummaryTimer(ctx, userIDs)
 	go s.runWeeklyParentReportTimer(ctx)
+
+	// Start weekly leaderboard recap on Monday 8:00 AM MYT.
+	if s.groups != nil {
+		go s.runWeeklyLeaderboardTimer(ctx)
+	}
 
 	s.logger.Info("scheduler started", "interval", s.config.CheckInterval)
 
@@ -232,6 +245,73 @@ func (s *Scheduler) SendDailySummaries(ctx context.Context, userIDs []string, no
 			continue
 		}
 		s.logger.Info("daily summary sent", "user_id", userID)
+	}
+}
+
+const weeklyLeaderboardHour = 8 // 8:00 AM MYT
+
+// runWeeklyLeaderboardTimer fires every Monday at 8:00 AM MYT.
+func (s *Scheduler) runWeeklyLeaderboardTimer(ctx context.Context) {
+	for {
+		delay := timeUntilNextWeekday(time.Monday, weeklyLeaderboardHour, 0)
+		s.logger.Info("weekly leaderboard scheduled", "fires_in", delay.Round(time.Second))
+
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			s.sendWeeklyLeaderboards(ctx)
+		}
+	}
+}
+
+func (s *Scheduler) sendWeeklyLeaderboards(ctx context.Context) {
+	if s.groups == nil || s.tenantID == "" {
+		return
+	}
+
+	allGroups, err := s.groups.ListGroups(s.tenantID, "")
+	if err != nil {
+		s.logger.Error("failed to list groups for leaderboard", "error", err)
+		return
+	}
+
+	for _, g := range allGroups {
+		if g.MemberCount < 2 {
+			continue
+		}
+
+		entries, err := s.groups.GetWeeklyLeaderboard(g.ID, 10)
+		if err != nil {
+			s.logger.Error("failed to get leaderboard", "group_id", g.ID, "error", err)
+			continue
+		}
+		if len(entries) == 0 {
+			continue
+		}
+
+		msg := formatLeaderboard(g.Name, entries, i18n.DefaultLocale)
+
+		recipients, err := s.groups.GetGroupMembersWithChannel(g.ID)
+		if err != nil {
+			s.logger.Error("failed to get group members", "group_id", g.ID, "error", err)
+			continue
+		}
+
+		for _, r := range recipients {
+			out := chat.OutboundMessage{
+				Channel:   r.Channel,
+				UserID:    r.ExternalID,
+				Text:      msg,
+				ParseMode: "Markdown",
+			}
+			if err := s.gateway.Send(ctx, out); err != nil {
+				s.logger.Error("failed to send leaderboard", "user", r.ExternalID, "group", g.Name, "error", err)
+			}
+		}
+		s.logger.Info("weekly leaderboard sent", "group", g.Name, "recipients", len(recipients))
 	}
 }
 

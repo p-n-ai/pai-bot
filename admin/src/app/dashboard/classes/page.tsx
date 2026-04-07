@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState, useTransition } from "react";
 import { IconBook2, IconPlus, IconUsers, IconWand } from "@tabler/icons-react";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { AdminHighlightPanel } from "@/components/admin-highlight-panel";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { ClassListItem } from "@/components/class-list-item";
@@ -24,21 +25,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { issueInvite, type InviteRecord } from "@/lib/api";
-import { getClassManagementSummary, getMockClasses } from "@/lib/mock-classes.mjs";
+import {
+  issueInvite,
+  listGroups,
+  createGroup,
+  getGroupDetail,
+  type InviteRecord,
+  type GroupRecord,
+  type GroupDetail,
+} from "@/lib/api";
+import { getMockAssignedTopics } from "@/lib/mock-classes.mjs";
 
 const classPageEase = [0.22, 1, 0.36, 1] as const;
 
 export default function ClassManagementPage() {
-  const classes = useMemo(() => getMockClasses(), []);
-  const summary = getClassManagementSummary(classes);
-  const [selectedClassID, setSelectedClassID] = useState(classes[0]?.id ?? "");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { data: classes, error: loadError } = useAsyncResource<GroupRecord[]>(
+    () => listGroups("class").then((d) => d ?? []),
+    [refreshKey],
+  );
+  const safeClasses = useMemo(() => classes ?? [], [classes]);
+  const [selectedClassID, setSelectedClassID] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"teacher" | "parent" | "admin">("teacher");
   const [inviteError, setInviteError] = useState("");
   const [latestInvite, setLatestInvite] = useState<InviteRecord | null>(null);
   const [isInvitePending, startInviteTransition] = useTransition();
-  const selectedClass = classes.find((item) => item.id === selectedClassID) ?? classes[0] ?? null;
+  const [isCreatePending, startCreateTransition] = useTransition();
+  const [createError, setCreateError] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createSyllabus, setCreateSyllabus] = useState("KSSM Form 1");
+  const [createCadence, setCreateCadence] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+
+  // Auto-select first class when data loads
+  const effectiveSelectedID = selectedClassID || safeClasses[0]?.id || "";
+  const selectedClass = safeClasses.find((item) => item.id === effectiveSelectedID) ?? safeClasses[0] ?? null;
+
+  const { data: selectedDetail } = useAsyncResource<GroupDetail | null>(
+    () => effectiveSelectedID ? getGroupDetail(effectiveSelectedID) : Promise.resolve(null),
+    [effectiveSelectedID],
+  );
+
+  const summary = useMemo(() => {
+    const totalMembers = safeClasses.reduce((sum, c) => sum + c.member_count, 0);
+    return {
+      classCount: safeClasses.length,
+      totalMembers,
+      activeStudents: totalMembers,
+      averageMastery: 0,
+    };
+  }, [safeClasses]);
+
+  const assignedTopics = useMemo(() => getMockAssignedTopics(), []);
+
+  function handleCreateClass(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreateError("");
+    startCreateTransition(async () => {
+      try {
+        const g = await createGroup({
+          name: createName.trim(),
+          type: "class",
+          syllabus: createSyllabus,
+          cadence: createCadence.trim(),
+          subject: "Mathematics",
+        });
+        setCreateOpen(false);
+        setCreateName("");
+        setCreateCadence("");
+        setRefreshKey((k) => k + 1);
+        setSelectedClassID(g.id);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Failed to create class");
+      }
+    });
+  }
+
   const prefersReducedMotion = useReducedMotion();
   const sectionMotion = prefersReducedMotion
     ? { initial: false, animate: { opacity: 1 }, transition: { duration: 0 } }
@@ -87,22 +150,23 @@ export default function ClassManagementPage() {
         <PageHero
           eyebrow="Teaching operations"
           title="Class management"
-          description="Frontend scaffold with mock data for class setup, join codes, member roster, and topic assignment. The real class backend contract is not implemented yet."
+          description={loadError || "Create and manage classes, join codes, member rosters, and topic assignments."
+          }
           surface="plain"
           aside={
             <AdminHighlightPanel>
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Current scaffold</p>
-                <p className="mt-2 text-3xl font-semibold">Mock data only</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Classes</p>
+                <p className="mt-2 text-3xl font-semibold">{safeClasses.length}</p>
               </div>
               <p className="text-sm text-slate-300">
-                Use this page to validate layout and information architecture only. None of the class-management actions below persist yet.
+                Students join via bot with /join CODE
               </p>
             </AdminHighlightPanel>
           }
         >
           <div className="flex flex-wrap gap-3">
-            <Dialog>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger render={<Button className="gap-2" />}>
                 <IconPlus data-icon="inline-start" />
                 New class
@@ -111,37 +175,42 @@ export default function ClassManagementPage() {
                 <DialogHeader>
                   <DialogTitle>Create class</DialogTitle>
                   <DialogDescription>
-                    This dialog is currently a UI scaffold. Submission is intentionally disabled until create-class and class-edit APIs exist.
+                    Create a new class. Students can join using the generated join code via the bot.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="class-name">Class name</Label>
-                    <Input id="class-name" placeholder="Form 1 Algebra A" />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                <form onSubmit={handleCreateClass}>
+                  <div className="grid gap-4 py-2">
                     <div className="space-y-2">
-                      <Label>Syllabus</Label>
-                      <Select defaultValue="KSSM Form 1">
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="KSSM Form 1">KSSM Form 1</SelectItem>
-                          <SelectItem value="KSSM Form 2">KSSM Form 2</SelectItem>
-                          <SelectItem value="KSSM Form 3">KSSM Form 3</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="class-name">Class name</Label>
+                      <Input id="class-name" placeholder="Form 1 Algebra A" value={createName} onChange={(e) => setCreateName(e.target.value)} required />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Cadence</Label>
-                      <Input placeholder="Mon, Wed, Fri" />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Syllabus</Label>
+                        <Select value={createSyllabus} onValueChange={(v) => setCreateSyllabus(v ?? "KSSM Form 1")}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="KSSM Form 1">KSSM Form 1</SelectItem>
+                            <SelectItem value="KSSM Form 2">KSSM Form 2</SelectItem>
+                            <SelectItem value="KSSM Form 3">KSSM Form 3</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cadence</Label>
+                        <Input placeholder="Mon, Wed, Fri" value={createCadence} onChange={(e) => setCreateCadence(e.target.value)} />
+                      </div>
                     </div>
+                    {createError && <p className="text-sm text-red-600">{createError}</p>}
                   </div>
-                </div>
-                <DialogFooter showCloseButton>
-                  <Button disabled>Create class</Button>
-                </DialogFooter>
+                  <DialogFooter showCloseButton>
+                    <Button type="submit" disabled={isCreatePending || !createName.trim()}>
+                      {isCreatePending ? "Creating..." : "Create class"}
+                    </Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
             </Dialog>
 
@@ -185,10 +254,10 @@ export default function ClassManagementPage() {
         transition={{ ...sectionMotion.transition, delay: 0.08 }}
         className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
       >
-        <StatCard icon={IconUsers} title="Classes" value={String(summary.classCount)} note="Mock classes represented in this scaffold" />
-        <StatCard icon={IconUsers} title="Members" value={String(summary.totalMembers)} note="Total learners across the mock roster" />
-        <StatCard icon={IconBook2} title="Active learners" value={String(summary.activeStudents)} note="Students active in the latest mock snapshot" />
-        <StatCard icon={IconWand} title="Avg mastery" value={`${summary.averageMastery}%`} note="Average mastery across the mock classes" />
+        <StatCard icon={IconUsers} title="Classes" value={String(summary.classCount)} note="Total class groups" />
+        <StatCard icon={IconUsers} title="Members" value={String(summary.totalMembers)} note="Total learners across all classes" />
+        <StatCard icon={IconBook2} title="Active learners" value={String(summary.activeStudents)} note="Students enrolled" />
+        <StatCard icon={IconWand} title="Avg mastery" value={summary.averageMastery ? `${summary.averageMastery}%` : "--"} note="Average mastery across classes" />
       </motion.section>
 
       <motion.section
@@ -197,11 +266,11 @@ export default function ClassManagementPage() {
         className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]"
       >
         <AdminSurface>
-          <AdminSurfaceHeader title="Classes" description="Switch between mock classes to inspect the intended management layout." />
+          <AdminSurfaceHeader title="Classes" description="Select a class to view its roster and join code." />
           <div className="mt-6 space-y-4">
             <Select
               value={selectedClassID}
-              onValueChange={(value) => setSelectedClassID(value ?? classes[0]?.id ?? "")}
+              onValueChange={(value) => setSelectedClassID(value ?? safeClasses[0]?.id ?? "")}
             >
               <SelectTrigger className="w-full dark:border-white/15 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-900">
                 <SelectValue placeholder="Select a class">
@@ -209,7 +278,7 @@ export default function ClassManagementPage() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="dark:border-white/10 dark:bg-slate-900 dark:text-slate-100">
-                {classes.map((item) => (
+                {safeClasses.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.name}
                   </SelectItem>
@@ -218,15 +287,15 @@ export default function ClassManagementPage() {
             </Select>
           </div>
           <div className="mt-6 space-y-3">
-            {classes.map((item) => {
+            {safeClasses.map((item) => {
               return (
                 <ClassListItem
                   key={item.id}
                   name={item.name}
                   syllabus={item.syllabus}
-                  joinCode={item.joinCode}
-                  summary={item.summary}
-                  active={item.id === selectedClassID}
+                  joinCode={item.join_code}
+                  summary={`${item.syllabus}, ${item.member_count} learner${item.member_count !== 1 ? "s" : ""}`}
+                  active={item.id === effectiveSelectedID}
                   onClick={() => setSelectedClassID(item.id)}
                 />
               );
@@ -242,19 +311,19 @@ export default function ClassManagementPage() {
                   <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700 dark:text-sky-300">Selected class</p>
                     <h2 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">{selectedClass.name}</h2>
-                    <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedClass.summary}</p>
+                    <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedClass.description || `${selectedClass.syllabus}, ${selectedClass.member_count} learner${selectedClass.member_count !== 1 ? "s" : ""}`}</p>
                     <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.subject}</span>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.syllabus}</span>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.cadence}</span>
+                      {selectedClass.subject && <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.subject}</span>}
+                      {selectedClass.syllabus && <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.syllabus}</span>}
+                      {selectedClass.cadence && <span className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-900/80">{selectedClass.cadence}</span>}
                     </div>
                   </div>
                   <AdminHighlightPanel>
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Join code</p>
-                      <p className="mt-2 text-4xl font-semibold">{selectedClass.joinCode}</p>
+                      <p className="mt-2 text-4xl font-semibold">{selectedClass.join_code}</p>
                     </div>
-                    <p className="text-sm text-slate-300">Mock join code display only. Generation, refresh, and member enrollment remain blocked on backend APIs.</p>
+                    <p className="text-sm text-slate-300">Share this code with students. They join via /join {selectedClass.join_code} in the bot.</p>
                   </AdminHighlightPanel>
                 </div>
               </AdminSurface>
@@ -263,27 +332,33 @@ export default function ClassManagementPage() {
                 <AdminSurface>
                   <AdminSurfaceHeader
                     title="Member roster"
-                    description="Planned teacher view for class membership, current status, and quick intervention context."
+                    description="Class membership and mastery overview."
                   />
                   <div className="mt-6">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-slate-700 dark:text-slate-200">Learner</TableHead>
-                          <TableHead className="text-slate-700 dark:text-slate-200">Status</TableHead>
+                          <TableHead className="text-slate-700 dark:text-slate-200">Role</TableHead>
                           <TableHead className="text-slate-700 dark:text-slate-200">Channel</TableHead>
                           <TableHead className="text-slate-700 dark:text-slate-200">Mastery</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedClass.members.map((member) => (
-                          <TableRow key={member.id}>
-                            <TableCell className="font-medium text-slate-900 dark:text-slate-100">{member.name}</TableCell>
-                            <TableCell className="text-slate-600 dark:text-slate-200">{member.status}</TableCell>
-                            <TableCell className="capitalize text-slate-600 dark:text-slate-200">{member.channel}</TableCell>
-                            <TableCell className="text-slate-700 dark:text-slate-100">{Math.round(member.mastery * 100)}%</TableCell>
+                        {(selectedDetail?.members ?? []).length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-slate-500">No members yet. Share the join code to get started.</TableCell>
                           </TableRow>
-                        ))}
+                        ) : (
+                          (selectedDetail?.members ?? []).map((member) => (
+                            <TableRow key={member.id}>
+                              <TableCell className="font-medium text-slate-900 dark:text-slate-100">{member.name}</TableCell>
+                              <TableCell className="capitalize text-slate-600 dark:text-slate-200">{member.role}</TableCell>
+                              <TableCell className="capitalize text-slate-600 dark:text-slate-200">{member.channel}</TableCell>
+                              <TableCell className="text-slate-700 dark:text-slate-100">{Math.round(member.mastery * 100)}%</TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -292,14 +367,14 @@ export default function ClassManagementPage() {
                 <AdminSurface>
                   <AdminSurfaceHeader
                     title="Assigned topics"
-                    description="Planned topic-assignment panel for sequencing class-level study focus."
+                    description="Topic assignment (coming soon)"
                   />
                   <div className="mt-6 space-y-4">
-                    {selectedClass.assignedTopics.map((topic) => (
+                    {assignedTopics.map((topic: { id: string; title: string; status: string; progress: number }) => (
                       <TopicProgressRow key={topic.id} title={topic.title} status={topic.status} progress={topic.progress} />
                     ))}
                     <Button variant="outline" disabled className="w-full">
-                      Assign topics to class
+                      Assign topics to class (coming soon)
                     </Button>
                   </div>
                 </AdminSurface>

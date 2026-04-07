@@ -68,6 +68,18 @@ func (p *PostgresTracker) UpdateMastery(userID, syllabusID, topicID string, delt
 		 DO UPDATE SET mastery_score = $5, ease_factor = $6, interval_days = $7, repetitions = $8, next_review_at = $9, last_studied_at = $10, updated_at = NOW()`,
 		userID, p.tenantID, syllabusID, topicID, score, sm2.EaseFactor, sm2.IntervalDays, sm2.Repetitions, nextReview, now,
 	)
+	if err != nil {
+		return err
+	}
+
+	// Record daily mastery snapshot for leaderboard history.
+	_, err = p.pool.Exec(ctx,
+		`INSERT INTO mastery_snapshots (user_id, tenant_id, topic_id, mastery_score, snapshot_date)
+		 VALUES ((SELECT id FROM users WHERE external_id = $1 AND tenant_id = $2), $2, $3, $4, CURRENT_DATE)
+		 ON CONFLICT (user_id, topic_id, snapshot_date)
+		 DO UPDATE SET mastery_score = $4`,
+		userID, p.tenantID, topicID, score,
+	)
 	return err
 }
 
