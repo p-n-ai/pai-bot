@@ -14,11 +14,6 @@ output "ssh_command" {
 }
 
 output "health_check_url" {
-  description = "Health check URL"
+  description = "Health check URL (via Caddy)"
   value       = "http://${aws_instance.app.public_ip}/healthz"
-}
-
-output "deploy_command" {
-  description = "Deploy command"
-  value       = "DEPLOY_HOST=${aws_instance.app.public_ip} DEPLOY_KEY=terraform/${var.project}-key.pem ./scripts/deploy.sh"
 }

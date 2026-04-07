@@ -1,10 +1,13 @@
 # P&AI Bot — Single EC2 + Docker Compose deployment
 # Region: ap-southeast-5 (Malaysia)
 #
+# The server only needs Docker + docker compose. All AWS operations
+# (ECR push, Secrets Manager read) happen in GitHub Actions CI.
+#
 # Usage:
 #   cd terraform
 #   terraform init
-#   terraform plan
+#   terraform plan -var="ssh_cidr_blocks=[\"YOUR_IP/32\"]"
 #   terraform apply
 
 terraform {
@@ -26,6 +29,9 @@ provider "aws" {
 }
 
 # --- SSH Key Pair ---
+# NOTE: This is convenient for bootstrapping but places the private key in
+# Terraform state. For production, consider importing an externally managed
+# key pair instead.
 
 resource "tls_private_key" "deploy" {
   algorithm = "ED25519"
@@ -102,70 +108,11 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_iam_instance_profile" "app" {
-  name = "${var.project}-ec2"
-  role = aws_iam_role.ec2.name
-}
-
-resource "aws_iam_role" "ec2" {
-  name = "${var.project}-ec2"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ssm" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_role_policy" "ec2_ecr" {
-  name = "ecr-pull"
-  role = aws_iam_role.ec2.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ecr:GetAuthorizationToken"]
-        Resource = "*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
-        Resource = ["arn:aws:ecr:${var.aws_region}:*:repository/${var.project}/*"]
-      },
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "ec2_secrets" {
-  name = "secrets-read"
-  role = aws_iam_role.ec2.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = ["arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project}/*"]
-    }]
-  })
-}
-
 resource "aws_instance" "app" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.deploy.key_name
   vpc_security_group_ids = [aws_security_group.app.id]
-  iam_instance_profile   = aws_iam_instance_profile.app.name
 
   root_block_device {
     volume_size = var.volume_size_gb

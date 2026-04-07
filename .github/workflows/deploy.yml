@@ -144,9 +144,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL
+          envs: DEPLOY_DIR,PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL
           script: |
-            cd /opt/pai-bot
+            cd "$DEPLOY_DIR"
             printf '%s\n' \
               "LEARN_SERVER_PORT=8080" \
               "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
@@ -178,6 +178,7 @@ jobs:
               "LEARN_LOG_FORMAT=json" \
               "POSTGRES_PASSWORD=${PG_PASS}" \
               > .env
+            chmod 600 .env
 
             if [ -n "${DOMAIN_VAL}" ] && [ "${DOMAIN_VAL}" != "localhost" ]; then
               echo "DOMAIN=${DOMAIN_VAL}" >> .env
@@ -186,6 +187,7 @@ jobs:
               cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
             fi
         env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           PG_PASS: ${{ steps.secrets.outputs.POSTGRES_PASSWORD }}
           TG_TOKEN: ${{ steps.secrets.outputs.LEARN_TELEGRAM_BOT_TOKEN }}
           AUTH_SECRET: ${{ steps.secrets.outputs.PAI_AUTH_SECRET }}
@@ -210,12 +212,13 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: ECR_TOKEN,REGISTRY,TAG
+          envs: DEPLOY_DIR,ECR_TOKEN,REGISTRY,TAG
           script: |
-            chmod +x /opt/pai-bot/scripts/deploy-remote.sh
-            ECR_TOKEN="$ECR_TOKEN" REGISTRY="$REGISTRY" TAG="$TAG" \
-              /opt/pai-bot/scripts/deploy-remote.sh
+            chmod +x "$DEPLOY_DIR/scripts/deploy-remote.sh"
+            DEPLOY_DIR="$DEPLOY_DIR" ECR_TOKEN="$ECR_TOKEN" REGISTRY="$REGISTRY" TAG="$TAG" \
+              "$DEPLOY_DIR/scripts/deploy-remote.sh"
         env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           ECR_TOKEN: ${{ needs.push-images.outputs.ecr-token }}
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           TAG: ${{ github.sha }}

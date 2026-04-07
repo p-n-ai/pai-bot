@@ -23,17 +23,11 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 
 usermod -aG docker ubuntu
 
+# --- Install git + jq ---
+apt-get install -y git jq
+
 # --- Create app directory ---
 mkdir -p ${app_dir}
 chown ubuntu:ubuntu ${app_dir}
-
-# --- Install git + jq + AWS CLI ---
-apt-get install -y git jq unzip
-curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
-
-# --- SSM Agent (snap-based on Ubuntu) ---
-snap install amazon-ssm-agent --classic
-snap start amazon-ssm-agent
 
 echo "=== Setup complete ==="
