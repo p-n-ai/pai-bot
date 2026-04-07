@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,12 +23,23 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Validate admin lockfile
+      - name: Install pnpm
         working-directory: admin
         run: |
           corepack enable
           corepack prepare pnpm@10.26.2 --activate
-          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate admin lockfile
+        working-directory: admin
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Admin lint
+        working-directory: admin
+        run: pnpm lint
+
+      - name: Admin test
+        working-directory: admin
+        run: pnpm test
 
       - name: Download dependencies
         run: go mod download
@@ -99,6 +114,7 @@ jobs:
               "LEARN_CURRICULUM_PATH=./oss" \
               "LEARN_DISABLE_MULTI_LANGUAGE=false" \
               "LEARN_RATING_PROMPT_EVERY_REPLIES=5" \
+              "LEARN_AI_PERSONALIZED_NUDGES_ENABLED=true" \
               "LEARN_EMAIL_SMTP_ADDR=${LEARN_EMAIL_SMTP_ADDR}" \
               "LEARN_EMAIL_SMTP_USERNAME=${LEARN_EMAIL_SMTP_USERNAME}" \
               "LEARN_EMAIL_SMTP_PASSWORD=${LEARN_EMAIL_SMTP_PASSWORD}" \
@@ -117,6 +133,10 @@ jobs:
               cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
             fi
 
+            echo "--- Disabling host nginx if present ---"
+            sudo systemctl stop nginx 2>/dev/null || true
+            sudo systemctl disable nginx 2>/dev/null || true
+
             echo "--- Loading Docker images ---"
             docker load < pai-bot.tar.gz
             docker load < pai-admin.tar.gz
@@ -127,15 +147,12 @@ jobs:
             sleep 3
 
             echo "--- Running migrations (goose) ---"
-            if docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
               go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 \
               -dir /app/migrations postgres \
               "postgres://pai:${POSTGRES_PASSWORD}@postgres:5432/pai?sslmode=disable" \
-              up -allow-missing; then
-              echo "Migrations applied successfully"
-            else
-              echo "WARNING: Migration failed (exit $?) - app will still start with existing schema"
-            fi
+              up -allow-missing
+            echo "Migrations applied successfully"
 
             echo "--- Rolling out new containers ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
@@ -171,6 +188,9 @@ jobs:
             echo "--- Verifying Caddy route ---"
             if curl -sf --max-time 10 http://localhost/healthz; then
               echo "Deploy successful"
+            elif [ -n "${DOMAIN}" ] && [ "${DOMAIN}" != "localhost" ]; then
+              echo "NOTE: Caddy localhost check failed (expected with HTTPS domain config)"
+              echo "App container is healthy — deploy successful"
             else
               echo "ERROR: Caddy health check failed"
               docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 caddy

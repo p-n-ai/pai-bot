@@ -7,7 +7,6 @@ echo "=== P&AI Bot EC2 Setup ==="
 
 # --- System updates ---
 apt-get update -y
-apt-get upgrade -y
 
 # --- Install Docker Engine ---
 apt-get install -y ca-certificates curl gnupg
@@ -23,10 +22,6 @@ apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 usermod -aG docker ubuntu
-
-# --- Install Nginx ---
-apt-get install -y nginx
-systemctl enable nginx
 
 # --- Create app directory ---
 mkdir -p ${app_dir}

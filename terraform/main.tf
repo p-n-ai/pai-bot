@@ -111,6 +111,12 @@ resource "aws_instance" "app" {
   root_block_device {
     volume_size = var.volume_size_gb
     volume_type = "gp3"
+    encrypted   = true
+  }
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required" # IMDSv2 only
   }
 
   user_data = templatefile("${path.module}/user-data.sh", {
