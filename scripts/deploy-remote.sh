@@ -84,7 +84,36 @@ if [ -n "$ADMIN_CONTAINER" ]; then
   fi
 fi
 
+echo "--- Smoke test: bot commands ---"
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+SMOKE_PASS=0
+SMOKE_FAIL=0
+
+smoke() {
+  local name="$1" input="$2" expect="$3"
+  output=$($COMPOSE exec -T -e LEARN_DEV_MODE=true app \
+    sh -c "printf '$input\n' | timeout 30 /pai-terminal-chat --memory" 2>&1)
+  if echo "$output" | grep -qiE "$expect"; then
+    echo "  PASS: $name"
+    SMOKE_PASS=$((SMOKE_PASS + 1))
+  else
+    echo "  FAIL: $name (expected: $expect)"
+    echo "    got: $(echo "$output" | grep "P&AI>" | head -2)"
+    SMOKE_FAIL=$((SMOKE_FAIL + 1))
+  fi
+}
+
+smoke "/learn usage"         "/learn"                    "/learn"
+smoke "/progress"            "/progress"                 "Progress|XP"
+smoke "/create_group"        "/create_group Test Deploy" "Test Deploy"
+smoke "unknown cmd"          "/foobar"                   "diketahui|Unknown"
+
+echo "  Smoke: $SMOKE_PASS passed, $SMOKE_FAIL failed"
+if [ "$SMOKE_FAIL" -gt 0 ]; then
+  echo "WARNING: $SMOKE_FAIL smoke test(s) failed — deploy succeeded but bot may have issues"
+fi
+
 echo ""
 echo "Deploy successful (image: $TAG)"
 docker image prune -f
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+$COMPOSE ps
