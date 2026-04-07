@@ -72,7 +72,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,PAI_AUTH_SECRET,PAI_AUTH_GOOGLE_CLIENT_ID,PAI_AUTH_GOOGLE_CLIENT_SECRET,PAI_AUTH_GOOGLE_ALLOWED_DOMAIN,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD,DOMAIN
+          envs: DEPLOY_DIR,LEARN_TELEGRAM_BOT_TOKEN,PAI_AUTH_SECRET,PAI_AUTH_GOOGLE_CLIENT_ID,PAI_AUTH_GOOGLE_CLIENT_SECRET,PAI_AUTH_GOOGLE_ALLOWED_DOMAIN,LEARN_AI_OPENAI_API_KEY,LEARN_AI_ANTHROPIC_API_KEY,LEARN_AI_DEEPSEEK_API_KEY,LEARN_AI_GOOGLE_API_KEY,LEARN_AI_OPENROUTER_API_KEY,POSTGRES_PASSWORD,DOMAIN,LEARN_EMAIL_SMTP_ADDR,LEARN_EMAIL_SMTP_USERNAME,LEARN_EMAIL_SMTP_PASSWORD,LEARN_EMAIL_FROM_ADDRESS,LEARN_EMAIL_FROM_NAME
           script: |
             set -euo pipefail
             cd $DEPLOY_DIR
@@ -99,6 +99,11 @@ jobs:
             LEARN_CURRICULUM_PATH=./oss
             LEARN_DISABLE_MULTI_LANGUAGE=false
             LEARN_RATING_PROMPT_EVERY_REPLIES=5
+            LEARN_EMAIL_SMTP_ADDR=${LEARN_EMAIL_SMTP_ADDR}
+            LEARN_EMAIL_SMTP_USERNAME=${LEARN_EMAIL_SMTP_USERNAME}
+            LEARN_EMAIL_SMTP_PASSWORD=${LEARN_EMAIL_SMTP_PASSWORD}
+            LEARN_EMAIL_FROM_ADDRESS=${LEARN_EMAIL_FROM_ADDRESS}
+            LEARN_EMAIL_FROM_NAME=${LEARN_EMAIL_FROM_NAME}
             LEARN_LOG_LEVEL=info
             LEARN_LOG_FORMAT=json
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -136,7 +141,13 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "--- Waiting for app ---"
-            sleep 5
+            for i in $(seq 1 30); do
+              if curl -sf --max-time 5 http://localhost/healthz >/dev/null 2>&1; then
+                echo "Health check passed after ${i}s"
+                break
+              fi
+              sleep 1
+            done
 
             echo "--- Health check ---"
             if curl -sf --max-time 10 http://localhost/healthz; then
@@ -167,3 +178,8 @@ jobs:
           LEARN_AI_OPENROUTER_API_KEY: ${{ secrets.LEARN_AI_OPENROUTER_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DOMAIN: ${{ secrets.DOMAIN }}
+          LEARN_EMAIL_SMTP_ADDR: ${{ secrets.LEARN_EMAIL_SMTP_ADDR }}
+          LEARN_EMAIL_SMTP_USERNAME: ${{ secrets.LEARN_EMAIL_SMTP_USERNAME }}
+          LEARN_EMAIL_SMTP_PASSWORD: ${{ secrets.LEARN_EMAIL_SMTP_PASSWORD }}
+          LEARN_EMAIL_FROM_ADDRESS: ${{ secrets.LEARN_EMAIL_FROM_ADDRESS }}
+          LEARN_EMAIL_FROM_NAME: ${{ secrets.LEARN_EMAIL_FROM_NAME }}
