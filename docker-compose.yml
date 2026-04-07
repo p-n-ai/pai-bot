@@ -57,10 +57,6 @@ services:
       - "8080:8080"
     env_file:
       - .env
-    environment:
-      LEARN_DATABASE_URL: postgres://pai:pai@postgres:5432/pai?sslmode=disable
-      LEARN_CACHE_URL: redis://dragonfly:6379
-      LEARN_NATS_URL: nats://nats:4222
     dns:
       - 8.8.8.8
       - 1.1.1.1
