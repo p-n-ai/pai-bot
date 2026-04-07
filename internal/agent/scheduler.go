@@ -111,6 +111,7 @@ type Scheduler struct {
 	xp       progress.XPTracker
 	goals    GoalStore
 	nudges   NudgeTracker
+	parentReports WeeklyParentReportSource
 	gateway  *chat.Gateway
 	aiRouter *ai.Router
 	store    nudgeLanguageStore
@@ -150,6 +151,7 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 
 	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
 	go s.runDailySummaryTimer(ctx, userIDs)
+	go s.runWeeklyParentReportTimer(ctx)
 
 	s.logger.Info("scheduler started", "interval", s.config.CheckInterval)
 
