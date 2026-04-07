@@ -67,6 +67,12 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
   admin:
@@ -85,7 +91,7 @@ services:
       NEXT_PUBLIC_API_URL: ""
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   caddy:
@@ -100,8 +106,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - app
-      - admin
+      app:
+        condition: service_healthy
+      admin:
+        condition: service_started
     restart: unless-stopped
 
   ollama:

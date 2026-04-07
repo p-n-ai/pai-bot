@@ -129,22 +129,47 @@ jobs:
               up -allow-missing; then
               echo "Migrations applied successfully"
             else
-              echo "WARNING: Migration failed (exit $?) — app will still start with existing schema"
+              echo "WARNING: Migration failed (exit $?) - app will still start with existing schema"
             fi
 
             echo "--- Rolling out new containers ---"
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-            echo "--- Waiting for app ---"
-            sleep 5
+            echo "--- Waiting for app container health ---"
+            APP_CONTAINER=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app)
+            if [ -z "$APP_CONTAINER" ]; then
+              echo "ERROR: app container was not created"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+              exit 1
+            fi
 
-            echo "--- Health check ---"
+            APP_HEALTH=""
+            for i in $(seq 1 30); do
+              APP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$APP_CONTAINER")
+              if [ "$APP_HEALTH" = "healthy" ]; then
+                echo "App container is healthy"
+                break
+              fi
+              echo "Attempt $i/30: app health=$APP_HEALTH"
+              sleep 2
+            done
+
+            if [ "$APP_HEALTH" != "healthy" ]; then
+              echo "ERROR: app container did not become healthy"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
+              exit 1
+            fi
+
+            echo "--- Verifying app endpoint directly ---"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app curl -sf --max-time 5 http://localhost:8080/healthz > /dev/null
+
+            echo "--- Verifying Caddy route ---"
             if curl -sf --max-time 10 http://localhost/healthz; then
               echo "Deploy successful"
             else
-              echo "ERROR: Health check failed — rolling back app"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml stop app
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app
+              echo "ERROR: Caddy health check failed"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 caddy
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
               exit 1
             fi
 
