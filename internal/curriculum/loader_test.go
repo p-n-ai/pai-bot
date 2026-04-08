@@ -91,6 +91,47 @@ func TestLoader_GetAssessment(t *testing.T) {
 	if assessment.Questions[0].Answer.Type != "exact" {
 		t.Fatalf("assessment.Questions[0].Answer.Type = %q, want exact", assessment.Questions[0].Answer.Type)
 	}
+	if assessment.Questions[0].Answer.Working == "" {
+		t.Fatal("assessment.Questions[0].Answer.Working is empty")
+	}
+}
+
+func TestLoader_GetAssessment_QuestionLevelWorkingFallback(t *testing.T) {
+	dir := t.TempDir()
+
+	topicsDir := filepath.Join(dir, "curricula", "malaysia", "kssm", "topics", "algebra")
+	_ = os.MkdirAll(topicsDir, 0o755)
+
+	_ = os.WriteFile(filepath.Join(topicsDir, "01-variables.assessments.yaml"), []byte(`
+topic_id: F1-01
+provenance: human
+questions:
+  - id: Q1
+    text: "Evaluate 3x when x=2."
+    difficulty: easy
+    learning_objective: LO1
+    working: "Substitute x=2, then multiply."
+    answer:
+      type: exact
+      value: "6"
+    marks: 1
+`), 0o644)
+
+	loader, err := curriculum.NewLoader(dir)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+
+	assessment, found := loader.GetAssessment("F1-01")
+	if !found {
+		t.Fatal("GetAssessment(F1-01) not found")
+	}
+	if got := assessment.Questions[0].Answer.Working; got != "Substitute x=2, then multiply." {
+		t.Fatalf("assessment.Questions[0].Answer.Working = %q", got)
+	}
+	if got := assessment.Questions[0].Working; got != "Substitute x=2, then multiply." {
+		t.Fatalf("assessment.Questions[0].Working = %q", got)
+	}
 }
 
 func TestLoader_LoadsSubjectMetadata(t *testing.T) {
