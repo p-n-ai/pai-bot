@@ -20,10 +20,14 @@ func main() {
 	var userID string
 	var language string
 	var memory bool
+	var multi bool
+	var userCount int
 
 	flag.StringVar(&userID, "user-id", "terminal-user", "stable user id for the terminal session")
 	flag.StringVar(&language, "lang", "", "preferred language override (en, ms, zh)")
 	flag.BoolVar(&memory, "memory", false, "use in-memory session state instead of PostgreSQL")
+	flag.BoolVar(&multi, "multi", false, "multi-user mode: prefix lines with N: to switch users (e.g., 1:hello, 2:/challenge ABC)")
+	flag.IntVar(&userCount, "users", 2, "number of simulated users in multi-user mode")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -94,12 +98,23 @@ func main() {
 		DevMode:              cfg.Features.DevMode,
 	})
 
-	if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{
-		UserID:  userID,
-		Channel: "terminal",
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", err)
-		os.Exit(1)
+	if multi {
+		if err := terminalchat.RunMulti(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.MultiConfig{
+			UserCount:  userCount,
+			UserPrefix: userID,
+			Channel:    "terminal",
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{
+			UserID:  userID,
+			Channel: "terminal",
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 

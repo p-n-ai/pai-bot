@@ -278,7 +278,7 @@ Status (2026-03-18): current `/challenge` surface now covers invite-code challen
 *   **The "5-5-5" Rule:** Every topic pool now guarantees a minimum baseline of 5 Easy, 5 Medium, and 5 Hard questions.
 *   **What's New:** Injected new pedagogical schema metadata not present in earlier versions, including explicit `tp_level` (1-6) routing, `kbat: true/false` flags for higher-order tracking, and `# EXAM: UASA` provenance tags to map AI models directly to national exam formats (OAP, OPB, Subjektif). Upgraded Form 3 pools with brand new TP6 non-routine application problems.
 
-Current note: `P-W3D11-3` is only partially complete. The shipped Day 11 slice is the challenge-creation and matchmaking baseline listed below; the simultaneous quiz runtime, results settlement, XP award, and post-challenge review parts of that planned task still belong to later slices.
+Current note (2026-04-09): `P-W3D11-3` is now complete. The challenge quiz runtime, settlement, and XP award shipped as part of `P-W3D13-2`. Post-challenge review with retry and +50 XP is also live.
 
 #### Additional Tasks (Out of Initial Plan)
 
@@ -307,9 +307,22 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W3D13-1` | A/B test infra: `user_flags` JSONB, alternating motivation_features on/off, flag logged with every event | 🤖 | ✅ | Uses `users.config` JSONB `ab_group` field, 50/50 random on /start, group B skips milestones + nudges |
-| `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 | ⬜ | |
+| `P-W3D13-2` | Post-challenge learning: review missed questions after battle, +50 XP for completing review | 🤖 | ✅ | Full challenge pipeline shipped: gameplay runtime (one-shot per question), settlement, post-challenge review with retry, +50 XP, i18n (BM/EN/ZH). Also added multi-user terminal-chat (`--multi`) for E2E testing. |
 | `P-W3D13-3` | Milestone celebrations: topic mastered, XP milestones, subject complete — rich Telegram formatting | 🤖 | ✅ | |
 | `P-W3D13-4` | 🧑 Partner with 1 Malaysian school: teacher creates class, enrolls 15-20 KSSM students | 🧑 Human | ✅ | Work with Sekolah Menengah Sains Batu Pahat with Cikgu Akmallina |
+
+**Design decision (2026-04-09): Bot challenges intentionally diverge from the Pandai web quiz battle mechanics.**
+
+The Pandai web app (`team-mupmzfqot/pandai.question`) uses a real-time battle system with per-question 60-second countdown timers, speed-based scoring (`accuracy% × speed_bonus%`), a lives system, battle-hour coin multipliers, and synchronous play. The bot challenge system deliberately does **not** replicate this because:
+
+1. **Chat is slower than tapping.** Typing answers in Telegram takes 5–15× longer than selecting multiple-choice options in a web UI. A 60-second timer would punish the medium, not test the student.
+2. **Asynchronous play is more natural for chat.** Students reply when they can. Forcing simultaneous real-time play requires both players to be online at the same moment — impractical in a chat channel.
+3. **Learning > competition for this audience.** The bot's post-challenge review (retry missed questions, +50 XP) is richer than the web's result screen. The goal is to convert mistakes into learning moments, not just declare a winner.
+4. **Simplicity for self-hosters.** No WebSocket/real-time infra needed. The challenge runs entirely through the existing message-processing pipeline.
+
+**What the bot keeps from Pandai web:** 5 random questions per challenge, same assessment pool, bot/AI fallback when no human opponent found, score comparison for winner.
+
+**What the bot skips (for now):** Per-question timer, speed-based scoring, lives system, battle-hour multiplier, real-time synchronous play, coin currency. These can be revisited if the chat medium proves suitable or if a WebSocket channel is added later.
 
 ### Day 14 — Analytics Dashboard
 
@@ -349,7 +362,7 @@ Status (2026-04-01): Week 4 admin is ahead of the original scaffold. Current shi
 |---------|------|-------|--------|--------|
 | `P-W4D17-1` | Admin API: GET classes/{id}/progress, GET students/{id}/detail, GET students/{id}/conversations, GET ai/usage | 🤖 | ✅ | Also shipping GET /api/admin/metrics, GET /api/admin/parents/{id}, POST /api/admin/students/{id}/nudge, POST /api/admin/invites, and POST /api/auth/switch-tenant with refresh-token rotation. |
 | `P-W4D17-2` | Parent view: child summary card, weekly stats, mastery progress bars, AI-generated encouragement suggestion | 🤖 | ✅ | |
-| `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ⬜ | |
+| `P-W4D17-3` | Form/syllabus selection: after /start ask "Tingkatan berapa? 1️⃣ Form 1, 2️⃣ Form 2, 3️⃣ Form 3" — load correct curriculum | 🤖 | ✅ | Onboarding form selection with `onboarding_form` state, regex + AI classification fallback, i18n (BM/EN/ZH) |
 | `P-W4D17-4` | 🧑 Show admin panel to 2 pilot teachers via screen share, collect feedback | 🧑 Human | ⬜ | |
 
 Implementation note (2026-04-01): auth/session work is ahead of the original sequence. Shipped: `auth_identities`, `auth_invites`, `auth_sessions`, invite acceptance, email/password login, logout, protected Next.js routes for teacher/parent/admin/platform-admin, and password-confirmed school switching with session reissue. Still pending: bot-side form selection.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/i18n"
 )
 
 func (e *Engine) handleChallengeCommand(_ context.Context, msg chat.InboundMessage, args []string) (string, error) {
@@ -21,6 +22,9 @@ func (e *Engine) handleChallengeCommand(_ context.Context, msg chat.InboundMessa
 	}
 	if quizOwnsConversation(conv) {
 		return quizMustFinishOrCancelMessage(), nil
+	}
+	if challengeOwnsConversation(conv) {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgChallengeFinishFirst), nil
 	}
 
 	if len(args) == 0 {

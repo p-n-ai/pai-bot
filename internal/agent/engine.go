@@ -211,6 +211,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if response, handled := e.maybeHandlePendingGoal(ctx, msg, conv); handled {
 		return response, nil
 	}
+	if response, handled := e.maybeHandleChallengeTurn(ctx, msg, conv); handled {
+		return response, nil
+	}
 	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
 		return response, nil
 	}

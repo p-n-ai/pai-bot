@@ -46,6 +46,12 @@ const (
 	MsgGroupNoGroups     Key = "group_no_groups"
 	MsgLeaderboardEmpty  Key = "leaderboard_empty"
 	MsgGroupClosed       Key = "group_closed"
+
+	MsgChallengeComplete    Key = "challenge_complete"
+	MsgChallengeReviewOffer Key = "challenge_review_offer"
+	MsgChallengeReviewDone  Key = "challenge_review_done"
+	MsgChallengeReviewSkip  Key = "challenge_review_skip"
+	MsgChallengeFinishFirst Key = "challenge_finish_first"
 )
 
 var catalog = map[string]map[Key]string{
@@ -108,6 +114,11 @@ Tingkatan berapa anda sekarang?`,
 		MsgGroupNoGroups:     "Anda belum menyertai sebarang kumpulan.\nGuna /join <kod> untuk sertai, atau /create_group <nama> untuk buat baru.",
 		MsgLeaderboardEmpty:  "Belum ada data papan pendahulu untuk *%s*.\nTeruskan belajar dan semak semula minggu depan!",
 		MsgGroupClosed:       "*%s* tidak lagi menerima ahli baru.",
+		MsgChallengeComplete:    "Cabaran selesai!\nSkor: %d/%d (%d%%)",
+		MsgChallengeReviewOffer: "Anda salah %d soalan. Mahu ulang kaji?\nBalas 'review' untuk mula, atau apa-apa sahaja untuk teruskan.",
+		MsgChallengeReviewDone:  "Ulang kaji selesai! Anda dapat %d/%d betul.\n+50 XP untuk melengkapkan ulang kaji!",
+		MsgChallengeReviewSkip:  "Baik, kita teruskan. Anda boleh ulang kaji kemudian.",
+		MsgChallengeFinishFirst: "Selesaikan cabaran semasa anda dulu, kemudian cuba lagi.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -168,6 +179,11 @@ Which form are you in now?`,
 		MsgGroupNoGroups:     "You haven't joined any groups yet.\nUse /join <code> to join, or /create_group <name> to create one.",
 		MsgLeaderboardEmpty:  "No leaderboard data yet for *%s*.\nKeep studying and check back next week!",
 		MsgGroupClosed:       "*%s* is no longer accepting new members.",
+		MsgChallengeComplete:    "Challenge complete!\nScore: %d/%d (%d%%)",
+		MsgChallengeReviewOffer: "You missed %d question(s). Want to review them?\nReply 'review' to start, or anything else to continue.",
+		MsgChallengeReviewDone:  "Review complete! You got %d/%d correct.\n+50 XP for completing the review!",
+		MsgChallengeReviewSkip:  "Okay, moving on. You can always review later.",
+		MsgChallengeFinishFirst: "Finish your current challenge first, then try again.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -228,6 +244,11 @@ Which form are you in now?`,
 		MsgGroupNoGroups:     "你还没有加入任何小组。\n使用 /join <代码> 加入，或 /create_group <名称> 创建一个。",
 		MsgLeaderboardEmpty:  "*%s* 暂无排行榜数据。\n继续学习，下周再来查看！",
 		MsgGroupClosed:       "*%s* 不再接受新成员。",
+		MsgChallengeComplete:    "挑战完成！\n分数：%d/%d (%d%%)",
+		MsgChallengeReviewOffer: "你答错了 %d 道题。要复习吗？\n回复 'review' 开始，或其他内容继续。",
+		MsgChallengeReviewDone:  "复习完成！你答对了 %d/%d 道题。\n+50 XP 完成复习奖励！",
+		MsgChallengeReviewSkip:  "好的，我们继续。你随时可以回来复习。",
+		MsgChallengeFinishFirst: "请先完成当前挑战，然后再试。",
 	},
 }
 

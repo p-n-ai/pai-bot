@@ -19,6 +19,8 @@ const (
 	ChallengeStateWaiting           = "waiting"
 	ChallengeStatePendingAcceptance = "pending_acceptance"
 	ChallengeStateReady             = "ready"
+	ChallengeStateActive            = "active"
+	ChallengeStateCompleted         = "completed"
 
 	ChallengeMatchSourceInviteCode = "invite_code"
 	ChallengeMatchSourceQueue      = "queue"
@@ -106,6 +108,9 @@ type ChallengeStore interface {
 	AcceptPendingChallenge(userID string) (*Challenge, error)
 	DeclinePendingChallenge(userID string) (bool, error)
 	CancelOpenChallenge(userID string) (bool, error)
+	StartChallenge(challengeID string) (*Challenge, error)
+	GetActiveChallengeForUser(userID string) (*Challenge, error)
+	CompleteChallenge(challengeID string) (*Challenge, error)
 }
 
 // MemoryChallengeStore stores challenges in memory.
@@ -399,6 +404,51 @@ func (s *MemoryChallengeStore) userHasLiveChallengeLocked(userID string) bool {
 		}
 	}
 	return false
+}
+
+func (s *MemoryChallengeStore) StartChallenge(challengeID string) (*Challenge, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	challenge, ok := s.challengesByID[challengeID]
+	if !ok {
+		return nil, ErrChallengeNotFound
+	}
+	if challenge.State != ChallengeStateReady {
+		return nil, fmt.Errorf("challenge state must be ready to start, got %s", challenge.State)
+	}
+	challenge.State = ChallengeStateActive
+	return cloneChallenge(challenge), nil
+}
+
+func (s *MemoryChallengeStore) GetActiveChallengeForUser(userID string) (*Challenge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, challenge := range s.challengesByID {
+		if challenge.CreatorID != userID && challenge.OpponentID != userID {
+			continue
+		}
+		if challenge.State == ChallengeStateActive || challenge.State == ChallengeStateReady {
+			return cloneChallenge(challenge), nil
+		}
+	}
+	return nil, ErrChallengeNotFound
+}
+
+func (s *MemoryChallengeStore) CompleteChallenge(challengeID string) (*Challenge, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	challenge, ok := s.challengesByID[challengeID]
+	if !ok {
+		return nil, ErrChallengeNotFound
+	}
+	if challenge.State != ChallengeStateActive {
+		return nil, fmt.Errorf("challenge state must be active to complete, got %s", challenge.State)
+	}
+	challenge.State = ChallengeStateCompleted
+	return cloneChallenge(challenge), nil
 }
 
 func (s *MemoryChallengeStore) AcceptPendingChallenge(userID string) (*Challenge, error) {
@@ -1116,6 +1166,21 @@ func (s *PostgresChallengeStore) CancelOpenChallenge(externalUserID string) (boo
 	return true, nil
 }
 
+func (s *PostgresChallengeStore) StartChallenge(challengeID string) (*Challenge, error) {
+	// TODO: implement PostgreSQL version
+	return nil, fmt.Errorf("PostgresChallengeStore.StartChallenge not implemented")
+}
+
+func (s *PostgresChallengeStore) GetActiveChallengeForUser(externalUserID string) (*Challenge, error) {
+	// TODO: implement PostgreSQL version
+	return nil, fmt.Errorf("PostgresChallengeStore.GetActiveChallengeForUser not implemented")
+}
+
+func (s *PostgresChallengeStore) CompleteChallenge(challengeID string) (*Challenge, error) {
+	// TODO: implement PostgreSQL version
+	return nil, fmt.Errorf("PostgresChallengeStore.CompleteChallenge not implemented")
+}
+
 func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx pgx.Tx, code string) (*Challenge, string, error) {
 	var challenge Challenge
 	var readyAt *time.Time
@@ -1819,7 +1884,7 @@ func challengeResumableAt(challenge *Challenge, now time.Time) bool {
 		return false
 	}
 	switch challenge.State {
-	case ChallengeStateWaiting, ChallengeStateReady, "active":
+	case ChallengeStateWaiting, ChallengeStateReady, ChallengeStateActive:
 		return true
 	case ChallengeStatePendingAcceptance:
 		return challenge.JoinDeadlineAt == nil || challenge.JoinDeadlineAt.After(now)
