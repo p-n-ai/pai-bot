@@ -993,16 +993,18 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	conv.PendingQuizTopicID = metadata.PendingQuizTopicID
 	conv.QuizState = metadata.QuizState
 	conv.PendingGoal = metadata.PendingGoal
+	conv.ChallengeState = metadata.ChallengeState
 
 	return conv, nil
 }
 
 type conversationMetadata struct {
-	Summary            string                 `json:"summary,omitempty"`
-	CompactedAt        int                    `json:"compacted_at,omitempty"`
-	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
-	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft      `json:"pending_goal,omitempty"`
+	Summary            string                      `json:"summary,omitempty"`
+	CompactedAt        int                         `json:"compacted_at,omitempty"`
+	PendingQuizTopicID string                      `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState      `json:"quiz_state,omitempty"`
+	PendingGoal        *PendingGoalDraft           `json:"pending_goal,omitempty"`
+	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
 }
 
 func parseConversationMetadata(metadata []byte) conversationMetadata {

@@ -514,24 +514,24 @@ func (e *Engine) challengeTopicIDFromState(state *ConversationChallengeState) st
 
 func renderChallengeQuestion(topicName string, index, total int, question QuizQuestion) string {
 	var builder strings.Builder
+	builder.WriteString("⚔️ *Challenge*")
 	if topicName != "" {
-		builder.WriteString("Challenge: ")
+		builder.WriteString(": ")
 		builder.WriteString(topicName)
-		builder.WriteString("\n")
 	}
-	fmt.Fprintf(&builder, "Question %d/%d\n", index+1, total)
+	fmt.Fprintf(&builder, "\n📝 Question %d of %d\n", index+1, total)
+	builder.WriteString("━━━━━━━━━━━━━━━━━━\n\n")
 	builder.WriteString(question.Text)
 
 	options := quizOptions(question)
 	if len(options) > 0 {
-		builder.WriteString("\nOptions:")
+		builder.WriteString("\n")
 		for _, option := range options {
-			builder.WriteString("\n- ")
+			builder.WriteString("\n▸ ")
 			builder.WriteString(option)
 		}
 	}
 
-	builder.WriteString("\nReply with your answer.")
 	return builder.String()
 }
 
@@ -549,24 +549,24 @@ func renderChallengeReviewOfferLocalized(locale string, missedCount int) string 
 
 func renderChallengeReviewQuestion(topicName string, reviewIndex, reviewTotal int, question QuizQuestion) string {
 	var builder strings.Builder
+	builder.WriteString("📖 *Review*")
 	if topicName != "" {
-		builder.WriteString("Review: ")
+		builder.WriteString(": ")
 		builder.WriteString(topicName)
-		builder.WriteString("\n")
 	}
-	fmt.Fprintf(&builder, "Review Question %d/%d\n", reviewIndex+1, reviewTotal)
+	fmt.Fprintf(&builder, "\n📝 Question %d of %d\n", reviewIndex+1, reviewTotal)
+	builder.WriteString("━━━━━━━━━━━━━━━━━━\n\n")
 	builder.WriteString(question.Text)
 
 	options := quizOptions(question)
 	if len(options) > 0 {
-		builder.WriteString("\nOptions:")
+		builder.WriteString("\n")
 		for _, option := range options {
-			builder.WriteString("\n- ")
+			builder.WriteString("\n▸ ")
 			builder.WriteString(option)
 		}
 	}
 
-	builder.WriteString("\nReply with your answer.")
 	return builder.String()
 }
 

@@ -32,6 +32,17 @@ const (
 )
 
 // EngineConfig holds dependencies for the agent engine.
+// Notifier sends proactive messages to users (e.g., challenge ready notifications).
+// Implementations should be safe to call from any goroutine.
+type Notifier interface {
+	Notify(ctx context.Context, channel, userID, text string)
+}
+
+// NopNotifier discards all notifications.
+type NopNotifier struct{}
+
+func (NopNotifier) Notify(context.Context, string, string, string) {}
+
 type EngineConfig struct {
 	AIRouter              *ai.Router
 	Store                 ConversationStore
@@ -52,6 +63,7 @@ type EngineConfig struct {
 	Groups                GroupStore
 	TenantID              string // tenant UUID for bot-side group operations
 	DevMode               bool
+	Notifier              Notifier
 }
 
 // Engine is the core conversation processor.
@@ -74,6 +86,7 @@ type Engine struct {
 	groups                GroupStore
 	tenantID              string
 	devMode               bool
+	notifier              Notifier
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
 	milestones            *pendingMilestones
@@ -129,6 +142,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if groups == nil {
 		groups = NewMemoryGroupStore()
 	}
+	notifier := cfg.Notifier
+	if notifier == nil {
+		notifier = NopNotifier{}
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -148,9 +165,18 @@ func NewEngine(cfg EngineConfig) *Engine {
 		groups:                groups,
 		tenantID:              cfg.TenantID,
 		devMode:               cfg.DevMode,
+		notifier:              notifier,
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
+	}
+}
+
+// SetNotifier replaces the engine's notifier. Use this when the notifier
+// depends on infrastructure (e.g., chat gateway) created after the engine.
+func (e *Engine) SetNotifier(n Notifier) {
+	if n != nil {
+		e.notifier = n
 	}
 }
 

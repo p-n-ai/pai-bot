@@ -12,6 +12,8 @@ type TelegramInlineKeyboardContext struct {
 	QuizIntensityPending bool
 	QuizActive           bool
 	QuizPaused           bool
+	ChallengeActive      bool
+	ChallengeReview      bool
 }
 
 // BuildTelegramInlineKeyboard returns inline keyboard rows inferred from the
@@ -82,7 +84,8 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 	}
 
 	hasQuizQuestionPrompt :=
-		strings.Contains(text, "Question ") &&
+		!ctx.ChallengeActive && !ctx.ChallengeReview &&
+			strings.Contains(text, "Question ") &&
 			(strings.Contains(lower, "reply with your answer.") || strings.Contains(lower, "reply with a short explanation."))
 	hasQuizRetryPrompt := strings.Contains(lower, "try the same question again.")
 	if ctx.QuizActive || hasQuizQuestionPrompt || hasQuizRetryPrompt {
@@ -144,3 +147,4 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 func StripReviewActionCodes(text string) string {
 	return strings.TrimSpace(reviewActionPattern.ReplaceAllString(text, ""))
 }
+

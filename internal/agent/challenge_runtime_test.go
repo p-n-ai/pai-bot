@@ -147,10 +147,10 @@ func TestStartChallengeFromReadyState(t *testing.T) {
 	if response == "" {
 		t.Fatal("expected non-empty response from startChallengePlay")
 	}
-	if !strings.Contains(response, "Challenge:") {
-		t.Errorf("response should contain 'Challenge:', got: %s", response)
+	if !strings.Contains(response, "Challenge") {
+		t.Errorf("response should contain 'Challenge', got: %s", response)
 	}
-	if !strings.Contains(response, "Question 1/") {
+	if !strings.Contains(response, "Question 1 of") {
 		t.Errorf("response should contain 'Question 1/', got: %s", response)
 	}
 }
@@ -187,7 +187,7 @@ func TestChallengeAnswerCorrect(t *testing.T) {
 	if !strings.Contains(response, "Betul") && !strings.Contains(response, "Correct") {
 		t.Errorf("response should contain correct feedback, got: %s", response)
 	}
-	if !strings.Contains(response, "Question 2/") {
+	if !strings.Contains(response, "Question 2 of") {
 		t.Errorf("response should contain 'Question 2/', got: %s", response)
 	}
 }
@@ -221,7 +221,7 @@ func TestChallengeAnswerIncorrect_StillAdvances(t *testing.T) {
 		t.Fatal("expected challenge turn to be handled")
 	}
 	// Key difference from quiz: wrong answer should still advance
-	if !strings.Contains(response, "Question 2/") {
+	if !strings.Contains(response, "Question 2 of") {
 		t.Errorf("response should advance to 'Question 2/' even on wrong answer, got: %s", response)
 	}
 }
@@ -330,7 +330,7 @@ func TestChallengeReview_AcceptReview(t *testing.T) {
 	if !handled {
 		t.Fatal("expected review accept to be handled")
 	}
-	if !strings.Contains(response, "Review Question 1/") {
+	if !strings.Contains(response, "Question 1 of") {
 		t.Errorf("response should contain 'Review Question 1/', got: %s", response)
 	}
 }
@@ -399,7 +399,7 @@ func TestChallengeReview_CorrectAnswer_Advances(t *testing.T) {
 	if !strings.Contains(response, "Betul") && !strings.Contains(response, "Correct") {
 		t.Errorf("response should contain correct feedback, got: %s", response)
 	}
-	if !strings.Contains(response, "Review Question 2/") {
+	if !strings.Contains(response, "Question 2 of") {
 		t.Errorf("response should contain 'Review Question 2/', got: %s", response)
 	}
 }
@@ -510,14 +510,14 @@ func TestRenderChallengeQuestion(t *testing.T) {
 	q := QuizQuestion{ID: "q1", Text: "Solve x + 2 = 5", AnswerType: "exact", Answer: "3"}
 	result := renderChallengeQuestion("Linear Equations", 0, 3, q)
 
-	if !strings.Contains(result, "Challenge:") {
-		t.Errorf("should contain 'Challenge:', got: %s", result)
+	if !strings.Contains(result, "Challenge") {
+		t.Errorf("should contain 'Challenge', got: %s", result)
 	}
 	if !strings.Contains(result, "Linear Equations") {
 		t.Errorf("should contain topic name, got: %s", result)
 	}
-	if !strings.Contains(result, "Question 1/3") {
-		t.Errorf("should contain 'Question 1/3', got: %s", result)
+	if !strings.Contains(result, "Question 1 of 3") {
+		t.Errorf("should contain 'Question 1 of 3', got: %s", result)
 	}
 }
 
