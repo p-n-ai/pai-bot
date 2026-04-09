@@ -180,6 +180,26 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		}
 		return resp, nil
 	}
+	// Translate challenge inline-button callbacks into command equivalents.
+	if msg.CallbackQueryID != "" {
+		switch msg.Text {
+		case "challenge:cancel":
+			msg.Text = "/challenge cancel"
+		case "challenge:accept":
+			msg.Text = "/challenge accept"
+		}
+		if strings.HasPrefix(msg.Text, "/") {
+			resp, err := e.handleCommand(ctx, msg)
+			if err != nil {
+				return resp, err
+			}
+			prefix := milestonePrefix + unlockPrefix
+			if prefix != "" {
+				return prefix + "\n\n" + resp, nil
+			}
+			return resp, nil
+		}
+	}
 	// Auto-trigger onboarding for first-time users who send a normal message.
 	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
 		e.logEventAsync(Event{

@@ -592,10 +592,15 @@ func selectChallengeQuestions(questions []QuizQuestion, count int) []QuizQuestio
 func isReviewAccept(text string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	switch normalized {
-	case "review", "yes", "ulang", "ya", "ok", "okay", "sure", "y":
+	case "review", "yes", "ulang", "ya", "ok", "okay", "sure", "y", "challenge:review":
 		return true
 	}
 	return false
+}
+
+func isReviewSkip(text string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	return normalized == "challenge:skip"
 }
 
 func isChallengeReviewExit(text string) bool {
