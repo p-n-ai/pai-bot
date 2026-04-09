@@ -543,7 +543,9 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/admin/groups/{id}/leaderboard", teacherOrAbove(handleAdminGroupLeaderboard(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
-	return withCORS(mux)
+	apiLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
+	authLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
+	return withSecurityHeaders(withCORS(withAPIRateLimit(mux, time.Now, apiLimiter, authLimiter)))
 }
 
 func authenticateRequests(authSvc authService, manager *auth.TokenManager, now func() time.Time) func(http.Handler) http.Handler {
