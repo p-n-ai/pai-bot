@@ -368,11 +368,10 @@ func formatChallengeJoinedMessage(challenge *Challenge, creatorName string) stri
 
 func formatChallengeSearchingMessage(search *ChallengeSearch) string {
 	return fmt.Sprintf(
-		"Searching for an opponent.\n\nTopic: %s\nStatus: %s\nTimeout: %d minutes\n\nOr invite a friend directly:\n/challenge invite %s\n\nCancel: /challenge cancel",
+		"Searching for an opponent.\n\nTopic: %s\nStatus: %s\nTimeout: %d minutes\n\nTip: Cancel and use /challenge invite to create a code for a friend.\n\nCancel: /challenge cancel",
 		search.TopicName,
 		search.Status,
 		int(matchmakingWaitTimeout/time.Minute),
-		search.TopicName,
 	)
 }
 
