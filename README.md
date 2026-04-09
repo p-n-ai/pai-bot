@@ -433,6 +433,24 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 
 *At least one AI provider must be configured.
 
+### First-Boot Tenant Flow
+
+The first setup behavior depends on `LEARN_TENANT_MODE`:
+
+- `single` mode:
+  - On server startup, P&AI ensures tenant slug `default` exists.
+  - If it is missing (for example, on a fresh DB), startup will auto-create/upsert it.
+  - Tenant-bound runtime services use this single tenant context.
+- `multi` mode:
+  - Startup does not auto-create tenants.
+  - Tenant lifecycle is managed explicitly (seed/admin/invite workflows).
+
+Recommended first setup sequence:
+
+1. Run migrations.
+2. Set `LEARN_TENANT_MODE` in `.env`.
+3. Start the server.
+
 ---
 
 ## Development

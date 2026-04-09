@@ -30,6 +30,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
+	"github.com/p-n-ai/pai-bot/internal/tenant"
 )
 
 func main() {
@@ -65,6 +66,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
+	if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
+		slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
+		os.Exit(1)
+	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
