@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"

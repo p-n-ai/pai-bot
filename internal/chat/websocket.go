@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // wsInboundMsg is the JSON envelope clients send over the WebSocket.
@@ -63,7 +63,7 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn) {
 	userID, err := ws.readAuth(ctx, conn)
 	if err != nil {
 		slog.Warn("websocket auth failed", "error", err)
-		conn.Close(websocket.StatusPolicyViolation, "auth required")
+		_ = conn.Close(websocket.StatusPolicyViolation, "auth required")
 		return
 	}
 
@@ -117,7 +117,7 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 	for {
 		select {
 		case <-ws.stop:
-			conn.Close(websocket.StatusGoingAway, "server shutting down")
+			_ = conn.Close(websocket.StatusGoingAway, "server shutting down")
 			return
 		default:
 		}

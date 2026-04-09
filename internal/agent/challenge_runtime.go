@@ -598,11 +598,6 @@ func isReviewAccept(text string) bool {
 	return false
 }
 
-func isReviewSkip(text string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(text))
-	return normalized == "challenge:skip"
-}
-
 func isChallengeReviewExit(text string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	switch normalized {
