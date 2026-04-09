@@ -19,6 +19,7 @@ var RegisteredCommands = []BotCommand{
 	{Command: "create_group", Description: "Buat kumpulan belajar baru"},
 	{Command: "join", Description: "Sertai kumpulan dengan kod"},
 	{Command: "leaderboard", Description: "Papan pendahulu mingguan kumpulan"},
+	{Command: "challenge", Description: "Cabaran kuiz dengan rakan atau AI"},
 }
 
 // DevCommands are only shown when dev mode is enabled.
