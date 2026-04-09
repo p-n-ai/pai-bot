@@ -183,8 +183,9 @@ func TestChallengeAnswerCorrect(t *testing.T) {
 	if !handled {
 		t.Fatal("expected challenge turn to be handled")
 	}
-	if !strings.Contains(response, "Correct") {
-		t.Errorf("response should contain 'Correct', got: %s", response)
+	// "Betul" (ms) or "Correct" (en) depending on default locale
+	if !strings.Contains(response, "Betul") && !strings.Contains(response, "Correct") {
+		t.Errorf("response should contain correct feedback, got: %s", response)
 	}
 	if !strings.Contains(response, "Question 2/") {
 		t.Errorf("response should contain 'Question 2/', got: %s", response)
@@ -395,8 +396,8 @@ func TestChallengeReview_CorrectAnswer_Advances(t *testing.T) {
 	if !handled {
 		t.Fatal("expected review turn to be handled")
 	}
-	if !strings.Contains(response, "Correct") {
-		t.Errorf("response should contain 'Correct', got: %s", response)
+	if !strings.Contains(response, "Betul") && !strings.Contains(response, "Correct") {
+		t.Errorf("response should contain correct feedback, got: %s", response)
 	}
 	if !strings.Contains(response, "Review Question 2/") {
 		t.Errorf("response should contain 'Review Question 2/', got: %s", response)
@@ -478,7 +479,9 @@ func TestChallengeReview_WrongAnswer_AllowsRetry(t *testing.T) {
 	if strings.Contains(response, "Review Question 2/") {
 		t.Errorf("wrong review answer should NOT advance, got: %s", response)
 	}
-	if !strings.Contains(strings.ToLower(response), "try") || !strings.Contains(strings.ToLower(response), "again") {
+	// "Cuba lagi" (ms), "Try again" (en), or "再试" (zh)
+	lower := strings.ToLower(response)
+	if !strings.Contains(lower, "try again") && !strings.Contains(lower, "cuba lagi") && !strings.Contains(lower, "再试") {
 		t.Errorf("response should encourage retry, got: %s", response)
 	}
 }

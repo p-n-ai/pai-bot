@@ -71,10 +71,10 @@ type Conversation struct {
 	CompactedAt        int                    `json:"compacted_at,omitempty"` // number of messages included in Summary
 	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
 	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft            `json:"pending_goal,omitempty"`
-	ChallengeState     *ConversationChallengeState  `json:"challenge_state,omitempty"`
-	StartedAt          time.Time                    `json:"started_at"`
-	EndedAt            *time.Time             `json:"ended_at,omitempty"`
+	PendingGoal    *PendingGoalDraft           `json:"pending_goal,omitempty"`
+	ChallengeState *ConversationChallengeState `json:"challenge_state,omitempty"`
+	StartedAt      time.Time                   `json:"started_at"`
+	EndedAt        *time.Time                  `json:"ended_at,omitempty"`
 }
 
 // ConversationStore persists conversation state and message history.

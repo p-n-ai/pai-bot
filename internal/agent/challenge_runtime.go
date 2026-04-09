@@ -161,14 +161,15 @@ func (e *Engine) handleChallengeAnswer(msg chat.InboundMessage, conv *Conversati
 	}
 
 	topicName := e.lookupTopicName(e.challengeTopicIDFromState(state))
+	locale := e.messageLocale(msg, conv)
 	var response string
 
 	// Build feedback
 	var feedback string
 	if correct {
-		feedback = "Correct."
+		feedback = i18n.S(locale, i18n.MsgChallengeCorrect)
 	} else {
-		feedback = fmt.Sprintf("Incorrect. The answer is: %s", question.Answer)
+		feedback = i18n.S(locale, i18n.MsgChallengeIncorrect, question.Answer)
 	}
 
 	if newState.CurrentIndex >= len(newState.Questions) {
@@ -417,7 +418,8 @@ func (e *Engine) handleChallengeReviewAnswer(msg chat.InboundMessage, conv *Conv
 
 	if !correct {
 		// Allow retry (like quiz)
-		feedback := "Not quite. Try again."
+		locale := e.messageLocale(msg, conv)
+		feedback := i18n.S(locale, i18n.MsgChallengeReviewRetry)
 		if len(question.Hints) > 0 {
 			feedback += "\nHint: " + question.Hints[0].Text
 		}
@@ -433,21 +435,29 @@ func (e *Engine) handleChallengeReviewAnswer(msg chat.InboundMessage, conv *Conv
 	}
 
 	// Correct - advance review
+	locale := e.messageLocale(msg, conv)
+	correctFeedback := i18n.S(locale, i18n.MsgChallengeCorrect)
+
 	newState := *state
 	newState.ReviewIndex = state.ReviewIndex + 1
 	newState.ReviewCorrect = state.ReviewCorrect + 1
 
 	if newState.ReviewIndex >= len(newState.MissedIndices) {
 		// Review complete
-		response = "Correct.\n\n" + e.completeChallengeReview(msg, conv, &newState)
+		response = correctFeedback + "\n\n" + e.completeChallengeReview(msg, conv, &newState)
 	} else {
 		if err := e.store.UpdateConversationChallengeState(conv.ID, conversationStateChallengeReview, newState); err != nil {
 			slog.Error("failed to update review state", "conversation_id", conv.ID, "error", err)
 		}
 		nextQuestionIdx := newState.MissedIndices[newState.ReviewIndex]
-		nextQuestion := newState.Questions[nextQuestionIdx]
-		nextQ := renderChallengeReviewQuestion(topicName, newState.ReviewIndex, len(newState.MissedIndices), nextQuestion)
-		response = "Correct.\n\n" + nextQ
+		// Bounds check for next review question.
+		if nextQuestionIdx >= len(newState.Questions) {
+			response = correctFeedback + "\n\n" + e.completeChallengeReview(msg, conv, &newState)
+		} else {
+			nextQuestion := newState.Questions[nextQuestionIdx]
+			nextQ := renderChallengeReviewQuestion(topicName, newState.ReviewIndex, len(newState.MissedIndices), nextQuestion)
+			response = correctFeedback + "\n\n" + nextQ
+		}
 	}
 
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{

@@ -47,11 +47,14 @@ const (
 	MsgLeaderboardEmpty  Key = "leaderboard_empty"
 	MsgGroupClosed       Key = "group_closed"
 
-	MsgChallengeComplete    Key = "challenge_complete"
-	MsgChallengeReviewOffer Key = "challenge_review_offer"
-	MsgChallengeReviewDone  Key = "challenge_review_done"
-	MsgChallengeReviewSkip  Key = "challenge_review_skip"
-	MsgChallengeFinishFirst Key = "challenge_finish_first"
+	MsgChallengeComplete      Key = "challenge_complete"
+	MsgChallengeReviewOffer   Key = "challenge_review_offer"
+	MsgChallengeReviewDone    Key = "challenge_review_done"
+	MsgChallengeReviewSkip    Key = "challenge_review_skip"
+	MsgChallengeFinishFirst   Key = "challenge_finish_first"
+	MsgChallengeCorrect       Key = "challenge_correct"
+	MsgChallengeIncorrect     Key = "challenge_incorrect"
+	MsgChallengeReviewRetry   Key = "challenge_review_retry"
 )
 
 var catalog = map[string]map[Key]string{
@@ -119,6 +122,9 @@ Tingkatan berapa anda sekarang?`,
 		MsgChallengeReviewDone:  "Ulang kaji selesai! Anda dapat %d/%d betul.\n+50 XP untuk melengkapkan ulang kaji!",
 		MsgChallengeReviewSkip:  "Baik, kita teruskan. Anda boleh ulang kaji kemudian.",
 		MsgChallengeFinishFirst: "Selesaikan cabaran semasa anda dulu, kemudian cuba lagi.",
+		MsgChallengeCorrect:     "Betul.",
+		MsgChallengeIncorrect:   "Salah. Jawapannya ialah: %s",
+		MsgChallengeReviewRetry: "Belum tepat. Cuba lagi.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -184,6 +190,9 @@ Which form are you in now?`,
 		MsgChallengeReviewDone:  "Review complete! You got %d/%d correct.\n+50 XP for completing the review!",
 		MsgChallengeReviewSkip:  "Okay, moving on. You can always review later.",
 		MsgChallengeFinishFirst: "Finish your current challenge first, then try again.",
+		MsgChallengeCorrect:     "Correct.",
+		MsgChallengeIncorrect:   "Incorrect. The answer is: %s",
+		MsgChallengeReviewRetry: "Not quite. Try again.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -249,6 +258,9 @@ Which form are you in now?`,
 		MsgChallengeReviewDone:  "复习完成！你答对了 %d/%d 道题。\n+50 XP 完成复习奖励！",
 		MsgChallengeReviewSkip:  "好的，我们继续。你随时可以回来复习。",
 		MsgChallengeFinishFirst: "请先完成当前挑战，然后再试。",
+		MsgChallengeCorrect:     "正确。",
+		MsgChallengeIncorrect:   "不正确。答案是：%s",
+		MsgChallengeReviewRetry: "还不对。再试一次。",
 	},
 }
 
