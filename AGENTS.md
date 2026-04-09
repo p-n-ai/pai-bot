@@ -234,6 +234,7 @@ Keep commits/doc changes small and verifiable.
 - Each AI provider implements the `Provider` interface (in `internal/ai/gateway.go`)
 - Each chat channel implements the `Channel` interface (in `internal/chat/`)
 - All external dependencies behind interfaces for testability
+- **When adding a new bot command:** always register it in `internal/chat/commands.go` (`RegisteredCommands` slice) so it appears in Telegram's slash command autocomplete menu. Commands sync to Telegram on bot startup via `setMyCommands`. Dev-only commands go in `DevCommands`.
 
 ### Database
 - All tables include `tenant_id` for multi-tenancy
