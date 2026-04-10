@@ -486,7 +486,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 | ⬜ | |
+| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 | ✅ | Shipped as `GET /api/admin/analytics/report` (admin/platform_admin): 42-day DAU, retention, nudge response, AI usage, plus overview rollups in one payload. |
 | `P-W6D29-2` | 🧑 Review community PRs. Plan next 6 weeks. | 🧑 Team | ⬜ | |
 
 ### Day 30 — 6-Week Report

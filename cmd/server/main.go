@@ -294,6 +294,7 @@ type adminDataSource interface {
 	GetAIUsage() (adminapi.AIUsageSummary, error)
 	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
+	GetAnalyticsReport() (adminapi.AnalyticsReport, error)
 	GetUserManagement() (adminapi.UserManagementView, error)
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
@@ -534,6 +535,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
 	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
+	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
@@ -818,6 +820,22 @@ func handleAdminMetrics(adminProvider adminDataSourceProvider) http.HandlerFunc 
 		}
 
 		payload, err := admin.GetMetrics()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminAnalyticsReport(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetAnalyticsReport()
 		if err != nil {
 			writeAdminError(w, err)
 			return

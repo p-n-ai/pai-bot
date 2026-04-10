@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +193,59 @@ func TestBuildNudgeRateSummary(t *testing.T) {
 	}
 	if got.ResponseRate != 0.275 {
 		t.Fatalf("response rate = %v, want 0.275", got.ResponseRate)
+	}
+}
+
+func TestBuildAnalyticsOverview(t *testing.T) {
+	report := buildAnalyticsOverview(
+		[]DailyActiveUsersPoint{
+			{Date: "2026-03-01", Users: 10},
+			{Date: "2026-03-02", Users: 20},
+			{Date: "2026-03-03", Users: 15},
+		},
+		[]RetentionPoint{
+			{CohortDate: "2026-02-01", CohortSize: 10, Day1Rate: 0.8, Day7Rate: 0.5, Day14Rate: 0.4},
+			{CohortDate: "2026-02-08", CohortSize: 5, Day1Rate: 0.6, Day7Rate: 0.4, Day14Rate: 0.2},
+		},
+		NudgeRateSummary{
+			NudgesSent:             20,
+			ResponsesWithin24Hours: 8,
+			ResponseRate:           0.4,
+		},
+		AIUsageSummary{
+			TotalMessages:     120,
+			TotalInputTokens:  7000,
+			TotalOutputTokens: 3000,
+		},
+	)
+
+	if report.TotalActiveLearners != 45 {
+		t.Fatalf("TotalActiveLearners = %d, want 45", report.TotalActiveLearners)
+	}
+	if report.AverageDAU != 15 {
+		t.Fatalf("AverageDAU = %v, want 15", report.AverageDAU)
+	}
+	if report.LatestDAU != 15 {
+		t.Fatalf("LatestDAU = %d, want 15", report.LatestDAU)
+	}
+	if math.Abs(report.Day1RetentionRate-0.7) > 1e-9 || math.Abs(report.Day7RetentionRate-0.45) > 1e-9 || math.Abs(report.Day14RetentionRate-0.3) > 1e-9 {
+		t.Fatalf("retention rates = %#v, want 0.7/0.45/0.3", report)
+	}
+	if report.NudgeResponseRate != 0.4 {
+		t.Fatalf("NudgeResponseRate = %v, want 0.4", report.NudgeResponseRate)
+	}
+	if report.TotalAIMessages != 120 || report.TotalAITokens != 10000 {
+		t.Fatalf("AI totals = %#v, want messages=120 tokens=10000", report)
+	}
+}
+
+func TestBuildAnalyticsOverviewWithEmptyInputs(t *testing.T) {
+	report := buildAnalyticsOverview(nil, nil, NudgeRateSummary{}, AIUsageSummary{})
+	if report.TotalActiveLearners != 0 || report.AverageDAU != 0 || report.LatestDAU != 0 {
+		t.Fatalf("DAU overview = %#v, want zeros", report)
+	}
+	if report.Day1RetentionRate != 0 || report.Day7RetentionRate != 0 || report.Day14RetentionRate != 0 {
+		t.Fatalf("retention overview = %#v, want zeros", report)
 	}
 }
 

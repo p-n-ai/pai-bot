@@ -484,6 +484,54 @@ func TestAdminMetricsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminAnalyticsReportEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/analytics/report", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		WindowDays int `json:"window_days"`
+		Overview   struct {
+			TotalActiveLearners int     `json:"total_active_learners"`
+			AverageDAU          float64 `json:"average_dau"`
+			LatestDAU           int     `json:"latest_dau"`
+		} `json:"overview"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.WindowDays != 42 {
+		t.Fatalf("window_days = %d, want 42", payload.WindowDays)
+	}
+	if payload.Overview.TotalActiveLearners != 41 {
+		t.Fatalf("total_active_learners = %d, want 41", payload.Overview.TotalActiveLearners)
+	}
+	if payload.Overview.LatestDAU != 22 {
+		t.Fatalf("latest_dau = %d, want 22", payload.Overview.LatestDAU)
+	}
+	if payload.Overview.AverageDAU <= 0 {
+		t.Fatalf("average_dau = %v, want positive value", payload.Overview.AverageDAU)
+	}
+}
+
+func TestAdminAnalyticsReportEndpointRejectsTeacherRole(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/analytics/report", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
 func TestAdminTokenBudgetWindowEndpoint(t *testing.T) {
 	admin := &budgetAdminStub{}
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/ai/budget-window", strings.NewReader(`{"budget_tokens":250000,"period_start":"2026-04-01","period_end":"2026-04-30"}`))
@@ -1490,6 +1538,44 @@ func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
 				{Provider: "anthropic", Model: "claude-3-5-haiku", Messages: 2, InputTokens: 58, OutputTokens: 61, TotalTokens: 119},
 			},
 		},
+	}, nil
+}
+
+func (stubAdminAPI) GetAnalyticsReport() (adminapi.AnalyticsReport, error) {
+	return adminapi.AnalyticsReport{
+		WindowDays: 42,
+		GeneratedAt: time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+		Overview: adminapi.AnalyticsOverview{
+			TotalActiveLearners: 41,
+			AverageDAU:          20.5,
+			LatestDAU:           22,
+			Day1RetentionRate:   0.79,
+			Day7RetentionRate:   0.52,
+			Day14RetentionRate:  0.41,
+			NudgeResponseRate:   0.36,
+			TotalAIMessages:     1820,
+			TotalAITokens:       219400,
+		},
+		DailyActiveUsers: []adminapi.DailyActiveUsersPoint{
+			{Date: "2026-04-08", Users: 19},
+			{Date: "2026-04-09", Users: 21},
+			{Date: "2026-04-10", Users: 22},
+		},
+		Retention: []adminapi.RetentionPoint{
+			{CohortDate: "2026-03-01", CohortSize: 20, Day1Rate: 0.8, Day7Rate: 0.5, Day14Rate: 0.4},
+			{CohortDate: "2026-03-08", CohortSize: 21, Day1Rate: 0.78, Day7Rate: 0.54, Day14Rate: 0.42},
+		},
+		NudgeRate: adminapi.NudgeRateSummary{
+			NudgesSent:             50,
+			ResponsesWithin24Hours: 18,
+			ResponseRate:           0.36,
+		},
+		AIUsage: adminapi.AIUsageSummary{
+			TotalMessages:     1820,
+			TotalInputTokens:  128000,
+			TotalOutputTokens: 91400,
+		},
+		ABComparison: nil,
 	}, nil
 }
 
