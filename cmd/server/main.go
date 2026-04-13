@@ -145,6 +145,20 @@ func main() {
 		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
 	}
 
+	// WhatsApp channel (behind feature flag).
+	var waChannel *chat.WhatsAppChannel
+	if cfg.WhatsApp.Enabled {
+		var waErr error
+		waChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
+		if waErr != nil {
+			slog.Error("failed to create WhatsApp channel", "error", waErr)
+			os.Exit(1)
+		}
+		gw.Register("whatsapp", waChannel)
+	} else {
+		slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
+	}
+
 	// WebSocket channel (always enabled — used by terminal-chat and future web clients).
 	wsChannel := chat.NewWSChannel()
 	gw.Register("websocket", wsChannel)
@@ -182,7 +196,8 @@ func main() {
 	go scheduler.Start(ctx, []string{})
 
 	// Start long-polling with message handler.
-	err = gw.StartAll(ctx, func(msg chat.InboundMessage) {
+	// Shared inbound message handler for all channels.
+	handleInbound := func(msg chat.InboundMessage) {
 		// Show typing indicator while processing.
 		if err := gw.SendTyping(ctx, msg.Channel, msg.UserID); err != nil {
 			slog.Warn("failed to send typing indicator", "error", err)
@@ -214,7 +229,9 @@ func main() {
 		if err := gw.Send(ctx, out); err != nil {
 			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
 		}
-	})
+	}
+
+	err = gw.StartAll(ctx, handleInbound)
 	if err != nil {
 		slog.Error("failed to start channels", "error", err)
 		os.Exit(1)
@@ -267,6 +284,9 @@ func main() {
 	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
 	topMux := http.NewServeMux()
 	topMux.Handle("GET /ws/chat", wsChannel.Handler())
+	if waChannel != nil {
+		topMux.Handle("/webhook/whatsapp", waChannel.WebhookHandler(handleInbound))
+	}
 	topMux.Handle("/", apiHandler)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
