@@ -433,7 +433,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W5D23-1` | Multi-tenancy: LEARN_TENANT_MODE single/multi, auto-create default tenant in single mode | 🤖 | ⬜ | |
+| `P-W5D23-1` | Multi-tenancy: LEARN_TENANT_MODE single/multi, auto-create default tenant in single mode | 🤖 | ✅ | Added startup bootstrap that enforces mode behavior: single mode upserts `default` tenant when missing; multi mode performs no tenant mutation. |
 | `P-W5D23-2` | Helm chart: Deployment, StatefulSet (PG, Dragonfly), ConfigMap, Secret, Service, Ingress | 🤖 | ⬜ | |
 | `P-W5D23-3` | 🧑 Fresh machine test: new AWS instance, follow README only, deploy from scratch, fix every issue | 🧑 Human | ⬜ | |
 
@@ -443,7 +443,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 |---------|------|-------|--------|--------|
 | `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 | ⬜ | |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 | ✅ | Go admin API now serves student CSV, conversation JSON, and progress CSV exports; admin UI downloads are available on `/export`. |
-| `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | 🤖 | ⬜ | |
+| `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | ðŸ¤– | âœ… | Added API/auth fixed-window rate limiting middleware, baseline security headers, and validated existing auth + tenant-scoped admin datasource + parameterized SQL usage. |
 | `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_sessions`; invite acceptance; email/password login; logout endpoint; Next.js route guards for teacher/parent/admin views | 🤖 | ✅ | Session cookies now come from Go as `HttpOnly`; admin auth no longer stores tokens in `localStorage`; protected API/page responses use `no-store`. |
 | `P-W5D24-4` | 🧑 Final curriculum QA for all KSSM Algebra topics across F1-F3 | 🧑 Human | ⬜ | |
 | `P-W5D24-5` | 🧑 Gather testimonials from 5 students + 2 teachers | 🧑 Human | ⬜ | |
@@ -499,7 +499,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 | ⬜ | |
+| `P-W6D29-1` | Comprehensive analytics API: GET /analytics/report — all 6-week metrics in one endpoint | 🤖 | ✅ | Shipped as `GET /api/admin/analytics/report` (admin/platform_admin): 42-day DAU, retention, nudge response, AI usage, plus overview rollups in one payload. |
 | `P-W6D29-2` | 🧑 Review community PRs. Plan next 6 weeks. | 🧑 Team | ⬜ | |
 
 ### Day 30 — 6-Week Report

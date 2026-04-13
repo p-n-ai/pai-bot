@@ -203,7 +203,7 @@ func (ws *WSChannel) Stop() error {
 	defer ws.mu.Unlock()
 
 	for userID, conn := range ws.conns {
-		conn.Close(websocket.StatusGoingAway, "server shutting down")
+		_ = conn.Close(websocket.StatusGoingAway, "server shutting down")
 		delete(ws.conns, userID)
 	}
 

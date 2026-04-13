@@ -238,6 +238,15 @@ func Build() (*Document, error) {
 			protectedErrors(),
 		),
 	})
+	doc.Paths["/api/admin/analytics/report"] = route("GET", Operation{
+		Summary:  "Get comprehensive 6-week analytics report",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseJSON("200", "Comprehensive analytics report.", registry.refFor(adminapi.AnalyticsReport{})),
+			protectedErrors(),
+		),
+	})
 	doc.Paths["/api/admin/ai/budget-window"] = route("POST", Operation{
 		Summary:     "Create or update the token budget window for the tenant",
 		Tags:        []string{"Admin"},

@@ -170,6 +170,29 @@ type MetricsSummary struct {
 	ABComparison     any                     `json:"ab_comparison"`
 }
 
+type AnalyticsOverview struct {
+	TotalActiveLearners int     `json:"total_active_learners"`
+	AverageDAU          float64 `json:"average_dau"`
+	LatestDAU           int     `json:"latest_dau"`
+	Day1RetentionRate   float64 `json:"day_1_retention_rate"`
+	Day7RetentionRate   float64 `json:"day_7_retention_rate"`
+	Day14RetentionRate  float64 `json:"day_14_retention_rate"`
+	NudgeResponseRate   float64 `json:"nudge_response_rate"`
+	TotalAIMessages     int     `json:"total_ai_messages"`
+	TotalAITokens       int     `json:"total_ai_tokens"`
+}
+
+type AnalyticsReport struct {
+	WindowDays       int                     `json:"window_days"`
+	GeneratedAt      time.Time               `json:"generated_at"`
+	Overview         AnalyticsOverview       `json:"overview"`
+	DailyActiveUsers []DailyActiveUsersPoint `json:"daily_active_users"`
+	Retention        []RetentionPoint        `json:"retention"`
+	NudgeRate        NudgeRateSummary        `json:"nudge_rate"`
+	AIUsage          AIUsageSummary          `json:"ai_usage"`
+	ABComparison     any                     `json:"ab_comparison"`
+}
+
 type ClassStudent struct {
 	ID     string             `json:"id"`
 	Name   string             `json:"name"`
@@ -836,6 +859,41 @@ func (s *Service) GetMetrics() (MetricsSummary, error) {
 
 	return MetricsSummary{
 		WindowDays:       14,
+		DailyActiveUsers: daily,
+		Retention:        retention,
+		NudgeRate:        nudgeRate,
+		AIUsage:          aiUsage,
+		ABComparison:     nil,
+	}, nil
+}
+
+func (s *Service) GetAnalyticsReport() (AnalyticsReport, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const reportWindowDays = 42
+
+	daily, err := s.loadDailyActiveUsers(ctx, reportWindowDays)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	retention, err := s.loadRetention(ctx)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	nudgeRate, err := s.loadNudgeRate(ctx, reportWindowDays)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	aiUsage, err := s.GetAIUsage()
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+
+	return AnalyticsReport{
+		WindowDays:       reportWindowDays,
+		GeneratedAt:      time.Now().UTC(),
+		Overview:         buildAnalyticsOverview(daily, retention, nudgeRate, aiUsage),
 		DailyActiveUsers: daily,
 		Retention:        retention,
 		NudgeRate:        nudgeRate,
@@ -1609,6 +1667,41 @@ func buildNudgeRateSummary(nudgesSent, responses int) NudgeRateSummary {
 		summary.ResponseRate = float64(responses) / float64(nudgesSent)
 	}
 	return summary
+}
+
+func buildAnalyticsOverview(daily []DailyActiveUsersPoint, retention []RetentionPoint, nudgeRate NudgeRateSummary, aiUsage AIUsageSummary) AnalyticsOverview {
+	overview := AnalyticsOverview{
+		NudgeResponseRate: nudgeRate.ResponseRate,
+		TotalAIMessages:   aiUsage.TotalMessages,
+		TotalAITokens:     aiUsage.TotalInputTokens + aiUsage.TotalOutputTokens,
+	}
+
+	for _, item := range daily {
+		overview.TotalActiveLearners += item.Users
+	}
+	if len(daily) > 0 {
+		overview.AverageDAU = float64(overview.TotalActiveLearners) / float64(len(daily))
+		overview.LatestDAU = daily[len(daily)-1].Users
+	}
+
+	if len(retention) > 0 {
+		var (
+			day1  float64
+			day7  float64
+			day14 float64
+		)
+		for _, item := range retention {
+			day1 += item.Day1Rate
+			day7 += item.Day7Rate
+			day14 += item.Day14Rate
+		}
+		denom := float64(len(retention))
+		overview.Day1RetentionRate = day1 / denom
+		overview.Day7RetentionRate = day7 / denom
+		overview.Day14RetentionRate = day14 / denom
+	}
+
+	return overview
 }
 
 func buildParentEncouragement(childName string, streak StreakSummary, progress []ProgressItem, stats WeeklyStats) EncouragementSuggestion {

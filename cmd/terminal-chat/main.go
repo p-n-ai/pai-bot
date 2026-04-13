@@ -192,7 +192,7 @@ func runWSClient(serverURL, userID string) error {
 	if err != nil {
 		return fmt.Errorf("connecting to %s: %w", serverURL, err)
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "bye")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "bye") }()
 
 	// Authenticate.
 	authMsg, _ := json.Marshal(wsInboundMsg{Type: "auth", UserID: userID})

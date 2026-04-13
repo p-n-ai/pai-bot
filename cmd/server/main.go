@@ -30,6 +30,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
+	"github.com/p-n-ai/pai-bot/internal/tenant"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -67,6 +68,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
+	if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
+		slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
+		os.Exit(1)
+	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
@@ -303,6 +310,7 @@ type adminDataSource interface {
 	GetAIUsage() (adminapi.AIUsageSummary, error)
 	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
+	GetAnalyticsReport() (adminapi.AnalyticsReport, error)
 	GetUserManagement() (adminapi.UserManagementView, error)
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
@@ -573,6 +581,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
 	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
+	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
@@ -589,7 +598,9 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/admin/groups/{id}/leaderboard", teacherOrAbove(handleAdminGroupLeaderboard(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
-	return withCORS(mux)
+	apiLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
+	authLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
+	return withSecurityHeaders(withCORS(withAPIRateLimit(mux, time.Now, apiLimiter, authLimiter)))
 }
 
 func authenticateRequests(authSvc authService, manager *auth.TokenManager, now func() time.Time) func(http.Handler) http.Handler {
@@ -855,6 +866,22 @@ func handleAdminMetrics(adminProvider adminDataSourceProvider) http.HandlerFunc 
 		}
 
 		payload, err := admin.GetMetrics()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminAnalyticsReport(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetAnalyticsReport()
 		if err != nil {
 			writeAdminError(w, err)
 			return
