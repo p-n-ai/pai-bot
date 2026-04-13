@@ -9,7 +9,7 @@ read_when:
 
 # Admin / Management Panel — Feature Specification
 
-> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), metrics, AI usage, class dashboard, student detail, and parent summary. The current budget view is token-allowance based (`token_budgets` window, used/remaining tokens, daily token trend, per-student average tokens); real-money USD attribution and provider cost reporting remain planned. Remaining sections below stay planned until implemented.
+> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), class dashboard, student detail, parent summary, and onboarding. AI usage and token-budget administration remain out of the current slice even though backend budget APIs still exist. Remaining sections below stay planned until implemented.
 >
 > **Stack:** Next.js 16 (App Router) · TypeScript · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
 
@@ -202,8 +202,8 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 | Linked Sign-in Methods | Sidebar footer card | Teacher, Parent, Admin, Platform Admin | Current |
 | Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Current |
 | Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Current |
-| Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to AI Usage |
-| AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Current |
+| Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to Dashboard |
+| AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Planned |
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
 | User & Invite Management | `/settings/users` | Admin, Platform Admin | Current |
@@ -237,7 +237,7 @@ All endpoints are under `/api/admin/` and require authenticated session state wi
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends, and the current tenant token budget window. Current scope is AI-token-only. |
-| `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window from the admin AI usage screen. |
+| `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window. No current admin UI ships for this in the slice. |
 | `GET` | `/api/admin/analytics/report` | Admin, Platform Admin | Comprehensive analytics report |
 
 ### User & Invite Management
@@ -262,7 +262,7 @@ All endpoints are under `/api/admin/` and require authenticated session state wi
 
 | Week | Day | Milestone |
 |------|-----|-----------|
-| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage. Current repo keeps this route as a redirect into AI usage. |
+| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage. Current repo keeps this route only as a redirect to Dashboard. |
 | 4 | 16 | Admin panel scaffold, teacher dashboard, mastery heatmap, student detail, login + route guards |
 | 4 | 17 | Admin API endpoints, parent view, form/syllabus selection |
 | 4 | 18 | nginx reverse proxy, Docker Compose integration, class management page |

@@ -14,13 +14,6 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
-    title: "AI Usage",
-    href: "/dashboard/ai-usage",
-    description: "Review token volume by provider and model across the teacher workspace.",
-    group: "Teaching",
-    roles: ["teacher", "admin", "platform_admin"],
-  },
-  {
     title: "Onboarding",
     href: "/setup/onboard",
     description: "Set curriculum, first class, and a minimal bot preset for a school workspace.",
@@ -102,14 +95,6 @@ export function getCurrentSection(pathname) {
       eyebrow: "Parent support",
       title: "Child summary",
       description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
-    };
-  }
-
-  if (pathname.startsWith("/dashboard/ai-usage")) {
-    return {
-      eyebrow: "Admin panel",
-      title: "AI Usage",
-      description: "Review token volume by provider and model across the teacher workspace.",
     };
   }
 
