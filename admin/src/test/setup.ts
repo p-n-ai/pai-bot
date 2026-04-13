@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { clearAdminSessionStore } from "@/stores/app-store";
 
 const storage = new Map<string, string>();
 
@@ -8,6 +9,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   storage.clear();
+  clearAdminSessionStore();
 });
 
 Object.defineProperty(window, "matchMedia", {

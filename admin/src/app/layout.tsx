@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Agentation } from "agentation";
+import { DevelopmentAgentation } from "@/components/development-agentation";
 import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,9 +15,6 @@ export const metadata: Metadata = {
   title: "P&AI Admin",
   description: "Teacher and parent dashboard for P&AI Bot",
 };
-
-const agentationEndpoint = process.env.NEXT_PUBLIC_AGENTATION_ENDPOINT;
-const showAgentation = process.env.NODE_ENV === "development" && Boolean(agentationEndpoint);
 
 export default async function RootLayout({
   children,
@@ -35,7 +32,7 @@ export default async function RootLayout({
             <Toaster richColors position="top-right" />
           </TooltipProvider>
         </ThemeProvider>
-        {showAgentation ? <Agentation endpoint={agentationEndpoint} /> : null}
+        <DevelopmentAgentation />
       </body>
     </html>
   );

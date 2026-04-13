@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { LoginGateContext } from "@/components/login-gate/login-gate-context";
 import { buildGoogleLoginURL, loginWithPassword, persistSession } from "@/lib/api";
 import { getGoogleAuthErrorMessage } from "@/lib/auth-flow-feedback";
+import { useLoginFlowBootstrap } from "@/hooks/use-auth-flow-bootstrap";
 import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
 import { clearSchoolSwitchState } from "@/lib/school-switch-state";
+import { useAppStore } from "@/stores/app-store";
 
 function mapGoogleAuthError(code: string | null): string {
   return getGoogleAuthErrorMessage(code);
@@ -22,39 +24,42 @@ export function LoginGateProvider({
   authError: string | null;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [email, setEmailState] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(() => mapGoogleAuthError(authError));
-  const [isGooglePending, setGooglePending] = useState(false);
+  const [, startTransition] = useTransition();
+  const seed = authError ?? "__default__";
+  const loginFlow = useAppStore((state) => state.loginFlow);
+  const setEmail = useAppStore((state) => state.setLoginEmail);
+  const setPassword = useAppStore((state) => state.setLoginPassword);
+  const startLoginSubmit = useAppStore((state) => state.startLoginSubmit);
+  const startLoginGoogleRedirect = useAppStore((state) => state.startLoginGoogleRedirect);
+  const failLogin = useAppStore((state) => state.failLogin);
+  const initialError = mapGoogleAuthError(authError);
+  const isPending = loginFlow.phase.kind === "submitting";
+  const isGooglePending = loginFlow.phase.kind === "redirecting_google";
+  const error = loginFlow.phase.kind === "error" ? loginFlow.phase.message : "";
 
-  function setEmail(value: string) {
-    setEmailState(value);
-    setError("");
-  }
+  useLoginFlowBootstrap(seed, initialError);
 
   function startGoogleLogin() {
     if (isPending || isGooglePending) {
       return;
     }
-    setError("");
-    setGooglePending(true);
+    startLoginGoogleRedirect();
     window.location.assign(buildGoogleLoginURL(nextPath));
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
+    startLoginSubmit();
 
     startTransition(async () => {
       try {
         const session = await loginWithPassword({
-          email: email.trim(),
-          password,
+          email: loginFlow.draft.email.trim(),
+          password: loginFlow.draft.password,
         });
 
         if (!hasAdminUIAccess(session.user)) {
-          setError("This account does not have access to the admin UI.");
+          failLogin("This account does not have access to the admin UI.");
           return;
         }
 
@@ -62,8 +67,7 @@ export function LoginGateProvider({
         router.push(nextPath && nextPath !== "/" && nextPath !== "/login" ? getSafeNextPath(session.user, nextPath) : "/");
       } catch (err) {
         clearSchoolSwitchState();
-        setGooglePending(false);
-        setError(err instanceof Error ? err.message : "Login failed");
+        failLogin(err instanceof Error ? err.message : "Login failed");
       }
     });
   }
@@ -71,16 +75,13 @@ export function LoginGateProvider({
   return (
     <LoginGateContext
       value={{
-        email,
-        password,
+        email: loginFlow.draft.email,
+        password: loginFlow.draft.password,
         error,
         isPending,
         isGooglePending,
         setEmail,
-        setPassword: (value) => {
-          setPassword(value);
-          setError("");
-        },
+        setPassword,
         submit,
         startGoogleLogin,
       }}
