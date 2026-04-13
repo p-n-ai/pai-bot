@@ -31,6 +31,8 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -141,6 +143,13 @@ func main() {
 		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
 	}
 
+	// WebSocket channel (always enabled — used by terminal-chat and future web clients).
+	wsChannel := chat.NewWSChannel()
+	gw.Register("websocket", wsChannel)
+
+	// Wire challenge notifications through the gateway.
+	engine.SetNotifier(gatewayNotifier{gw: gw, pool: db.Pool})
+
 	// Start proactive scheduler (nudges for due reviews).
 	nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
 	scheduler := agent.NewScheduler(
@@ -189,7 +198,8 @@ func main() {
 			Text:    resp,
 		}
 		if msg.Channel == "telegram" {
-			out.Text = chat.NormalizeTelegramMarkdown(resp)
+			out.Text = chat.ConvertLaTeXToUnicode(resp)
+			out.Text = chat.NormalizeTelegramMarkdown(out.Text)
 			out.ParseMode = "Markdown"
 			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
 			out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
@@ -235,7 +245,7 @@ func main() {
 	}
 
 	// HTTP endpoints.
-	mux := newHandlerWithAdminProvider(
+	apiHandler := newHandlerWithAdminProvider(
 		tenantAdminDataSourceProvider{
 			newForTenant: func(tenantID string) adminDataSource {
 				return adminapi.New(db.Pool, tenantID)
@@ -251,10 +261,16 @@ func main() {
 		defaultAccessTokenTTL,
 		cfg.Email.BaseURL,
 	)
+
+	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
+	topMux := http.NewServeMux()
+	topMux.Handle("GET /ws/chat", wsChannel.Handler())
+	topMux.Handle("/", apiHandler)
+
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      topMux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -414,6 +430,34 @@ func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
 	})
 }
 
+// gatewayNotifier implements agent.Notifier by looking up the user's channel
+// from the database and sending to the correct one.
+type gatewayNotifier struct {
+	gw   *chat.Gateway
+	pool *pgxpool.Pool
+}
+
+func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {
+	// Look up which channel this user is on.
+	var channel string
+	err := g.pool.QueryRow(ctx,
+		`SELECT channel FROM users WHERE external_id = $1 LIMIT 1`,
+		userID,
+	).Scan(&channel)
+	if err != nil {
+		// User not found — try all channels as fallback.
+		slog.Warn("notifier: user channel lookup failed, trying all channels", "user_id", userID, "error", err)
+		for _, ch := range g.gw.ChannelNames() {
+			_ = g.gw.Send(ctx, chat.OutboundMessage{Channel: ch, UserID: userID, Text: text})
+		}
+		return
+	}
+
+	if err := g.gw.Send(ctx, chat.OutboundMessage{Channel: channel, UserID: userID, Text: text}); err != nil {
+		slog.Warn("notifier: failed to send", "channel", channel, "user_id", userID, "error", err)
+	}
+}
+
 func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
 	conv, found := store.GetActiveConversation(userID)
 	if !found || conv == nil {
@@ -423,6 +467,8 @@ func telegramInlineKeyboardContext(store agent.ConversationStore, userID string)
 	ctx := chat.TelegramInlineKeyboardContext{
 		QuizIntensityPending: conv.State == "quiz_intensity",
 		QuizActive:           conv.State == "quiz_active",
+		ChallengeActive:      conv.State == "challenge_active",
+		ChallengeReview:      conv.State == "challenge_review",
 	}
 	if conv.QuizState != nil && conv.QuizState.RunState == "paused" {
 		ctx.QuizPaused = true

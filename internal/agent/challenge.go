@@ -19,6 +19,8 @@ const (
 	ChallengeStateWaiting           = "waiting"
 	ChallengeStatePendingAcceptance = "pending_acceptance"
 	ChallengeStateReady             = "ready"
+	ChallengeStateActive            = "active"
+	ChallengeStateCompleted         = "completed"
 
 	ChallengeMatchSourceInviteCode = "invite_code"
 	ChallengeMatchSourceQueue      = "queue"
@@ -106,6 +108,9 @@ type ChallengeStore interface {
 	AcceptPendingChallenge(userID string) (*Challenge, error)
 	DeclinePendingChallenge(userID string) (bool, error)
 	CancelOpenChallenge(userID string) (bool, error)
+	StartChallenge(challengeID string) (*Challenge, error)
+	GetActiveChallengeForUser(userID string) (*Challenge, error)
+	CompleteChallenge(challengeID string) (*Challenge, error)
 }
 
 // MemoryChallengeStore stores challenges in memory.
@@ -399,6 +404,51 @@ func (s *MemoryChallengeStore) userHasLiveChallengeLocked(userID string) bool {
 		}
 	}
 	return false
+}
+
+func (s *MemoryChallengeStore) StartChallenge(challengeID string) (*Challenge, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	challenge, ok := s.challengesByID[challengeID]
+	if !ok {
+		return nil, ErrChallengeNotFound
+	}
+	if challenge.State != ChallengeStateReady {
+		return nil, fmt.Errorf("challenge state must be ready to start, got %s", challenge.State)
+	}
+	challenge.State = ChallengeStateActive
+	return cloneChallenge(challenge), nil
+}
+
+func (s *MemoryChallengeStore) GetActiveChallengeForUser(userID string) (*Challenge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, challenge := range s.challengesByID {
+		if challenge.CreatorID != userID && challenge.OpponentID != userID {
+			continue
+		}
+		if challenge.State == ChallengeStateActive || challenge.State == ChallengeStateReady {
+			return cloneChallenge(challenge), nil
+		}
+	}
+	return nil, ErrChallengeNotFound
+}
+
+func (s *MemoryChallengeStore) CompleteChallenge(challengeID string) (*Challenge, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	challenge, ok := s.challengesByID[challengeID]
+	if !ok {
+		return nil, ErrChallengeNotFound
+	}
+	if challenge.State != ChallengeStateActive {
+		return nil, fmt.Errorf("challenge state must be active to complete, got %s", challenge.State)
+	}
+	challenge.State = ChallengeStateCompleted
+	return cloneChallenge(challenge), nil
 }
 
 func (s *MemoryChallengeStore) AcceptPendingChallenge(userID string) (*Challenge, error) {
@@ -1116,6 +1166,120 @@ func (s *PostgresChallengeStore) CancelOpenChallenge(externalUserID string) (boo
 	return true, nil
 }
 
+func (s *PostgresChallengeStore) StartChallenge(challengeID string) (*Challenge, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var challenge Challenge
+	var creatorExternalID string
+	var opponentExternalID *string
+
+	err := s.pool.QueryRow(ctx,
+		`UPDATE challenges
+		    SET state = 'active', started_at = NOW(), updated_at = NOW()
+		  WHERE id = $1::uuid
+		    AND tenant_id = $2::uuid
+		    AND state = 'ready'
+		  RETURNING id::text, topic_id, topic_name, syllabus_id, question_count, state, match_source, opponent_kind,
+		    (SELECT external_id FROM users WHERE id = creator_user_id),
+		    (SELECT external_id FROM users WHERE id = opponent_user_id)`,
+		challengeID, s.tenantID,
+	).Scan(
+		&challenge.ID, &challenge.TopicID, &challenge.TopicName, &challenge.SyllabusID,
+		&challenge.QuestionCount, &challenge.State, &challenge.MatchSource, &challenge.OpponentKind,
+		&creatorExternalID, &opponentExternalID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("challenge %s is not in ready state", challengeID)
+		}
+		return nil, fmt.Errorf("start challenge: %w", err)
+	}
+	challenge.CreatorID = creatorExternalID
+	if opponentExternalID != nil {
+		challenge.OpponentID = *opponentExternalID
+	}
+	return &challenge, nil
+}
+
+func (s *PostgresChallengeStore) GetActiveChallengeForUser(externalUserID string) (*Challenge, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var challenge Challenge
+	var creatorExternalID string
+	var opponentExternalID *string
+
+	err := s.pool.QueryRow(ctx,
+		`SELECT c.id::text, c.topic_id, c.topic_name, c.syllabus_id, c.question_count,
+		        c.state, c.match_source, c.opponent_kind, c.invite_code,
+		        creator.external_id,
+		        opponent.external_id
+		   FROM challenges c
+		   JOIN users creator ON creator.id = c.creator_user_id
+		   LEFT JOIN users opponent ON opponent.id = c.opponent_user_id
+		  WHERE c.tenant_id = $1::uuid
+		    AND c.state IN ('ready', 'active')
+		    AND (creator.external_id = $2 OR opponent.external_id = $2)
+		    AND creator.channel = $3
+		  ORDER BY c.created_at DESC
+		  LIMIT 1`,
+		s.tenantID, externalUserID, s.channel,
+	).Scan(
+		&challenge.ID, &challenge.TopicID, &challenge.TopicName, &challenge.SyllabusID,
+		&challenge.QuestionCount, &challenge.State, &challenge.MatchSource, &challenge.OpponentKind,
+		&challenge.Code,
+		&creatorExternalID, &opponentExternalID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrChallengeNotFound
+		}
+		return nil, fmt.Errorf("get active challenge for user: %w", err)
+	}
+	challenge.CreatorID = creatorExternalID
+	if opponentExternalID != nil {
+		challenge.OpponentID = *opponentExternalID
+	}
+	return &challenge, nil
+}
+
+func (s *PostgresChallengeStore) CompleteChallenge(challengeID string) (*Challenge, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var challenge Challenge
+	var creatorExternalID string
+	var opponentExternalID *string
+
+	err := s.pool.QueryRow(ctx,
+		`UPDATE challenges
+		    SET state = 'completed', completed_at = NOW(), updated_at = NOW()
+		  WHERE id = $1::uuid
+		    AND tenant_id = $2::uuid
+		    AND state = 'active'
+		  RETURNING id::text, topic_id, topic_name, syllabus_id, question_count, state, match_source, opponent_kind,
+		    (SELECT external_id FROM users WHERE id = creator_user_id),
+		    (SELECT external_id FROM users WHERE id = opponent_user_id)`,
+		challengeID, s.tenantID,
+	).Scan(
+		&challenge.ID, &challenge.TopicID, &challenge.TopicName, &challenge.SyllabusID,
+		&challenge.QuestionCount, &challenge.State, &challenge.MatchSource, &challenge.OpponentKind,
+		&creatorExternalID, &opponentExternalID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("challenge %s is not in active state", challengeID)
+		}
+		return nil, fmt.Errorf("complete challenge: %w", err)
+	}
+	challenge.CreatorID = creatorExternalID
+	if opponentExternalID != nil {
+		challenge.OpponentID = *opponentExternalID
+	}
+	return &challenge, nil
+}
+
 func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx pgx.Tx, code string) (*Challenge, string, error) {
 	var challenge Challenge
 	var readyAt *time.Time
@@ -1819,7 +1983,7 @@ func challengeResumableAt(challenge *Challenge, now time.Time) bool {
 		return false
 	}
 	switch challenge.State {
-	case ChallengeStateWaiting, ChallengeStateReady, "active":
+	case ChallengeStateWaiting, ChallengeStateReady, ChallengeStateActive:
 		return true
 	case ChallengeStatePendingAcceptance:
 		return challenge.JoinDeadlineAt == nil || challenge.JoinDeadlineAt.After(now)

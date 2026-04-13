@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/i18n"
 )
 
 func (e *Engine) handleChallengeCommand(_ context.Context, msg chat.InboundMessage, args []string) (string, error) {
@@ -21,6 +23,26 @@ func (e *Engine) handleChallengeCommand(_ context.Context, msg chat.InboundMessa
 	}
 	if quizOwnsConversation(conv) {
 		return quizMustFinishOrCancelMessage(), nil
+	}
+	// Allow cancel even during active challenge.
+	if len(args) > 0 && strings.EqualFold(args[0], "cancel") {
+		if challengeOwnsConversation(conv) {
+			// Cancel the challenge in the store first.
+			if conv.ChallengeState != nil {
+				_, _ = e.challenges.CompleteChallenge(conv.ChallengeState.ChallengeID)
+			}
+			_, _ = e.challenges.CancelOpenChallenge(msg.UserID)
+			// Clear conversation challenge state.
+			if err := e.store.ClearConversationChallengeState(conv.ID, "teaching"); err != nil {
+				slog.Error("failed to clear challenge state on cancel", "conversation_id", conv.ID, "error", err)
+			}
+			return "Challenge cancelled.", nil
+		}
+		return e.handleChallengeCancel(msg, conv)
+	}
+
+	if challengeOwnsConversation(conv) {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgChallengeFinishFirst), nil
 	}
 
 	if len(args) == 0 {
@@ -183,6 +205,13 @@ func (e *Engine) handleChallengeAccept(msg chat.InboundMessage, conv *Conversati
 		},
 	})
 	if challenge.State == ChallengeStateReady {
+		// Notify the other player that the challenge is ready.
+		myName, ok := e.store.GetUserName(msg.UserID)
+		if !ok || strings.TrimSpace(myName) == "" {
+			myName = "Your opponent"
+		}
+		e.notifier.Notify(context.Background(), msg.Channel, otherUserID,
+			fmt.Sprintf("%s accepted the challenge!\n\nTopic: %s\nQuestions: %d\n\nSend any message to start.", myName, challenge.TopicName, challenge.QuestionCount))
 		return formatQueueChallengeReadyMessage(challenge, opponentName), nil
 	}
 	return formatQueueChallengeAcceptedMessage(challenge, opponentName), nil
@@ -249,6 +278,17 @@ func (e *Engine) handleChallengeJoin(msg chat.InboundMessage, conv *Conversation
 			"topic_id":       challenge.TopicID,
 		},
 	})
+
+	// Notify the creator that someone joined and the challenge is ready.
+	if challenge.State == ChallengeStateReady {
+		joinerName, ok := e.store.GetUserName(msg.UserID)
+		if !ok || strings.TrimSpace(joinerName) == "" {
+			joinerName = "Someone"
+		}
+		e.notifier.Notify(context.Background(), msg.Channel, challenge.CreatorID,
+			fmt.Sprintf("%s joined your challenge!\n\nTopic: %s\nQuestions: %d\n\nSend any message to start.", joinerName, challenge.TopicName, challenge.QuestionCount))
+	}
+
 	return formatChallengeJoinedMessage(challenge, creatorName), nil
 }
 
@@ -331,11 +371,11 @@ func invalidChallengeCodeMessage() string {
 }
 
 func unresolvedChallengeTopicMessage() string {
-	return "I couldn't map that to a challenge topic yet.\n\nTry something like:\n- /challenge invite linear equations\n- /challenge invite fractions"
+	return "I couldn't map that to a challenge topic yet.\n\nTry something like:\n- /challenge invite Persamaan Linear\n- /challenge invite Ungkapan Algebra"
 }
 
 func unresolvedChallengeSearchTopicMessage() string {
-	return "I need a topic before I can find an opponent.\n\nTry talking about the topic first, or use:\n- /challenge invite linear equations\n- /challenge invite fractions"
+	return "I need a topic before I can find an opponent.\n\nTry talking about the topic first, or use:\n- /challenge invite Persamaan Linear\n- /challenge invite Ungkapan Algebra"
 }
 
 func challengeAlreadyActiveMessage() string {
@@ -364,7 +404,7 @@ func formatChallengeJoinedMessage(challenge *Challenge, creatorName string) stri
 
 func formatChallengeSearchingMessage(search *ChallengeSearch) string {
 	return fmt.Sprintf(
-		"Searching for an opponent.\n\nTopic: %s\nStatus: %s\nTimeout: %d minutes\nCancel: /challenge cancel",
+		"Searching for an opponent.\n\nTopic: %s\nStatus: %s\nTimeout: %d minutes\n\nTip: Cancel and use /challenge invite to create a code for a friend.\n\nCancel: /challenge cancel",
 		search.TopicName,
 		search.Status,
 		int(matchmakingWaitTimeout/time.Minute),

@@ -12,6 +12,8 @@ type TelegramInlineKeyboardContext struct {
 	QuizIntensityPending bool
 	QuizActive           bool
 	QuizPaused           bool
+	ChallengeActive      bool
+	ChallengeReview      bool
 }
 
 // BuildTelegramInlineKeyboard returns inline keyboard rows inferred from the
@@ -82,7 +84,8 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 	}
 
 	hasQuizQuestionPrompt :=
-		strings.Contains(text, "Question ") &&
+		!ctx.ChallengeActive && !ctx.ChallengeReview &&
+			strings.Contains(text, "Question ") &&
 			(strings.Contains(lower, "reply with your answer.") || strings.Contains(lower, "reply with a short explanation."))
 	hasQuizRetryPrompt := strings.Contains(lower, "try the same question again.")
 	if ctx.QuizActive || hasQuizQuestionPrompt || hasQuizRetryPrompt {
@@ -105,6 +108,38 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 		}
 	}
 
+	// Challenge: searching for opponent → Cancel button
+	if strings.Contains(lower, "searching for an opponent") {
+		return [][]InlineButton{
+			{
+				{Text: "Cancel", CallbackData: "challenge:cancel"},
+			},
+		}
+	}
+
+	// Challenge: pending acceptance → Accept / Decline buttons
+	if strings.Contains(lower, "state: pending_acceptance") && strings.Contains(lower, "/challenge accept") {
+		return [][]InlineButton{
+			{
+				{Text: "Accept", CallbackData: "challenge:accept"},
+				{Text: "Decline", CallbackData: "challenge:cancel"},
+			},
+		}
+	}
+
+	// Challenge: review offer → Review / Skip buttons
+	hasChallengeReviewOffer :=
+		(strings.Contains(lower, "review") || strings.Contains(lower, "ulang kaji") || strings.Contains(lower, "复习")) &&
+			(strings.Contains(lower, "missed") || strings.Contains(lower, "salah") || strings.Contains(lower, "答错"))
+	if hasChallengeReviewOffer {
+		return [][]InlineButton{
+			{
+				{Text: "Review", CallbackData: "challenge:review"},
+				{Text: "Skip", CallbackData: "challenge:skip"},
+			},
+		}
+	}
+
 	return nil
 }
 
@@ -112,3 +147,4 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 func StripReviewActionCodes(text string) string {
 	return strings.TrimSpace(reviewActionPattern.ReplaceAllString(text, ""))
 }
+

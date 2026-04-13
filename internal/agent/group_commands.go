@@ -159,7 +159,7 @@ func formatLeaderboard(groupName string, entries []LeaderboardEntry, locale stri
 	_ = locale // reserved for future i18n
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("🏆 *%s — Weekly Leaderboard*\n\n", groupName))
+	fmt.Fprintf(&b, "🏆 *%s — Weekly Leaderboard*\n\n", groupName)
 
 	medals := []string{"🥇", "🥈", "🥉"}
 	for _, e := range entries {
@@ -167,7 +167,7 @@ func formatLeaderboard(groupName string, entries []LeaderboardEntry, locale stri
 		if e.Rank <= 3 {
 			prefix = medals[e.Rank-1]
 		}
-		b.WriteString(fmt.Sprintf("%s %s — +%.0f%%\n", prefix, e.UserName, e.MasteryGain*100))
+		fmt.Fprintf(&b, "%s %s — +%.0f%%\n", prefix, e.UserName, e.MasteryGain*100)
 	}
 
 	return b.String()

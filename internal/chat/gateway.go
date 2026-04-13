@@ -83,6 +83,17 @@ func (g *Gateway) HasChannel(name string) bool {
 	return ok
 }
 
+// ChannelNames returns the names of all registered channels.
+func (g *Gateway) ChannelNames() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	names := make([]string, 0, len(g.channels))
+	for name := range g.channels {
+		names = append(names, name)
+	}
+	return names
+}
+
 // Send dispatches a message to the appropriate channel.
 func (g *Gateway) Send(ctx context.Context, msg OutboundMessage) error {
 	g.mu.RLock()

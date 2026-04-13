@@ -24,7 +24,7 @@ const (
 	XPMasteryUp       = 50  // when mastery threshold crossed for a topic
 	XPStreakMilestone = 100 // on streak milestones (3, 7, 14, 30, etc.)
 	XPChallengeWin    = 30  // winning a peer challenge
-	XPReviewCompleted = 15  // completing post-challenge review
+	XPReviewCompleted = 50  // completing post-challenge review
 )
 
 // XPEntry represents a single XP award.
