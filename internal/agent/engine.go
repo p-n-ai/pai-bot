@@ -1457,9 +1457,17 @@ func (e *Engine) buildSystemPrompt(msg chat.InboundMessage, conv *Conversation, 
 Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
 If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu.
 If the user writes mostly in English, respond mainly in English.`
-	if lang, hasLangPref := e.preferredLanguageForConversation(conv); hasLangPref {
+	// Resolve language: stored preference > Telegram language_code > generic fallback.
+	detectedLang, hasLangPref := e.preferredLanguageForConversation(conv)
+	if !hasLangPref && !e.disableMultiLanguage {
+		if tgLang := i18n.NormalizeLocale(msg.Language); tgLang != "" {
+			detectedLang = tgLang
+			hasLangPref = true
+		}
+	}
+	if hasLangPref {
 		langInstruction := "Preferred language setting: Bahasa Melayu. Follow this preference, unless the student's latest message is clearly in another language for that reply."
-		switch lang {
+		switch detectedLang {
 		case "en":
 			langInstruction = "Preferred language setting: English. Follow this preference, unless the student's latest message is clearly in another language for that reply."
 		case "zh":
