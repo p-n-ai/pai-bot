@@ -123,8 +123,9 @@ type WhatsAppConfig struct {
 
 // AuthConfig holds authentication settings.
 type AuthConfig struct {
-	JWTSecret string
-	Google    GoogleOAuthConfig
+	JWTSecret      string
+	Google         GoogleOAuthConfig
+	BootstrapAdmin BootstrapAdminConfig
 }
 
 // GoogleOAuthConfig holds Google OIDC settings for admin login/linking.
@@ -134,6 +135,12 @@ type GoogleOAuthConfig struct {
 	AllowedDomain         string
 	DiscoveryURL          string
 	EmulatorSigningSecret string
+}
+
+// BootstrapAdminConfig holds startup bootstrap credentials for the first platform admin.
+type BootstrapAdminConfig struct {
+	Email    string
+	Password string
 }
 
 // TenantConfig holds multi-tenancy settings.
@@ -211,6 +218,10 @@ func Load() (*Config, error) {
 				AllowedDomain:         envStr("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", ""),
 				DiscoveryURL:          envStr("PAI_AUTH_GOOGLE_DISCOVERY_URL", "https://accounts.google.com/.well-known/openid-configuration"),
 				EmulatorSigningSecret: envStr("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", ""),
+			},
+			BootstrapAdmin: BootstrapAdminConfig{
+				Email:    envStr("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "platform-admin@example.com"),
+				Password: envStr("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "demo-password"),
 			},
 		},
 		Tenant: TenantConfig{

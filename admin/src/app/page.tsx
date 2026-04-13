@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getServerAuthSession } from "@/lib/server-api";
-import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { getServerAuthSession, getServerPostAuthPath } from "@/lib/server-api";
+import { hasAdminUIAccess } from "@/lib/rbac.mjs";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ export default async function RootPage({ searchParams }: RootPageProps) {
   const currentUser = session?.user ?? null;
 
   if (currentUser && hasAdminUIAccess(currentUser)) {
-    redirect(getSafeNextPath(currentUser, next));
+    redirect(await getServerPostAuthPath(currentUser, next ?? null));
   }
 
   const loginURL = new URL("/login", "http://localhost");

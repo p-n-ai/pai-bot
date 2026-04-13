@@ -36,6 +36,8 @@ func clearEnv(t *testing.T) {
 		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
 		"PAI_AUTH_GOOGLE_DISCOVERY_URL",
 		"PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET",
+		"PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL",
+		"PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD",
 		"LEARN_TENANT_MODE",
 		"LEARN_WHATSAPP_ENABLED",
 		"LEARN_LOG_LEVEL",
@@ -81,6 +83,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Auth.Google.DiscoveryURL != "https://accounts.google.com/.well-known/openid-configuration" {
 		t.Errorf("Auth.Google.DiscoveryURL = %q, want Google discovery URL", cfg.Auth.Google.DiscoveryURL)
 	}
+	if cfg.Auth.BootstrapAdmin.Email != "platform-admin@example.com" {
+		t.Errorf("Auth.BootstrapAdmin.Email = %q, want platform-admin@example.com", cfg.Auth.BootstrapAdmin.Email)
+	}
+	if cfg.Auth.BootstrapAdmin.Password != "demo-password" {
+		t.Errorf("Auth.BootstrapAdmin.Password = %q, want demo-password", cfg.Auth.BootstrapAdmin.Password)
+	}
 	if cfg.CurriculumPath != "./oss" {
 		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
 	}
@@ -109,6 +117,8 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", "pandai.org")
 	t.Setenv("PAI_AUTH_GOOGLE_DISCOVERY_URL", "http://127.0.0.1:4002/.well-known/openid-configuration")
 	t.Setenv("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", "emu-secret")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "root@example.com")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "secret-bootstrap")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
 	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
 	t.Setenv("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "false")
@@ -168,6 +178,12 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.Google.EmulatorSigningSecret != "emu-secret" {
 		t.Errorf("Auth.Google.EmulatorSigningSecret = %q, want emu-secret", cfg.Auth.Google.EmulatorSigningSecret)
+	}
+	if cfg.Auth.BootstrapAdmin.Email != "root@example.com" {
+		t.Errorf("Auth.BootstrapAdmin.Email = %q, want root@example.com", cfg.Auth.BootstrapAdmin.Email)
+	}
+	if cfg.Auth.BootstrapAdmin.Password != "secret-bootstrap" {
+		t.Errorf("Auth.BootstrapAdmin.Password = %q, want secret-bootstrap", cfg.Auth.BootstrapAdmin.Password)
 	}
 	if cfg.Tenant.Mode != "multi" {
 		t.Errorf("Tenant.Mode = %q, want multi", cfg.Tenant.Mode)

@@ -51,6 +51,73 @@ func (s *PostgresService) ConfigureInviteEmail(sender mailer.Sender) {
 	s.inviteMailSender = sender
 }
 
+func (s *PostgresService) EnsureBootstrapPlatformAdmin(ctx context.Context, email, password string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	normalizedEmail := NormalizeIdentifier(email)
+	if normalizedEmail == "" || strings.TrimSpace(password) == "" {
+		return false, ErrInvalidCredentials
+	}
+
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		return false, fmt.Errorf("hash bootstrap password: %w", err)
+	}
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return false, fmt.Errorf("begin bootstrap transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var existingAdminCount int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM users
+		WHERE role IN ('admin', 'platform_admin')
+	`).Scan(&existingAdminCount); err != nil {
+		return false, fmt.Errorf("count admin-capable users: %w", err)
+	}
+	if existingAdminCount > 0 {
+		return false, nil
+	}
+
+	var userID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO users (tenant_id, role, name, channel, config)
+		VALUES (NULL, 'platform_admin', 'Platform Admin', 'web', '{"bootstrap": true}'::jsonb)
+		RETURNING id::text
+	`).Scan(&userID); err != nil {
+		return false, fmt.Errorf("insert bootstrap platform admin: %w", err)
+	}
+
+	now := s.now().UTC()
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO auth_identities (
+			user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+		)
+		VALUES ($1::uuid, NULL, 'password', $2, $3, $4, $5, $5, $5, $5)
+		ON CONFLICT (provider, identifier_normalized) WHERE tenant_id IS NULL DO UPDATE
+		SET user_id = EXCLUDED.user_id,
+		    tenant_id = EXCLUDED.tenant_id,
+		    identifier = EXCLUDED.identifier,
+		    identifier_normalized = EXCLUDED.identifier_normalized,
+		    password_hash = EXCLUDED.password_hash,
+		    email_verified_at = EXCLUDED.email_verified_at,
+		    last_login_at = EXCLUDED.last_login_at,
+		    updated_at = EXCLUDED.updated_at
+	`, userID, normalizedEmail, normalizedEmail, passwordHash, now); err != nil {
+		return false, fmt.Errorf("insert bootstrap auth identity: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit bootstrap platform admin: %w", err)
+	}
+
+	return true, nil
+}
+
 func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()

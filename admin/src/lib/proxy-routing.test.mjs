@@ -5,6 +5,9 @@ import { getProxyRedirect, isProtectedPath } from "./proxy-routing.mjs";
 
 test("isProtectedPath covers admin app sections behind auth", () => {
   assert.equal(isProtectedPath("/dashboard"), true);
+  assert.equal(isProtectedPath("/setup/onboard"), true);
+  assert.equal(isProtectedPath("/settings/users"), true);
+  assert.equal(isProtectedPath("/export"), true);
   assert.equal(isProtectedPath("/students/student-1"), true);
   assert.equal(isProtectedPath("/parents/parent-1"), true);
   assert.equal(isProtectedPath("/"), false);
@@ -31,7 +34,7 @@ test("getProxyRedirect returns logged-in users away from /login", () => {
   assert.deepEqual(
     getProxyRedirect("/login", true, { role: "teacher", user_id: "teacher-1" }),
     {
-      pathname: "/dashboard",
+      pathname: "/",
       addNext: false,
     },
   );

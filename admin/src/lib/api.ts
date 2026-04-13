@@ -254,6 +254,50 @@ export interface UserManagementView {
   pending_invites: PendingInvite[];
 }
 
+export interface OnboardingCurriculum {
+  syllabus_id: string;
+  label: string;
+}
+
+export interface OnboardingFirstClass {
+  name: string;
+  slug: string;
+}
+
+export interface OnboardingBotSetup {
+  preset: string;
+}
+
+export interface OnboardingState {
+  school_name?: string;
+  curriculum: OnboardingCurriculum;
+  first_class: OnboardingFirstClass;
+  bot_setup: OnboardingBotSetup;
+  join_link: string;
+  save_status: string;
+  configured_at: string;
+}
+
+export interface OnboardingView {
+  tenant_id: string;
+  tenant_name: string;
+  onboarding?: OnboardingState | null;
+}
+
+export interface SubmitOnboardingInput {
+  school_name?: string;
+  curriculum: OnboardingCurriculum;
+  first_class: OnboardingFirstClass;
+  bot_setup: OnboardingBotSetup;
+}
+
+export interface SubmitOnboardingResult {
+  school_name: string;
+  class_name: string;
+  join_link: string;
+  save_status: string;
+}
+
 function parseErrorMessage(raw: string, fallback: string): string {
   if (!raw.trim()) {
     return fallback;
@@ -351,6 +395,14 @@ export async function getMetrics(): Promise<MetricsSummary> {
 
 export async function getUserManagement(): Promise<UserManagementView> {
   return fetchJSON(`/api/admin/users`);
+}
+
+export async function getOnboarding(): Promise<OnboardingView> {
+  return fetchJSON(`/api/admin/onboarding`);
+}
+
+export async function submitOnboarding(input: SubmitOnboardingInput): Promise<SubmitOnboardingResult> {
+  return postJSONWithBody(`/api/admin/onboarding`, input);
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {

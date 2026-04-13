@@ -473,8 +473,15 @@ just go
 # Ctrl-C also stops backend + Agentation started by this command
 just next
 
+# Start Google auth emulator + backend + admin + Agentation through one wrapper script
+# Good target for Codex app "play" / run-button flows
+./scripts/run-dev.sh
+
 # Stop docker services plus local backend/frontend/Agentation listeners
 just stop
+
+# Stop only the local run-dev.sh processes
+./scripts/stop-dev.sh
 ```
 
 ### Running Tests

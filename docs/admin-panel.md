@@ -160,7 +160,7 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 | **User & Invite Management** | Review active teacher, parent, admin, and platform-admin access plus pending invites in one workspace view, with invite-email delivery status and resend for pending records |
 | **Class Configuration** | Create classes, generate join codes, assign curriculum |
 | **Token Budget Management** | Set tenant-level token allowance windows, monitor token consumption by class/student, configure AI fallback strategies, and later add USD cost projections |
-| **School Onboarding Wizard** | Interactive setup: school name → curriculum selection → bot setup → class creation → teacher invitation |
+| **School Onboarding Wizard** | Interactive multi-step setup centered on curriculum selection, first class creation, bot setup, optional school name, and teacher invitation |
 | **Data Export** | Export students (CSV), conversations (JSON), progress data (CSV) |
 | **All Teacher Features** | Full access to mastery heatmaps, student details, analytics, nudges |
 

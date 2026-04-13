@@ -59,7 +59,7 @@ export function LoginGateProvider({
         }
 
         persistSession(session);
-        router.push(getSafeNextPath(session.user, nextPath));
+        router.push(nextPath && nextPath !== "/" && nextPath !== "/login" ? getSafeNextPath(session.user, nextPath) : "/");
       } catch (err) {
         clearSchoolSwitchState();
         setGooglePending(false);

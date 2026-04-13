@@ -3,12 +3,15 @@ import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 import { normalizeAIUsage } from "@/lib/ai-usage.mjs";
 import { normalizeMetrics } from "@/lib/metrics.mjs";
+import { canAccessPath, getDefaultRouteForUser } from "@/lib/rbac.mjs";
 import type {
   AIUsageSummary,
+  AuthUser,
   AuthSession,
   ClassProgress,
   ConversationExportRecord,
   MetricsSummary,
+  OnboardingView,
   ParentSummary,
   UserManagementView,
 } from "@/lib/api";
@@ -72,6 +75,29 @@ export async function getServerParentSummary(parentID: string): Promise<ParentSu
 
 export async function getServerUserManagement(): Promise<UserManagementView> {
   return fetchServerJSON(`/api/admin/users`);
+}
+
+export async function getServerOnboarding(): Promise<OnboardingView> {
+  return fetchServerJSON(`/api/admin/onboarding`);
+}
+
+export async function getServerPostAuthPath(user: AuthUser, nextPath?: string | null): Promise<string> {
+  if (nextPath && nextPath !== "/" && nextPath !== "/login" && canAccessPath(user, nextPath)) {
+    return nextPath;
+  }
+
+  if (user.role === "admin" || user.role === "platform_admin") {
+    try {
+      const onboarding = await getServerOnboarding();
+      if (!onboarding.onboarding) {
+        return "/setup/onboard";
+      }
+    } catch {
+      // Fall back to the normal role route when onboarding state is unavailable.
+    }
+  }
+
+  return getDefaultRouteForUser(user);
 }
 
 export async function getServerConversationExport(): Promise<ConversationExportRecord[]> {

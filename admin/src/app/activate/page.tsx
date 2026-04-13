@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { InviteAcceptanceCard } from "@/components/invite-acceptance-card";
 import { useSessionRedirect } from "@/hooks/use-session-redirect";
 import { acceptInvite, persistSession } from "@/lib/api";
-import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { hasAdminUIAccess } from "@/lib/rbac.mjs";
 import { useAppStore } from "@/stores/app-store";
 
 export default function ActivatePage() {
@@ -59,7 +59,7 @@ function ActivatePageContent() {
           password,
         });
         persistSession(session);
-        router.push(getSafeNextPath(session.user, null));
+        router.push("/");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Invite activation failed");
       }

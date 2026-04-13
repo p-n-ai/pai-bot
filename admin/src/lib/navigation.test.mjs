@@ -78,6 +78,14 @@ test("getCurrentSection returns user management metadata for settings routes", (
   });
 });
 
+test("getCurrentSection returns onboarding metadata for setup routes", () => {
+  assert.deepEqual(getCurrentSection("/setup/onboard"), {
+    eyebrow: "Administration",
+    title: "School onboarding",
+    description: "Set curriculum, the first class, and a minimal bot preset before sharing the join link.",
+  });
+});
+
 test("getCurrentSection returns export metadata for export routes", () => {
   assert.deepEqual(getCurrentSection("/export"), {
     eyebrow: "Administration",
@@ -115,7 +123,14 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/settings/users", "/export"],
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/setup/onboard", "/settings/users", "/export"],
+  );
+});
+
+test("getNavigationForUser exposes onboarding to platform admins", () => {
+  assert.deepEqual(
+    getNavigationForUser({ role: "platform_admin", user_id: "platform-admin-1" }).map((item) => item.href),
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/setup/onboard", "/settings/users", "/export"],
   );
 });
 
@@ -143,6 +158,13 @@ test("getBreadcrumbs returns user management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/settings/users"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Users", href: "/settings/users" },
+  ]);
+});
+
+test("getBreadcrumbs returns onboarding hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/setup/onboard"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Onboarding", href: "/setup/onboard" },
   ]);
 });
 

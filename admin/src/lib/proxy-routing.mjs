@@ -1,6 +1,6 @@
 import { canAccessPath, getDefaultRouteForUser, hasAdminUIAccess } from "./rbac.mjs";
 
-const protectedPrefixes = ["/dashboard", "/students", "/parents"];
+const protectedPrefixes = ["/dashboard", "/setup", "/settings", "/export", "/students", "/parents"];
 
 export function isProtectedPath(pathname) {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -23,7 +23,7 @@ export function getProxyRedirect(pathname, hasSession, user) {
 
   if (pathname === "/login" && hasSession && hasAdminUIAccess(user)) {
     return {
-      pathname: getDefaultRouteForUser(user),
+      pathname: "/",
       addNext: false,
     };
   }
