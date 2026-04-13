@@ -166,7 +166,7 @@ func (w *WhatsAppChannel) postJSON(path string, body any) error {
 	if err != nil {
 		return fmt.Errorf("whatsapp api request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
