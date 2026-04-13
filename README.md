@@ -112,7 +112,7 @@ When the backend is running in Docker, make sure `.env` uses Compose service nam
 If using Ollama for free self-hosted AI:
 
 ```bash
-docker compose exec ollama ollama pull llama3:8b
+docker compose exec ollama ollama pull llama3
 ```
 
 ### 4. Chat with your bot
@@ -222,7 +222,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
-| **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
+| **Deployment** | Docker Compose (Helm planned) | Single server ($20/mo) to national deployment (millions of students). |
 
 ### Current Admin Auth
 
@@ -346,9 +346,9 @@ Currently supported:
 
 | Curriculum | Subjects | Status |
 |-----------|----------|--------|
-| Malaysia KSSM Form 1 | Matematik (Algebra) | Planned |
-| Malaysia KSSM Form 2 | Matematik (Algebra) | Planned |
-| Malaysia KSSM Form 3 | Matematik (Algebra) | Planned |
+| Malaysia KSSM Form 1 | Matematik (Algebra) | Live |
+| Malaysia KSSM Form 2 | Matematik (Algebra) | Live |
+| Malaysia KSSM Form 3 | Matematik (Algebra) | Live |
 | Cambridge IGCSE 0580 | Mathematics | Planned |
 | *More coming — contributions welcome!* | | |
 
@@ -381,17 +381,9 @@ docker compose up -d   # Start everything
 
 **Cost:** ~$20/month on any VPS provider. Supports 100-500 students.
 
-### Option 2: Kubernetes (Helm)
+### Option 2: Kubernetes (Planned)
 
-For districts, states, or national deployments.
-
-```bash
-helm repo add pai https://p-n-ai.github.io/pai-bot/charts
-helm install pai pai/pai-bot \
-  --set telegram.botToken=your-token \
-  --set ai.openai.apiKey=sk-... \
-  --set database.url=postgresql://...
-```
+For districts, states, or national deployments. A Helm chart is planned but not yet available.
 
 **Scales:** Horizontally to millions of students. Each school gets a namespace with isolated data.
 
@@ -609,6 +601,20 @@ We welcome contributions! P&AI is built by a community that believes every stude
 7. Open a Pull Request
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/setup.md) | Prerequisites, quick start, environment variables, common issues |
+| [Architecture](docs/architecture.md) | Modular monolith design, domain packages, HTTP routing, infrastructure |
+| [AI Providers](docs/ai-providers.md) | Provider configuration, fallback chain, structured output, budget enforcement |
+| [Curriculum](docs/curriculum.md) | YAML schema, teaching notes, assessments, adding new curricula |
+| [Deployment](docs/deployment.md) | Docker Compose production, monitoring, backups |
+| [Admin Panel](docs/admin-panel.md) | Dashboard features, roles, API specification |
+| [Technical Plan](docs/technical-plan.md) | Detailed architecture, database schema, security model |
 
 ---
 
