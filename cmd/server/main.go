@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
@@ -36,14 +39,13 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	slog.SetDefault(slog.New(newLogHandler(cfg.Log)))
 
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid config", "error", err)
@@ -2247,4 +2249,26 @@ func buildManualNudgeMessage(detail adminapi.StudentDetail) string {
 		strings.ReplaceAll(weakest.TopicID, "-", " "),
 		int(weakest.MasteryScore*100),
 	)
+}
+
+// newLogHandler returns a slog.Handler based on config.
+// "text" uses human-readable output; anything else defaults to JSON.
+func newLogHandler(cfg config.LogConfig) slog.Handler {
+	var level slog.Level
+	switch strings.ToLower(cfg.Level) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn", "warning":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+	opts := &slog.HandlerOptions{Level: level}
+
+	if strings.ToLower(cfg.Format) == "text" {
+		return slog.NewTextHandler(os.Stdout, opts)
+	}
+	return slog.NewJSONHandler(os.Stdout, opts)
 }

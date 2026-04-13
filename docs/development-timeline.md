@@ -422,10 +422,10 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W5D21-1` | Codebase cleanup: remove hardcoded values, Go doc comments, copyright headers, golangci-lint fixes, .env.example | 🤖 | ⬜ | |
-| `P-W5D21-2` | Write docs: setup.md, architecture.md, ai-providers.md, curriculum.md, deployment.md | 🤖 | ⬜ | |
-| `P-W5D21-3` | Comprehensive README.md: hero, quick start (5 steps), features, architecture diagram, providers table, curricula table | 🤖 | ⬜ | |
-| `P-W5D21-4` | `scripts/setup.sh`: check prereqs → copy .env → prompt for tokens → docker compose up → migrate → seed demo school | 🤖 | ⬜ | |
+| `P-W5D21-1` | Codebase cleanup: remove hardcoded values, Go doc comments, copyright headers, golangci-lint fixes, .env.example | 🤖 | ✅ | Apache 2.0 SPDX headers on all 181 Go files, .env.example synced with config.go (added LEARN_SERVER_HOST, LEARN_DATABASE_MIN_CONNS, PAI_AUTH_GOOGLE_* vars) |
+| `P-W5D21-2` | Write docs: setup.md, architecture.md, ai-providers.md, curriculum.md, deployment.md | 🤖 | ✅ | All 5 docs written with accurate details from current codebase |
+| `P-W5D21-3` | Comprehensive README.md: hero, quick start (5 steps), features, architecture diagram, providers table, curricula table | 🤖 | ✅ | Updated curricula status to Live for KSSM F1-F3 Algebra, added Documentation section linking to new docs |
+| `P-W5D21-4` | `scripts/setup.sh`: check prereqs → copy .env → prompt for tokens → docker compose up → migrate → seed demo school | 🤖 | ✅ | Interactive setup wizard with prereq checks, pg_isready wait, optional demo seed, build step |
 | `P-W5D21-5` | 🧑 Write launch blog post (1500 words) | 🧑 Human | ⬜ | |
 | `P-W5D21-6` | 🧑 Record 3-min demo video | 🧑 Human | ⬜ | |
 
