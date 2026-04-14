@@ -21,8 +21,9 @@ const (
 	MsgLanguagePrompt        Key = "language_prompt"
 	MsgLanguageInvalidFormat Key = "language_invalid_format"
 	MsgDefaultStudentName    Key = "default_student_name"
-	MsgStartOnboardingForm   Key = "start_onboarding_form"
-	MsgStartOnboardingLang   Key = "start_onboarding_lang"
+	MsgStartOnboardingForm       Key = "start_onboarding_form"
+	MsgStartOnboardingLang       Key = "start_onboarding_lang"
+	MsgStartOnboardingAutoDetect Key = "start_onboarding_auto_detect"
 	MsgLanguageUnclear       Key = "language_unclear"
 	MsgOnboardingFormUnclear Key = "onboarding_form_unclear"
 	MsgOnboardingFormPrompt  Key = "onboarding_form_prompt"
@@ -91,6 +92,20 @@ Bahasa pilihan anda untuk sesi ini?
 - 中文
 
 Anda boleh jawab bebas (contoh: English / BM / Chinese).`,
+		MsgStartOnboardingAutoDetect: `Hai %s!
+
+Saya P&AI Bot — tutor matematik peribadi anda!
+
+Bahasa dikesan: %s
+(Guna /language untuk tukar bahasa)
+
+Saya boleh membantu anda dengan KSSM Matematik:
+- Tingkatan 1
+- Tingkatan 2
+- Tingkatan 3
+
+Tingkatan berapa anda sekarang?
+Balas dengan: 1, 2, atau 3.`,
 		MsgLanguageUnclear:       "Saya belum pasti bahasa pilihan anda. Boleh jawab: English, Bahasa Melayu, atau 中文.",
 		MsgOnboardingFormUnclear: "Saya belum pasti tingkatan anda. Boleh jawab bebas (contoh: saya tingkatan 2 / form two), atau balas terus 1, 2, atau 3.",
 		MsgOnboardingFormPrompt: `Baik. Saya boleh bantu untuk:
@@ -159,6 +174,20 @@ Choose your preferred session language:
 - 中文
 
 You can answer freely (example: English / BM / Chinese).`,
+		MsgStartOnboardingAutoDetect: `Hi %s!
+
+I'm P&AI Bot — your personal math tutor!
+
+Language detected: %s
+(Use /language to change language)
+
+I can help you with KSSM Mathematics:
+- Form 1
+- Form 2
+- Form 3
+
+What form are you in now?
+Reply with: 1, 2, or 3.`,
 		MsgLanguageUnclear:       "I couldn't determine your preferred language. Please reply with: English, Bahasa Melayu, or 中文.",
 		MsgOnboardingFormUnclear: "I couldn't determine your form. You can reply freely (for example: form 2 / tingkatan 2), or just 1, 2, or 3.",
 		MsgOnboardingFormPrompt: `Great. I can help with:
@@ -227,6 +256,20 @@ Which form are you in now?`,
 - 中文
 
 你可以自由输入（例如：English / BM / Chinese）。`,
+		MsgStartOnboardingAutoDetect: `你好 %s！
+
+我是 P&AI Bot —— 你的数学私人导师！
+
+检测到语言：%s
+（使用 /language 切换语言）
+
+我可以帮助你学习 KSSM 数学：
+- Form 1
+- Form 2
+- Form 3
+
+你现在是几年级？
+请回复：1、2 或 3。`,
 		MsgLanguageUnclear:       "我还不能确定你的语言偏好。请回复：English、Bahasa Melayu 或 中文。",
 		MsgOnboardingFormUnclear: "我还不能确定你的年级。你可以自由回答（例如：Form 2 / Tingkatan 2），或直接回复 1、2、3。",
 		MsgOnboardingFormPrompt: `好的。我可以帮助你学习：
@@ -265,6 +308,19 @@ Which form are you in now?`,
 		MsgChallengeIncorrect:   "❌ 不正确\n答案：%s",
 		MsgChallengeReviewRetry: "还不对。再试一次。",
 	},
+}
+
+func LocaleDisplayName(locale string) string {
+	switch NormalizeLocale(locale) {
+	case "en":
+		return "English"
+	case "ms":
+		return "Bahasa Melayu"
+	case "zh":
+		return "中文"
+	default:
+		return locale
+	}
 }
 
 func NormalizeLocale(locale string) string {
