@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useTransition } from "react";
-import { IconArrowLeft, IconArrowRight, IconCheck, IconCopy, IconSparkles } from "@tabler/icons-react";
-import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
+import type { ReactNode } from "react";
+import { IconArrowLeft, IconArrowRight, IconCheck, IconSparkles } from "@tabler/icons-react";
+import { AdminSurface } from "@/components/admin-surface";
+import { OnboardingSuccessSection } from "@/components/onboarding-success-section";
 import { StatePanel } from "@/components/state-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { submitOnboarding, type OnboardingView, type SubmitOnboardingInput, type SubmitOnboardingResult } from "@/lib/api";
+import { submitOnboarding, type OnboardingView, type SubmitOnboardingInput } from "@/lib/api";
 import { normalizeClassSlug, onboardingBotPresetOptions, onboardingCurriculumOptions } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useOnboardingWizardStore } from "@/stores/onboarding-wizard-store";
@@ -23,10 +24,10 @@ type OnboardingStep = {
 };
 
 const steps: readonly OnboardingStep[] = [
-  { id: "curriculum", title: "Curriculum", description: "Locked demo syllabus for the first delivery slice." },
-  { id: "class", title: "First class", description: "Create one starter class to anchor join-link setup." },
-  { id: "bot", title: "Bot setup", description: "Pick a minimal preset. Keep the initial experience stable." },
-  { id: "school", title: "School", description: "Optional metadata. Safe to skip and save later." },
+  { id: "curriculum", title: "Curriculum", description: "Choose the starting syllabus for this class." },
+  { id: "class", title: "First class", description: "Name the class students will join first." },
+  { id: "bot", title: "Bot setup", description: "Choose how the tutor should respond at the start." },
+  { id: "school", title: "School", description: "Review the setup and add the school name if you want it shown." },
 ];
 
 export function OnboardingWizard({ initialData, loadError = "" }: {
@@ -156,18 +157,18 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {savedState ? (
-        <Alert>
-          <AlertTitle>Existing setup found</AlertTitle>
-          <AlertDescription>
-            Saving again updates the stored onboarding state for <span className="font-medium">{savedState.first_class.name}</span>.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-foreground/40" aria-hidden="true" />
+          <span>
+            <span className="font-medium text-foreground">{savedState.first_class.name}</span> is already set up. Save again to update it.
+          </span>
+        </div>
       ) : null}
 
       <AdminSurface>
-        <div className="flex min-h-[40rem] flex-col gap-6">
+        <div className="flex min-h-[35rem] flex-col gap-6">
           <OnboardingStepper currentStepIndex={stepIndex} steps={steps} onStepSelect={setStepIndex} />
 
           <OnboardingStepBody
@@ -260,14 +261,16 @@ function OnboardingStepper({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">
-          Step {currentStepIndex + 1} of {steps.length}
-        </p>
-        <p className="text-sm text-muted-foreground">{steps[currentStepIndex]?.title}</p>
+      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            Step {currentStepIndex + 1} of {steps.length}
+          </p>
+        </div>
+        <p className="text-sm font-medium text-foreground">{steps[currentStepIndex]?.title}</p>
       </div>
       <Progress value={completionRatio}>
-        <ProgressLabel>Progress</ProgressLabel>
+        <ProgressLabel className="sr-only">Setup progress</ProgressLabel>
       </Progress>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => (
@@ -276,10 +279,10 @@ function OnboardingStepper({
             type="button"
             onClick={() => onStepSelect(index)}
             className={cn(
-              "flex min-h-16 flex-col rounded-xl border px-3 py-3 text-left transition-colors",
+              "flex min-h-11 flex-col rounded-full border px-4 py-2.5 text-left transition-colors",
               index === currentStepIndex
-                ? "border-foreground bg-foreground text-background"
-                : "border-border bg-card text-card-foreground hover:border-foreground/40",
+                ? "border-foreground bg-foreground text-background shadow-sm"
+                : "border-border bg-background/70 text-card-foreground hover:border-foreground/40",
             )}
           >
             <div className="flex items-center gap-2">
@@ -303,10 +306,10 @@ function OnboardingStepper({
 function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
   return (
     <OnboardingStepLayout
-      title="Lock the starter curriculum"
-      description="This first slice stays deliberately narrow. We keep one starter syllabus fixed so onboarding can create a real class and a working join route without expanding scope."
-      supportTitle="What this step controls"
-      supportContent="The selected syllabus is attached to the first persisted class. Broader curriculum management can come later."
+      title="Choose the starting syllabus"
+      description="Choose the syllabus this class will start with."
+      supportTitle="What happens next"
+      supportContent="This syllabus is attached to the class you create in the next step."
     >
       <FieldGroup>
         <Field>
@@ -323,7 +326,7 @@ function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
               ))}
             </SelectContent>
           </Select>
-          <FieldDescription>{onboardingCurriculumOptions[0]?.note}</FieldDescription>
+          <FieldDescription>This is the starting syllabus for your first class.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -339,9 +342,9 @@ function OnboardingClassStep({
 }) {
   return (
     <OnboardingStepLayout
-      title="Name the first real class"
-      description="This step creates the first persisted class entity. Keep it simple: one usable class, one stable slug, one public join route."
-      supportTitle="Join path preview"
+      title="Name the class"
+      description="Give students and teachers a clear class name."
+      supportTitle="Student join link preview"
       supportContent={`/join/${normalizeClassSlug(className)}`}
     >
       <FieldGroup>
@@ -351,9 +354,9 @@ function OnboardingClassStep({
             id="onboarding-first-class"
             value={className}
             onChange={(event) => onClassNameChange(event.target.value)}
-            placeholder="steady-otter-harbor"
+            placeholder="Pilot Class A"
           />
-          <FieldDescription>Auto-generated by default. Keep it editable so admins can separate groups fast.</FieldDescription>
+          <FieldDescription>Keep it simple and recognizable, for example Form 1 Algebra or Pilot Class A.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -369,10 +372,10 @@ function OnboardingBotStep({
 }) {
   return (
     <OnboardingStepLayout
-      title="Choose the initial bot posture"
-      description="Keep the first student experience stable. This preset is only the opening behavior; richer tutoring modes can come later."
-      supportTitle="Selection rule"
-      supportContent="Choose one preset now. Optimize for clarity, not customization."
+      title="Choose how the tutor begins"
+      description="Choose how the tutor should respond when the class begins."
+      supportTitle="How to choose"
+      supportContent="Pick the tone that best fits your first rollout. You can refine it later."
     >
       <div className="grid w-full grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
         {onboardingBotPresetOptions.map((option) => {
@@ -416,9 +419,9 @@ function OnboardingSchoolStep({
 }) {
   return (
     <OnboardingStepLayout
-      title="Add the school label and review the setup"
-      description="This is the last pass before save. School name is optional; the important part is verifying the class and bot preset you want to ship with."
-      supportTitle="Ready-to-save summary"
+      title="Review and save"
+      description="Check the setup before you save."
+      supportTitle="What you are about to save"
       supportContent={
         <dl className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between gap-3">
@@ -427,10 +430,10 @@ function OnboardingSchoolStep({
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt>First class</dt>
-            <dd>{form.first_class.name.trim() || "Missing"}</dd>
+            <dd>{form.first_class.name.trim() || "Add a class name"}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <dt>Bot preset</dt>
+            <dt>Tutor style</dt>
             <dd>{currentPresetTitle}</dd>
           </div>
         </dl>
@@ -445,7 +448,7 @@ function OnboardingSchoolStep({
             onChange={(event) => onSchoolNameChange(event.target.value)}
             placeholder={tenantName || "Current workspace"}
           />
-          <FieldDescription>Duplicate names are blocked on final save.</FieldDescription>
+          <FieldDescription>This helps teachers recognize the workspace. Leave it blank if you want to finish setup first.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -466,82 +469,18 @@ function OnboardingStepLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-6">
-      <section className="space-y-3">
+    <div className="grid gap-4">
+      <section className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
       </section>
       <section className="grid gap-5 md:grid-cols-[minmax(0,503px)_minmax(0,483px)] md:items-start md:justify-between">
         <div className="rounded-2xl border bg-card p-5 md:p-6">{children}</div>
-        <div className="rounded-2xl border bg-muted/20 p-5 md:p-6">
-          <p className="text-sm font-medium text-foreground">{supportTitle}</p>
-          <div className="mt-3 text-sm leading-6 text-muted-foreground">{supportContent}</div>
+        <div className="px-1 py-2 md:px-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{supportTitle}</p>
+          <div className="mt-2 text-sm leading-6 text-muted-foreground">{supportContent}</div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function OnboardingSuccessSection({
-  copyFeedback,
-  onCopyJoinLink,
-  onEditSetup,
-  result,
-  resultSchoolName,
-}: {
-  copyFeedback: string;
-  onCopyJoinLink: () => void;
-  onEditSetup: () => void;
-  result: SubmitOnboardingResult;
-  resultSchoolName: string;
-}) {
-  return (
-    <AdminSurface className="overflow-hidden">
-      <div className="flex flex-col gap-6">
-        <AdminSurfaceHeader
-          title="Onboarding saved"
-          description="Core setup is in. Invite teachers later if you want to keep this slice thin."
-        />
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <SummaryItem label="School" value={resultSchoolName} />
-          <SummaryItem label="First class" value={result.class_name} />
-          <SummaryItem label="Save status" value={result.save_status} />
-        </div>
-
-        <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium text-foreground">Join link</p>
-          <Input readOnly value={result.join_link} className="mt-3" aria-label="Join link" />
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button type="button" variant="outline" onClick={onCopyJoinLink}>
-              <IconCopy data-icon="inline-start" />
-              Copy link
-            </Button>
-            <Button type="button" variant="outline" onClick={() => window.open(result.join_link, "_blank", "noopener,noreferrer")}>
-              Open link
-            </Button>
-            {copyFeedback ? <p className="text-sm text-muted-foreground">{copyFeedback}</p> : null}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" onClick={onEditSetup}>
-            Edit setup
-          </Button>
-          <Button type="button" variant="outline" disabled>
-            Teacher invites next
-          </Button>
-        </div>
-      </div>
-    </AdminSurface>
-  );
-}
-
-function SummaryItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-muted/20 p-4">
-      <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-base font-medium text-foreground">{value}</p>
     </div>
   );
 }

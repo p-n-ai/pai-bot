@@ -23,13 +23,14 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-8">
+    <div className="flex flex-1 flex-col gap-6">
       <PageHero
-        eyebrow="Administration"
-        title="School onboarding"
-        description="Multi-step setup for curriculum, first class, and a minimal bot preset. Teacher invites stay outside this first delivery slice."
+        eyebrow="School setup"
+        title="Set up your first class"
+        description="Choose the syllabus, name the class, decide how the tutor begins, then share it."
         surface="plain"
         className="mx-auto w-full max-w-5xl"
+        contentClassName="space-y-2"
       />
       <div className="mx-auto w-full max-w-5xl">
         <OnboardingWizard initialData={data} loadError={loadError} />
