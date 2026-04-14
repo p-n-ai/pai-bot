@@ -260,6 +260,7 @@ export interface OnboardingCurriculum {
 }
 
 export interface OnboardingFirstClass {
+  id?: string;
   name: string;
   slug: string;
 }
@@ -292,10 +293,19 @@ export interface SubmitOnboardingInput {
 }
 
 export interface SubmitOnboardingResult {
+  class_id: string;
   school_name: string;
   class_name: string;
   join_link: string;
   save_status: string;
+}
+
+export interface JoinClassView {
+  class_id: string;
+  class_name: string;
+  class_slug: string;
+  school_name: string;
+  curriculum_label: string;
 }
 
 function parseErrorMessage(raw: string, fallback: string): string {
@@ -403,6 +413,16 @@ export async function getOnboarding(): Promise<OnboardingView> {
 
 export async function submitOnboarding(input: SubmitOnboardingInput): Promise<SubmitOnboardingResult> {
   return postJSONWithBody(`/api/admin/onboarding`, input);
+}
+
+export async function getJoinClass(slug: string): Promise<JoinClassView> {
+  const res = await fetch(resolveAPIPath(`/api/join/${encodeURIComponent(slug)}`), {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load /api/join/${slug}: ${res.status}`);
+  }
+  return (await readJSONResponse(res)) as JoinClassView;
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {

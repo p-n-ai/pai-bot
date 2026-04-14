@@ -276,6 +276,10 @@ func NewPlatform(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool, allTenants: true}
 }
 
+func NewPublic(pool *pgxpool.Pool) *Service {
+	return &Service{pool: pool, allTenants: true}
+}
+
 func (s *Service) tenantPredicate(column string, argPos int) string {
 	return fmt.Sprintf("($%d::uuid IS NULL OR %s = $%d::uuid)", argPos, column, argPos)
 }

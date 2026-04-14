@@ -14,6 +14,7 @@ import type {
   OnboardingView,
   ParentSummary,
   UserManagementView,
+  JoinClassView,
 } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -79,6 +80,10 @@ export async function getServerUserManagement(): Promise<UserManagementView> {
 
 export async function getServerOnboarding(): Promise<OnboardingView> {
   return fetchServerJSON(`/api/admin/onboarding`);
+}
+
+export async function getServerJoinClass(slug: string): Promise<JoinClassView> {
+  return fetchServerJSON(`/api/join/${encodeURIComponent(slug)}`);
 }
 
 export async function getServerPostAuthPath(user: AuthUser, nextPath?: string | null): Promise<string> {

@@ -356,6 +356,9 @@ func TestAdminSubmitOnboardingEndpoint(t *testing.T) {
 	if payload.SchoolName != "SMK Pandai Demo" {
 		t.Fatalf("school_name = %q, want SMK Pandai Demo", payload.SchoolName)
 	}
+	if payload.ClassID != "class-1" {
+		t.Fatalf("class_id = %q, want class-1", payload.ClassID)
+	}
 	if payload.ClassName != "steady-otter-harbor" {
 		t.Fatalf("class_name = %q, want steady-otter-harbor", payload.ClassName)
 	}
@@ -364,6 +367,28 @@ func TestAdminSubmitOnboardingEndpoint(t *testing.T) {
 	}
 	if payload.SaveStatus != "saved" {
 		t.Fatalf("save_status = %q, want saved", payload.SaveStatus)
+	}
+}
+
+func TestPublicJoinClassEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/join/steady-otter-harbor", nil)
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload adminapi.JoinClassView
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.ClassID != "class-1" {
+		t.Fatalf("class_id = %q, want class-1", payload.ClassID)
+	}
+	if payload.ClassSlug != "steady-otter-harbor" {
+		t.Fatalf("class_slug = %q, want steady-otter-harbor", payload.ClassSlug)
 	}
 }
 
@@ -1615,6 +1640,7 @@ func (stubAdminAPI) GetOnboarding() (adminapi.OnboardingView, error) {
 				Label:      "KSSM Algebra",
 			},
 			FirstClass: adminapi.OnboardingFirstClass{
+				ID:   "class-1",
 				Name: "steady-otter-harbor",
 				Slug: "steady-otter-harbor",
 			},
@@ -1633,10 +1659,21 @@ func (stubAdminAPI) SubmitOnboarding(req adminapi.SubmitOnboardingRequest, joinB
 		className = strings.TrimSpace(req.FirstClass.Slug)
 	}
 	return adminapi.SubmitOnboardingResult{
+		ClassID:    "class-1",
 		SchoolName: strings.TrimSpace(req.SchoolName),
 		ClassName:  className,
 		JoinLink:   strings.TrimRight(joinBaseURL, "/") + "/join/" + strings.TrimSpace(req.FirstClass.Slug),
 		SaveStatus: "saved",
+	}, nil
+}
+
+func (stubAdminAPI) GetJoinClass(slug string) (adminapi.JoinClassView, error) {
+	return adminapi.JoinClassView{
+		ClassID:         "class-1",
+		ClassName:       "steady-otter-harbor",
+		ClassSlug:       strings.TrimSpace(slug),
+		SchoolName:      "P&AI Academy",
+		CurriculumLabel: "KSSM Algebra",
 	}, nil
 }
 
@@ -1950,7 +1987,7 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
 	rec := httptest.NewRecorder()
 
-	newHandlerWithAdminProvider(provider, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
+	newHandlerWithAdminProvider(provider, stubAdminAPI{}, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)

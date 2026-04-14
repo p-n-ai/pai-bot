@@ -21,6 +21,9 @@ func TestNormalizeOnboardingSubmitGeneratesSlug(t *testing.T) {
 	if req.FirstClass.Slug != "steady-otter-harbor" {
 		t.Fatalf("first_class.slug = %q, want steady-otter-harbor", req.FirstClass.Slug)
 	}
+	if req.FirstClass.ID != "" {
+		t.Fatalf("first_class.id = %q, want empty", req.FirstClass.ID)
+	}
 }
 
 func TestBuildOnboardingJoinLink(t *testing.T) {

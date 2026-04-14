@@ -247,6 +247,7 @@ func main() {
 				return lookupDefaultTenantID(ctx, db.Pool)
 			},
 		},
+		adminapi.NewPublic(db.Pool),
 		gatewaySender{gw},
 		retrievalService,
 		authService,
@@ -303,6 +304,10 @@ type adminDataSource interface {
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
 	ExportProgress() ([]adminapi.ProgressExportRow, error)
+}
+
+type joinClassSource interface {
+	GetJoinClass(slug string) (adminapi.JoinClassView, error)
 }
 
 type adminDataSourceProvider interface {
@@ -479,10 +484,11 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 }
 
 func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
+	joinSource, _ := admin.(joinClassSource)
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
 }
 
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -513,6 +519,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc))
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
+	mux.Handle("GET /api/join/{slug}", handlePublicJoinClass(joinSource))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc, inviteBaseURL)))
 	mux.Handle("POST /api/admin/invites/{id}/reissue", adminOrAbove(handleAdminInviteReissue(authSvc, inviteBaseURL)))
 	mux.Handle("GET /api/admin/users", adminOrAbove(handleAdminUsers(adminProvider)))
@@ -532,6 +539,22 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
 	return withCORS(mux)
+}
+
+func handlePublicJoinClass(joinSource joinClassSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if joinSource == nil {
+			http.Error(w, "join lookup unavailable", http.StatusNotFound)
+			return
+		}
+		slug := r.PathValue("slug")
+		payload, err := joinSource.GetJoinClass(slug)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
 }
 
 func authenticateRequests(authSvc authService, manager *auth.TokenManager, now func() time.Time) func(http.Handler) http.Handler {

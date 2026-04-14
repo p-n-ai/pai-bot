@@ -20,6 +20,7 @@ type OnboardingCurriculum struct {
 }
 
 type OnboardingFirstClass struct {
+	ID   string `json:"id,omitempty"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
 }
@@ -52,6 +53,7 @@ type SubmitOnboardingRequest struct {
 }
 
 type SubmitOnboardingResult struct {
+	ClassID    string `json:"class_id"`
 	SchoolName string `json:"school_name"`
 	ClassName  string `json:"class_name"`
 	JoinLink   string `json:"join_link"`
@@ -121,17 +123,27 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 	}
 	defer tx.Rollback(ctx)
 
-	var tenantName string
+	var (
+		tenantName string
+		rawConfig  []byte
+	)
 	if err := tx.QueryRow(ctx, `
-		SELECT name
+		SELECT name, COALESCE(config, '{}'::jsonb)
 		FROM tenants
 		WHERE id = $1::uuid
 		FOR UPDATE
-	`, s.tenantID).Scan(&tenantName); err != nil {
+	`, s.tenantID).Scan(&tenantName, &rawConfig); err != nil {
 		if err == pgx.ErrNoRows {
 			return SubmitOnboardingResult{}, ErrNotFound
 		}
 		return SubmitOnboardingResult{}, fmt.Errorf("load tenant for onboarding: %w", err)
+	}
+
+	var existing tenantConfigEnvelope
+	if len(rawConfig) > 0 {
+		if err := json.Unmarshal(rawConfig, &existing); err != nil {
+			return SubmitOnboardingResult{}, fmt.Errorf("decode existing onboarding config: %w", err)
+		}
 	}
 
 	schoolName := normalized.SchoolName
@@ -153,11 +165,20 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 		}
 	}
 
-	joinLink := buildOnboardingJoinLink(joinBaseURL, normalized.FirstClass.Slug)
+	classRecord, err := upsertOnboardingClass(ctx, tx, s.tenantID, existing.Onboarding, normalized)
+	if err != nil {
+		return SubmitOnboardingResult{}, err
+	}
+
+	joinLink := buildOnboardingJoinLink(joinBaseURL, classRecord.Slug)
 	onboardingState := OnboardingState{
 		SchoolName:   schoolName,
 		Curriculum:   normalized.Curriculum,
-		FirstClass:   normalized.FirstClass,
+		FirstClass: OnboardingFirstClass{
+			ID:   classRecord.ID,
+			Name: classRecord.Name,
+			Slug: classRecord.Slug,
+		},
 		BotSetup:     normalized.BotSetup,
 		JoinLink:     joinLink,
 		SaveStatus:   onboardingSaveStatusSaved,
@@ -192,11 +213,69 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 	}
 
 	return SubmitOnboardingResult{
+		ClassID:    classRecord.ID,
 		SchoolName: schoolName,
-		ClassName:  normalized.FirstClass.Name,
+		ClassName:  classRecord.Name,
 		JoinLink:   joinLink,
 		SaveStatus: onboardingSaveStatusSaved,
 	}, nil
+}
+
+type onboardingClassRecord struct {
+	ID   string
+	Name string
+	Slug string
+}
+
+func upsertOnboardingClass(ctx context.Context, tx pgx.Tx, tenantID string, existing *OnboardingState, req SubmitOnboardingRequest) (onboardingClassRecord, error) {
+	classID := strings.TrimSpace(req.FirstClass.ID)
+	if classID == "" && existing != nil {
+		classID = strings.TrimSpace(existing.FirstClass.ID)
+	}
+
+	var record onboardingClassRecord
+	if classID != "" {
+		err := tx.QueryRow(ctx, `
+			UPDATE classes
+			SET name = $3,
+			    slug = $4,
+			    syllabus_id = $5,
+			    updated_at = NOW()
+			WHERE id = $1::uuid
+			  AND tenant_id = $2::uuid
+			RETURNING id::text, name, slug
+		`, classID, tenantID, req.FirstClass.Name, req.FirstClass.Slug, req.Curriculum.SyllabusID).Scan(
+			&record.ID,
+			&record.Name,
+			&record.Slug,
+		)
+		if err == nil {
+			return record, nil
+		}
+		if err != pgx.ErrNoRows {
+			return onboardingClassRecord{}, fmt.Errorf("update onboarding class: %w", err)
+		}
+	}
+
+	err := tx.QueryRow(ctx, `
+		INSERT INTO classes (tenant_id, name, slug, syllabus_id)
+		VALUES ($1::uuid, $2, $3, $4)
+		ON CONFLICT (slug) DO UPDATE
+		SET name = EXCLUDED.name,
+		    tenant_id = EXCLUDED.tenant_id,
+		    syllabus_id = EXCLUDED.syllabus_id,
+		    updated_at = NOW()
+		RETURNING id::text, name, slug
+	`, tenantID, req.FirstClass.Name, req.FirstClass.Slug, req.Curriculum.SyllabusID).Scan(
+		&record.ID,
+		&record.Name,
+		&record.Slug,
+	)
+	if err != nil {
+		return onboardingClassRecord{}, fmt.Errorf("upsert onboarding class: %w", err)
+	}
+
+	return record, nil
 }
 
 func normalizeOnboardingSubmit(req SubmitOnboardingRequest) (SubmitOnboardingRequest, error) {

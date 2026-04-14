@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTransition } from "react";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCopy, IconSparkles } from "@tabler/icons-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
@@ -10,7 +11,6 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { submitOnboarding, type OnboardingView, type SubmitOnboardingInput, type SubmitOnboardingResult } from "@/lib/api";
 import { normalizeClassSlug, onboardingBotPresetOptions, onboardingCurriculumOptions } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
@@ -167,7 +167,7 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
       ) : null}
 
       <AdminSurface>
-        <div className="flex flex-col gap-6">
+        <div className="flex min-h-[40rem] flex-col gap-6">
           <OnboardingStepper currentStepIndex={stepIndex} steps={steps} onStepSelect={setStepIndex} />
 
           <OnboardingStepBody
@@ -260,29 +260,39 @@ function OnboardingStepper({
 
   return (
     <div className="flex flex-col gap-3">
-      <Progress value={completionRatio}>
-        <ProgressLabel>
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">
           Step {currentStepIndex + 1} of {steps.length}
-        </ProgressLabel>
-        <p className="ml-auto text-sm text-muted-foreground">{steps[currentStepIndex]?.title}</p>
+        </p>
+        <p className="text-sm text-muted-foreground">{steps[currentStepIndex]?.title}</p>
+      </div>
+      <Progress value={completionRatio}>
+        <ProgressLabel>Progress</ProgressLabel>
       </Progress>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => (
           <button
             key={step.id}
             type="button"
             onClick={() => onStepSelect(index)}
             className={cn(
-              "flex min-h-28 flex-col rounded-xl border px-4 py-3 text-left transition-colors",
+              "flex min-h-16 flex-col rounded-xl border px-3 py-3 text-left transition-colors",
               index === currentStepIndex
                 ? "border-foreground bg-foreground text-background"
                 : "border-border bg-card text-card-foreground hover:border-foreground/40",
             )}
           >
-            <p className="text-sm font-medium">{step.title}</p>
-            <p className={cn("mt-1 text-xs leading-5", index === currentStepIndex ? "text-background/80" : "text-muted-foreground")}>
-              {step.description}
-            </p>
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex size-5 items-center justify-center rounded-full text-[11px] font-semibold",
+                  index === currentStepIndex ? "bg-background/15 text-background" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {index + 1}
+              </span>
+              <p className="text-sm font-medium">{step.title}</p>
+            </div>
           </button>
         ))}
       </div>
@@ -292,24 +302,31 @@ function OnboardingStepper({
 
 function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
   return (
-    <FieldGroup>
-      <Field>
-        <FieldLabel htmlFor="onboarding-curriculum">Syllabus</FieldLabel>
-        <Select value={syllabusID} disabled>
-          <SelectTrigger id="onboarding-curriculum">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {onboardingCurriculumOptions.map((option) => (
-              <SelectItem key={option.syllabus_id} value={option.syllabus_id}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FieldDescription>{onboardingCurriculumOptions[0]?.note}</FieldDescription>
-      </Field>
-    </FieldGroup>
+    <OnboardingStepLayout
+      title="Lock the starter curriculum"
+      description="This first slice stays deliberately narrow. We keep one starter syllabus fixed so onboarding can create a real class and a working join route without expanding scope."
+      supportTitle="What this step controls"
+      supportContent="The selected syllabus is attached to the first persisted class. Broader curriculum management can come later."
+    >
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="onboarding-curriculum">Syllabus</FieldLabel>
+          <Select value={syllabusID} disabled>
+            <SelectTrigger id="onboarding-curriculum">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {onboardingCurriculumOptions.map((option) => (
+                <SelectItem key={option.syllabus_id} value={option.syllabus_id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>{onboardingCurriculumOptions[0]?.note}</FieldDescription>
+        </Field>
+      </FieldGroup>
+    </OnboardingStepLayout>
   );
 }
 
@@ -321,7 +338,12 @@ function OnboardingClassStep({
   onClassNameChange: (className: string) => void;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
+    <OnboardingStepLayout
+      title="Name the first real class"
+      description="This step creates the first persisted class entity. Keep it simple: one usable class, one stable slug, one public join route."
+      supportTitle="Join path preview"
+      supportContent={`/join/${normalizeClassSlug(className)}`}
+    >
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="onboarding-first-class">First class name</FieldLabel>
@@ -334,11 +356,7 @@ function OnboardingClassStep({
           <FieldDescription>Auto-generated by default. Keep it editable so admins can separate groups fast.</FieldDescription>
         </Field>
       </FieldGroup>
-      <div className="rounded-xl border bg-muted/30 p-4">
-        <p className="text-sm font-medium text-foreground">Join path preview</p>
-        <p className="mt-3 break-all text-sm text-muted-foreground">/join/{normalizeClassSlug(className)}</p>
-      </div>
-    </div>
+    </OnboardingStepLayout>
   );
 }
 
@@ -350,39 +368,38 @@ function OnboardingBotStep({
   onPresetSelect: (preset: string) => void;
 }) {
   return (
-    <ToggleGroup
-      value={[selectedPreset]}
-      onValueChange={(value) => {
-        const nextPreset = value[0];
-        if (typeof nextPreset === "string" && nextPreset.trim()) {
-          onPresetSelect(nextPreset);
-        }
-      }}
-      orientation="vertical"
-      className="grid w-full grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3"
+    <OnboardingStepLayout
+      title="Choose the initial bot posture"
+      description="Keep the first student experience stable. This preset is only the opening behavior; richer tutoring modes can come later."
+      supportTitle="Selection rule"
+      supportContent="Choose one preset now. Optimize for clarity, not customization."
     >
-      {onboardingBotPresetOptions.map((option) => {
-        const active = option.id === selectedPreset;
-        return (
-          <ToggleGroupItem
-            key={option.id}
-            value={option.id}
-            className={cn(
-              "flex h-full min-h-40 w-full flex-col items-stretch justify-between rounded-xl px-4 py-4 text-left whitespace-normal transition-colors",
-              active
-                ? "border-foreground bg-foreground text-background"
-                : "border-border bg-card text-card-foreground hover:border-foreground/40",
-            )}
-          >
-            <div className="flex w-full items-start justify-between gap-3">
-              <p className="text-sm font-medium">{option.title}</p>
-              {active ? <IconCheck className="size-4" /> : <IconSparkles className="size-4 opacity-70" />}
-            </div>
-            <p className={cn("mt-3 text-xs leading-5", active ? "text-background/80" : "text-muted-foreground")}>{option.description}</p>
-          </ToggleGroupItem>
-        );
-      })}
-    </ToggleGroup>
+      <div className="grid w-full grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
+        {onboardingBotPresetOptions.map((option) => {
+          const active = option.id === selectedPreset;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onPresetSelect(option.id)}
+              aria-pressed={active}
+              className={cn(
+                "flex h-full min-h-40 w-full flex-col items-stretch justify-between rounded-xl border px-4 py-4 text-left transition-colors",
+                active
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card text-card-foreground hover:border-foreground/40",
+              )}
+            >
+              <div className="flex w-full items-start justify-between gap-3">
+                <p className="text-sm font-medium">{option.title}</p>
+                {active ? <IconCheck className="size-4" /> : <IconSparkles className="size-4 opacity-70" />}
+              </div>
+              <p className={cn("mt-3 text-xs leading-5", active ? "text-background/80" : "text-muted-foreground")}>{option.description}</p>
+            </button>
+          );
+        })}
+      </div>
+    </OnboardingStepLayout>
   );
 }
 
@@ -398,22 +415,12 @@ function OnboardingSchoolStep({
   onSchoolNameChange: (schoolName: string) => void;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="onboarding-school-name">School name (optional)</FieldLabel>
-          <Input
-            id="onboarding-school-name"
-            value={form.school_name ?? ""}
-            onChange={(event) => onSchoolNameChange(event.target.value)}
-            placeholder={tenantName || "Current workspace"}
-          />
-          <FieldDescription>Duplicate names are blocked on final save.</FieldDescription>
-        </Field>
-      </FieldGroup>
-      <div className="rounded-xl border bg-muted/30 p-4">
-        <p className="text-sm font-medium text-foreground">Ready-to-save summary</p>
-        <dl className="mt-3 space-y-2 text-sm text-muted-foreground">
+    <OnboardingStepLayout
+      title="Add the school label and review the setup"
+      description="This is the last pass before save. School name is optional; the important part is verifying the class and bot preset you want to ship with."
+      supportTitle="Ready-to-save summary"
+      supportContent={
+        <dl className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between gap-3">
             <dt>Curriculum</dt>
             <dd>{form.curriculum.label}</dd>
@@ -427,7 +434,50 @@ function OnboardingSchoolStep({
             <dd>{currentPresetTitle}</dd>
           </div>
         </dl>
-      </div>
+      }
+    >
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="onboarding-school-name">School name (optional)</FieldLabel>
+          <Input
+            id="onboarding-school-name"
+            value={form.school_name ?? ""}
+            onChange={(event) => onSchoolNameChange(event.target.value)}
+            placeholder={tenantName || "Current workspace"}
+          />
+          <FieldDescription>Duplicate names are blocked on final save.</FieldDescription>
+        </Field>
+      </FieldGroup>
+    </OnboardingStepLayout>
+  );
+}
+
+function OnboardingStepLayout({
+  title,
+  description,
+  supportTitle,
+  supportContent,
+  children,
+}: {
+  title: string;
+  description: string;
+  supportTitle: string;
+  supportContent: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-6">
+      <section className="space-y-3">
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+      </section>
+      <section className="grid gap-5 md:grid-cols-[minmax(0,503px)_minmax(0,483px)] md:items-start md:justify-between">
+        <div className="rounded-2xl border bg-card p-5 md:p-6">{children}</div>
+        <div className="rounded-2xl border bg-muted/20 p-5 md:p-6">
+          <p className="text-sm font-medium text-foreground">{supportTitle}</p>
+          <div className="mt-3 text-sm leading-6 text-muted-foreground">{supportContent}</div>
+        </div>
+      </section>
     </div>
   );
 }
