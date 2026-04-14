@@ -121,7 +121,9 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 	if err != nil {
 		return SubmitOnboardingResult{}, fmt.Errorf("begin onboarding transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	var (
 		tenantName string
@@ -174,11 +176,7 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 	onboardingState := OnboardingState{
 		SchoolName:   schoolName,
 		Curriculum:   normalized.Curriculum,
-		FirstClass: OnboardingFirstClass{
-			ID:   classRecord.ID,
-			Name: classRecord.Name,
-			Slug: classRecord.Slug,
-		},
+		FirstClass:   OnboardingFirstClass(classRecord),
 		BotSetup:     normalized.BotSetup,
 		JoinLink:     joinLink,
 		SaveStatus:   onboardingSaveStatusSaved,
