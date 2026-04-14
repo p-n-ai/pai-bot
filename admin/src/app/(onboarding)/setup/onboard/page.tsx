@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
-import { PageHero } from "@/components/page-hero";
 import { getServerAuthSession, getServerOnboarding } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +22,13 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHero
-        eyebrow="School setup"
-        title="Set up your first class"
-        description="Choose the syllabus, name the class, decide how the tutor begins, then share it."
-        surface="plain"
-        className="mx-auto w-full max-w-5xl"
-        contentClassName="space-y-2"
-      />
+    <div className="flex flex-1 flex-col gap-4">
+      <header className="mx-auto w-full max-w-5xl">
+        <div className="max-w-2xl space-y-2">
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground">Set up your first class</h1>
+          <p className="text-sm leading-6 text-muted-foreground">Choose the syllabus. Name the class. Share it.</p>
+        </div>
+      </header>
       <div className="mx-auto w-full max-w-5xl">
         <OnboardingWizard initialData={data} loadError={loadError} />
       </div>
