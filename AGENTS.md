@@ -109,8 +109,20 @@ Use these files as primary references:
 5. `docs/implementation-guide.md` for code templates, test specs, and exit criteria
 6. `docs/admin-panel.md` for admin panel features, roles, and API specification
 7. `docs/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
+8. `docs/setup.md` for prerequisites, quick start, and common issues
+9. `docs/architecture.md` for modular monolith design and domain package reference
+10. `docs/ai-providers.md` for provider configuration, fallback chain, and structured output
+11. `docs/curriculum.md` for YAML schema, teaching notes, and assessment format
+12. `docs/deployment.md` for Docker Compose production, monitoring, and backups
 
 If you change one doc and it affects others, update all impacted docs in the same task.
+
+**When making code changes**, check whether the change affects any of the docs listed above. In particular:
+- Adding/removing/renaming a provider → update `docs/ai-providers.md` and the README providers table
+- Adding/removing/renaming a domain package → update `docs/architecture.md`
+- Changing environment variables or config fields → update `docs/setup.md` and `.env.example`
+- Changing deployment, Docker, or infrastructure → update `docs/deployment.md`
+- Changing curriculum loader behavior or YAML schema → update `docs/curriculum.md`
 
 Before changing curriculum contracts, shared API shapes, bot workflows, or OSS sync behavior, also inspect the relevant `p-n-ai` sibling/core repos listed in [Related Repositories](#related-repositories). Reuse existing patterns and data contracts when they already exist there instead of inventing local variants.
 
@@ -366,6 +378,11 @@ Agent note:
 ## Documentation
 
 - [README.md](README.md) — Project overview, quick start, features, deployment
+- [docs/setup.md](docs/setup.md) — Prerequisites, quick start, environment variables, common issues
+- [docs/architecture.md](docs/architecture.md) — Modular monolith design, domain packages, HTTP routing, infrastructure
+- [docs/ai-providers.md](docs/ai-providers.md) — Provider configuration, fallback chain, structured output, budget enforcement
+- [docs/curriculum.md](docs/curriculum.md) — YAML schema, teaching notes, assessments, adding new curricula
+- [docs/deployment.md](docs/deployment.md) — Docker Compose production, monitoring, backups
 - [docs/technical-plan.md](docs/technical-plan.md) — Detailed architecture, schema, infra, security
 - [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
 - [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan

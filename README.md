@@ -112,7 +112,7 @@ When the backend is running in Docker, make sure `.env` uses Compose service nam
 If using Ollama for free self-hosted AI:
 
 ```bash
-docker compose exec ollama ollama pull llama3:8b
+docker compose exec ollama ollama pull llama3
 ```
 
 ### 4. Chat with your bot
@@ -149,7 +149,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 - **Class Dashboard** — Mastery heatmap showing every student's progress across every topic at a glance.
 - **Student Detail View** — Deep dive into any student: mastery radar, activity timeline, struggle areas, conversation summaries.
 - **Nudge Students** — One-click to have the AI send a personalized study prompt to a specific student.
-- **Assign Topics** — Direct the AI to teach a specific topic to a student or entire class.
+- **Assign Topics** — Direct the AI to teach a specific topic to a student or entire class. *(Planned)*
 - **Weekly Leaderboards** — Motivate the class with weekly rankings by mastery gain.
 
 ### 👪 For Parents
@@ -222,7 +222,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
-| **Deployment** | Docker Compose / Helm + Kubernetes | Single server ($20/mo) to national deployment (millions of students). |
+| **Deployment** | Docker Compose (Helm planned) | Single server ($20/mo) to national deployment (millions of students). |
 
 ### Current Admin Auth
 
@@ -236,77 +236,75 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 ```
 pai-bot/
 ├── cmd/
-│   └── server/
-│       └── main.go                  # Application entrypoint
+│   ├── server/main.go               # Application entrypoint
+│   ├── seed/main.go                 # Demo data seeder
+│   ├── terminal-chat/main.go        # Terminal chat for testing
+│   └── terminal-nudge/main.go       # Terminal nudge for testing
 ├── internal/
 │   ├── ai/                          # AI Gateway
-│   │   ├── gateway.go               # Provider-agnostic interface
-│   │   ├── router.go                # Model routing + fallback chains
-│   │   ├── budget.go                # Token budget tracking + enforcement
-│   │   ├── provider_openai.go       # OpenAI + compatible APIs (DeepSeek, etc.)
-│   │   ├── provider_anthropic.go
+│   │   ├── gateway.go               # Provider interface + types
+│   │   ├── router.go                # Model routing + fallback chain + circuit breaker
+│   │   ├── budget.go                # Token budget tracking (in-memory)
+│   │   ├── provider_openai.go       # OpenAI + DeepSeek (compatible API)
+│   │   ├── provider_anthropic.go    # Anthropic Claude
 │   │   ├── provider_google.go       # Google Gemini
-│   │   ├── provider_ollama.go       # Self-hosted (Llama, DeepSeek, Qwen)
-│   │   └── provider_openrouter.go   # 100+ models (Qwen, Kimi, etc.)
+│   │   ├── provider_ollama.go       # Self-hosted (Llama, Qwen, etc.)
+│   │   └── provider_openrouter.go   # 100+ models via OpenRouter
 │   ├── agent/                       # Agent Engine
 │   │   ├── engine.go                # Conversation state machine
-│   │   ├── scheduler.go             # Proactive nudges via NATS
-│   │   ├── prompts.go               # Pedagogical system prompts
-│   │   ├── quiz.go                  # Assessment engine
-│   │   └── challenge.go             # Peer battle system
+│   │   ├── scheduler.go             # Proactive nudge scheduler
+│   │   ├── quiz.go                  # Quiz engine + assessment
+│   │   ├── challenge.go             # Peer battle system
+│   │   ├── challenge_runtime.go     # Challenge gameplay + settlement
+│   │   └── goals.go                 # Goal tracking
 │   ├── chat/                        # Chat Gateway
 │   │   ├── gateway.go               # Unified message routing
-│   │   ├── telegram.go              # Telegram adapter
-│   │   ├── whatsapp.go              # WhatsApp adapter
-│   │   └── websocket.go             # Web chat adapter
+│   │   ├── telegram.go              # Telegram Bot API adapter
+│   │   └── websocket.go             # WebSocket adapter
 │   ├── curriculum/                   # Curriculum Service
 │   │   ├── loader.go                # Reads YAML from OSS repository
-│   │   ├── cache.go                 # In-memory + Dragonfly curriculum cache
-│   │   └── types.go                 # Go structs matching OSS schema
+│   │   ├── types.go                 # Go structs matching OSS schema
+│   │   └── prerequisites.go         # Prerequisite graph
 │   ├── progress/                    # Progress Tracker
 │   │   ├── tracker.go               # Mastery scoring
 │   │   ├── spaced_rep.go            # SM-2 algorithm
-│   │   └── streaks.go               # Streak + XP system
+│   │   ├── streaks.go               # Streak tracking
+│   │   └── xp.go                    # XP system
 │   ├── auth/                        # Authentication
 │   │   ├── jwt.go                   # Token generation + validation
-│   │   └── middleware.go            # Role-based access control
-│   ├── tenant/                      # Multi-tenancy
-│   │   ├── tenant.go                # Tenant isolation logic
-│   │   └── middleware.go            # Tenant resolution from JWT/subdomain
+│   │   ├── middleware.go            # Role-based access control
+│   │   ├── google_oidc.go           # Google OIDC sign-in
+│   │   └── service.go              # Login, invites, sessions
+│   ├── adminapi/                    # Admin REST API
+│   ├── retrieval/                   # BM25 knowledge retrieval
+│   ├── tenant/                      # Multi-tenancy bootstrap
+│   ├── i18n/                        # Internationalization (BM/EN/ZH)
 │   └── platform/                    # Shared infrastructure
 │       ├── config/                  # Environment configuration
 │       ├── database/                # PostgreSQL connection (pgx)
 │       ├── cache/                   # Dragonfly client (go-redis)
-│       ├── messaging/               # NATS client + JetStream helpers
-│       ├── storage/                 # Object storage interface (S3-compatible)
-│       ├── telemetry/               # OpenTelemetry setup
-│       └── health/                  # Health check endpoints
+│       ├── mailer/                  # SMTP email delivery
+│       └── seed/                    # Demo data seeding
 ├── admin/                           # Next.js admin panel
-│   ├── src/
-│   │   ├── app/                     # App Router pages
-│   │   ├── components/              # Shared UI components
-│   │   └── providers/               # Auth + data providers
-│   ├── package.json
-│   └── next.config.js
+│   └── src/
+│       ├── app/                     # App Router pages
+│       └── components/              # Shared UI components (shadcn/ui)
 ├── migrations/                      # SQL migration files (goose)
 ├── deploy/
 │   ├── docker/
-│   │   ├── Dockerfile               # Multi-stage Go + Admin build
-│   │   └── Dockerfile.dev           # Development with hot reload
-│   └── helm/
-│       └── pai/                     # Helm chart for Kubernetes
-├── terraform/                       # Infrastructure as Code
+│   │   ├── Dockerfile               # Multi-stage Go build
+│   │   └── Dockerfile.admin         # Multi-stage Next.js build
+│   ├── caddy/                       # Reverse proxy config
+│   └── nginx/                       # Alternative reverse proxy
 ├── scripts/
 │   ├── setup.sh                     # First-time setup wizard
-│   ├── deploy.sh                    # Production deployment
+│   ├── deploy-remote.sh             # Production deployment
 │   └── analytics.sh                 # Quick metrics from CLI
-├── docker-compose.yml               # One-command local development
-├── docker-compose.prod.yml          # Production compose (single-server)
+├── docker-compose.yml               # Local development
+├── docker-compose.prod.yml          # Production single-server
 ├── justfile                         # Preferred task runner
-├── Makefile                         # Legacy parity shortcuts
 ├── .env.example                     # All configuration documented
-├── .github/workflows/               # CI/CD (build, test, lint, release)
-└── README.md
+└── .github/workflows/               # CI pipeline
 ```
 
 ---
@@ -317,7 +315,7 @@ P&AI is not locked to any AI model. Configure one or more providers:
 
 | Provider | Models | Cost | Setup |
 |----------|--------|------|-------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-5 Nano | Paid API | Set `LEARN_AI_OPENAI_API_KEY` |
+| **OpenAI** | GPT-4o, GPT-4o-mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` |
 | **Anthropic** | Claude Sonnet, Claude Haiku | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` |
 | **DeepSeek** | DeepSeek V3, Reasoner | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` |
 | **Google Gemini** | Gemini 2.5 Flash, Pro | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` |
@@ -346,9 +344,9 @@ Currently supported:
 
 | Curriculum | Subjects | Status |
 |-----------|----------|--------|
-| Malaysia KSSM Form 1 | Matematik (Algebra) | Planned |
-| Malaysia KSSM Form 2 | Matematik (Algebra) | Planned |
-| Malaysia KSSM Form 3 | Matematik (Algebra) | Planned |
+| Malaysia KSSM Form 1 | Matematik (Algebra) | Live |
+| Malaysia KSSM Form 2 | Matematik (Algebra) | Live |
+| Malaysia KSSM Form 3 | Matematik (Algebra) | Live |
 | Cambridge IGCSE 0580 | Mathematics | Planned |
 | *More coming — contributions welcome!* | | |
 
@@ -381,17 +379,9 @@ docker compose up -d   # Start everything
 
 **Cost:** ~$20/month on any VPS provider. Supports 100-500 students.
 
-### Option 2: Kubernetes (Helm)
+### Option 2: Kubernetes (Planned)
 
-For districts, states, or national deployments.
-
-```bash
-helm repo add pai https://p-n-ai.github.io/pai-bot/charts
-helm install pai pai/pai-bot \
-  --set telegram.botToken=your-token \
-  --set ai.openai.apiKey=sk-... \
-  --set database.url=postgresql://...
-```
+For districts, states, or national deployments. A Helm chart is planned but not yet available.
 
 **Scales:** Horizontally to millions of students. Each school gets a namespace with isolated data.
 
@@ -425,10 +415,10 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_GOOGLE_API_KEY` | No* | — | Google Gemini API key |
 | `LEARN_AI_OPENROUTER_API_KEY` | No* | — | OpenRouter API key (100+ models) |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
-| `LEARN_AI_OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama server URL |
+| `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
-| `PAI_AUTH_SECRET` | No | Auto-generated | Root auth secret; currently used for JWT signing |
-| `LEARN_PORT` | No | `8080` | HTTP server port |
+| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; currently used for JWT signing |
+| `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 
 *At least one AI provider must be configured.
@@ -608,7 +598,21 @@ We welcome contributions! P&AI is built by a community that believes every stude
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+See [docs/setup.md](docs/setup.md) for development environment setup.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/setup.md) | Prerequisites, quick start, environment variables, common issues |
+| [Architecture](docs/architecture.md) | Modular monolith design, domain packages, HTTP routing, infrastructure |
+| [AI Providers](docs/ai-providers.md) | Provider configuration, fallback chain, structured output, budget enforcement |
+| [Curriculum](docs/curriculum.md) | YAML schema, teaching notes, assessments, adding new curricula |
+| [Deployment](docs/deployment.md) | Docker Compose production, monitoring, backups |
+| [Admin Panel](docs/admin-panel.md) | Dashboard features, roles, API specification |
+| [Technical Plan](docs/technical-plan.md) | Detailed architecture, database schema, security model |
 
 ---
 
