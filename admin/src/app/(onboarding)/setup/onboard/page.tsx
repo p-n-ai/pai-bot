@@ -22,11 +22,10 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-3">
       <header className="mx-auto w-full max-w-5xl">
-        <div className="max-w-2xl space-y-2">
+        <div className="max-w-2xl">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground">Set up your first class</h1>
-          <p className="text-sm leading-6 text-muted-foreground">Choose the syllabus. Name the class. Share it.</p>
         </div>
       </header>
       <div className="mx-auto w-full max-w-5xl">

@@ -79,7 +79,6 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
   }
 
   const currentStep = steps[stepIndex];
-  const savedState = initialData.onboarding ?? null;
   const className = form.first_class.name.trim();
   const canAdvance =
     currentStep.id === "class" ? Boolean(className) : currentStep.id === "bot" ? Boolean(form.bot_setup.preset.trim()) : true;
@@ -158,15 +157,6 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
 
   return (
     <div className="flex flex-col gap-4">
-      {savedState ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-foreground/40" aria-hidden="true" />
-          <span>
-            <span className="font-medium text-foreground">{savedState.first_class.name}</span> is already set up. Save again to update it.
-          </span>
-        </div>
-      ) : null}
-
       <AdminSurface>
         <div className="flex min-h-[35rem] flex-col gap-6">
           <OnboardingStepper currentStepIndex={stepIndex} steps={steps} onStepSelect={setStepIndex} />
@@ -293,9 +283,9 @@ function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
   return (
     <OnboardingStepLayout
       title="Choose the starting syllabus"
-      description="Choose the syllabus this class will start with."
-      supportTitle="What happens next"
-      supportContent="This syllabus is attached to the class you create in the next step."
+      description="Choose the syllabus for this class."
+      supportTitle="Syllabus"
+      supportContent="Students in this class will begin here."
     >
       <FieldGroup>
         <Field>
@@ -329,9 +319,9 @@ function OnboardingClassStep({
   return (
     <OnboardingStepLayout
       title="Name the class"
-      description="Give students and teachers a clear class name."
-      supportTitle="Student join link preview"
-      supportContent={`/join/${normalizeClassSlug(className)}`}
+      description="Give the class a clear name."
+      supportTitle="Name"
+      supportContent="Use the name teachers and students will recognize."
     >
       <FieldGroup>
         <Field>
@@ -359,9 +349,9 @@ function OnboardingBotStep({
   return (
     <OnboardingStepLayout
       title="Choose how the tutor begins"
-      description="Choose how the tutor should respond when the class begins."
-      supportTitle="How to choose"
-      supportContent="Pick the tone that best fits your first rollout. You can refine it later."
+      description="Choose how the tutor should respond."
+      supportTitle="Tutor style"
+      supportContent="Pick one style."
     >
       <div className="grid w-full grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
         {onboardingBotPresetOptions.map((option) => {
@@ -406,8 +396,8 @@ function OnboardingSchoolStep({
   return (
     <OnboardingStepLayout
       title="Review and save"
-      description="Check the setup before you save."
-      supportTitle="What you are about to save"
+      description="Review the setup."
+      supportTitle="Current setup"
       supportContent={
         <dl className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center justify-between gap-3">
@@ -434,7 +424,7 @@ function OnboardingSchoolStep({
             onChange={(event) => onSchoolNameChange(event.target.value)}
             placeholder={tenantName || "Current workspace"}
           />
-          <FieldDescription>This helps teachers recognize the workspace. Leave it blank if you want to finish setup first.</FieldDescription>
+          <FieldDescription>Add the school name if you want it shown.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -455,18 +445,18 @@ function OnboardingStepLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-4">
-      <section className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
-      </section>
-      <section className="grid gap-5 md:grid-cols-[minmax(0,503px)_minmax(0,483px)] md:items-start md:justify-between">
-        <div className="rounded-2xl border bg-card p-5 md:p-6">{children}</div>
-        <div className="px-1 py-2 md:px-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{supportTitle}</p>
-          <div className="mt-2 text-sm leading-6 text-muted-foreground">{supportContent}</div>
+    <section className="grid gap-6 md:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] md:items-start">
+      <div className="space-y-5 md:pt-2">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+          <p className="max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
-      </section>
-    </div>
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{supportTitle}</p>
+          <div className="max-w-md text-sm leading-6 text-muted-foreground">{supportContent}</div>
+        </div>
+      </div>
+      <div className="rounded-2xl border bg-card p-5 md:p-6">{children}</div>
+    </section>
   );
 }
