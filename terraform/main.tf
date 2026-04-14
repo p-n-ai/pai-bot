@@ -1,10 +1,13 @@
 # P&AI Bot — Single EC2 + Docker Compose deployment
 # Region: ap-southeast-5 (Malaysia)
 #
+# The server only needs Docker + docker compose. All AWS operations
+# (ECR push, Secrets Manager read) happen in GitHub Actions CI.
+#
 # Usage:
 #   cd terraform
 #   terraform init
-#   terraform plan
+#   terraform plan -var="ssh_cidr_blocks=[\"YOUR_IP/32\"]"
 #   terraform apply
 
 terraform {
@@ -26,6 +29,9 @@ provider "aws" {
 }
 
 # --- SSH Key Pair ---
+# NOTE: This is convenient for bootstrapping but places the private key in
+# Terraform state. For production, consider importing an externally managed
+# key pair instead.
 
 resource "tls_private_key" "deploy" {
   algorithm = "ED25519"
@@ -111,6 +117,12 @@ resource "aws_instance" "app" {
   root_block_device {
     volume_size = var.volume_size_gb
     volume_type = "gp3"
+    encrypted   = true
+  }
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required" # IMDSv2 only
   }
 
   user_data = templatefile("${path.module}/user-data.sh", {

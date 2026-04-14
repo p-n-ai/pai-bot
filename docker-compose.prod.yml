@@ -48,6 +48,9 @@ services:
   admin:
     image: pai-admin:latest
     build: !reset null
+    depends_on:
+      app:
+        condition: service_started
     restart: always
     logging:
       driver: json-file
@@ -62,6 +65,11 @@ services:
   caddy:
     environment:
       DOMAIN: ${DOMAIN:-localhost}
+    depends_on:
+      app:
+        condition: service_started
+      admin:
+        condition: service_started
     restart: always
     deploy:
       resources:

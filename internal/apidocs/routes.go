@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package apidocs
 
 import (
@@ -235,6 +238,15 @@ func Build() (*Document, error) {
 		Security: protected,
 		Responses: mergeResponses(
 			responseJSON("200", "AI usage summary.", registry.refFor(adminapi.AIUsageSummary{})),
+			protectedErrors(),
+		),
+	})
+	doc.Paths["/api/admin/analytics/report"] = route("GET", Operation{
+		Summary:  "Get comprehensive 6-week analytics report",
+		Tags:     []string{"Admin"},
+		Security: protected,
+		Responses: mergeResponses(
+			responseJSON("200", "Comprehensive analytics report.", registry.refFor(adminapi.AnalyticsReport{})),
 			protectedErrors(),
 		),
 	})

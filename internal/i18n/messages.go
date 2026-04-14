@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package i18n
 
 import (
@@ -18,8 +21,9 @@ const (
 	MsgLanguagePrompt        Key = "language_prompt"
 	MsgLanguageInvalidFormat Key = "language_invalid_format"
 	MsgDefaultStudentName    Key = "default_student_name"
-	MsgStartOnboardingForm   Key = "start_onboarding_form"
-	MsgStartOnboardingLang   Key = "start_onboarding_lang"
+	MsgStartOnboardingForm       Key = "start_onboarding_form"
+	MsgStartOnboardingLang       Key = "start_onboarding_lang"
+	MsgStartOnboardingAutoDetect Key = "start_onboarding_auto_detect"
 	MsgLanguageUnclear       Key = "language_unclear"
 	MsgOnboardingFormUnclear Key = "onboarding_form_unclear"
 	MsgOnboardingFormPrompt  Key = "onboarding_form_prompt"
@@ -36,6 +40,25 @@ const (
 	MsgMilestoneXP            Key = "milestone_xp"
 	MsgMilestoneSubjectDone   Key = "milestone_subject_done"
 	MsgMilestoneStreakRecord   Key = "milestone_streak_record"
+
+	MsgGroupCreateUsage  Key = "group_create_usage"
+	MsgGroupCreated      Key = "group_created"
+	MsgGroupJoinUsage    Key = "group_join_usage"
+	MsgGroupJoined       Key = "group_joined"
+	MsgGroupNotFound     Key = "group_not_found"
+	MsgGroupUserNotFound Key = "group_user_not_found"
+	MsgGroupNoGroups     Key = "group_no_groups"
+	MsgLeaderboardEmpty  Key = "leaderboard_empty"
+	MsgGroupClosed       Key = "group_closed"
+
+	MsgChallengeComplete      Key = "challenge_complete"
+	MsgChallengeReviewOffer   Key = "challenge_review_offer"
+	MsgChallengeReviewDone    Key = "challenge_review_done"
+	MsgChallengeReviewSkip    Key = "challenge_review_skip"
+	MsgChallengeFinishFirst   Key = "challenge_finish_first"
+	MsgChallengeCorrect       Key = "challenge_correct"
+	MsgChallengeIncorrect     Key = "challenge_incorrect"
+	MsgChallengeReviewRetry   Key = "challenge_review_retry"
 )
 
 var catalog = map[string]map[Key]string{
@@ -69,6 +92,20 @@ Bahasa pilihan anda untuk sesi ini?
 - 中文
 
 Anda boleh jawab bebas (contoh: English / BM / Chinese).`,
+		MsgStartOnboardingAutoDetect: `Hai %s!
+
+Saya P&AI Bot — tutor matematik peribadi anda!
+
+Bahasa dikesan: %s
+(Guna /language untuk tukar bahasa)
+
+Saya boleh membantu anda dengan KSSM Matematik:
+- Tingkatan 1
+- Tingkatan 2
+- Tingkatan 3
+
+Tingkatan berapa anda sekarang?
+Balas dengan: 1, 2, atau 3.`,
 		MsgLanguageUnclear:       "Saya belum pasti bahasa pilihan anda. Boleh jawab: English, Bahasa Melayu, atau 中文.",
 		MsgOnboardingFormUnclear: "Saya belum pasti tingkatan anda. Boleh jawab bebas (contoh: saya tingkatan 2 / form two), atau balas terus 1, 2, atau 3.",
 		MsgOnboardingFormPrompt: `Baik. Saya boleh bantu untuk:
@@ -89,6 +126,23 @@ Tingkatan berapa anda sekarang?`,
 		MsgMilestoneXP:            "🌟 *Pencapaian XP!*\n\nAnda telah mencapai *%d XP*!\n\nKerja keras anda membuahkan hasil! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *LUAR BIASA!*\n\nAnda telah menguasai semua topik dalam *%s*!\n\nAnda seorang juara matematik! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *Rekod Baru!*\n\nStreak terpanjang anda: *%d hari*!\n\nDedikasi yang mengagumkan! 🏅",
+		MsgGroupCreateUsage:  "Guna: /create_group <nama>\nContoh: /create_group Kumpulan Algebra",
+		MsgGroupCreated:      "Kumpulan *%s* telah dibuat!\n\nKod jemputan: *%s*\nKongsi kod ini supaya rakan boleh sertai dengan /join %s",
+		MsgGroupJoinUsage:    "Guna: /join <kod>\nContoh: /join ABC123",
+		MsgGroupJoined:       "Anda telah menyertai *%s*! 🎉",
+		MsgGroupNotFound:     "Kumpulan dengan kod %s tidak dijumpai.",
+		MsgGroupUserNotFound: "Sila mulakan dulu dengan /start.",
+		MsgGroupNoGroups:     "Anda belum menyertai sebarang kumpulan.\nGuna /join <kod> untuk sertai, atau /create_group <nama> untuk buat baru.",
+		MsgLeaderboardEmpty:  "Belum ada data papan pendahulu untuk *%s*.\nTeruskan belajar dan semak semula minggu depan!",
+		MsgGroupClosed:       "*%s* tidak lagi menerima ahli baru.",
+		MsgChallengeComplete:    "🏁 Cabaran selesai!\n\n📊 Skor: %d/%d (%d%%)",
+		MsgChallengeReviewOffer: "Anda salah %d soalan. Mahu ulang kaji?\n\nBalas *review* untuk mula, atau apa sahaja untuk teruskan.",
+		MsgChallengeReviewDone:  "🎉 Ulang kaji selesai!\nAnda dapat %d/%d betul.\n⭐ +50 XP",
+		MsgChallengeReviewSkip:  "Baik, kita teruskan. Anda boleh ulang kaji kemudian.",
+		MsgChallengeFinishFirst: "Selesaikan cabaran semasa anda dulu, kemudian cuba lagi.",
+		MsgChallengeCorrect:     "✅ Betul!",
+		MsgChallengeIncorrect:   "❌ Salah\nJawapan: %s",
+		MsgChallengeReviewRetry: "Belum tepat. Cuba lagi.",
 	},
 	"en": {
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
@@ -120,6 +174,20 @@ Choose your preferred session language:
 - 中文
 
 You can answer freely (example: English / BM / Chinese).`,
+		MsgStartOnboardingAutoDetect: `Hi %s!
+
+I'm P&AI Bot — your personal math tutor!
+
+Language detected: %s
+(Use /language to change language)
+
+I can help you with KSSM Mathematics:
+- Form 1
+- Form 2
+- Form 3
+
+What form are you in now?
+Reply with: 1, 2, or 3.`,
 		MsgLanguageUnclear:       "I couldn't determine your preferred language. Please reply with: English, Bahasa Melayu, or 中文.",
 		MsgOnboardingFormUnclear: "I couldn't determine your form. You can reply freely (for example: form 2 / tingkatan 2), or just 1, 2, or 3.",
 		MsgOnboardingFormPrompt: `Great. I can help with:
@@ -140,6 +208,23 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP Milestone!*\n\nYou've reached *%d XP*!\n\nYour hard work is paying off! 🎉",
 		MsgMilestoneSubjectDone:   "🎓 *AMAZING!*\n\nYou've mastered all topics in *%s*!\n\nYou're a math champion! 🏅",
 		MsgMilestoneStreakRecord:   "🔥 *New Record!*\n\nYour longest streak: *%d days*!\n\nIncredible dedication! 🏅",
+		MsgGroupCreateUsage:  "Usage: /create_group <name>\nExample: /create_group Algebra Squad",
+		MsgGroupCreated:      "Group *%s* created!\n\nJoin code: *%s*\nShare this code so friends can join with /join %s",
+		MsgGroupJoinUsage:    "Usage: /join <code>\nExample: /join ABC123",
+		MsgGroupJoined:       "You've joined *%s*! 🎉",
+		MsgGroupNotFound:     "No group found with code %s.",
+		MsgGroupUserNotFound: "Please start first with /start.",
+		MsgGroupNoGroups:     "You haven't joined any groups yet.\nUse /join <code> to join, or /create_group <name> to create one.",
+		MsgLeaderboardEmpty:  "No leaderboard data yet for *%s*.\nKeep studying and check back next week!",
+		MsgGroupClosed:       "*%s* is no longer accepting new members.",
+		MsgChallengeComplete:    "🏁 Challenge complete!\n\n📊 Score: %d/%d (%d%%)",
+		MsgChallengeReviewOffer: "You missed %d question(s). Want to review them?\n\nReply *review* to start, or anything else to continue.",
+		MsgChallengeReviewDone:  "🎉 Review complete!\nYou got %d/%d correct.\n⭐ +50 XP",
+		MsgChallengeReviewSkip:  "Okay, moving on. You can always review later.",
+		MsgChallengeFinishFirst: "Finish your current challenge first, then try again.",
+		MsgChallengeCorrect:     "✅ Correct!",
+		MsgChallengeIncorrect:   "❌ Incorrect\nAnswer: %s",
+		MsgChallengeReviewRetry: "Not quite. Try again.",
 	},
 	"zh": {
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
@@ -171,6 +256,20 @@ Which form are you in now?`,
 - 中文
 
 你可以自由输入（例如：English / BM / Chinese）。`,
+		MsgStartOnboardingAutoDetect: `你好 %s！
+
+我是 P&AI Bot —— 你的数学私人导师！
+
+检测到语言：%s
+（使用 /language 切换语言）
+
+我可以帮助你学习 KSSM 数学：
+- Form 1
+- Form 2
+- Form 3
+
+你现在是几年级？
+请回复：1、2 或 3。`,
 		MsgLanguageUnclear:       "我还不能确定你的语言偏好。请回复：English、Bahasa Melayu 或 中文。",
 		MsgOnboardingFormUnclear: "我还不能确定你的年级。你可以自由回答（例如：Form 2 / Tingkatan 2），或直接回复 1、2、3。",
 		MsgOnboardingFormPrompt: `好的。我可以帮助你学习：
@@ -191,7 +290,37 @@ Which form are you in now?`,
 		MsgMilestoneXP:            "🌟 *XP 里程碑！*\n\n你已达到 *%d XP*！\n\n你的努力正在得到回报！🎉",
 		MsgMilestoneSubjectDone:   "🎓 *太厉害了！*\n\n你已掌握 *%s* 的所有主题！\n\n你是数学冠军！🏅",
 		MsgMilestoneStreakRecord:   "🔥 *新纪录！*\n\n你最长的连续学习记录：*%d 天*！\n\n令人敬佩的毅力！🏅",
+		MsgGroupCreateUsage:  "用法：/create_group <名称>\n例如：/create_group 代数小组",
+		MsgGroupCreated:      "小组 *%s* 已创建！\n\n加入代码：*%s*\n分享此代码，好友可以用 /join %s 加入",
+		MsgGroupJoinUsage:    "用法：/join <代码>\n例如：/join ABC123",
+		MsgGroupJoined:       "你已加入 *%s*！🎉",
+		MsgGroupNotFound:     "未找到代码为 %s 的小组。",
+		MsgGroupUserNotFound: "请先使用 /start 开始。",
+		MsgGroupNoGroups:     "你还没有加入任何小组。\n使用 /join <代码> 加入，或 /create_group <名称> 创建一个。",
+		MsgLeaderboardEmpty:  "*%s* 暂无排行榜数据。\n继续学习，下周再来查看！",
+		MsgGroupClosed:       "*%s* 不再接受新成员。",
+		MsgChallengeComplete:    "🏁 挑战完成！\n\n📊 分数：%d/%d (%d%%)",
+		MsgChallengeReviewOffer: "你答错了 %d 道题。要复习吗？\n\n回复 *review* 开始，或其他内容继续。",
+		MsgChallengeReviewDone:  "🎉 复习完成！\n你答对了 %d/%d 道题。\n⭐ +50 XP",
+		MsgChallengeReviewSkip:  "好的，我们继续。你随时可以回来复习。",
+		MsgChallengeFinishFirst: "请先完成当前挑战，然后再试。",
+		MsgChallengeCorrect:     "✅ 正确！",
+		MsgChallengeIncorrect:   "❌ 不正确\n答案：%s",
+		MsgChallengeReviewRetry: "还不对。再试一次。",
 	},
+}
+
+func LocaleDisplayName(locale string) string {
+	switch NormalizeLocale(locale) {
+	case "en":
+		return "English"
+	case "ms":
+		return "Bahasa Melayu"
+	case "zh":
+		return "中文"
+	default:
+		return locale
+	}
 }
 
 func NormalizeLocale(locale string) string {

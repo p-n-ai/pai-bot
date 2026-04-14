@@ -23,9 +23,8 @@ variable "volume_size_gb" {
 }
 
 variable "ssh_cidr_blocks" {
-  description = "CIDR blocks allowed to SSH (restrict to your IP)"
+  description = "CIDR blocks allowed to SSH — must be explicitly set, no default"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
 }
 
 variable "app_dir" {

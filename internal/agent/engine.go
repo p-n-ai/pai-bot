@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package agent
 
 import (
@@ -32,6 +35,17 @@ const (
 )
 
 // EngineConfig holds dependencies for the agent engine.
+// Notifier sends proactive messages to users (e.g., challenge ready notifications).
+// Implementations should be safe to call from any goroutine.
+type Notifier interface {
+	Notify(ctx context.Context, channel, userID, text string)
+}
+
+// NopNotifier discards all notifications.
+type NopNotifier struct{}
+
+func (NopNotifier) Notify(context.Context, string, string, string) {}
+
 type EngineConfig struct {
 	AIRouter              *ai.Router
 	Store                 ConversationStore
@@ -49,7 +63,10 @@ type EngineConfig struct {
 	XP                    progress.XPTracker
 	Goals                 GoalStore
 	Challenges            ChallengeStore
+	Groups                GroupStore
+	TenantID              string // tenant UUID for bot-side group operations
 	DevMode               bool
+	Notifier              Notifier
 }
 
 // Engine is the core conversation processor.
@@ -69,7 +86,10 @@ type Engine struct {
 	xp                    progress.XPTracker
 	goals                 GoalStore
 	challenges            ChallengeStore
+	groups                GroupStore
+	tenantID              string
 	devMode               bool
+	notifier              Notifier
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
 	milestones            *pendingMilestones
@@ -121,6 +141,14 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if challenges == nil {
 		challenges = NewMemoryChallengeStore()
 	}
+	groups := cfg.Groups
+	if groups == nil {
+		groups = NewMemoryGroupStore()
+	}
+	notifier := cfg.Notifier
+	if notifier == nil {
+		notifier = NopNotifier{}
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -137,10 +165,21 @@ func NewEngine(cfg EngineConfig) *Engine {
 		xp:                    cfg.XP,
 		goals:                 cfg.Goals,
 		challenges:            challenges,
+		groups:                groups,
+		tenantID:              cfg.TenantID,
 		devMode:               cfg.DevMode,
+		notifier:              notifier,
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
+	}
+}
+
+// SetNotifier replaces the engine's notifier. Use this when the notifier
+// depends on infrastructure (e.g., chat gateway) created after the engine.
+func (e *Engine) SetNotifier(n Notifier) {
+	if n != nil {
+		e.notifier = n
 	}
 }
 
@@ -169,6 +208,26 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			return prefix + "\n\n" + resp, nil
 		}
 		return resp, nil
+	}
+	// Translate challenge inline-button callbacks into command equivalents.
+	if msg.CallbackQueryID != "" {
+		switch msg.Text {
+		case "challenge:cancel":
+			msg.Text = "/challenge cancel"
+		case "challenge:accept":
+			msg.Text = "/challenge accept"
+		}
+		if strings.HasPrefix(msg.Text, "/") {
+			resp, err := e.handleCommand(ctx, msg)
+			if err != nil {
+				return resp, err
+			}
+			prefix := milestonePrefix + unlockPrefix
+			if prefix != "" {
+				return prefix + "\n\n" + resp, nil
+			}
+			return resp, nil
+		}
 	}
 	// Auto-trigger onboarding for first-time users who send a normal message.
 	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
@@ -199,6 +258,9 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 		return response, nil
 	}
 	if response, handled := e.maybeHandlePendingGoal(ctx, msg, conv); handled {
+		return response, nil
+	}
+	if response, handled := e.maybeHandleChallengeTurn(ctx, msg, conv); handled {
 		return response, nil
 	}
 	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
@@ -650,6 +712,12 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleChallengeCommand(ctx, msg, fields[1:])
 	case "/learn":
 		return e.handleLearnCommand(ctx, msg, fields[1:])
+	case "/create_group":
+		return e.handleCreateGroupCommand(ctx, msg, fields[1:])
+	case "/join":
+		return e.handleJoinGroupCommand(ctx, msg, fields[1:])
+	case "/leaderboard":
+		return e.handleLeaderboardCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":
 		if !e.devMode {
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
@@ -670,6 +738,11 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevAB(msg, fields[1:])
+	case "/dev-close-group", "/dev_close_group":
+		if !e.devMode {
+			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		}
+		return e.handleDevCloseGroup(fields[1:])
 	default:
 		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
@@ -806,13 +879,30 @@ func (e *Engine) supportsAutoStartLookup() bool {
 func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {
 	// Explicitly create an onboarding conversation on /start. In Postgres-backed
 	// deployments this also guarantees the user record exists before first question.
+
+	// Determine whether we can auto-detect the user's language from Telegram data.
+	// If so, skip the language selection step and go straight to form selection.
+	autoDetectedLocale := ""
+	if !e.disableMultiLanguage {
+		autoDetectedLocale = i18n.NormalizeLocale(msg.Language)
+	}
+
 	initialState := "onboarding_language"
-	if e.disableMultiLanguage {
+	if e.disableMultiLanguage || autoDetectedLocale != "" {
 		initialState = "onboarding_form"
 	}
 	if _, err := e.createConversation(userID, initialState); err != nil {
 		slog.Error("failed to create onboarding conversation", "user_id", userID, "error", err)
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+
+	// Persist auto-detected language so future messages use it.
+	if autoDetectedLocale != "" {
+		if err := e.store.SetUserPreferredLanguage(userID, autoDetectedLocale); err != nil {
+			slog.Error("failed to persist auto-detected language", "user_id", userID, "error", err)
+		} else {
+			slog.Info("language auto-detected from Telegram", "user_id", userID, "locale", autoDetectedLocale)
+		}
 	}
 
 	// Assign AB group for new users.
@@ -838,6 +928,12 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 		return i18n.S(locale, i18n.MsgStartOnboardingForm, name), nil
 	}
 
+	// Language was auto-detected — skip language selection, go straight to form.
+	if autoDetectedLocale != "" {
+		return i18n.S(locale, i18n.MsgStartOnboardingAutoDetect, name, i18n.LocaleDisplayName(autoDetectedLocale)), nil
+	}
+
+	// No detectable language from Telegram — ask user to choose.
 	return i18n.S(locale, i18n.MsgStartOnboardingLang, name), nil
 }
 
@@ -1387,9 +1483,17 @@ func (e *Engine) buildSystemPrompt(msg chat.InboundMessage, conv *Conversation, 
 Respond in the student's language (Bahasa Melayu, English, or mixed if they mix).
 If the user writes mostly in Bahasa Melayu, respond mainly in Bahasa Melayu.
 If the user writes mostly in English, respond mainly in English.`
-	if lang, hasLangPref := e.preferredLanguageForConversation(conv); hasLangPref {
+	// Resolve language: stored preference > Telegram language_code > generic fallback.
+	detectedLang, hasLangPref := e.preferredLanguageForConversation(conv)
+	if !hasLangPref && !e.disableMultiLanguage {
+		if tgLang := i18n.NormalizeLocale(msg.Language); tgLang != "" {
+			detectedLang = tgLang
+			hasLangPref = true
+		}
+	}
+	if hasLangPref {
 		langInstruction := "Preferred language setting: Bahasa Melayu. Follow this preference, unless the student's latest message is clearly in another language for that reply."
-		switch lang {
+		switch detectedLang {
 		case "en":
 			langInstruction = "Preferred language setting: English. Follow this preference, unless the student's latest message is clearly in another language for that reply."
 		case "zh":

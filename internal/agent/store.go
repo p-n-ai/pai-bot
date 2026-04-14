@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package agent
 
 import (
@@ -30,6 +33,27 @@ type ConversationQuizState struct {
 	GeneratedQuestions []QuizQuestion `json:"generated_questions,omitempty"`
 }
 
+// ConversationChallengeState is the persisted runtime state for an active challenge.
+type ConversationChallengeState struct {
+	ChallengeID   string                  `json:"challenge_id"`
+	TopicID       string                  `json:"topic_id,omitempty"`
+	Phase         string                  `json:"phase"` // "playing", "review_offered", "reviewing"
+	Questions     []QuizQuestion          `json:"questions"`
+	CurrentIndex  int                     `json:"current_index"`
+	CorrectCount  int                     `json:"correct_count"`
+	Answers       []ChallengeAnswerRecord `json:"answers"`
+	MissedIndices []int                   `json:"missed_indices,omitempty"`
+	ReviewIndex   int                     `json:"review_index,omitempty"`
+	ReviewCorrect int                     `json:"review_correct,omitempty"`
+}
+
+// ChallengeAnswerRecord records one answer attempt during a challenge.
+type ChallengeAnswerRecord struct {
+	QuestionIndex int    `json:"question_index"`
+	UserAnswer    string `json:"user_answer"`
+	Correct       bool   `json:"correct"`
+}
+
 // PendingGoalDraft stores a suggested goal awaiting confirmation.
 type PendingGoalDraft struct {
 	Summary       string  `json:"summary"`
@@ -50,9 +74,10 @@ type Conversation struct {
 	CompactedAt        int                    `json:"compacted_at,omitempty"` // number of messages included in Summary
 	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
 	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft      `json:"pending_goal,omitempty"`
-	StartedAt          time.Time              `json:"started_at"`
-	EndedAt            *time.Time             `json:"ended_at,omitempty"`
+	PendingGoal    *PendingGoalDraft           `json:"pending_goal,omitempty"`
+	ChallengeState *ConversationChallengeState `json:"challenge_state,omitempty"`
+	StartedAt      time.Time                   `json:"started_at"`
+	EndedAt        *time.Time                  `json:"ended_at,omitempty"`
 }
 
 // ConversationStore persists conversation state and message history.
@@ -80,7 +105,12 @@ type ConversationStore interface {
 	ClearConversationQuizState(conversationID, state string) error
 	SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error
 	ClearConversationPendingGoal(conversationID string) error
+	UpdateConversationChallengeState(conversationID, state string, challengeState ConversationChallengeState) error
+	ClearConversationChallengeState(conversationID, state string) error
 	EndConversation(id string) error
+	// ResolveUserUUID maps an external chat ID to an internal users.id UUID.
+	// Returns ("", nil) if the user does not exist.
+	ResolveUserUUID(externalID string) (string, error)
 }
 
 // MemoryStore is an in-memory implementation of ConversationStore.
@@ -411,6 +441,44 @@ func (s *MemoryStore) ClearConversationPendingGoal(conversationID string) error 
 	}
 	conv.PendingGoal = nil
 	return nil
+}
+
+func (s *MemoryStore) UpdateConversationChallengeState(conversationID, state string, challengeState ConversationChallengeState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
+	stateCopy := challengeState
+	conv.ChallengeState = &stateCopy
+	return nil
+}
+
+func (s *MemoryStore) ClearConversationChallengeState(conversationID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+	conv.State = state
+	conv.ChallengeState = nil
+	return nil
+}
+
+func (s *MemoryStore) ResolveUserUUID(externalID string) (string, error) {
+	// In memory store, external ID = internal ID.
+	return externalID, nil
 }
 
 func (s *MemoryStore) EndConversation(id string) error {

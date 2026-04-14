@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 // Package chat provides a unified interface for messaging channels (Telegram, WhatsApp, WebSocket).
 package chat
 
@@ -81,6 +84,17 @@ func (g *Gateway) HasChannel(name string) bool {
 	defer g.mu.RUnlock()
 	_, ok := g.channels[name]
 	return ok
+}
+
+// ChannelNames returns the names of all registered channels.
+func (g *Gateway) ChannelNames() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	names := make([]string, 0, len(g.channels))
+	for name := range g.channels {
+		names = append(names, name)
+	}
+	return names
 }
 
 // Send dispatches a message to the appropriate channel.

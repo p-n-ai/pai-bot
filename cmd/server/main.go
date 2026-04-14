@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
@@ -31,17 +34,19 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
+	"github.com/p-n-ai/pai-bot/internal/tenant"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	slog.SetDefault(slog.New(newLogHandler(cfg.Log)))
 
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid config", "error", err)
@@ -66,6 +71,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
+	if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
+		slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
+		os.Exit(1)
+	}
 
 	// Initialize cache (warn if unavailable, don't fail).
 	if cfg.Cache.URL != "" {
@@ -103,6 +114,7 @@ func main() {
 	xpTracker := progress.NewMemoryXPTracker()
 	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
 	challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
+	groupStore := agent.NewPostgresGroupStore(db.Pool)
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:             router,
 		Store:                store,
@@ -116,6 +128,8 @@ func main() {
 		XP:                   xpTracker,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
+		Groups:               groupStore,
+		TenantID:             store.TenantID(),
 		DevMode:              cfg.Features.DevMode,
 	})
 
@@ -131,6 +145,13 @@ func main() {
 	} else {
 		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
 	}
+
+	// WebSocket channel (always enabled — used by terminal-chat and future web clients).
+	wsChannel := chat.NewWSChannel()
+	gw.Register("websocket", wsChannel)
+
+	// Wire challenge notifications through the gateway.
+	engine.SetNotifier(gatewayNotifier{gw: gw, pool: db.Pool})
 
 	// Start proactive scheduler (nudges for due reviews).
 	nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -149,6 +170,9 @@ func main() {
 		router,
 		store,
 	)
+	scheduler.SetWeeklyParentReportSource(weeklyParentReportSource{admin: adminapi.New(db.Pool, store.TenantID())})
+
+	scheduler.SetGroupStore(groupStore, store.TenantID())
 
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -177,7 +201,8 @@ func main() {
 			Text:    resp,
 		}
 		if msg.Channel == "telegram" {
-			out.Text = chat.NormalizeTelegramMarkdown(resp)
+			out.Text = chat.ConvertLaTeXToUnicode(resp)
+			out.Text = chat.NormalizeTelegramMarkdown(out.Text)
 			out.ParseMode = "Markdown"
 			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
 			out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
@@ -235,7 +260,7 @@ func main() {
 	}
 
 	// HTTP endpoints.
-	mux := newHandlerWithAdminProvider(
+	apiHandler := newHandlerWithAdminProvider(
 		tenantAdminDataSourceProvider{
 			newForTenant: func(tenantID string) adminDataSource {
 				return adminapi.New(db.Pool, tenantID)
@@ -255,10 +280,16 @@ func main() {
 		defaultAccessTokenTTL,
 		cfg.Email.BaseURL,
 	)
+
+	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
+	topMux := http.NewServeMux()
+	topMux.Handle("GET /ws/chat", wsChannel.Handler())
+	topMux.Handle("/", apiHandler)
+
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      topMux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -298,12 +329,21 @@ type adminDataSource interface {
 	GetAIUsage() (adminapi.AIUsageSummary, error)
 	UpsertTenantTokenBudgetWindow(req adminapi.UpsertTokenBudgetWindowRequest) (adminapi.AIUsageSummary, error)
 	GetMetrics() (adminapi.MetricsSummary, error)
+	GetAnalyticsReport() (adminapi.AnalyticsReport, error)
 	GetUserManagement() (adminapi.UserManagementView, error)
 	GetOnboarding() (adminapi.OnboardingView, error)
 	SubmitOnboarding(req adminapi.SubmitOnboardingRequest, joinBaseURL string) (adminapi.SubmitOnboardingResult, error)
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
 	ExportProgress() ([]adminapi.ProgressExportRow, error)
+	ListGroups(groupType string) ([]adminapi.AdminGroup, error)
+	CreateGroup(input adminapi.CreateGroupInput, createdByUserID string) (adminapi.AdminGroup, error)
+	GetGroupDetail(id string) (adminapi.AdminGroupDetail, error)
+	UpdateGroup(id string, input adminapi.AdminUpdateGroupInput) (adminapi.AdminGroup, error)
+	DeleteGroup(id string) error
+	AddGroupMember(groupID, userID, role string) error
+	RemoveGroupMember(groupID, userID string) error
+	GetGroupLeaderboard(id string) ([]adminapi.AdminLeaderboardEntry, error)
 }
 
 type joinClassSource interface {
@@ -312,6 +352,42 @@ type joinClassSource interface {
 
 type adminDataSourceProvider interface {
 	ForRequest(r *http.Request) (adminDataSource, error)
+}
+
+type weeklyParentReportSource struct {
+	admin *adminapi.Service
+}
+
+func (s weeklyParentReportSource) ListWeeklyParentReportSummaries(ctx context.Context) ([]agent.WeeklyParentReportSummary, error) {
+	items, err := s.admin.ListWeeklyParentReportSummaries(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]agent.WeeklyParentReportSummary, 0, len(items))
+	for _, item := range items {
+		out = append(out, agent.WeeklyParentReportSummary{
+			ParentExternalID:   item.ParentExternalID,
+			ParentChannel:      item.ParentChannel,
+			ParentName:         item.ParentName,
+			ChildName:          item.ChildName,
+			ChildForm:          item.ChildForm,
+			CurrentStreak:      item.CurrentStreak,
+			TotalXP:            item.TotalXP,
+			NeedsReviewCount:   item.NeedsReviewCount,
+			WeakestTopicID:     item.WeakestTopicID,
+			EncouragementTitle: item.EncouragementTitle,
+			EncouragementText:  item.EncouragementText,
+			WeeklyStats: agent.WeeklyParentWeeklyStats{
+				DaysActive:        item.WeeklyStats.DaysActive,
+				MessagesExchanged: item.WeeklyStats.MessagesExchanged,
+				QuizzesCompleted:  item.WeeklyStats.QuizzesCompleted,
+				NeedsReviewCount:  item.WeeklyStats.NeedsReviewCount,
+			},
+		})
+	}
+
+	return out, nil
 }
 
 type fixedAdminDataSourceProvider struct {
@@ -390,6 +466,34 @@ func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
 	})
 }
 
+// gatewayNotifier implements agent.Notifier by looking up the user's channel
+// from the database and sending to the correct one.
+type gatewayNotifier struct {
+	gw   *chat.Gateway
+	pool *pgxpool.Pool
+}
+
+func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {
+	// Look up which channel this user is on.
+	var channel string
+	err := g.pool.QueryRow(ctx,
+		`SELECT channel FROM users WHERE external_id = $1 LIMIT 1`,
+		userID,
+	).Scan(&channel)
+	if err != nil {
+		// User not found — try all channels as fallback.
+		slog.Warn("notifier: user channel lookup failed, trying all channels", "user_id", userID, "error", err)
+		for _, ch := range g.gw.ChannelNames() {
+			_ = g.gw.Send(ctx, chat.OutboundMessage{Channel: ch, UserID: userID, Text: text})
+		}
+		return
+	}
+
+	if err := g.gw.Send(ctx, chat.OutboundMessage{Channel: channel, UserID: userID, Text: text}); err != nil {
+		slog.Warn("notifier: failed to send", "channel", channel, "user_id", userID, "error", err)
+	}
+}
+
 func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
 	conv, found := store.GetActiveConversation(userID)
 	if !found || conv == nil {
@@ -399,6 +503,8 @@ func telegramInlineKeyboardContext(store agent.ConversationStore, userID string)
 	ctx := chat.TelegramInlineKeyboardContext{
 		QuizIntensityPending: conv.State == "quiz_intensity",
 		QuizActive:           conv.State == "quiz_active",
+		ChallengeActive:      conv.State == "challenge_active",
+		ChallengeReview:      conv.State == "challenge_review",
 	}
 	if conv.QuizState != nil && conv.QuizState.RunState == "paused" {
 		ctx.QuizPaused = true
@@ -531,14 +637,26 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	mux.Handle("POST /api/admin/students/{id}/nudge", teacherOrAbove(handleAdminStudentNudge(adminProvider, sender)))
 	mux.Handle("GET /api/admin/metrics", teacherOrAbove(handleAdminMetrics(adminProvider)))
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
+	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
 	mux.Handle("GET /api/admin/export/progress", adminOrAbove(handleAdminExportProgress(adminProvider)))
 	mux.Handle("GET /api/admin/parents/{id}", parentOrAbove(handleAdminParentSummary(adminProvider)))
+	// Group CRUD
+	mux.Handle("GET /api/admin/groups", teacherOrAbove(handleAdminListGroups(adminProvider)))
+	mux.Handle("POST /api/admin/groups", teacherOrAbove(handleAdminCreateGroup(adminProvider)))
+	mux.Handle("GET /api/admin/groups/{id}", teacherOrAbove(handleAdminGetGroup(adminProvider)))
+	mux.Handle("PATCH /api/admin/groups/{id}", adminOrAbove(handleAdminUpdateGroup(adminProvider)))
+	mux.Handle("DELETE /api/admin/groups/{id}", adminOrAbove(handleAdminDeleteGroup(adminProvider)))
+	mux.Handle("POST /api/admin/groups/{id}/members", adminOrAbove(handleAdminAddGroupMember(adminProvider)))
+	mux.Handle("DELETE /api/admin/groups/{id}/members/{uid}", adminOrAbove(handleAdminRemoveGroupMember(adminProvider)))
+	mux.Handle("GET /api/admin/groups/{id}/leaderboard", teacherOrAbove(handleAdminGroupLeaderboard(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
 
-	return withCORS(mux)
+	apiLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
+	authLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
+	return withSecurityHeaders(withCORS(withAPIRateLimit(mux, time.Now, apiLimiter, authLimiter)))
 }
 
 func handlePublicJoinClass(joinSource joinClassSource) http.HandlerFunc {
@@ -820,6 +938,22 @@ func handleAdminMetrics(adminProvider adminDataSourceProvider) http.HandlerFunc 
 		}
 
 		payload, err := admin.GetMetrics()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminAnalyticsReport(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetAnalyticsReport()
 		if err != nil {
 			writeAdminError(w, err)
 			return
@@ -1440,6 +1574,149 @@ func handleRetrievalSearch(service *retrieval.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, results)
+	}
+}
+
+func handleAdminListGroups(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		groupType := r.URL.Query().Get("type")
+		payload, err := admin.ListGroups(groupType)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		if payload == nil {
+			payload = []adminapi.AdminGroup{}
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminCreateGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.CreateGroupInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		createdBy := ""
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			createdBy = claims.Subject
+		}
+		payload, err := admin.CreateGroup(input, createdBy)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, payload)
+	}
+}
+
+func handleAdminGetGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		payload, err := admin.GetGroupDetail(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminUpdateGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.AdminUpdateGroupInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		payload, err := admin.UpdateGroup(r.PathValue("id"), input)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminDeleteGroup(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		if err := admin.DeleteGroup(r.PathValue("id")); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminAddGroupMember(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		var input adminapi.AddMemberInput
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := admin.AddGroupMember(r.PathValue("id"), input.UserID, input.Role); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminRemoveGroupMember(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		if err := admin.RemoveGroupMember(r.PathValue("id"), r.PathValue("uid")); err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func handleAdminGroupLeaderboard(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+		payload, err := admin.GetGroupLeaderboard(r.PathValue("id"))
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		if payload == nil {
+			payload = []adminapi.AdminLeaderboardEntry{}
+		}
+		writeJSON(w, http.StatusOK, payload)
 	}
 }
 
@@ -2092,4 +2369,26 @@ func buildManualNudgeMessage(detail adminapi.StudentDetail) string {
 		strings.ReplaceAll(weakest.TopicID, "-", " "),
 		int(weakest.MasteryScore*100),
 	)
+}
+
+// newLogHandler returns a slog.Handler based on config.
+// "text" uses human-readable output; anything else defaults to JSON.
+func newLogHandler(cfg config.LogConfig) slog.Handler {
+	var level slog.Level
+	switch strings.ToLower(cfg.Level) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn", "warning":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+	opts := &slog.HandlerOptions{Level: level}
+
+	if strings.ToLower(cfg.Format) == "text" {
+		return slog.NewTextHandler(os.Stdout, opts)
+	}
+	return slog.NewJSONHandler(os.Stdout, opts)
 }

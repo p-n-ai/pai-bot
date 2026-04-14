@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package adminapi
 
 import (
@@ -82,6 +85,21 @@ type ParentSummary struct {
 	Encouragement EncouragementSuggestion `json:"encouragement"`
 }
 
+type WeeklyParentReportSummary struct {
+	ParentExternalID   string
+	ParentChannel      string
+	ParentName         string
+	ChildName          string
+	ChildForm          string
+	CurrentStreak      int
+	TotalXP            int
+	NeedsReviewCount   int
+	WeakestTopicID     string
+	EncouragementTitle string
+	EncouragementText  string
+	WeeklyStats        WeeklyStats
+}
+
 type AIProviderUsage struct {
 	Provider     string `json:"provider"`
 	Model        string `json:"model"`
@@ -148,6 +166,29 @@ type NudgeRateSummary struct {
 
 type MetricsSummary struct {
 	WindowDays       int                     `json:"window_days"`
+	DailyActiveUsers []DailyActiveUsersPoint `json:"daily_active_users"`
+	Retention        []RetentionPoint        `json:"retention"`
+	NudgeRate        NudgeRateSummary        `json:"nudge_rate"`
+	AIUsage          AIUsageSummary          `json:"ai_usage"`
+	ABComparison     any                     `json:"ab_comparison"`
+}
+
+type AnalyticsOverview struct {
+	TotalActiveLearners int     `json:"total_active_learners"`
+	AverageDAU          float64 `json:"average_dau"`
+	LatestDAU           int     `json:"latest_dau"`
+	Day1RetentionRate   float64 `json:"day_1_retention_rate"`
+	Day7RetentionRate   float64 `json:"day_7_retention_rate"`
+	Day14RetentionRate  float64 `json:"day_14_retention_rate"`
+	NudgeResponseRate   float64 `json:"nudge_response_rate"`
+	TotalAIMessages     int     `json:"total_ai_messages"`
+	TotalAITokens       int     `json:"total_ai_tokens"`
+}
+
+type AnalyticsReport struct {
+	WindowDays       int                     `json:"window_days"`
+	GeneratedAt      time.Time               `json:"generated_at"`
+	Overview         AnalyticsOverview       `json:"overview"`
 	DailyActiveUsers []DailyActiveUsersPoint `json:"daily_active_users"`
 	Retention        []RetentionPoint        `json:"retention"`
 	NudgeRate        NudgeRateSummary        `json:"nudge_rate"`
@@ -292,6 +333,12 @@ func (s *Service) tenantArg() any {
 }
 
 func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
+	// If classID looks like a UUID, use real group membership.
+	if looksLikeUUID(classID) {
+		return s.GetGroupClassProgress(classID)
+	}
+
+	// Legacy path: "all-students" or form-based IDs like "form-1".
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -316,6 +363,22 @@ func (s *Service) GetClassProgress(classID string) (ClassProgress, error) {
 	}
 	defer rows.Close()
 
+	return scanClassProgressRows(rows)
+}
+
+func looksLikeUUID(s string) bool {
+	// UUID v4: 8-4-4-4-12 hex chars
+	if len(s) != 36 {
+		return false
+	}
+	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
+}
+
+func scanClassProgressRows(rows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}) (ClassProgress, error) {
 	studentsByID := make(map[string]*ClassStudent)
 	var studentOrder []string
 	var topicIDs []string
@@ -541,6 +604,83 @@ func (s *Service) GetParentSummary(parentID string) (ParentSummary, error) {
 	}, nil
 }
 
+func (s *Service) ListWeeklyParentReportSummaries(ctx context.Context) ([]WeeklyParentReportSummary, error) {
+	parentRows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			u.id::text,
+			COALESCE(NULLIF(u.external_id, ''), ''),
+			COALESCE(u.channel, ''),
+			COALESCE(u.name, '')
+		FROM users u
+		WHERE %s
+			AND u.role = 'parent'
+			AND COALESCE(NULLIF(u.external_id, ''), '') <> ''
+		ORDER BY u.created_at ASC
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return nil, fmt.Errorf("query weekly parent recipients: %w", err)
+	}
+	defer parentRows.Close()
+
+	type parentRecipient struct {
+		id         string
+		externalID string
+		channel    string
+		name       string
+	}
+
+	var recipients []parentRecipient
+	for parentRows.Next() {
+		var item parentRecipient
+		if err := parentRows.Scan(&item.id, &item.externalID, &item.channel, &item.name); err != nil {
+			return nil, fmt.Errorf("scan weekly parent recipient: %w", err)
+		}
+		recipients = append(recipients, item)
+	}
+	if err := parentRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate weekly parent recipients: %w", err)
+	}
+
+	summaries := make([]WeeklyParentReportSummary, 0, len(recipients))
+	for _, recipient := range recipients {
+		parentSummary, err := s.GetParentSummary(recipient.id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, fmt.Errorf("load weekly parent summary for %s: %w", recipient.id, err)
+		}
+
+		weakestTopicID := ""
+		if len(parentSummary.Mastery) > 0 {
+			weakest := parentSummary.Mastery[0]
+			for _, item := range parentSummary.Mastery[1:] {
+				if item.MasteryScore < weakest.MasteryScore {
+					weakest = item
+				}
+			}
+			weakestTopicID = weakest.TopicID
+		}
+
+		summaries = append(summaries, WeeklyParentReportSummary{
+			ParentExternalID:   recipient.externalID,
+			ParentChannel:      recipient.channel,
+			ParentName:         recipient.name,
+			ChildName:          parentSummary.Child.Name,
+			ChildForm:          parentSummary.Child.Form,
+			CurrentStreak:      parentSummary.Streak.Current,
+			TotalXP:            parentSummary.Streak.TotalXP,
+			NeedsReviewCount:   parentSummary.WeeklyStats.NeedsReviewCount,
+			WeakestTopicID:     weakestTopicID,
+			EncouragementTitle: parentSummary.Encouragement.Headline,
+			EncouragementText:  parentSummary.Encouragement.Text,
+			WeeklyStats:        parentSummary.WeeklyStats,
+		})
+	}
+
+	return summaries, nil
+}
+
 func (s *Service) GetAIUsage() (AIUsageSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -726,6 +866,41 @@ func (s *Service) GetMetrics() (MetricsSummary, error) {
 
 	return MetricsSummary{
 		WindowDays:       14,
+		DailyActiveUsers: daily,
+		Retention:        retention,
+		NudgeRate:        nudgeRate,
+		AIUsage:          aiUsage,
+		ABComparison:     nil,
+	}, nil
+}
+
+func (s *Service) GetAnalyticsReport() (AnalyticsReport, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const reportWindowDays = 42
+
+	daily, err := s.loadDailyActiveUsers(ctx, reportWindowDays)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	retention, err := s.loadRetention(ctx)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	nudgeRate, err := s.loadNudgeRate(ctx, reportWindowDays)
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+	aiUsage, err := s.GetAIUsage()
+	if err != nil {
+		return AnalyticsReport{}, err
+	}
+
+	return AnalyticsReport{
+		WindowDays:       reportWindowDays,
+		GeneratedAt:      time.Now().UTC(),
+		Overview:         buildAnalyticsOverview(daily, retention, nudgeRate, aiUsage),
 		DailyActiveUsers: daily,
 		Retention:        retention,
 		NudgeRate:        nudgeRate,
@@ -1499,6 +1674,41 @@ func buildNudgeRateSummary(nudgesSent, responses int) NudgeRateSummary {
 		summary.ResponseRate = float64(responses) / float64(nudgesSent)
 	}
 	return summary
+}
+
+func buildAnalyticsOverview(daily []DailyActiveUsersPoint, retention []RetentionPoint, nudgeRate NudgeRateSummary, aiUsage AIUsageSummary) AnalyticsOverview {
+	overview := AnalyticsOverview{
+		NudgeResponseRate: nudgeRate.ResponseRate,
+		TotalAIMessages:   aiUsage.TotalMessages,
+		TotalAITokens:     aiUsage.TotalInputTokens + aiUsage.TotalOutputTokens,
+	}
+
+	for _, item := range daily {
+		overview.TotalActiveLearners += item.Users
+	}
+	if len(daily) > 0 {
+		overview.AverageDAU = float64(overview.TotalActiveLearners) / float64(len(daily))
+		overview.LatestDAU = daily[len(daily)-1].Users
+	}
+
+	if len(retention) > 0 {
+		var (
+			day1  float64
+			day7  float64
+			day14 float64
+		)
+		for _, item := range retention {
+			day1 += item.Day1Rate
+			day7 += item.Day7Rate
+			day14 += item.Day14Rate
+		}
+		denom := float64(len(retention))
+		overview.Day1RetentionRate = day1 / denom
+		overview.Day7RetentionRate = day7 / denom
+		overview.Day14RetentionRate = day14 / denom
+	}
+
+	return overview
 }
 
 func buildParentEncouragement(childName string, streak StreakSummary, progress []ProgressItem, stats WeeklyStats) EncouragementSuggestion {

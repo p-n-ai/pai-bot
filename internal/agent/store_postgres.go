@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package agent
 
 import (
@@ -772,6 +775,64 @@ func (s *PostgresStore) ClearConversationQuizState(conversationID, state string)
 	return nil
 }
 
+func (s *PostgresStore) UpdateConversationChallengeState(conversationID, state string, challengeState ConversationChallengeState) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+
+	payload, err := json.Marshal(challengeState)
+	if err != nil {
+		return fmt.Errorf("marshal challenge state: %w", err)
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2,
+		     metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{challenge_state}', $3::jsonb, true)
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+		payload,
+	)
+	if err != nil {
+		return fmt.Errorf("update challenge state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) ClearConversationChallengeState(conversationID, state string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	if state == "" {
+		return fmt.Errorf("state is required")
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET state = $2,
+		     metadata = COALESCE(metadata, '{}'::jsonb) - 'challenge_state'
+		 WHERE id = $1::uuid`,
+		conversationID,
+		state,
+	)
+	if err != nil {
+		return fmt.Errorf("clear challenge state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
+	return nil
+}
+
 func (s *PostgresStore) SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -834,6 +895,34 @@ func (s *PostgresStore) EndConversation(id string) error {
 	}
 
 	return nil
+}
+
+// ResolveUserUUID maps an external chat ID to an internal users.id UUID.
+// Returns ("", nil) if the user does not exist.
+func (s *PostgresStore) ResolveUserUUID(externalID string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var userID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT id::text
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND channel = $2
+		   AND external_id = $3
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		s.channel,
+		externalID,
+	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve user UUID: %w", err)
+	}
+	return userID, nil
 }
 
 func (s *PostgresStore) resolveOrCreateUser(ctx context.Context, externalID string) (string, error) {
@@ -907,16 +996,18 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	conv.PendingQuizTopicID = metadata.PendingQuizTopicID
 	conv.QuizState = metadata.QuizState
 	conv.PendingGoal = metadata.PendingGoal
+	conv.ChallengeState = metadata.ChallengeState
 
 	return conv, nil
 }
 
 type conversationMetadata struct {
-	Summary            string                 `json:"summary,omitempty"`
-	CompactedAt        int                    `json:"compacted_at,omitempty"`
-	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
-	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft      `json:"pending_goal,omitempty"`
+	Summary            string                      `json:"summary,omitempty"`
+	CompactedAt        int                         `json:"compacted_at,omitempty"`
+	PendingQuizTopicID string                      `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState      `json:"quiz_state,omitempty"`
+	PendingGoal        *PendingGoalDraft           `json:"pending_goal,omitempty"`
+	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
 }
 
 func parseConversationMetadata(metadata []byte) conversationMetadata {

@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package agent_test
 
 import (
@@ -884,6 +887,61 @@ func TestEngine_SystemPrompt_EnforcesLanguageAndOutputContract(t *testing.T) {
 	}
 	if !contains(systemPrompt.Content, `final tutoring reply should not contain the token "PT3"`) {
 		t.Fatalf("system prompt missing PT3 final-output ban")
+	}
+}
+
+func TestEngine_SystemPrompt_UseTelegramLanguageCode(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+	})
+
+	// Send a message with Telegram language_code "en" but no stored preference.
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:  "telegram",
+		UserID:   "u-tg-lang-detect",
+		Text:     "help me with algebra",
+		Language: "en",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if !contains(systemPrompt, "Preferred language setting: English") {
+		t.Fatalf("system prompt should include English preference from Telegram language_code, got:\n%s", systemPrompt)
+	}
+}
+
+func TestEngine_SystemPrompt_StoredPreferenceOverridesTelegramLanguage(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	store := agent.NewMemoryStore()
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(mockAI),
+		Store:    store,
+	})
+
+	// Set stored preference to Chinese.
+	if err := store.SetUserPreferredLanguage("u-tg-override", "zh"); err != nil {
+		t.Fatalf("SetUserPreferredLanguage() error = %v", err)
+	}
+
+	// Send a message with Telegram language_code "en" — stored pref should win.
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel:  "telegram",
+		UserID:   "u-tg-override",
+		Text:     "help me",
+		Language: "en",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if !contains(systemPrompt, "Preferred language setting: Chinese") {
+		t.Fatalf("stored preference (zh) should override Telegram language_code (en), got:\n%s", systemPrompt)
 	}
 }
 

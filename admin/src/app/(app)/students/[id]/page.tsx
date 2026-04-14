@@ -27,7 +27,7 @@ function activityTone(level: number) {
 export default function StudentPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { data, error } = useAsyncResource<{ detail: Awaited<ReturnType<typeof getStudentDetail>>; conversations: StudentConversation[] }>(
+  const { data, loading, error } = useAsyncResource<{ detail: Awaited<ReturnType<typeof getStudentDetail>>; conversations: StudentConversation[] }>(
     async () => {
       const [detail, conversations] = await Promise.all([getStudentDetail(id), getStudentConversations(id)]);
       return { detail, conversations };
@@ -37,6 +37,7 @@ export default function StudentPage() {
 
   const detail = data?.detail ?? null;
   const conversations = data?.conversations ?? [];
+  const hasHardError = Boolean(error) && !detail && !loading;
 
   const view = buildStudentViewModel(detail, conversations);
   const radarData = view.radarData.map((item) => ({
@@ -52,7 +53,9 @@ export default function StudentPage() {
           eyebrow="Student detail"
           title={detail?.student.name ?? "Student summary"}
           description={
-            detail
+            loading
+              ? "Loading the latest student details."
+              : detail
               ? `${detail.student.form} | ${detail.student.channel} | ${detail.student.external_id}`
               : error
                 ? "Student information isn't available right now."
@@ -72,6 +75,20 @@ export default function StudentPage() {
             </Link>
         </PageHero>
 
+        {loading ? (
+          <StatePanel
+            tone="loading"
+            title="Loading student detail"
+            description="Pulling the learner profile, mastery history, activity timeline, and recent conversations."
+          />
+        ) : hasHardError ? (
+          <StatePanel
+            tone="error"
+            title="Student detail unavailable"
+            description={error}
+          />
+        ) : (
+          <>
         <section className="grid gap-4 xl:grid-cols-[0.75fr_1fr_0.9fr]">
           <AdminSurface>
             <AdminSurfaceHeader title="Profile card" />
@@ -235,6 +252,8 @@ export default function StudentPage() {
             ))}
           </div>
         </AdminSurface>
+          </>
+        )}
     </div>
   );
 }

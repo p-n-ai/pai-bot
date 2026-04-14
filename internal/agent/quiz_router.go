@@ -1,3 +1,6 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package agent
 
 import (
@@ -18,6 +21,9 @@ const (
 )
 
 func (e *Engine) maybeHandleQuizTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation) (string, bool) {
+	if challengeOwnsConversation(conv) {
+		return "", false
+	}
 	if conv.State == conversationStateQuizIntensity && conv.PendingQuizTopicID != "" {
 		return e.handleQuizIntensitySelection(msg, conv, conv.PendingQuizTopicID), true
 	}
