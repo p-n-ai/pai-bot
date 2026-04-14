@@ -492,7 +492,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 | ⬜ | |
+| `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 | ✅ | i18n catalog (ms/en/zh) existed from Day 4. This task wires Telegram language_code into buildSystemPrompt as fallback when no stored preference exists; stored preference still takes priority. |
 | `P-W6D28-2` | 🧑 3-day post-launch metrics. Identify most-requested features. | 🧑 Human | ⬜ | |
 
 ### Day 29 — Analytics API
