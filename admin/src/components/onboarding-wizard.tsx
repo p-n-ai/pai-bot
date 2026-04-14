@@ -161,24 +161,26 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
         <div className="flex min-h-[35rem] flex-col gap-6">
           <OnboardingStepper currentStepIndex={stepIndex} steps={steps} onStepSelect={setStepIndex} />
 
-          <OnboardingStepBody
-            currentPresetTitle={currentPreset?.title ?? form.bot_setup.preset}
-            currentStepId={currentStep.id}
-            form={form}
-            tenantName={initialData.tenant_name}
-            onBotPresetChange={setBotPreset}
-            onClassNameChange={setClassName}
-            onSchoolNameChange={setSchoolName}
-          />
+          <div className="flex flex-1 flex-col gap-6">
+            <OnboardingStepBody
+              currentPresetTitle={currentPreset?.title ?? form.bot_setup.preset}
+              currentStepId={currentStep.id}
+              form={form}
+              tenantName={initialData.tenant_name}
+              onBotPresetChange={setBotPreset}
+              onClassNameChange={setClassName}
+              onSchoolNameChange={setSchoolName}
+            />
 
-          {submitError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Save failed</AlertTitle>
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          ) : null}
+            {submitError ? (
+              <Alert variant="destructive">
+                <AlertTitle>Save failed</AlertTitle>
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
             <Button type="button" variant="ghost" size="sm" onClick={handleBack} disabled={stepIndex === 0 || isPending}>
               <IconArrowLeft data-icon="inline-start" />
               Back
