@@ -131,11 +131,11 @@ export function OnboardingSuccessSection({
               </div>
               <Input readOnly value={result.join_link} aria-label="Join link" />
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" variant="outline" onClick={onCopyJoinLink}>
+                <Button type="button" variant="outline" size="sm" onClick={onCopyJoinLink}>
                   <IconCopy data-icon="inline-start" />
                   Copy link
                 </Button>
-                <Button type="button" variant="outline" onClick={() => window.open(result.join_link, "_blank", "noopener,noreferrer")}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => window.open(result.join_link, "_blank", "noopener,noreferrer")}>
                   Open link
                 </Button>
                 {copyFeedback ? <p className="text-sm text-muted-foreground">{copyFeedback}</p> : null}
@@ -149,24 +149,24 @@ export function OnboardingSuccessSection({
               </div>
 
               <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="onboarding-teacher-emails">Teacher emails</FieldLabel>
-                <Textarea
-                  id="onboarding-teacher-emails"
-                  value={teacherEmails}
-                  onChange={(event) => setTeacherEmails(event.target.value)}
-                  placeholder={"cikgu.aminah@school.my\ncikgu.rizal@school.my"}
-                  rows={5}
-                />
-                <FieldDescription>Each teacher will receive an invite to set their password and open this workspace.</FieldDescription>
-              </Field>
+                <Field>
+                  <FieldLabel htmlFor="onboarding-teacher-emails">Teacher emails</FieldLabel>
+                  <Textarea
+                    id="onboarding-teacher-emails"
+                    value={teacherEmails}
+                    onChange={(event) => setTeacherEmails(event.target.value)}
+                    placeholder={"cikgu.aminah@school.my\ncikgu.rizal@school.my"}
+                    rows={5}
+                  />
+                  <FieldDescription>Each teacher will receive an invite to set their password and open this workspace.</FieldDescription>
+                </Field>
               </FieldGroup>
 
               <div className="flex flex-wrap gap-3">
                 <Button type="button" onClick={handleInviteSubmit} disabled={isInvitePending}>
                   {isInvitePending ? "Sending invites..." : "Send invites"}
                 </Button>
-                <Button type="button" variant="outline" onClick={onEditSetup}>
+                <Button type="button" variant="ghost" size="sm" onClick={onEditSetup}>
                   Edit setup
                 </Button>
               </div>

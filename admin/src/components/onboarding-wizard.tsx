@@ -189,7 +189,7 @@ export function OnboardingWizard({ initialData, loadError = "" }: {
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button type="button" variant="outline" onClick={handleBack} disabled={stepIndex === 0 || isPending}>
+            <Button type="button" variant="ghost" size="sm" onClick={handleBack} disabled={stepIndex === 0 || isPending}>
               <IconArrowLeft data-icon="inline-start" />
               Back
             </Button>
@@ -261,41 +261,27 @@ function OnboardingStepper({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">
-            Step {currentStepIndex + 1} of {steps.length}
-          </p>
-        </div>
-        <p className="text-sm font-medium text-foreground">{steps[currentStepIndex]?.title}</p>
-      </div>
+      <p className="text-sm font-medium text-foreground">
+        Step {currentStepIndex + 1} of {steps.length}
+      </p>
       <Progress value={completionRatio}>
         <ProgressLabel className="sr-only">Setup progress</ProgressLabel>
       </Progress>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-4 gap-y-2 border-b border-border/70 pb-2 sm:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => (
           <button
             key={step.id}
             type="button"
             onClick={() => onStepSelect(index)}
             className={cn(
-              "flex min-h-11 flex-col rounded-full border px-4 py-2.5 text-left transition-colors",
+              "flex items-center gap-2 border-b-2 pb-2 text-left transition-colors",
               index === currentStepIndex
-                ? "border-foreground bg-foreground text-background shadow-sm"
-                : "border-border bg-background/70 text-card-foreground hover:border-foreground/40",
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex size-5 items-center justify-center rounded-full text-[11px] font-semibold",
-                  index === currentStepIndex ? "bg-background/15 text-background" : "bg-muted text-muted-foreground",
-                )}
-              >
-                {index + 1}
-              </span>
-              <p className="text-sm font-medium">{step.title}</p>
-            </div>
+            <span className="text-[11px] font-medium tabular-nums opacity-70">{index + 1}</span>
+            <p className="text-sm font-medium">{step.title}</p>
           </button>
         ))}
       </div>
