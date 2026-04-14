@@ -35,8 +35,6 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {

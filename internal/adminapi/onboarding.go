@@ -262,9 +262,9 @@ func upsertOnboardingClass(ctx context.Context, tx pgx.Tx, tenantID string, exis
 		VALUES ($1::uuid, $2, $3, $4)
 		ON CONFLICT (slug) DO UPDATE
 		SET name = EXCLUDED.name,
-		    tenant_id = EXCLUDED.tenant_id,
 		    syllabus_id = EXCLUDED.syllabus_id,
 		    updated_at = NOW()
+		WHERE classes.tenant_id = EXCLUDED.tenant_id
 		RETURNING id::text, name, slug
 	`, tenantID, req.FirstClass.Name, req.FirstClass.Slug, req.Curriculum.SyllabusID).Scan(
 		&record.ID,
@@ -272,6 +272,9 @@ func upsertOnboardingClass(ctx context.Context, tx pgx.Tx, tenantID string, exis
 		&record.Slug,
 	)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return onboardingClassRecord{}, fmt.Errorf("%w: class slug already exists", ErrInvalidArgument)
+		}
 		return onboardingClassRecord{}, fmt.Errorf("upsert onboarding class: %w", err)
 	}
 

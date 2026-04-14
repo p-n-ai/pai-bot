@@ -74,6 +74,10 @@ func (s *PostgresService) EnsureBootstrapPlatformAdmin(ctx context.Context, emai
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(8_420_001)); err != nil {
+		return false, fmt.Errorf("lock bootstrap platform admin creation: %w", err)
+	}
+
 	var existingAdminCount int
 	if err := tx.QueryRow(ctx, `
 		SELECT COUNT(*)
