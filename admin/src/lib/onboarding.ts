@@ -1,5 +1,10 @@
-import { generateSlug } from "random-word-slugs";
 import type { OnboardingView, SubmitOnboardingInput } from "@/lib/api";
+
+export const defaultOnboardingClassName = "Form 1 Mathematics";
+
+function isDemoOnboardingClassName(raw: string): boolean {
+  return raw.trim().toLowerCase() === "pilot class a";
+}
 
 export const onboardingCurriculumOptions = [
   {
@@ -27,11 +32,13 @@ export const onboardingBotPresetOptions = [
   },
 ] as const;
 
-export function generateDefaultClassName(): string {
-  return generateSlug(3, {
-    format: "kebab",
-    partsOfSpeech: ["noun", "noun", "noun"],
-  });
+export function sanitizeOnboardingClassName(raw: string): string {
+  const value = raw.trim();
+  if (isDemoOnboardingClassName(value)) {
+    return defaultOnboardingClassName;
+  }
+
+  return value;
 }
 
 export function normalizeClassSlug(raw: string): string {
@@ -45,9 +52,12 @@ export function normalizeClassSlug(raw: string): string {
 export function buildInitialOnboardingInput(view: OnboardingView | null): SubmitOnboardingInput {
   const saved = view?.onboarding ?? null;
   const defaultCurriculum = onboardingCurriculumOptions[0];
-  const defaultClassName = generateDefaultClassName();
-  const className = saved?.first_class?.name?.trim() || defaultClassName;
-  const classSlug = saved?.first_class?.slug?.trim() || normalizeClassSlug(className);
+  const rawSavedClassName = saved?.first_class?.name || "";
+  const className = rawSavedClassName ? sanitizeOnboardingClassName(rawSavedClassName) : "";
+  const classSlug =
+    isDemoOnboardingClassName(rawSavedClassName)
+      ? normalizeClassSlug(className)
+      : saved?.first_class?.slug?.trim() || normalizeClassSlug(className);
   const defaultPreset = onboardingBotPresetOptions[0]?.id ?? "guided-practice";
 
   return {

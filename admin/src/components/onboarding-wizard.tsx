@@ -8,26 +8,25 @@ import { OnboardingSuccessSection } from "@/components/onboarding-success-sectio
 import { StatePanel } from "@/components/state-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { submitOnboarding, type OnboardingView, type SubmitOnboardingInput } from "@/lib/api";
-import { normalizeClassSlug, onboardingBotPresetOptions, onboardingCurriculumOptions } from "@/lib/onboarding";
+import { defaultOnboardingClassName, normalizeClassSlug, onboardingBotPresetOptions, onboardingCurriculumOptions } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useOnboardingWizardStore } from "@/stores/onboarding-wizard-store";
 
 type OnboardingStep = {
   id: "curriculum" | "class" | "bot" | "school";
   title: string;
-  description: string;
 };
 
 const steps: readonly OnboardingStep[] = [
-  { id: "curriculum", title: "Curriculum", description: "Choose the starting syllabus for this class." },
-  { id: "class", title: "First class", description: "Name the class students will join first." },
-  { id: "bot", title: "Bot setup", description: "Choose how the tutor should respond at the start." },
-  { id: "school", title: "School", description: "Review the setup and add the school name if you want it shown." },
+  { id: "curriculum", title: "Curriculum" },
+  { id: "class", title: "First class" },
+  { id: "bot", title: "Bot setup" },
+  { id: "school", title: "School" },
 ];
 
 export function OnboardingWizard({ initialData, loadError = "" }: {
@@ -253,9 +252,6 @@ function OnboardingStepper({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm font-medium text-foreground">
-        Step {currentStepIndex + 1} of {steps.length}
-      </p>
       <Progress value={completionRatio}>
         <ProgressLabel className="sr-only">Setup progress</ProgressLabel>
       </Progress>
@@ -266,13 +262,12 @@ function OnboardingStepper({
             type="button"
             onClick={() => onStepSelect(index)}
             className={cn(
-              "flex items-center gap-2 border-b-2 pb-2 text-left transition-colors",
+              "flex items-center border-b-2 pb-2 text-left transition-colors",
               index === currentStepIndex
-                ? "border-foreground text-foreground"
+                ? "border-foreground/80 text-foreground"
                 : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >
-            <span className="text-[11px] font-medium tabular-nums opacity-70">{index + 1}</span>
             <p className="text-sm font-medium">{step.title}</p>
           </button>
         ))}
@@ -285,9 +280,7 @@ function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
   return (
     <OnboardingStepLayout
       title="Choose the starting syllabus"
-      description="Choose the syllabus for this class."
-      supportTitle="Syllabus"
-      supportContent="Students in this class will begin here."
+      description="Choose the syllabus."
     >
       <FieldGroup>
         <Field>
@@ -304,7 +297,6 @@ function OnboardingCurriculumStep({ syllabusID }: { syllabusID: string }) {
               ))}
             </SelectContent>
           </Select>
-          <FieldDescription>This is the starting syllabus for your first class.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -321,9 +313,7 @@ function OnboardingClassStep({
   return (
     <OnboardingStepLayout
       title="Name the class"
-      description="Give the class a clear name."
-      supportTitle="Name"
-      supportContent="Use the name teachers and students will recognize."
+      description="Enter the class name."
     >
       <FieldGroup>
         <Field>
@@ -332,9 +322,8 @@ function OnboardingClassStep({
             id="onboarding-first-class"
             value={className}
             onChange={(event) => onClassNameChange(event.target.value)}
-            placeholder="Pilot Class A"
+            placeholder={defaultOnboardingClassName}
           />
-          <FieldDescription>Keep it simple and recognizable, for example Form 1 Algebra or Pilot Class A.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -351,9 +340,7 @@ function OnboardingBotStep({
   return (
     <OnboardingStepLayout
       title="Choose how the tutor begins"
-      description="Choose how the tutor should respond."
-      supportTitle="Tutor style"
-      supportContent="Pick one style."
+      description="Choose the tutor style."
     >
       <div className="grid w-full grid-cols-1 items-stretch gap-4 sm:grid-cols-2">
         {onboardingBotPresetOptions.map((option) => {
@@ -398,10 +385,9 @@ function OnboardingSchoolStep({
   return (
     <OnboardingStepLayout
       title="Review and save"
-      description="Review the setup."
-      supportTitle="Current setup"
+      description="Check the details."
       supportContent={
-        <dl className="space-y-2 text-sm text-muted-foreground">
+        <dl className="space-y-3 text-sm text-muted-foreground">
           <div className="flex items-center justify-between gap-3">
             <dt>Curriculum</dt>
             <dd>{form.curriculum.label}</dd>
@@ -426,7 +412,6 @@ function OnboardingSchoolStep({
             onChange={(event) => onSchoolNameChange(event.target.value)}
             placeholder={tenantName || "Current workspace"}
           />
-          <FieldDescription>Add the school name if you want it shown.</FieldDescription>
         </Field>
       </FieldGroup>
     </OnboardingStepLayout>
@@ -436,29 +421,24 @@ function OnboardingSchoolStep({
 function OnboardingStepLayout({
   title,
   description,
-  supportTitle,
   supportContent,
   children,
 }: {
   title: string;
-  description: string;
-  supportTitle: string;
-  supportContent: ReactNode;
+  description?: string;
+  supportContent?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="grid gap-6 md:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] md:items-start">
-      <div className="space-y-5 md:pt-2">
+      <div className="space-y-4 md:pt-2 md:pr-6">
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
+          {description ? <p className="max-w-md text-sm leading-6 text-muted-foreground">{description}</p> : null}
         </div>
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{supportTitle}</p>
-          <div className="max-w-md text-sm leading-6 text-muted-foreground">{supportContent}</div>
-        </div>
+        {supportContent ? <div className="max-w-md text-sm leading-6 text-muted-foreground">{supportContent}</div> : null}
       </div>
-      <div className="rounded-2xl border bg-card p-5 md:p-6">{children}</div>
+      <div className="rounded-2xl border bg-card p-5 md:border-l md:border-border/60 md:p-6 md:pl-6">{children}</div>
     </section>
   );
 }

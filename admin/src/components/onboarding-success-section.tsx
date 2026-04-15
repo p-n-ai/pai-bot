@@ -5,10 +5,11 @@ import { IconCopy } from "@tabler/icons-react";
 import { AdminSurface, AdminSurfaceHeader } from "@/components/admin-surface";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { issueInvite, type InviteRecord, type SubmitOnboardingResult } from "@/lib/api";
+import { sanitizeOnboardingClassName } from "@/lib/onboarding";
 
 type InviteOutcome = {
   email: string;
@@ -58,6 +59,7 @@ export function OnboardingSuccessSection({
   const [inviteOutcomes, setInviteOutcomes] = useState<InviteOutcome[]>([]);
   const [isInvitePending, startInviteTransition] = useTransition();
 
+  const displayClassName = sanitizeOnboardingClassName(result.class_name);
   const sentCount = inviteOutcomes.filter((item) => item.invite?.delivery_status === "sent").length;
   const failedCount = inviteOutcomes.filter((item) => item.error || item.invite?.delivery_status === "failed").length;
 
@@ -112,41 +114,31 @@ export function OnboardingSuccessSection({
   return (
     <AdminSurface className="overflow-hidden">
       <div className="flex flex-col gap-4">
-        <AdminSurfaceHeader
-          title="Setup complete"
-          description="Your class is ready. Share it with students and invite teachers now or later."
-        />
+        <AdminSurfaceHeader title="Welcome to your classroom." description="Your first class is ready to share." />
 
         <div className="rounded-2xl border bg-card p-5 md:p-6">
-          <div className="mb-5 border-b pb-4">
-            <p className="text-base font-medium text-foreground">
-              <span className="font-semibold">{result.class_name}</span> is ready for <span className="font-semibold">{resultSchoolName}</span>.
-            </p>
+          <div className="space-y-1 pb-5">
+            <p className="text-base font-medium text-foreground">{displayClassName}</p>
+            <p className="text-sm text-muted-foreground">{resultSchoolName}</p>
           </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8">
             <div className="space-y-4 lg:pr-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Share with students</p>
-                <p className="text-sm text-muted-foreground">Send this link to students so they can join the class.</p>
-              </div>
+              <p className="text-sm font-medium text-foreground">Students</p>
               <Input readOnly value={result.join_link} aria-label="Join link" />
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" variant="outline" size="sm" onClick={onCopyJoinLink}>
                   <IconCopy data-icon="inline-start" />
-                  Copy link
+                  Copy
                 </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={() => window.open(result.join_link, "_blank", "noopener,noreferrer")}>
-                  Open link
+                  Open
                 </Button>
                 {copyFeedback ? <p className="text-sm text-muted-foreground">{copyFeedback}</p> : null}
               </div>
             </div>
 
             <div className="space-y-4 border-t pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Invite teachers</p>
-                <p className="text-sm text-muted-foreground">Add one email per line.</p>
-              </div>
+              <p className="text-sm font-medium text-foreground">Teachers</p>
 
               <FieldGroup>
                 <Field>
@@ -154,11 +146,10 @@ export function OnboardingSuccessSection({
                   <Textarea
                     id="onboarding-teacher-emails"
                     value={teacherEmails}
-                    onChange={(event) => setTeacherEmails(event.target.value)}
-                    placeholder={"cikgu.aminah@school.my\ncikgu.rizal@school.my"}
-                    rows={5}
-                  />
-                  <FieldDescription>Each teacher will receive an invite to set their password and open this workspace.</FieldDescription>
+                  onChange={(event) => setTeacherEmails(event.target.value)}
+                  placeholder={"cikgu.aminah@school.my\ncikgu.rizal@school.my"}
+                  rows={5}
+                />
                 </Field>
               </FieldGroup>
 
@@ -183,12 +174,9 @@ export function OnboardingSuccessSection({
 
         {inviteOutcomes.length > 0 ? (
           <div className="space-y-4">
-            <Alert>
-              <AlertTitle>Teacher invite results</AlertTitle>
-              <AlertDescription>
-                {sentCount} sent, {failedCount} needing follow-up, {inviteOutcomes.length} processed.
-              </AlertDescription>
-            </Alert>
+            <p className="text-sm text-muted-foreground">
+              {sentCount} sent, {failedCount} needing follow-up, {inviteOutcomes.length} processed.
+            </p>
 
             <div className="space-y-3">
               {inviteOutcomes.map((item) => {
