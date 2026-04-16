@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getServerJoinClass } from "@/lib/server-api";
+import { getServerJoinClass, ServerAPIError } from "@/lib/server-api";
 
 type JoinPageProps = {
   params: Promise<{ slug: string }>;
@@ -11,8 +11,11 @@ export default async function JoinPage({ params }: JoinPageProps) {
 
   try {
     joinClass = await getServerJoinClass(slug);
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ServerAPIError && error.status === 404) {
+      notFound();
+    }
+    throw error;
   }
 
   return (

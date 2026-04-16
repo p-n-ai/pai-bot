@@ -19,6 +19,18 @@ import type {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+export class ServerAPIError extends Error {
+  status: number;
+  path: string;
+
+  constructor(path: string, status: number) {
+    super(`Failed to load ${path}: ${status}`);
+    this.name = "ServerAPIError";
+    this.path = path;
+    this.status = status;
+  }
+}
+
 async function requestCookieHeader(): Promise<string> {
   const cookieStore = await cookies();
   return cookieStore
@@ -36,7 +48,7 @@ async function fetchServerJSON<T>(path: string): Promise<T> {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to load ${path}: ${res.status}`);
+    throw new ServerAPIError(path, res.status);
   }
 
   return (await readJSONResponse(res)) as T;

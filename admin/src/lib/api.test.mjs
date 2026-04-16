@@ -49,4 +49,12 @@ test("getSafeNextPath falls back when the requested route is not allowed", () =>
     getSafeNextPath({ role: "teacher", user_id: "teacher-1" }, "/dashboard/classes"),
     "/dashboard/classes",
   );
+  assert.equal(
+    getSafeNextPath({ role: "teacher", user_id: "teacher-1" }, "/setup/onboard"),
+    "/dashboard",
+  );
+  assert.equal(
+    getSafeNextPath({ role: "admin", user_id: "admin-1" }, "/setup/onboard"),
+    "/setup/onboard",
+  );
 });
