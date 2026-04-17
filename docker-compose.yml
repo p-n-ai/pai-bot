@@ -61,6 +61,7 @@ services:
       LEARN_DATABASE_URL: postgres://pai:${POSTGRES_PASSWORD:-pai}@postgres:5432/pai?sslmode=disable
       LEARN_CACHE_URL: redis://dragonfly:6379
       LEARN_NATS_URL: nats://nats:4222
+      LEARN_AI_OLLAMA_URL: http://ollama:11434
       LEARN_WHATSAPP_MEOW_DB: "file:/data/whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
     volumes:
       - whatsmeow-data:/data

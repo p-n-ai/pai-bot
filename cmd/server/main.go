@@ -28,6 +28,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
@@ -559,44 +560,7 @@ func telegramInlineKeyboardContext(store agent.ConversationStore, userID string)
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
-	router := ai.NewRouter()
-
-	if cfg.AI.OpenAI.APIKey != "" {
-		router.Register("openai", ai.NewOpenAIProvider(cfg.AI.OpenAI.APIKey))
-		slog.Info("AI provider registered", "provider", "openai")
-	}
-
-	if cfg.AI.Anthropic.APIKey != "" {
-		provider, err := ai.NewAnthropicProvider(cfg.AI.Anthropic.APIKey)
-		if err != nil {
-			slog.Warn("failed to create Anthropic provider", "error", err)
-		} else {
-			router.Register("anthropic", provider)
-			slog.Info("AI provider registered", "provider", "anthropic")
-		}
-	}
-
-	if cfg.AI.DeepSeek.APIKey != "" {
-		router.Register("deepseek", ai.NewDeepSeekProvider(cfg.AI.DeepSeek.APIKey))
-		slog.Info("AI provider registered", "provider", "deepseek")
-	}
-
-	if cfg.AI.Google.APIKey != "" {
-		router.Register("google", ai.NewGoogleProvider(cfg.AI.Google.APIKey))
-		slog.Info("AI provider registered", "provider", "google")
-	}
-
-	if cfg.AI.Ollama.Enabled {
-		router.Register("ollama", ai.NewOllamaProvider(cfg.AI.Ollama.URL))
-		slog.Info("AI provider registered", "provider", "ollama")
-	}
-
-	if cfg.AI.OpenRouter.APIKey != "" {
-		router.Register("openrouter", ai.NewOpenRouterProvider(cfg.AI.OpenRouter.APIKey))
-		slog.Info("AI provider registered", "provider", "openrouter")
-	}
-
-	return router
+	return airouter.Setup(cfg)
 }
 
 func lookupDefaultTenantID(ctx context.Context, pool *pgxpool.Pool) (string, error) {

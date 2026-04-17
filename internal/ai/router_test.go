@@ -112,6 +112,26 @@ func TestRouter_FallbackOrder(t *testing.T) {
 	}
 }
 
+func TestRouter_UsesConfiguredDefaultModelForProvider(t *testing.T) {
+	router := newTestRouter()
+	mock := ai.NewMockProvider("Hello!")
+	router.Register("openai", mock)
+	router.SetDefaultModel("openai", "gpt-4.1-mini")
+
+	_, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if mock.LastRequest == nil {
+		t.Fatal("expected provider to capture request")
+	}
+	if mock.LastRequest.Model != "gpt-4.1-mini" {
+		t.Fatalf("model = %q, want gpt-4.1-mini", mock.LastRequest.Model)
+	}
+}
+
 func TestRouter_RetryThenSuccess(t *testing.T) {
 	router := newTestRouter()
 	flaky := &countingProvider{failuresBeforeSuccess: 2, response: "ok"}

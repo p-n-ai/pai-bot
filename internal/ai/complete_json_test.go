@@ -209,6 +209,31 @@ func TestRouter_CompleteJSON_UsesAnthropicStructuredDefaults(t *testing.T) {
 	}
 }
 
+func TestRouter_CompleteJSON_UsesConfiguredStructuredModelForProvider(t *testing.T) {
+	router := newTestRouter()
+	mock := ai.NewMockProvider(`{"final_answer":"ok"}`)
+	router.Register("openai", mock)
+	router.SetDefaultModel("openai", "gpt-4.1-mini")
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}, &out)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+	if mock.LastRequest == nil {
+		t.Fatal("expected provider to capture request")
+	}
+	if mock.LastRequest.Model != "gpt-4.1-mini" {
+		t.Fatalf("default structured model = %q, want gpt-4.1-mini", mock.LastRequest.Model)
+	}
+}
+
 func TestRouter_CompleteJSON_UsesGoogleForStructuredSystemPrompt(t *testing.T) {
 	router := newTestRouter()
 	google := ai.NewMockProvider(`{"final_answer":"google"}`)

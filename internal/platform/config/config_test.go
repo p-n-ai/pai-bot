@@ -27,12 +27,19 @@ func clearEnv(t *testing.T) {
 		"LEARN_EMAIL_FROM_NAME",
 		"LEARN_EMAIL_BASE_URL",
 		"LEARN_AI_OPENAI_API_KEY",
+		"LEARN_AI_OPENAI_MODEL",
 		"LEARN_AI_ANTHROPIC_API_KEY",
+		"LEARN_AI_ANTHROPIC_MODEL",
 		"LEARN_AI_DEEPSEEK_API_KEY",
+		"LEARN_AI_DEEPSEEK_MODEL",
 		"LEARN_AI_GOOGLE_API_KEY",
+		"LEARN_AI_GOOGLE_MODEL",
 		"LEARN_AI_OPENROUTER_API_KEY",
+		"LEARN_AI_OPENROUTER_MODEL",
+		"LEARN_AI_DEFAULT_PROVIDER",
 		"LEARN_AI_OLLAMA_ENABLED",
 		"LEARN_AI_OLLAMA_URL",
+		"LEARN_AI_OLLAMA_MODEL",
 		"PAI_AUTH_SECRET",
 		"PAI_AUTH_GOOGLE_CLIENT_ID",
 		"PAI_AUTH_GOOGLE_CLIENT_SECRET",
@@ -46,6 +53,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_LOG_LEVEL",
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
+		"LEARN_DEV_MODE",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_NUDGES_ENABLED",
 	}
@@ -113,7 +121,10 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_EMAIL_FROM_NAME", "Pandai Mailer")
 	t.Setenv("LEARN_EMAIL_BASE_URL", "https://admin.example.com")
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
+	t.Setenv("LEARN_AI_OPENAI_MODEL", "gpt-4.1-mini")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
+	t.Setenv("LEARN_AI_OLLAMA_MODEL", "qwen3:14b")
+	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "openrouter")
 	t.Setenv("PAI_AUTH_SECRET", "super-secret")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_ID", "google-client")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_SECRET", "google-secret")
@@ -161,8 +172,17 @@ func TestLoad_FromEnv(t *testing.T) {
 	if cfg.AI.OpenAI.APIKey != "sk-test-key" {
 		t.Errorf("AI.OpenAI.APIKey = %q, want sk-test-key", cfg.AI.OpenAI.APIKey)
 	}
+	if cfg.AI.OpenAI.Model != "gpt-4.1-mini" {
+		t.Errorf("AI.OpenAI.Model = %q, want gpt-4.1-mini", cfg.AI.OpenAI.Model)
+	}
 	if cfg.AI.Ollama.URL != "http://localhost:11434" {
 		t.Errorf("AI.Ollama.URL = %q, want http://localhost:11434", cfg.AI.Ollama.URL)
+	}
+	if cfg.AI.Ollama.Model != "qwen3:14b" {
+		t.Errorf("AI.Ollama.Model = %q, want qwen3:14b", cfg.AI.Ollama.Model)
+	}
+	if cfg.AI.DefaultProvider != "openrouter" {
+		t.Errorf("AI.DefaultProvider = %q, want openrouter", cfg.AI.DefaultProvider)
 	}
 	if cfg.Auth.JWTSecret != "super-secret" {
 		t.Errorf("Auth.JWTSecret = %q, want super-secret", cfg.Auth.JWTSecret)
@@ -257,6 +277,36 @@ func TestLoad_AIProviders(t *testing.T) {
 	}
 	if !cfg.AI.Ollama.Enabled {
 		t.Error("AI.Ollama.Enabled should be true")
+	}
+}
+
+func TestValidate_DefaultProvider(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_DEV_MODE", "true")
+	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "google")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidate_DefaultProvider_Invalid(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_DEV_MODE", "true")
+	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "not-a-provider")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject unsupported LEARN_AI_DEFAULT_PROVIDER")
 	}
 }
 
