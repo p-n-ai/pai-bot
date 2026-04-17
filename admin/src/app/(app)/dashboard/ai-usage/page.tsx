@@ -4,7 +4,7 @@ import { AIUsageOverviewSection } from "@/components/ai-usage/overview-section";
 import { AIUsageProviderBreakdownSection } from "@/components/ai-usage/provider-breakdown-section";
 import type { AIUsageView } from "@/components/ai-usage/types";
 import { StatePanel } from "@/components/state-panel";
-import { ServerAPIError, getServerAIUsage } from "@/lib/server-api";
+import { ServerAPIError, getServerAIUsage, getServerAuthSession } from "@/lib/server-api";
 import { getAIUsageBudgetViewModel } from "@/lib/ai-usage.mjs";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,9 @@ async function loadAIUsagePageResult(): Promise<AIUsagePageResult> {
 }
 
 export default async function AIUsagePage() {
-  const result = await loadAIUsagePageResult();
+  const [session, result] = await Promise.all([getServerAuthSession(), loadAIUsagePageResult()]);
+  const currentUser = session?.user ?? null;
+  const canManageBudget = currentUser?.role === "admin" || currentUser?.role === "platform_admin";
 
   if (!result.ok) {
     return (
@@ -47,7 +49,7 @@ export default async function AIUsagePage() {
       <AIUsageOverviewSection view={result.view} />
 
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.95fr]">
-        <AIUsageBudgetSection view={result.view} />
+        <AIUsageBudgetSection view={result.view} canManageBudget={canManageBudget} />
         <AIUsageDailyTrendSection view={result.view} />
       </div>
 

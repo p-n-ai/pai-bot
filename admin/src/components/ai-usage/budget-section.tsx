@@ -7,8 +7,10 @@ import { formatBudgetWindowLabel } from "@/components/ai-usage/format";
 
 export function AIUsageBudgetSection({
   view,
+  canManageBudget,
 }: {
   view: AIUsageView;
+  canManageBudget: boolean;
 }) {
   return (
     <AdminSurface>
@@ -36,11 +38,17 @@ export function AIUsageBudgetSection({
           </AdminInsetPanel>
         </div>
 
-        <TokenBudgetEditor
-          initialBudgetTokens={view.budgetTokenLimit}
-          initialPeriodStart={view.budget_period_start}
-          initialPeriodEnd={view.budget_period_end}
-        />
+        {canManageBudget ? (
+          <TokenBudgetEditor
+            initialBudgetTokens={view.budgetTokenLimit}
+            initialPeriodStart={view.budget_period_start}
+            initialPeriodEnd={view.budget_period_end}
+          />
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Budget changes require admin access.
+          </p>
+        )}
       </div>
     </AdminSurface>
   );
