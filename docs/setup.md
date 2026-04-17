@@ -109,6 +109,23 @@ pnpm exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
 
+By default, authenticated E2E tests use seeded admin credentials:
+- email: `platform-admin@example.com`
+- password: `demo-password`
+
+Override when needed:
+
+```bash
+cd admin
+E2E_ADMIN_EMAIL=your-admin@example.com E2E_ADMIN_PASSWORD=your-password pnpm test:e2e
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:E2E_ADMIN_EMAIL="your-admin@example.com"; $env:E2E_ADMIN_PASSWORD="your-password"; pnpm test:e2e
+```
+
 Useful variants:
 
 ```bash

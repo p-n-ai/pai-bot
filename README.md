@@ -500,6 +500,7 @@ just test-all              # Convenience gate: lint + Go tests + admin unit/comp
 ```
 
 Playwright first-run setup (install deps + Chromium) is documented in [docs/setup.md](docs/setup.md#playwright-e2e-setup-admin).
+Authenticated E2E routes default to seeded `platform-admin@example.com` / `demo-password`, overridable via `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD`.
 
 OpenAI live conversation integration suite:
 
