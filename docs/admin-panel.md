@@ -9,7 +9,7 @@ read_when:
 
 # Admin / Management Panel — Feature Specification
 
-> **Status:** Partially implemented. Current shipped scope includes the public landing page (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), class dashboard, student detail, parent summary, and onboarding. AI usage and token-budget administration remain out of the current slice even though backend budget APIs still exist. Remaining sections below stay planned until implemented.
+> **Status:** Partially implemented. Current shipped scope includes the public gate (`/`), direct login (`/login`), teacher dashboard (`/dashboard`), class dashboard, student detail, parent summary, and onboarding. AI usage and token-budget administration remain out of the current slice even though backend budget APIs still exist. Remaining sections below stay planned until implemented.
 >
 > **Stack:** Next.js 16 (App Router) · TypeScript · shadcn/ui · Tailwind CSS 4 · TanStack Query v5 · Recharts/Tremor
 
@@ -42,7 +42,7 @@ This document describes all planned features for the P&AI Bot admin panel, organ
 | `platform_admin` | Multi-tenant management + all admin features | Web (admin panel) |
 
 ---
-The root route `/` now stays public as a landing page. Its primary CTA routes signed-in users to their role-safe workspace and routes signed-out users to `/login`.
+The root route `/` now resolves immediately to the role-safe workspace when a session exists, otherwise it redirects to `/login`.
 
 ## Authentication & Authorization
 
@@ -53,7 +53,7 @@ Detailed runtime reference:
 ### Flow
 
 1. **Enter** — User lands on `/` or `/login`
-   Root `/` stays public and sends users onward only through its CTA
+   Root `/` redirects to `/login` when no session exists
 2. **Login** — Email + password, or `Continue with Google` for linked Google identities and exact single-account verified-email matches. Google workspace/domain restriction is code-level auth policy, not env; current admin wiring limits Google login to `pandai.org`.
 3. **Resolve tenant when needed** — If the same email belongs to more than one school, the backend returns `tenant_required` and the UI asks the user to choose the school before retrying sign-in. Google callback flows do not silently pick a tenant when the email maps to multiple schools.
 4. **Link sign-in methods** — Authenticated admins can link Google from the signed-in workspace shell. Same-email auto-linking is limited to exact one-account matches; different-email Google accounts require an explicit authenticated link flow.
