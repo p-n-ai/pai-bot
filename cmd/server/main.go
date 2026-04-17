@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -34,8 +35,6 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -276,6 +275,18 @@ func main() {
 		}
 		authService.ConfigureInviteEmail(inviteMailer)
 	}
+	createdBootstrapAdmin, err := authService.EnsureBootstrapPlatformAdmin(
+		context.Background(),
+		cfg.Auth.BootstrapAdmin.Email,
+		cfg.Auth.BootstrapAdmin.Password,
+	)
+	if err != nil {
+		slog.Error("failed to ensure bootstrap platform admin", "error", err)
+		os.Exit(1)
+	}
+	if createdBootstrapAdmin {
+		slog.Info("bootstrap platform admin created", "email", cfg.Auth.BootstrapAdmin.Email)
+	}
 
 	// HTTP endpoints.
 	apiHandler := newHandlerWithAdminProvider(
@@ -286,7 +297,11 @@ func main() {
 			newForPlatform: func() adminDataSource {
 				return adminapi.NewPlatform(db.Pool)
 			},
+			defaultTenantID: func(ctx context.Context) (string, error) {
+				return lookupDefaultTenantID(ctx, db.Pool)
+			},
 		},
+		adminapi.NewPublic(db.Pool),
 		gatewaySender{gw},
 		retrievalService,
 		authService,
@@ -361,6 +376,8 @@ type adminDataSource interface {
 	GetMetrics() (adminapi.MetricsSummary, error)
 	GetAnalyticsReport() (adminapi.AnalyticsReport, error)
 	GetUserManagement() (adminapi.UserManagementView, error)
+	GetOnboarding() (adminapi.OnboardingView, error)
+	SubmitOnboarding(req adminapi.SubmitOnboardingRequest, joinBaseURL string) (adminapi.SubmitOnboardingResult, error)
 	ExportStudents() ([]adminapi.StudentExportRow, error)
 	ExportConversations() ([]adminapi.ConversationExportRecord, error)
 	ExportProgress() ([]adminapi.ProgressExportRow, error)
@@ -372,6 +389,10 @@ type adminDataSource interface {
 	AddGroupMember(groupID, userID, role string) error
 	RemoveGroupMember(groupID, userID string) error
 	GetGroupLeaderboard(id string) ([]adminapi.AdminLeaderboardEntry, error)
+}
+
+type joinClassSource interface {
+	GetJoinClass(slug string) (adminapi.JoinClassView, error)
 }
 
 type adminDataSourceProvider interface {
@@ -423,8 +444,9 @@ func (p fixedAdminDataSourceProvider) ForRequest(_ *http.Request) (adminDataSour
 }
 
 type tenantAdminDataSourceProvider struct {
-	newForTenant   func(tenantID string) adminDataSource
-	newForPlatform func() adminDataSource
+	newForTenant    func(tenantID string) adminDataSource
+	newForPlatform  func() adminDataSource
+	defaultTenantID func(ctx context.Context) (string, error)
 }
 
 func (p tenantAdminDataSourceProvider) ForRequest(r *http.Request) (adminDataSource, error) {
@@ -433,8 +455,17 @@ func (p tenantAdminDataSourceProvider) ForRequest(r *http.Request) (adminDataSou
 		return nil, errors.New("missing auth claims")
 	}
 
-	if claims.Role == auth.RolePlatformAdmin && p.newForPlatform != nil {
-		return p.newForPlatform(), nil
+	if claims.Role == auth.RolePlatformAdmin {
+		if strings.HasPrefix(r.URL.Path, "/api/admin/onboarding") && p.newForTenant != nil && p.defaultTenantID != nil {
+			tenantID, err := p.defaultTenantID(r.Context())
+			if err != nil {
+				return nil, err
+			}
+			return p.newForTenant(tenantID), nil
+		}
+		if p.newForPlatform != nil {
+			return p.newForPlatform(), nil
+		}
 	}
 	if strings.TrimSpace(claims.TenantID) == "" {
 		return nil, errors.New("missing auth claims")
@@ -448,6 +479,7 @@ type authService interface {
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.Session, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
 	ReissueInvite(ctx context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error)
+	EnsureBootstrapPlatformAdmin(ctx context.Context, email, password string) (bool, error)
 	Session(ctx context.Context, sessionToken string) (auth.Session, error)
 	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (auth.Session, error)
 	Logout(ctx context.Context, sessionToken string) error
@@ -567,6 +599,23 @@ func setupAIRouter(cfg *config.Config) *ai.Router {
 	return router
 }
 
+func lookupDefaultTenantID(ctx context.Context, pool *pgxpool.Pool) (string, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var tenantID string
+	if err := pool.QueryRow(queryCtx, `
+		SELECT id::text
+		FROM tenants
+		WHERE slug = 'default'
+		ORDER BY created_at ASC, id ASC
+		LIMIT 1
+	`).Scan(&tenantID); err != nil {
+		return "", fmt.Errorf("lookup default tenant: %w", err)
+	}
+	return tenantID, nil
+}
+
 // newMux creates the HTTP router with health check and admin endpoints.
 func newMux(admin adminDataSource, sender messageSender) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -586,10 +635,11 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 }
 
 func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
+	joinSource, _ := admin.(joinClassSource)
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
 }
 
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -611,7 +661,6 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 		authenticated,
 		auth.RequireRoles(auth.RoleAdmin),
 	)
-
 	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
 	mux.Handle("GET /api/auth/google/start", handleAuthGoogleStart(authSvc))
 	mux.Handle("GET /api/auth/google/callback", handleAuthGoogleCallback(authSvc))
@@ -621,9 +670,12 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc))
 	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
+	mux.Handle("GET /api/join/{slug}", handlePublicJoinClass(joinSource))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc, inviteBaseURL)))
 	mux.Handle("POST /api/admin/invites/{id}/reissue", adminOrAbove(handleAdminInviteReissue(authSvc, inviteBaseURL)))
 	mux.Handle("GET /api/admin/users", adminOrAbove(handleAdminUsers(adminProvider)))
+	mux.Handle("GET /api/admin/onboarding", adminOrAbove(handleAdminGetOnboarding(adminProvider)))
+	mux.Handle("POST /api/admin/onboarding", adminOrAbove(handleAdminSubmitOnboarding(adminProvider)))
 	mux.Handle("GET /api/admin/classes/{id}/progress", teacherOrAbove(handleAdminClassProgress(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}", teacherOrAbove(handleAdminStudentDetail(adminProvider)))
 	mux.Handle("GET /api/admin/students/{id}/conversations", teacherOrAbove(handleAdminStudentConversations(adminProvider)))
@@ -650,6 +702,22 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, sender m
 	apiLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
 	authLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
 	return withSecurityHeaders(withCORS(withAPIRateLimit(mux, time.Now, apiLimiter, authLimiter)))
+}
+
+func handlePublicJoinClass(joinSource joinClassSource) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if joinSource == nil {
+			http.Error(w, "join lookup unavailable", http.StatusNotFound)
+			return
+		}
+		slug := r.PathValue("slug")
+		payload, err := joinSource.GetJoinClass(slug)
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
 }
 
 func authenticateRequests(authSvc authService, manager *auth.TokenManager, now func() time.Time) func(http.Handler) http.Handler {
@@ -947,6 +1015,44 @@ func handleAdminUsers(adminProvider adminDataSourceProvider) http.HandlerFunc {
 		}
 
 		payload, err := admin.GetUserManagement()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminGetOnboarding(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		payload, err := admin.GetOnboarding()
+		if err != nil {
+			writeAdminError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
+	}
+}
+
+func handleAdminSubmitOnboarding(adminProvider adminDataSourceProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := resolveAdminDataSource(w, r, adminProvider)
+		if !ok {
+			return
+		}
+
+		var body adminapi.SubmitOnboardingRequest
+		if err := decodeJSONBody(r, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		payload, err := admin.SubmitOnboarding(body, onboardingJoinBaseURL(r))
 		if err != nil {
 			writeAdminError(w, err)
 			return
@@ -2103,6 +2209,21 @@ func inviteActivationBaseURL(r *http.Request, defaultBaseURL string) string {
 	return strings.TrimSpace(defaultBaseURL)
 }
 
+func onboardingJoinBaseURL(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		return strings.TrimRight(origin, "/")
+	}
+	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
+		if parsed, err := url.Parse(referer); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			return parsed.Scheme + "://" + parsed.Host
+		}
+	}
+	return requestBaseURL(r)
+}
+
 func googleOAuthPolicy(cfg *config.Config) auth.GoogleOAuthPolicy {
 	if cfg == nil {
 		return auth.GoogleOAuthPolicy{}
@@ -2159,11 +2280,8 @@ func resolvePostAuthRedirect(rawURL string, session *auth.Session) string {
 	return defaultPath
 }
 
-func defaultPostAuthPath(user auth.UserSession) string {
-	if user.Role == auth.RoleParent && strings.TrimSpace(user.UserID) != "" {
-		return "/parents/" + user.UserID
-	}
-	return "/dashboard"
+func defaultPostAuthPath(_ auth.UserSession) string {
+	return "/"
 }
 
 func writeAdminError(w http.ResponseWriter, err error) {

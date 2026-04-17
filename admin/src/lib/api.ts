@@ -254,6 +254,60 @@ export interface UserManagementView {
   pending_invites: PendingInvite[];
 }
 
+export interface OnboardingCurriculum {
+  syllabus_id: string;
+  label: string;
+}
+
+export interface OnboardingFirstClass {
+  id?: string;
+  name: string;
+  slug: string;
+}
+
+export interface OnboardingBotSetup {
+  preset: string;
+}
+
+export interface OnboardingState {
+  school_name?: string;
+  curriculum: OnboardingCurriculum;
+  first_class: OnboardingFirstClass;
+  bot_setup: OnboardingBotSetup;
+  join_link: string;
+  save_status: string;
+  configured_at: string;
+}
+
+export interface OnboardingView {
+  tenant_id: string;
+  tenant_name: string;
+  onboarding?: OnboardingState | null;
+}
+
+export interface SubmitOnboardingInput {
+  school_name?: string;
+  curriculum: OnboardingCurriculum;
+  first_class: OnboardingFirstClass;
+  bot_setup: OnboardingBotSetup;
+}
+
+export interface SubmitOnboardingResult {
+  class_id: string;
+  school_name: string;
+  class_name: string;
+  join_link: string;
+  save_status: string;
+}
+
+export interface JoinClassView {
+  class_id: string;
+  class_name: string;
+  class_slug: string;
+  school_name: string;
+  curriculum_label: string;
+}
+
 function parseErrorMessage(raw: string, fallback: string): string {
   if (!raw.trim()) {
     return fallback;
@@ -351,6 +405,24 @@ export async function getMetrics(): Promise<MetricsSummary> {
 
 export async function getUserManagement(): Promise<UserManagementView> {
   return fetchJSON(`/api/admin/users`);
+}
+
+export async function getOnboarding(): Promise<OnboardingView> {
+  return fetchJSON(`/api/admin/onboarding`);
+}
+
+export async function submitOnboarding(input: SubmitOnboardingInput): Promise<SubmitOnboardingResult> {
+  return postJSONWithBody(`/api/admin/onboarding`, input);
+}
+
+export async function getJoinClass(slug: string): Promise<JoinClassView> {
+  const res = await fetch(resolveAPIPath(`/api/join/${encodeURIComponent(slug)}`), {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load /api/join/${slug}: ${res.status}`);
+  }
+  return (await readJSONResponse(res)) as JoinClassView;
 }
 
 export async function sendStudentNudge(studentId: string): Promise<NudgeResponse> {

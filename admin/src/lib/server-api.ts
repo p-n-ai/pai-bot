@@ -3,17 +3,33 @@ import { normalizeClassProgress } from "@/lib/class-progress.mjs";
 import { readJSONResponse } from "@/lib/http-response.mjs";
 import { normalizeAIUsage } from "@/lib/ai-usage.mjs";
 import { normalizeMetrics } from "@/lib/metrics.mjs";
+import { canAccessPath, getDefaultRouteForUser } from "@/lib/rbac.mjs";
 import type {
   AIUsageSummary,
+  AuthUser,
   AuthSession,
   ClassProgress,
   ConversationExportRecord,
   MetricsSummary,
+  OnboardingView,
   ParentSummary,
   UserManagementView,
+  JoinClassView,
 } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+export class ServerAPIError extends Error {
+  status: number;
+  path: string;
+
+  constructor(path: string, status: number) {
+    super(`Failed to load ${path}: ${status}`);
+    this.name = "ServerAPIError";
+    this.path = path;
+    this.status = status;
+  }
+}
 
 async function requestCookieHeader(): Promise<string> {
   const cookieStore = await cookies();
@@ -32,7 +48,7 @@ async function fetchServerJSON<T>(path: string): Promise<T> {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to load ${path}: ${res.status}`);
+    throw new ServerAPIError(path, res.status);
   }
 
   return (await readJSONResponse(res)) as T;
@@ -78,6 +94,33 @@ export async function getServerParentSummary(parentID: string): Promise<ParentSu
 
 export async function getServerUserManagement(): Promise<UserManagementView> {
   return fetchServerJSON(`/api/admin/users`);
+}
+
+export async function getServerOnboarding(): Promise<OnboardingView> {
+  return fetchServerJSON(`/api/admin/onboarding`);
+}
+
+export async function getServerJoinClass(slug: string): Promise<JoinClassView> {
+  return fetchServerJSON(`/api/join/${encodeURIComponent(slug)}`);
+}
+
+export async function getServerPostAuthPath(user: AuthUser, nextPath?: string | null): Promise<string> {
+  if (nextPath && nextPath !== "/" && nextPath !== "/login" && canAccessPath(user, nextPath)) {
+    return nextPath;
+  }
+
+  if (user.role === "admin" || user.role === "platform_admin") {
+    try {
+      const onboarding = await getServerOnboarding();
+      if (!onboarding.onboarding) {
+        return "/setup/onboard";
+      }
+    } catch {
+      // Fall back to the normal role route when onboarding state is unavailable.
+    }
+  }
+
+  return getDefaultRouteForUser(user);
 }
 
 export async function getServerConversationExport(): Promise<ConversationExportRecord[]> {

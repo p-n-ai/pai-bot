@@ -14,11 +14,11 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
-    title: "AI Usage",
-    href: "/dashboard/ai-usage",
-    description: "Review token volume by provider and model across the teacher workspace.",
-    group: "Teaching",
-    roles: ["teacher", "admin", "platform_admin"],
+    title: "Onboarding",
+    href: "/setup/onboard",
+    description: "Set curriculum, first class, and a minimal bot preset for a school workspace.",
+    group: "Administration",
+    roles: ["admin", "platform_admin"],
   },
   {
     title: "Users",
@@ -105,14 +105,6 @@ export function getCurrentSection(pathname) {
     };
   }
 
-  if (pathname.startsWith("/dashboard/ai-usage")) {
-    return {
-      eyebrow: "Admin panel",
-      title: "AI Usage",
-      description: "Review token volume by provider and model across the teacher workspace.",
-    };
-  }
-
   if (pathname.startsWith("/settings/whatsapp")) {
     return {
       eyebrow: "Integration",
@@ -120,12 +112,19 @@ export function getCurrentSection(pathname) {
       description: "Link your WhatsApp account via QR code to enable the bot on WhatsApp.",
     };
   }
-
   if (pathname.startsWith("/settings/users")) {
     return {
       eyebrow: "Administration",
       title: "User management",
       description: "Review active users, invite status, and access operations for the current workspace.",
+    };
+  }
+
+  if (pathname.startsWith("/setup/onboard")) {
+    return {
+      eyebrow: "Administration",
+      title: "School onboarding",
+      description: "Set curriculum, the first class, and a minimal bot preset before sharing the join link.",
     };
   }
 
@@ -204,6 +203,13 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Users", href: "/settings/users" },
+    ];
+  }
+
+  if (pathname.startsWith("/setup/onboard")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Onboarding", href: "/setup/onboard" },
     ];
   }
 

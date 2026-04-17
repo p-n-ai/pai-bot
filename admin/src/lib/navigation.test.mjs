@@ -10,11 +10,9 @@ test("isRouteActive matches exact and nested routes", () => {
 });
 
 test("isRouteActive prefers the most specific dashboard route", () => {
-  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard"), false);
-  assert.equal(isRouteActive("/dashboard/ai-usage", "/dashboard/ai-usage"), true);
-  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), true);
   assert.equal(isRouteActive("/dashboard/classes", "/dashboard"), false);
   assert.equal(isRouteActive("/dashboard/classes", "/dashboard/classes"), true);
+  assert.equal(isRouteActive("/dashboard/metrics", "/dashboard"), true);
 });
 
 test("getCurrentSection returns student detail metadata for nested student routes", () => {
@@ -30,14 +28,6 @@ test("getCurrentSection returns parent detail metadata for nested parent routes"
     eyebrow: "Parent support",
     title: "Child summary",
     description: "Review weekly momentum, topic mastery, and a suggested encouragement for home support.",
-  });
-});
-
-test("getCurrentSection returns AI usage metadata for dashboard analytics routes", () => {
-  assert.deepEqual(getCurrentSection("/dashboard/ai-usage"), {
-    eyebrow: "Admin panel",
-    title: "AI Usage",
-    description: "Review token volume by provider and model across the teacher workspace.",
   });
 });
 
@@ -78,6 +68,14 @@ test("getCurrentSection returns user management metadata for settings routes", (
   });
 });
 
+test("getCurrentSection returns onboarding metadata for setup routes", () => {
+  assert.deepEqual(getCurrentSection("/setup/onboard"), {
+    eyebrow: "Administration",
+    title: "School onboarding",
+    description: "Set curriculum, the first class, and a minimal bot preset before sharing the join link.",
+  });
+});
+
 test("getCurrentSection returns export metadata for export routes", () => {
   assert.deepEqual(getCurrentSection("/export"), {
     eyebrow: "Administration",
@@ -108,14 +106,21 @@ test("getNavigationForUser hides teacher links from parents", () => {
 test("getNavigationForUser keeps elevated navigation for teachers", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "teacher", user_id: "teacher-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage"],
+    ["/dashboard", "/dashboard/classes"],
   );
 });
 
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/settings/users", "/export", "/settings/whatsapp"],
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
+  );
+});
+
+test("getNavigationForUser exposes onboarding to platform admins", () => {
+  assert.deepEqual(
+    getNavigationForUser({ role: "platform_admin", user_id: "platform-admin-1" }).map((item) => item.href),
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 
@@ -143,6 +148,13 @@ test("getBreadcrumbs returns user management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/settings/users"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Users", href: "/settings/users" },
+  ]);
+});
+
+test("getBreadcrumbs returns onboarding hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/setup/onboard"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Onboarding", href: "/setup/onboard" },
   ]);
 });
 

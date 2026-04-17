@@ -1,11 +1,13 @@
 "use client";
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InviteAcceptanceCard } from "@/components/invite-acceptance-card";
+import { useAdminSessionBootstrap } from "@/hooks/use-admin-session-bootstrap";
+import { useInviteActivationFlowBootstrap } from "@/hooks/use-auth-flow-bootstrap";
 import { useSessionRedirect } from "@/hooks/use-session-redirect";
 import { acceptInvite, persistSession } from "@/lib/api";
-import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { hasAdminUIAccess } from "@/lib/rbac.mjs";
 import { useAppStore } from "@/stores/app-store";
 
 export default function ActivatePage() {
@@ -22,11 +24,18 @@ function ActivatePageContent() {
   const isHydrated = useAppStore((state) => state.hydrated);
   const currentUser = useAppStore((state) => state.currentUser);
   const hasActiveSession = useAppStore((state) => state.isLoggedIn) && Boolean(currentUser && hasAdminUIAccess(currentUser));
-  const [isPending, startTransition] = useTransition();
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [, startTransition] = useTransition();
   const token = searchParams.get("token") || "";
+  const inviteActivationFlow = useAppStore((state) => state.inviteActivationFlow);
+  const setName = useAppStore((state) => state.setInviteActivationName);
+  const setPassword = useAppStore((state) => state.setInviteActivationPassword);
+  const startInviteActivationSubmit = useAppStore((state) => state.startInviteActivationSubmit);
+  const failInviteActivation = useAppStore((state) => state.failInviteActivation);
+  const isPending = inviteActivationFlow.phase.kind === "submitting";
+  const error = inviteActivationFlow.phase.kind === "error" ? inviteActivationFlow.phase.message : "";
+
+  useAdminSessionBootstrap(null, null);
+  useInviteActivationFlowBootstrap(token);
 
   useSessionRedirect({
     enabled: isHydrated,
@@ -44,24 +53,25 @@ function ActivatePageContent() {
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
 
     if (!token.trim()) {
-      setError("Invite token missing. Open the full invite link from the email and try again.");
+      failInviteActivation("Invite token missing. Open the full invite link from the email and try again.");
       return;
     }
+
+    startInviteActivationSubmit();
 
     startTransition(async () => {
       try {
         const session = await acceptInvite({
           token,
-          name: name.trim(),
-          password,
+          name: inviteActivationFlow.draft.name.trim(),
+          password: inviteActivationFlow.draft.password,
         });
         persistSession(session);
-        router.push(getSafeNextPath(session.user, null));
+        router.push("/");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Invite activation failed");
+        failInviteActivation(err instanceof Error ? err.message : "Invite activation failed");
       }
     });
   }
@@ -69,8 +79,8 @@ function ActivatePageContent() {
   return (
     <InviteAcceptanceCard
       token={token}
-      name={name}
-      password={password}
+      name={inviteActivationFlow.draft.name}
+      password={inviteActivationFlow.draft.password}
       error={error}
       isPending={isPending}
       onNameChange={setName}

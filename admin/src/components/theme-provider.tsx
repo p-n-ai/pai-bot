@@ -6,7 +6,13 @@ import { THEME_STORAGE_KEY } from "@/lib/theme.mjs";
 
 type Theme = "light" | "dark";
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({
+  children,
+  forcedTheme,
+}: {
+  children: ReactNode;
+  forcedTheme?: Theme;
+}) {
   return (
     <NextThemesProvider
       attribute="class"
@@ -14,6 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       enableSystem
       enableColorScheme
       storageKey={THEME_STORAGE_KEY}
+      forcedTheme={forcedTheme}
     >
       {children}
     </NextThemesProvider>

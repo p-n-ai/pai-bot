@@ -148,6 +148,7 @@ type Service interface {
 	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (Session, error)
 	IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error)
 	ReissueInvite(ctx context.Context, req ReissueInviteRequest) (InviteRecord, error)
+	EnsureBootstrapPlatformAdmin(ctx context.Context, email, password string) (bool, error)
 	Session(ctx context.Context, sessionToken string) (Session, error)
 	SwitchTenant(ctx context.Context, sessionToken, tenantID, password string) (Session, error)
 	Logout(ctx context.Context, sessionToken string) error
@@ -178,6 +179,10 @@ func (noopService) IssueInvite(_ context.Context, _ IssueInviteRequest) (InviteR
 
 func (noopService) ReissueInvite(_ context.Context, _ ReissueInviteRequest) (InviteRecord, error) {
 	return InviteRecord{}, ErrNotImplemented
+}
+
+func (noopService) EnsureBootstrapPlatformAdmin(_ context.Context, _, _ string) (bool, error) {
+	return false, ErrNotImplemented
 }
 
 func (noopService) Session(_ context.Context, _ string) (Session, error) {

@@ -309,6 +309,92 @@ func TestAdminUserManagementEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminGetOnboardingEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/onboarding", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload adminapi.OnboardingView
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.TenantID != "tenant-1" {
+		t.Fatalf("tenant_id = %q, want tenant-1", payload.TenantID)
+	}
+	if payload.Onboarding == nil {
+		t.Fatal("onboarding = nil, want saved onboarding state")
+	}
+	if payload.Onboarding.FirstClass.Slug != "steady-otter-harbor" {
+		t.Fatalf("first_class.slug = %q, want steady-otter-harbor", payload.Onboarding.FirstClass.Slug)
+	}
+}
+
+func TestAdminSubmitOnboardingEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/onboarding", strings.NewReader(`{
+		"school_name":"SMK Pandai Demo",
+		"curriculum":{"syllabus_id":"kssm-algebra","label":"KSSM Algebra"},
+		"first_class":{"name":"steady-otter-harbor","slug":"steady-otter-harbor"},
+		"bot_setup":{"preset":"guided-practice"}
+	}`))
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	req.Header.Set("Origin", "http://127.0.0.1:3000")
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload adminapi.SubmitOnboardingResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.SchoolName != "SMK Pandai Demo" {
+		t.Fatalf("school_name = %q, want SMK Pandai Demo", payload.SchoolName)
+	}
+	if payload.ClassID != "class-1" {
+		t.Fatalf("class_id = %q, want class-1", payload.ClassID)
+	}
+	if payload.ClassName != "steady-otter-harbor" {
+		t.Fatalf("class_name = %q, want steady-otter-harbor", payload.ClassName)
+	}
+	if payload.JoinLink != "http://127.0.0.1:3000/join/steady-otter-harbor" {
+		t.Fatalf("join_link = %q, want app-origin join link", payload.JoinLink)
+	}
+	if payload.SaveStatus != "saved" {
+		t.Fatalf("save_status = %q, want saved", payload.SaveStatus)
+	}
+}
+
+func TestPublicJoinClassEndpoint(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/join/steady-otter-harbor", nil)
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload adminapi.JoinClassView
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.ClassID != "class-1" {
+		t.Fatalf("class_id = %q, want class-1", payload.ClassID)
+	}
+	if payload.ClassSlug != "steady-otter-harbor" {
+		t.Fatalf("class_slug = %q, want steady-otter-harbor", payload.ClassSlug)
+	}
+}
+
 func TestAdminExportStudentsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/export/students", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
@@ -1063,7 +1149,7 @@ func TestAuthGoogleCallbackEndpointSetsCookiesAndRedirects(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
 	if got := rec.Header().Get("Location"); got != "http://localhost:3000/dashboard?auth_provider=google&identity_linked=google" {
-		t.Fatalf("location = %q, want google success redirect", got)
+		t.Fatalf("location = %q, want explicit dashboard redirect preserved", got)
 	}
 	if authSvc.googleCBReq.State != "state-123" || authSvc.googleCBReq.Code != "code-123" {
 		t.Fatalf("callback request = %#v", authSvc.googleCBReq)
@@ -1111,8 +1197,8 @@ func TestAuthGoogleCallbackEndpointPromotesLoginRedirectToDefaultRoute(t *testin
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if got := rec.Header().Get("Location"); got != "http://localhost:3000/dashboard?auth_provider=google&identity_linked=google" {
-		t.Fatalf("location = %q, want promoted dashboard redirect", got)
+	if got := rec.Header().Get("Location"); got != "http://localhost:3000/?auth_provider=google&identity_linked=google" {
+		t.Fatalf("location = %q, want promoted root redirect", got)
 	}
 	assertAuthCookies(t, rec.Result().Cookies(), "google-session")
 }
@@ -1632,6 +1718,54 @@ func (stubAdminAPI) GetUserManagement() (adminapi.UserManagementView, error) {
 	}, nil
 }
 
+func (stubAdminAPI) GetOnboarding() (adminapi.OnboardingView, error) {
+	return adminapi.OnboardingView{
+		TenantID:   "tenant-1",
+		TenantName: "P&AI Academy",
+		Onboarding: &adminapi.OnboardingState{
+			SchoolName: "P&AI Academy",
+			Curriculum: adminapi.OnboardingCurriculum{
+				SyllabusID: "kssm-algebra",
+				Label:      "KSSM Algebra",
+			},
+			FirstClass: adminapi.OnboardingFirstClass{
+				ID:   "class-1",
+				Name: "steady-otter-harbor",
+				Slug: "steady-otter-harbor",
+			},
+			BotSetup: adminapi.OnboardingBotSetup{
+				Preset: "guided-practice",
+			},
+			JoinLink:   "http://127.0.0.1:3000/join/steady-otter-harbor",
+			SaveStatus: "saved",
+		},
+	}, nil
+}
+
+func (stubAdminAPI) SubmitOnboarding(req adminapi.SubmitOnboardingRequest, joinBaseURL string) (adminapi.SubmitOnboardingResult, error) {
+	className := strings.TrimSpace(req.FirstClass.Name)
+	if className == "" {
+		className = strings.TrimSpace(req.FirstClass.Slug)
+	}
+	return adminapi.SubmitOnboardingResult{
+		ClassID:    "class-1",
+		SchoolName: strings.TrimSpace(req.SchoolName),
+		ClassName:  className,
+		JoinLink:   strings.TrimRight(joinBaseURL, "/") + "/join/" + strings.TrimSpace(req.FirstClass.Slug),
+		SaveStatus: "saved",
+	}, nil
+}
+
+func (stubAdminAPI) GetJoinClass(slug string) (adminapi.JoinClassView, error) {
+	return adminapi.JoinClassView{
+		ClassID:         "class-1",
+		ClassName:       "steady-otter-harbor",
+		ClassSlug:       strings.TrimSpace(slug),
+		SchoolName:      "P&AI Academy",
+		CurriculumLabel: "KSSM Algebra",
+	}, nil
+}
+
 func (stubAdminAPI) ExportStudents() ([]adminapi.StudentExportRow, error) {
 	averageMastery := 0.8125
 	return []adminapi.StudentExportRow{
@@ -1761,6 +1895,10 @@ type stubAuthService struct {
 	reissueReq       auth.ReissueInviteRequest
 	reissueResp      auth.InviteRecord
 	reissueErr       error
+	bootstrapEmail   string
+	bootstrapPassword string
+	bootstrapCreated bool
+	bootstrapErr     error
 	acceptReq        auth.AcceptInviteRequest
 	acceptResp       auth.Session
 	acceptErr        error
@@ -1806,6 +1944,12 @@ func (s *stubAuthService) IssueInvite(_ context.Context, req auth.IssueInviteReq
 func (s *stubAuthService) ReissueInvite(_ context.Context, req auth.ReissueInviteRequest) (auth.InviteRecord, error) {
 	s.reissueReq = req
 	return s.reissueResp, s.reissueErr
+}
+
+func (s *stubAuthService) EnsureBootstrapPlatformAdmin(_ context.Context, email, password string) (bool, error) {
+	s.bootstrapEmail = email
+	s.bootstrapPassword = password
+	return s.bootstrapCreated, s.bootstrapErr
 }
 
 func (s *stubAuthService) Session(_ context.Context, sessionToken string) (auth.Session, error) {
@@ -1951,7 +2095,7 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
 	rec := httptest.NewRecorder()
 
-	newHandlerWithAdminProvider(provider, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
+	newHandlerWithAdminProvider(provider, stubAdminAPI{}, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -1976,6 +2120,38 @@ func TestPlatformAdminRequestsUseGlobalAdminSource(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/classes/all-students/progress", nil)
+	req = req.WithContext(auth.WithClaims(req.Context(), auth.TokenClaims{
+		Subject: "platform-user",
+		Role:    auth.RolePlatformAdmin,
+	}))
+
+	admin, err := provider.ForRequest(req)
+	if err != nil {
+		t.Fatalf("ForRequest() error = %v", err)
+	}
+	if _, ok := admin.(stubAdminAPI); !ok {
+		t.Fatalf("admin source = %T, want stubAdminAPI", admin)
+	}
+}
+
+func TestPlatformAdminOnboardingRequestsUseDefaultTenantAdminSource(t *testing.T) {
+	provider := tenantAdminDataSourceProvider{
+		newForTenant: func(tenantID string) adminDataSource {
+			if tenantID != "tenant-default" {
+				t.Fatalf("tenantID = %q, want tenant-default", tenantID)
+			}
+			return stubAdminAPI{}
+		},
+		newForPlatform: func() adminDataSource {
+			t.Fatal("newForPlatform should not be called for onboarding")
+			return nil
+		},
+		defaultTenantID: func(context.Context) (string, error) {
+			return "tenant-default", nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/onboarding", nil)
 	req = req.WithContext(auth.WithClaims(req.Context(), auth.TokenClaims{
 		Subject: "platform-user",
 		Role:    auth.RolePlatformAdmin,

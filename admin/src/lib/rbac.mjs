@@ -1,7 +1,7 @@
 const ELEVATED_ROLES = new Set(["teacher", "admin", "platform_admin"]);
 
 export function isPublicEntryRoute(pathname) {
-  return pathname === "/" || pathname === "/login";
+  return pathname === "/" || pathname === "/login" || pathname === "/activate" || pathname.startsWith("/join/");
 }
 
 export function isElevatedRole(role) {
@@ -30,6 +30,8 @@ export function canAccessPath(user, pathname) {
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    ((user.role === "admin" || user.role === "platform_admin") &&
+      (pathname === "/setup" || pathname.startsWith("/setup/"))) ||
     pathname === "/settings" ||
     pathname.startsWith("/settings/") ||
     pathname === "/export" ||

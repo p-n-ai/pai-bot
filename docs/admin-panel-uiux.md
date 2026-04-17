@@ -782,39 +782,42 @@ Current implementation note:
 
 **Route:** `/setup/onboard`
 **Access:** Admin (first-time setup)
-**Status:** Planned (Week 6, Day 27)
+**Status:** Implemented
 
 ```
-Step 1 of 4                    ● ○ ○ ○
+Step 1 of 5                    ● ○ ○ ○ ○
 
 ┌──────────────────────────────────────────────────────────────────┐
 │                                                                  │
 │                    Welcome to P&AI Bot                           │
-│                    Let's set up your school                      │
+│                    Let's set up your first class                 │
 │                                                                  │
-│  Step 1: School Details                                          │
+│  Step 1: Curriculum                                              │
 │  ┌──────────────────────────────────┐                            │
-│  │ School name                      │                            │
+│  │ Syllabus                         │                            │
+│  │ [KSSM Form 1                ▼]   │                            │
+│  └──────────────────────────────────┘                            │
+│                                                                  │
+│  Step 2: First Class                    ● ● ○ ○ ○                │
+│  ┌──────────────────────────────────┐                            │
+│  │ Class name                        │                            │
+│  │ calm-river-lantern                │                            │
+│  └──────────────────────────────────┘                            │
+│                                                                  │
+│  Step 3: Bot Setup                      ● ● ● ○ ○                │
+│  ┌──────────────────────────────────┐                            │
+│  │ Tutor style: [Balanced        ▼] │                            │
+│  │ Reply tone:  [Friendly        ▼] │                            │
+│  │ Language:    [Bahasa Melayu   ▼] │                            │
+│  └──────────────────────────────────┘                            │
+│                                                                  │
+│  Step 4: School Details                 ● ● ● ● ○                │
+│  ┌──────────────────────────────────┐                            │
+│  │ School name (optional)           │                            │
 │  │ SMK Taman Megah                  │                            │
 │  └──────────────────────────────────┘                            │
 │                                                                  │
-│  Step 2: Curriculum                     ● ● ○ ○                  │
-│  ┌──────────────────────────────────┐                            │
-│  │ Which forms do you teach?        │                            │
-│  │                                  │                            │
-│  │  [✓] KSSM Form 1                 │                            │
-│  │  [✓] KSSM Form 2                 │                            │
-│  │  [ ] KSSM Form 3                 │                            │
-│  └──────────────────────────────────┘                            │
-│                                                                  │
-│  Step 3: Create First Class             ● ● ● ○                  │
-│  ┌──────────────────────────────────┐                            │
-│  │ Class name: [Form 1A Matematik ] │                            │
-│  │ Syllabus:   [KSSM Form 1     ▼]  │                            │
-│  │ Cadence:    [Mon, Wed, Fri     ] │                            │
-│  └──────────────────────────────────┘                            │
-│                                                                  │
-│  Step 4: Invite Teachers                ● ● ● ●                  │
+│  Step 5: Invite Teachers                ● ● ● ● ●                │
 │  ┌──────────────────────────────────┐                            │
 │  │ Teacher emails (one per line)    │                            │
 │  │ ┌──────────────────────────────┐ │                            │
@@ -828,6 +831,16 @@ Step 1 of 4                    ● ○ ○ ○
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+Current slice notes:
+- multi-step input; real writes only on final save
+- curriculum selection and bot setup are the main setup focus
+- syllabus is required
+- first class is required
+- school name is optional in this slice
+- class name is auto-generated, editable, and used to differentiate groups/cohorts
+- success state should show school name when present, the created class name, join link, simple save status, and an immediate teacher-invite handoff
+- teacher invites are available directly from the success state, while students enter through the generated join link
 
 ---
 

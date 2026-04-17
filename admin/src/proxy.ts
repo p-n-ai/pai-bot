@@ -8,6 +8,8 @@ export function proxy(request: NextRequest) {
   const isProtectedPath =
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    pathname === "/setup" ||
+    pathname.startsWith("/setup/") ||
     pathname === "/settings" ||
     pathname.startsWith("/settings/") ||
     pathname === "/export" ||
@@ -26,6 +28,7 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next();
   if (
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/setup") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/export") ||
     pathname.startsWith("/students") ||
@@ -37,5 +40,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/export/:path*", "/students/:path*", "/parents/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/setup/:path*", "/settings/:path*", "/export/:path*", "/students/:path*", "/parents/:path*", "/login"],
 };

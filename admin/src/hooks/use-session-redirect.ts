@@ -3,7 +3,6 @@
 import { useEffect, useEffectEvent } from "react";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { AuthUser } from "@/lib/api";
-import { getSafeNextPath } from "@/lib/rbac.mjs";
 
 type UseSessionRedirectParams = {
   enabled: boolean;
@@ -17,7 +16,7 @@ export function useSessionRedirect({ enabled, router, user }: UseSessionRedirect
       return;
     }
 
-    router.replace(getSafeNextPath(user, null));
+    router.replace("/");
   });
 
   useEffect(() => {

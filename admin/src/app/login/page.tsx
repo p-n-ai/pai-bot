@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginGate } from "@/components/login-gate";
-import { getServerAuthSession } from "@/lib/server-api";
-import { getSafeNextPath, hasAdminUIAccess } from "@/lib/rbac.mjs";
+import { getServerAuthSession, getServerPostAuthPath } from "@/lib/server-api";
+import { hasAdminUIAccess } from "@/lib/rbac.mjs";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const currentUser = session?.user ?? null;
 
   if (currentUser && hasAdminUIAccess(currentUser)) {
-    redirect(getSafeNextPath(currentUser, next));
+    redirect(await getServerPostAuthPath(currentUser, next ?? null));
   }
 
   return <LoginGate nextPath={next ?? null} authError={authError ?? null} />;
