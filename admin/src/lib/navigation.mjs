@@ -14,6 +14,13 @@ export const primaryNavigation = [
     roles: ["teacher", "admin", "platform_admin"],
   },
   {
+    title: "Onboarding",
+    href: "/setup/onboard",
+    description: "Set curriculum, the first class, and the initial bot setup.",
+    group: "Administration",
+    roles: ["admin", "platform_admin"],
+  },
+  {
     title: "Users",
     href: "/settings/users",
     description: "Manage teacher, parent, and admin access plus invite status.",
