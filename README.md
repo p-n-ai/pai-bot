@@ -80,12 +80,12 @@ LEARN_TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 # AI Providers (at least one required)
 LEARN_AI_DEFAULT_PROVIDER=openrouter
 LEARN_AI_OPENROUTER_API_KEY=sk-or-v1-...
-LEARN_AI_OPENROUTER_MODEL=openai/gpt-4.1-mini
+LEARN_AI_OPENROUTER_MODEL=qwen/qwen3-max
 
 # Or use free self-hosted AI (no API key needed)
 LEARN_AI_DEFAULT_PROVIDER=ollama
 LEARN_AI_OLLAMA_ENABLED=true
-LEARN_AI_OLLAMA_MODEL=qwen3:14b
+LEARN_AI_OLLAMA_MODEL=qwen3
 ```
 
 ### 2. Start everything
@@ -112,11 +112,15 @@ When the backend is running in Docker, make sure `.env` uses Compose service nam
 
 ### 3. Pull a free AI model (optional)
 
-If using Ollama for free self-hosted AI:
+Only do this if you are using Ollama as your AI provider. This downloads the model weights into the Ollama container so the app has something local to run.
+
+Warning: this can be a large download and may take time depending on the model and network speed.
 
 ```bash
-docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull qwen3
 ```
+
+After that, set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL=qwen3` in `.env`.
 
 ### 4. Chat with your bot
 
@@ -318,14 +322,14 @@ P&AI is not locked to any AI model. Configure one or more providers:
 
 | Provider | Models | Cost | Setup |
 |----------|--------|------|-------|
-| **OpenAI** | GPT-4o, GPT-4o-mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` and optionally `LEARN_AI_OPENAI_MODEL` |
-| **Anthropic** | Claude Sonnet, Claude Haiku | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` and optionally `LEARN_AI_ANTHROPIC_MODEL` |
-| **DeepSeek** | DeepSeek V3, Reasoner | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` and optionally `LEARN_AI_DEEPSEEK_MODEL` |
-| **Google Gemini** | Gemini 2.5 Flash, Pro | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` and optionally `LEARN_AI_GOOGLE_MODEL` |
-| **Ollama** | Llama 3, DeepSeek, Qwen, Mistral | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL` |
-| **OpenRouter** | 100+ models (Qwen, Kimi, etc.) | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` and optionally `LEARN_AI_OPENROUTER_MODEL` |
+| **OpenAI** | GPT-5.4, GPT-5.4 mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` and optionally `LEARN_AI_OPENAI_MODEL` |
+| **Anthropic** | Claude Sonnet 4.6, Claude Haiku 4.5 | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` and optionally `LEARN_AI_ANTHROPIC_MODEL` |
+| **DeepSeek** | DeepSeek-V3.2 (`deepseek-chat`), DeepSeek-R1 (`deepseek-reasoner`) | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` and optionally `LEARN_AI_DEEPSEEK_MODEL` |
+| **Google Gemini** | Gemini 3 Flash Preview, Gemini 3 Pro Preview | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` and optionally `LEARN_AI_GOOGLE_MODEL` |
+| **Ollama** | Qwen3, Qwen3 14B, Qwen3 30B | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL` |
+| **OpenRouter** | Qwen3 Max, Qwen3 Coder Next, 100+ others | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` and optionally `LEARN_AI_OPENROUTER_MODEL` |
 
-DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
+DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Its official `deepseek-chat` alias already tracks the current DeepSeek-V3.2 non-thinking model. Gemini 3 models are the latest family, but note that the current Flash/Pro API IDs are preview models. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
 
 To prefer one provider first, set `LEARN_AI_DEFAULT_PROVIDER` to one of: `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`.
 

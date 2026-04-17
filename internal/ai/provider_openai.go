@@ -133,7 +133,7 @@ type openaiResponse struct {
 func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "gpt-4o-mini" // sensible default
+		model = "gpt-5.4-mini" // current low-latency default
 	}
 
 	oaiReq := openaiRequest{
@@ -282,8 +282,8 @@ func (p *OpenAIProvider) Models() []ModelInfo {
 		return p.models
 	}
 	return []ModelInfo{
-		{ID: "gpt-4o", Name: "GPT-4o", MaxTokens: 128000, Description: "Most capable OpenAI model"},
-		{ID: "gpt-4o-mini", Name: "GPT-4o Mini", MaxTokens: 128000, Description: "Fast, affordable OpenAI model"},
+		{ID: "gpt-5.4", Name: "GPT-5.4", MaxTokens: 128000, Description: "Frontier OpenAI model for complex work"},
+		{ID: "gpt-5.4-mini", Name: "GPT-5.4 mini", MaxTokens: 128000, Description: "Current fast OpenAI default"},
 	}
 }
 

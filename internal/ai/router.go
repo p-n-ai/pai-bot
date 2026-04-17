@@ -415,13 +415,13 @@ func requestNeedsImageInputs(req CompletionRequest) bool {
 func hardcodedStructuredModelForProvider(providerName string) string {
 	switch providerName {
 	case "openai":
-		return "gpt-4o-mini"
+		return "gpt-5.4-mini"
 	case "deepseek":
 		return "deepseek-chat"
 	case "openrouter":
-		return "qwen/qwen-2.5-72b-instruct"
+		return "qwen/qwen3-max"
 	case "google":
-		return "gemini-2.5-flash"
+		return "gemini-3-flash-preview"
 	case "anthropic":
 		return "claude-haiku-4-5-20251001"
 	default:

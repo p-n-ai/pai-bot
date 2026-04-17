@@ -103,7 +103,7 @@ type geminiResponse struct {
 func (p *GoogleProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "gemini-2.5-flash"
+		model = "gemini-3-flash-preview"
 	}
 
 	var systemParts []geminiPart
@@ -252,8 +252,8 @@ func (p *GoogleProvider) Models() []ModelInfo {
 		return p.models
 	}
 	return []ModelInfo{
-		{ID: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", MaxTokens: 1048576, Description: "Most capable Google model"},
-		{ID: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", MaxTokens: 1048576, Description: "Fast, affordable Google model"},
+		{ID: "gemini-3-pro-preview", Name: "Gemini 3 Pro Preview", MaxTokens: 1048576, Description: "Latest Gemini frontier model"},
+		{ID: "gemini-3-flash-preview", Name: "Gemini 3 Flash Preview", MaxTokens: 1048576, Description: "Latest Gemini fast model"},
 	}
 }
 

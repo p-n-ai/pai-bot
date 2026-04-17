@@ -6,12 +6,12 @@ P&AI Bot uses a provider-agnostic AI gateway. All AI calls go through a unified 
 
 | Provider | Env Variable | Chat Default | Structured Default | Notes |
 |----------|-------------|-------------|-------------------|-------|
-| **OpenAI** | `LEARN_AI_OPENAI_API_KEY` | `gpt-4o-mini` | `gpt-4o-mini` | Primary provider |
-| **Anthropic** | `LEARN_AI_ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `claude-haiku-4-5-20251001` | Sonnet for teaching, Haiku for grading |
-| **DeepSeek** | `LEARN_AI_DEEPSEEK_API_KEY` | (via OpenAI compat) | `deepseek-chat` | OpenAI-compatible API with custom base URL |
-| **Google Gemini** | `LEARN_AI_GOOGLE_API_KEY` | `gemini-2.5-flash` | `gemini-2.5-flash` | Fast and cheap |
-| **OpenRouter** | `LEARN_AI_OPENROUTER_API_KEY` | `qwen/qwen-2.5-72b-instruct` | `qwen/qwen-2.5-72b-instruct` | Access to 100+ models |
-| **Ollama** | `LEARN_AI_OLLAMA_ENABLED=true` | `llama3` | — (not supported) | Self-hosted, free, last-resort fallback |
+| **OpenAI** | `LEARN_AI_OPENAI_API_KEY` | `gpt-5.4-mini` | `gpt-5.4-mini` | Current low-latency OpenAI default |
+| **Anthropic** | `LEARN_AI_ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `claude-haiku-4-5-20251001` | Current Anthropic API IDs |
+| **DeepSeek** | `LEARN_AI_DEEPSEEK_API_KEY` | (via OpenAI compat) | `deepseek-chat` | `deepseek-chat` currently maps to DeepSeek-V3.2 |
+| **Google Gemini** | `LEARN_AI_GOOGLE_API_KEY` | `gemini-3-flash-preview` | `gemini-3-flash-preview` | Latest Gemini fast model; preview API ID |
+| **OpenRouter** | `LEARN_AI_OPENROUTER_API_KEY` | `qwen/qwen3-max` | `qwen/qwen3-max` | Current general-purpose OpenRouter default |
+| **Ollama** | `LEARN_AI_OLLAMA_ENABLED=true` | `qwen3` | — (not supported) | Latest local default family in Ollama |
 
 Chat defaults are set in each provider's `Complete()` method. Structured defaults are set centrally in `router.go` (`defaultStructuredModelForProvider`). DeepSeek reuses the OpenAI provider with a different base URL; its chat requests typically specify a model explicitly.
 
@@ -92,7 +92,7 @@ LEARN_AI_OLLAMA_ENABLED=true
 LEARN_AI_OLLAMA_URL=http://localhost:11434
 ```
 
-Run `just ollama-pull` to download the default model (`llama3`).
+Run `just ollama-pull` to download the default model (`qwen3`).
 
 ## Adding a New Provider
 

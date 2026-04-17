@@ -45,7 +45,7 @@ func NewOllamaProvider(baseURL string, opts ...OllamaOption) *OllamaProvider {
 func (p *OllamaProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "llama3:8b"
+		model = "qwen3"
 	}
 
 	oaiReq := openaiRequest{
@@ -116,7 +116,7 @@ func (p *OllamaProvider) Models() []ModelInfo {
 		return p.models
 	}
 	return []ModelInfo{
-		{ID: "llama3:8b", Name: "Llama 3 8B", MaxTokens: 8192, Description: "Free self-hosted model via Ollama"},
+		{ID: "qwen3", Name: "Qwen3", MaxTokens: 40000, Description: "Latest default self-hosted model via Ollama"},
 	}
 }
 

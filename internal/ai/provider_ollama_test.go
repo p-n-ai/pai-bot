@@ -34,7 +34,7 @@ func TestOllamaProvider_Complete(t *testing.T) {
 					Content string `json:"content"`
 				}{Content: "Ollama response"}},
 			},
-			Model: "llama3:8b",
+			Model: "qwen3",
 			Usage: struct {
 				PromptTokens     int `json:"prompt_tokens"`
 				CompletionTokens int `json:"completion_tokens"`

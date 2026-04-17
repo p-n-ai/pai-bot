@@ -526,7 +526,7 @@ logs:
 # Ollama
 ollama-pull:
   docker compose --profile ollama up -d ollama
-  docker exec -it "$(docker compose ps -q ollama)" ollama pull llama3
+  docker exec -it "$(docker compose ps -q ollama)" ollama pull qwen3
 
 # Analytics
 analytics:

@@ -16,7 +16,7 @@ import (
 func TestGoogleProvider_Complete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify Gemini-specific URL pattern.
-		if !strings.Contains(r.URL.Path, "/models/gemini-2.5-flash:generateContent") {
+		if !strings.Contains(r.URL.Path, "/models/gemini-3-flash-preview:generateContent") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.URL.Query().Get("key") != "test-key" {

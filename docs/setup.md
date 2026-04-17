@@ -97,7 +97,7 @@ Example:
 ```env
 LEARN_AI_DEFAULT_PROVIDER=openrouter
 LEARN_AI_OPENROUTER_API_KEY=sk-or-v1-...
-LEARN_AI_OPENROUTER_MODEL=openai/gpt-4.1-mini
+LEARN_AI_OPENROUTER_MODEL=qwen/qwen3-max
 ```
 
 Ollama example:
@@ -105,7 +105,7 @@ Ollama example:
 ```env
 LEARN_AI_DEFAULT_PROVIDER=ollama
 LEARN_AI_OLLAMA_ENABLED=true
-LEARN_AI_OLLAMA_MODEL=qwen3:14b
+LEARN_AI_OLLAMA_MODEL=qwen3
 ```
 
 The app container overrides `LEARN_AI_OLLAMA_URL` to `http://ollama:11434`, so Compose users do not need to point Ollama at `localhost`.
@@ -201,7 +201,7 @@ For a fully free setup using local AI models:
 docker compose --profile ollama up -d
 
 # Pull a model
-just ollama-pull    # Downloads llama3
+just ollama-pull    # Downloads qwen3
 
 # Enable in .env
 LEARN_AI_OLLAMA_ENABLED=true
