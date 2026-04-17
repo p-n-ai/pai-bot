@@ -2,6 +2,8 @@ package chat
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -144,63 +146,97 @@ func (w *WhatsAppMeowChannel) Stop() error {
 	return nil
 }
 
+// Logout disconnects, removes the session, and starts a new QR code flow.
+func (w *WhatsAppMeowChannel) Logout() error {
+	if err := w.client.Logout(context.Background()); err != nil {
+		return fmt.Errorf("whatsmeow logout: %w", err)
+	}
+	slog.Info("whatsapp session logged out")
+
+	// Re-initiate QR flow so the admin can re-link immediately.
+	w.mu.RLock()
+	handler := w.handler
+	w.mu.RUnlock()
+	if err := w.Start(context.Background(), handler); err != nil {
+		slog.Error("failed to restart QR flow after logout", "error", err)
+	}
+	return nil
+}
+
+// DisconnectHandler returns an HTTP handler that logs out the WhatsApp session.
+func (w *WhatsAppMeowChannel) DisconnectHandler() http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if err := w.Logout(); err != nil {
+			rw.Header().Set("Content-Type", "application/json")
+			rw.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(rw).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(map[string]string{"status": "disconnected"})
+	})
+}
+
 // IsConnected returns true if the client is currently connected.
 func (w *WhatsAppMeowChannel) IsConnected() bool {
 	return w.client.IsConnected()
 }
 
-// QRHandler returns an HTTP handler that serves the QR code as a PNG image.
-// Returns an HTML page with the QR code and auto-refresh, or a status page if already connected.
-func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
+// qrExpired returns true if there's no active QR and the client isn't authenticated.
+func (w *WhatsAppMeowChannel) qrExpired() bool {
+	w.qrMu.RLock()
+	qr := w.latestQR
+	w.qrMu.RUnlock()
+	return qr == "" && w.client.Store.ID == nil && !w.client.IsConnected()
+}
+
+// restartQR disconnects and re-initiates the QR flow.
+func (w *WhatsAppMeowChannel) restartQR() {
+	w.client.Disconnect()
+	w.mu.RLock()
+	handler := w.handler
+	w.mu.RUnlock()
+	if err := w.Start(context.Background(), handler); err != nil {
+		slog.Error("failed to restart QR flow", "error", err)
+	}
+}
+
+// WhatsAppStatus represents the current WhatsApp connection state.
+type WhatsAppStatus struct {
+	Connected bool   `json:"connected"`
+	QR        string `json:"qr,omitempty"`
+	QRImage   string `json:"qr_image,omitempty"` // base64-encoded PNG
+}
+
+// StatusHandler returns an HTTP handler that serves the WhatsApp status as JSON.
+// If the QR has expired, it automatically restarts the QR flow.
+func (w *WhatsAppMeowChannel) StatusHandler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// If already connected, show status.
-		if w.client.Store.ID != nil && w.client.IsConnected() {
-			rw.Header().Set("Content-Type", "text/html")
-			_, _ = fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
-				<h2>&#9989; WhatsApp Connected</h2>
-				<p>Session is active. Bot is ready to send and receive messages.</p>
-			</body></html>`)
-			return
+		status := WhatsAppStatus{
+			Connected: w.client.Store.ID != nil && w.client.IsConnected(),
 		}
 
-		w.qrMu.RLock()
-		qr := w.latestQR
-		w.qrMu.RUnlock()
-
-		// Preserve query string for auto-refresh so auth tokens carry through.
-		qs := r.URL.RawQuery
-
-		if qr == "" {
-			rw.Header().Set("Content-Type", "text/html")
-			rw.Header().Set("Refresh", "3")
-			_, _ = fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
-				<h2>Waiting for QR code...</h2>
-				<p>Page will auto-refresh. If this persists, restart the server.</p>
-			</body></html>`)
-			return
-		}
-
-		// Return QR as PNG if ?format=png
-		if r.URL.Query().Get("format") == "png" {
-			png, err := qrcode.Encode(qr, qrcode.Medium, 512)
-			if err != nil {
-				http.Error(rw, "failed to generate QR", http.StatusInternalServerError)
-				return
+		if !status.Connected {
+			// Auto-restart QR flow if it timed out.
+			if w.qrExpired() {
+				go w.restartQR()
 			}
-			rw.Header().Set("Content-Type", "image/png")
-			_, _ = rw.Write(png)
-			return
+
+			w.qrMu.RLock()
+			qr := w.latestQR
+			w.qrMu.RUnlock()
+
+			if qr != "" {
+				status.QR = qr
+				png, err := qrcode.Encode(qr, qrcode.Medium, 512)
+				if err == nil {
+					status.QRImage = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+				}
+			}
 		}
 
-		// Default: HTML page with embedded QR image and auto-refresh.
-		rw.Header().Set("Content-Type", "text/html")
-		_, _ = fmt.Fprintf(rw, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5; url=/whatsapp/qr?%s"></head>
-			<body style="font-family:sans-serif;text-align:center;padding:40px">
-			<h2>Scan QR Code with WhatsApp</h2>
-			<p>Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</p>
-			<img src="/whatsapp/qr?format=png&%s" style="margin:20px" />
-			<p style="color:#888">Page auto-refreshes every 5 seconds</p>
-		</body></html>`, qs, qs)
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(status)
 	})
 }
 

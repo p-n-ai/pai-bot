@@ -302,12 +302,17 @@ func main() {
 		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
 	}
 	if waMeowChannel != nil {
-		if cfg.WhatsApp.QRToken != "" {
-			topMux.Handle("/whatsapp/qr", requireToken(cfg.WhatsApp.QRToken, waMeowChannel.QRHandler()))
-		} else {
-			slog.Warn("LEARN_WHATSAPP_QR_TOKEN is not set — /whatsapp/qr is unprotected")
-			topMux.Handle("/whatsapp/qr", waMeowChannel.QRHandler())
-		}
+		manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+		waAuth := chain(
+			authenticateRequests(authService, manager, time.Now),
+			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+		)
+		waStatusHandler := withCORS(waAuth(waMeowChannel.StatusHandler()))
+		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
+		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
+		waDisconnectHandler := withCORS(waAuth(waMeowChannel.DisconnectHandler()))
+		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
+		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
 	}
 	topMux.Handle("/", apiHandler)
 
