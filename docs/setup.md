@@ -110,6 +110,8 @@ LEARN_AI_OLLAMA_MODEL=qwen3
 
 The app container overrides `LEARN_AI_OLLAMA_URL` to `http://ollama:11434`, so Compose users do not need to point Ollama at `localhost`.
 
+For Google Gemini, note that preview model IDs can have different or tighter rate limits than stable IDs. If you want a steadier production default, set `LEARN_AI_GOOGLE_MODEL` to a non-preview model name such as `gemini-2.5-flash`.
+
 ## Running Tests
 
 ```bash

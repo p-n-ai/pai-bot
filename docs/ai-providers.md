@@ -9,7 +9,7 @@ P&AI Bot uses a provider-agnostic AI gateway. All AI calls go through a unified 
 | **OpenAI** | `LEARN_AI_OPENAI_API_KEY` | `gpt-5.4-mini` | `gpt-5.4-mini` | Current low-latency OpenAI default |
 | **Anthropic** | `LEARN_AI_ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `claude-haiku-4-5-20251001` | Current Anthropic API IDs |
 | **DeepSeek** | `LEARN_AI_DEEPSEEK_API_KEY` | (via OpenAI compat) | `deepseek-chat` | `deepseek-chat` currently maps to DeepSeek-V3.2 |
-| **Google Gemini** | `LEARN_AI_GOOGLE_API_KEY` | `gemini-3-flash-preview` | `gemini-3-flash-preview` | Latest Gemini fast model; preview API ID |
+| **Google Gemini** | `LEARN_AI_GOOGLE_API_KEY` | `gemini-3-flash-preview` | `gemini-3-flash-preview` | Latest Gemini fast model; preview API ID. For steadier rate limits, prefer a stable non-preview override such as `gemini-2.5-flash` |
 | **OpenRouter** | `LEARN_AI_OPENROUTER_API_KEY` | `qwen/qwen3-max` | `qwen/qwen3-max` | Current general-purpose OpenRouter default |
 | **Ollama** | `LEARN_AI_OLLAMA_ENABLED=true` | `qwen3` | — (not supported) | Latest local default family in Ollama |
 

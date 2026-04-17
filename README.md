@@ -329,7 +329,7 @@ P&AI is not locked to any AI model. Configure one or more providers:
 | **Ollama** | Qwen3, Qwen3 14B, Qwen3 30B | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL` |
 | **OpenRouter** | Qwen3 Max, Qwen3 Coder Next, 100+ others | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` and optionally `LEARN_AI_OPENROUTER_MODEL` |
 
-DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Its official `deepseek-chat` alias already tracks the current DeepSeek-V3.2 non-thinking model. Gemini 3 models are the latest family, but note that the current Flash/Pro API IDs are preview models. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
+DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Its official `deepseek-chat` alias already tracks the current DeepSeek-V3.2 non-thinking model. Gemini 3 models are the latest family, but note that the current Flash/Pro API IDs are preview models. Preview Gemini IDs can have different or tighter rate limits, so for steadier production behavior it is usually safer to set `LEARN_AI_GOOGLE_MODEL` to a non-preview model name such as `gemini-2.5-flash`. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
 
 To prefer one provider first, set `LEARN_AI_DEFAULT_PROVIDER` to one of: `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`.
 
