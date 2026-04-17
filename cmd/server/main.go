@@ -302,7 +302,12 @@ func main() {
 		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
 	}
 	if waMeowChannel != nil {
-		topMux.Handle("/whatsapp/qr", requireToken(cfg.Auth.JWTSecret, waMeowChannel.QRHandler()))
+		if cfg.WhatsApp.QRToken != "" {
+			topMux.Handle("/whatsapp/qr", requireToken(cfg.WhatsApp.QRToken, waMeowChannel.QRHandler()))
+		} else {
+			slog.Warn("LEARN_WHATSAPP_QR_TOKEN is not set — /whatsapp/qr is unprotected")
+			topMux.Handle("/whatsapp/qr", waMeowChannel.QRHandler())
+		}
 	}
 	topMux.Handle("/", apiHandler)
 
