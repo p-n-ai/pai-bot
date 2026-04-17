@@ -78,11 +78,14 @@ Edit `.env` with your credentials:
 LEARN_TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
 # AI Providers (at least one required)
-LEARN_AI_OPENAI_API_KEY=sk-...
-LEARN_AI_ANTHROPIC_API_KEY=sk-ant-...
+LEARN_AI_DEFAULT_PROVIDER=openrouter
+LEARN_AI_OPENROUTER_API_KEY=sk-or-v1-...
+LEARN_AI_OPENROUTER_MODEL=qwen/qwen3-max
 
 # Or use free self-hosted AI (no API key needed)
+LEARN_AI_DEFAULT_PROVIDER=ollama
 LEARN_AI_OLLAMA_ENABLED=true
+LEARN_AI_OLLAMA_MODEL=qwen3
 ```
 
 ### 2. Start everything
@@ -105,15 +108,19 @@ If the app is running in Docker, seed through the app container instead:
 just seed-docker
 ```
 
-When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`.
+When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`. The `app` service already reads `.env`, so school admins can choose AI provider and default model purely with Docker env vars. For Ollama, Compose overrides `LEARN_AI_OLLAMA_URL` inside the app container to `http://ollama:11434`.
 
 ### 3. Pull a free AI model (optional)
 
-If using Ollama for free self-hosted AI:
+Only do this if you are using Ollama as your AI provider. This downloads the model weights into the Ollama container so the app has something local to run.
+
+Warning: this can be a large download and may take time depending on the model and network speed.
 
 ```bash
-docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull qwen3
 ```
+
+After that, set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL=qwen3` in `.env`.
 
 ### 4. Chat with your bot
 
@@ -315,14 +322,16 @@ P&AI is not locked to any AI model. Configure one or more providers:
 
 | Provider | Models | Cost | Setup |
 |----------|--------|------|-------|
-| **OpenAI** | GPT-4o, GPT-4o-mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` |
-| **Anthropic** | Claude Sonnet, Claude Haiku | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` |
-| **DeepSeek** | DeepSeek V3, Reasoner | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` |
-| **Google Gemini** | Gemini 2.5 Flash, Pro | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` |
-| **Ollama** | Llama 3, DeepSeek, Qwen, Mistral | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` |
-| **OpenRouter** | 100+ models (Qwen, Kimi, etc.) | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` |
+| **OpenAI** | GPT-5.4, GPT-5.4 mini | Paid API | Set `LEARN_AI_OPENAI_API_KEY` and optionally `LEARN_AI_OPENAI_MODEL` |
+| **Anthropic** | Claude Sonnet 4.6, Claude Haiku 4.5 | Paid API | Set `LEARN_AI_ANTHROPIC_API_KEY` and optionally `LEARN_AI_ANTHROPIC_MODEL` |
+| **DeepSeek** | DeepSeek-V3.2 (`deepseek-chat`), DeepSeek-R1 (`deepseek-reasoner`) | Paid API (very cheap) | Set `LEARN_AI_DEEPSEEK_API_KEY` and optionally `LEARN_AI_DEEPSEEK_MODEL` |
+| **Google Gemini** | Gemini 3 Flash Preview, Gemini 3 Pro Preview | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` and optionally `LEARN_AI_GOOGLE_MODEL` |
+| **Ollama** | Qwen3, Qwen3 14B, Qwen3 30B | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL` |
+| **OpenRouter** | Qwen3 Max, Qwen3 Coder Next, 100+ others | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` and optionally `LEARN_AI_OPENROUTER_MODEL` |
 
-DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
+DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Its official `deepseek-chat` alias already tracks the current DeepSeek-V3.2 non-thinking model. Gemini 3 models are the latest family, but note that the current Flash/Pro API IDs are preview models. Preview Gemini IDs can have different or tighter rate limits, so for steadier production behavior it is usually safer to set `LEARN_AI_GOOGLE_MODEL` to a non-preview model name such as `gemini-2.5-flash`. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
+
+To prefer one provider first, set `LEARN_AI_DEFAULT_PROVIDER` to one of: `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`.
 
 The AI Gateway automatically routes by task type:
 
@@ -409,13 +418,20 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
 | `LEARN_NATS_URL` | No | `nats://localhost:4222` | NATS messaging server |
+| `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
 | `LEARN_AI_OPENAI_API_KEY` | No* | — | OpenAI API key |
+| `LEARN_AI_OPENAI_MODEL` | No | — | Default OpenAI model when request model is not set |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | — | Anthropic API key |
+| `LEARN_AI_ANTHROPIC_MODEL` | No | — | Default Anthropic model when request model is not set |
 | `LEARN_AI_DEEPSEEK_API_KEY` | No* | — | DeepSeek API key (OpenAI-compatible) |
+| `LEARN_AI_DEEPSEEK_MODEL` | No | — | Default DeepSeek model when request model is not set |
 | `LEARN_AI_GOOGLE_API_KEY` | No* | — | Google Gemini API key |
+| `LEARN_AI_GOOGLE_MODEL` | No | — | Default Google model when request model is not set |
 | `LEARN_AI_OPENROUTER_API_KEY` | No* | — | OpenRouter API key (100+ models) |
+| `LEARN_AI_OPENROUTER_MODEL` | No | — | Default OpenRouter model when request model is not set |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
+| `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
 | `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; currently used for JWT signing |
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |

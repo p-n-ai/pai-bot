@@ -70,16 +70,47 @@ Copy `.env.example` for the full list. The key ones:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `LEARN_TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from @BotFather |
+| `LEARN_AI_DEFAULT_PROVIDER` | No | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
 | `LEARN_AI_OPENAI_API_KEY` | No* | OpenAI API key |
+| `LEARN_AI_OPENAI_MODEL` | No | Default OpenAI model when no request-specific model is set |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No* | Anthropic API key |
+| `LEARN_AI_ANTHROPIC_MODEL` | No | Default Anthropic model when no request-specific model is set |
 | `LEARN_AI_DEEPSEEK_API_KEY` | No* | DeepSeek API key |
+| `LEARN_AI_DEEPSEEK_MODEL` | No | Default DeepSeek model when no request-specific model is set |
 | `LEARN_AI_GOOGLE_API_KEY` | No* | Google Gemini API key |
+| `LEARN_AI_GOOGLE_MODEL` | No | Default Google model when no request-specific model is set |
 | `LEARN_AI_OPENROUTER_API_KEY` | No* | OpenRouter API key (100+ models) |
+| `LEARN_AI_OPENROUTER_MODEL` | No | Default OpenRouter model when no request-specific model is set |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
+| `LEARN_AI_OLLAMA_MODEL` | No | Default Ollama model when no request-specific model is set |
 | `PAI_AUTH_SECRET` | No | JWT signing secret (default: `change-me-in-production`) |
 | `LEARN_TENANT_MODE` | No | `single` (default) or `multi` |
 
 *At least one AI provider must be configured.
+
+## Docker AI Provider Selection
+
+For Docker Compose deploys, the `app` service already loads `.env` via `env_file`, so school admins can choose provider and model with normal env vars.
+
+Example:
+
+```env
+LEARN_AI_DEFAULT_PROVIDER=openrouter
+LEARN_AI_OPENROUTER_API_KEY=sk-or-v1-...
+LEARN_AI_OPENROUTER_MODEL=qwen/qwen3-max
+```
+
+Ollama example:
+
+```env
+LEARN_AI_DEFAULT_PROVIDER=ollama
+LEARN_AI_OLLAMA_ENABLED=true
+LEARN_AI_OLLAMA_MODEL=qwen3
+```
+
+The app container overrides `LEARN_AI_OLLAMA_URL` to `http://ollama:11434`, so Compose users do not need to point Ollama at `localhost`.
+
+For Google Gemini, note that preview model IDs can have different or tighter rate limits than stable IDs. If you want a steadier production default, set `LEARN_AI_GOOGLE_MODEL` to a non-preview model name such as `gemini-2.5-flash`.
 
 ## Running Tests
 
@@ -172,7 +203,7 @@ For a fully free setup using local AI models:
 docker compose --profile ollama up -d
 
 # Pull a model
-just ollama-pull    # Downloads llama3
+just ollama-pull    # Downloads qwen3
 
 # Enable in .env
 LEARN_AI_OLLAMA_ENABLED=true

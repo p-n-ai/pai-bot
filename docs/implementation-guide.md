@@ -1297,8 +1297,8 @@ func (p *OpenAIProvider) StreamComplete(ctx context.Context, req CompletionReque
 
 func (p *OpenAIProvider) Models() []ModelInfo {
 	return []ModelInfo{
-		{ID: "gpt-4o", Name: "GPT-4o", MaxTokens: 128000, Description: "Most capable"},
-		{ID: "gpt-4o-mini", Name: "GPT-4o Mini", MaxTokens: 128000, Description: "Fast and affordable"},
+		{ID: "gpt-5.4", Name: "GPT-5.4", MaxTokens: 128000, Description: "Most capable"},
+		{ID: "gpt-5.4-mini", Name: "GPT-5.4 mini", MaxTokens: 128000, Description: "Fast and affordable"},
 	}
 }
 
@@ -1505,7 +1505,7 @@ func NewOllamaProvider(baseURL string) (*OllamaProvider, error) {
 func (p *OllamaProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "llama3"
+		model = "qwen3"
 	}
 
 	body := map[string]interface{}{
@@ -1579,7 +1579,7 @@ func (p *OllamaProvider) StreamComplete(ctx context.Context, req CompletionReque
 
 func (p *OllamaProvider) Models() []ModelInfo {
 	return []ModelInfo{
-		{ID: "llama3", Name: "Llama 3", MaxTokens: 8192, Description: "Free self-hosted"},
+		{ID: "qwen3", Name: "Qwen3", MaxTokens: 40000, Description: "Free self-hosted"},
 		{ID: "mistral", Name: "Mistral", MaxTokens: 32768, Description: "Free self-hosted"},
 	}
 }
@@ -1710,7 +1710,7 @@ logs:
 # Ollama
 ollama-pull:
 	docker compose --profile ollama up -d ollama
-	docker exec -it $$(docker compose ps -q ollama) ollama pull llama3
+	docker exec -it $$(docker compose ps -q ollama) ollama pull qwen3
 
 # Analytics
 analytics:

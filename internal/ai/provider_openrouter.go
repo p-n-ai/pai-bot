@@ -56,7 +56,7 @@ func NewOpenRouterProvider(apiKey string, opts ...OpenRouterOption) *OpenRouterP
 func (p *OpenRouterProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
 	if model == "" {
-		model = "qwen/qwen-2.5-72b-instruct"
+		model = "qwen/qwen3-max"
 	}
 
 	oaiReq := openaiRequest{
@@ -137,7 +137,7 @@ func (p *OpenRouterProvider) Models() []ModelInfo {
 		return p.models
 	}
 	return []ModelInfo{
-		{ID: "qwen/qwen-2.5-72b-instruct", Name: "Qwen 2.5 72B", MaxTokens: 32768, Description: "Large open-weight model via OpenRouter"},
+		{ID: "qwen/qwen3-max", Name: "Qwen3 Max", MaxTokens: 262144, Description: "Current general-purpose OpenRouter default"},
 	}
 }
 

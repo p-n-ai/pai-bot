@@ -20,7 +20,7 @@ func TestOpenRouterProvider_Complete(t *testing.T) {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
 
-		writeOpenAITextResponse(t, w, "OpenRouter response", "qwen/qwen-2.5-72b-instruct", 7, 15)
+		writeOpenAITextResponse(t, w, "OpenRouter response", "qwen/qwen3-max", 7, 15)
 	}))
 	defer server.Close()
 
@@ -46,7 +46,7 @@ func TestOpenRouterProvider_Complete_StructuredOutput_AddsResponseFormat(t *test
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&captured)
 
-		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "qwen/qwen-2.5-72b-instruct", 7, 15)
+		writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, "qwen/qwen3-max", 7, 15)
 	}))
 	defer server.Close()
 

@@ -62,43 +62,50 @@ type NATSConfig struct {
 
 // AIConfig holds configuration for all AI providers.
 type AIConfig struct {
-	OpenAI     OpenAIConfig
-	Anthropic  AnthropicConfig
-	DeepSeek   DeepSeekConfig
-	Google     GoogleConfig
-	Ollama     OllamaConfig
-	OpenRouter OpenRouterConfig
+	DefaultProvider string
+	OpenAI          OpenAIConfig
+	Anthropic       AnthropicConfig
+	DeepSeek        DeepSeekConfig
+	Google          GoogleConfig
+	Ollama          OllamaConfig
+	OpenRouter      OpenRouterConfig
 }
 
 // OpenAIConfig holds OpenAI provider settings.
 type OpenAIConfig struct {
 	APIKey string
+	Model  string
 }
 
 // AnthropicConfig holds Anthropic provider settings.
 type AnthropicConfig struct {
 	APIKey string
+	Model  string
 }
 
 // DeepSeekConfig holds DeepSeek provider settings (OpenAI-compatible).
 type DeepSeekConfig struct {
 	APIKey string
+	Model  string
 }
 
 // GoogleConfig holds Google Gemini provider settings.
 type GoogleConfig struct {
 	APIKey string
+	Model  string
 }
 
 // OllamaConfig holds self-hosted Ollama settings.
 type OllamaConfig struct {
 	Enabled bool
 	URL     string
+	Model   string
 }
 
 // OpenRouterConfig holds OpenRouter provider settings.
 type OpenRouterConfig struct {
 	APIKey string
+	Model  string
 }
 
 // TelegramConfig holds Telegram Bot API settings.
@@ -180,24 +187,31 @@ func Load() (*Config, error) {
 			URL: envStr("LEARN_NATS_URL", "nats://localhost:4222"),
 		},
 		AI: AIConfig{
+			DefaultProvider: envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
 			OpenAI: OpenAIConfig{
 				APIKey: envStr("LEARN_AI_OPENAI_API_KEY", ""),
+				Model:  envStr("LEARN_AI_OPENAI_MODEL", ""),
 			},
 			Anthropic: AnthropicConfig{
 				APIKey: envStr("LEARN_AI_ANTHROPIC_API_KEY", ""),
+				Model:  envStr("LEARN_AI_ANTHROPIC_MODEL", ""),
 			},
 			DeepSeek: DeepSeekConfig{
 				APIKey: envStr("LEARN_AI_DEEPSEEK_API_KEY", ""),
+				Model:  envStr("LEARN_AI_DEEPSEEK_MODEL", ""),
 			},
 			Google: GoogleConfig{
 				APIKey: envStr("LEARN_AI_GOOGLE_API_KEY", ""),
+				Model:  envStr("LEARN_AI_GOOGLE_MODEL", ""),
 			},
 			Ollama: OllamaConfig{
 				Enabled: envBool("LEARN_AI_OLLAMA_ENABLED", false),
 				URL:     envStr("LEARN_AI_OLLAMA_URL", "http://localhost:11434"),
+				Model:   envStr("LEARN_AI_OLLAMA_MODEL", ""),
 			},
 			OpenRouter: OpenRouterConfig{
 				APIKey: envStr("LEARN_AI_OPENROUTER_API_KEY", ""),
+				Model:  envStr("LEARN_AI_OPENROUTER_MODEL", ""),
 			},
 		},
 		Email: EmailConfig{
@@ -262,6 +276,9 @@ func (c *Config) Validate() error {
 	if !c.HasAIProvider() && !c.Features.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
 	}
+	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
+		return fmt.Errorf("unsupported LEARN_AI_DEFAULT_PROVIDER %q", c.AI.DefaultProvider)
+	}
 
 	if c.Tenant.Mode != "single" && c.Tenant.Mode != "multi" {
 		return fmt.Errorf("LEARN_TENANT_MODE must be 'single' or 'multi', got %q", c.Tenant.Mode)
@@ -286,6 +303,15 @@ func (c *Config) HasAIProvider() bool {
 		c.AI.Google.APIKey != "" ||
 		c.AI.OpenRouter.APIKey != "" ||
 		c.AI.Ollama.Enabled
+}
+
+func isKnownAIProvider(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "openai", "anthropic", "deepseek", "google", "ollama", "openrouter":
+		return true
+	default:
+		return false
+	}
 }
 
 func envStr(key, fallback string) string {

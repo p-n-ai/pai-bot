@@ -20,6 +20,7 @@ import (
 type Router struct {
 	providers               map[string]Provider
 	fallback                []string // ordered fallback chain
+	defaultModels           map[string]string
 	retryBackoff            []time.Duration
 	breakerFailureThreshold int
 	breakerCooldown         time.Duration
@@ -61,6 +62,7 @@ func NewRouterWithConfig(cfg RouterConfig) *Router {
 	}
 	return &Router{
 		providers:               make(map[string]Provider),
+		defaultModels:           make(map[string]string),
 		retryBackoff:            retryBackoff,
 		breakerFailureThreshold: breakerThreshold,
 		breakerCooldown:         breakerCooldown,
@@ -83,6 +85,24 @@ func (r *Router) Register(name string, provider Provider) {
 	}
 }
 
+// SetDefaultModel sets the provider-specific default model used when a request
+// does not specify one explicitly.
+func (r *Router) SetDefaultModel(providerName, model string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	providerName = strings.TrimSpace(providerName)
+	model = strings.TrimSpace(model)
+	if providerName == "" {
+		return
+	}
+	if model == "" {
+		delete(r.defaultModels, providerName)
+		return
+	}
+	r.defaultModels[providerName] = model
+}
+
 // Complete routes a request to the best available provider.
 func (r *Router) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	providers, order := r.snapshotProviders()
@@ -101,7 +121,11 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 			continue
 		}
 
-		resp, err := r.completeWithRetry(ctx, provider, req)
+		providerReq := req
+		if providerReq.Model == "" {
+			providerReq.Model = r.defaultModelForProvider(name)
+		}
+		resp, err := r.completeWithRetry(ctx, provider, providerReq)
 		if err != nil {
 			r.markFailure(name)
 			slog.Warn("AI provider failed, trying next",
@@ -143,7 +167,7 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		if provider == nil {
 			continue
 		}
-		providerReq, ok := structuredProviderRequest(name, req)
+		providerReq, ok := r.structuredProviderRequest(name, req)
 		if !ok {
 			failures = append(failures, fmt.Sprintf("%s: structured output unsupported", name))
 			continue
@@ -332,7 +356,7 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 	return nil
 }
 
-func structuredProviderRequest(providerName string, req CompletionRequest) (CompletionRequest, bool) {
+func (r *Router) structuredProviderRequest(providerName string, req CompletionRequest) (CompletionRequest, bool) {
 	capabilities, ok := structuredProviderCapabilities(providerName)
 	if !ok || !capabilities.StructuredOutput {
 		return CompletionRequest{}, false
@@ -347,7 +371,7 @@ func structuredProviderRequest(providerName string, req CompletionRequest) (Comp
 		return req, true
 	}
 
-	req.Model = defaultStructuredModelForProvider(providerName)
+	req.Model = r.structuredDefaultModelForProvider(providerName)
 	return req, true
 }
 
@@ -388,21 +412,34 @@ func requestNeedsImageInputs(req CompletionRequest) bool {
 	return false
 }
 
-func defaultStructuredModelForProvider(providerName string) string {
+func hardcodedStructuredModelForProvider(providerName string) string {
 	switch providerName {
 	case "openai":
-		return "gpt-4o-mini"
+		return "gpt-5.4-mini"
 	case "deepseek":
 		return "deepseek-chat"
 	case "openrouter":
-		return "qwen/qwen-2.5-72b-instruct"
+		return "qwen/qwen3-max"
 	case "google":
-		return "gemini-2.5-flash"
+		return "gemini-3-flash-preview"
 	case "anthropic":
 		return "claude-haiku-4-5-20251001"
 	default:
 		return ""
 	}
+}
+
+func (r *Router) defaultModelForProvider(providerName string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return strings.TrimSpace(r.defaultModels[providerName])
+}
+
+func (r *Router) structuredDefaultModelForProvider(providerName string) string {
+	if model := r.defaultModelForProvider(providerName); model != "" {
+		return model
+	}
+	return hardcodedStructuredModelForProvider(providerName)
 }
 
 func completeJSONPayload(resp CompletionResponse) (json.RawMessage, error) {

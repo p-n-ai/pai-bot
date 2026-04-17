@@ -257,8 +257,8 @@ func TestOpenAIProvider_DefaultModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
-	if receivedModel != "gpt-4o-mini" {
-		t.Errorf("default model = %q, want %q", receivedModel, "gpt-4o-mini")
+	if receivedModel != "gpt-5.4-mini" {
+		t.Errorf("default model = %q, want %q", receivedModel, "gpt-5.4-mini")
 	}
 }
 
@@ -272,7 +272,7 @@ func TestOpenAIProvider_Complete_WithImageURL(t *testing.T) {
 		}
 		capturedContent = req.Messages[0].Content
 
-		writeOpenAITextResponse(t, w, "ok", "gpt-4o-mini", 0, 0)
+		writeOpenAITextResponse(t, w, "ok", "gpt-5.4-mini", 0, 0)
 	}))
 	defer server.Close()
 

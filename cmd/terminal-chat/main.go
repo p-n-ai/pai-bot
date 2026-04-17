@@ -18,6 +18,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
@@ -138,38 +139,7 @@ func main() {
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
-	router := ai.NewRouter()
-
-	if cfg.AI.OpenAI.APIKey != "" {
-		router.Register("openai", ai.NewOpenAIProvider(cfg.AI.OpenAI.APIKey))
-	}
-
-	if cfg.AI.Anthropic.APIKey != "" {
-		provider, err := ai.NewAnthropicProvider(cfg.AI.Anthropic.APIKey)
-		if err != nil {
-			slog.Warn("failed to create Anthropic provider", "error", err)
-		} else {
-			router.Register("anthropic", provider)
-		}
-	}
-
-	if cfg.AI.DeepSeek.APIKey != "" {
-		router.Register("deepseek", ai.NewDeepSeekProvider(cfg.AI.DeepSeek.APIKey))
-	}
-
-	if cfg.AI.Google.APIKey != "" {
-		router.Register("google", ai.NewGoogleProvider(cfg.AI.Google.APIKey))
-	}
-
-	if cfg.AI.Ollama.Enabled {
-		router.Register("ollama", ai.NewOllamaProvider(cfg.AI.Ollama.URL))
-	}
-
-	if cfg.AI.OpenRouter.APIKey != "" {
-		router.Register("openrouter", ai.NewOpenRouterProvider(cfg.AI.OpenRouter.APIKey))
-	}
-
-	return router
+	return airouter.Setup(cfg)
 }
 
 // wsInboundMsg mirrors the WebSocket protocol envelope for outgoing client messages.

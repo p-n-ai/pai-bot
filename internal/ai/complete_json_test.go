@@ -41,8 +41,8 @@ func TestRouter_CompleteJSON_ParsesOutputAndDefaultsToCheapModel(t *testing.T) {
 	if mock.LastRequest == nil {
 		t.Fatal("expected provider to capture request")
 	}
-	if mock.LastRequest.Model != "gpt-4o-mini" {
-		t.Fatalf("default structured model = %q, want gpt-4o-mini", mock.LastRequest.Model)
+	if mock.LastRequest.Model != "gpt-5.4-mini" {
+		t.Fatalf("default structured model = %q, want gpt-5.4-mini", mock.LastRequest.Model)
 	}
 	if string(resp.StructuredOutput) != `{"final_answer":"12"}` {
 		t.Fatalf("StructuredOutput = %s, want raw JSON payload", string(resp.StructuredOutput))
@@ -87,10 +87,10 @@ func TestRouter_CompleteJSON_FallsBackWhenProviderReturnsInvalidJSON(t *testing.
 	if out.FinalAnswer != "fallback" {
 		t.Fatalf("parsed output = %#v, want fallback response", out)
 	}
-	if invalid.LastRequest == nil || invalid.LastRequest.Model != "gpt-4o-mini" {
+	if invalid.LastRequest == nil || invalid.LastRequest.Model != "gpt-5.4-mini" {
 		t.Fatalf("first provider should receive cheap OpenAI model, got %#v", invalid.LastRequest)
 	}
-	if valid.LastRequest == nil || valid.LastRequest.Model != "qwen/qwen-2.5-72b-instruct" {
+	if valid.LastRequest == nil || valid.LastRequest.Model != "qwen/qwen3-max" {
 		t.Fatalf("fallback provider should receive cheap OpenRouter model, got %#v", valid.LastRequest)
 	}
 }
@@ -173,8 +173,8 @@ func TestRouter_CompleteJSON_UsesGoogleStructuredDefaults(t *testing.T) {
 	if mock.LastRequest == nil {
 		t.Fatal("expected provider to capture request")
 	}
-	if mock.LastRequest.Model != "gemini-2.5-flash" {
-		t.Fatalf("default structured model = %q, want gemini-2.5-flash", mock.LastRequest.Model)
+	if mock.LastRequest.Model != "gemini-3-flash-preview" {
+		t.Fatalf("default structured model = %q, want gemini-3-flash-preview", mock.LastRequest.Model)
 	}
 	if out.FinalAnswer != "ok" {
 		t.Fatalf("parsed output = %#v, want ok", out)
@@ -206,6 +206,31 @@ func TestRouter_CompleteJSON_UsesAnthropicStructuredDefaults(t *testing.T) {
 	}
 	if out.FinalAnswer != "ok" {
 		t.Fatalf("parsed output = %#v, want ok", out)
+	}
+}
+
+func TestRouter_CompleteJSON_UsesConfiguredStructuredModelForProvider(t *testing.T) {
+	router := newTestRouter()
+	mock := ai.NewMockProvider(`{"final_answer":"ok"}`)
+	router.Register("openai", mock)
+	router.SetDefaultModel("openai", "gpt-4.1-mini")
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}, &out)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+	if mock.LastRequest == nil {
+		t.Fatal("expected provider to capture request")
+	}
+	if mock.LastRequest.Model != "gpt-4.1-mini" {
+		t.Fatalf("default structured model = %q, want gpt-4.1-mini", mock.LastRequest.Model)
 	}
 }
 
