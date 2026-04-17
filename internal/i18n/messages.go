@@ -13,6 +13,7 @@ type Key string
 const (
 	DefaultLocale = "ms"
 
+	MsgHelpHeader            Key = "help_header"
 	MsgTechnicalIssue        Key = "technical_issue"
 	MsgImageProcessingFailed Key = "image_processing_failed"
 	MsgHistoryCleared        Key = "history_cleared"
@@ -63,6 +64,7 @@ const (
 
 var catalog = map[string]map[Key]string{
 	"ms": {
+		MsgHelpHeader:            "Berikut adalah arahan yang tersedia:",
 		MsgTechnicalIssue:        "Maaf, saya sedang mengalami masalah teknikal. Cuba lagi sebentar.",
 		MsgImageProcessingFailed: "Saya terima gambar anda, tapi gagal memproses fail gambar itu. Cuba hantar semula gambar yang lebih jelas.",
 		MsgHistoryCleared:        "Sejarah perbualan telah dikosongkan. Hantar soalan baru untuk mula semula.",
@@ -145,6 +147,7 @@ Tingkatan berapa anda sekarang?`,
 		MsgChallengeReviewRetry: "Belum tepat. Cuba lagi.",
 	},
 	"en": {
+		MsgHelpHeader:            "Here are the available commands:",
 		MsgTechnicalIssue:        "Sorry, I'm facing a technical issue right now. Please try again shortly.",
 		MsgImageProcessingFailed: "I received your image, but couldn't process it. Please resend a clearer image.",
 		MsgHistoryCleared:        "Conversation history has been cleared. Send a new question to start again.",
@@ -227,6 +230,7 @@ Which form are you in now?`,
 		MsgChallengeReviewRetry: "Not quite. Try again.",
 	},
 	"zh": {
+		MsgHelpHeader:            "以下是可用的指令：",
 		MsgTechnicalIssue:        "抱歉，我目前遇到技术问题。请稍后再试。",
 		MsgImageProcessingFailed: "我收到了你的图片，但暂时无法处理。请重新发送更清晰的图片。",
 		MsgHistoryCleared:        "对话记录已清除。发送新问题即可重新开始。",

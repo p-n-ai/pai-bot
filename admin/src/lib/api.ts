@@ -663,3 +663,19 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
     throw new Error(text || `Failed to remove member: ${res.status}`);
   }
 }
+
+// ── WhatsApp ──────────────────────────────────────────────────────────
+
+export interface WhatsAppStatus {
+  connected: boolean;
+  qr?: string;
+  qr_image?: string;
+}
+
+export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
+  return fetchJSON<WhatsAppStatus>("/api/admin/whatsapp/status");
+}
+
+export async function disconnectWhatsApp(): Promise<void> {
+  await postJSON("/api/admin/whatsapp/disconnect");
+}

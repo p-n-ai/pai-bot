@@ -39,6 +39,8 @@ admin/node_modules/
 admin/.next/
 admin/out/
 admin/.env*.local
+admin/playwright-report/
+admin/test-results/
 
 # Node
 node_modules/

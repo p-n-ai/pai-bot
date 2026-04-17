@@ -18,6 +18,18 @@ describe("getServerAuthSession", () => {
     await expect(getServerAuthSession()).resolves.toBeNull();
   });
 
+  it("treats 500 session responses as signed-out during SSR bootstrap", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("server error", { status: 500 })));
+
+    await expect(getServerAuthSession()).resolves.toBeNull();
+  });
+
+  it("treats fetch errors as signed-out during SSR bootstrap", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+
+    await expect(getServerAuthSession()).resolves.toBeNull();
+  });
+
   it("returns the session payload when the backend accepts the cookie", async () => {
     vi.stubGlobal(
       "fetch",

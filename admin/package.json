@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npm run test:unit && npm run test:react",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
     "test:unit": "node src/lib/all.test.mjs",
     "test:react": "vitest run --config vitest.config.mjs --configLoader native --pool threads --maxWorkers 1"
   },
@@ -45,6 +48,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -433,6 +433,9 @@ admin-lockfile:
 admin-test:
   cd admin && pnpm test
 
+admin-e2e:
+  cd admin && pnpm test:e2e
+
 test-all: lint test admin-lockfile admin-lint admin-test
 
 test-cover:

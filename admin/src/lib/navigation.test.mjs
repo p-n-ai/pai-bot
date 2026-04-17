@@ -113,14 +113,14 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export"],
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 
 test("getNavigationForUser exposes onboarding to platform admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "platform_admin", user_id: "platform-admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export"],
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 

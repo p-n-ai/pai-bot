@@ -689,6 +689,8 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 	locale := e.messageLocale(msg, nil)
 
 	switch cmd {
+	case "/help":
+		return e.handleHelpCommand(locale), nil
 	case "/start":
 		e.endActiveConversation(msg.UserID)
 		return e.handleStart(msg.UserID, msg)
@@ -874,6 +876,16 @@ func (e *Engine) supportsAutoStartLookup() bool {
 	// would hijack many normal chat-path tests. Enable this behavior for persistent stores.
 	_, isMemory := e.store.(*MemoryStore)
 	return !isMemory
+}
+
+func (e *Engine) handleHelpCommand(locale string) string {
+	var b strings.Builder
+	b.WriteString(i18n.S(locale, i18n.MsgHelpHeader))
+	b.WriteString("\n\n")
+	for _, cmd := range chat.AllCommands(e.devMode) {
+		fmt.Fprintf(&b, "/%s — %s\n", cmd.Command, cmd.Description)
+	}
+	return b.String()
 }
 
 func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {

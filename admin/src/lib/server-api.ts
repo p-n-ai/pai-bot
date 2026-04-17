@@ -57,16 +57,22 @@ async function fetchServerJSON<T>(path: string): Promise<T> {
 export async function getServerAuthSession(): Promise<AuthSession | null> {
   const cookieHeader = await requestCookieHeader();
 
-  const res = await fetch(`${API_BASE}/api/auth/session`, {
-    headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
-    cache: "no-store",
-  });
-  if (res.status >= 400 && res.status < 500) {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/auth/session`, {
+      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+      cache: "no-store",
+    });
+  } catch {
+    // Fail open for SSR when backend is unavailable (for example in FE-only CI).
     return null;
   }
+
   if (!res.ok) {
-    throw new Error(`Failed to load /api/auth/session: ${res.status}`);
+    // Treat any non-OK auth-session read as unauthenticated during SSR.
+    return null;
   }
+
   return (await readJSONResponse(res)) as AuthSession;
 }
 

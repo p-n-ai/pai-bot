@@ -144,6 +144,34 @@ func main() {
 		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
 	}
 
+	// WhatsApp channel (behind feature flag).
+	var waCloudChannel *chat.WhatsAppChannel
+	var waMeowChannel *chat.WhatsAppMeowChannel
+	if cfg.WhatsApp.Enabled {
+		switch cfg.WhatsApp.Backend {
+		case "cloudapi":
+			var waErr error
+			waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
+			if waErr != nil {
+				slog.Error("failed to create WhatsApp Cloud API channel", "error", waErr)
+				os.Exit(1)
+			}
+			gw.Register("whatsapp", waCloudChannel)
+			slog.Info("whatsapp backend: Cloud API")
+		default: // "meow"
+			var waErr error
+			waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
+			if waErr != nil {
+				slog.Error("failed to create WhatsApp meow channel", "error", waErr)
+				os.Exit(1)
+			}
+			gw.Register("whatsapp", waMeowChannel)
+			slog.Info("whatsapp backend: whatsmeow")
+		}
+	} else {
+		slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
+	}
+
 	// WebSocket channel (always enabled — used by terminal-chat and future web clients).
 	wsChannel := chat.NewWSChannel()
 	gw.Register("websocket", wsChannel)
@@ -181,7 +209,8 @@ func main() {
 	go scheduler.Start(ctx, []string{})
 
 	// Start long-polling with message handler.
-	err = gw.StartAll(ctx, func(msg chat.InboundMessage) {
+	// Shared inbound message handler for all channels.
+	handleInbound := func(msg chat.InboundMessage) {
 		// Show typing indicator while processing.
 		if err := gw.SendTyping(ctx, msg.Channel, msg.UserID); err != nil {
 			slog.Warn("failed to send typing indicator", "error", err)
@@ -213,7 +242,9 @@ func main() {
 		if err := gw.Send(ctx, out); err != nil {
 			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
 		}
-	})
+	}
+
+	err = gw.StartAll(ctx, handleInbound)
 	if err != nil {
 		slog.Error("failed to start channels", "error", err)
 		os.Exit(1)
@@ -282,6 +313,22 @@ func main() {
 	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
 	topMux := http.NewServeMux()
 	topMux.Handle("GET /ws/chat", wsChannel.Handler())
+	if waCloudChannel != nil {
+		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
+	}
+	if waMeowChannel != nil {
+		manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+		waAuth := chain(
+			authenticateRequests(authService, manager, time.Now),
+			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+		)
+		waStatusHandler := withCORS(waAuth(waMeowChannel.StatusHandler()))
+		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
+		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
+		waDisconnectHandler := withCORS(waAuth(waMeowChannel.DisconnectHandler()))
+		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
+		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
+	}
 	topMux.Handle("/", apiHandler)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)

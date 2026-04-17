@@ -88,7 +88,66 @@ just test              # Unit tests only
 just test-integration  # Integration tests (requires Docker — uses testcontainers)
 just lint              # golangci-lint
 just test-all          # All tests + lint
+just admin-e2e         # Admin Playwright smoke tests
 ```
+
+For direct admin E2E runs:
+
+```bash
+cd admin
+pnpm test:e2e
+```
+
+## Playwright E2E Setup (Admin)
+
+If this is your first Playwright run on a machine:
+
+```bash
+cd admin
+pnpm install
+pnpm exec playwright install --with-deps chromium
+pnpm test:e2e
+```
+
+Authenticated E2E tests are opt-in and only run when all of these are set:
+- `E2E_BACKEND_ENABLED=true`
+- `E2E_AUTH_ENABLED=true`
+- `E2E_ADMIN_EMAIL`
+- `E2E_ADMIN_PASSWORD`
+
+Example:
+
+```bash
+cd admin
+E2E_BACKEND_ENABLED=true E2E_AUTH_ENABLED=true E2E_ADMIN_EMAIL=platform-admin@example.com E2E_ADMIN_PASSWORD=demo-password pnpm test:e2e
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:E2E_BACKEND_ENABLED="true"; $env:E2E_AUTH_ENABLED="true"; $env:E2E_ADMIN_EMAIL="platform-admin@example.com"; $env:E2E_ADMIN_PASSWORD="demo-password"; pnpm test:e2e
+```
+
+You can place these in `admin/.env`, `admin/.env.local`, or repo-root `.env`; Playwright now reads those files before test startup.
+By default (`E2E_BACKEND_ENABLED` unset), Playwright skips tests tagged with `@backend`.
+The same `E2E_*` keys are listed in `.env.example` for copy/paste onboarding.
+
+Useful variants:
+
+```bash
+cd admin
+pnpm test:e2e:headed   # run with visible browser
+pnpm test:e2e:ui       # open Playwright UI mode
+```
+
+Common issues:
+
+- `Cannot find module '@playwright/test'`:
+  - Run `cd admin && pnpm install` so `@playwright/test` exists in local `node_modules`.
+- PowerShell policy blocks `pnpm` scripts:
+  - Use `pnpm.cmd ...` from PowerShell, or run commands from a shell where `pnpm` is enabled.
+- Browser executable missing:
+  - Run `cd admin && pnpm exec playwright install --with-deps chromium`.
 
 ## Common Issues
 
