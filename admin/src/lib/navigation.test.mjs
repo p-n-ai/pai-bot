@@ -115,7 +115,7 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/settings/users", "/export"],
+    ["/dashboard", "/dashboard/classes", "/dashboard/ai-usage", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 
