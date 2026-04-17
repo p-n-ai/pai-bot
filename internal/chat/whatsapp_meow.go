@@ -167,6 +167,9 @@ func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
 		qr := w.latestQR
 		w.qrMu.RUnlock()
 
+		// Preserve query string for auto-refresh so auth tokens carry through.
+		qs := r.URL.RawQuery
+
 		if qr == "" {
 			rw.Header().Set("Content-Type", "text/html")
 			rw.Header().Set("Refresh", "3")
@@ -191,13 +194,13 @@ func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
 
 		// Default: HTML page with embedded QR image and auto-refresh.
 		rw.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(rw, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5"></head>
+		fmt.Fprintf(rw, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5; url=/whatsapp/qr?%s"></head>
 			<body style="font-family:sans-serif;text-align:center;padding:40px">
 			<h2>Scan QR Code with WhatsApp</h2>
 			<p>Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</p>
-			<img src="/whatsapp/qr?format=png&t=%d" style="margin:20px" />
+			<img src="/whatsapp/qr?format=png&%s" style="margin:20px" />
 			<p style="color:#888">Page auto-refreshes every 5 seconds</p>
-		</body></html>`, r.URL.Query().Get("t"))
+		</body></html>`, qs, qs)
 	})
 }
 

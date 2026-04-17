@@ -302,7 +302,7 @@ func main() {
 		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
 	}
 	if waMeowChannel != nil {
-		topMux.Handle("/whatsapp/qr", waMeowChannel.QRHandler())
+		topMux.Handle("/whatsapp/qr", requireToken(cfg.Auth.JWTSecret, waMeowChannel.QRHandler()))
 	}
 	topMux.Handle("/", apiHandler)
 
@@ -2251,6 +2251,19 @@ func chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) ht
 		}
 		return wrapped
 	}
+}
+
+// requireToken wraps a handler with a simple token check.
+// Access via query param: /whatsapp/qr?token=<secret>
+func requireToken(secret string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" || token != secret {
+			http.Error(w, "Unauthorized — append ?token=<PAI_AUTH_SECRET> to the URL", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func isTelegramChatID(v string) bool {
