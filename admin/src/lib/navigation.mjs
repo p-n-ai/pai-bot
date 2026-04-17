@@ -16,7 +16,7 @@ export const primaryNavigation = [
   {
     title: "Onboarding",
     href: "/setup/onboard",
-    description: "Set curriculum, first class, and a minimal bot preset for a school workspace.",
+    description: "Set curriculum, the first class, and the initial bot setup.",
     group: "Administration",
     roles: ["admin", "platform_admin"],
   },
@@ -152,6 +152,14 @@ export function getCurrentSection(pathname) {
     };
   }
 
+  if (pathname.startsWith("/dashboard/ai-usage")) {
+    return {
+      eyebrow: "Administration",
+      title: "AI usage",
+      description: "Track token consumption, provider mix, and tenant budget windows for the current workspace.",
+    };
+  }
+
   const match = primaryNavigation.find((item) => isRouteActive(pathname, item.href));
   if (match) {
     return {
@@ -189,6 +197,13 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Classes", href: "/dashboard/classes" },
+    ];
+  }
+
+  if (pathname.startsWith("/dashboard/ai-usage")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "AI usage", href: "/dashboard/ai-usage" },
     ];
   }
 

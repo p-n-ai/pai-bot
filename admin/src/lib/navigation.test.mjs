@@ -60,6 +60,14 @@ test("getCurrentSection returns class management metadata for dashboard classes 
   });
 });
 
+test("getCurrentSection returns AI usage metadata for dashboard ai usage routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/ai-usage"), {
+    eyebrow: "Administration",
+    title: "AI usage",
+    description: "Track token consumption, provider mix, and tenant budget windows for the current workspace.",
+  });
+});
+
 test("getCurrentSection returns user management metadata for settings routes", () => {
   assert.deepEqual(getCurrentSection("/settings/users"), {
     eyebrow: "Administration",
@@ -141,6 +149,13 @@ test("getBreadcrumbs returns class management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/dashboard/classes"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Classes", href: "/dashboard/classes" },
+  ]);
+});
+
+test("getBreadcrumbs returns AI usage hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/dashboard/ai-usage"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "AI usage", href: "/dashboard/ai-usage" },
   ]);
 });
 
