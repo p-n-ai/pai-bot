@@ -34,6 +34,13 @@ export const primaryNavigation = [
     group: "Administration",
     roles: ["admin", "platform_admin"],
   },
+  {
+    title: "WhatsApp",
+    href: "/settings/whatsapp",
+    description: "Link your WhatsApp account via QR code.",
+    group: "Integration",
+    roles: ["admin", "platform_admin"],
+  },
 ];
 
 export function getNavigationForUser(user) {
@@ -106,6 +113,14 @@ export function getCurrentSection(pathname) {
     };
   }
 
+  if (pathname.startsWith("/settings/whatsapp")) {
+    return {
+      eyebrow: "Integration",
+      title: "WhatsApp setup",
+      description: "Link your WhatsApp account via QR code to enable the bot on WhatsApp.",
+    };
+  }
+
   if (pathname.startsWith("/settings/users")) {
     return {
       eyebrow: "Administration",
@@ -175,6 +190,13 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Classes", href: "/dashboard/classes" },
+    ];
+  }
+
+  if (pathname.startsWith("/settings/whatsapp")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "WhatsApp", href: "/settings/whatsapp" },
     ];
   }
 

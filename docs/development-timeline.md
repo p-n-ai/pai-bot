@@ -441,7 +441,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
-| `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 | ⬜ | |
+| `P-W5D24-1` | WhatsApp Cloud API adapter (behind LEARN_WHATSAPP_ENABLED flag) | 🤖 | ✅ | WhatsAppChannel implements Channel interface; sends text via Cloud API v21.0; receives via webhook (GET verify + POST inbound); wired behind LEARN_WHATSAPP_ENABLED; webhook at /webhook/whatsapp |
 | `P-W5D24-2` | Data export: GET /export/students (CSV), /export/conversations (JSON), /export/progress (CSV) | 🤖 | ✅ | Go admin API now serves student CSV, conversation JSON, and progress CSV exports; admin UI downloads are available on `/export`. |
 | `P-W5D24-3` | Security audit: auth on all endpoints, tenant isolation middleware, rate limiting, parameterized queries | ðŸ¤– | âœ… | Added API/auth fixed-window rate limiting middleware, baseline security headers, and validated existing auth + tenant-scoped admin datasource + parameterized SQL usage. |
 | `P-W5D24-6` | Admin auth hardening: migrations for `auth_identities`, `auth_invites`, `auth_sessions`; invite acceptance; email/password login; logout endpoint; Next.js route guards for teacher/parent/admin views | 🤖 | ✅ | Session cookies now come from Go as `HttpOnly`; admin auth no longer stores tokens in `localStorage`; protected API/page responses use `no-store`. |

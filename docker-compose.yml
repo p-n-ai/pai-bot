@@ -5,7 +5,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: pai
-      POSTGRES_PASSWORD: pai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pai}
       POSTGRES_DB: pai
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -58,9 +58,12 @@ services:
     env_file:
       - .env
     environment:
-      LEARN_DATABASE_URL: postgres://pai:pai@postgres:5432/pai?sslmode=disable
+      LEARN_DATABASE_URL: postgres://pai:${POSTGRES_PASSWORD:-pai}@postgres:5432/pai?sslmode=disable
       LEARN_CACHE_URL: redis://dragonfly:6379
       LEARN_NATS_URL: nats://nats:4222
+      LEARN_WHATSAPP_MEOW_DB: "file:/data/whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+    volumes:
+      - whatsmeow-data:/data
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -129,6 +132,7 @@ volumes:
   postgres-data:
   dragonfly-data:
   nats-data:
+  whatsmeow-data:
   caddy_data:
   caddy_config:
   ollama-data:
