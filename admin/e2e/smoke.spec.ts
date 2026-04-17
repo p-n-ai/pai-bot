@@ -10,9 +10,14 @@ test.describe("admin public entry flows", () => {
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
-  test("redirects root path to login and preserves next query parameter", async ({ page }) => {
+  test("keeps the landing page visible and preserves next on the sign-in CTA", async ({ page }) => {
     await page.goto("/?next=/dashboard");
-    await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);
+    await expect(page).toHaveURL(/\/\?next=\/dashboard$/);
+    await expect(page.getByRole("heading", { name: "Learn math in chat." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in" }).first()).toHaveAttribute(
+      "href",
+      "/login?next=%2Fdashboard",
+    );
   });
 
   test("shows mapped auth error message on login when auth_error is present", async ({ page }) => {
