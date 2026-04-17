@@ -156,7 +156,7 @@ func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
 		// If already connected, show status.
 		if w.client.Store.ID != nil && w.client.IsConnected() {
 			rw.Header().Set("Content-Type", "text/html")
-			fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
+			_, _ = fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
 				<h2>&#9989; WhatsApp Connected</h2>
 				<p>Session is active. Bot is ready to send and receive messages.</p>
 			</body></html>`)
@@ -173,7 +173,7 @@ func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
 		if qr == "" {
 			rw.Header().Set("Content-Type", "text/html")
 			rw.Header().Set("Refresh", "3")
-			fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
+			_, _ = fmt.Fprint(rw, `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px">
 				<h2>Waiting for QR code...</h2>
 				<p>Page will auto-refresh. If this persists, restart the server.</p>
 			</body></html>`)
@@ -194,7 +194,7 @@ func (w *WhatsAppMeowChannel) QRHandler() http.Handler {
 
 		// Default: HTML page with embedded QR image and auto-refresh.
 		rw.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(rw, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5; url=/whatsapp/qr?%s"></head>
+		_, _ = fmt.Fprintf(rw, `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5; url=/whatsapp/qr?%s"></head>
 			<body style="font-family:sans-serif;text-align:center;padding:40px">
 			<h2>Scan QR Code with WhatsApp</h2>
 			<p>Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</p>
