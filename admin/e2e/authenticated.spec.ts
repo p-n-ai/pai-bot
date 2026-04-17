@@ -61,7 +61,7 @@ test.describe("admin authenticated routes", () => {
     await loginAsAdmin(page);
     await page.goto("/students/test-student-id");
     await expect(page).toHaveURL(/\/students\/test-student-id$/);
-    await expect(page.getByText("Student detail")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to dashboard" })).toBeVisible();
   });
 
   test("renders /parents/:id route shell", async ({ page }) => {
