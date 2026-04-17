@@ -50,7 +50,6 @@ export function RootLandingPage({
             <LandingAudienceShowcase
               primaryHref={primaryHref}
               primaryActionLabel={primaryActionLabel}
-              signedInLabel={signedInLabel}
             />
           </div>
         </section>

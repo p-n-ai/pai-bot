@@ -28,6 +28,18 @@ describe("RootPage", () => {
     expect(getServerPostAuthPathMock).not.toHaveBeenCalled();
   });
 
+  it("preserves next for signed-out visitors", async () => {
+    getServerAuthSessionMock.mockResolvedValue(null);
+
+    render(await RootPage({ searchParams: Promise.resolve({ next: "/dashboard/classes" }) }));
+
+    expect(screen.getAllByRole("link", { name: "Sign in" })[0]).toHaveAttribute(
+      "href",
+      "/login?next=%2Fdashboard%2Fclasses",
+    );
+    expect(getServerPostAuthPathMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the landing page visible and points signed-in users to their workspace", async () => {
     getServerAuthSessionMock.mockResolvedValue({
       user: {
