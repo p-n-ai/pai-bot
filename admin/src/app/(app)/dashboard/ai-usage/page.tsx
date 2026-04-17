@@ -32,7 +32,7 @@ async function loadAIUsagePageResult(): Promise<AIUsagePageResult> {
 export default async function AIUsagePage() {
   const [session, result] = await Promise.all([getServerAuthSession(), loadAIUsagePageResult()]);
   const currentUser = session?.user ?? null;
-  const canManageBudget = currentUser?.role === "admin" || currentUser?.role === "platform_admin";
+  const canManageBudget = currentUser?.role === "admin";
 
   if (!result.ok) {
     return (
