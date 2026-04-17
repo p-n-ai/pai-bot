@@ -88,6 +88,14 @@ just test              # Unit tests only
 just test-integration  # Integration tests (requires Docker — uses testcontainers)
 just lint              # golangci-lint
 just test-all          # All tests + lint
+just admin-e2e         # Admin Playwright smoke tests
+```
+
+For direct admin E2E runs:
+
+```bash
+cd admin
+pnpm test:e2e
 ```
 
 ## Common Issues

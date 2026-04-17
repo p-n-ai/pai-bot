@@ -493,7 +493,10 @@ go test -tags=integration ./...   # Run integration tests
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
-just test-all     # Convenience gate: lint + Go tests
+cd admin && pnpm test      # Admin unit + component tests
+cd admin && pnpm test:e2e  # Admin Playwright smoke tests
+just admin-e2e             # Same Playwright run via just
+just test-all              # Convenience gate: lint + Go tests + admin unit/component tests
 ```
 
 OpenAI live conversation integration suite:
