@@ -162,23 +162,9 @@ The admin shell provides a persistent sidebar (desktop) or collapsible menu (mob
 
 ---
 
-## Landing Page
-
-**Route:** `/`
-**Access:** All roles
-**Status:** Implemented
-
-The root route is now a real landing page instead of a redirect shim. It should explain the product in product language, show a concrete intervention-oriented snapshot, and keep login as an explicit next step rather than embedding the auth form directly into the landing experience.
-
-**Interactions:**
-- Signed-out users land on `/` and move to `/login` through CTA buttons
-- Signed-in users can still view `/`, but the main CTA routes them into their role-safe workspace
-- Keep the hero outcome-oriented: early intervention, mastery drift, family follow-up, rollout visibility
-- Use a clear visual difference between landing and auth so `/login` feels like a deliberate entry point, not a slightly different hero state
-
 ## Login Page
 
-**Route:** `/login`
+**Routes:** `/`, `/login`
 **Access:** All roles (unauthenticated)
 **Status:** Implemented
 
@@ -214,7 +200,7 @@ Current shell note:
 └───────────────────────────────────────────────────┘
 ```
 
-`/login` remains the direct auth URL and renders the login layout. It should stay focused on authentication only.
+The root route `/` is now redirect-only. It sends signed-in users to their role-safe default route and sends signed-out users to `/login`. `/login` remains the direct auth URL and renders the login layout.
 
 **Interactions:**
 - On success → redirect to the role-appropriate workspace
