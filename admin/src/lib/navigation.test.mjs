@@ -60,6 +60,14 @@ test("getCurrentSection returns class management metadata for dashboard classes 
   });
 });
 
+test("getCurrentSection returns AI usage metadata for dashboard ai usage routes", () => {
+  assert.deepEqual(getCurrentSection("/dashboard/ai-usage"), {
+    eyebrow: "Administration",
+    title: "AI usage",
+    description: "Track token consumption, provider mix, and tenant budget windows for the current workspace.",
+  });
+});
+
 test("getCurrentSection returns user management metadata for settings routes", () => {
   assert.deepEqual(getCurrentSection("/settings/users"), {
     eyebrow: "Administration",
@@ -113,14 +121,14 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
+    ["/dashboard", "/dashboard/classes", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 
 test("getNavigationForUser exposes onboarding to platform admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "platform_admin", user_id: "platform-admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
+    ["/dashboard", "/dashboard/classes", "/settings/users", "/export", "/settings/whatsapp"],
   );
 });
 
@@ -141,6 +149,13 @@ test("getBreadcrumbs returns class management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/dashboard/classes"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Classes", href: "/dashboard/classes" },
+  ]);
+});
+
+test("getBreadcrumbs returns AI usage hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/dashboard/ai-usage"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "AI usage", href: "/dashboard/ai-usage" },
   ]);
 });
 
