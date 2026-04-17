@@ -782,7 +782,7 @@ Current implementation note:
 
 **Route:** `/setup/onboard`
 **Access:** Admin (first-time setup)
-**Status:** Planned (Week 6, Day 27)
+**Status:** Implemented
 
 ```
 Step 1 of 5                    ● ○ ○ ○ ○
@@ -839,8 +839,8 @@ Current slice notes:
 - first class is required
 - school name is optional in this slice
 - class name is auto-generated, editable, and used to differentiate groups/cohorts
-- success state should show school name when present, the created class name, join link, and simple save status
-- teacher invites happen after setup, while students enter through the generated join link
+- success state should show school name when present, the created class name, join link, simple save status, and an immediate teacher-invite handoff
+- teacher invites are available directly from the success state, while students enter through the generated join link
 
 ---
 

@@ -484,7 +484,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W6D27-1` | Fix top 5 bugs from launch day | 🤖 | ⬜ | |
-| `P-W6D27-2` | School onboarding wizard in admin: curriculum selection → first class setup → bot setup → optional school name → invite teachers via email invite flow → success summary with join link | 🤖 | ⬜ | |
+| `P-W6D27-2` | School onboarding wizard in admin: curriculum selection → first class setup → bot setup → optional school name → invite teachers via email invite flow → success summary with join link | 🤖 | ✅ | Wizard now persists the first class entity, exposes the public join link, and offers teacher invite handoff from the success state using the existing email invite flow. |
 | `A-W6D27-EMAIL-1` | Email-delivered admin invites: add outbound invite email delivery for a provided recipient email, keep `/activate` as the one activation path, persist send-attempt metadata/status for pending invites, and expose resend-via-email from user management instead of only showing a copyable link | 🤖 | ✅ | Added SMTP-backed invite delivery, persisted `sent/failed` invite delivery state, exposed resend-email in user management, and kept the activation link as admin fallback. |
 | `P-W6D27-3` | 🧑 Respond to every GitHub issue/star/PR. Onboard schools signing up. | 🧑 Team | ⬜ | |
 

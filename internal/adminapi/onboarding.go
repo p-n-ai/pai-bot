@@ -186,6 +186,7 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 	if err != nil {
 		return SubmitOnboardingResult{}, fmt.Errorf("encode onboarding config: %w", err)
 	}
+	onboardingConfig := string(onboardingJSON)
 
 	if strings.TrimSpace(normalized.SchoolName) != "" {
 		if _, err := tx.Exec(ctx, `
@@ -193,7 +194,7 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 			SET name = $2,
 			    config = COALESCE(config, '{}'::jsonb) || jsonb_build_object('onboarding', $3::jsonb)
 			WHERE id = $1::uuid
-		`, s.tenantID, normalized.SchoolName, onboardingJSON); err != nil {
+		`, s.tenantID, normalized.SchoolName, onboardingConfig); err != nil {
 			return SubmitOnboardingResult{}, fmt.Errorf("update tenant onboarding config: %w", err)
 		}
 	} else {
@@ -201,7 +202,7 @@ func (s *Service) SubmitOnboarding(req SubmitOnboardingRequest, joinBaseURL stri
 			UPDATE tenants
 			SET config = COALESCE(config, '{}'::jsonb) || jsonb_build_object('onboarding', $2::jsonb)
 			WHERE id = $1::uuid
-		`, s.tenantID, onboardingJSON); err != nil {
+		`, s.tenantID, onboardingConfig); err != nil {
 			return SubmitOnboardingResult{}, fmt.Errorf("update tenant onboarding config: %w", err)
 		}
 	}
