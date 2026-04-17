@@ -13,6 +13,7 @@ type BotCommand struct {
 // shown in Telegram's command menu (and any future chat channel).
 // Add new commands here — they auto-sync to Telegram on bot startup.
 var RegisteredCommands = []BotCommand{
+	{Command: "help", Description: "Senarai semua arahan"},
 	{Command: "start", Description: "Mulakan sesi pembelajaran"},
 	{Command: "clear", Description: "Reset perbualan semasa"},
 	{Command: "language", Description: "Tukar bahasa (English/BM/中文)"},

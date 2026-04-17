@@ -116,12 +116,16 @@ type EmailConfig struct {
 	BaseURL      string
 }
 
-// WhatsAppConfig holds WhatsApp Cloud API settings.
+// WhatsAppConfig holds WhatsApp settings.
+// Backend selects the adapter: "cloudapi" (Meta Cloud API) or "meow" (whatsmeow, default).
 type WhatsAppConfig struct {
 	Enabled     bool
-	AccessToken string
-	PhoneID     string
-	VerifyToken string
+	Backend     string // "cloudapi" or "meow"
+	AccessToken string // Cloud API only
+	PhoneID     string // Cloud API only
+	VerifyToken string // Cloud API only
+	MeowDBPath  string // whatsmeow session DB path
+	QRToken     string // token to access /whatsapp/qr endpoint
 }
 
 // AuthConfig holds authentication settings.
@@ -202,9 +206,12 @@ func Load() (*Config, error) {
 		},
 		WhatsApp: WhatsAppConfig{
 			Enabled:     envBool("LEARN_WHATSAPP_ENABLED", false),
+			Backend:     envStr("LEARN_WHATSAPP_BACKEND", "meow"),
 			AccessToken: envStr("LEARN_WHATSAPP_ACCESS_TOKEN", ""),
 			PhoneID:     envStr("LEARN_WHATSAPP_PHONE_ID", ""),
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
+			MeowDBPath:  envStr("LEARN_WHATSAPP_MEOW_DB", "file:whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"),
+			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
 		},
 		Auth: AuthConfig{
 			JWTSecret: envStr("PAI_AUTH_SECRET", "change-me-in-production"),
