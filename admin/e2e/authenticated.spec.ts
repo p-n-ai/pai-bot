@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "platform-admin@example.com";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "demo-password";
+const authEnabled = process.env.E2E_AUTH_ENABLED === "true";
+const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "";
+const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "";
+const hasAuthSetup = authEnabled && Boolean(adminEmail) && Boolean(adminPassword);
 
 async function loginAsAdmin(page: Page) {
   const response = await page.request.post("/api/auth/login", {
@@ -22,7 +24,12 @@ async function loginAsAdmin(page: Page) {
   expect(sessionResponse.ok()).toBeTruthy();
 }
 
-test.describe("admin authenticated routes", () => {
+test.describe("admin authenticated routes @backend", () => {
+  test.skip(
+    !hasAuthSetup,
+    "Set E2E_AUTH_ENABLED=true, E2E_ADMIN_EMAIL, and E2E_ADMIN_PASSWORD to run authenticated E2E tests.",
+  );
+
   test("redirects authenticated users away from /login", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/login");

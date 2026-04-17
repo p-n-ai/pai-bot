@@ -109,22 +109,28 @@ pnpm exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
 
-By default, authenticated E2E tests use seeded admin credentials:
-- email: `platform-admin@example.com`
-- password: `demo-password`
+Authenticated E2E tests are opt-in and only run when all of these are set:
+- `E2E_BACKEND_ENABLED=true`
+- `E2E_AUTH_ENABLED=true`
+- `E2E_ADMIN_EMAIL`
+- `E2E_ADMIN_PASSWORD`
 
-Override when needed:
+Example:
 
 ```bash
 cd admin
-E2E_ADMIN_EMAIL=your-admin@example.com E2E_ADMIN_PASSWORD=your-password pnpm test:e2e
+E2E_BACKEND_ENABLED=true E2E_AUTH_ENABLED=true E2E_ADMIN_EMAIL=platform-admin@example.com E2E_ADMIN_PASSWORD=demo-password pnpm test:e2e
 ```
 
 PowerShell equivalent:
 
 ```powershell
-$env:E2E_ADMIN_EMAIL="your-admin@example.com"; $env:E2E_ADMIN_PASSWORD="your-password"; pnpm test:e2e
+$env:E2E_BACKEND_ENABLED="true"; $env:E2E_AUTH_ENABLED="true"; $env:E2E_ADMIN_EMAIL="platform-admin@example.com"; $env:E2E_ADMIN_PASSWORD="demo-password"; pnpm test:e2e
 ```
+
+You can place these in `admin/.env`, `admin/.env.local`, or repo-root `.env`; Playwright now reads those files before test startup.
+By default (`E2E_BACKEND_ENABLED` unset), Playwright skips tests tagged with `@backend`.
+The same `E2E_*` keys are listed in `.env.example` for copy/paste onboarding.
 
 Useful variants:
 
