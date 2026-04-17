@@ -20,19 +20,10 @@ test.describe("admin public entry flows", () => {
     await expect(page.getByText("Google sign-in failed. Please try again.")).toBeVisible();
   });
 
-  test("theme toggle is available on public routes and updates the html class", async ({ page }) => {
+  test("public login route renders without protected navigation chrome", async ({ page }) => {
     await page.goto("/login");
-    const themeToggle = page.getByRole("button", { name: /theme/i });
-    await expect(themeToggle).toBeVisible();
-
-    const html = page.locator("html");
-    const before = (await html.getAttribute("class")) ?? "";
-
-    await themeToggle.click();
-
-    await expect
-      .poll(async () => (await html.getAttribute("class")) ?? "")
-      .not.toBe(before);
+    await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
   });
 
   test("invite acceptance submit button is disabled when token is missing", async ({ page }) => {
@@ -41,8 +32,10 @@ test.describe("admin public entry flows", () => {
     await expect(page.getByRole("button", { name: "Accept invite" })).toBeDisabled();
   });
 
-  test("invite acceptance submit button is enabled when token is present", async ({ page }) => {
+  test("invite acceptance form hydrates and becomes submittable when token is present", async ({ page }) => {
     await page.goto("/activate?token=test-token");
+    await page.getByLabel("Full name").fill("Teacher One");
+    await page.getByLabel("Password").fill("strong-pass-1");
     await expect(page.getByRole("button", { name: "Accept invite" })).toBeEnabled();
   });
 });

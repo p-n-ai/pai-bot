@@ -3,6 +3,7 @@
 import { Suspense, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { InviteAcceptanceCard } from "@/components/invite-acceptance-card";
+import { useAdminSessionBootstrap } from "@/hooks/use-admin-session-bootstrap";
 import { useInviteActivationFlowBootstrap } from "@/hooks/use-auth-flow-bootstrap";
 import { useSessionRedirect } from "@/hooks/use-session-redirect";
 import { acceptInvite, persistSession } from "@/lib/api";
@@ -33,6 +34,7 @@ function ActivatePageContent() {
   const isPending = inviteActivationFlow.phase.kind === "submitting";
   const error = inviteActivationFlow.phase.kind === "error" ? inviteActivationFlow.phase.message : "";
 
+  useAdminSessionBootstrap(null, null);
   useInviteActivationFlowBootstrap(token);
 
   useSessionRedirect({
