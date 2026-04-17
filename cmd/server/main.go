@@ -146,15 +146,29 @@ func main() {
 	}
 
 	// WhatsApp channel (behind feature flag).
-	var waChannel *chat.WhatsAppChannel
+	var waCloudChannel *chat.WhatsAppChannel
+	var waMeowChannel *chat.WhatsAppMeowChannel
 	if cfg.WhatsApp.Enabled {
-		var waErr error
-		waChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
-		if waErr != nil {
-			slog.Error("failed to create WhatsApp channel", "error", waErr)
-			os.Exit(1)
+		switch cfg.WhatsApp.Backend {
+		case "cloudapi":
+			var waErr error
+			waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
+			if waErr != nil {
+				slog.Error("failed to create WhatsApp Cloud API channel", "error", waErr)
+				os.Exit(1)
+			}
+			gw.Register("whatsapp", waCloudChannel)
+			slog.Info("whatsapp backend: Cloud API")
+		default: // "meow"
+			var waErr error
+			waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
+			if waErr != nil {
+				slog.Error("failed to create WhatsApp meow channel", "error", waErr)
+				os.Exit(1)
+			}
+			gw.Register("whatsapp", waMeowChannel)
+			slog.Info("whatsapp backend: whatsmeow")
 		}
-		gw.Register("whatsapp", waChannel)
 	} else {
 		slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
 	}
@@ -284,8 +298,11 @@ func main() {
 	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
 	topMux := http.NewServeMux()
 	topMux.Handle("GET /ws/chat", wsChannel.Handler())
-	if waChannel != nil {
-		topMux.Handle("/webhook/whatsapp", waChannel.WebhookHandler(handleInbound))
+	if waCloudChannel != nil {
+		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
+	}
+	if waMeowChannel != nil {
+		topMux.Handle("/whatsapp/qr", waMeowChannel.QRHandler())
 	}
 	topMux.Handle("/", apiHandler)
 
