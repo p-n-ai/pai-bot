@@ -499,6 +499,8 @@ just admin-e2e             # Same Playwright run via just
 just test-all              # Convenience gate: lint + Go tests + admin unit/component tests
 ```
 
+Playwright first-run setup (install deps + Chromium) is documented in [docs/setup.md](docs/setup.md#playwright-e2e-setup-admin).
+
 OpenAI live conversation integration suite:
 
 - Fixture source: `internal/agent/testdata/openai_live_conversations.yaml` (30 scripted conversations, 2-10 turns each)

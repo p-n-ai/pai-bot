@@ -98,6 +98,34 @@ cd admin
 pnpm test:e2e
 ```
 
+## Playwright E2E Setup (Admin)
+
+If this is your first Playwright run on a machine:
+
+```bash
+cd admin
+pnpm install
+pnpm exec playwright install --with-deps chromium
+pnpm test:e2e
+```
+
+Useful variants:
+
+```bash
+cd admin
+pnpm test:e2e:headed   # run with visible browser
+pnpm test:e2e:ui       # open Playwright UI mode
+```
+
+Common issues:
+
+- `Cannot find module '@playwright/test'`:
+  - Run `cd admin && pnpm install` so `@playwright/test` exists in local `node_modules`.
+- PowerShell policy blocks `pnpm` scripts:
+  - Use `pnpm.cmd ...` from PowerShell, or run commands from a shell where `pnpm` is enabled.
+- Browser executable missing:
+  - Run `cd admin && pnpm exec playwright install --with-deps chromium`.
+
 ## Common Issues
 
 **Port 8080 already in use:**
