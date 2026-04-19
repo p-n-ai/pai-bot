@@ -29,6 +29,7 @@ const (
 	RoleParent        Role = "parent"
 	RoleAdmin         Role = "admin"
 	RolePlatformAdmin Role = "platform_admin"
+	RoleGuest         Role = "guest"
 )
 
 type TokenClaims struct {
