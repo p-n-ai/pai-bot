@@ -3,8 +3,10 @@ import tailwindcss from "@tailwindcss/vite";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
-  site: "https://p-n-ai.github.io",
-  base: process.env.CI ? "/pai-bot" : "/",
+  site: process.env.CI
+    ? "https://p-n-ai.github.io/pai-bot"
+    : "http://localhost:4321",
+  base: process.env.CI ? "/pai-bot" : undefined,
   integrations: [
     starlight({
       title: "P&AI Bot",
