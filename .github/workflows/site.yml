@@ -50,6 +50,8 @@ jobs:
 
       - name: Build
         working-directory: site
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://p-n-ai.github.io/pai-bot' }}
         run: pnpm build
 
       - uses: actions/upload-pages-artifact@v3
