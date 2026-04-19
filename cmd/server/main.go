@@ -58,12 +58,13 @@ func main() {
 	// (curriculum seeding, retrieval indexing, Telegram sync can take >60 s
 	// on small instances).  The handler is atomically swapped to the full
 	// mux once initialisation completes.
-	var handler atomic.Value
-	handler.Store(http.HandlerFunc(handleHealthz))
+	var handler atomic.Pointer[http.Handler]
+	initialHandler := http.Handler(http.HandlerFunc(handleHealthz))
+	handler.Store(&initialHandler)
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			handler.Load().(http.Handler).ServeHTTP(w, r)
+			(*handler.Load()).ServeHTTP(w, r)
 		}),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -352,7 +353,8 @@ func main() {
 	topMux.Handle("/", apiHandler)
 
 	// Atomically swap to the full handler — no port gap, no reconnect.
-	handler.Store(topMux)
+	fullHandler := http.Handler(topMux)
+	handler.Store(&fullHandler)
 	slog.Info("full handler active")
 
 	// Start chat channels now that the full HTTP handler is live.
