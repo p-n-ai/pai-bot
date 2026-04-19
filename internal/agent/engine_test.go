@@ -1207,6 +1207,59 @@ func TestEngine_ProcessMessage_PersistsMatchedTopicForFollowUps(t *testing.T) {
 	}
 }
 
+// Regression: after a topic is set on the conversation (via /learn or a prior
+// lexical match), subsequent vague messages like "ok" or "what's next" should
+// not cause the bot to forget the topic. The stored topic must still be
+// injected into the system prompt as TOPIC CONTEXT.
+func TestEngine_ProcessMessage_InjectsStoredTopicContextForVagueFollowUp(t *testing.T) {
+	mockAI := ai.NewMockProvider("ok")
+	store := agent.NewMemoryStore()
+	loader := createTestCurriculumLoader(t)
+
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: loader,
+	})
+
+	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "vague-user",
+		Text:    "/learn linear equations",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(/learn) error = %v", err)
+	}
+
+	conv, ok := store.GetActiveConversation("vague-user")
+	if !ok {
+		t.Fatal("expected active conversation after /learn")
+	}
+	if conv.TopicID != "F1-02" {
+		t.Fatalf("conv.TopicID after /learn = %q, want F1-02", conv.TopicID)
+	}
+
+	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "vague-user",
+		Text:    "ok",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage(ok) error = %v", err)
+	}
+
+	systemPrompt := mockAI.LastRequest.Messages[0].Content
+	if !contains(systemPrompt, "TOPIC CONTEXT") {
+		t.Fatalf("expected TOPIC CONTEXT in system prompt after vague reply, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "F1-02") {
+		t.Fatalf("expected stored topic ID F1-02 in system prompt, got: %s", systemPrompt)
+	}
+	if !contains(systemPrompt, "Treat the equation like a balance") {
+		t.Fatalf("expected stored teaching notes in system prompt, got: %s", systemPrompt)
+	}
+}
+
 func TestEngine_ClearClearsHistory(t *testing.T) {
 	mockAI := ai.NewMockProvider("Response")
 

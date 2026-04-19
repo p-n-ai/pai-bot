@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -83,11 +84,12 @@ func NewDeepSeekProvider(apiKey string, opts ...OpenAIOption) *OpenAIProvider {
 
 // openaiRequest is the request body for the OpenAI chat completions API.
 type openaiRequest struct {
-	Model          string                `json:"model"`
-	Messages       []openaiMessage       `json:"messages"`
-	ResponseFormat *openaiResponseFormat `json:"response_format,omitempty"`
-	MaxTokens      int                   `json:"max_tokens,omitempty"`
-	Temperature    *float64              `json:"temperature,omitempty"`
+	Model               string                `json:"model"`
+	Messages            []openaiMessage       `json:"messages"`
+	ResponseFormat      *openaiResponseFormat `json:"response_format,omitempty"`
+	MaxTokens           int                   `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int                   `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64              `json:"temperature,omitempty"`
 }
 
 type openaiMessage struct {
@@ -141,7 +143,13 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		Messages: buildOpenAIMessages(req.Messages),
 	}
 	if req.MaxTokens > 0 {
-		oaiReq.MaxTokens = req.MaxTokens
+		// Newer OpenAI models (o1+, gpt-5+) reject max_tokens and require
+		// max_completion_tokens instead.
+		if needsMaxCompletionTokens(model) {
+			oaiReq.MaxCompletionTokens = req.MaxTokens
+		} else {
+			oaiReq.MaxTokens = req.MaxTokens
+		}
 	}
 	if req.Temperature > 0 {
 		temp := req.Temperature
@@ -224,6 +232,21 @@ func applyOpenAIStructuredOutput(providerName string, oaiReq *openaiRequest, spe
 		},
 	}
 	return nil
+}
+
+// needsMaxCompletionTokens returns true for model families that reject the
+// legacy max_tokens parameter and require max_completion_tokens instead.
+func needsMaxCompletionTokens(model string) bool {
+	switch {
+	case strings.HasPrefix(model, "o1"),
+		strings.HasPrefix(model, "o3"),
+		strings.HasPrefix(model, "o4"),
+		strings.HasPrefix(model, "gpt-4.1"),
+		strings.HasPrefix(model, "gpt-5"):
+		return true
+	default:
+		return false
+	}
 }
 
 func buildOpenAIMessages(messages []Message) []openaiMessage {

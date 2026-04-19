@@ -313,6 +313,22 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			conv.TopicID = matchedTopic.ID
 		}
 	}
+	// Fallback: if lexical retrieval did not match but the conversation already
+	// has an active topic (set via /learn or a prior match) and the user's
+	// message is a vague acknowledgment or generic follow-up, reuse the stored
+	// topic so the bot does not "forget" the current topic on replies like
+	// "ok" or "what's next". We intentionally skip this when the message has
+	// content-bearing terms, so an explicit off-topic request still falls
+	// through to a clean topic-less prompt.
+	if matchedTopic == nil && conv.TopicID != "" && e.curriculumLoader != nil && isVagueContinuation(msg.Text) {
+		if stored, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
+			topicCopy := stored
+			matchedTopic = &topicCopy
+			if notes, ok := e.curriculumLoader.GetTeachingNotes(conv.TopicID); ok {
+				teachingNotes = notes
+			}
+		}
+	}
 	replyCount := countTutoringReplies(conv.Messages) + 1
 	promptRequested := shouldRequestRatingAfterReply(replyCount, e.ratingPromptEvery)
 

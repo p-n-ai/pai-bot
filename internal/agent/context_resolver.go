@@ -11,6 +11,37 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
+// vagueContinuationTokens are short affirmations or prompts that don't introduce
+// a new subject and should keep the conversation's active topic in context.
+var vagueContinuationTokens = map[string]struct{}{
+	"ok": {}, "okay": {}, "okey": {}, "yes": {}, "yeah": {}, "yup": {}, "yep": {},
+	"ya": {}, "baik": {}, "boleh": {}, "setuju": {}, "sure": {}, "done": {}, "siap": {},
+	"continue": {}, "teruskan": {}, "lanjut": {}, "go": {}, "proceed": {}, "more": {},
+	"thanks": {}, "thank": {}, "terima": {}, "kasih": {}, "tq": {},
+}
+
+// isVagueContinuation reports whether the given message is a short
+// acknowledgment or generic follow-up that should not displace the
+// conversation's active topic. It returns true when the message either
+// has no content-bearing tokens or every token is a known generic
+// follow-up / acknowledgment token.
+func isVagueContinuation(text string) bool {
+	tokens := tokenizeRetrievalText(text)
+	if len(tokens) == 0 {
+		return true
+	}
+	for _, token := range tokens {
+		if _, ok := genericFollowUpTokens[token]; ok {
+			continue
+		}
+		if _, ok := vagueContinuationTokens[token]; ok {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // ContextResolver resolves curriculum context for a user message.
 // It returns a matched topic and optional teaching notes.
 // Returning nil topic and empty notes means "no curriculum match".
