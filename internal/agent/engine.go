@@ -306,7 +306,22 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	e.maybeCompact(ctx, conv)
 
 	matchedTopic, teachingNotes := e.resolveCurriculumContext(msg.UserID, conv.TopicID, msg.Text)
-	if matchedTopic != nil && matchedTopic.ID != "" && matchedTopic.ID != conv.TopicID {
+
+	// Guard: if the message is a vague continuation ("ok", "whats next", etc.)
+	// and the conversation already has a stored topic, always prefer the stored
+	// topic — even if the retriever matched a different topic (e.g. "next"
+	// matching "Patterns and Sequences" via assessment items).
+	vague := isVagueContinuation(msg.Text)
+	if vague && conv.TopicID != "" && e.curriculumLoader != nil {
+		if stored, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
+			topicCopy := stored
+			matchedTopic = &topicCopy
+			if notes, ok := e.curriculumLoader.GetTeachingNotes(conv.TopicID); ok {
+				teachingNotes = notes
+			}
+		}
+	} else if matchedTopic != nil && matchedTopic.ID != "" && matchedTopic.ID != conv.TopicID {
+		// Non-vague message matched a different topic — update the conversation.
 		if err := e.store.UpdateConversationTopicID(conv.ID, matchedTopic.ID); err != nil {
 			slog.Warn("failed to persist matched topic", "conversation_id", conv.ID, "topic_id", matchedTopic.ID, "error", err)
 		} else {
