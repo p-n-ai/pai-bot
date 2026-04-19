@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pai.fullname" . }}
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+data:
+  LEARN_SERVER_HOST: {{ .Values.config.serverHost | quote }}
+  LEARN_SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  LEARN_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  LEARN_LOG_FORMAT: {{ .Values.config.logFormat | quote }}
+  LEARN_TENANT_MODE: {{ .Values.config.tenantMode | quote }}
+  LEARN_CURRICULUM_PATH: {{ .Values.config.curriculumPath | quote }}
+  LEARN_DEV_MODE: {{ .Values.config.devMode | quote }}
+  LEARN_DISABLE_MULTI_LANGUAGE: {{ .Values.config.disableMultiLanguage | quote }}
+  LEARN_RATING_PROMPT_EVERY_REPLIES: {{ .Values.config.ratingPromptEveryReplies | quote }}
+  LEARN_AI_PERSONALIZED_NUDGES_ENABLED: {{ .Values.config.personalizedNudgesEnabled | quote }}
+  {{- if .Values.postgres.enabled }}
+  LEARN_DATABASE_URL: {{ include "pai.databaseUrl" . | quote }}
+  {{- end }}
+  {{- if .Values.dragonfly.enabled }}
+  LEARN_CACHE_URL: {{ include "pai.cacheUrl" . | quote }}
+  {{- end }}
+  {{- if .Values.nats.enabled }}
+  LEARN_NATS_URL: {{ include "pai.natsUrl" . | quote }}
+  {{- end }}
+  {{- if .Values.secrets.ollama.enabled }}
+  LEARN_AI_OLLAMA_ENABLED: "true"
+  LEARN_AI_OLLAMA_URL: {{ .Values.secrets.ollama.url | quote }}
+  {{- if .Values.secrets.ollama.model }}
+  LEARN_AI_OLLAMA_MODEL: {{ .Values.secrets.ollama.model | quote }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.secrets.whatsapp.enabled }}
+  LEARN_WHATSAPP_ENABLED: "true"
+  {{- end }}

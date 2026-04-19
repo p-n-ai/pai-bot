@@ -1,0 +1,29 @@
+P&AI Bot has been deployed!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+  https://{{ .Values.ingress.host }}
+{{- else }}
+  kubectl port-forward svc/{{ include "pai.fullname" . }}-app {{ .Values.config.serverPort }}:{{ .Values.config.serverPort }}
+  Then visit: http://localhost:{{ .Values.config.serverPort }}/healthz
+{{- end }}
+
+{{- if .Values.admin.enabled }}
+
+2. Access the admin panel:
+{{- if .Values.ingress.enabled }}
+  https://{{ .Values.ingress.host }}
+{{- else }}
+  kubectl port-forward svc/{{ include "pai.fullname" . }}-admin 3000:3000
+  Then visit: http://localhost:3000
+{{- end }}
+{{- end }}
+
+3. Check health:
+  curl http://localhost:{{ .Values.config.serverPort }}/healthz
+  curl http://localhost:{{ .Values.config.serverPort }}/readyz
+
+IMPORTANT: Make sure you have configured:
+  - At least one AI provider API key (unless devMode is enabled)
+  - A Telegram bot token (unless devMode is enabled)
+  - A strong PAI_AUTH_SECRET (do NOT use the default in production)

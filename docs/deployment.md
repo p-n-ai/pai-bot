@@ -134,17 +134,139 @@ Multi-stage build:
 - **Builder:** Node.js with pnpm, builds Next.js app
 - **Runtime:** Node.js Alpine, serves on `:3000`
 
-## Kubernetes (Planned)
+## Kubernetes (Helm)
 
-A Helm chart for Kubernetes deployment is planned (`P-W5D23-2` in the development timeline) but not yet available. The target structure is `deploy/helm/pai/` with Deployment, StatefulSet, ConfigMap, Secret, Service, and Ingress resources.
+A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, Next.js admin, PostgreSQL, Dragonfly, NATS, with database migrations, health probes, and ingress routing.
+
+### Prerequisites
+
+- Kubernetes cluster (any: EKS, GKE, AKS, k3s, minikube, k3d)
+- `helm` v3.12+
+- `kubectl` configured for your cluster
+- Container images pushed to a registry (or imported locally for k3d/minikube)
+
+### Quick Start
+
+```bash
+# 1. Build and push images (or import into local cluster)
+docker build -f deploy/docker/Dockerfile -t ghcr.io/p-n-ai/pai-bot:latest .
+docker build -f deploy/docker/Dockerfile.admin -t ghcr.io/p-n-ai/pai-admin:latest .
+
+# 2. Install with your values
+helm install pai deploy/helm/pai \
+  --set secrets.telegramBotToken=YOUR_TOKEN \
+  --set secrets.ai.openaiApiKey=YOUR_KEY \
+  --set secrets.authSecret=$(openssl rand -hex 16) \
+  --set ingress.enabled=true \
+  --set ingress.host=learn.yourschool.edu.my \
+  --set ingress.className=nginx
+
+# 3. Check status
+kubectl get pods
+helm status pai
+```
+
+### Local Testing with k3d
+
+```bash
+# Create a local cluster
+k3d cluster create pai-local --port "9090:80@loadbalancer"
+
+# Build and import images
+docker build -f deploy/docker/Dockerfile -t pai-bot:local .
+docker build -f deploy/docker/Dockerfile.admin -t pai-admin:local .
+k3d image import pai-bot:local pai-admin:local -c pai-local
+
+# Install in dev mode (no Telegram/AI keys needed)
+helm install pai-local deploy/helm/pai \
+  --set app.image.repository=pai-bot \
+  --set app.image.tag=local \
+  --set app.image.pullPolicy=Never \
+  --set admin.image.repository=pai-admin \
+  --set admin.image.tag=local \
+  --set admin.image.pullPolicy=Never \
+  --set config.devMode=true \
+  --set ingress.enabled=true \
+  --set ingress.host=localhost \
+  --set ingress.className=traefik
+
+# Visit http://localhost:9090
+# Login: platform-admin@example.com / demo-password
+
+# Cleanup
+k3d cluster delete pai-local
+```
+
+### What Gets Deployed
+
+| Resource | Type | Purpose |
+|----------|------|---------|
+| `pai-app` | Deployment | Go backend (port 8080) |
+| `pai-admin` | Deployment | Next.js admin panel (port 3000) |
+| `pai-postgres` | StatefulSet + PVC | PostgreSQL 17 database |
+| `pai-dragonfly` | StatefulSet + PVC | Dragonfly cache (Redis-compatible) |
+| `pai-nats` | Deployment | NATS with JetStream |
+| `pai` | ConfigMap | Non-secret environment variables |
+| `pai` | Secret | API keys, auth secret, DB password |
+| `pai` | Ingress | Routes `/api/*` to app, `/` to admin |
+
+Database migrations run automatically as init containers on the app pod before the server starts.
+
+### Configuration
+
+Override values via `--set` flags or a custom values file:
+
+```bash
+helm install pai deploy/helm/pai -f my-values.yaml
+```
+
+Key values in `values.yaml`:
+
+| Value | Default | Description |
+|-------|---------|-------------|
+| `config.tenantMode` | `single` | `single` or `multi` tenant |
+| `config.devMode` | `false` | Skip Telegram/AI requirements |
+| `secrets.authSecret` | `change-me-in-production` | JWT signing secret |
+| `secrets.telegramBotToken` | `""` | Telegram bot token |
+| `secrets.ai.openaiApiKey` | `""` | OpenAI API key |
+| `postgres.enabled` | `true` | Use built-in PostgreSQL (set `false` for external DB) |
+| `dragonfly.enabled` | `true` | Use built-in Dragonfly cache |
+| `nats.enabled` | `true` | Use built-in NATS |
+| `admin.enabled` | `true` | Deploy admin panel |
+| `ingress.enabled` | `false` | Create ingress resource |
+| `ingress.host` | `pai.example.com` | Ingress hostname |
+
+For external databases, disable the built-in StatefulSet and set the connection URL in config:
+
+```bash
+helm install pai deploy/helm/pai \
+  --set postgres.enabled=false \
+  --set app.env.LEARN_DATABASE_URL=postgres://user:pass@your-rds:5432/pai
+```
+
+### Upgrading
+
+```bash
+helm upgrade pai deploy/helm/pai --set ...
+```
+
+Migrations run automatically on upgrade via init containers.
+
+### Uninstalling
+
+```bash
+helm uninstall pai
+# PVCs are retained — delete manually if you want to wipe data:
+kubectl delete pvc -l app.kubernetes.io/instance=pai
+```
 
 ### Health Probes
 
 The Go server exposes:
 - `/healthz` — Liveness probe (always returns 200 if the process is running)
-- `/readyz` — Readiness probe (currently returns 200 unconditionally; dependency checks planned)
+- `/readyz` — Readiness probe (returns 200 when the server is ready to accept traffic)
 
-Graceful shutdown on `SIGTERM`.
+Graceful shutdown on `SIGTERM` with a 15-second termination grace period.
 
 ## Monitoring
 

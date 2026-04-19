@@ -229,7 +229,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
-| **Deployment** | Docker Compose (Helm planned) | Single server ($20/mo) to national deployment (millions of students). |
+| **Deployment** | Docker Compose or Helm | Single server ($20/mo) to national deployment (millions of students). |
 
 ### Current Admin Auth
 
@@ -388,9 +388,20 @@ docker compose up -d   # Start everything
 
 **Cost:** ~$20/month on any VPS provider. Supports 100-500 students.
 
-### Option 2: Kubernetes (Planned)
+### Option 2: Kubernetes (Helm)
 
-For districts, states, or national deployments. A Helm chart is planned but not yet available.
+For districts, states, or national deployments. A Helm chart is available at `deploy/helm/pai/`.
+
+```bash
+helm install pai deploy/helm/pai \
+  --set secrets.telegramBotToken=YOUR_TOKEN \
+  --set secrets.ai.openaiApiKey=YOUR_KEY \
+  --set secrets.authSecret=$(openssl rand -hex 16) \
+  --set ingress.enabled=true \
+  --set ingress.host=learn.yourschool.edu.my
+```
+
+See [docs/deployment.md](docs/deployment.md#kubernetes-helm) for full configuration, local testing with k3d, and external database setup.
 
 **Scales:** Horizontally to millions of students. Each school gets a namespace with isolated data.
 

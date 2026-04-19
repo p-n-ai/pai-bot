@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pai.fullname" . }}-app
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.config.serverPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "pai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+---
+{{- if .Values.admin.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pai.fullname" . }}-admin
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "pai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+{{- end }}
+---
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pai.fullname" . }}-postgres
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "pai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+{{- end }}
+---
+{{- if .Values.dragonfly.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pai.fullname" . }}-dragonfly
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dragonfly
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 6379
+      targetPort: redis
+      protocol: TCP
+      name: redis
+  selector:
+    {{- include "pai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dragonfly
+{{- end }}
+---
+{{- if .Values.nats.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pai.fullname" . }}-nats
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4222
+      targetPort: client
+      protocol: TCP
+      name: client
+    - port: 8222
+      targetPort: monitor
+      protocol: TCP
+      name: monitor
+  selector:
+    {{- include "pai.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+{{- end }}

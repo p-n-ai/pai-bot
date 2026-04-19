@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: Apache-2.0
+{{- if .Values.admin.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pai.fullname" . }}-admin
+  labels:
+    {{- include "pai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  replicas: {{ .Values.admin.replicas }}
+  selector:
+    matchLabels:
+      {{- include "pai.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.admin.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "pai.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: admin
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: admin
+          image: "{{ .Values.admin.image.repository }}:{{ .Values.admin.image.tag }}"
+          imagePullPolicy: {{ .Values.admin.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: INTERNAL_API_URL
+              value: "http://{{ include "pai.fullname" . }}-app:{{ .Values.config.serverPort }}"
+            - name: NEXT_PUBLIC_API_URL
+              value: ""
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.admin.resources | nindent 12 }}
+{{- end }}

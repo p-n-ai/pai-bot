@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: Apache-2.0
+# Migrations run as init containers on the app deployment (see app-deployment.yaml).
+# This ensures postgres is already scheduled before migrations attempt to connect.

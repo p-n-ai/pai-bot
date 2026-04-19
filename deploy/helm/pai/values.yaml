@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: Apache-2.0
+# Default values for pai-bot Helm chart.
+
+# -- Global settings
+global:
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
+
+# -- App (Go backend)
+app:
+  image:
+    repository: ghcr.io/p-n-ai/pai-bot
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # -- Additional environment variables (non-secret)
+  env: {}
+  # -- Pod annotations
+  podAnnotations: {}
+
+# -- Admin (Next.js panel)
+admin:
+  enabled: true
+  image:
+    repository: ghcr.io/p-n-ai/pai-admin
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  podAnnotations: {}
+
+# -- PostgreSQL
+postgres:
+  # -- Use built-in StatefulSet. Set to false to use an external database.
+  enabled: true
+  image:
+    repository: postgres
+    tag: "17-alpine"
+  storage:
+    size: 10Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # -- Credentials (only used when postgres.enabled=true)
+  auth:
+    database: pai
+    username: pai
+    # -- Password. Override in production!
+    password: pai-secret
+
+# -- Dragonfly (Redis-compatible cache)
+dragonfly:
+  enabled: true
+  image:
+    repository: docker.dragonflydb.io/dragonflydb/dragonfly
+    tag: latest
+  storage:
+    size: 2Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 300Mi
+
+# -- NATS (message queue)
+nats:
+  enabled: true
+  image:
+    repository: nats
+    tag: "2.10-alpine"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# -- Configuration (non-secret env vars)
+config:
+  # -- Server
+  serverHost: "0.0.0.0"
+  serverPort: 8080
+  logLevel: info
+  logFormat: json
+  # -- Tenant mode: "single" or "multi"
+  tenantMode: single
+  # -- Curriculum path inside the container
+  curriculumPath: ./oss
+  # -- Dev mode (disables Telegram/AI provider requirement)
+  devMode: false
+  # -- Feature flags
+  disableMultiLanguage: false
+  ratingPromptEveryReplies: 5
+  personalizedNudgesEnabled: true
+
+# -- Secrets (sensitive credentials)
+secrets:
+  # -- Auth secret for JWT signing. MUST override in production.
+  authSecret: change-me-in-production
+  # -- Telegram bot token (required unless devMode)
+  telegramBotToken: ""
+  # -- AI provider keys (at least one required unless devMode)
+  ai:
+    openaiApiKey: ""
+    anthropicApiKey: ""
+    deepseekApiKey: ""
+    googleApiKey: ""
+    openrouterApiKey: ""
+  # -- Ollama (self-hosted)
+  ollama:
+    enabled: false
+    url: http://ollama:11434
+    model: ""
+  # -- AI model overrides (optional)
+  aiModels:
+    openai: ""
+    anthropic: ""
+    deepseek: ""
+    google: ""
+    openrouter: ""
+  # -- Default AI provider
+  aiDefaultProvider: ""
+  # -- Email/SMTP (optional)
+  email:
+    smtpAddr: ""
+    smtpUsername: ""
+    smtpPassword: ""
+    fromAddress: ""
+    fromName: "P&AI Bot"
+    baseUrl: ""
+  # -- Google OIDC (optional)
+  google:
+    clientId: ""
+    clientSecret: ""
+    allowedDomain: ""
+  # -- WhatsApp (optional)
+  whatsapp:
+    enabled: false
+    accessToken: ""
+    phoneId: ""
+    verifyToken: ""
+  # -- Bootstrap admin
+  bootstrapAdminEmail: "platform-admin@example.com"
+  bootstrapAdminPassword: ""
+
+# -- Database migration job
+migration:
+  # -- Run migrations as a pre-install/pre-upgrade hook
+  enabled: true
+
+# -- Ingress
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # -- Hostname for the ingress
+  host: pai.example.com
+  tls: []
+  #  - secretName: pai-tls
+  #    hosts:
+  #      - pai.example.com
+
+# -- Service type for the main entrypoint
+service:
+  type: ClusterIP

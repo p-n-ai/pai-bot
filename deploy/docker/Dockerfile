@@ -12,8 +12,8 @@ RUN CGO_ENABLED=0 go build -o /pai-seed ./cmd/seed
 # Stage 2: Final image (~25MB)
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata curl \
-    && curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz \
-       | tar -xz -C /usr/local/bin migrate
+    && curl -fsSL https://github.com/pressly/goose/releases/download/v3.24.3/goose_linux_x86_64 \
+       -o /usr/local/bin/goose && chmod +x /usr/local/bin/goose
 COPY --from=builder /pai-server /pai-server
 COPY --from=builder /pai-terminal-chat /pai-terminal-chat
 COPY --from=builder /pai-terminal-nudge /pai-terminal-nudge
