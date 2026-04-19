@@ -495,6 +495,21 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `P-W6D28-1` | i18n support: detect Telegram language_code, add to system prompt "Respond in Bahasa Melayu/Chinese/etc." | 🤖 | ✅ | i18n catalog (ms/en/zh) existed from Day 4. This task wires Telegram language_code into buildSystemPrompt as fallback when no stored preference exists; stored preference still takes priority. |
 | `P-W6D28-2` | 🧑 3-day post-launch metrics. Identify most-requested features. | 🧑 Human | ⬜ | |
 
+#### Additional Tasks (Out of Initial Plan)
+
+Use this section for any completed or in-progress work that was not listed in the original weekly/day plan.
+When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into the original planned task table.
+
+Embeddable web chat scope: ship a drop-in JS widget (`<script src="/embed/pai-chat.js">`) that lets any external site host the tutor through an iframe-sandboxed chat. Treated as post-launch scope because it opens a new public attack surface (anonymous traffic, origin spoofing, abuse) that the Telegram channel doesn't have, so authentication wiring and security hardening are tracked as first-class tasks alongside the channel and widget work.
+
+| Task ID | Task | Owner | Status | Remark |
+|---------|------|-------|--------|--------|
+| `A-W6D28-EMBED-1` | Embeddable web chat — WebSocket channel: `internal/chat/websocket.go` implementing the existing `Channel` interface, `/ws/chat` endpoint with origin allowlist check, per-connection message size limits, ping/pong keepalive, and CORS/CSP headers aligned with tenant-configured allowed origins | 🤖 | ⬜ | |
+| `A-W6D28-EMBED-2` | Embeddable web chat — authentication wiring: short-lived guest JWT issued per tenant with WebSocket subprotocol auth, anonymous guest `users` rows scoped to tenant + origin, optional magic-link/email upgrade path to a registered account, refresh-token rotation reusing the existing `auth_sessions` table, and session eviction when an origin is revoked | 🤖 | ⬜ | |
+| `A-W6D28-EMBED-3` | Embeddable web chat — JS widget: standalone widget bundle (e.g. under `admin/widget/`), `<script src="/embed/pai-chat.js">` loader that injects a sandboxed iframe, theming props (color, position, language), message history, typing indicator, and graceful offline handling | 🤖 | ⬜ | |
+| `A-W6D28-EMBED-4` | Embeddable web chat — admin config: per-tenant Embed page with allowed-origins CRUD, widget preview, copy-paste snippet, enable/disable toggle, and Go admin API endpoints (`GET/POST/DELETE /api/admin/embed/origins`, `GET /api/admin/embed/config`) | 🤖 | ⬜ | |
+| `A-W6D28-EMBED-5` | Embeddable web chat — security hardening: per-IP and per-origin rate limiting on WebSocket handshake and message send, captcha or proof-of-work on guest signup, tenant token-budget enforcement (reuse existing budget checker), abuse event logging to the `events` table, message content filtering for prompt-injection attempts, and audit logging for origin configuration changes | 🤖 | ⬜ | |
+
 ### Day 29 — Analytics API
 
 | Task ID | Task | Owner | Status | Remark |
