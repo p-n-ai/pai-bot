@@ -306,27 +306,26 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	e.maybeCompact(ctx, conv)
 
 	matchedTopic, teachingNotes := e.resolveCurriculumContext(msg.UserID, conv.TopicID, msg.Text)
-	if matchedTopic != nil && matchedTopic.ID != "" && matchedTopic.ID != conv.TopicID {
-		if err := e.store.UpdateConversationTopicID(conv.ID, matchedTopic.ID); err != nil {
-			slog.Warn("failed to persist matched topic", "conversation_id", conv.ID, "topic_id", matchedTopic.ID, "error", err)
-		} else {
-			conv.TopicID = matchedTopic.ID
-		}
-	}
-	// Fallback: if lexical retrieval did not match but the conversation already
-	// has an active topic (set via /learn or a prior match) and the user's
-	// message is a vague acknowledgment or generic follow-up, reuse the stored
-	// topic so the bot does not "forget" the current topic on replies like
-	// "ok" or "what's next". We intentionally skip this when the message has
-	// content-bearing terms, so an explicit off-topic request still falls
-	// through to a clean topic-less prompt.
-	if matchedTopic == nil && conv.TopicID != "" && e.curriculumLoader != nil && isVagueContinuation(msg.Text) {
+
+	// Guard: if the message is a vague continuation ("ok", "whats next", etc.)
+	// and the conversation already has a stored topic, always prefer the stored
+	// topic — even if the retriever matched a different topic (e.g. "next"
+	// matching "Patterns and Sequences" via assessment items).
+	vague := isVagueContinuation(msg.Text)
+	if vague && conv.TopicID != "" && e.curriculumLoader != nil {
 		if stored, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
 			topicCopy := stored
 			matchedTopic = &topicCopy
 			if notes, ok := e.curriculumLoader.GetTeachingNotes(conv.TopicID); ok {
 				teachingNotes = notes
 			}
+		}
+	} else if matchedTopic != nil && matchedTopic.ID != "" && matchedTopic.ID != conv.TopicID {
+		// Non-vague message matched a different topic — update the conversation.
+		if err := e.store.UpdateConversationTopicID(conv.ID, matchedTopic.ID); err != nil {
+			slog.Warn("failed to persist matched topic", "conversation_id", conv.ID, "topic_id", matchedTopic.ID, "error", err)
+		} else {
+			conv.TopicID = matchedTopic.ID
 		}
 	}
 	replyCount := countTutoringReplies(conv.Messages) + 1
