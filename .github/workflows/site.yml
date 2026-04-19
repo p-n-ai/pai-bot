@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'docs/**'
       - '.github/workflows/site.yml'
   workflow_dispatch:
 
@@ -36,6 +37,16 @@ jobs:
       - name: Install dependencies
         working-directory: site
         run: pnpm install --frozen-lockfile
+
+      - name: Cache Astro build
+        uses: actions/cache@v4
+        with:
+          path: |
+            site/.astro
+            site/node_modules/.astro
+          key: astro-${{ hashFiles('site/pnpm-lock.yaml') }}-${{ hashFiles('site/src/**', 'site/astro.config.mjs') }}
+          restore-keys: |
+            astro-${{ hashFiles('site/pnpm-lock.yaml') }}-
 
       - name: Build
         working-directory: site
