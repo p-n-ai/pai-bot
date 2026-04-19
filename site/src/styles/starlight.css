@@ -1,0 +1,171 @@
+/* ── P&AI Bot — Starlight Theme ──
+   Uses the exact OKLCH values from the admin/landing design system.
+*/
+
+/* ── Dark mode (Starlight default) ── */
+:root {
+  /* Accent: landing page primary, hue shifted redder for lighter variants */
+  --sl-color-accent-low: oklch(0.25 0.1 30);
+  --sl-color-accent: oklch(0.553 0.195 38.402);
+  --sl-color-accent-high: oklch(0.78 0.14 30);
+
+  /* Grays: warm-neutral to match landing */
+  --sl-color-white: oklch(0.985 0 0);
+  --sl-color-gray-1: oklch(0.82 0 0);
+  --sl-color-gray-2: oklch(0.708 0 0);
+  --sl-color-gray-3: oklch(0.556 0 0);
+  --sl-color-gray-4: oklch(0.4 0 0);
+  --sl-color-gray-5: oklch(0.269 0 0);
+  --sl-color-gray-6: oklch(0.205 0 0);
+  --sl-color-black: oklch(0.145 0 0);
+
+  /* Backgrounds: exact landing values */
+  --sl-color-bg: oklch(0.145 0 0);
+  --sl-color-bg-nav: oklch(0.18 0 0);
+  --sl-color-bg-sidebar: oklch(0.18 0 0);
+
+  /* Semantic overrides */
+  --sl-color-text-accent: oklch(0.78 0.14 30);
+  --sl-color-bg-accent: oklch(0.553 0.195 38.402);
+
+  /* Fonts */
+  --sl-font: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --sl-font-system-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --sl-line-height-headings: 1.15;
+}
+
+/* ── Light mode ── */
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --sl-color-accent-low: oklch(0.93 0.06 30);
+  --sl-color-accent: oklch(0.553 0.195 38.402);
+  --sl-color-accent-high: oklch(0.35 0.14 30);
+  --sl-color-text-accent: oklch(0.35 0.14 30);
+  --sl-color-bg-accent: oklch(0.553 0.195 38.402);
+
+  --sl-color-white: oklch(0.145 0 0);
+  --sl-color-gray-1: oklch(0.205 0 0);
+  --sl-color-gray-2: oklch(0.35 0 0);
+  --sl-color-gray-3: oklch(0.45 0 0);
+  --sl-color-gray-4: oklch(0.556 0 0);
+  --sl-color-gray-5: oklch(0.82 0 0);
+  --sl-color-gray-6: oklch(0.94 0 0);
+  --sl-color-gray-7: oklch(0.97 0 0);
+  --sl-color-black: oklch(1 0 0);
+
+  --sl-color-bg: oklch(1 0 0);
+  --sl-color-bg-nav: oklch(0.985 0 0);
+  --sl-color-bg-sidebar: oklch(0.985 0 0);
+}
+
+/* ── Header ── */
+header.header {
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid oklch(0.5 0 0 / 10%);
+}
+
+/* ── Sidebar ── */
+nav.sidebar-content a[aria-current="page"] {
+  font-weight: 600;
+}
+
+.sidebar-content ul ul {
+  border-inline-start-color: oklch(0.553 0.195 38.402 / 25%);
+}
+
+/* ── Content headings ── */
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  letter-spacing: -0.03em;
+  font-weight: 650;
+}
+
+.sl-markdown-content h1 {
+  font-size: var(--sl-text-4xl);
+  letter-spacing: -0.04em;
+}
+
+/* Links */
+.sl-markdown-content a:not([class]) {
+  text-decoration-color: oklch(0.553 0.195 38.402 / 40%);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 200ms ease;
+}
+
+.sl-markdown-content a:not([class]):hover {
+  text-decoration-color: oklch(0.553 0.195 38.402);
+}
+
+/* Inline code */
+.sl-markdown-content :not(pre) > code {
+  border-radius: 5px;
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+}
+
+/* Code blocks */
+.expressive-code {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.expressive-code .frame {
+  border-radius: 12px !important;
+}
+
+/* Tables */
+.sl-markdown-content .table-container,
+.sl-markdown-content table:not([class]) {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sl-markdown-content table {
+  border-radius: 8px;
+}
+
+.sl-markdown-content th {
+  font-weight: 600;
+}
+
+/* Cards */
+.card {
+  border-radius: 16px;
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.card:hover {
+  border-color: oklch(0.553 0.195 38.402 / 40%);
+  box-shadow: 0 8px 24px oklch(0.553 0.195 38.402 / 8%);
+}
+
+.card .card-title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Asides */
+.starlight-aside {
+  border-radius: 12px;
+  border-left-width: 3px;
+}
+
+/* Pagination */
+.pagination-links a {
+  border-radius: 12px;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.pagination-links a:hover {
+  border-color: oklch(0.553 0.195 38.402 / 40%);
+  box-shadow: 0 4px 16px oklch(0.553 0.195 38.402 / 6%);
+}
+
+/* Color scheme */
+:root {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}

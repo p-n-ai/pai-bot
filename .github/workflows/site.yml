@@ -1,0 +1,69 @@
+name: Deploy site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: site
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Astro build
+        uses: actions/cache@v4
+        with:
+          path: |
+            site/.astro
+            site/node_modules/.astro
+          key: astro-${{ hashFiles('site/pnpm-lock.yaml') }}-${{ hashFiles('site/src/**', 'site/astro.config.mjs') }}
+          restore-keys: |
+            astro-${{ hashFiles('site/pnpm-lock.yaml') }}-
+
+      - name: Build
+        working-directory: site
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://p-n-ai.github.io/pai-bot' }}
+        run: pnpm build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

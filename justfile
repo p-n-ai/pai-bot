@@ -19,6 +19,7 @@ setup:
 install-deps:
   go mod download
   if [ ! -d admin/node_modules ]; then cd admin && pnpm install --frozen-lockfile; fi
+  if [ ! -d site/node_modules ]; then cd site && pnpm install --frozen-lockfile; fi
 
 install-local-runtime:
   needs_postgres_tools="no"; \
@@ -470,6 +471,12 @@ build-backend:
 
 admin-build:
   cd admin && pnpm build
+
+site-dev:
+  cd site && pnpm dev
+
+site-build:
+  cd site && pnpm build
 
 build: build-backend admin-build
 
