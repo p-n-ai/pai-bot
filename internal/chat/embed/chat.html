@@ -298,6 +298,7 @@
           token = resp.session.token;
         }
         isUpgraded = true;
+        userId = (resp.user && resp.user.user_id) || (resp.session && resp.session.user && resp.session.user.user_id) || userId;
         var userName = (resp.user && resp.user.name) || (resp.session && resp.session.user && resp.session.user.name) || email.split('@')[0];
         saveSession(token, userId, userName, 'student');
         showProfile(userName);

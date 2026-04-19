@@ -20,6 +20,9 @@ import (
 // ErrNotGuest is returned when UpgradeGuest is called on a user that is not a guest.
 var ErrNotGuest = errors.New("user is not a guest")
 
+// ErrEmailAlreadyUsed is returned when the email is already registered in the tenant.
+var ErrEmailAlreadyUsed = errors.New("email already in use")
+
 // GuestService handles guest token issuance for the embed widget.
 type GuestService struct {
 	pool         *pgxpool.Pool
@@ -48,7 +51,7 @@ func (gs *GuestService) findGuestByFingerprint(ctx context.Context, tenantID, fi
 		if err == pgx.ErrNoRows {
 			return "", nil
 		}
-		return "", nil // Not found is not an error — will create new
+		return "", fmt.Errorf("query guest by fingerprint: %w", err)
 	}
 	return userID, nil
 }
@@ -129,6 +132,18 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name
 	}
 	if role != string(RoleGuest) {
 		return "", ErrNotGuest
+	}
+
+	// Check if email is already taken in this tenant.
+	var emailExists bool
+	if err := gs.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM auth_identities WHERE tenant_id = $1::uuid AND provider = 'password' AND identifier_normalized = $2)`,
+		tenantID, email,
+	).Scan(&emailExists); err != nil {
+		return "", fmt.Errorf("check email exists: %w", err)
+	}
+	if emailExists {
+		return "", ErrEmailAlreadyUsed
 	}
 
 	passwordHash, err := HashPassword(password)

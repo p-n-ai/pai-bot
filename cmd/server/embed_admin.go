@@ -134,6 +134,10 @@ func handleEmbedUpgradeGuest(guestSvc *auth.GuestService, tm *auth.TokenManager)
 				http.Error(w, "user is not a guest", http.StatusForbidden)
 				return
 			}
+			if errors.Is(err, auth.ErrEmailAlreadyUsed) {
+				http.Error(w, "email already in use", http.StatusConflict)
+				return
+			}
 			slog.Error("embed upgrade guest", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

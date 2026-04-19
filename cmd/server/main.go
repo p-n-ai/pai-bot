@@ -255,10 +255,14 @@ func main() {
 			return
 		}
 
+		// Strip review action codes from all channels (Telegram renders
+		// them as inline buttons; other channels should never show the raw tag).
+		cleanResp := chat.StripReviewActionCodes(resp)
+
 		out := chat.OutboundMessage{
 			Channel: msg.Channel,
 			UserID:  msg.UserID,
-			Text:    resp,
+			Text:    cleanResp,
 		}
 		if msg.Channel == "telegram" {
 			out.Text = chat.ConvertLaTeXToUnicode(resp)
@@ -353,7 +357,10 @@ func main() {
 		embedGuestLimiter,
 	)))
 	topMux.Handle("OPTIONS /api/embed/auth/guest", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-	topMux.Handle("POST /api/embed/auth/upgrade", withCORS(handleEmbedUpgradeGuest(guestSvc, embedTokenManager)))
+	topMux.Handle("POST /api/embed/auth/upgrade", withCORS(withIPRateLimit(
+		handleEmbedUpgradeGuest(guestSvc, embedTokenManager),
+		embedGuestLimiter,
+	)))
 	topMux.Handle("OPTIONS /api/embed/auth/upgrade", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
 	topMux.Handle("GET /api/embed/messages", withCORS(handleEmbedMessages(db.Pool, embedTokenManager)))
 	topMux.Handle("OPTIONS /api/embed/messages", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))

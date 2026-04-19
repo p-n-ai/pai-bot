@@ -433,14 +433,12 @@ func containsPromptInjection(text string) bool {
 	markers := []string{
 		"<|system|>",
 		"<|im_start|>system",
-		"[system]",
 		"<<sys>>",
 		"[inst]",
-		"you are now",
 		"ignore previous instructions",
-		"ignore all previous",
-		"disregard previous",
-		"forget your instructions",
+		"ignore all previous instructions",
+		"disregard all previous instructions",
+		"forget all previous instructions",
 	}
 	for _, m := range markers {
 		if strings.Contains(lower, m) {
