@@ -475,7 +475,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | Task ID | Task | Owner | Status | Remark |
 |---------|------|-------|--------|--------|
 | `P-W6D26-1` | Landing page at `/`: static HTML (Tailwind CDN), "Try on Telegram" + "Self-host" buttons | 🤖 | ⬜ | |
-| `P-W6D26-2` | K8s health probes: /healthz, /readyz, graceful shutdown on SIGTERM | 🤖 | ⬜ | |
+| `P-W6D26-2` | K8s health probes: /healthz, /readyz, graceful shutdown on SIGTERM | 🤖 | ✅ | Already shipped in Day 0 (handlers + graceful shutdown) and Helm chart (liveness/readiness probes in app-deployment.yaml) |
 | `P-W6D26-3` | 🧑 Publish blog, HN submission, Twitter/LinkedIn/Reddit, 50 personal emails | 🧑 Human | ⬜ | |
 | `P-W6D26-4` | 🧑 Monitor server + conversations all day | 🧑 Team | ⬜ | |
 
