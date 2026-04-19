@@ -52,6 +52,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start an early health endpoint so Docker/K8s health checks pass while
+	// the rest of the application initialises (curriculum seeding, retrieval
+	// indexing, Telegram sync, etc. can take >60 s on small instances).
+	earlyHealth := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler: http.HandlerFunc(handleHealthz),
+	}
+	go func() {
+		if err := earlyHealth.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("early health server error", "error", err)
+		}
+	}()
+
 	// Initialize AI router with configured providers.
 	router := setupAIRouter(cfg)
 	if !router.HasProvider() {
@@ -245,12 +258,6 @@ func main() {
 		}
 	}
 
-	err = gw.StartAll(ctx, handleInbound)
-	if err != nil {
-		slog.Error("failed to start channels", "error", err)
-		os.Exit(1)
-	}
-
 	authService := auth.NewPostgresService(
 		db.Pool,
 		defaultSessionTTL,
@@ -332,6 +339,12 @@ func main() {
 	}
 	topMux.Handle("/", apiHandler)
 
+	// Shut down the early health-only listener before binding the full server
+	// on the same port.
+	if err := earlyHealth.Close(); err != nil {
+		slog.Warn("early health server close", "error", err)
+	}
+
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -343,11 +356,19 @@ func main() {
 
 	go func() {
 		slog.Info("server starting", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
 		}
 	}()
+
+	// Start chat channels after the HTTP server is listening so /healthz is
+	// available immediately.  Telegram's syncCommands (60 s timeout) would
+	// otherwise block the health check window.
+	if err := gw.StartAll(ctx, handleInbound); err != nil {
+		slog.Error("failed to start channels", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("P&AI Bot is running")
 
