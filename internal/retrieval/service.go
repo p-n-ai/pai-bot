@@ -352,9 +352,32 @@ func (s *Service) UpsertDocument(req UpsertDocumentInput) (Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Step 2 in the generic model: once the caller knows the source and
-	// collection, it writes a normalized document here. The service owns the
-	// indexing details and rebuilds the BM25 state after each mutation.
+	doc, err := s.upsertDocumentLocked(req)
+	if err != nil {
+		return Document{}, err
+	}
+	s.rebuildIndexLocked()
+	return doc, nil
+}
+
+// BulkUpsertDocuments inserts many documents and rebuilds the index once at
+// the end instead of after every insert.  This turns O(N²) seeding into O(N).
+func (s *Service) BulkUpsertDocuments(reqs []UpsertDocumentInput) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, req := range reqs {
+		if _, err := s.upsertDocumentLocked(req); err != nil {
+			return i, err
+		}
+	}
+	s.rebuildIndexLocked()
+	return len(reqs), nil
+}
+
+// upsertDocumentLocked writes a single document without rebuilding the index.
+// Caller must hold s.mu.
+func (s *Service) upsertDocumentLocked(req UpsertDocumentInput) (Document, error) {
 	if strings.TrimSpace(req.Kind) == "" || strings.TrimSpace(req.Title) == "" {
 		return Document{}, fmt.Errorf("%w: document kind and title are required", ErrInvalidArgument)
 	}
@@ -389,7 +412,6 @@ func (s *Service) UpsertDocument(req UpsertDocumentInput) (Document, error) {
 		document.Active = true
 	}
 	s.documents[id] = document
-	s.rebuildIndexLocked()
 	return cloneDocument(document), nil
 }
 

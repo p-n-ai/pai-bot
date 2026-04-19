@@ -37,14 +37,15 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 		return fmt.Errorf("upsert curriculum source: %w", err)
 	}
 
+	// Collect all documents first, then bulk-upsert so the BM25 index is
+	// rebuilt once instead of after every insert (O(N) vs O(N²)).
+	var docs []UpsertDocumentInput
+
 	for _, topic := range loader.AllTopics() {
 		subject, _ := loader.GetSubject(topic.SubjectID)
 		syllabus, _ := loader.GetSyllabus(topic.SyllabusID)
 		form := inferTopicForm(topic, subject)
 
-		// Step 2: create or update the collection that scopes this topic's
-		// material. Right now we use subject-level collections so search can be
-		// narrowed without hard-coding curriculum logic into the service.
 		collectionID := topic.SubjectID
 		if collectionID == "" {
 			collectionID = topic.SyllabusID
@@ -82,10 +83,7 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 			"form":        form,
 		}
 
-		// Step 3: store normalized curriculum documents.
-		// We keep topic cards, teaching-note sections, and assessment items as
-		// separate searchable records so BM25 can rank the most relevant chunk.
-		if _, err := service.UpsertDocument(UpsertDocumentInput{
+		docs = append(docs, UpsertDocumentInput{
 			ID:           "topic:" + topic.ID,
 			CollectionID: collectionID,
 			Kind:         "topic_card",
@@ -96,13 +94,11 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 			SourceType:   "curriculum",
 			Metadata:     withKind(baseMetadata, "topic_card"),
 			Source:       "curriculum",
-		}); err != nil {
-			return fmt.Errorf("upsert topic document %s: %w", topic.ID, err)
-		}
+		})
 
 		if notes, ok := loader.GetTeachingNotes(topic.ID); ok && strings.TrimSpace(notes) != "" {
 			for i, section := range splitTeachingNoteSections(notes) {
-				if _, err := service.UpsertDocument(UpsertDocumentInput{
+				docs = append(docs, UpsertDocumentInput{
 					ID:           "note:" + topic.ID + ":" + strconv.Itoa(i),
 					CollectionID: collectionID,
 					Kind:         "teaching_note",
@@ -113,15 +109,13 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 					SourceType:   "curriculum",
 					Metadata:     withKind(baseMetadata, "teaching_note"),
 					Source:       "curriculum",
-				}); err != nil {
-					return fmt.Errorf("upsert note document %s: %w", topic.ID, err)
-				}
+				})
 			}
 		}
 
 		if assessment, ok := loader.GetAssessment(topic.ID); ok {
 			for i, question := range assessment.Questions {
-				if _, err := service.UpsertDocument(UpsertDocumentInput{
+				docs = append(docs, UpsertDocumentInput{
 					ID:           "assessment:" + topic.ID + ":" + strconv.Itoa(i),
 					CollectionID: collectionID,
 					Kind:         "assessment_item",
@@ -132,11 +126,13 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 					SourceType:   "curriculum",
 					Metadata:     withKind(baseMetadata, "assessment_item"),
 					Source:       "curriculum",
-				}); err != nil {
-					return fmt.Errorf("upsert assessment document %s: %w", topic.ID, err)
-				}
+				})
 			}
 		}
+	}
+
+	if _, err := service.BulkUpsertDocuments(docs); err != nil {
+		return fmt.Errorf("bulk upsert curriculum documents: %w", err)
 	}
 
 	return nil
