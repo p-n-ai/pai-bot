@@ -4,7 +4,7 @@ import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   site: "https://p-n-ai.github.io",
-  base: "/pai-bot",
+  base: process.env.CI ? "/pai-bot" : "/",
   integrations: [
     starlight({
       title: "P&AI Bot",
