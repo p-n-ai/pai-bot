@@ -3,6 +3,8 @@ import tailwindcss from "@tailwindcss/vite";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
+  site: "https://p-n-ai.github.io",
+  base: "/pai-bot",
   integrations: [
     starlight({
       title: "P&AI Bot",
@@ -10,7 +12,12 @@ export default defineConfig({
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/p-n-ai/pai-bot" },
       ],
-      sidebar: [{ label: "Docs", autogenerate: { directory: "docs" } }],
+      sidebar: [
+        { label: "Getting Started", autogenerate: { directory: "getting-started" } },
+        { label: "Features", autogenerate: { directory: "features" } },
+        { label: "Guides", autogenerate: { directory: "guides" } },
+        { label: "Deployment", autogenerate: { directory: "deployment" } },
+      ],
       customCss: ["./src/styles/starlight.css"],
     }),
   ],
