@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -51,6 +52,30 @@ func main() {
 		slog.Error("invalid config", "error", err)
 		os.Exit(1)
 	}
+
+	// Start the HTTP server immediately with only /healthz so Docker/K8s
+	// health checks pass while the rest of the application initialises
+	// (curriculum seeding, retrieval indexing, Telegram sync can take >60 s
+	// on small instances).  The handler is atomically swapped to the full
+	// mux once initialisation completes.
+	var handler atomic.Value
+	handler.Store(http.HandlerFunc(handleHealthz))
+	srv := &http.Server{
+		Addr: fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler.Load().(http.Handler).ServeHTTP(w, r)
+		}),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	go func() {
+		slog.Info("server starting", "addr", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
 
 	// Initialize AI router with configured providers.
 	router := setupAIRouter(cfg)
@@ -245,12 +270,6 @@ func main() {
 		}
 	}
 
-	err = gw.StartAll(ctx, handleInbound)
-	if err != nil {
-		slog.Error("failed to start channels", "error", err)
-		os.Exit(1)
-	}
-
 	authService := auth.NewPostgresService(
 		db.Pool,
 		defaultSessionTTL,
@@ -332,22 +351,15 @@ func main() {
 	}
 	topMux.Handle("/", apiHandler)
 
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      topMux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
+	// Atomically swap to the full handler — no port gap, no reconnect.
+	handler.Store(topMux)
+	slog.Info("full handler active")
 
-	go func() {
-		slog.Info("server starting", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
-		}
-	}()
+	// Start chat channels now that the full HTTP handler is live.
+	if err := gw.StartAll(ctx, handleInbound); err != nil {
+		slog.Error("failed to start channels", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("P&AI Bot is running")
 
