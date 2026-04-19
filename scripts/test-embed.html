@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P&AI Embed Test</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; color: #1f2937; }
+    h1 { color: #6366f1; }
+    .info { background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 14px; }
+    .info code { background: #e5e7eb; padding: 2px 6px; border-radius: 4px; }
+    .status { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 14px; }
+    .ok { background: #d1fae5; color: #065f46; }
+    .err { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>P&AI Embed Widget Test</h1>
+  <p>This page tests the embeddable web chat widget. Look for the chat bubble in the bottom-right corner.</p>
+
+  <div class="info">
+    <strong>How it works:</strong><br>
+    1. The <code>&lt;script&gt;</code> tag below loads <code>/embed/pai-chat.js</code><br>
+    2. The widget creates a toggle button and an iframe<br>
+    3. Click the bubble to open the chat<br>
+    4. The iframe fetches a guest token and connects via WebSocket
+  </div>
+
+  <div class="info">
+    <strong>Configuration:</strong><br>
+    Tenant: <code>default</code><br>
+    Color: <code>#6366f1</code> (indigo)<br>
+    Position: bottom-right (default)
+  </div>
+
+  <div id="status" class="status">Checking backend connection...</div>
+
+  <script>
+    // Quick health check
+    document.getElementById('status').className = 'status ok';
+    document.getElementById('status').textContent = 'Ready! Click the purple chat bubble in the bottom-right corner.';
+  </script>
+
+  <!-- The embed widget -->
+  <script src="http://localhost/embed/pai-chat.js" data-tenant="default" data-color="#6366f1"></script>
+</body>
+</html>

@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/p-n-ai/pai-bot/internal/auth"
 )
 
 // wsInboundMsg is the JSON envelope clients send over the WebSocket.
@@ -30,10 +33,14 @@ type wsOutboundMsg struct {
 
 // WSChannel implements the Channel interface for WebSocket connections.
 type WSChannel struct {
-	mu      sync.RWMutex
-	conns   map[string]*websocket.Conn // userID -> connection
-	handler func(InboundMessage)       // set by Start()
-	stop    chan struct{}
+	mu               sync.RWMutex
+	conns            map[string]*websocket.Conn // userID -> connection
+	handler          func(InboundMessage)       // set by Start()
+	stop             chan struct{}
+	embedConfigStore EmbedConfigStore   // nil for non-embed (terminal-chat) use
+	tokenManager     *auth.TokenManager // nil for non-embed use
+	maxMessageSize   int64              // 0 means no limit
+	rateLimiter      *EmbedRateLimiter  // nil for non-embed use
 }
 
 // NewWSChannel creates a new WebSocket channel.
@@ -44,29 +51,148 @@ func NewWSChannel() *WSChannel {
 	}
 }
 
+// NewEmbedWSChannel creates a WebSocket channel with embed security features.
+func NewEmbedWSChannel(store EmbedConfigStore, tm *auth.TokenManager) *WSChannel {
+	return &WSChannel{
+		conns:            make(map[string]*websocket.Conn),
+		stop:             make(chan struct{}),
+		embedConfigStore: store,
+		tokenManager:     tm,
+		maxMessageSize:   8192, // 8KB default for embed
+		rateLimiter:      NewEmbedRateLimiter(10, 30, time.Minute),
+	}
+}
+
 // Handler returns the HTTP handler for WebSocket upgrades at GET /ws/chat.
 func (ws *WSChannel) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			// Allow any origin for dev use; tighten in production.
-			InsecureSkipVerify: true,
-		})
+		var jwtToken string
+		var acceptOpts websocket.AcceptOptions
+
+		if ws.embedConfigStore != nil {
+			// Embed mode: validate origin.
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				http.Error(w, "missing origin", http.StatusForbidden)
+				return
+			}
+
+			// Check for subprotocol auth: Sec-WebSocket-Protocol: pai-auth.<token>
+			protocols := strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",")
+			for _, p := range protocols {
+				p = strings.TrimSpace(p)
+				if strings.HasPrefix(p, "pai-auth.") {
+					jwtToken = strings.TrimPrefix(p, "pai-auth.")
+					acceptOpts.Subprotocols = []string{p}
+					break
+				}
+			}
+
+			// Embed mode requires JWT subprotocol auth — reject first-message auth.
+			if jwtToken == "" {
+				http.Error(w, "jwt auth required for embed", http.StatusUnauthorized)
+				return
+			}
+
+			// Validate JWT and extract tenant ID for origin check.
+			claims, err := ws.tokenManager.Parse(jwtToken, time.Now().UTC())
+			if err != nil {
+				http.Error(w, "invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			// Validate origin against the tenant's allowlist.
+			allowed, err := ws.embedConfigStore.IsOriginAllowed(r.Context(), claims.TenantID, origin)
+			if err != nil {
+				slog.Error("websocket origin check failed", "error", err)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			if !allowed {
+				http.Error(w, "origin not allowed", http.StatusForbidden)
+				return
+			}
+
+			// IP-based handshake rate limiting.
+			if ws.rateLimiter != nil {
+				ip := extractClientIP(r)
+				if !ws.rateLimiter.AllowHandshake(ip, time.Now()) {
+					http.Error(w, "too many connections", http.StatusTooManyRequests)
+					return
+				}
+			}
+
+			// Set CORS headers for the validated origin.
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+
+			acceptOpts.InsecureSkipVerify = true
+		} else {
+			// Non-embed (terminal-chat): permissive.
+			acceptOpts.InsecureSkipVerify = true
+		}
+
+		conn, err := websocket.Accept(w, r, &acceptOpts)
 		if err != nil {
 			slog.Warn("websocket accept failed", "error", err)
 			return
 		}
 
-		ws.handleConn(r.Context(), conn)
+		// Set message size limit for embed connections.
+		if ws.maxMessageSize > 0 {
+			conn.SetReadLimit(ws.maxMessageSize)
+		}
+
+		ws.handleConn(r.Context(), conn, jwtToken)
 	})
 }
 
+// extractClientIP extracts the client IP from the request, checking
+// X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
+func extractClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if ip := strings.TrimSpace(parts[0]); ip != "" {
+			return ip
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	// RemoteAddr is "host:port".
+	host := r.RemoteAddr
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	return host
+}
+
 // handleConn manages a single WebSocket connection lifecycle.
-func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn) {
-	// First message must be auth.
-	userID, err := ws.readAuth(ctx, conn)
-	if err != nil {
-		slog.Warn("websocket auth failed", "error", err)
-		_ = conn.Close(websocket.StatusPolicyViolation, "auth required")
+func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtToken string) {
+	var userID string
+
+	if jwtToken != "" && ws.tokenManager != nil {
+		// Subprotocol JWT auth (embed mode — already validated in Handler,
+		// but parse again to extract claims after upgrade).
+		claims, err := ws.tokenManager.Parse(jwtToken, time.Now().UTC())
+		if err != nil {
+			slog.Warn("websocket jwt auth failed", "error", err)
+			_ = conn.Close(websocket.StatusPolicyViolation, "invalid token")
+			return
+		}
+		userID = claims.Subject
+	} else if ws.embedConfigStore == nil {
+		// Non-embed (terminal-chat): first message must be auth.
+		var err error
+		userID, err = ws.readAuth(ctx, conn)
+		if err != nil {
+			slog.Warn("websocket auth failed", "error", err)
+			_ = conn.Close(websocket.StatusPolicyViolation, "auth required")
+			return
+		}
+	} else {
+		// Embed mode without JWT — should not reach here (Handler rejects).
+		_ = conn.Close(websocket.StatusPolicyViolation, "jwt auth required")
 		return
 	}
 
@@ -83,6 +209,29 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn) {
 		ws.removeConn(userID)
 		return
 	}
+
+	// Start keepalive pinger.
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ws.stop:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
+				err := conn.Ping(pingCtx)
+				pingCancel()
+				if err != nil {
+					slog.Debug("websocket ping failed, closing", "user_id", userID, "error", err)
+					_ = conn.Close(websocket.StatusGoingAway, "ping timeout")
+					return
+				}
+			}
+		}
+	}()
 
 	// Read loop.
 	ws.readLoop(ctx, conn, userID)
@@ -139,6 +288,25 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 
 		if msg.Type != "message" {
 			slog.Warn("websocket unexpected message type", "type", msg.Type, "user_id", userID)
+			continue
+		}
+
+		// Content filtering for embed connections.
+		if ws.embedConfigStore != nil && containsPromptInjection(msg.Text) {
+			slog.Warn("embed content filter triggered", "user_id", userID)
+			_ = ws.writeJSON(ctx, conn, wsOutboundMsg{
+				Type: "error",
+				Text: "Message blocked by content filter.",
+			})
+			continue
+		}
+
+		// Rate limit messages for embed connections.
+		if ws.rateLimiter != nil && !ws.rateLimiter.AllowMessage(userID, time.Now()) {
+			_ = ws.writeJSON(ctx, conn, wsOutboundMsg{
+				Type: "error",
+				Text: "Rate limit exceeded. Please slow down.",
+			})
 			continue
 		}
 
@@ -257,4 +425,27 @@ func (ws *WSChannel) removeConn(userID string) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 	delete(ws.conns, userID)
+}
+
+// containsPromptInjection checks if a message contains common prompt injection markers.
+func containsPromptInjection(text string) bool {
+	lower := strings.ToLower(text)
+	markers := []string{
+		"<|system|>",
+		"<|im_start|>system",
+		"[system]",
+		"<<sys>>",
+		"[inst]",
+		"you are now",
+		"ignore previous instructions",
+		"ignore all previous",
+		"disregard previous",
+		"forget your instructions",
+	}
+	for _, m := range markers {
+		if strings.Contains(lower, m) {
+			return true
+		}
+	}
+	return false
 }

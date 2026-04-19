@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P&AI Chat</title>
+<style>
+  :root {
+    --pai-primary: oklch(0.553 0.195 38.402);
+    --pai-primary-fg: oklch(0.98 0.016 73.684);
+    --pai-bg: oklch(1 0 0);
+    --pai-fg: oklch(0.145 0 0);
+    --pai-card: oklch(1 0 0);
+    --pai-card-fg: oklch(0.145 0 0);
+    --pai-muted: oklch(0.97 0 0);
+    --pai-muted-fg: oklch(0.556 0 0);
+    --pai-border: oklch(0.922 0 0);
+    --pai-input: oklch(0.922 0 0);
+    --pai-destructive: oklch(0.577 0.245 27.325);
+    --pai-radius: 0.875rem;
+    --pai-font: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--pai-font); height: 100vh; display: flex; flex-direction: column; background: var(--pai-bg); color: var(--pai-fg); }
+  .header { background: var(--pai-primary); color: var(--pai-primary-fg); padding: 14px 16px; font-weight: 600; font-size: 14px; letter-spacing: 0.01em; display: flex; align-items: center; gap: 8px; }
+  .header svg { opacity: 0.85; }
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: oklch(0.556 0 0 / 0.22) transparent; }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: var(--pai-radius); font-size: 14px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--pai-primary); color: var(--pai-primary-fg); border-bottom-right-radius: calc(var(--pai-radius) * 0.3); }
+  .msg.bot { align-self: flex-start; background: var(--pai-card); color: var(--pai-card-fg); border: 1px solid var(--pai-border); border-bottom-left-radius: calc(var(--pai-radius) * 0.3); box-shadow: 0 1px 2px oklch(0 0 0 / 0.04); }
+  .msg.system { align-self: center; background: var(--pai-muted); color: var(--pai-muted-fg); font-size: 12px; border-radius: calc(var(--pai-radius) * 0.6); padding: 6px 12px; }
+  .typing { align-self: flex-start; padding: 10px 16px; margin-left: 16px; background: var(--pai-card); border: 1px solid var(--pai-border); border-radius: var(--pai-radius); font-size: 14px; color: var(--pai-muted-fg); display: none; }
+  .typing.active { display: flex; gap: 3px; align-items: center; }
+  .typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--pai-muted-fg); animation: bounce 1.4s infinite both; }
+  .typing span:nth-child(2) { animation-delay: 0.16s; }
+  .typing span:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-4px); opacity: 1; } }
+  .input-area { display: flex; padding: 10px 12px; background: var(--pai-card); border-top: 1px solid var(--pai-border); gap: 8px; }
+  .input-area input { flex: 1; padding: 9px 14px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.8); font-size: 14px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); transition: border-color 0.15s ease; }
+  .input-area input::placeholder { color: var(--pai-muted-fg); }
+  .input-area input:focus { border-color: var(--pai-primary); box-shadow: 0 0 0 2px oklch(0.553 0.195 38.402 / 0.15); }
+  .input-area button { padding: 9px 18px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); transition: opacity 0.15s ease; }
+  .input-area button:hover:not(:disabled) { opacity: 0.9; }
+  .input-area button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .offline-banner { background: oklch(0.577 0.245 27.325 / 0.1); color: var(--pai-destructive); text-align: center; padding: 6px; font-size: 12px; font-weight: 500; display: none; }
+  .offline-banner.active { display: block; }
+  .cmd-palette { position: absolute; bottom: 100%; left: 0; right: 0; background: var(--pai-card); border: 1px solid var(--pai-border); border-bottom: none; border-radius: var(--pai-radius) var(--pai-radius) 0 0; max-height: 240px; overflow-y: auto; display: none; box-shadow: 0 -4px 16px oklch(0 0 0 / 0.08); scrollbar-width: thin; scrollbar-color: oklch(0.556 0 0 / 0.22) transparent; }
+  .cmd-palette.active { display: block; }
+  .cmd-item { display: flex; align-items: baseline; gap: 10px; padding: 9px 14px; cursor: pointer; transition: background 0.1s ease; }
+  .cmd-item:hover, .cmd-item.selected { background: var(--pai-muted); }
+  .cmd-item .cmd-name { font-weight: 600; font-size: 13px; color: var(--pai-primary); white-space: nowrap; }
+  .cmd-item .cmd-desc { font-size: 12px; color: var(--pai-muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .input-wrap { position: relative; }
+  .header { justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 8px; }
+  .upgrade-btn { background: var(--pai-primary-fg); color: var(--pai-primary); border: none; border-radius: calc(var(--pai-radius) * 0.6); padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--pai-font); transition: opacity 0.15s ease; }
+  .upgrade-btn:hover { opacity: 0.85; }
+  .upgrade-overlay { position: absolute; inset: 0; background: var(--pai-bg); z-index: 10; display: none; flex-direction: column; }
+  .upgrade-overlay.active { display: flex; }
+  .upgrade-header { background: var(--pai-primary); color: var(--pai-primary-fg); padding: 14px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between; }
+  .upgrade-close { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 18px; padding: 0 4px; }
+  .upgrade-form { flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .upgrade-form h2 { font-size: 18px; font-weight: 700; color: var(--pai-fg); margin: 0; }
+  .upgrade-form p { font-size: 13px; color: var(--pai-muted-fg); margin: 0; line-height: 1.5; }
+  .upgrade-field { display: flex; flex-direction: column; gap: 4px; }
+  .upgrade-field label { font-size: 12px; font-weight: 600; color: var(--pai-fg); }
+  .upgrade-field input { padding: 9px 12px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.6); font-size: 14px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); }
+  .upgrade-field input:focus { border-color: var(--pai-primary); box-shadow: 0 0 0 2px oklch(0.553 0.195 38.402 / 0.15); }
+  .upgrade-submit { padding: 10px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); margin-top: 4px; }
+  .upgrade-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+  .upgrade-error { font-size: 12px; color: var(--pai-destructive); margin: 0; min-height: 16px; }
+  .upgrade-success { text-align: center; padding: 40px 20px; }
+  .upgrade-success h2 { font-size: 20px; margin-bottom: 8px; }
+  .upgrade-success p { font-size: 14px; color: var(--pai-muted-fg); }
+  .header-actions { display: flex; align-items: center; gap: 6px; }
+  .profile-pill { display: none; align-items: center; gap: 6px; background: oklch(1 0 0 / 0.15); border-radius: calc(var(--pai-radius) * 0.6); padding: 3px 8px 3px 6px; font-size: 11px; font-weight: 500; }
+  .profile-pill.active { display: flex; }
+  .profile-pill .avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--pai-primary-fg); color: var(--pai-primary); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .profile-pill .name { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logout-btn { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 13px; padding: 2px 4px; opacity: 0.7; transition: opacity 0.15s; }
+  .logout-btn:hover { opacity: 1; }
+  .guest-label { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: 0.7; }
+  .guest-label .dot { width: 6px; height: 6px; border-radius: 50%; background: oklch(0.8 0.15 145); }
+  .auth-tabs { display: flex; border-bottom: 1px solid var(--pai-border); }
+  .auth-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--pai-muted-fg); font-family: var(--pai-font); transition: color 0.15s, border-color 0.15s; }
+  .auth-tab.active { color: var(--pai-primary); border-bottom-color: var(--pai-primary); }
+  .auth-tab:hover:not(.active) { color: var(--pai-fg); }
+  .auth-panel { display: none; }
+  .auth-panel.active { display: flex; flex-direction: column; gap: 14px; }
+  .login-btn { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 11px; font-weight: 500; font-family: var(--pai-font); padding: 3px 8px; opacity: 0.8; background: oklch(1 0 0 / 0.15); border-radius: calc(var(--pai-radius) * 0.6); }
+  .login-btn:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="header-left"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> P&AI Tutor</span>
+  <div class="header-actions">
+    <span class="guest-label" id="guestLabel"><span class="dot"></span> Guest</span>
+    <span class="profile-pill" id="profilePill"><span class="avatar" id="profileAvatar"></span><span class="name" id="profileName"></span></span>
+    <button class="upgrade-btn" id="upgradeBtn">Sign Up</button>
+    <button class="logout-btn" id="logoutBtn" style="display:none" title="Log out">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</div>
+<div class="upgrade-overlay" id="upgradeOverlay">
+  <div class="upgrade-header">
+    <span id="authTitle">Account</span>
+    <button class="upgrade-close" id="upgradeClose">&times;</button>
+  </div>
+  <div class="auth-tabs">
+    <button class="auth-tab active" id="tabSignup">Sign Up</button>
+    <button class="auth-tab" id="tabLogin">Log In</button>
+  </div>
+  <div class="upgrade-form">
+    <div class="auth-panel active" id="panelSignup">
+      <h2>Save your progress</h2>
+      <p>Create a free account to keep your learning history and continue on any device.</p>
+      <div class="upgrade-field"><label>Name</label><input type="text" id="upgradeName" placeholder="Your name"></div>
+      <div class="upgrade-field"><label>Email</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>
+      <div class="upgrade-field"><label>Password</label><input type="password" id="upgradePassword" placeholder="At least 8 characters"></div>
+      <p class="upgrade-error" id="upgradeError"></p>
+      <button class="upgrade-submit" id="upgradeSubmit">Create Account</button>
+    </div>
+    <div class="auth-panel" id="panelLogin">
+      <h2>Welcome back</h2>
+      <p>Log in to continue your learning journey.</p>
+      <div class="upgrade-field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@example.com"></div>
+      <div class="upgrade-field"><label>Password</label><input type="password" id="loginPassword" placeholder="Your password"></div>
+      <p class="upgrade-error" id="loginError"></p>
+      <button class="upgrade-submit" id="loginSubmit">Log In</button>
+    </div>
+  </div>
+</div>
+<div class="offline-banner" id="offline">Reconnecting...</div>
+<div class="messages" id="messages"></div>
+<div class="typing" id="typing"><span>.</span><span>.</span><span>.</span></div>
+<div class="input-wrap">
+  <div class="cmd-palette" id="cmdPalette"></div>
+  <div class="input-area">
+    <input type="text" id="input" placeholder="Ask a question... (type / for commands)" autocomplete="off">
+    <button id="send" disabled>Send</button>
+  </div>
+</div>
+<script>
+(function() {
+  'use strict';
+
+  var params = new URLSearchParams(window.location.search);
+  var tenant = params.get('tenant') || '';
+  var rawColor = params.get('color') || '#6366f1';
+  var color = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#6366f1';
+  var lang = params.get('lang') || '';
+
+  document.documentElement.style.setProperty('--pai-primary', color);
+
+  var messagesEl = document.getElementById('messages');
+  var typingEl = document.getElementById('typing');
+  var inputEl = document.getElementById('input');
+  var sendBtn = document.getElementById('send');
+  var offlineEl = document.getElementById('offline');
+
+  var cmdPaletteEl = document.getElementById('cmdPalette');
+  var commands = [
+    {cmd: '/help', desc: 'List all commands'},
+    {cmd: '/start', desc: 'Start a learning session'},
+    {cmd: '/clear', desc: 'Reset current conversation'},
+    {cmd: '/language', desc: 'Switch language (EN/BM/中文)'},
+    {cmd: '/progress', desc: 'View learning progress'},
+    {cmd: '/goal', desc: 'Set a learning goal'},
+    {cmd: '/learn', desc: 'Pick a topic to study'},
+    {cmd: '/challenge', desc: 'Quiz challenge with friend or AI'},
+    {cmd: '/leaderboard', desc: 'Weekly group leaderboard'},
+    {cmd: '/create_group', desc: 'Create a new study group'},
+    {cmd: '/join', desc: 'Join a group with code'}
+  ];
+  var cmdSelected = -1;
+
+  function showCmdPalette(filter) {
+    var filtered = commands.filter(function(c) {
+      return c.cmd.indexOf(filter.toLowerCase()) === 0;
+    });
+    if (filtered.length === 0 || filter === '') {
+      cmdPaletteEl.classList.remove('active');
+      cmdSelected = -1;
+      return;
+    }
+    cmdPaletteEl.innerHTML = '';
+    filtered.forEach(function(c, i) {
+      var div = document.createElement('div');
+      div.className = 'cmd-item' + (i === cmdSelected ? ' selected' : '');
+      div.innerHTML = '<span class="cmd-name">' + c.cmd + '</span><span class="cmd-desc">' + c.desc + '</span>';
+      div.addEventListener('click', function() { selectCmd(c.cmd); });
+      cmdPaletteEl.appendChild(div);
+    });
+    cmdPaletteEl.classList.add('active');
+  }
+
+  function hideCmdPalette() {
+    cmdPaletteEl.classList.remove('active');
+    cmdSelected = -1;
+  }
+
+  function selectCmd(cmd) {
+    inputEl.value = cmd + ' ';
+    inputEl.focus();
+    hideCmdPalette();
+  }
+
+  function navigateCmdPalette(dir) {
+    var items = cmdPaletteEl.querySelectorAll('.cmd-item');
+    if (items.length === 0) return false;
+    cmdSelected += dir;
+    if (cmdSelected < 0) cmdSelected = items.length - 1;
+    if (cmdSelected >= items.length) cmdSelected = 0;
+    items.forEach(function(el, i) {
+      el.classList.toggle('selected', i === cmdSelected);
+    });
+    items[cmdSelected].scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
+  // --- Fingerprinting ---
+  var fpKey = 'pai-guest-fp-' + tenant;
+  function generateFingerprint() {
+    var stored = localStorage.getItem(fpKey);
+    if (stored) return stored;
+    var raw = [
+      navigator.userAgent,
+      screen.width + 'x' + screen.height,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      navigator.language
+    ].join('|');
+    // Simple hash (djb2)
+    var hash = 5381;
+    for (var i = 0; i < raw.length; i++) {
+      hash = ((hash << 5) + hash) + raw.charCodeAt(i);
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    var fp = 'fp-' + Math.abs(hash).toString(36);
+    localStorage.setItem(fpKey, fp);
+    return fp;
+  }
+  var fingerprint = generateFingerprint();
+
+  // --- Upgrade UI ---
+  var upgradeBtnEl = document.getElementById('upgradeBtn');
+  var upgradeOverlayEl = document.getElementById('upgradeOverlay');
+  var upgradeCloseEl = document.getElementById('upgradeClose');
+  var upgradeSubmitEl = document.getElementById('upgradeSubmit');
+  var upgradeErrorEl = document.getElementById('upgradeError');
+  var upgradeNameEl = document.getElementById('upgradeName');
+  var upgradeEmailEl = document.getElementById('upgradeEmail');
+  var upgradePasswordEl = document.getElementById('upgradePassword');
+  var isUpgraded = false;
+  var tabSignupEl = document.getElementById('tabSignup');
+  var tabLoginEl = document.getElementById('tabLogin');
+  var panelSignupEl = document.getElementById('panelSignup');
+  var panelLoginEl = document.getElementById('panelLogin');
+  var loginEmailEl = document.getElementById('loginEmail');
+  var loginPasswordEl = document.getElementById('loginPassword');
+  var loginErrorEl = document.getElementById('loginError');
+  var loginSubmitEl = document.getElementById('loginSubmit');
+
+  function switchTab(tab) {
+    var isSignup = tab === 'signup';
+    tabSignupEl.classList.toggle('active', isSignup);
+    tabLoginEl.classList.toggle('active', !isSignup);
+    panelSignupEl.classList.toggle('active', isSignup);
+    panelLoginEl.classList.toggle('active', !isSignup);
+  }
+
+  tabSignupEl.addEventListener('click', function() { switchTab('signup'); });
+  tabLoginEl.addEventListener('click', function() { switchTab('login'); });
+
+  loginSubmitEl.addEventListener('click', function() {
+    var email = loginEmailEl.value.trim();
+    var pw = loginPasswordEl.value;
+    loginErrorEl.textContent = '';
+
+    if (!email || email.indexOf('@') === -1) { loginErrorEl.textContent = 'Valid email is required'; return; }
+    if (!pw) { loginErrorEl.textContent = 'Password is required'; return; }
+
+    loginSubmitEl.disabled = true;
+    loginSubmitEl.textContent = 'Logging in...';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/auth/login');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        // The login endpoint returns a session — extract token from cookie or response.
+        // For embed, we need a JWT. Use the session to get user info.
+        if (resp.token) {
+          token = resp.token;
+        } else if (resp.session && resp.session.token) {
+          token = resp.session.token;
+        }
+        isUpgraded = true;
+        var userName = (resp.user && resp.user.name) || (resp.session && resp.session.user && resp.session.user.name) || email.split('@')[0];
+        saveSession(token, userId, userName, 'student');
+        showProfile(userName);
+        upgradeOverlayEl.classList.remove('active');
+        // Clear messages and reconnect with student token
+        messagesEl.innerHTML = '';
+        localStorage.removeItem(storageKey);
+        if (ws) { ws.close(); }
+      } else {
+        var errText = 'Invalid email or password';
+        try { errText = xhr.responseText || errText; } catch(e) {}
+        loginErrorEl.textContent = errText;
+        loginSubmitEl.disabled = false;
+        loginSubmitEl.textContent = 'Log In';
+      }
+    };
+    xhr.onerror = function() {
+      loginErrorEl.textContent = 'Network error. Please try again.';
+      loginSubmitEl.disabled = false;
+      loginSubmitEl.textContent = 'Log In';
+    };
+    xhr.send(JSON.stringify({ email: email, password: pw }));
+  });
+
+  var guestLabelEl = document.getElementById('guestLabel');
+  var profilePillEl = document.getElementById('profilePill');
+  var profileAvatarEl = document.getElementById('profileAvatar');
+  var profileNameEl = document.getElementById('profileName');
+  var logoutBtnEl = document.getElementById('logoutBtn');
+
+  function showProfile(name) {
+    guestLabelEl.style.display = 'none';
+    upgradeBtnEl.style.display = 'none';
+
+    profileAvatarEl.textContent = name.charAt(0).toUpperCase();
+    profileNameEl.textContent = name;
+    profilePillEl.classList.add('active');
+    logoutBtnEl.style.display = '';
+  }
+
+  function showGuest() {
+    guestLabelEl.style.display = '';
+    upgradeBtnEl.style.display = '';
+    profilePillEl.classList.remove('active');
+    logoutBtnEl.style.display = 'none';
+  }
+
+  logoutBtnEl.addEventListener('click', function() {
+    // Clear all session state.
+    token = null;
+    userId = null;
+    isUpgraded = false;
+    clearSession();
+    localStorage.removeItem(fpKey);
+    localStorage.removeItem(storageKey);
+    fingerprint = generateFingerprint();
+    // Clear messages from UI.
+    messagesEl.innerHTML = '';
+    // Reset upgrade form.
+    upgradeOverlayEl.classList.remove('active');
+    document.getElementById('upgradeForm').innerHTML =
+      '<h2>Save your progress</h2>' +
+      '<p>Create a free account to keep your learning history, track your progress, and continue on any device.</p>' +
+      '<div class="upgrade-field"><label>Name</label><input type="text" id="upgradeName" placeholder="Your name"></div>' +
+      '<div class="upgrade-field"><label>Email</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>' +
+      '<div class="upgrade-field"><label>Password</label><input type="password" id="upgradePassword" placeholder="At least 8 characters"></div>' +
+      '<p class="upgrade-error" id="upgradeError"></p>' +
+      '<button class="upgrade-submit" id="upgradeSubmit">Create Account</button>';
+    // Re-bind upgrade form elements.
+    upgradeNameEl = document.getElementById('upgradeName');
+    upgradeEmailEl = document.getElementById('upgradeEmail');
+    upgradePasswordEl = document.getElementById('upgradePassword');
+    upgradeErrorEl = document.getElementById('upgradeError');
+    upgradeSubmitEl = document.getElementById('upgradeSubmit');
+    bindUpgradeSubmit();
+    showGuest();
+    // Disconnect and reconnect as new guest.
+    if (ws) ws.close();
+    setTimeout(connect, 500);
+  });
+
+  upgradeBtnEl.addEventListener('click', function() {
+    upgradeOverlayEl.classList.add('active');
+    switchTab('signup');
+    upgradeNameEl.focus();
+  });
+  upgradeCloseEl.addEventListener('click', function() {
+    upgradeOverlayEl.classList.remove('active');
+    upgradeErrorEl.textContent = '';
+  });
+
+  function bindUpgradeSubmit() {
+    upgradeSubmitEl.addEventListener('click', function() {
+      var name = upgradeNameEl.value.trim();
+      var email = upgradeEmailEl.value.trim();
+      var pw = upgradePasswordEl.value;
+      upgradeErrorEl.textContent = '';
+
+      if (!name) { upgradeErrorEl.textContent = 'Name is required'; return; }
+      if (!email || email.indexOf('@') === -1) { upgradeErrorEl.textContent = 'Valid email is required'; return; }
+      if (pw.length < 8) { upgradeErrorEl.textContent = 'Password must be at least 8 characters'; return; }
+
+      upgradeSubmitEl.disabled = true;
+      upgradeSubmitEl.textContent = 'Creating...';
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/embed/auth/upgrade');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          var resp = JSON.parse(xhr.responseText);
+          token = resp.token;
+          isUpgraded = true;
+          saveSession(token, userId, name, 'student');
+          // Show success + profile
+          document.getElementById('upgradeForm').innerHTML =
+            '<div class="upgrade-success"><h2>Account created!</h2>' +
+            '<p>Your progress is now saved. You can log in anytime with your email and password.</p></div>';
+          showProfile(name);
+          // Close overlay after a moment
+          setTimeout(function() { upgradeOverlayEl.classList.remove('active'); }, 2000);
+          // Reconnect with new student token
+          if (ws) { ws.close(); }
+        } else {
+          upgradeErrorEl.textContent = xhr.responseText || 'Something went wrong';
+          upgradeSubmitEl.disabled = false;
+          upgradeSubmitEl.textContent = 'Create Account';
+        }
+      };
+      xhr.onerror = function() {
+        upgradeErrorEl.textContent = 'Network error. Please try again.';
+        upgradeSubmitEl.disabled = false;
+        upgradeSubmitEl.textContent = 'Create Account';
+      };
+      xhr.send(JSON.stringify({ name: name, email: email, password: pw }));
+    });
+  }
+  bindUpgradeSubmit();
+
+  var ws = null;
+  var token = null;
+  var userId = null;
+  var connected = false;
+  var sessionKey = 'pai-session-' + tenant;
+
+  function saveSession(t, uid, name, role) {
+    try { localStorage.setItem(sessionKey, JSON.stringify({token: t, userId: uid, name: name || '', role: role || 'guest'})); } catch(e) {}
+  }
+  function loadSession() {
+    try {
+      var data = localStorage.getItem(sessionKey);
+      if (data) return JSON.parse(data);
+    } catch(e) {}
+    return null;
+  }
+  function clearSession() {
+    try { localStorage.removeItem(sessionKey); } catch(e) {}
+  }
+
+  // Restore previous session.
+  var savedSession = loadSession();
+  if (savedSession && savedSession.token) {
+    token = savedSession.token;
+    userId = savedSession.userId;
+    if (savedSession.role === 'student' && savedSession.name) {
+      isUpgraded = true;
+      showProfile(savedSession.name);
+    }
+  }
+  var reconnectDelay = 1000;
+  var maxReconnectDelay = 30000;
+  var queue = [];
+  var storageKey = 'pai-chat-' + tenant;
+  var nextCursor = null;
+  var hasMore = false;
+  var loadingMore = false;
+
+  function loadHistory() {
+    try {
+      var data = localStorage.getItem(storageKey);
+      if (data) {
+        var msgs = JSON.parse(data);
+        msgs.forEach(function(m) { addMessage(m.text, m.type, true); });
+      }
+    } catch(e) {}
+  }
+
+  function saveHistory() {
+    try {
+      var msgs = [];
+      var els = messagesEl.querySelectorAll('.msg');
+      var start = Math.max(0, els.length - 50);
+      for (var i = start; i < els.length; i++) {
+        msgs.push({
+          text: els[i].textContent,
+          type: els[i].classList.contains('user') ? 'user' : 'bot'
+        });
+      }
+      localStorage.setItem(storageKey, JSON.stringify(msgs));
+    } catch(e) {}
+  }
+
+  function addMessage(text, type, skipSave) {
+    var div = document.createElement('div');
+    div.className = 'msg ' + type;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    typingEl.classList.remove('active');
+    if (!skipSave) saveHistory();
+  }
+
+  function prependMessages(msgs) {
+    var scrollH = messagesEl.scrollHeight;
+    var scrollT = messagesEl.scrollTop;
+    var frag = document.createDocumentFragment();
+    msgs.forEach(function(m) {
+      var div = document.createElement('div');
+      div.className = 'msg ' + (m.role === 'user' ? 'user' : 'bot');
+      div.textContent = m.content;
+      frag.appendChild(div);
+    });
+    messagesEl.insertBefore(frag, messagesEl.firstChild);
+    // Maintain scroll position after prepend.
+    messagesEl.scrollTop = scrollT + (messagesEl.scrollHeight - scrollH);
+  }
+
+  function loadMessagesFromAPI(cursor, onDone) {
+    if (!token) { if (onDone) onDone(); return; }
+    loadingMore = true;
+    var url = '/api/embed/messages?limit=20';
+    if (cursor) url += '&before=' + encodeURIComponent(cursor);
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.onload = function() {
+      loadingMore = false;
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        hasMore = resp.has_more || false;
+        nextCursor = resp.next_cursor || null;
+        if (resp.messages && resp.messages.length > 0) {
+          prependMessages(resp.messages);
+        }
+      }
+      if (onDone) onDone();
+    };
+    xhr.onerror = function() { loadingMore = false; if (onDone) onDone(); };
+    xhr.send();
+  }
+
+  // Scroll-up pagination: load older messages when scrolled near top.
+  messagesEl.addEventListener('scroll', function() {
+    if (messagesEl.scrollTop < 60 && hasMore && !loadingMore) {
+      loadMessagesFromAPI(nextCursor);
+    }
+  });
+
+  function sendMessage() {
+    var text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    addMessage(text, 'user');
+
+    var msg = JSON.stringify({ type: 'message', text: text });
+    if (connected && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    } else {
+      queue.push(msg);
+    }
+  }
+
+  function flushQueue() {
+    while (queue.length > 0 && connected && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(queue.shift());
+    }
+  }
+
+  function authenticate(cb) {
+    if (token) { cb(); return; }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/embed/auth/guest');
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        token = resp.token;
+        userId = resp.user_id;
+        saveSession(token, userId, '', 'guest');
+        cb();
+      } else {
+        addMessage('Unable to connect. Please try again later.', 'system');
+      }
+    };
+    xhr.onerror = function() {
+      addMessage('Unable to connect. Please try again later.', 'system');
+    };
+    xhr.send(JSON.stringify({ tenant: tenant, fingerprint: fingerprint }));
+  }
+
+  function connect() {
+    authenticate(function() {
+      var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var wsURL = proto + '//' + window.location.host + '/ws/chat';
+
+      ws = new WebSocket(wsURL, ['pai-auth.' + token]);
+
+      ws.onopen = function() {
+        connected = true;
+        reconnectDelay = 1000;
+        sendBtn.disabled = false;
+        offlineEl.classList.remove('active');
+        flushQueue();
+      };
+
+      ws.onmessage = function(e) {
+        try {
+          var msg = JSON.parse(e.data);
+          switch(msg.type) {
+            case 'auth_ok':
+              // Load message history from server on connect.
+              loadMessagesFromAPI(null);
+              break;
+            case 'response':
+              addMessage(msg.text, 'bot');
+              break;
+            case 'typing':
+              typingEl.classList.add('active');
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+              break;
+            case 'notification':
+              addMessage(msg.text, 'bot');
+              break;
+            case 'error':
+              addMessage(msg.text, 'system');
+              break;
+          }
+        } catch(err) {}
+      };
+
+      ws.onclose = function() {
+        connected = false;
+        sendBtn.disabled = true;
+        offlineEl.classList.add('active');
+        setTimeout(function() {
+          reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
+          connect();
+        }, reconnectDelay);
+      };
+
+      ws.onerror = function() {};
+    });
+  }
+
+  sendBtn.addEventListener('click', function() { hideCmdPalette(); sendMessage(); });
+
+  inputEl.addEventListener('input', function() {
+    var val = inputEl.value;
+    if (val.indexOf('/') === 0 && val.indexOf(' ') === -1) {
+      cmdSelected = -1;
+      showCmdPalette(val);
+    } else {
+      hideCmdPalette();
+    }
+  });
+
+  inputEl.addEventListener('keydown', function(e) {
+    if (cmdPaletteEl.classList.contains('active')) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); navigateCmdPalette(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); navigateCmdPalette(-1); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && cmdSelected >= 0)) {
+        e.preventDefault();
+        var items = cmdPaletteEl.querySelectorAll('.cmd-item');
+        if (cmdSelected >= 0 && cmdSelected < items.length) {
+          selectCmd(commands.filter(function(c) { return c.cmd.indexOf(inputEl.value.toLowerCase()) === 0; })[cmdSelected].cmd);
+        }
+        return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); hideCmdPalette(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      hideCmdPalette();
+      sendMessage();
+    }
+  });
+
+  inputEl.addEventListener('blur', function() {
+    setTimeout(hideCmdPalette, 150);
+  });
+
+  loadHistory();
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -199,8 +199,14 @@ func main() {
 		slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
 	}
 
-	// WebSocket channel (always enabled — used by terminal-chat and future web clients).
-	wsChannel := chat.NewWSChannel()
+	// Embed config store (for embeddable web chat widget).
+	embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
+
+	// WebSocket channel (always enabled — used by terminal-chat and embed web clients).
+	// NewEmbedWSChannel adds origin checking + subprotocol JWT auth while remaining
+	// backward-compatible with first-message auth used by terminal-chat.
+	embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
+	wsChannel := chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
 	gw.Register("websocket", wsChannel)
 
 	// Wire challenge notifications through the gateway.
@@ -334,6 +340,24 @@ func main() {
 	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
 	topMux := http.NewServeMux()
 	topMux.Handle("GET /ws/chat", wsChannel.Handler())
+
+	// Embed widget routes (public, no auth).
+	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
+	topMux.Handle("GET /embed/chat", chat.HandleChatPage(embedConfigStore))
+
+	// Embed guest auth (public, rate-limited: 5 req/min/IP).
+	guestSvc := auth.NewGuestService(db.Pool, embedTokenManager)
+	embedGuestLimiter := newFixedWindowLimiter(5, time.Minute)
+	topMux.Handle("POST /api/embed/auth/guest", withCORS(withIPRateLimit(
+		handleEmbedGuestAuth(embedConfigStore, guestSvc),
+		embedGuestLimiter,
+	)))
+	topMux.Handle("OPTIONS /api/embed/auth/guest", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	topMux.Handle("POST /api/embed/auth/upgrade", withCORS(handleEmbedUpgradeGuest(guestSvc, embedTokenManager)))
+	topMux.Handle("OPTIONS /api/embed/auth/upgrade", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	topMux.Handle("GET /api/embed/messages", withCORS(handleEmbedMessages(db.Pool, embedTokenManager)))
+	topMux.Handle("OPTIONS /api/embed/messages", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+
 	if waCloudChannel != nil {
 		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
 	}
@@ -350,6 +374,21 @@ func main() {
 		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
 		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
 	}
+	// Embed admin routes (admin/platform_admin only).
+	{
+		embedManager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+		embedAdminAuth := chain(
+			authenticateRequests(authService, embedManager, time.Now),
+			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+		)
+		topMux.Handle("GET /api/admin/embed/config", withCORS(embedAdminAuth(handleAdminGetEmbedConfig(embedConfigStore))))
+		topMux.Handle("PUT /api/admin/embed/config", withCORS(embedAdminAuth(handleAdminUpdateEmbedConfig(embedConfigStore))))
+		topMux.Handle("POST /api/admin/embed/origins", withCORS(embedAdminAuth(handleAdminAddEmbedOrigin(embedConfigStore))))
+		topMux.Handle("DELETE /api/admin/embed/origins", withCORS(embedAdminAuth(handleAdminDeleteEmbedOrigin(embedConfigStore))))
+		topMux.Handle("OPTIONS /api/admin/embed/config", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+		topMux.Handle("OPTIONS /api/admin/embed/origins", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	}
+
 	topMux.Handle("/", apiHandler)
 
 	// Atomically swap to the full handler — no port gap, no reconnect.
@@ -2319,10 +2358,14 @@ func withCORS(next http.Handler) http.Handler {
 		}
 
 		origin := r.Header.Get("Origin")
-		if isAllowedBrowserOrigin(origin) {
+		allowed := isAllowedBrowserOrigin(origin)
+		if !allowed && strings.HasPrefix(r.URL.Path, "/api/embed/") {
+			allowed = isAllowedEmbedOrigin(origin)
+		}
+		if allowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
@@ -2341,6 +2384,14 @@ func isAllowedBrowserOrigin(origin string) bool {
 		"http://localhost:3000",
 		"http://127.0.0.1:3000",
 	}, origin)
+}
+
+// isAllowedEmbedOrigin returns true for any non-empty origin on embed paths.
+// The real tenant+origin validation happens at the endpoint level
+// (handleEmbedGuestAuth validates via FindTenantBySlugAndOrigin,
+// WSChannel.Handler validates via IsOriginAllowed).
+func isAllowedEmbedOrigin(origin string) bool {
+	return strings.TrimSpace(origin) != ""
 }
 
 func setPrivateNoStoreHeaders(w http.ResponseWriter) {
