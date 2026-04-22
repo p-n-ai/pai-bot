@@ -9,7 +9,7 @@ import { LoginGateShell } from "@/components/login-gate/login-gate-shell";
 export function DarkLoginGate() {
   return (
     <LoginGateShell>
-      <LoginGateHeroSection heroSectionClassName="bg-[#06101d]">
+      <LoginGateHeroSection heroSectionClassName="bg-[#171310]">
         <DarkLoginGateBackdrop />
       </LoginGateHeroSection>
       <LoginGateAuthPanel>
