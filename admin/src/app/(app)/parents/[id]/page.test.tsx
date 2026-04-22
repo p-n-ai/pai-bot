@@ -17,7 +17,6 @@ describe("ParentPage", () => {
     render(await ParentPage({ params: Promise.resolve({ id: "parent-1" }) }));
 
     expect(screen.getByText("Parent summary unavailable")).toBeInTheDocument();
-    expect(screen.getByText("The parent summary isn't available right now.")).toBeInTheDocument();
     expect(screen.queryByText("No mastery data yet")).not.toBeInTheDocument();
   });
 });

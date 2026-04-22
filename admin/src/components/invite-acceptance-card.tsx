@@ -38,10 +38,10 @@ export function InviteAcceptanceCard({
         </div>
         <div className="space-y-4">
           <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-slate-950 dark:text-white md:text-5xl">
-            Accept your invite and set the password for this workspace.
+            Accept your invite
           </h1>
           <p className="max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300">
-            Teachers, parents, and admins activate once from an emailed invite, then return through the normal sign-in page.
+            Set up access once. Sign in normally after.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -49,14 +49,14 @@ export function InviteAcceptanceCard({
             <IconMailCheck className="size-5 text-emerald-600 dark:text-emerald-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">One-time activation</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              The invite link identifies the tenant-scoped account that is being activated.
+              This link activates one workspace account.
             </p>
           </div>
           <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/45">
             <IconCircleCheck className="size-5 text-sky-600 dark:text-sky-300" />
             <p className="mt-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Immediate sign-in</p>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Once accepted, the session is stored and the user is redirected into the correct admin view automatically.
+              Go straight to the right admin view.
             </p>
           </div>
         </div>
@@ -64,9 +64,9 @@ export function InviteAcceptanceCard({
 
       <Card className="rounded-[32px] border border-white/75 bg-white/78 py-0 shadow-[0_28px_90px_rgba(15,23,42,0.12)] backdrop-blur dark:border-white/10 dark:bg-slate-950/58 dark:shadow-[0_28px_90px_rgba(2,8,23,0.45)]">
         <CardHeader className="px-8 pt-8">
-          <h2 className="text-2xl font-semibold text-slate-950 dark:text-white">Accept your invite</h2>
+          <h2 className="text-2xl font-semibold text-slate-950 dark:text-white">Set up access</h2>
           <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Set the display name and password that will be used for future sign-ins.
+            Set your name and password.
           </p>
         </CardHeader>
         <CardContent className="px-8 pb-8">
@@ -88,7 +88,7 @@ export function InviteAcceptanceCard({
             <FormField
               label="Password"
               htmlFor="password"
-              description="Use a strong password. This becomes the password for your normal email sign-in."
+              description="Use a strong password for future sign-ins."
             >
               <Input
                 id="password"

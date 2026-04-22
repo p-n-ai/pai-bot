@@ -25,7 +25,7 @@ export default async function ParentPage({
   try {
     summary = await getServerParentSummary(id);
   } catch {
-    loadError = "The parent summary isn't available right now.";
+    loadError = "Try again later.";
   }
 
   const view = getParentViewModel(summary);
@@ -93,7 +93,7 @@ export default async function ParentPage({
               <StatePanel
                 tone="empty"
                 title="No mastery data yet"
-                description="No mastery data is available yet for this learner."
+                description="Mastery data appears after practice."
               />
             )}
           </div>
@@ -113,7 +113,7 @@ export default async function ParentPage({
             <AdminInsetPanel>
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100">What this means for home support</p>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Keep praise specific, focus on one topic only, and ask for a short follow-up practice session instead of a long catch-up.
+                Praise one clear win. Ask for one short practice round.
               </p>
             </AdminInsetPanel>
           </div>

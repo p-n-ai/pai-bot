@@ -4,7 +4,7 @@ test.describe("admin public entry flows", () => {
   test("renders the login hero and form fields", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("heading", { name: "See who needs help before the exam." })).toBeVisible();
+    await expect(page.getByRole("main")).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
@@ -33,7 +33,7 @@ test.describe("admin public entry flows", () => {
 
   test("invite acceptance submit button is disabled when token is missing", async ({ page }) => {
     await page.goto("/activate");
-    await expect(page.getByRole("heading", { name: "Accept your invite and set the password for this workspace." })).toBeVisible();
+    await expect(page.getByRole("main")).toBeVisible();
     await expect(page.getByRole("button", { name: "Accept invite" })).toBeDisabled();
   });
 

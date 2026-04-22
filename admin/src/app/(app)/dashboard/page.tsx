@@ -165,18 +165,18 @@ export default function DashboardPage() {
             {loading ? (
               <StatePanel
                 tone="loading"
-                title="Preparing the latest class snapshot"
-                description="Pulling student mastery, tracked topics, and direct links into the learner detail pages."
+                title="Preparing class snapshot"
+                description="Loading mastery and topic data."
               />
             ) : progress ? (
               !summary.hasHeatmap ? (
                 <StatePanel
                   tone={isPreview && dashboardIssue ? "error" : "empty"}
-                  title={isPreview && dashboardIssue ? "Live class data is unavailable" : "No class heatmap yet"}
+                  title={isPreview && dashboardIssue ? "Class data unavailable" : "No class heatmap yet"}
                   description={
                     isPreview && dashboardIssue
-                      ? `${dashboardIssue} Showing preview data until the admin API is reachable again.`
-                      : "Class progress will appear here once students start working through assigned topics."
+                      ? `${dashboardIssue}. Showing preview data.`
+                      : "Progress appears after students start topics."
                   }
                 />
               ) : (

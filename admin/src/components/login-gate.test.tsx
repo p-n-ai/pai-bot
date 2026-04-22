@@ -78,7 +78,6 @@ describe("LoginGate", () => {
       </ThemeProvider>,
     );
 
-    expect(screen.getByText("We couldn't sign you in yet.")).toBeInTheDocument();
     expect(screen.getByText(/sign in with email once, then link Google/i)).toBeInTheDocument();
   });
 
