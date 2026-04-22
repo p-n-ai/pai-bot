@@ -12,18 +12,18 @@ describe("LandingAudienceShowcase", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /students get unstuck in chat\./i,
+        name: /unstuck in chat\./i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /teach the next step, then check it\./i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /hint\. check\. continue\./i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: /teachers/i }));
 
     expect(
       await screen.findByRole("heading", {
-        name: /teachers see what to fix first\./i,
+        name: /fix the right topic\./i,
       }),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: /a daily list, not another report\./i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /daily follow-up list\./i })).toBeInTheDocument();
   });
 });

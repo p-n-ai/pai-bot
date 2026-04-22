@@ -53,12 +53,12 @@ export const audienceViews = {
   student: {
     tabLabel: "Students",
     kicker: "Student practice",
-    title: "Students get unstuck in chat.",
-    body: "No new app to learn. They send the question, work through one step at a time, and keep the conversation in the same thread.",
+    title: "Unstuck in chat.",
+    body: "Ask, try one step, continue in the same thread.",
     imageSrc: "/landing/student-abstract-scene.svg",
     imageAlt: "Abstract chat learning visual with message blocks and step-by-step flow.",
-    panelTitle: "Teach the next step, then check it.",
-    proof: "Question. Hint. Check. Continue.",
+    panelTitle: "Hint. Check. Continue.",
+    proof: "Question to next step.",
     summaryStats: [
       { label: "Channel", value: "WhatsApp / Telegram" },
       { label: "Style", value: "Step by step" },
@@ -75,12 +75,12 @@ export const audienceViews = {
   teacher: {
     tabLabel: "Teachers",
     kicker: "Teacher follow-up",
-    title: "Teachers see what to fix first.",
-    body: "After students practise, the teacher view turns their chat history into a focused list: who needs help, which topic slipped, and what to revisit next.",
+    title: "Fix the right topic.",
+    body: "See who needs help, what slipped, and what to revisit.",
     imageSrc: "/landing/teacher-abstract-scene.svg",
     imageAlt: "Abstract school dashboard visual with queues, score bars, and follow-up signals.",
-    panelTitle: "A daily list, not another report.",
-    proof: "Student. Topic. Urgency.",
+    panelTitle: "Daily follow-up list.",
+    proof: "Student. Topic. Priority.",
     summaryStats: [
       { label: "Needs help", value: "3 students" },
       { label: "Weakest topic", value: "Functions" },

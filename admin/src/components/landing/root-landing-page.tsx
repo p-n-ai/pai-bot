@@ -19,26 +19,26 @@ const landingPrimaryButtonClassName =
   "h-12 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-[0_14px_30px_color-mix(in_oklch,var(--primary)_22%,transparent)] hover:bg-primary/90 active:translate-y-px";
 
 const heroSignals = [
-  { icon: "chatCircleText", label: "Student help", value: "step-by-step chat" },
-  { icon: "trendUp", label: "Teacher follow-up", value: "weak topics first" },
-  { icon: "usersThree", label: "Family follow-up", value: "clear next action" },
+  { icon: "chatCircleText", label: "Student", value: "guided chat" },
+  { icon: "trendUp", label: "Teacher", value: "weak topics" },
+  { icon: "usersThree", label: "Family", value: "next action" },
 ] satisfies Array<{ icon: LandingIconName; label: string; value: string }>;
 
 const dailyLoop = [
   {
     label: "Student",
-    title: "A question comes in through chat",
-    body: "Students ask inside WhatsApp or Telegram. No extra portal to remember.",
+    title: "Question in chat",
+    body: "WhatsApp or Telegram.",
   },
   {
     label: "Tutor",
-    title: "One step gets checked",
-    body: "The tutor asks for the next move, catches mistakes early, and keeps the student working.",
+    title: "One step checked",
+    body: "Hint. Try. Correct.",
   },
   {
     label: "Teacher",
-    title: "The follow-up list is ready",
-    body: "Before class, the teacher sees who needs help and which topic to revisit.",
+    title: "Follow-up ready",
+    body: "Who needs help. What to revisit.",
   },
 ];
 
@@ -47,25 +47,25 @@ const workflowItems = [
     icon: "chatCircleText",
     label: "Channels",
     title: "Students stay in chat",
-    body: "WhatsApp and Telegram become the practice surface. No extra app for students to remember.",
+    body: "No extra app.",
   },
   {
     icon: "bookOpenText",
     label: "Math help",
     title: "Every answer becomes a step",
-    body: "The tutor slows the question down, checks the next move, and keeps the student working.",
+    body: "Ask. Try. Check.",
   },
   {
     icon: "trendUp",
     label: "Signals",
     title: "Weak topics surface early",
-    body: "The teacher sees who struggled, which topic slipped, and where the class is starting to drift.",
+    body: "See who is stuck.",
   },
   {
     icon: "paperPlaneTilt",
     label: "Follow-up",
     title: "Tomorrow's action is ready",
-    body: "A short repair list turns chat history into reteach groups, parent notes, or class review.",
+    body: "Plan the next repair.",
   },
 ] satisfies Array<{ icon: LandingIconName; label: string; title: string; body: string }>;
 
@@ -73,17 +73,17 @@ const teacherOutcomes = [
   {
     value: "who",
     label: "Pull aside the right students",
-    body: "Spend attention on the students who got stuck, not only the students who speak up.",
+    body: "Help the quiet stuck ones.",
   },
   {
     value: "what",
     label: "Reteach the right topic",
-    body: "Use the weakest topic signal to plan the next warm-up, mini lesson, or homework review.",
+    body: "Start with the weakest topic.",
   },
   {
     value: "when",
     label: "Move on with confidence",
-    body: "Coverage and mastery signals make it clearer when the class is ready for the next concept.",
+    body: "Move when the class is ready.",
   },
 ];
 
@@ -142,13 +142,13 @@ export function RootLandingPage({
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-[#fffdf9]/76 px-3 py-1 text-xs font-semibold text-muted-foreground shadow-[0_10px_26px_rgba(23,19,16,0.04)]">
               <LandingIcon name="clipboardText" className="size-4 text-primary" />
-              School math support, from chat to follow-up
+              Chat to follow-up
             </div>
             <h1 className="mt-7 max-w-[13ch] text-[4rem] leading-[0.88] font-semibold tracking-[-0.075em] text-balance sm:text-[5.8rem] lg:text-[6.75rem]">
               See who needs help next.
             </h1>
             <p className="mt-8 max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">
-              P&amp;AI helps students work through math in WhatsApp and Telegram, then shows teachers which students and topics need attention before the class moves on.
+              Students practice in chat. Teachers see who needs help next.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -191,10 +191,10 @@ export function RootLandingPage({
             <div>
               <p className="text-xs font-semibold tracking-[0.24em] uppercase text-primary">How it works</p>
               <h2 className="mt-4 max-w-lg text-4xl leading-none font-semibold text-balance sm:text-5xl">
-                One loop from student question to teacher action.
+                Chat to teacher action.
               </h2>
               <p className="mt-5 max-w-md text-lg leading-8 text-muted-foreground">
-                P&amp;AI is not another dashboard students need to open. It starts where they already ask for help, then gives the teacher the useful part.
+                No student dashboard. Just useful signals for teachers.
               </p>
             </div>
 
@@ -226,7 +226,7 @@ export function RootLandingPage({
               </h2>
             </div>
             <p className="text-lg leading-8 text-muted-foreground">
-              The product stays useful because every student interaction has a clear destination: better follow-up from the teacher.
+              Every chat points to better follow-up.
             </p>
           </div>
 
@@ -250,7 +250,7 @@ export function RootLandingPage({
           <div className="flex flex-col gap-5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col gap-1">
               <p className="font-medium text-foreground">P&amp;AI Bot</p>
-              <p>Math chatbot for WhatsApp, Telegram, and schools.</p>
+              <p>Math support for school chat.</p>
             </div>
             <Link href={primaryHref} className="inline-flex items-center gap-2 font-semibold text-foreground transition hover:text-primary">
               {primaryActionLabel}

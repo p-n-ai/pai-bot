@@ -334,7 +334,7 @@ export function LandingAudienceShowcase({
             Practice in chat. Follow up in class.
           </h2>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-            One question becomes a guided thread for the student, then a short repair list for the teacher.
+            Guided student chat. Short teacher repair list.
           </p>
         </div>
         <div className="flex lg:justify-end">
