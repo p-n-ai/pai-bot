@@ -46,10 +46,12 @@ jobs:
         run: pnpm test
 
       - name: Install Playwright browsers
+        timeout-minutes: 10
         working-directory: admin
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Admin E2E
+        timeout-minutes: 15
         working-directory: admin
         run: pnpm test:e2e
 
