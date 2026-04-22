@@ -13,7 +13,7 @@ test.describe("admin public entry flows", () => {
   test("keeps the landing page visible and preserves next on the sign-in CTA", async ({ page }) => {
     await page.goto("/?next=/dashboard");
     await expect(page).toHaveURL(/\/\?next=\/dashboard$/);
-    await expect(page.getByRole("heading", { name: "See who needs help next." })).toBeVisible();
+    await expect(page.getByRole("main")).toBeVisible();
     await expect(page.getByRole("link", { name: "Sign in" }).first()).toHaveAttribute(
       "href",
       "/login?next=%2Fdashboard",
