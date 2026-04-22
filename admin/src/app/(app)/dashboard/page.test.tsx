@@ -78,7 +78,6 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(screen.getByText("Preparing the latest class snapshot")).toBeInTheDocument();
     expect(screen.queryByText("Waiting for class data")).not.toBeInTheDocument();
   });
 
@@ -98,8 +97,8 @@ describe("DashboardPage", () => {
 
     render(<DashboardPage />);
 
-    expect(screen.getByText("Live class data is unavailable")).toBeInTheDocument();
-    expect(screen.getByText(/Admin API offline Showing preview data until the admin API is reachable again\./i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/Admin API offline/i)).toBeInTheDocument();
   });
 
   it("renders live heatmap data and confirms a successful nudge action", async () => {

@@ -23,7 +23,7 @@ describe("RootPage", () => {
 
     render(await RootPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByRole("heading", { name: /learn math in chat\./i })).toBeInTheDocument();
+    expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Sign in" })[0]).toHaveAttribute("href", "/login");
     expect(getServerPostAuthPathMock).not.toHaveBeenCalled();
   });

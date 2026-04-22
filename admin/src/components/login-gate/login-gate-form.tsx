@@ -72,7 +72,7 @@ export function LoginGateForm() {
           className="animate-in fade-in-0 slide-in-from-top-1 gap-y-1 rounded-2xl border-rose-200/80 bg-rose-50/90 px-4 py-3 shadow-none duration-200 dark:border-rose-400/25 dark:bg-rose-500/10"
         >
           <IconAlertCircle />
-          <AlertTitle>{"We couldn't sign you in yet."}</AlertTitle>
+          <AlertTitle>Sign-in failed.</AlertTitle>
           <AlertDescription className="leading-6 text-rose-700 dark:text-rose-200">
             {errorMessage}
           </AlertDescription>

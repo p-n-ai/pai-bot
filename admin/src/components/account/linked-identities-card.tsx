@@ -54,10 +54,10 @@ export function LinkedIdentitiesCard({
             {isLoading
               ? "Checking linked providers..."
               : isError
-                ? "We couldn't load linked providers right now."
+                ? "Linked providers unavailable."
               : googleIdentity
                 ? googleIdentity.email
-                : "Link Google to let the same person sign in without typing a password."}
+                : "Link Google for passwordless sign-in."}
           </p>
           {googleIdentity?.last_used_at ? (
             <p className="mt-1 text-[11px] text-muted-foreground">

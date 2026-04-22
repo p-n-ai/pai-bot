@@ -111,6 +111,6 @@ describe("LinkedIdentitiesCard", () => {
 
     render(<LinkedIdentitiesCard nextPath="/dashboard" />);
 
-    expect(screen.getByText("We couldn't load linked providers right now.")).toBeInTheDocument();
+    expect(screen.getByText("Linked providers unavailable.")).toBeInTheDocument();
   });
 });

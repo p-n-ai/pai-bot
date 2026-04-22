@@ -26,7 +26,7 @@ export function LoginGate({
   return (
     <LoginGateProvider nextPath={nextPath} authError={authError}>
       <LoginGateShell>
-        <LoginGateHeroSection heroSectionClassName="bg-[#edf4ff] dark:bg-[#06101d]">
+        <LoginGateHeroSection heroSectionClassName="bg-[#fbf7f1] dark:bg-[#171310]">
           <motion.div
             data-testid="login-gate-light-backdrop"
             initial={false}

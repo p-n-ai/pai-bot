@@ -4,8 +4,8 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { buttonVariants } from "@/components/ui/button";
 
-const heroTitle = "See who needs help before the exam.";
-const heroWords = ["See", "who", "needs", "help", "before", "the", "exam."];
+const heroTitle = "See who needs help next.";
+const heroWords = ["See", "who", "needs", "help", "next."];
 const easeOutQuint: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
 export function LoginGateHeroSection({
@@ -55,7 +55,7 @@ export function LoginGateHeroSection({
               </span>
             </motion.h1>
             <p className="max-w-3xl text-base leading-8 text-slate-600 md:text-lg dark:text-slate-300">
-              P&amp;AI is a proactive AI learning agent that teaches students through chat. This workspace gives teachers, parents, and school admins visibility into mastery, momentum, and the right moment to intervene.
+              Students practice in chat. Teachers see who needs help.
             </p>
           </div>
           <div className="pt-0">

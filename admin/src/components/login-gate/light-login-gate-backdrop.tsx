@@ -8,11 +8,11 @@ export function LightLoginGateBackdrop() {
   return (
     <Aurora
       className="absolute inset-0"
-      colorStops={["#43aedf", "#057aff", "#ffffff"]}
-      amplitude={0.96}
-      blend={0.39}
+      colorStops={["#fffdf9", "#d98b5f", "#a96b48"]}
+      amplitude={0.9}
+      blend={0.36}
       speed={0.97}
-      style={{ opacity: 0.44 }}
+      style={{ opacity: 0.42 }}
     />
   );
 }

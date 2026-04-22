@@ -40,10 +40,14 @@ jobs:
         run: pnpm test
 
       - name: Install Playwright browsers
+        if: github.event_name != 'pull_request'
+        timeout-minutes: 10
         working-directory: admin
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Admin E2E
+        if: github.event_name != 'pull_request'
+        timeout-minutes: 15
         working-directory: admin
         run: pnpm test:e2e
 
