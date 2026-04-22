@@ -23,7 +23,9 @@ describe("RootPage", () => {
 
     render(await RootPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByRole("heading", { name: /learn math in chat\./i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /see who needs help next\./i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /one loop from student question to teacher action\./i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /less guessing after practice\./i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Sign in" })[0]).toHaveAttribute("href", "/login");
     expect(getServerPostAuthPathMock).not.toHaveBeenCalled();
   });
