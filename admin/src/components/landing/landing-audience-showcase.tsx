@@ -33,7 +33,7 @@ function AudienceSwitch({
   return (
     <div className="flex">
       <div
-        className="inline-flex rounded-full border border-[#d3c4b3] bg-[#fffdf9] p-1 shadow-[0_16px_36px_rgba(23,19,16,0.07)] backdrop-blur"
+        className="inline-flex rounded-full border border-foreground/10 bg-white/62 p-1 shadow-[0_16px_36px_rgba(23,19,16,0.06)] backdrop-blur"
         role="tablist"
         aria-label="Landing audience"
       >
@@ -106,7 +106,7 @@ function ChatBubble({
         "max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 shadow-[0_10px_26px_color-mix(in_oklch,var(--foreground)_4%,transparent)]",
         isStudent
           ? "ml-auto bg-primary text-primary-foreground"
-          : "bg-white text-foreground ring-1 ring-[#d5c6b6]",
+          : "bg-white/82 text-foreground ring-1 ring-foreground/10",
       )}
     >
       <p className="text-[11px] font-semibold tracking-[0.16em] uppercase opacity-70">{turn.speaker}</p>
@@ -117,7 +117,7 @@ function ChatBubble({
 
 function ChatTranscript({ turns, label }: { turns: ChatTurn[]; label: string }) {
   return (
-    <div className="relative min-h-full overflow-hidden rounded-[26px] border border-[#d5c6b6] bg-[#fffdf9] p-4 shadow-[0_18px_46px_rgba(23,19,16,0.06)]">
+    <div className="relative min-h-full overflow-hidden rounded-[26px] border border-foreground/10 bg-white/64 p-4 shadow-[0_18px_46px_rgba(23,19,16,0.05)]">
       <div className="relative flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-foreground">Example tutoring thread</p>
@@ -141,7 +141,7 @@ function ChatTranscript({ turns, label }: { turns: ChatTurn[]; label: string }) 
 
 function InterventionRow({ item }: { item: Intervention }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[20px] border border-[#d5c6b6] bg-white px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-[20px] border border-foreground/10 bg-white/76 px-4 py-3">
       <div>
         <p className="font-medium text-foreground">{item.name}</p>
         <p className="text-sm text-muted-foreground">{item.topic}</p>
@@ -162,10 +162,10 @@ function InterventionRow({ item }: { item: Intervention }) {
 
 function TopicScoreList({ items }: { items: TopicScore[] }) {
   return (
-    <div className="rounded-[26px] border border-[#d5c6b6] bg-[#fffdf9] p-5 shadow-[0_18px_46px_rgba(23,19,16,0.05)]">
+    <div className="rounded-[26px] border border-foreground/10 bg-white/64 p-5 shadow-[0_18px_46px_rgba(23,19,16,0.04)]">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-foreground">Topic scores</p>
-        <div className="rounded-full border border-[#d5c6b6] bg-white px-3 py-1 text-xs font-medium text-muted-foreground">
+        <div className="rounded-full border border-foreground/10 bg-white/76 px-3 py-1 text-xs font-medium text-muted-foreground">
           12 / 12 filled
         </div>
       </div>
@@ -203,7 +203,7 @@ function TeacherInterventionList({
   primaryHref: string;
 }) {
   return (
-    <div className="rounded-[26px] border border-[#d5c6b6] bg-[#fffdf9] p-4 shadow-[0_18px_46px_rgba(23,19,16,0.05)]">
+    <div className="rounded-[26px] border border-foreground/10 bg-white/64 p-4 shadow-[0_18px_46px_rgba(23,19,16,0.04)]">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-foreground">Chats to follow up with</p>
@@ -242,7 +242,7 @@ function AudiencePanelFrame({
       id={panelId}
       className="grid gap-8 lg:grid-cols-[minmax(0,0.76fr)_minmax(0,1.24fr)] lg:items-stretch"
     >
-      <div className="flex min-h-full flex-col justify-between gap-8 rounded-[26px] bg-[#fffdf9] p-5 shadow-[inset_0_0_0_1px_rgba(23,19,16,0.07)] sm:p-7">
+      <div className="flex min-h-full flex-col justify-between gap-8 rounded-[26px] bg-white/58 p-5 shadow-[inset_0_0_0_1px_rgba(23,19,16,0.05)] sm:p-7">
         <div>
           <p className="text-xs font-semibold tracking-[0.24em] uppercase text-primary">{audience.kicker}</p>
           <h2 className="mt-5 max-w-[12ch] text-4xl leading-none font-semibold text-balance sm:text-5xl lg:text-[3.45rem]">

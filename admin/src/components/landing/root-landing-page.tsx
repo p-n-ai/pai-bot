@@ -27,18 +27,18 @@ const heroSignals = [
 const dailyLoop = [
   {
     label: "Student",
-    title: "A question arrives in chat",
-    body: "No new student portal. The work starts in WhatsApp or Telegram.",
+    title: "A question comes in through chat",
+    body: "Students ask inside WhatsApp or Telegram. No extra portal to remember.",
   },
   {
     label: "Tutor",
-    title: "The next step gets checked",
-    body: "The tutor asks for one move, catches the slip, and keeps the attempt going.",
+    title: "One step gets checked",
+    body: "The tutor asks for the next move, catches mistakes early, and keeps the student working.",
   },
   {
     label: "Teacher",
-    title: "The repair list is ready",
-    body: "By lesson time, the teacher sees who needs help and what to revisit.",
+    title: "The follow-up list is ready",
+    body: "Before class, the teacher sees who needs help and which topic to revisit.",
   },
 ];
 
