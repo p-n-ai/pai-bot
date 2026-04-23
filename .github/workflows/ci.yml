@@ -45,7 +45,7 @@ jobs:
         working-directory: admin
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Admin E2E
+      - name: Admin E2E (smoke only)
         if: github.event_name != 'pull_request'
         timeout-minutes: 15
         working-directory: admin
@@ -74,6 +74,136 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.4.0
+
+  e2e-backend:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pai
+          POSTGRES_PASSWORD: pai
+          POSTGRES_DB: pai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pai"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+      dragonfly:
+        image: docker.dragonflydb.io/dragonflydb/dragonfly
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+      nats:
+        image: nats:2.10-alpine
+        ports:
+          - 4222:4222
+        options: >-
+          --health-cmd "true"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 3
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Run database migrations
+        run: go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://pai:pai@localhost:5432/pai?sslmode=disable" up -allow-missing
+
+      - name: Build Go backend
+        run: go build -o pai-bot ./cmd/server
+
+      - name: Start backend
+        run: |
+          ./pai-bot > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          # Wait for healthz
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/healthz > /dev/null 2>&1; then
+              echo "Backend healthy after attempt $i"
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
+              echo "Backend process died"; cat /tmp/backend.log; exit 1
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8080/healthz || (echo "Backend failed to start"; cat /tmp/backend.log; exit 1)
+        env:
+          LEARN_SERVER_HOST: 0.0.0.0
+          LEARN_SERVER_PORT: "8080"
+          LEARN_DATABASE_URL: postgres://pai:pai@localhost:5432/pai?sslmode=disable
+          LEARN_CACHE_URL: redis://localhost:6379
+          LEARN_NATS_URL: nats://localhost:4222
+          LEARN_TENANT_MODE: single
+          LEARN_CURRICULUM_PATH: ./oss
+          LEARN_DEV_MODE: "true"
+          LEARN_LOG_LEVEL: warn
+          LEARN_LOG_FORMAT: text
+          PAI_AUTH_SECRET: ci-test-secret
+          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: demo-password
+
+      - name: Install pnpm
+        working-directory: admin
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.26.2 --activate
+
+      - name: Install admin dependencies
+        working-directory: admin
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Playwright browsers
+        timeout-minutes: 10
+        working-directory: admin
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright E2E (with backend)
+        timeout-minutes: 15
+        working-directory: admin
+        run: pnpm test:e2e
+        env:
+          INTERNAL_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          E2E_BACKEND_ENABLED: "true"
+          E2E_AUTH_ENABLED: "true"
+          E2E_ADMIN_EMAIL: admin@example.com
+          E2E_ADMIN_PASSWORD: demo-password
+
+      - name: Dump backend logs
+        if: failure()
+        run: cat /tmp/backend.log || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-backend
+          path: |
+            admin/playwright-report
+            admin/test-results
+          if-no-files-found: ignore
 
   docker:
     runs-on: ubuntu-latest
