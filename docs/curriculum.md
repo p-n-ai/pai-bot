@@ -1,12 +1,3 @@
----
-title: "Curriculum"
-summary: "How P&AI Bot loads KSSM curriculum content from the OSS submodule and how topics, standards, teaching notes, and assessments are structured."
-read_when:
-  - You are changing curriculum loading, topic resolution, teaching notes, or assessment lookup
-  - You need to update or debug the OSS curriculum submodule integration
-  - You are adding curriculum-backed tutor, quiz, retrieval, or challenge behavior
----
-
 # Curriculum
 
 P&AI Bot loads curriculum content from structured YAML files. The default curriculum is **KSSM Matematik** (Malaysian national syllabus, Forms 1–3), with Algebra as the primary validation target.

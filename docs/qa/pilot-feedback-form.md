@@ -1,12 +1,3 @@
----
-title: "Pilot Feedback Form"
-summary: "Feedback form template for collecting student ratings and short-answer responses after pilot tutor sessions."
-read_when:
-  - You are running a pilot feedback collection flow
-  - You need the current questions asked after a Telegram tutor test
-  - You are revising pilot evaluation inputs
----
-
 # Pilot Feedback Form (Template)
 
 ## Basic Info

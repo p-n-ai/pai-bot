@@ -1,12 +1,3 @@
----
-title: "AI Providers"
-summary: "Provider gateway defaults, fallback behavior, budget controls, and configuration for OpenAI, Anthropic, DeepSeek, Gemini, OpenRouter, and Ollama."
-read_when:
-  - You are changing AI provider defaults, model IDs, fallback behavior, or budget enforcement
-  - You are adding or debugging an AI provider integration
-  - You need the environment variables for model provider configuration
----
-
 # AI Providers
 
 P&AI Bot uses a provider-agnostic AI gateway. All AI calls go through a unified `Provider` interface with automatic fallback, circuit breaking, and budget enforcement.

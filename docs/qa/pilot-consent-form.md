@@ -1,12 +1,3 @@
----
-title: "Pilot Consent Form"
-summary: "Student and parent consent text for the Telegram pilot, including data collection, storage, access, voluntary participation, and incentives."
-read_when:
-  - You are preparing or revising pilot consent material
-  - You are checking what pilot data is disclosed to students or parents
-  - You need consent wording for Telegram-based tutor testing
----
-
 # Pilot Consent Form (Student/Parent)
 
 ## Purpose

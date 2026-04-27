@@ -1,12 +1,3 @@
----
-title: "Setup Guide"
-summary: "Local setup guide for running P&AI Bot with Go, Docker Compose, pnpm, just, migrations, server, and admin panel."
-read_when:
-  - You are setting up pai-bot locally for the first time
-  - You are debugging local server, infrastructure, migration, or admin-panel startup
-  - You need the canonical local development commands
----
-
 # Setup Guide
 
 Get P&AI Bot running on your machine in under 10 minutes.

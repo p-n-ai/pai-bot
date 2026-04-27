@@ -1,12 +1,3 @@
----
-title: "Architecture"
-summary: "High-level modular-monolith architecture for the bot runtime, AI gateway, curriculum, progress, quiz, challenge, nudges, and admin surfaces."
-read_when:
-  - You need the system map before changing cross-domain runtime behavior
-  - You are adding a new internal package, transport, or domain boundary
-  - You need to understand how chat, agent, AI, curriculum, progress, and admin pieces fit together
----
-
 # Architecture
 
 P&AI Bot is a **modular monolith** — a single Go binary with clean domain boundaries. Each domain lives under `internal/` and communicates through well-defined Go interfaces, making it possible to split into microservices later if needed.

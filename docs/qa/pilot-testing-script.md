@@ -1,12 +1,3 @@
----
-title: "Pilot Testing Script"
-summary: "Telegram pilot testing script for KSSM Form 1-3 Algebra, including scope, volunteer instructions, and safe prompt list."
-read_when:
-  - You are preparing a pilot testing session
-  - You need the approved algebra prompt list for Telegram validation
-  - You are checking pilot scope and volunteer instructions
----
-
 # Pilot Testing Script (KSSM Form 1-3 Algebra)
 
 ## Scope
