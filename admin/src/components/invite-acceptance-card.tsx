@@ -30,7 +30,7 @@ export function InviteAcceptanceCard({
   const tokenMissing = token.trim() === "";
 
   return (
-    <div className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
+    <main className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl items-center gap-8 px-4 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
       <section className="space-y-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700 shadow-sm dark:border-emerald-400/20 dark:bg-slate-950/40 dark:text-emerald-200">
           <IconShieldCheck className="size-4" />
@@ -121,6 +121,6 @@ export function InviteAcceptanceCard({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }
