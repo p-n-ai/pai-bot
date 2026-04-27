@@ -439,41 +439,6 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	return responseContent, nil
 }
 
-// buildContextMessages returns the conversation messages for the AI prompt.
-// If a summary exists, it prepends it and only includes messages after compaction point.
-func (e *Engine) buildContextMessages(conv *Conversation) []ai.Message {
-	var messages []ai.Message
-
-	if conv.Summary != "" {
-		messages = append(messages, ai.Message{
-			Role:    "user",
-			Content: "Previous conversation summary:\n" + conv.Summary,
-		})
-		messages = append(messages, ai.Message{
-			Role:    "assistant",
-			Content: "Understood, I'll continue based on our previous conversation.",
-		})
-		// Only include messages after the compaction point.
-		for _, m := range conv.Messages[conv.CompactedAt:] {
-			cleanContent := sanitizeControlContent(m.Content)
-			if cleanContent == "" {
-				continue
-			}
-			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
-		}
-	} else {
-		for _, m := range conv.Messages {
-			cleanContent := sanitizeControlContent(m.Content)
-			if cleanContent == "" {
-				continue
-			}
-			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
-		}
-	}
-
-	return messages
-}
-
 // estimateTokens gives a rough token count for messages (1 token ≈ 4 chars).
 func estimateTokens(messages []StoredMessage) int {
 	total := 0
@@ -540,7 +505,7 @@ Keep the summary under 150 words. Write in the same language used in the convers
 		return
 	}
 
-	// Update the in-memory conv so buildContextMessages uses the new summary.
+	// Update the in-memory conversation before prompt compilation uses it.
 	conv.Summary = resp.Content
 	conv.CompactedAt = compactUpTo
 
