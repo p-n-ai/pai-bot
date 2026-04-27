@@ -11,7 +11,7 @@ read_when:
 
 > **Status:** Partially implemented (scaffold complete), ongoing development
 >
-> **Reference:** [docs/admin-panel.md](admin-panel.md) for feature list, [docs/implementation-guide.md](implementation-guide.md) for code templates
+> **Reference:** [docs/admin/admin-panel.md](admin-panel.md) for feature list, [docs/planning/implementation-guide.md](implementation-guide.md) for code templates
 
 This document provides UI/UX specifications, layout wireframes, and interaction patterns for the P&AI Bot admin panel. Use this as the development reference for building and extending admin views.
 

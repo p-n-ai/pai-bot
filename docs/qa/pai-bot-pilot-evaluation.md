@@ -1,4 +1,13 @@
-﻿# Pilot Evaluation: `pai-bot` (Telegram)
+---
+title: "Pilot Evaluation"
+summary: "Telegram pilot evaluation notes for pai-bot algebra tutoring behavior, curriculum citations, and guardrails."
+read_when:
+  - You are reviewing pilot feedback or education QA findings.
+  - You are changing algebra tutoring behavior based on pilot observations.
+  - You need historical pilot evaluation context.
+---
+
+# Pilot Evaluation: `pai-bot` (Telegram)
 
 ## P-W1D4-4 - Week 1 Day 4
 
@@ -139,4 +148,3 @@ The bot followed `Understand -> Plan -> Solve -> Verify -> Connect` structure bu
 2. Add explicit curriculum boundary gate before advanced topics (quadratics/integration/differentiation).
 3. Harden anti-answer-dump behavior for urgency and answer-only prompts.
 4. Add response QA checks for contradiction errors (for example, wrong confirmation then correction).
-

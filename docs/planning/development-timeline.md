@@ -1,3 +1,12 @@
+---
+title: "Development Timeline"
+summary: "Planning timeline and task tracker for pai-bot implementation phases, task IDs, status, and remarks."
+read_when:
+  - You are working from an older planned task ID or timeline reference.
+  - You are updating shipped/planned task status.
+  - You need historical sequencing context, not necessarily current code truth.
+---
+
 # pai-bot — Daily Development Timeline
 
 > **Repository:** `p-n-ai/pai-bot`
@@ -109,7 +118,7 @@ Day 1 has 5 tasks. Tasks 1.1–1.4 can be built in parallel; task 1.5 integrates
 Engineer mapping:
 - Engineer A = @djakajaya89
 
-**Refer to `docs/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
+**Refer to `docs/planning/implementation-guide.md` § Day 1 for exact code templates, test specs, and validation commands for each task.**
 
 **Reminder:** Follow TDD — write `_test.go` first → confirm RED → implement → confirm GREEN → run `just test-all`. Never commit until the full suite passes.
 
@@ -460,7 +469,7 @@ When adding a new item here, use an `A-WxDy-...` ID and do not backfill it into 
 | `A-W5D24-UI-3` | Data export page: add `/export` for admin and platform admin with download actions for students CSV, conversations JSON, and progress CSV | Bot | ✅ | `/export` now ships direct download actions for all three Week 5 export datasets. |
 | `A-W5D24-UI-4` | Admin navigation update: add role-aware links for `/settings/users` and `/export`, preserving current shell conventions and `no-store` behavior on protected responses | Bot | ✅ | Admin/platform-admin navigation, route protection, breadcrumbs, and section metadata now include both pages. |
 | `A-W5D24-UI-5` | Frontend coverage for Week 5 admin pages: add tests for `/settings/users`, `/export`, auth redirects, empty states, and failure states | Bot | ✅ | Added admin route/unit/react coverage for navigation, RBAC, user management, and export panel behavior. |
-| `A-W5D24-UI-6` | Docs sync for Week 5 admin UI: update admin docs and UI/UX docs to move shipped surfaces from planned to current and keep route/API descriptions aligned | Bot | ✅ | `docs/admin-panel.md` and `docs/admin-panel-uiux.md` now reflect the shipped Week 5 pages and endpoints. |
+| `A-W5D24-UI-6` | Docs sync for Week 5 admin UI: update admin docs and UI/UX docs to move shipped surfaces from planned to current and keep route/API descriptions aligned | Bot | ✅ | `docs/admin/admin-panel.md` and `docs/admin/admin-panel-uiux.md` now reflect the shipped Week 5 pages and endpoints. |
 | `A-W5D24-UI-7` | Pending invite reissue flow: add backend token rotation for pending invites, expose a reissue action on `/settings/users`, and surface the fresh `/activate` link inline without storing recoverable tokens | Bot | ✅ | Added `POST /api/admin/invites/{id}/reissue`, rotated pending invite hashes in place so old links immediately die, and covered the flow in Go + React tests. |
 | `A-W5D24-AUTH-2` | Fix SSR session refresh regression for admin auth: resolve tenant choices before committing the session transaction so `/api/auth/session` works with valid `pai_session` cookies | Bot | ✅ | Prevents refresh-time fallback to guest when the browser cookie exists but backend session hydration reads through a closed transaction. |
 

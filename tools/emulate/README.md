@@ -17,4 +17,4 @@ Ports:
 
 Reference:
 
-- `docs/local-auth-emulation.md`
+- `docs/ops/local-auth-emulation.md`

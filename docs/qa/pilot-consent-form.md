@@ -1,3 +1,12 @@
+---
+title: "Pilot Consent Form"
+summary: "Student and parent consent form template for pai-bot pilot testing."
+read_when:
+  - You are preparing or revising pilot testing materials.
+  - You need the consent language used for student or parent testers.
+  - You are updating QA docs for external pilot participants.
+---
+
 # Pilot Consent Form (Student/Parent)
 
 ## Purpose

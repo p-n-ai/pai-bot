@@ -1,3 +1,12 @@
+---
+title: "Business Plan"
+summary: "Product strategy, market framing, growth model, and business context for pai-bot."
+read_when:
+  - You need product or business context behind pai-bot.
+  - You are changing positioning, product strategy, pricing, metrics, or market docs.
+  - You need to distinguish implementation authority from strategy context.
+---
+
 # P&AI Bot — Business Plan
 
 *Last updated: February 2026*

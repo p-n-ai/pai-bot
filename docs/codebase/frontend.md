@@ -61,5 +61,6 @@ Do not mix these responsibilities. Admin product UI belongs in `admin/`; public/
 - Do not move shared shadcn primitives into app-owned behavior.
 - Keep product dashboard UI dense and operational; landing/site work can be more editorial.
 - Update docs when routes, auth behavior, or dashboard API contracts change.
-- For login/auth changes, read `docs/admin-auth.md`.
-- For admin shell/layout changes, read `docs/admin-panel-uiux.md`.
+- For login/auth changes, read `docs/admin/admin-auth.md`.
+- For admin shell/layout changes, read `docs/admin/admin-panel-uiux.md`.
+- For route/navigation changes, read `docs/admin/routes.md`.

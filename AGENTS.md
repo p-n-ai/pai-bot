@@ -14,7 +14,7 @@ Built by the [Pandai](https://pandai.org) team. Licensed under Apache 2.0.
 
 **Day 0 foundation is complete.** The repository has a working Go backend with health endpoints, configuration system, AI gateway (6 providers), database/cache clients, Docker infrastructure, CI pipeline, and full test suite.
 
-Development follows a 30-day timeline. See [docs/development-timeline.md](docs/development-timeline.md) for current progress.
+Development follows a 30-day timeline. See [docs/planning/development-timeline.md](docs/planning/development-timeline.md) for current progress.
 
 The first curriculum target is **KSSM Matematik (Form 1, 2, 3)** — specifically Algebra topics first.
 
@@ -101,26 +101,28 @@ Quick ownership map:
 Use these files as primary references:
 
 1. `README.md` for positioning, scope, and contribution framing
-2. `docs/technical-plan.md` for architecture and implementation plan
-3. `docs/business-plan.md` for product strategy and metrics intent
-4. `docs/development-timeline.md` for phased execution plan and task assignments
-5. `docs/implementation-guide.md` for code templates, test specs, and exit criteria
-6. `docs/admin-panel.md` for admin panel features, roles, and API specification
-7. `docs/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
-8. `docs/setup.md` for prerequisites, quick start, and common issues
-9. `docs/architecture.md` for modular monolith design and domain package reference
-10. `docs/ai-providers.md` for provider configuration, fallback chain, and structured output
-11. `docs/curriculum.md` for YAML schema, teaching notes, and assessment format
-12. `docs/deployment.md` for Docker Compose production, monitoring, and backups
+2. `docs/architecture/technical-plan.md` for architecture and implementation plan
+3. `docs/planning/business-plan.md` for product strategy and metrics intent
+4. `docs/planning/development-timeline.md` for phased execution plan and task assignments
+5. `docs/planning/implementation-guide.md` for code templates, test specs, and exit criteria
+6. `docs/admin/admin-panel.md` for admin panel features, roles, and API specification
+7. `docs/admin/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
+8. `docs/admin/routes.md` for admin frontend and backend route mapping
+9. `docs/ops/setup.md` for prerequisites, quick start, and common issues
+10. `docs/ops/config.md` for environment variables and validation rules
+11. `docs/architecture/architecture.md` for modular monolith design and domain package reference
+12. `docs/architecture/ai-providers.md` for provider configuration, fallback chain, and structured output
+13. `docs/architecture/curriculum.md` for YAML schema, teaching notes, and assessment format
+14. `docs/ops/deployment.md` for Docker Compose production, monitoring, and backups
 
 If you change one doc and it affects others, update all impacted docs in the same task.
 
 **When making code changes**, check whether the change affects any of the docs listed above. In particular:
-- Adding/removing/renaming a provider → update `docs/ai-providers.md` and the README providers table
-- Adding/removing/renaming a domain package → update `docs/architecture.md`
-- Changing environment variables or config fields → update `docs/setup.md` and `.env.example`
-- Changing deployment, Docker, or infrastructure → update `docs/deployment.md`
-- Changing curriculum loader behavior or YAML schema → update `docs/curriculum.md`
+- Adding/removing/renaming a provider → update `docs/architecture/ai-providers.md` and the README providers table
+- Adding/removing/renaming a domain package → update `docs/architecture/architecture.md`
+- Changing environment variables or config fields → update `docs/ops/config.md`, `docs/ops/setup.md`, and `.env.example`
+- Changing deployment, Docker, or infrastructure → update `docs/ops/deployment.md`
+- Changing curriculum loader behavior or YAML schema → update `docs/architecture/curriculum.md`
 
 Before changing curriculum contracts, shared API shapes, bot workflows, or OSS sync behavior, also inspect the relevant `p-n-ai` sibling/core repos listed in [Related Repositories](#related-repositories). Reuse existing patterns and data contracts when they already exist there instead of inventing local variants.
 
@@ -130,14 +132,14 @@ Before changing curriculum contracts, shared API shapes, bot workflows, or OSS s
 
 **Before starting ANY daily implementation task, you MUST read and cross-reference BOTH:**
 
-1. **[docs/implementation-guide.md](docs/implementation-guide.md)** — Code templates, function signatures, test specifications, file-by-file implementation details, and exit criteria for each day
-2. **[docs/development-timeline.md](docs/development-timeline.md)** — Task assignments, dependencies between tasks, engineer allocation, and day-by-day execution order
+1. **[docs/planning/implementation-guide.md](docs/planning/implementation-guide.md)** — Code templates, function signatures, test specifications, file-by-file implementation details, and exit criteria for each day
+2. **[docs/planning/development-timeline.md](docs/planning/development-timeline.md)** — Task assignments, dependencies between tasks, engineer allocation, and day-by-day execution order
 
 **Why both?** The implementation guide tells you **what** to build and **how** (exact code patterns, test cases, API contracts). The development timeline tells you **when** and **in what order** (task dependencies, parallelization, which tasks block others). Using only one will lead to missed dependencies or divergent implementations.
 
 **The workflow for each day:**
-1. Read the day's section in `docs/development-timeline.md` — identify task IDs, dependencies, and assignments
-2. Read the day's section in `docs/implementation-guide.md` — identify code templates, test specs, and exit criteria
+1. Read the day's section in `docs/planning/development-timeline.md` — identify task IDs, dependencies, and assignments
+2. Read the day's section in `docs/planning/implementation-guide.md` — identify code templates, test specs, and exit criteria
 3. Follow TDD (Rule 5 below)
 4. Verify ALL exit criteria from the implementation guide before marking any day complete
 
@@ -173,7 +175,7 @@ If one doc changes these boundaries, propagate the same model everywhere.
 
 **MANDATORY: After finishing ANY implementation, always run `just test-all` to verify nothing is broken. Never skip this step. Never consider a task done until the full test suite passes.**
 
-**MANDATORY: After completing ANY task from the development timeline, update `docs/development-timeline.md` using the task table format `| Task ID | Task | Owner | Status | Remark |`. Set `Status` to `✅` when completed (otherwise `⬜`), and put any notes in the `Remark` column. Never consider a task done until the timeline is updated.**
+**MANDATORY: After completing ANY task from the development timeline, update `docs/planning/development-timeline.md` using the task table format `| Task ID | Task | Owner | Status | Remark |`. Set `Status` to `✅` when completed (otherwise `⬜`), and put any notes in the `Remark` column. Never consider a task done until the timeline is updated.**
 
 **Every implementation task must follow this cycle. No exceptions.**
 
@@ -376,14 +378,20 @@ Agent note:
 ## Documentation
 
 - [README.md](README.md) — Project overview, quick start, features, deployment
-- [docs/setup.md](docs/setup.md) — Prerequisites, quick start, environment variables, common issues
-- [docs/architecture.md](docs/architecture.md) — Modular monolith design, domain packages, HTTP routing, infrastructure
-- [docs/ai-providers.md](docs/ai-providers.md) — Provider configuration, fallback chain, structured output, budget enforcement
-- [docs/curriculum.md](docs/curriculum.md) — YAML schema, teaching notes, assessments, adding new curricula
-- [docs/deployment.md](docs/deployment.md) — Docker Compose production, monitoring, backups
-- [docs/technical-plan.md](docs/technical-plan.md) — Detailed architecture, schema, infra, security
-- [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
-- [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
-- [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day
-- [docs/admin-panel.md](docs/admin-panel.md) — Admin panel features, roles, routes, and API specification
-- [docs/admin-panel-uiux.md](docs/admin-panel-uiux.md) — Admin panel UI/UX wireframes, design system, and interaction patterns
+- [docs/ops/setup.md](docs/ops/setup.md) — Prerequisites, quick start, environment variables, common issues
+- [docs/ops/config.md](docs/ops/config.md) — Environment variable defaults and validation rules
+- [docs/architecture/architecture.md](docs/architecture/architecture.md) — Modular monolith design, domain packages, HTTP routing, infrastructure
+- [docs/architecture/ai-providers.md](docs/architecture/ai-providers.md) — Provider configuration, fallback chain, structured output, budget enforcement
+- [docs/architecture/curriculum.md](docs/architecture/curriculum.md) — YAML schema, teaching notes, assessments, adding new curricula
+- [docs/ops/deployment.md](docs/ops/deployment.md) — Docker Compose production, monitoring, backups
+- [docs/architecture/technical-plan.md](docs/architecture/technical-plan.md) — Detailed architecture, schema, infra, security
+- [docs/planning/business-plan.md](docs/planning/business-plan.md) — Business strategy, metrics, competitive landscape
+- [docs/planning/development-timeline.md](docs/planning/development-timeline.md) — Day-by-day 6-week development plan
+- [docs/planning/implementation-guide.md](docs/planning/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day
+- [docs/admin/admin-panel.md](docs/admin/admin-panel.md) — Admin panel features, roles, routes, and API specification
+- [docs/admin/admin-panel-uiux.md](docs/admin/admin-panel-uiux.md) — Admin panel UI/UX wireframes, design system, and interaction patterns
+- [docs/admin/routes.md](docs/admin/routes.md) — Admin route and API map
+- [docs/runtime/embeddable-chat.md](docs/runtime/embeddable-chat.md) — Embed widget runtime surface
+- [docs/runtime/openapi-scalar.md](docs/runtime/openapi-scalar.md) — OpenAPI JSON and Scalar docs surface
+- [docs/runtime/whatsapp.md](docs/runtime/whatsapp.md) — WhatsApp runtime modes and setup
+- [docs/ops/local-tools.md](docs/ops/local-tools.md) — Local helper binaries, scripts, and emulation tools

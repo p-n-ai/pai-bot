@@ -1,3 +1,12 @@
+---
+title: "Architecture"
+summary: "Current modular-monolith architecture for pai-bot, including backend domains, HTTP routing, admin app, and infrastructure shape."
+read_when:
+  - You are changing domain boundaries or adding a backend package.
+  - You need the current high-level architecture before implementing a cross-cutting feature.
+  - You are updating AGENTS.md or codebase docs about repo structure.
+---
+
 # Architecture
 
 P&AI Bot is a **modular monolith** — a single Go binary with clean domain boundaries. Each domain lives under `internal/` and communicates through well-defined Go interfaces, making it possible to split into microservices later if needed.

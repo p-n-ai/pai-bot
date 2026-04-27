@@ -1,3 +1,12 @@
+---
+title: "Pilot Feedback Form"
+summary: "Feedback form template for pai-bot pilot testers."
+read_when:
+  - You are collecting or revising pilot tester feedback.
+  - You need the survey questions for pai-bot pilot sessions.
+  - You are updating QA participant materials.
+---
+
 # Pilot Feedback Form (Template)
 
 ## Basic Info

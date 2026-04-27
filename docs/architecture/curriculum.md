@@ -1,3 +1,12 @@
+---
+title: "Curriculum"
+summary: "Curriculum content source, YAML schema, teaching notes, assessments, and loader behavior for KSSM math content."
+read_when:
+  - You are changing curriculum YAML, loader behavior, topic schema, teaching notes, or assessments.
+  - You are adding a new curriculum, form, subject, topic, or prerequisite.
+  - You need to understand how pai-bot consumes the oss curriculum mirror.
+---
+
 # Curriculum
 
 P&AI Bot loads curriculum content from structured YAML files. The default curriculum is **KSSM Matematik** (Malaysian national syllabus, Forms 1–3), with Algebra as the primary validation target.

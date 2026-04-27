@@ -192,7 +192,7 @@ Guardrail:
 
 For local Google auth testing:
 
-- use [docs/local-auth-emulation.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/local-auth-emulation.md)
+- use [docs/ops/local-auth-emulation.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/ops/local-auth-emulation.md)
 - local emulate seed currently includes `teacher@gmail.com`
 
 One emulator nuance:

@@ -1,3 +1,12 @@
+---
+title: "Setup Guide"
+summary: "Local setup guide for pai-bot prerequisites, quick start, environment variables, Playwright, and common issues."
+read_when:
+  - You are setting up pai-bot locally.
+  - You are changing required tools, setup scripts, environment variables, or local dev commands.
+  - You are debugging local development startup.
+---
+
 # Setup Guide
 
 Get P&AI Bot running on your machine in under 10 minutes.

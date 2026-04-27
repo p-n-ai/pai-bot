@@ -1,3 +1,12 @@
+---
+title: "AI Tutor DSKP Alignment Proposal"
+summary: "Planning proposal for aligning tutor prompt behavior with KPM DSKP pedagogy and Mathematical Fikrah."
+read_when:
+  - You are changing core tutor pedagogy, KSSM alignment, or system prompt teaching philosophy.
+  - You need the planned DSKP framing before editing tutor prompts.
+  - You are separating current prompt behavior from proposed education-lead guidance.
+---
+
 # Proposal: Aligning AI Tutor Core Prompts to KPM DSKP Pedagogy
 
 ## Overview
@@ -36,4 +45,4 @@ School assessment should be holistic, taking forms like presentations and projec
 *Impact on Bot:* To achieve TP6 (Creative Non-Routine), the AI must design a chat-friendly "Projek Mini". The AI should instruct the student to use household items or observe their surroundings, construct a model, and then send a photo back to the AI via chat. *Note: This requires robust image processing capabilities from the underlying LLM.*
 
 ## Next Steps
-This document is for the Education Lead and engineering team to review. If approved, these directives should be merged into `pai-bot`'s core system architecture prompts (e.g. `docs/implementation-guide.md`).
+This document is for the Education Lead and engineering team to review. If approved, these directives should be merged into `pai-bot`'s core system architecture prompts (e.g. `docs/planning/implementation-guide.md`).

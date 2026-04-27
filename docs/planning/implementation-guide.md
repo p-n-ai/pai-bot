@@ -1,3 +1,12 @@
+---
+title: "Implementation Guide"
+summary: "Planning-era implementation instructions, code templates, tests, and exit criteria for the original pai-bot build plan."
+read_when:
+  - You are working from an old development-timeline task.
+  - You need original code templates or test criteria from the planned build.
+  - You are reconciling planned instructions with current repo reality.
+---
+
 # Implementation Guide — P&AI Bot
 
 > **Companion to:** [development-timeline.md](development-timeline.md)
@@ -4670,7 +4679,7 @@ Current contract files:
 - `internal/agent/challenge_postgres_integration_test.go`
 - `internal/agent/challenge_ai_fallback_internal_test.go`
 - `internal/agent/challenge_ai_fallback_postgres_integration_test.go`
-- `docs/challenge-invite-slice.md`
+- `docs/runtime/challenge-invite-slice.md`
 
 Current key store surface:
 
@@ -4686,7 +4695,7 @@ type ChallengeStore interface {
 }
 ```
 
-Use `docs/challenge-invite-slice.md` as the behavior/source-of-truth doc for the current challenge state machine. Keep this guide explicit: Day 11 shipped the challenge entry + matchmaking baseline, but not the later runtime or settlement pieces that were part of the original broader plan.
+Use `docs/runtime/challenge-invite-slice.md` as the behavior/source-of-truth doc for the current challenge state machine. Keep this guide explicit: Day 11 shipped the challenge entry + matchmaking baseline, but not the later runtime or settlement pieces that were part of the original broader plan.
 
 ### Day 12-15 — Groups, Leaderboards, A/B Test, Analytics Dashboard
 
@@ -4949,7 +4958,7 @@ echo ""
 - Add `/export` for admin and platform admin with download actions for students CSV, conversations JSON, and progress CSV
 - Update admin navigation for the new pages while preserving cookie-session auth behavior and `no-store` protected responses
 - Add frontend tests for the new pages plus auth redirects, empty states, and failure states
-- Update `docs/admin-panel.md` and `docs/admin-panel-uiux.md` when the pages ship so planned/current status stays accurate
+- Update `docs/admin/admin-panel.md` and `docs/admin/admin-panel-uiux.md` when the pages ship so planned/current status stays accurate
 
 **Week 5 Targets:**
 - [ ] Fresh `docker compose up` works in <10min

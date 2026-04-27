@@ -1,3 +1,12 @@
+---
+title: "Pilot Testing Script"
+summary: "KSSM Form 1-3 Algebra testing script for pai-bot pilot sessions."
+read_when:
+  - You are running a pilot test session.
+  - You need scripted algebra scenarios for tutor QA.
+  - You are updating pilot QA materials.
+---
+
 # Pilot Testing Script (KSSM Form 1-3 Algebra)
 
 ## Scope

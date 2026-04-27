@@ -33,16 +33,21 @@ read_when:
 
 | Request | Start here | Then check |
 |---|---|---|
-| Bot reply behavior | `internal/agent/engine.go` | `internal/agent/prompt_builder.go`, `docs/agent-turn-api.md`, tests in `internal/agent/`.
-| Prompt/context safety | `internal/agent/turn.go` | `internal/agent/context_loader.go`, `internal/agent/context_packets.go`, `docs/agent-turn-api.md`.
+| Bot reply behavior | `internal/agent/engine.go` | `internal/agent/prompt_builder.go`, `docs/runtime/agent-turn-api.md`, tests in `internal/agent/`.
+| Prompt/context safety | `internal/agent/turn.go` | `internal/agent/context_loader.go`, `internal/agent/context_packets.go`, `docs/runtime/agent-turn-api.md`.
 | Telegram/WhatsApp/web chat transport | `internal/chat/` | `cmd/server/main.go`, channel-specific tests.
 | Admin API behavior | `internal/adminapi/` | `cmd/server/main.go`, `admin/src/lib/server-api.ts`.
-| Admin UI | `admin/src/app/` | `admin/src/components/`, `admin/src/lib/`, `docs/admin-panel-uiux.md`.
-| Auth/login/session | `internal/auth/` | `docs/admin-auth.md`, `admin/src/components/login-gate/`.
-| Curriculum loading | `internal/curriculum/` | `oss/`, `docs/curriculum.md`.
-| Retrieval lab/search | `internal/retrieval/` | `admin/src/components/retrieval-lab.tsx`, `docs/quiz-mode.md` when agent retrieval affects tutoring.
+| Admin UI | `admin/src/app/` | `admin/src/components/`, `admin/src/lib/`, `docs/admin/admin-panel-uiux.md`.
+| Auth/login/session | `internal/auth/` | `docs/admin/admin-auth.md`, `admin/src/components/login-gate/`.
+| Admin routes/API | `cmd/server/main.go`, `admin/src/app/` | `docs/admin/routes.md`, `internal/apidocs/`.
+| Curriculum loading | `internal/curriculum/` | `oss/`, `docs/architecture/curriculum.md`.
+| Retrieval lab/search | `internal/retrieval/` | `admin/src/components/retrieval-lab.tsx`, `docs/runtime/quiz-mode.md` when agent retrieval affects tutoring.
+| Embed chat widget | `internal/chat/embed*`, `cmd/server/embed_admin.go` | `docs/runtime/embeddable-chat.md`, `scripts/test-embed.html`.
+| WhatsApp runtime | `internal/chat/whatsapp*.go` | `docs/runtime/whatsapp.md`, `admin/src/app/settings/whatsapp/page.tsx`.
+| OpenAPI/Scalar docs | `internal/apidocs/` | `docs/runtime/openapi-scalar.md`, `cmd/server/main.go`.
+| Config/env behavior | `internal/platform/config/` | `docs/ops/config.md`, `docs/ops/setup.md`.
 | Progress, XP, streaks | `internal/progress/` | `internal/agent/*progress*`, `internal/agent/milestones.go`.
-| Deployment | `deploy/`, `terraform/` | `docs/deployment.md`, `.github/workflows/`.
+| Deployment | `deploy/`, `terraform/` | `docs/ops/deployment.md`, `.github/workflows/`.
 
 ## Documentation rules
 

@@ -53,8 +53,9 @@ This repo carries runtime code plus the operational assets needed to run it.
 
 ## Operational rules
 
-- Update `docs/deployment.md` when deploy behavior changes.
-- Update `docs/setup.md` and `.env.example` when config/env changes.
-- Update `docs/curriculum.md` when curriculum schema or loader behavior changes.
+- Update `docs/ops/deployment.md` when deploy behavior changes.
+- Update `docs/ops/config.md`, `docs/ops/setup.md`, and `.env.example` when config/env changes.
+- Update `docs/architecture/curriculum.md` when curriculum schema or loader behavior changes.
+- Update `docs/ops/local-tools.md` when helper binaries, scripts, or emulation tools change.
 - Use `trash` for removals.
 - Keep local-only agent config out of commits unless the task explicitly says repo-local agent policy.

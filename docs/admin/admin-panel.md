@@ -48,7 +48,7 @@ The root route `/` now stays public as a landing page. Its primary CTA routes si
 
 Detailed runtime reference:
 
-- [docs/admin-auth.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/admin-auth.md)
+- [docs/admin/admin-auth.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/admin/admin-auth.md)
 
 ### Flow
 

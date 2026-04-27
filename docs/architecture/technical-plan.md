@@ -1,3 +1,12 @@
+---
+title: "Technical Plan"
+summary: "Planning-era technical architecture, schema design, security model, and implementation reference for pai-bot."
+read_when:
+  - You need the original technical plan behind current architecture decisions.
+  - You are reconciling planned architecture with current code.
+  - You are updating broad product or platform architecture docs.
+---
+
 # Technical Plan — P&AI Bot
 
 > **Repository:** `p-n-ai/pai-bot`

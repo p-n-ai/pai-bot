@@ -55,6 +55,8 @@ The backend is a modular Go monolith. `cmd/` wires binaries. `internal/` owns do
 
 - Keep `cmd/*` thin. If logic is testable product behavior, put it under `internal/`.
 - Keep package tests beside package code.
-- For bot prompt/context changes, read `docs/agent-turn-api.md` before editing.
-- For auth/session changes, read `docs/admin-auth.md` before editing.
-- For admin API changes, update `internal/apidocs/` and admin client code when the surface changes.
+- For bot prompt/context changes, read `docs/runtime/agent-turn-api.md` before editing.
+- For auth/session changes, read `docs/admin/admin-auth.md` before editing.
+- For admin API changes, update `docs/admin/routes.md`, `internal/apidocs/`, and admin client code when the surface changes.
+- For config/env changes, update `docs/ops/config.md`.
+- For embed, WhatsApp, or OpenAPI docs surfaces, read the matching `docs/runtime/` file first.
