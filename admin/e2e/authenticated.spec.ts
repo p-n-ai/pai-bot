@@ -48,7 +48,7 @@ test.describe("admin authenticated routes @backend", () => {
     await loginAsAdmin(page);
     await page.goto("/dashboard/ai-usage");
     await expect(page).toHaveURL(/\/dashboard\/ai-usage$/);
-    await expect(page.getByRole("heading", { name: "Budget and provider usage" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI usage" })).toBeVisible();
   });
 
   test("redirects /dashboard/metrics to /dashboard/ai-usage", async ({ page }) => {
