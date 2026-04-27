@@ -10,94 +10,94 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
-func appendProfilePackets(packets []ContextPacket, profile LearnerProfile) []ContextPacket {
+func appendProfilePackets(packets []contextPacket, profile learnerProfile) []contextPacket {
 	if profile.Form != "" || profile.Language != "" || profile.QuizIntensity != "" || profile.ABGroup != "" {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "profile.system",
-			Kind:     ContextKindProfile,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindProfile,
+			Trust:    contextTrustSystemOwned,
 			Source:   "profile",
 			Data:     profileSystemContext(profile),
-			RenderAs: ContextRenderSystemData,
+			RenderAs: contextRenderSystemData,
 		}))
 	}
 	if profile.Name != "" {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "profile.name",
-			Kind:     ContextKindProfile,
-			Trust:    ContextTrustLearnerProvided,
+			Kind:     contextKindProfile,
+			Trust:    contextTrustLearnerProvided,
 			Source:   "profile",
 			Data:     profile.Name,
-			RenderAs: ContextRenderQuotedData,
+			RenderAs: contextRenderQuotedData,
 		}))
 	}
 	return packets
 }
 
-func appendGoalPackets(packets []ContextPacket, goals []*Goal) []ContextPacket {
+func appendGoalPackets(packets []contextPacket, goals []*Goal) []contextPacket {
 	if systemGoals := goalSystemContext(goals); len(systemGoals) > 0 {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "goals.system",
-			Kind:     ContextKindGoal,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindGoal,
+			Trust:    contextTrustSystemOwned,
 			Source:   "goals",
 			Data:     systemGoals,
-			RenderAs: ContextRenderSystemData,
+			RenderAs: contextRenderSystemData,
 		}))
 	}
 	if summaries := goalSummaryContext(goals); len(summaries) > 0 {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "goals.summary",
-			Kind:     ContextKindGoal,
-			Trust:    ContextTrustLearnerProvided,
+			Kind:     contextKindGoal,
+			Trust:    contextTrustLearnerProvided,
 			Source:   "goals",
 			Data:     summaries,
-			RenderAs: ContextRenderQuotedData,
+			RenderAs: contextRenderQuotedData,
 		}))
 	}
 	return packets
 }
 
-func appendImagePackets(packets []ContextPacket, imageDataURL string) []ContextPacket {
+func appendImagePackets(packets []contextPacket, imageDataURL string) []contextPacket {
 	return append(packets,
-		newContextPacket(ContextPacket{
+		newContextPacket(contextPacket{
 			ID:       "image.instruction",
-			Kind:     ContextKindControlInstruction,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindControlInstruction,
+			Trust:    contextTrustSystemOwned,
 			Source:   "image",
 			Data:     "Analyze the attached image directly and answer based on what you see. If unreadable, say exactly what is unclear and how to retake it.",
-			RenderAs: ContextRenderSystemInstruction,
+			RenderAs: contextRenderSystemInstruction,
 		}),
-		newContextPacket(ContextPacket{
+		newContextPacket(contextPacket{
 			ID:        "image.attachment",
-			Kind:      ContextKindImage,
-			Trust:     ContextTrustExternal,
+			Kind:      contextKindImage,
+			Trust:     contextTrustExternal,
 			Source:    "image",
 			Data:      imageDataURL,
-			RenderAs:  ContextRenderAttachment,
-			TraceMode: ContextTraceOmit,
+			RenderAs:  contextRenderAttachment,
+			TraceMode: contextTraceOmit,
 		}),
 	)
 }
 
-func newContextPacket(packet ContextPacket) ContextPacket {
+func newContextPacket(packet contextPacket) contextPacket {
 	if packet.RenderAs == "" {
 		packet.RenderAs = defaultRenderMode(packet.Trust)
 	}
 	if packet.TraceMode == "" {
-		packet.TraceMode = ContextTraceMetadataOnly
+		packet.TraceMode = contextTraceMetadataOnly
 	}
 	return packet
 }
 
-func defaultRenderMode(trust ContextTrust) ContextRenderMode {
-	if trust == ContextTrustSystemOwned {
-		return ContextRenderSystemData
+func defaultRenderMode(trust contextTrust) contextRenderMode {
+	if trust == contextTrustSystemOwned {
+		return contextRenderSystemData
 	}
-	return ContextRenderQuotedData
+	return contextRenderQuotedData
 }
 
-func validateContextPacket(packet ContextPacket) error {
+func validateContextPacket(packet contextPacket) error {
 	if packet.Trust == "" {
 		return fmt.Errorf("context packet %q missing trust", packet.ID)
 	}
@@ -107,13 +107,13 @@ func validateContextPacket(packet ContextPacket) error {
 	if packet.TraceMode == "" {
 		return fmt.Errorf("context packet %q missing trace mode", packet.ID)
 	}
-	if (packet.RenderAs == ContextRenderSystemInstruction || packet.RenderAs == ContextRenderSystemData) && packet.Trust != ContextTrustSystemOwned {
+	if (packet.RenderAs == contextRenderSystemInstruction || packet.RenderAs == contextRenderSystemData) && packet.Trust != contextTrustSystemOwned {
 		return fmt.Errorf("context packet %q renders untrusted data as system content", packet.ID)
 	}
 	return nil
 }
 
-func validateContextPackets(packets []ContextPacket) error {
+func validateContextPackets(packets []contextPacket) error {
 	for _, packet := range packets {
 		if err := validateContextPacket(packet); err != nil {
 			return err
@@ -122,13 +122,13 @@ func validateContextPackets(packets []ContextPacket) error {
 	return nil
 }
 
-func contextSources(packets []ContextPacket) []ContextSource {
-	var sources []ContextSource
+func contextSources(packets []contextPacket) []contextSource {
+	var sources []contextSource
 	for _, packet := range packets {
-		if packet.TraceMode == ContextTraceOmit {
+		if packet.TraceMode == contextTraceOmit {
 			continue
 		}
-		sources = append(sources, ContextSource{
+		sources = append(sources, contextSource{
 			Name:     packet.Source,
 			Included: true,
 		})
@@ -136,7 +136,7 @@ func contextSources(packets []ContextPacket) []ContextSource {
 	return sources
 }
 
-func profileSystemContext(profile LearnerProfile) []string {
+func profileSystemContext(profile learnerProfile) []string {
 	var fields []string
 	if profile.Form != "" {
 		fields = append(fields, "Form: "+profile.Form)

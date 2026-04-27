@@ -11,11 +11,11 @@ read_when:
 
 Status:
 
-- Current: repo-local dev tooling only
-- Current: Go admin auth can now point its Google OIDC transport at these emulator endpoints
-- Not current: production auth still uses the Go backend and real providers
+- Implemented as repo-local dev tooling only
+- Go admin auth can point its Google OIDC transport at these emulator endpoints
+- Production auth uses the Go backend and real providers
 
-This repo now carries a shared [`emulate`](https://github.com/vercel-labs/emulate) seed config under [`tools/emulate/emulate.config.yaml`](/Users/thor/.codex/worktrees/5665/pai-bot/tools/emulate/emulate.config.yaml).
+This repo carries a shared [`emulate`](https://github.com/vercel-labs/emulate) seed config under [`tools/emulate/emulate.config.yaml`](../../tools/emulate/emulate.config.yaml).
 
 Why:
 

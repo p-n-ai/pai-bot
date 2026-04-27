@@ -1,3 +1,12 @@
+---
+title: "Pilot Volunteer Invite"
+summary: "Volunteer invite copy for KSSM Form 1-3 Algebra pilot testing."
+read_when:
+  - You are recruiting pilot testers.
+  - You need short invite copy for pai-bot pilot participation.
+  - You are updating QA participant outreach materials.
+---
+
 # Pilot Volunteer Invite (KSSM Form 1-3 Algebra)
 
 ## Message (Short)

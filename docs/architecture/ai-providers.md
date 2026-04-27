@@ -1,3 +1,12 @@
+---
+title: "AI Providers"
+summary: "Provider configuration, router fallback, structured output support, token budgets, and model defaults for pai-bot AI calls."
+read_when:
+  - You are changing AI provider setup, router behavior, structured output, or token budgets.
+  - You are adding, removing, or renaming an AI provider.
+  - You are changing LEARN_AI_* environment variables.
+---
+
 # AI Providers
 
 P&AI Bot uses a provider-agnostic AI gateway. All AI calls go through a unified `Provider` interface with automatic fallback, circuit breaking, and budget enforcement.

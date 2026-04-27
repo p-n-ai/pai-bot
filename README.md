@@ -401,7 +401,7 @@ helm install pai deploy/helm/pai \
   --set ingress.host=learn.yourschool.edu.my
 ```
 
-See [docs/deployment.md](docs/deployment.md#kubernetes-helm) for full configuration, local testing with k3d, and external database setup.
+See [docs/ops/deployment.md](docs/ops/deployment.md#kubernetes-helm) for full configuration, local testing with k3d, and external database setup.
 
 **Scales:** Horizontally to millions of students. Each school gets a namespace with isolated data.
 
@@ -533,7 +533,7 @@ just admin-e2e             # Same Playwright run via just
 just test-all              # Convenience gate: lint + Go tests + admin unit/component tests
 ```
 
-Playwright first-run setup (install deps + Chromium) is documented in [docs/setup.md](docs/setup.md#playwright-e2e-setup-admin).
+Playwright first-run setup (install deps + Chromium) is documented in [docs/ops/setup.md](docs/ops/setup.md#playwright-e2e-setup-admin).
 Backend-dependent E2E tests are tagged `@backend` and are skipped by default unless `E2E_BACKEND_ENABLED=true`. Authenticated routes also require `E2E_AUTH_ENABLED=true` plus `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD`.
 These `E2E_*` variables are documented in [`.env.example`](.env.example).
 
@@ -639,7 +639,7 @@ We welcome contributions! P&AI is built by a community that believes every stude
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
 
-See [docs/setup.md](docs/setup.md) for development environment setup.
+See [docs/ops/setup.md](docs/ops/setup.md) for development environment setup.
 
 ---
 
@@ -647,12 +647,19 @@ See [docs/setup.md](docs/setup.md) for development environment setup.
 
 | Document | Description |
 |----------|-------------|
-| [Setup Guide](docs/setup.md) | Prerequisites, quick start, environment variables, common issues |
-| [Architecture](docs/architecture.md) | Modular monolith design, domain packages, HTTP routing, infrastructure |
-| [AI Providers](docs/ai-providers.md) | Provider configuration, fallback chain, structured output, budget enforcement |
-| [Curriculum](docs/curriculum.md) | YAML schema, teaching notes, assessments, adding new curricula |
-| [Deployment](docs/deployment.md) | Docker Compose production, monitoring, backups |
+| [Setup Guide](docs/ops/setup.md) | Prerequisites, quick start, environment variables, common issues |
+| [Configuration](docs/ops/config.md) | Environment variable defaults and validation rules |
+| [Architecture](docs/architecture/architecture.md) | Modular monolith design, domain packages, HTTP routing, infrastructure |
+| [AI Providers](docs/architecture/ai-providers.md) | Provider configuration, fallback chain, structured output, budget enforcement |
+| [Curriculum](docs/architecture/curriculum.md) | YAML schema, teaching notes, assessments, adding new curricula |
+| [Deployment](docs/ops/deployment.md) | Docker Compose production, monitoring, backups |
 | [Admin Panel](docs/admin-panel.md) | Dashboard features, roles, API specification |
+| [Admin Routes](docs/admin/routes.md) | Admin frontend route and backend API map |
+| [Telegram Runtime](docs/runtime/telegram.md) | Telegram Bot API polling, commands, media, and nudge behavior |
+| [Embed Chat](docs/runtime/embeddable-chat.md) | Embeddable widget runtime and security boundaries |
+| [WhatsApp Runtime](docs/runtime/whatsapp.md) | WhatsApp backend modes, env vars, and setup routes |
+| [OpenAPI and Scalar](docs/runtime/openapi-scalar.md) | API docs surface and update rules |
+| [Local Tools](docs/ops/local-tools.md) | Local helper binaries, scripts, and emulation tools |
 | [Technical Plan](docs/technical-plan.md) | Detailed architecture, database schema, security model |
 
 ---

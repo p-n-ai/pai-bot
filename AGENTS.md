@@ -70,33 +70,31 @@ Key domains:
 - `internal/platform/` — Shared infra: config, database, cache, messaging, storage, telemetry, health
 - `admin/` — Next.js admin panel (teacher dashboard, parent view, school admin)
 
-## Project Structure
+## Folder Map
 
-```
-pai-bot/
-├── cmd/server/main.go          # Application entrypoint
-├── internal/
-│   ├── ai/                     # AI Gateway (providers, routing, budget)
-│   ├── agent/                  # Agent Engine (state machine, scheduler, prompts, quiz, challenges)
-│   ├── chat/                   # Chat Gateway (telegram, whatsapp, websocket)
-│   ├── curriculum/             # Curriculum loader (YAML from OSS)
-│   ├── progress/               # Mastery scoring, SM-2, streaks/XP
-│   ├── auth/                   # JWT + RBAC middleware
-│   ├── tenant/                 # Multi-tenancy isolation
-│   └── platform/               # Shared: config, database, cache, messaging, storage, telemetry, health
-├── admin/                      # Next.js admin panel
-├── migrations/                 # SQL migrations (goose)
-├── deploy/
-│   ├── docker/                 # Dockerfiles
-│   └── helm/pai/               # Helm chart
-├── terraform/                  # Infrastructure as Code
-├── scripts/                    # setup.sh, deploy.sh, analytics.sh
-├── docker-compose.yml          # Local dev
-├── docker-compose.prod.yml     # Production single-server
-├── Makefile                    # Legacy task runner parity
-├── justfile                    # Preferred task runner
-└── .env.example                # All config documented
-```
+Use `docs-list` before opening docs. The codebase map lives under `docs/codebase/`:
+
+- `docs/codebase/README.md` — top-level folder ownership and request routing
+- `docs/codebase/backend.md` — Go binaries and `internal/` package map
+- `docs/codebase/frontend.md` — `admin/` and `site/` surface map
+- `docs/codebase/data-and-ops.md` — migrations, OSS content, deploy, infra, scripts, and local tooling
+
+Quick ownership map:
+
+| Path | What it does |
+|---|---|
+| `cmd/` | Go binary entrypoints. Keep these thin; put behavior in `internal/`. |
+| `internal/` | Backend product/runtime packages. Main bot, admin API, auth, AI, chat, curriculum, retrieval, progress, tenancy, platform adapters. |
+| `admin/` | Next.js admin/product app. Login, dashboard, retrieval lab, classes, users, AI usage, settings. |
+| `site/` | Astro public site/docs surface. Separate from admin product UI. |
+| `oss/` | Curriculum/content mirror consumed by runtime. Has its own `oss/AGENTS.md`. |
+| `migrations/` | PostgreSQL schema migrations. |
+| `deploy/` | Docker, Caddy, Nginx, Helm deploy assets. |
+| `terraform/` | Cloud infrastructure as code. |
+| `scripts/` | Local setup/dev/deploy/analytics shell helpers. |
+| `tools/` | Local support tooling, currently provider emulation. |
+| `docs/` | Docs-list indexed repo documentation. New cross-cutting docs go under `docs/codebase/` unless a narrower folder exists. |
+| `.agents/`, `.codex/`, `.claude/`, `AGENTS.override.md` | Local agent tooling/config. Do not commit unless explicitly requested as repo policy. |
 
 ## Source of Truth
 
@@ -109,20 +107,22 @@ Use these files as primary references:
 5. `docs/implementation-guide.md` for code templates, test specs, and exit criteria
 6. `docs/admin-panel.md` for admin panel features, roles, and API specification
 7. `docs/admin-panel-uiux.md` for admin panel UI/UX wireframes and design system
-8. `docs/setup.md` for prerequisites, quick start, and common issues
-9. `docs/architecture.md` for modular monolith design and domain package reference
-10. `docs/ai-providers.md` for provider configuration, fallback chain, and structured output
-11. `docs/curriculum.md` for YAML schema, teaching notes, and assessment format
-12. `docs/deployment.md` for Docker Compose production, monitoring, and backups
+8. `docs/admin/routes.md` for admin frontend and backend route mapping
+9. `docs/ops/setup.md` for prerequisites, quick start, and common issues
+10. `docs/ops/config.md` for environment variables and validation rules
+11. `docs/architecture/architecture.md` for modular monolith design and domain package reference
+12. `docs/architecture/ai-providers.md` for provider configuration, fallback chain, and structured output
+13. `docs/architecture/curriculum.md` for YAML schema, teaching notes, and assessment format
+14. `docs/ops/deployment.md` for Docker Compose production, monitoring, and backups
 
 If you change one doc and it affects others, update all impacted docs in the same task.
 
 **When making code changes**, check whether the change affects any of the docs listed above. In particular:
-- Adding/removing/renaming a provider → update `docs/ai-providers.md` and the README providers table
-- Adding/removing/renaming a domain package → update `docs/architecture.md`
-- Changing environment variables or config fields → update `docs/setup.md` and `.env.example`
-- Changing deployment, Docker, or infrastructure → update `docs/deployment.md`
-- Changing curriculum loader behavior or YAML schema → update `docs/curriculum.md`
+- Adding/removing/renaming a provider → update `docs/architecture/ai-providers.md` and the README providers table
+- Adding/removing/renaming a domain package → update `docs/architecture/architecture.md`
+- Changing environment variables or config fields → update `docs/ops/config.md`, `docs/ops/setup.md`, and `.env.example`
+- Changing deployment, Docker, or infrastructure → update `docs/ops/deployment.md`
+- Changing curriculum loader behavior or YAML schema → update `docs/architecture/curriculum.md`
 
 Before changing curriculum contracts, shared API shapes, bot workflows, or OSS sync behavior, also inspect the relevant `p-n-ai` sibling/core repos listed in [Related Repositories](#related-repositories). Reuse existing patterns and data contracts when they already exist there instead of inventing local variants.
 
@@ -378,14 +378,21 @@ Agent note:
 ## Documentation
 
 - [README.md](README.md) — Project overview, quick start, features, deployment
-- [docs/setup.md](docs/setup.md) — Prerequisites, quick start, environment variables, common issues
-- [docs/architecture.md](docs/architecture.md) — Modular monolith design, domain packages, HTTP routing, infrastructure
-- [docs/ai-providers.md](docs/ai-providers.md) — Provider configuration, fallback chain, structured output, budget enforcement
-- [docs/curriculum.md](docs/curriculum.md) — YAML schema, teaching notes, assessments, adding new curricula
-- [docs/deployment.md](docs/deployment.md) — Docker Compose production, monitoring, backups
+- [docs/ops/setup.md](docs/ops/setup.md) — Prerequisites, quick start, environment variables, common issues
+- [docs/ops/config.md](docs/ops/config.md) — Environment variable defaults and validation rules
+- [docs/architecture/architecture.md](docs/architecture/architecture.md) — Modular monolith design, domain packages, HTTP routing, infrastructure
+- [docs/architecture/ai-providers.md](docs/architecture/ai-providers.md) — Provider configuration, fallback chain, structured output, budget enforcement
+- [docs/architecture/curriculum.md](docs/architecture/curriculum.md) — YAML schema, teaching notes, assessments, adding new curricula
+- [docs/ops/deployment.md](docs/ops/deployment.md) — Docker Compose production, monitoring, backups
 - [docs/technical-plan.md](docs/technical-plan.md) — Detailed architecture, schema, infra, security
 - [docs/business-plan.md](docs/business-plan.md) — Business strategy, metrics, competitive landscape
 - [docs/development-timeline.md](docs/development-timeline.md) — Day-by-day 6-week development plan
 - [docs/implementation-guide.md](docs/implementation-guide.md) — Detailed code templates, test specs, and exit criteria for each day
 - [docs/admin-panel.md](docs/admin-panel.md) — Admin panel features, roles, routes, and API specification
 - [docs/admin-panel-uiux.md](docs/admin-panel-uiux.md) — Admin panel UI/UX wireframes, design system, and interaction patterns
+- [docs/admin/routes.md](docs/admin/routes.md) — Admin route and API map
+- [docs/runtime/telegram.md](docs/runtime/telegram.md) — Telegram Bot API runtime, commands, media, and nudges
+- [docs/runtime/embeddable-chat.md](docs/runtime/embeddable-chat.md) — Embed widget runtime surface
+- [docs/runtime/openapi-scalar.md](docs/runtime/openapi-scalar.md) — OpenAPI JSON and Scalar docs surface
+- [docs/runtime/whatsapp.md](docs/runtime/whatsapp.md) — WhatsApp runtime modes and setup
+- [docs/ops/local-tools.md](docs/ops/local-tools.md) — Local helper binaries, scripts, and emulation tools

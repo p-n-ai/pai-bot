@@ -1,3 +1,12 @@
+---
+title: "Deployment"
+summary: "Local and production deployment notes for pai-bot, including Docker Compose, server setup, monitoring, and backups."
+read_when:
+  - You are changing deploy assets, Docker, Helm, Terraform, reverse proxies, or release operations.
+  - You need current deployment commands or environment expectations.
+  - You are updating infrastructure or production runbooks.
+---
+
 # Deployment
 
 P&AI Bot supports two deployment models today: local development and single-server production (Docker Compose). Kubernetes (Helm) is planned.

@@ -44,9 +44,7 @@ The root route `/` now stays public as a landing page. Its primary CTA routes si
 
 ## Authentication & Authorization
 
-Detailed runtime reference:
-
-- [docs/admin-auth.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/admin-auth.md)
+Detailed runtime reference: `docs/admin/admin-auth.md`.
 
 ### Flow
 
@@ -273,4 +271,4 @@ Public route exception:
 | 6 | 27 | School onboarding wizard |
 | 6 | 29 | Comprehensive analytics API |
 
-See [development-timeline.md](development-timeline.md) for full task breakdown and dependencies.
+See `docs/development-timeline.md` for full task breakdown and dependencies.

@@ -3,13 +3,13 @@ title: "Agent Turn API"
 summary: "Runtime API contract for turning one tutor message into trust-labeled context packets, prompt messages, and safe turn metadata."
 read_when:
   - You are changing how chat input reaches the tutor model
-  - You are changing AgentTurn, ContextPacket, prompt assembly, or agent_turn_completed metadata
+  - You are changing agentTurn, contextPacket, prompt assembly, or agent_turn_completed metadata
   - You need to add a new learner context source without leaking raw private data into traces
 ---
 
 # Agent Turn API
 
-This doc describes the internal API boundary for one generic tutor model turn.
+This doc describes the current internal API boundary for one generic tutor model turn.
 
 The goal is to make prompt construction reviewable:
 
@@ -18,37 +18,58 @@ The goal is to make prompt construction reviewable:
 - untrusted text is quoted as data, not promoted into system instructions
 - traces record metadata only
 
-This only covers the normal tutor AI path. Quiz routing still happens before this path.
+This only covers the normal tutor AI path. Early-return flows such as commands, onboarding, challenge runtime, quiz routing, and rating submissions stay outside this harness unless they reach the normal tutor model path.
+
+## Public Surface
+
+The package-level API remains `Engine.ProcessMessage`.
+
+The turn harness is package-private on purpose:
+
+- `agentTurn`
+- `contextPacket`
+- `loadContextPackets`
+- `buildPromptMessagesFromTurn`
+- `promptCompiler.compile`
+
+Keep these names unexported unless another Go package needs to construct or compile tutor turns directly. The contract is still documented here because these types are the review boundary inside `internal/agent`.
+
+Non-goals for the current surface:
+
+- exporting turn construction for other packages
+- persisting full prompts or packet data
+- wrapping command, onboarding, goal, challenge, quiz, or rating-only flows in `agentTurn`
+- adding a second `TurnContext` object between the loader and compiler
 
 ## Runtime flow
 
 ```text
 ProcessMessage
-  -> AgentTurn
-  -> LoadContextPackets
-  -> BuildPromptMessagesFromTurn
-  -> PromptCompiler.Compile
+  -> agentTurn
+  -> loadContextPackets
+  -> buildPromptMessagesFromTurn
+  -> promptCompiler.compile
   -> aiRouter.Complete
   -> agent_turn_completed
 ```
 
-## AgentTurn
+## agentTurn
 
-`AgentTurn` is the runtime record for one inbound message that reaches the tutor model.
+`agentTurn` is the runtime record for one inbound message that reaches the tutor model.
 
 It carries:
 
 - request identity: turn ID, user ID, conversation ID, channel, language
 - current input: raw text, model-facing user content, reply/image flags
 - resolved context: conversation, matched curriculum topic, teaching notes
-- packet input: `[]ContextPacket`
+- packet input: `[]contextPacket`
 - output metadata: prompt manifest and model result
 
 It should not become a general session object. State that survives across turns belongs in the existing stores.
 
-## ContextPacket
+## contextPacket
 
-`ContextPacket` is the context unit passed from the loader to the prompt compiler.
+`contextPacket` is the context unit passed from the loader to the prompt compiler.
 
 Fields:
 
@@ -109,7 +130,7 @@ Binary or URL-like payload attached through the model request, not rendered as p
 
 ## Loader contract
 
-`LoadContextPackets` gathers context directly from existing stores and returns packets.
+`loadContextPackets` gathers context directly from existing stores and returns packets.
 
 Current sources:
 
@@ -128,7 +149,7 @@ Keep the loader direct. Do not add a second `TurnContext` representation unless 
 
 ## Prompt compiler contract
 
-`BuildPromptMessagesFromTurn` delegates to `PromptCompiler.Compile`.
+`buildPromptMessagesFromTurn` delegates to `promptCompiler.compile`.
 
 The compiler renders messages in this order:
 
@@ -164,8 +185,8 @@ Do not add raw packet data, learner goal text, reply text, profile name, summari
 
 ## Adding a context source
 
-1. Add the packet in `LoadContextPackets`.
+1. Add the packet in `loadContextPackets`.
 2. Pick the narrowest `Kind`, `Trust`, `RenderAs`, and `TraceMode`.
-3. Render it in `PromptCompiler` only if it affects model input.
+3. Render it in `promptCompiler` only if it affects model input.
 4. Add a regression test if the source can include learner text or model-generated text.
 5. Confirm `agent_turn_completed` contains only trace-safe metadata.

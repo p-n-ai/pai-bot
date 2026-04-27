@@ -1,3 +1,12 @@
+---
+title: "Telegram Simulation Results"
+summary: "Live Telegram algebra simulation results for pai-bot Form 1-3 tutoring behavior."
+read_when:
+  - You are reviewing historical Telegram simulation results.
+  - You are comparing tutor behavior against prior algebra QA findings.
+  - You are updating QA evidence for live chat simulations.
+---
+
 # Telegram Live Chat Simulation Results - Algebra (F1-F3)
 **Date:** 19 March 2026
 **Tester:** Education Lead (Faiz)
