@@ -9,7 +9,7 @@ read_when:
 
 # Agent Turn API
 
-This doc describes the internal API boundary for one generic tutor model turn.
+This doc describes the current internal API boundary for one generic tutor model turn.
 
 The goal is to make prompt construction reviewable:
 
@@ -18,9 +18,9 @@ The goal is to make prompt construction reviewable:
 - untrusted text is quoted as data, not promoted into system instructions
 - traces record metadata only
 
-This only covers the normal tutor AI path. Quiz routing still happens before this path.
+This only covers the normal tutor AI path. Early-return flows such as commands, onboarding, challenge runtime, quiz routing, and rating submissions stay outside this harness unless they reach the normal tutor model path.
 
-## API surface
+## Public Surface
 
 The package-level API remains `Engine.ProcessMessage`.
 
@@ -33,6 +33,13 @@ The turn harness is package-private on purpose:
 - `promptCompiler.compile`
 
 Keep these names unexported unless another Go package needs to construct or compile tutor turns directly. The contract is still documented here because these types are the review boundary inside `internal/agent`.
+
+Non-goals for the current surface:
+
+- exporting turn construction for other packages
+- persisting full prompts or packet data
+- wrapping command, onboarding, goal, challenge, quiz, or rating-only flows in `agentTurn`
+- adding a second `TurnContext` object between the loader and compiler
 
 ## Runtime flow
 
