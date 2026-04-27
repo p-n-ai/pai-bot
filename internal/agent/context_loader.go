@@ -19,13 +19,13 @@ const (
 	maxTurnGoals         = 3
 )
 
-// LoadContextPackets gathers selected learner/runtime state for one tutor turn.
+// loadContextPackets gathers selected learner/runtime state for one tutor turn.
 // It returns trust-labeled packets directly, so prompt rendering and tracing do
 // not need a second context representation.
-func (e *Engine) LoadContextPackets(_ context.Context, turn *AgentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) []ContextPacket {
-	var packets []ContextPacket
+func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) []contextPacket {
+	var packets []contextPacket
 
-	profile := LearnerProfile{}
+	profile := learnerProfile{}
 	if name, ok := e.store.GetUserName(msg.UserID); ok && name != "" {
 		profile.Name = name
 	}
@@ -44,44 +44,44 @@ func (e *Engine) LoadContextPackets(_ context.Context, turn *AgentTurn, msg chat
 	packets = appendProfilePackets(packets, profile)
 
 	if conv != nil {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "conversation.state",
-			Kind:     ContextKindConversation,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindConversation,
+			Trust:    contextTrustSystemOwned,
 			Source:   "conversation",
 			Data:     conversationSystemContext(conv),
-			RenderAs: ContextRenderSystemData,
+			RenderAs: contextRenderSystemData,
 		}))
 		if conv.Summary != "" {
-			packets = append(packets, newContextPacket(ContextPacket{
+			packets = append(packets, newContextPacket(contextPacket{
 				ID:       "conversation.summary",
-				Kind:     ContextKindConversationSummary,
-				Trust:    ContextTrustModelGenerated,
+				Kind:     contextKindConversationSummary,
+				Trust:    contextTrustModelGenerated,
 				Source:   "conversation",
 				Data:     conv.Summary,
-				RenderAs: ContextRenderQuotedData,
+				RenderAs: contextRenderQuotedData,
 			}))
 		}
 	}
 
 	if topic != nil {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "curriculum.topic",
-			Kind:     ContextKindCurriculum,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindCurriculum,
+			Trust:    contextTrustSystemOwned,
 			Source:   "topic",
 			Data:     curriculumTopicContext(topic),
-			RenderAs: ContextRenderSystemData,
+			RenderAs: contextRenderSystemData,
 		}))
 	}
 	if teachingNotes != "" {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "curriculum.teaching_notes",
-			Kind:     ContextKindCurriculum,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindCurriculum,
+			Trust:    contextTrustSystemOwned,
 			Source:   "teaching_notes",
 			Data:     teachingNotes,
-			RenderAs: ContextRenderSystemData,
+			RenderAs: contextRenderSystemData,
 		}))
 	}
 
@@ -89,26 +89,26 @@ func (e *Engine) LoadContextPackets(_ context.Context, turn *AgentTurn, msg chat
 		if items, err := e.tracker.GetAllProgress(msg.UserID); err == nil {
 			selected := selectTurnProgress(items, topic, maxTurnProgressItems)
 			if len(selected) > 0 {
-				packets = append(packets, newContextPacket(ContextPacket{
+				packets = append(packets, newContextPacket(contextPacket{
 					ID:       "progress.mastery",
-					Kind:     ContextKindProgress,
-					Trust:    ContextTrustSystemOwned,
+					Kind:     contextKindProgress,
+					Trust:    contextTrustSystemOwned,
 					Source:   "progress",
 					Data:     selected,
-					RenderAs: ContextRenderSystemData,
+					RenderAs: contextRenderSystemData,
 				}))
 			}
 		}
 		if due, err := e.tracker.GetDueReviews(msg.UserID); err == nil {
 			selected := capProgressItems(sortDueReviews(due), maxTurnDueReviews)
 			if len(selected) > 0 {
-				packets = append(packets, newContextPacket(ContextPacket{
+				packets = append(packets, newContextPacket(contextPacket{
 					ID:       "progress.due_reviews",
-					Kind:     ContextKindProgress,
-					Trust:    ContextTrustSystemOwned,
+					Kind:     contextKindProgress,
+					Trust:    contextTrustSystemOwned,
 					Source:   "due_reviews",
 					Data:     selected,
-					RenderAs: ContextRenderSystemData,
+					RenderAs: contextRenderSystemData,
 				}))
 			}
 		}
@@ -125,38 +125,38 @@ func (e *Engine) LoadContextPackets(_ context.Context, turn *AgentTurn, msg chat
 
 	if e.streaks != nil {
 		if streak, err := e.streaks.GetStreak(msg.UserID); err == nil && (streak.CurrentStreak > 0 || streak.LongestStreak > 0) {
-			packets = append(packets, newContextPacket(ContextPacket{
+			packets = append(packets, newContextPacket(contextPacket{
 				ID:       "streak.current",
-				Kind:     ContextKindStreak,
-				Trust:    ContextTrustSystemOwned,
+				Kind:     contextKindStreak,
+				Trust:    contextTrustSystemOwned,
 				Source:   "streak",
 				Data:     &streak,
-				RenderAs: ContextRenderSystemData,
+				RenderAs: contextRenderSystemData,
 			}))
 		}
 	}
 
 	if e.xp != nil {
 		if total, err := e.xp.GetTotal(msg.UserID); err == nil && total > 0 {
-			packets = append(packets, newContextPacket(ContextPacket{
+			packets = append(packets, newContextPacket(contextPacket{
 				ID:       "xp.total",
-				Kind:     ContextKindXP,
-				Trust:    ContextTrustSystemOwned,
+				Kind:     contextKindXP,
+				Trust:    contextTrustSystemOwned,
 				Source:   "xp",
 				Data:     total,
-				RenderAs: ContextRenderSystemData,
+				RenderAs: contextRenderSystemData,
 			}))
 		}
 	}
 
 	if turn.HasReply && turn.ReplyText != "" {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "current.reply_to",
-			Kind:     ContextKindCurrentInput,
-			Trust:    ContextTrustLearnerProvided,
+			Kind:     contextKindCurrentInput,
+			Trust:    contextTrustLearnerProvided,
 			Source:   "reply_to",
 			Data:     turn.ReplyText,
-			RenderAs: ContextRenderQuotedData,
+			RenderAs: contextRenderQuotedData,
 		}))
 	}
 
@@ -164,13 +164,13 @@ func (e *Engine) LoadContextPackets(_ context.Context, turn *AgentTurn, msg chat
 		packets = appendImagePackets(packets, turn.ImageDataURL)
 	}
 	if turn.RatingPromptRequested {
-		packets = append(packets, newContextPacket(ContextPacket{
+		packets = append(packets, newContextPacket(contextPacket{
 			ID:       "rating.prompt",
-			Kind:     ContextKindControlInstruction,
-			Trust:    ContextTrustSystemOwned,
+			Kind:     contextKindControlInstruction,
+			Trust:    contextTrustSystemOwned,
 			Source:   "rating",
 			Data:     ratingPromptInstruction,
-			RenderAs: ContextRenderSystemInstruction,
+			RenderAs: contextRenderSystemInstruction,
 		}))
 	}
 

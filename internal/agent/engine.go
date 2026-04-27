@@ -275,7 +275,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if msg.HasImage && msg.ImageDataURL == "" {
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgImageProcessingFailed), nil
 	}
-	turn := &AgentTurn{
+	turn := &agentTurn{
 		ID:             generateID(),
 		UserID:         msg.UserID,
 		ConversationID: conv.ID,
@@ -348,8 +348,8 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	turn.Conversation = conv
 	turn.Topic = matchedTopic
 	turn.TeachingNotes = teachingNotes
-	turn.Packets = e.LoadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes)
-	messages := e.BuildPromptMessagesFromTurn(turn)
+	turn.Packets = e.loadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes)
+	messages := e.buildPromptMessagesFromTurn(turn)
 
 	reqModel := ""
 	if msg.ImageDataURL != "" {
@@ -568,7 +568,7 @@ func (e *Engine) logEventAsync(event Event) {
 	}()
 }
 
-func (e *Engine) logAgentTurnCompleted(turn *AgentTurn, status string) {
+func (e *Engine) logAgentTurnCompleted(turn *agentTurn, status string) {
 	if turn == nil {
 		return
 	}
@@ -596,7 +596,7 @@ func (e *Engine) logAgentTurnCompleted(turn *AgentTurn, status string) {
 	})
 }
 
-func turnTopicID(turn *AgentTurn) string {
+func turnTopicID(turn *agentTurn) string {
 	if turn == nil {
 		return ""
 	}
@@ -609,7 +609,7 @@ func turnTopicID(turn *AgentTurn) string {
 	return ""
 }
 
-func includedContextSourceNames(sources []ContextSource) []string {
+func includedContextSourceNames(sources []contextSource) []string {
 	names := make([]string, 0, len(sources))
 	for _, src := range sources {
 		if src.Included {

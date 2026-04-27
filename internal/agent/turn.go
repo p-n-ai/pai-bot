@@ -12,9 +12,9 @@ const (
 	agentTurnRouteTeaching = "teaching"
 )
 
-// AgentTurn is the runtime boundary for one inbound message that reaches the
+// agentTurn is the runtime boundary for one inbound message that reaches the
 // generic tutor model path.
-type AgentTurn struct {
+type agentTurn struct {
 	ID             string
 	UserID         string
 	ConversationID string
@@ -36,14 +36,14 @@ type AgentTurn struct {
 	Conversation  *Conversation
 	Topic         *curriculum.Topic
 	TeachingNotes string
-	Packets       []ContextPacket
-	Prompt        PromptManifest
-	Model         ModelResult
+	Packets       []contextPacket
+	Prompt        promptManifest
+	Model         modelResult
 }
 
-// LearnerProfile is the small educational profile that can be shown to the
+// learnerProfile is the small educational profile that can be shown to the
 // tutor model.
-type LearnerProfile struct {
+type learnerProfile struct {
 	Name          string
 	Form          string
 	Language      string
@@ -51,75 +51,75 @@ type LearnerProfile struct {
 	ABGroup       string
 }
 
-type ContextKind string
+type contextKind string
 
 const (
-	ContextKindProfile             ContextKind = "profile"
-	ContextKindConversation        ContextKind = "conversation"
-	ContextKindConversationSummary ContextKind = "conversation_summary"
-	ContextKindCurriculum          ContextKind = "curriculum"
-	ContextKindProgress            ContextKind = "progress"
-	ContextKindGoal                ContextKind = "goal"
-	ContextKindStreak              ContextKind = "streak"
-	ContextKindXP                  ContextKind = "xp"
-	ContextKindCurrentInput        ContextKind = "current_input"
-	ContextKindImage               ContextKind = "image"
-	ContextKindControlInstruction  ContextKind = "control_instruction"
+	contextKindProfile             contextKind = "profile"
+	contextKindConversation        contextKind = "conversation"
+	contextKindConversationSummary contextKind = "conversation_summary"
+	contextKindCurriculum          contextKind = "curriculum"
+	contextKindProgress            contextKind = "progress"
+	contextKindGoal                contextKind = "goal"
+	contextKindStreak              contextKind = "streak"
+	contextKindXP                  contextKind = "xp"
+	contextKindCurrentInput        contextKind = "current_input"
+	contextKindImage               contextKind = "image"
+	contextKindControlInstruction  contextKind = "control_instruction"
 )
 
-type ContextTrust string
+type contextTrust string
 
 const (
-	ContextTrustSystemOwned     ContextTrust = "system_owned"
-	ContextTrustModelGenerated  ContextTrust = "model_generated"
-	ContextTrustLearnerProvided ContextTrust = "learner_provided"
-	ContextTrustExternal        ContextTrust = "external"
+	contextTrustSystemOwned     contextTrust = "system_owned"
+	contextTrustModelGenerated  contextTrust = "model_generated"
+	contextTrustLearnerProvided contextTrust = "learner_provided"
+	contextTrustExternal        contextTrust = "external"
 )
 
-type ContextRenderMode string
+type contextRenderMode string
 
 const (
-	ContextRenderSystemInstruction ContextRenderMode = "system_instruction"
-	ContextRenderSystemData        ContextRenderMode = "system_data"
-	ContextRenderQuotedData        ContextRenderMode = "quoted_data"
-	ContextRenderAttachment        ContextRenderMode = "attachment"
+	contextRenderSystemInstruction contextRenderMode = "system_instruction"
+	contextRenderSystemData        contextRenderMode = "system_data"
+	contextRenderQuotedData        contextRenderMode = "quoted_data"
+	contextRenderAttachment        contextRenderMode = "attachment"
 )
 
-type ContextTraceMode string
+type contextTraceMode string
 
 const (
-	ContextTraceMetadataOnly ContextTraceMode = "metadata_only"
-	ContextTraceOmit         ContextTraceMode = "omit"
+	contextTraceMetadataOnly contextTraceMode = "metadata_only"
+	contextTraceOmit         contextTraceMode = "omit"
 )
 
-type ContextPacket struct {
+type contextPacket struct {
 	ID        string
-	Kind      ContextKind
-	Trust     ContextTrust
+	Kind      contextKind
+	Trust     contextTrust
 	Source    string
 	Data      any
-	RenderAs  ContextRenderMode
-	TraceMode ContextTraceMode
+	RenderAs  contextRenderMode
+	TraceMode contextTraceMode
 }
 
-// ContextSource is trace metadata. It should not contain raw private data.
-type ContextSource struct {
+// contextSource is trace metadata. It should not contain raw private data.
+type contextSource struct {
 	Name     string
 	Included bool
 }
 
-// PromptManifest records the shape of the model input without storing the full
+// promptManifest records the shape of the model input without storing the full
 // prompt body.
-type PromptManifest struct {
+type promptManifest struct {
 	MessageCount    int
 	HasSystemPrompt bool
 	HasSummary      bool
 	HasImage        bool
-	ContextSources  []ContextSource
+	ContextSources  []contextSource
 }
 
-// ModelResult records the model call result for tracing.
-type ModelResult struct {
+// modelResult records the model call result for tracing.
+type modelResult struct {
 	Model        string
 	InputTokens  int
 	OutputTokens int
