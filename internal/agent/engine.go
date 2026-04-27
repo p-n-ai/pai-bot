@@ -266,26 +266,40 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
 		return response, nil
 	}
-
-	// Build user content — include replied message as context if present.
 	userContent := msg.Text
 	if msg.HasImage {
 		if userContent == "" {
-			userContent = "Please analyze the attached image and help me solve it step by step."
+			userContent = "Please help me with the attached image."
 		}
-		userContent = "[Student attached an image]\nAnalyze the image content first, then answer the student's request.\n\n" + userContent
 	}
-	if msg.ReplyToText != "" {
-		userContent = fmt.Sprintf("[Replying to: \"%s\"]\n\n%s", msg.ReplyToText, userContent)
+	if msg.HasImage && msg.ImageDataURL == "" {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgImageProcessingFailed), nil
+	}
+	turn := &AgentTurn{
+		ID:             generateID(),
+		UserID:         msg.UserID,
+		ConversationID: conv.ID,
+		Channel:        msg.Channel,
+		Language:       msg.Language,
+		Route:          agentTurnRouteTeaching,
+		TaskType:       ai.TaskTeaching,
+		InputText:      msg.Text,
+		UserContent:    userContent,
+		HasImage:       msg.HasImage,
+		HasReply:       msg.ReplyToText != "",
+		ReplyText:      msg.ReplyToText,
+		ImageDataURL:   msg.ImageDataURL,
 	}
 
 	// Record user message.
-	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
+	userMessageID, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
 		Content: userContent,
-	}); err != nil {
+	})
+	if err != nil {
 		slog.Error("failed to store user message", "error", err)
 	}
+	turn.UserMessageID = userMessageID
 	e.logEventAsync(Event{
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
@@ -330,27 +344,12 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 	replyCount := countTutoringReplies(conv.Messages) + 1
 	promptRequested := shouldRequestRatingAfterReply(replyCount, e.ratingPromptEvery)
-
-	// Build messages: system prompt + (optional summary) + recent messages.
-	systemPrompt := e.buildSystemPrompt(msg, conv, matchedTopic, teachingNotes)
-	messages := []ai.Message{{Role: "system", Content: systemPrompt}}
-	messages = append(messages, e.buildContextMessages(conv)...)
-	if msg.HasImage && msg.ImageDataURL == "" {
-		return i18n.S(e.messageLocale(msg, conv), i18n.MsgImageProcessingFailed), nil
-	}
-	if msg.ImageDataURL != "" {
-		messages = append(messages, ai.Message{
-			Role:      "user",
-			Content:   "Attached image from the student. Analyze this image directly and answer based on what you see. If unreadable, say exactly what is unclear and how to retake it.",
-			ImageURLs: []string{msg.ImageDataURL},
-		})
-	}
-	if promptRequested {
-		messages = append(messages, ai.Message{
-			Role:    "user",
-			Content: "At the end of your response, ask for a quick 1-5 rating in one short sentence and include the exact control token [[PAI_REVIEW]] once.",
-		})
-	}
+	turn.RatingPromptRequested = promptRequested
+	turn.Conversation = conv
+	turn.Topic = matchedTopic
+	turn.TeachingNotes = teachingNotes
+	turn.Packets = e.LoadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes)
+	messages := e.BuildPromptMessagesFromTurn(turn)
 
 	reqModel := ""
 	if msg.ImageDataURL != "" {
@@ -359,16 +358,23 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	// Call AI
+	modelStartedAt := time.Now()
 	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
 		Messages:  messages,
 		Model:     reqModel,
 		Task:      ai.TaskTeaching,
 		MaxTokens: 1024,
 	})
+	turn.Model.LatencyMS = int(time.Since(modelStartedAt).Milliseconds())
 	if err != nil {
+		turn.Model.Error = err.Error()
+		e.logAgentTurnCompleted(turn, "failed")
 		slog.Error("AI completion failed", "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
 	}
+	turn.Model.Model = resp.Model
+	turn.Model.InputTokens = resp.InputTokens
+	turn.Model.OutputTokens = resp.OutputTokens
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content))
@@ -388,6 +394,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if err != nil {
 		slog.Error("failed to store assistant message", "error", err)
 	}
+	turn.AssistantMessageID = assistantMessageID
 	e.logEventAsync(Event{
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
@@ -401,6 +408,7 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 			"has_image":     msg.HasImage,
 		},
 	})
+	e.logAgentTurnCompleted(turn, "completed")
 	e.assessMasteryAsync(ctx, msg.UserID, matchedTopic, userContent, plainContent)
 	e.recordActivityAsync(msg.UserID)
 
@@ -427,41 +435,6 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 
 	return responseContent, nil
-}
-
-// buildContextMessages returns the conversation messages for the AI prompt.
-// If a summary exists, it prepends it and only includes messages after compaction point.
-func (e *Engine) buildContextMessages(conv *Conversation) []ai.Message {
-	var messages []ai.Message
-
-	if conv.Summary != "" {
-		messages = append(messages, ai.Message{
-			Role:    "user",
-			Content: "Previous conversation summary:\n" + conv.Summary,
-		})
-		messages = append(messages, ai.Message{
-			Role:    "assistant",
-			Content: "Understood, I'll continue based on our previous conversation.",
-		})
-		// Only include messages after the compaction point.
-		for _, m := range conv.Messages[conv.CompactedAt:] {
-			cleanContent := sanitizeControlContent(m.Content)
-			if cleanContent == "" {
-				continue
-			}
-			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
-		}
-	} else {
-		for _, m := range conv.Messages {
-			cleanContent := sanitizeControlContent(m.Content)
-			if cleanContent == "" {
-				continue
-			}
-			messages = append(messages, ai.Message{Role: m.Role, Content: cleanContent})
-		}
-	}
-
-	return messages
 }
 
 // estimateTokens gives a rough token count for messages (1 token ≈ 4 chars).
@@ -530,7 +503,7 @@ Keep the summary under 150 words. Write in the same language used in the convers
 		return
 	}
 
-	// Update the in-memory conv so buildContextMessages uses the new summary.
+	// Update the in-memory conversation before prompt compilation uses it.
 	conv.Summary = resp.Content
 	conv.CompactedAt = compactUpTo
 
@@ -593,6 +566,57 @@ func (e *Engine) logEventAsync(event Event) {
 			)
 		}
 	}()
+}
+
+func (e *Engine) logAgentTurnCompleted(turn *AgentTurn, status string) {
+	if turn == nil {
+		return
+	}
+	e.logEventAsync(Event{
+		ConversationID: turn.ConversationID,
+		UserID:         turn.UserID,
+		EventType:      "agent_turn_completed",
+		Data: map[string]any{
+			"turn_id":              turn.ID,
+			"channel":              turn.Channel,
+			"route":                turn.Route,
+			"task":                 turn.TaskType.String(),
+			"topic_id":             turnTopicID(turn),
+			"message_count":        turn.Prompt.MessageCount,
+			"summary_used":         turn.Prompt.HasSummary,
+			"context_sources":      includedContextSourceNames(turn.Prompt.ContextSources),
+			"context_source_count": len(turn.Prompt.ContextSources),
+			"model":                turn.Model.Model,
+			"input_tokens":         turn.Model.InputTokens,
+			"output_tokens":        turn.Model.OutputTokens,
+			"latency_ms":           turn.Model.LatencyMS,
+			"status":               status,
+			"error":                turn.Model.Error,
+		},
+	})
+}
+
+func turnTopicID(turn *AgentTurn) string {
+	if turn == nil {
+		return ""
+	}
+	if turn.Topic != nil {
+		return turn.Topic.ID
+	}
+	if turn.Conversation != nil {
+		return turn.Conversation.TopicID
+	}
+	return ""
+}
+
+func includedContextSourceNames(sources []ContextSource) []string {
+	names := make([]string, 0, len(sources))
+	for _, src := range sources {
+		if src.Included {
+			names = append(names, src.Name)
+		}
+	}
+	return names
 }
 
 func (e *Engine) assessMasteryAsync(ctx context.Context, userID string, topic *curriculum.Topic, userMessage, aiResponse string) {
