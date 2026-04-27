@@ -668,7 +668,7 @@ See [docs/ops/setup.md](docs/ops/setup.md) for development environment setup.
 
 | Repository | Description |
 |-----------|-------------|
-| [p-n-ai/oss](https://github.com/p-n-ai/oss) | Open School Syllabus — structured curriculum data for any learning platform |
+| [p-n-ai/oss](https://github.com/p-n-ai/oss) | Open School Syllabus — structured curriculum data for any learning platform. See [docs/curriculum-oss.md](docs/curriculum-oss.md) for how pai-bot consumes it. |
 | [p-n-ai/oss-bot](https://github.com/p-n-ai/oss-bot) | GitHub bot + CLI tools for contributing to Open School Syllabus |
 
 ---
