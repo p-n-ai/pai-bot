@@ -37,7 +37,7 @@ read_when:
 | Prompt/context safety | `internal/agent/turn.go` | `internal/agent/context_loader.go`, `internal/agent/context_packets.go`, `docs/runtime/agent-turn-api.md`.
 | Telegram/WhatsApp/web chat transport | `internal/chat/` | `cmd/server/main.go`, channel-specific tests.
 | Admin API behavior | `internal/adminapi/` | `cmd/server/main.go`, `admin/src/lib/server-api.ts`.
-| Admin UI | `admin/src/app/` | `admin/src/components/`, `admin/src/lib/`, `docs/admin/admin-panel-uiux.md`.
+| Admin UI | `admin/src/app/` | `admin/src/components/`, `admin/src/lib/`, `docs/admin-panel-uiux.md`.
 | Auth/login/session | `internal/auth/` | `docs/admin/admin-auth.md`, `admin/src/components/login-gate/`.
 | Admin routes/API | `cmd/server/main.go`, `admin/src/app/` | `docs/admin/routes.md`, `internal/apidocs/`.
 | Curriculum loading | `internal/curriculum/` | `oss/`, `docs/architecture/curriculum.md`.

@@ -653,13 +653,13 @@ See [docs/ops/setup.md](docs/ops/setup.md) for development environment setup.
 | [AI Providers](docs/architecture/ai-providers.md) | Provider configuration, fallback chain, structured output, budget enforcement |
 | [Curriculum](docs/architecture/curriculum.md) | YAML schema, teaching notes, assessments, adding new curricula |
 | [Deployment](docs/ops/deployment.md) | Docker Compose production, monitoring, backups |
-| [Admin Panel](docs/admin/admin-panel.md) | Dashboard features, roles, API specification |
+| [Admin Panel](docs/admin-panel.md) | Dashboard features, roles, API specification |
 | [Admin Routes](docs/admin/routes.md) | Admin frontend route and backend API map |
 | [Embed Chat](docs/runtime/embeddable-chat.md) | Embeddable widget runtime and security boundaries |
 | [WhatsApp Runtime](docs/runtime/whatsapp.md) | WhatsApp backend modes, env vars, and setup routes |
 | [OpenAPI and Scalar](docs/runtime/openapi-scalar.md) | API docs surface and update rules |
 | [Local Tools](docs/ops/local-tools.md) | Local helper binaries, scripts, and emulation tools |
-| [Technical Plan](docs/architecture/technical-plan.md) | Detailed architecture, database schema, security model |
+| [Technical Plan](docs/technical-plan.md) | Detailed architecture, database schema, security model |
 
 ---
 

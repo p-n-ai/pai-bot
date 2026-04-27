@@ -50,6 +50,6 @@ read_when:
 ## Update rules
 
 - Update this doc when adding, removing, renaming, or redirecting admin routes.
-- Update `docs/admin/admin-panel.md` when feature scope changes.
-- Update `docs/admin/admin-panel-uiux.md` when navigation or shell behavior changes.
+- Update `docs/admin-panel.md` when feature scope changes.
+- Update `docs/admin-panel-uiux.md` when navigation or shell behavior changes.
 - Update `internal/apidocs` when backend API surface changes.
