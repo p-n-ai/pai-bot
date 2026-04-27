@@ -9,11 +9,9 @@ read_when:
 
 # Admin Auth Runtime
 
-Current.
+This doc describes the auth model implemented by the Go backend and Next.js admin app.
 
-This doc describes the auth model that is live today for the admin app.
-
-Current direction:
+Runtime direction:
 
 - Better Auth-inspired shape
 - Google-only OIDC provider for now
@@ -28,12 +26,12 @@ Current direction:
 
 Main files:
 
-- [cmd/server/main.go](/Users/thor/.codex/worktrees/5665/pai-bot/cmd/server/main.go)
-- [internal/auth/postgres.go](/Users/thor/.codex/worktrees/5665/pai-bot/internal/auth/postgres.go)
-- [internal/auth/google_oidc.go](/Users/thor/.codex/worktrees/5665/pai-bot/internal/auth/google_oidc.go)
-- [internal/auth/cookies.go](/Users/thor/.codex/worktrees/5665/pai-bot/internal/auth/cookies.go)
-- [admin/src/lib/api.ts](/Users/thor/.codex/worktrees/5665/pai-bot/admin/src/lib/api.ts)
-- [admin/src/stores/app-store.ts](/Users/thor/.codex/worktrees/5665/pai-bot/admin/src/stores/app-store.ts)
+- [cmd/server/main.go](../../cmd/server/main.go)
+- [internal/auth/postgres.go](../../internal/auth/postgres.go)
+- [internal/auth/google_oidc.go](../../internal/auth/google_oidc.go)
+- [internal/auth/cookies.go](../../internal/auth/cookies.go)
+- [admin/src/lib/api.ts](../../admin/src/lib/api.ts)
+- [admin/src/stores/app-store.ts](../../admin/src/stores/app-store.ts)
 
 ## Cookie Model
 
@@ -192,7 +190,7 @@ Guardrail:
 
 For local Google auth testing:
 
-- use [docs/ops/local-auth-emulation.md](/Users/thor/.codex/worktrees/5665/pai-bot/docs/ops/local-auth-emulation.md)
+- use [docs/ops/local-auth-emulation.md](../ops/local-auth-emulation.md)
 - local emulate seed currently includes `teacher@gmail.com`
 
 One emulator nuance:

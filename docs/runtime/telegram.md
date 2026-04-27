@@ -56,7 +56,7 @@ When adding a new command, add it to `internal/chat/commands.go` so Telegram aut
 
 ## Admin And Proactive Nudge Notes
 
-Manual student nudges are Telegram-only today. `cmd/server/main.go` rejects the admin nudge path unless the student channel is `telegram` and the stored external ID is a real Telegram chat ID.
+As implemented in `cmd/server/main.go`, manual student nudges are Telegram-only. The admin nudge path rejects requests unless the student channel is `telegram` and the stored external ID is a real Telegram chat ID.
 
 ## Ownership
 
