@@ -202,8 +202,8 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 | Linked Sign-in Methods | Sidebar footer card | Teacher, Parent, Admin, Platform Admin | Current |
 | Teacher Dashboard | `/dashboard` | Teacher, Admin, Platform Admin | Current |
 | Student Detail | `/students/[id]` | Teacher, Admin, Platform Admin | Current |
-| Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to Dashboard |
-| AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Planned |
+| Analytics Redirect | `/dashboard/metrics` | Teacher, Admin, Platform Admin | Legacy redirect to AI Usage |
+| AI Usage | `/dashboard/ai-usage` | Teacher, Admin, Platform Admin | Current |
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
 | User & Invite Management | `/settings/users` | Admin, Platform Admin | Current |
@@ -266,7 +266,7 @@ Public route exception:
 
 | Week | Day | Milestone |
 |------|-----|-----------|
-| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage. Current repo keeps this route only as a redirect to Dashboard. |
+| 3 | 14 | Analytics dashboard (`/dashboard/metrics`) — DAU, retention, token usage. Current repo keeps this route only as a redirect to AI Usage. |
 | 4 | 16 | Admin panel scaffold, teacher dashboard, mastery heatmap, student detail, login + route guards |
 | 4 | 17 | Admin API endpoints, parent view, form/syllabus selection |
 | 4 | 18 | nginx reverse proxy, Docker Compose integration, class management page |

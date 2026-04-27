@@ -18,7 +18,7 @@ read_when:
 | `/activate` | `admin/src/app/activate/page.tsx` | Account activation and invite acceptance support. |
 | `/join/[slug]` | `admin/src/app/join/[slug]/page.tsx` | Public invite join surface. |
 | `/dashboard` | `admin/src/app/(app)/dashboard/page.tsx` | Main dashboard. |
-| `/dashboard/metrics` | `admin/src/app/(app)/dashboard/metrics/page.tsx` | Metrics dashboard. |
+| `/dashboard/metrics` | `admin/src/app/(app)/dashboard/metrics/page.tsx` | Legacy redirect to AI usage. |
 | `/dashboard/classes` | `admin/src/app/(app)/dashboard/classes/page.tsx` | Class management. |
 | `/dashboard/ai-usage` | `admin/src/app/(app)/dashboard/ai-usage/page.tsx` | AI usage and budget view. |
 | `/dashboard/retrieval-lab` | `admin/src/app/(app)/dashboard/retrieval-lab/page.tsx` | Retrieval lab. |

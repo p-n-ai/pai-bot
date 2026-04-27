@@ -33,7 +33,7 @@ test.describe("admin authenticated routes @backend", () => {
   test("redirects authenticated users away from /login", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/login");
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/setup\/onboard$/);
   });
 
   test("renders /dashboard", async ({ page }) => {
