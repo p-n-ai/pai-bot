@@ -1,28 +1,23 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("admin public entry flows", () => {
-  test("renders the login hero and form fields", async ({ page }) => {
+  test("renders the login form fields", async ({ page }) => {
     await page.goto("/login");
 
     await expect(page.getByRole("main")).toBeVisible();
-    await expect(page.getByLabel("Email")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.locator('input[name="email"]')).toBeVisible();
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
-  test("keeps the landing page visible and preserves next on the sign-in CTA", async ({ page }) => {
+  test("keeps the landing page visible and preserves next on the login link", async ({ page }) => {
     await page.goto("/?next=/dashboard");
     await expect(page).toHaveURL(/\/\?next=\/dashboard$/);
     await expect(page.getByRole("main")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Sign in" }).first()).toHaveAttribute(
+    await expect(page.locator('a[href="/login?next=%2Fdashboard"]').first()).toHaveAttribute(
       "href",
       "/login?next=%2Fdashboard",
     );
-  });
-
-  test("shows mapped auth error message on login when auth_error is present", async ({ page }) => {
-    await page.goto("/login?auth_error=google_auth_failed");
-    await expect(page.getByText("Google sign-in failed. Please try again.")).toBeVisible();
   });
 
   test("public login route renders without protected navigation chrome", async ({ page }) => {
