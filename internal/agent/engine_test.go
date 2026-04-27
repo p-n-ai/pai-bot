@@ -2051,6 +2051,11 @@ func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 			t.Fatalf("stored message should not contain raw image data URL, got: %q", m.Content)
 		}
 	}
+
+	last := mockAI.LastRequest.Messages[len(mockAI.LastRequest.Messages)-1]
+	if contains(last.Content, "Analyze the image") || contains(last.Content, "Analyze the attached image") {
+		t.Fatalf("current user message should not contain image instructions, got: %q", last.Content)
+	}
 }
 
 func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {

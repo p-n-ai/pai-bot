@@ -169,4 +169,3 @@ Do not add raw packet data, learner goal text, reply text, profile name, summari
 3. Render it in `PromptCompiler` only if it affects model input.
 4. Add a regression test if the source can include learner text or model-generated text.
 5. Confirm `agent_turn_completed` contains only trace-safe metadata.
-

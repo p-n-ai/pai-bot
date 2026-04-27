@@ -266,13 +266,11 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if response, handled := e.maybeHandleQuizTurn(ctx, msg, conv); handled {
 		return response, nil
 	}
-	// Build user content — include replied message as context if present.
 	userContent := msg.Text
 	if msg.HasImage {
 		if userContent == "" {
-			userContent = "Please analyze the attached image and help me solve it step by step."
+			userContent = "Please help me with the attached image."
 		}
-		userContent = "[Student attached an image]\nAnalyze the image content first, then answer the student's request.\n\n" + userContent
 	}
 	if msg.HasImage && msg.ImageDataURL == "" {
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgImageProcessingFailed), nil
