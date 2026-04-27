@@ -680,11 +680,13 @@ make docker                          # Docker image
 
 P&AI Bot consumes curriculum data from the [Open School Syllabus (OSS)](https://github.com/p-n-ai/oss) repository. The integration works as follows:
 
-1. **Git submodule** — OSS is included as a Git submodule at `curriculum/`
-2. **Loader** — `internal/curriculum/loader.go` reads YAML files at startup and caches parsed curriculum in memory + Dragonfly
-3. **Hot reload** — A filesystem watcher detects changes to curriculum files and reloads without restart
-4. **Go types** — `internal/curriculum/types.go` defines Go structs that mirror the OSS JSON Schema (Syllabus, Subject, Topic, Assessment, TeachingNotes)
-5. **No code changes needed** — Adding a new curriculum to OSS automatically makes it available in P&AI
+1. **Git submodule** — OSS is included as a Git submodule at `oss/`
+2. **Loader** — `internal/curriculum/loader.go` reads YAML files at startup and caches parsed curriculum in memory
+3. **Go types** — `internal/curriculum/types.go` defines Go structs for loaded syllabi, subjects, topics, teaching notes, and assessments
+4. **Retrieval seed** — `internal/retrieval/curriculum_seed.go` turns curriculum into retrieval source, collection, and document records
+5. **Pinned updates** — Adding or changing curriculum in OSS becomes available after the deployed repo updates its `oss` submodule pointer or points `LEARN_CURRICULUM_PATH` at the new content
+
+See [curriculum-oss.md](curriculum-oss.md) for the current boundary between OSS content and pai-bot runtime behavior.
 
 ---
 
