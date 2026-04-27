@@ -1,3 +1,12 @@
+---
+title: "Pilot Volunteer Invite"
+summary: "Short and long invite copy for recruiting pilot volunteers for KSSM Form 1-3 Algebra tutor testing."
+read_when:
+  - You are inviting pilot volunteers
+  - You need approved short or long recruitment copy
+  - You are checking how incentives, consent, and chat review are disclosed
+---
+
 # Pilot Volunteer Invite (KSSM Form 1-3 Algebra)
 
 ## Message (Short)

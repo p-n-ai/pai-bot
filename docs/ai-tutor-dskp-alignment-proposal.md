@@ -1,3 +1,12 @@
+---
+title: "AI Tutor DSKP Alignment Proposal"
+summary: "Proposal for aligning tutor prompts with KPM DSKP pedagogy, including problem solving, reasoning, representation, and mathematical communication."
+read_when:
+  - You are changing tutor pedagogy, system prompts, or KSSM/DSKP alignment
+  - You need the rationale for prompting students to reason instead of accepting bare answers
+  - You are reviewing proposed prompt changes against Malaysian curriculum expectations
+---
+
 # Proposal: Aligning AI Tutor Core Prompts to KPM DSKP Pedagogy
 
 ## Overview

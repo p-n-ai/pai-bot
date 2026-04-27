@@ -1,3 +1,12 @@
+---
+title: "Telegram Simulation Results"
+summary: "Live Telegram algebra simulation results covering bite-sized pacing, check-for-understanding, tone, bilingual handling, and input tolerance."
+read_when:
+  - You are reviewing Telegram tutor quality evidence
+  - You need prior simulation results for algebra tutor behavior
+  - You are comparing prompt or runtime changes against pilot-quality expectations
+---
+
 # Telegram Live Chat Simulation Results - Algebra (F1-F3)
 **Date:** 19 March 2026
 **Tester:** Education Lead (Faiz)

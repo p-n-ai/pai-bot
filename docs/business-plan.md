@@ -1,3 +1,12 @@
+---
+title: "Business Plan"
+summary: "Business context for P&AI Bot: market problem, moat, product positioning, go-to-market, and operating assumptions."
+read_when:
+  - You need product or business context before changing user-facing strategy
+  - You are writing investor, partner, or leadership-facing material
+  - You need the rationale for proactive learning, motivation loops, and self-hostable AI tutoring
+---
+
 # P&AI Bot — Business Plan
 
 *Last updated: February 2026*

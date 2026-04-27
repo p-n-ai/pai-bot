@@ -1,3 +1,12 @@
+---
+title: "Deployment"
+summary: "Deployment models, production prerequisites, Docker Compose setup, environment configuration, and operations notes for P&AI Bot."
+read_when:
+  - You are changing deploy scripts, production configuration, Docker Compose, Caddy, or hosting assumptions
+  - You need the production environment checklist
+  - You are debugging deployment or server operations
+---
+
 # Deployment
 
 P&AI Bot supports two deployment models today: local development and single-server production (Docker Compose). Kubernetes (Helm) is planned.
