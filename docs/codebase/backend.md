@@ -59,4 +59,4 @@ The backend is a modular Go monolith. `cmd/` wires binaries. `internal/` owns do
 - For auth/session changes, read `docs/admin/admin-auth.md` before editing.
 - For admin API changes, update `docs/admin/routes.md`, `internal/apidocs/`, and admin client code when the surface changes.
 - For config/env changes, update `docs/ops/config.md`.
-- For embed, WhatsApp, or OpenAPI docs surfaces, read the matching `docs/runtime/` file first.
+- For Telegram, WhatsApp, embed, or OpenAPI docs surfaces, read the matching `docs/runtime/` file first.

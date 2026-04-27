@@ -391,6 +391,7 @@ Agent note:
 - [docs/admin-panel.md](docs/admin-panel.md) — Admin panel features, roles, routes, and API specification
 - [docs/admin-panel-uiux.md](docs/admin-panel-uiux.md) — Admin panel UI/UX wireframes, design system, and interaction patterns
 - [docs/admin/routes.md](docs/admin/routes.md) — Admin route and API map
+- [docs/runtime/telegram.md](docs/runtime/telegram.md) — Telegram Bot API runtime, commands, media, and nudges
 - [docs/runtime/embeddable-chat.md](docs/runtime/embeddable-chat.md) — Embed widget runtime surface
 - [docs/runtime/openapi-scalar.md](docs/runtime/openapi-scalar.md) — OpenAPI JSON and Scalar docs surface
 - [docs/runtime/whatsapp.md](docs/runtime/whatsapp.md) — WhatsApp runtime modes and setup

@@ -11,6 +11,16 @@ read_when:
 
 WhatsApp is an optional chat channel. Enable it with `LEARN_WHATSAPP_ENABLED=true`.
 
+## Runtime Flow
+
+| Step | Cloud API | whatsmeow |
+|---|---|---|
+| Configure | `LEARN_WHATSAPP_BACKEND=cloudapi` plus access token, phone ID, verify token | `LEARN_WHATSAPP_BACKEND=meow` plus session DB path |
+| Register channel | `cmd/server/main.go` registers channel name `whatsapp` | `cmd/server/main.go` registers channel name `whatsapp` |
+| Receive messages | `/webhook/whatsapp` | Long-lived whatsmeow client session |
+| Setup/admin | Meta app configuration outside this repo | Admin QR/status/disconnect routes and `/settings/whatsapp` |
+| Session storage | Meta Cloud API account state | SQLite DSN from `LEARN_WHATSAPP_MEOW_DB` |
+
 ## Backends
 
 | Backend | Env value | Code | Notes |
@@ -29,6 +39,15 @@ WhatsApp is an optional chat channel. Enable it with `LEARN_WHATSAPP_ENABLED=tru
 | `LEARN_WHATSAPP_VERIFY_TOKEN` | Cloud API webhook verification token. |
 | `LEARN_WHATSAPP_MEOW_DB` | whatsmeow session DB path. |
 | `LEARN_WHATSAPP_QR_TOKEN` | Token for QR/admin setup flow. |
+
+## Message Capabilities
+
+| Capability | Current behavior |
+|---|---|
+| Text | Both backends map incoming WhatsApp text into `chat.InboundMessage`. |
+| Channel name | Both backends use `whatsapp` so downstream agent behavior stays channel-agnostic. |
+| Setup state | whatsmeow exposes admin-visible connection and QR state. |
+| Cloud webhook verification | Cloud API backend verifies Meta webhook requests through the configured verify token. |
 
 ## Routes
 
@@ -51,4 +70,5 @@ WhatsApp is an optional chat channel. Enable it with `LEARN_WHATSAPP_ENABLED=tru
 
 - Update `docs/ops/config.md` when adding or changing `LEARN_WHATSAPP_*`.
 - Update `docs/admin/routes.md` when admin setup routes change.
+- Keep this doc parallel with `docs/runtime/telegram.md` when shared chat channel behavior changes.
 - Keep channel behavior behind the `chat.Channel` interface.

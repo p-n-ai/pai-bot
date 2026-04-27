@@ -35,7 +35,8 @@ read_when:
 |---|---|---|
 | Bot reply behavior | `internal/agent/engine.go` | `internal/agent/prompt_builder.go`, `docs/runtime/agent-turn-api.md`, tests in `internal/agent/`.
 | Prompt/context safety | `internal/agent/turn.go` | `internal/agent/context_loader.go`, `internal/agent/context_packets.go`, `docs/runtime/agent-turn-api.md`.
-| Telegram/WhatsApp/web chat transport | `internal/chat/` | `cmd/server/main.go`, channel-specific tests.
+| Telegram runtime | `internal/chat/telegram.go` | `docs/runtime/telegram.md`, `internal/chat/commands.go`, `cmd/server/main.go`.
+| WhatsApp runtime | `internal/chat/whatsapp*.go` | `docs/runtime/whatsapp.md`, `admin/src/app/settings/whatsapp/page.tsx`.
 | Admin API behavior | `internal/adminapi/` | `cmd/server/main.go`, `admin/src/lib/server-api.ts`.
 | Admin UI | `admin/src/app/` | `admin/src/components/`, `admin/src/lib/`, `docs/admin-panel-uiux.md`.
 | Auth/login/session | `internal/auth/` | `docs/admin/admin-auth.md`, `admin/src/components/login-gate/`.
@@ -43,7 +44,6 @@ read_when:
 | Curriculum loading | `internal/curriculum/` | `oss/`, `docs/architecture/curriculum.md`.
 | Retrieval lab/search | `internal/retrieval/` | `admin/src/components/retrieval-lab.tsx`, `docs/runtime/quiz-mode.md` when agent retrieval affects tutoring.
 | Embed chat widget | `internal/chat/embed*`, `cmd/server/embed_admin.go` | `docs/runtime/embeddable-chat.md`, `scripts/test-embed.html`.
-| WhatsApp runtime | `internal/chat/whatsapp*.go` | `docs/runtime/whatsapp.md`, `admin/src/app/settings/whatsapp/page.tsx`.
 | OpenAPI/Scalar docs | `internal/apidocs/` | `docs/runtime/openapi-scalar.md`, `cmd/server/main.go`.
 | Config/env behavior | `internal/platform/config/` | `docs/ops/config.md`, `docs/ops/setup.md`.
 | Progress, XP, streaks | `internal/progress/` | `internal/agent/*progress*`, `internal/agent/milestones.go`.

@@ -655,6 +655,7 @@ See [docs/ops/setup.md](docs/ops/setup.md) for development environment setup.
 | [Deployment](docs/ops/deployment.md) | Docker Compose production, monitoring, backups |
 | [Admin Panel](docs/admin-panel.md) | Dashboard features, roles, API specification |
 | [Admin Routes](docs/admin/routes.md) | Admin frontend route and backend API map |
+| [Telegram Runtime](docs/runtime/telegram.md) | Telegram Bot API polling, commands, media, and nudge behavior |
 | [Embed Chat](docs/runtime/embeddable-chat.md) | Embeddable widget runtime and security boundaries |
 | [WhatsApp Runtime](docs/runtime/whatsapp.md) | WhatsApp backend modes, env vars, and setup routes |
 | [OpenAPI and Scalar](docs/runtime/openapi-scalar.md) | API docs surface and update rules |
