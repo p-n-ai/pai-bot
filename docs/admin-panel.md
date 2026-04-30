@@ -207,6 +207,7 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
 | User & Invite Management | `/settings/users` | Admin, Platform Admin | Current |
+| Embed Settings | `/settings/embed` | Admin, Platform Admin | Current |
 | Token Budget | `/settings/budget` | Admin, Platform Admin | Planned |
 | Data Export | `/export` | Admin, Platform Admin | Current |
 | School Onboarding | `/setup/onboard` | Admin, Platform Admin | Current |

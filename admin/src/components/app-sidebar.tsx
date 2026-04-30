@@ -1,7 +1,7 @@
 "use client";
 
 import { Buildings } from "@phosphor-icons/react";
-import { IconBooks, IconChartBar, IconDownload, IconUsers } from "@tabler/icons-react";
+import { IconBooks, IconChartBar, IconCode, IconDownload, IconUsers } from "@tabler/icons-react";
 import Link from "next/link";
 import { AccountSettingsDialog } from "@/components/account/account-settings-dialog";
 import { SchoolSwitchDialog } from "@/components/account/school-switch-dialog";
@@ -32,6 +32,7 @@ const navIcons: Record<string, typeof IconChartBar> = {
   "/dashboard": IconChartBar,
   "/dashboard/classes": IconBooks,
   "/settings/users": IconUsers,
+  "/settings/embed": IconCode,
   "/export": IconDownload,
   "/parents/parent-1": IconUsers,
 };

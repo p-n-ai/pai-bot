@@ -679,3 +679,76 @@ export async function getWhatsAppStatus(): Promise<WhatsAppStatus> {
 export async function disconnectWhatsApp(): Promise<void> {
   await postJSON("/api/admin/whatsapp/disconnect");
 }
+
+// -- Embed ---------------------------------------------------------------
+
+export interface EmbedThemeConfig {
+  color?: string;
+  lang?: string;
+}
+
+export interface EmbedConfig {
+  id?: string;
+  tenant_id: string;
+  enabled: boolean;
+  allowed_origins: string[];
+  theme_config: EmbedThemeConfig;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpdateEmbedConfigInput {
+  enabled?: boolean;
+  theme_config?: EmbedThemeConfig;
+}
+
+function normalizeEmbedConfig(payload: Record<string, unknown>): EmbedConfig {
+  const rawTheme = (payload.theme_config ?? payload.ThemeConfig ?? {}) as Record<string, unknown>;
+  const rawOrigins = payload.allowed_origins ?? payload.AllowedOrigins;
+
+  return {
+    id: (payload.id ?? payload.ID) as string | undefined,
+    tenant_id: ((payload.tenant_id ?? payload.TenantID) as string | undefined) ?? "",
+    enabled: Boolean(payload.enabled ?? payload.Enabled),
+    allowed_origins: Array.isArray(rawOrigins) ? rawOrigins.filter((origin): origin is string => typeof origin === "string") : [],
+    theme_config: {
+      color: typeof rawTheme.color === "string" ? rawTheme.color : undefined,
+      lang: typeof rawTheme.lang === "string" ? rawTheme.lang : undefined,
+    },
+    created_at: (payload.created_at ?? payload.CreatedAt) as string | undefined,
+    updated_at: (payload.updated_at ?? payload.UpdatedAt) as string | undefined,
+  };
+}
+
+export async function getEmbedConfig(): Promise<EmbedConfig> {
+  return normalizeEmbedConfig(await fetchJSON<Record<string, unknown>>("/api/admin/embed/config"));
+}
+
+export async function updateEmbedConfig(input: UpdateEmbedConfigInput): Promise<EmbedConfig> {
+  const res = await fetchWithSession("/api/admin/embed/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to update embed config: ${res.status}`);
+  }
+  return normalizeEmbedConfig((await readJSONResponse(res)) as Record<string, unknown>);
+}
+
+export async function addEmbedOrigin(origin: string): Promise<void> {
+  await postJSONWithBody("/api/admin/embed/origins", { origin });
+}
+
+export async function removeEmbedOrigin(origin: string): Promise<void> {
+  const res = await fetchWithSession("/api/admin/embed/origins", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ origin }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to remove embed origin: ${res.status}`);
+  }
+}

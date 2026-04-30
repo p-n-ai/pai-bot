@@ -41,6 +41,13 @@ export const primaryNavigation = [
     group: "Integration",
     roles: ["admin", "platform_admin"],
   },
+  {
+    title: "Embed",
+    href: "/settings/embed",
+    description: "Manage the website chat widget, allowed origins, and install snippet.",
+    group: "Integration",
+    roles: ["admin", "platform_admin"],
+  },
 ];
 
 export function getNavigationForUser(user) {
@@ -110,6 +117,13 @@ export function getCurrentSection(pathname) {
       eyebrow: "Integration",
       title: "WhatsApp setup",
       description: "Link your WhatsApp account via QR code to enable the bot on WhatsApp.",
+    };
+  }
+  if (pathname.startsWith("/settings/embed")) {
+    return {
+      eyebrow: "Integration",
+      title: "Embed settings",
+      description: "Enable the website chat widget, manage trusted origins, and copy the install snippet.",
     };
   }
   if (pathname.startsWith("/settings/users")) {
@@ -211,6 +225,13 @@ export function getBreadcrumbs(pathname, user) {
     return [
       { label: "Dashboard", href: "/dashboard" },
       { label: "WhatsApp", href: "/settings/whatsapp" },
+    ];
+  }
+
+  if (pathname.startsWith("/settings/embed")) {
+    return [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Embed", href: "/settings/embed" },
     ];
   }
 

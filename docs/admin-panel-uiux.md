@@ -94,6 +94,8 @@ Theme note:
 
 The admin shell provides a persistent sidebar (desktop) or collapsible menu (mobile) with role-aware navigation.
 
+Current integration navigation includes WhatsApp setup and Embed settings. Embed settings manages the website chat widget enabled state, trusted origins, theme props, and copyable install snippet.
+
 ### Desktop Layout (≥ 1024px)
 
 ```

@@ -27,6 +27,7 @@ read_when:
 | `/parents/[id]` | `admin/src/app/(app)/parents/[id]/page.tsx` | Parent summary view. |
 | `/students/[id]` | `admin/src/app/(app)/students/[id]/page.tsx` | Student detail view. |
 | `/settings/users` | `admin/src/app/(app)/settings/users/page.tsx` | User management settings. |
+| `/settings/embed` | `admin/src/app/(app)/settings/embed/page.tsx` | Embed widget settings, trusted origins, and install snippet. |
 | `/settings/whatsapp` | `admin/src/app/settings/whatsapp/page.tsx` | WhatsApp setup/status page. |
 | `/setup/onboard` | `admin/src/app/(onboarding)/setup/onboard/page.tsx` | Onboarding setup wizard. |
 | `/api/retrieval-lab/search` | `admin/src/app/api/retrieval-lab/search/route.ts` | Next.js proxy route for retrieval-lab search. |

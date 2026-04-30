@@ -41,6 +41,7 @@ Do not mix these responsibilities. Admin product UI belongs in `admin/`; public/
 | `admin/src/app/login/page.tsx` | Login entry. |
 | `admin/src/app/activate/page.tsx` | Account/session activation. |
 | `admin/src/app/join/[slug]/page.tsx` | Invite join surface. |
+| `admin/src/app/(app)/settings/embed/page.tsx` | Embed widget settings for enabled state, trusted origins, theme props, and install snippet. |
 | `admin/src/app/settings/whatsapp/page.tsx` | WhatsApp setup surface. |
 | `admin/src/app/(app)/dashboard/retrieval-lab/page.tsx` | Current retrieval lab route. |
 | `admin/src/app/(app)/dashboard/retreival-lab/page.tsx` | Legacy misspelled route; keep only if compatibility is intentional. |

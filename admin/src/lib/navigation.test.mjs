@@ -76,6 +76,14 @@ test("getCurrentSection returns user management metadata for settings routes", (
   });
 });
 
+test("getCurrentSection returns embed metadata for embed settings routes", () => {
+  assert.deepEqual(getCurrentSection("/settings/embed"), {
+    eyebrow: "Integration",
+    title: "Embed settings",
+    description: "Enable the website chat widget, manage trusted origins, and copy the install snippet.",
+  });
+});
+
 test("getCurrentSection returns onboarding metadata for setup routes", () => {
   assert.deepEqual(getCurrentSection("/setup/onboard"), {
     eyebrow: "Administration",
@@ -121,14 +129,14 @@ test("getNavigationForUser keeps elevated navigation for teachers", () => {
 test("getNavigationForUser adds administration links for admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "admin", user_id: "admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp", "/settings/embed"],
   );
 });
 
 test("getNavigationForUser exposes onboarding to platform admins", () => {
   assert.deepEqual(
     getNavigationForUser({ role: "platform_admin", user_id: "platform-admin-1" }).map((item) => item.href),
-    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp"],
+    ["/dashboard", "/dashboard/classes", "/setup/onboard", "/settings/users", "/export", "/settings/whatsapp", "/settings/embed"],
   );
 });
 
@@ -163,6 +171,13 @@ test("getBreadcrumbs returns user management hierarchy", () => {
   assert.deepEqual(getBreadcrumbs("/settings/users"), [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Users", href: "/settings/users" },
+  ]);
+});
+
+test("getBreadcrumbs returns embed settings hierarchy", () => {
+  assert.deepEqual(getBreadcrumbs("/settings/embed"), [
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Embed", href: "/settings/embed" },
   ]);
 });
 
