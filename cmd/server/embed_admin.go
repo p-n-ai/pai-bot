@@ -20,13 +20,14 @@ import (
 
 // handleEmbedGuestAuth issues a guest JWT for an embed widget connection.
 // POST /api/embed/auth/guest
-// Body: {"tenant": "slug"}
+// Body: {"tenant": "slug", "parent_origin": "https://school.example"}
 // No authentication required — public endpoint.
 func handleEmbedGuestAuth(embedStore chat.EmbedConfigStore, guestSvc *auth.GuestService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Tenant      string `json:"tenant"`
-			Fingerprint string `json:"fingerprint"`
+			Tenant       string `json:"tenant"`
+			ParentOrigin string `json:"parent_origin"`
+			Fingerprint  string `json:"fingerprint"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -37,24 +38,23 @@ func handleEmbedGuestAuth(embedStore chat.EmbedConfigStore, guestSvc *auth.Guest
 			return
 		}
 
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			// Also check Referer as fallback for same-origin iframe requests
-			origin = r.Header.Get("Referer")
-			if origin != "" {
-				// Extract just the origin from the Referer URL
-				if u, err := url.Parse(origin); err == nil {
-					origin = u.Scheme + "://" + u.Host
-				}
-			}
+		parentOrigin, err := normalizeWebOrigin(req.ParentOrigin)
+		if err != nil {
+			http.Error(w, "invalid parent_origin", http.StatusBadRequest)
+			return
 		}
-		if origin == "" {
-			http.Error(w, "missing origin", http.StatusForbidden)
+		requestOrigin, err := requestOrigin(r)
+		if err != nil {
+			http.Error(w, "invalid origin", http.StatusForbidden)
+			return
+		}
+		if requestOrigin != "" && requestOrigin != parentOrigin && requestOrigin != serverOrigin(r) {
+			http.Error(w, "origin does not match parent_origin", http.StatusForbidden)
 			return
 		}
 
 		// Validate tenant + origin combination.
-		tenantID, err := embedStore.FindTenantBySlugAndOrigin(r.Context(), req.Tenant, origin)
+		tenantID, err := embedStore.FindTenantBySlugAndOrigin(r.Context(), req.Tenant, parentOrigin)
 		if err != nil {
 			if errors.Is(err, chat.ErrEmbedNotConfigured) {
 				http.Error(w, "embed not configured for this tenant/origin", http.StatusForbidden)
@@ -65,7 +65,7 @@ func handleEmbedGuestAuth(embedStore chat.EmbedConfigStore, guestSvc *auth.Guest
 			return
 		}
 
-		token, userID, err := guestSvc.IssueGuestToken(r.Context(), tenantID, origin, req.Fingerprint)
+		token, userID, err := guestSvc.IssueGuestToken(r.Context(), tenantID, parentOrigin, req.Fingerprint)
 		if err != nil {
 			slog.Error("embed guest auth: issue token", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -151,6 +151,93 @@ func handleEmbedUpgradeGuest(guestSvc *auth.GuestService, tm *auth.TokenManager)
 	}
 }
 
+// handleEmbedLogin authenticates a student for an embed widget connection and
+// returns a WebSocket JWT bound to the validated parent origin.
+// POST /api/embed/auth/login
+func handleEmbedLogin(embedStore chat.EmbedConfigStore, authSvc authService, tm *auth.TokenManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Tenant       string `json:"tenant"`
+			ParentOrigin string `json:"parent_origin"`
+			Email        string `json:"email"`
+			Password     string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Tenant) == "" {
+			http.Error(w, "missing tenant", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Email) == "" || strings.TrimSpace(req.Password) == "" {
+			http.Error(w, "email and password are required", http.StatusBadRequest)
+			return
+		}
+
+		parentOrigin, err := normalizeWebOrigin(req.ParentOrigin)
+		if err != nil {
+			http.Error(w, "invalid parent_origin", http.StatusBadRequest)
+			return
+		}
+		requestOrigin, err := requestOrigin(r)
+		if err != nil {
+			http.Error(w, "invalid origin", http.StatusForbidden)
+			return
+		}
+		if requestOrigin != "" && requestOrigin != parentOrigin && requestOrigin != serverOrigin(r) {
+			http.Error(w, "origin does not match parent_origin", http.StatusForbidden)
+			return
+		}
+
+		tenantID, err := embedStore.FindTenantBySlugAndOrigin(r.Context(), req.Tenant, parentOrigin)
+		if err != nil {
+			if errors.Is(err, chat.ErrEmbedNotConfigured) {
+				http.Error(w, "embed not configured for this tenant/origin", http.StatusForbidden)
+				return
+			}
+			slog.Error("embed login: find tenant", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		session, err := authSvc.Login(r.Context(), auth.LoginRequest{
+			TenantID: tenantID,
+			Email:    req.Email,
+			Password: req.Password,
+		})
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+		if session.User.Role != auth.RoleStudent {
+			http.Error(w, "embed login requires a student account", http.StatusForbidden)
+			return
+		}
+
+		token, err := tm.Issue(auth.TokenClaims{
+			Subject:      session.User.UserID,
+			TenantID:     session.User.TenantID,
+			Role:         session.User.Role,
+			ParentOrigin: parentOrigin,
+		}, time.Now().UTC())
+		if err != nil {
+			slog.Error("embed login: issue token", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"token":      token,
+			"user_id":    session.User.UserID,
+			"role":       session.User.Role,
+			"name":       session.User.Name,
+			"expires_in": 3600,
+		})
+	}
+}
+
 // handleEmbedMessages returns paginated message history for the authenticated user.
 // GET /api/embed/messages?before=<cursor>&limit=20
 // Requires a valid JWT (guest or student) in Authorization: Bearer header.
@@ -186,8 +273,8 @@ func handleEmbedMessages(pool *pgxpool.Pool, tm *auth.TokenManager) http.Handler
 		if pool == nil {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"messages":  []any{},
-				"has_more":  false,
+				"messages": []any{},
+				"has_more": false,
 			})
 			return
 		}
@@ -353,14 +440,9 @@ func handleAdminAddEmbedOrigin(store chat.EmbedConfigStore) http.HandlerFunc {
 			return
 		}
 
-		origin := strings.TrimSpace(req.Origin)
-		if origin == "" {
+		origin, err := normalizeWebOrigin(req.Origin)
+		if err != nil {
 			http.Error(w, "missing origin", http.StatusBadRequest)
-			return
-		}
-		// Validate origin format: must start with http:// or https://
-		if !strings.HasPrefix(origin, "https://") && !strings.HasPrefix(origin, "http://") {
-			http.Error(w, "origin must start with http:// or https://", http.StatusBadRequest)
 			return
 		}
 
@@ -374,6 +456,41 @@ func handleAdminAddEmbedOrigin(store chat.EmbedConfigStore) http.HandlerFunc {
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}
+}
+
+func requestOrigin(r *http.Request) (string, error) {
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		return normalizeWebOrigin(origin)
+	}
+	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
+		return normalizeWebOrigin(referer)
+	}
+	return "", nil
+}
+
+func serverOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "http" || proto == "https" {
+		scheme = proto
+	}
+	return scheme + "://" + r.Host
+}
+
+func normalizeWebOrigin(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", url.InvalidHostError(raw)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", url.InvalidHostError(u.Scheme)
+	}
+	return u.Scheme + "://" + u.Host, nil
 }
 
 // handleAdminDeleteEmbedOrigin removes an allowed origin.

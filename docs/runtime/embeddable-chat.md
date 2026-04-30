@@ -30,8 +30,9 @@ read_when:
 | Route | Purpose |
 |---|---|
 | `GET /embed/pai-chat.js` | Host-page loader script. Creates launcher and iframe. |
-| `GET /embed/chat?tenant=<slug>&color=<hex>&lang=<code>` | Iframe chat UI. |
-| `POST /api/embed/auth/guest` | Issues a tenant-scoped guest JWT after origin and tenant validation. |
+| `GET /embed/chat?tenant=<slug>&color=<hex>&lang=<code>&parent_origin=<origin>` | Iframe chat UI. |
+| `POST /api/embed/auth/guest` | Issues a tenant-scoped guest JWT after parent-origin and tenant validation. |
+| `POST /api/embed/auth/login` | Authenticates a student and returns an embed WebSocket JWT bound to the parent origin. |
 | `POST /api/embed/auth/upgrade` | Upgrades a guest user to a student account. |
 | `GET /api/embed/messages?before=<cursor>&limit=20` | Returns authenticated message history. |
 | `GET /ws/chat` | WebSocket transport. Embed clients authenticate with JWT subprotocol. |
@@ -49,16 +50,18 @@ Admin embed routes require admin or platform-admin role.
 
 ## Security Boundary
 
-- Guest auth validates tenant slug plus request origin through `EmbedConfigStore`.
+- Guest auth validates tenant slug plus the parent page origin through `EmbedConfigStore`.
+- Guest auth rejects direct cross-origin requests whose request origin tries to spoof a different `parent_origin`.
 - Embed WebSocket connections require JWT auth.
-- Embed WebSocket origin checks use tenant embed config.
+- Embed WebSocket authorization uses the parent origin minted into the JWT, because the browser WebSocket `Origin` can be the iframe/backend origin.
+- Embed inbound messages use the `embed` channel identity so message history attaches to the real guest learner, not a Telegram-shaped shadow user.
 - Embed guest auth and guest upgrade are CORS-enabled and IP-rate-limited.
 - Message size is capped for embed connections.
 - The WebSocket read loop applies simple prompt-injection content filtering for embed connections.
 
 ## Operational Notes
 
-- The widget is tenant-routed by slug.
+- The widget is tenant-routed by slug today; the planned public admin language is an opaque Installation ID.
 - Embed origins must be explicitly configured per tenant.
 - The chat shell is intentionally minimal and iframe-based.
 - Future polish can add widget events, unread state, resize events, richer theming, and admin UI for embed config.

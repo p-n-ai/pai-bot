@@ -151,6 +151,7 @@
   var rawColor = params.get('color') || '#6366f1';
   var color = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#6366f1';
   var lang = params.get('lang') || '';
+  var parentOrigin = params.get('parent_origin') || window.location.origin;
 
   document.documentElement.style.setProperty('--pai-primary', color);
 
@@ -285,7 +286,7 @@
     loginSubmitEl.textContent = 'Logging in...';
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/auth/login');
+    xhr.open('POST', '/api/embed/auth/login');
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function() {
       if (xhr.status === 200) {
@@ -320,7 +321,7 @@
       loginSubmitEl.disabled = false;
       loginSubmitEl.textContent = 'Log In';
     };
-    xhr.send(JSON.stringify({ email: email, password: pw }));
+    xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, email: email, password: pw }));
   });
 
   var guestLabelEl = document.getElementById('guestLabel');
@@ -598,7 +599,7 @@
     xhr.onerror = function() {
       addMessage('Unable to connect. Please try again later.', 'system');
     };
-    xhr.send(JSON.stringify({ tenant: tenant, fingerprint: fingerprint }));
+    xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, fingerprint: fingerprint }));
   }
 
   function connect() {

@@ -45,7 +45,7 @@ read_when:
 | parent view | `GET /api/admin/parents/{id}` |
 | groups | `GET|POST /api/admin/groups`, `GET|PATCH|DELETE /api/admin/groups/{id}`, `POST /api/admin/groups/{id}/members`, `DELETE /api/admin/groups/{id}/members/{uid}`, `GET /api/admin/groups/{id}/leaderboard` |
 | retrieval | `/api/admin/retrieval/sources`, `/collections`, `/documents`, and `POST /api/admin/retrieval/search` |
-| embed admin | `GET|PUT /api/admin/embed/config`, `POST|DELETE /api/admin/embed/origins` |
+| embed admin | `GET|PUT /api/admin/embed/config`, `POST|DELETE /api/admin/embed/origins`, `POST /api/embed/auth/guest`, `POST /api/embed/auth/login`, `GET /api/embed/messages`, `GET /ws/chat` |
 | WhatsApp admin | `GET /api/admin/whatsapp/status`, `POST /api/admin/whatsapp/disconnect` |
 
 ## Update rules

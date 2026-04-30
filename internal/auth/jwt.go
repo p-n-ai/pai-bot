@@ -33,19 +33,21 @@ const (
 )
 
 type TokenClaims struct {
-	Subject   string    `json:"sub"`
-	TenantID  string    `json:"tenant_id"`
-	Role      Role      `json:"role"`
-	IssuedAt  time.Time `json:"-"`
-	ExpiresAt time.Time `json:"-"`
+	Subject      string    `json:"sub"`
+	TenantID     string    `json:"tenant_id"`
+	Role         Role      `json:"role"`
+	ParentOrigin string    `json:"parent_origin,omitempty"`
+	IssuedAt     time.Time `json:"-"`
+	ExpiresAt    time.Time `json:"-"`
 }
 
 type tokenPayload struct {
-	Subject   string `json:"sub"`
-	TenantID  string `json:"tenant_id"`
-	Role      Role   `json:"role"`
-	IssuedAt  int64  `json:"iat"`
-	ExpiresAt int64  `json:"exp"`
+	Subject      string `json:"sub"`
+	TenantID     string `json:"tenant_id"`
+	Role         Role   `json:"role"`
+	ParentOrigin string `json:"parent_origin,omitempty"`
+	IssuedAt     int64  `json:"iat"`
+	ExpiresAt    int64  `json:"exp"`
 }
 
 type TokenManager struct {
@@ -83,11 +85,12 @@ func (m *TokenManager) Issue(claims TokenClaims, now time.Time) (string, error) 
 	}
 
 	payloadJSON, err := json.Marshal(tokenPayload{
-		Subject:   claims.Subject,
-		TenantID:  claims.TenantID,
-		Role:      claims.Role,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(m.ttl).Unix(),
+		Subject:      claims.Subject,
+		TenantID:     claims.TenantID,
+		Role:         claims.Role,
+		ParentOrigin: claims.ParentOrigin,
+		IssuedAt:     now.Unix(),
+		ExpiresAt:    now.Add(m.ttl).Unix(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal payload: %w", err)
@@ -150,11 +153,12 @@ func (m *TokenManager) Parse(token string, now time.Time) (TokenClaims, error) {
 	}
 
 	return TokenClaims{
-		Subject:   payload.Subject,
-		TenantID:  payload.TenantID,
-		Role:      payload.Role,
-		IssuedAt:  time.Unix(payload.IssuedAt, 0).UTC(),
-		ExpiresAt: time.Unix(payload.ExpiresAt, 0).UTC(),
+		Subject:      payload.Subject,
+		TenantID:     payload.TenantID,
+		Role:         payload.Role,
+		ParentOrigin: payload.ParentOrigin,
+		IssuedAt:     time.Unix(payload.IssuedAt, 0).UTC(),
+		ExpiresAt:    time.Unix(payload.ExpiresAt, 0).UTC(),
 	}, nil
 }
 

@@ -7,6 +7,7 @@
   var color = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#b45a1a';
   var position = script.getAttribute('data-position') || 'bottom-right';
   var lang = script.getAttribute('data-language') || '';
+  var parentOrigin = window.location.origin;
 
   // Derive the base URL from the script's own src.
   var src = script.src;
@@ -27,7 +28,7 @@
   container.style.cssText = 'position:fixed;' + (position === 'bottom-left' ? 'left:20px;' : 'right:20px;') + 'bottom:86px;width:380px;height:520px;max-height:80vh;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06);z-index:99999;display:none;border:1px solid rgba(0,0,0,0.08);';
 
   var iframe = document.createElement('iframe');
-  iframe.src = baseURL + '/embed/chat?tenant=' + encodeURIComponent(tenant) + '&color=' + encodeURIComponent(color) + '&lang=' + encodeURIComponent(lang);
+  iframe.src = baseURL + '/embed/chat?tenant=' + encodeURIComponent(tenant) + '&color=' + encodeURIComponent(color) + '&lang=' + encodeURIComponent(lang) + '&parent_origin=' + encodeURIComponent(parentOrigin);
   iframe.style.cssText = 'width:100%;height:100%;border:none;';
   iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
   iframe.setAttribute('title', 'P&AI Chat');

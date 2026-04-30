@@ -99,25 +99,25 @@ func TestHandleEmbedGuestAuth(t *testing.T) {
 	}{
 		{
 			name:       "missing tenant in body",
-			body:       `{}`,
+			body:       `{"parent_origin":"https://example.com"}`,
 			origin:     "https://example.com",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "empty tenant field",
-			body:       `{"tenant": "  "}`,
+			body:       `{"tenant": "  ", "parent_origin":"https://example.com"}`,
 			origin:     "https://example.com",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "missing origin header",
+			name:       "missing parent origin",
 			body:       `{"tenant": "school-a"}`,
-			origin:     "",
-			wantStatus: http.StatusForbidden,
+			origin:     "https://example.com",
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "embed not configured for tenant/origin",
-			body:       `{"tenant": "school-a"}`,
+			body:       `{"tenant": "school-a", "parent_origin":"https://example.com"}`,
 			origin:     "https://example.com",
 			storeErr:   chat.ErrEmbedNotConfigured,
 			wantStatus: http.StatusForbidden,
@@ -127,6 +127,12 @@ func TestHandleEmbedGuestAuth(t *testing.T) {
 			body:       `not-json`,
 			origin:     "https://example.com",
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "request origin cannot spoof different parent origin",
+			body:       `{"tenant": "school-a", "parent_origin":"https://school.example"}`,
+			origin:     "https://evil.example",
+			wantStatus: http.StatusForbidden,
 		},
 	}
 
@@ -517,4 +523,3 @@ func TestHandleAdminUpdateEmbedConfig_UpdatesEnabled(t *testing.T) {
 		t.Errorf("enabled = %v, want true", cfg.Enabled)
 	}
 }
-

@@ -121,6 +121,11 @@ func main() {
 		slog.Error("failed to initialize conversation store", "error", err)
 		os.Exit(1)
 	}
+	embedStore, err := agent.NewPostgresStoreForChannel(context.Background(), db.Pool, "embed")
+	if err != nil {
+		slog.Error("failed to initialize embed conversation store", "error", err)
+		os.Exit(1)
+	}
 
 	// Load curriculum (warn if unavailable, don't fail).
 	loader, err := curriculum.NewLoader(cfg.CurriculumPath)
@@ -155,6 +160,23 @@ func main() {
 		Challenges:           challengeStore,
 		Groups:               groupStore,
 		TenantID:             store.TenantID(),
+		DevMode:              cfg.Features.DevMode,
+	})
+	embedEngine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:             router,
+		Store:                embedStore,
+		EventLogger:          eventLogger,
+		CurriculumLoader:     loader,
+		RetrievalService:     retrievalService,
+		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
+		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
+		Tracker:              tracker,
+		Streaks:              streakTracker,
+		XP:                   xpTracker,
+		Goals:                goalStore,
+		Challenges:           challengeStore,
+		Groups:               groupStore,
+		TenantID:             embedStore.TenantID(),
 		DevMode:              cfg.Features.DevMode,
 	})
 
@@ -208,6 +230,7 @@ func main() {
 	embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
 	wsChannel := chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
 	gw.Register("websocket", wsChannel)
+	gw.Register("embed", wsChannel)
 
 	// Wire challenge notifications through the gateway.
 	engine.SetNotifier(gatewayNotifier{gw: gw, pool: db.Pool})
@@ -249,7 +272,11 @@ func main() {
 			slog.Warn("failed to send typing indicator", "error", err)
 		}
 
-		resp, err := engine.ProcessMessage(ctx, msg)
+		activeEngine := engine
+		if msg.Channel == "embed" {
+			activeEngine = embedEngine
+		}
+		resp, err := activeEngine.ProcessMessage(ctx, msg)
 		if err != nil {
 			slog.Error("ProcessMessage failed", "error", err, "user_id", msg.UserID)
 			return
@@ -357,6 +384,11 @@ func main() {
 		embedGuestLimiter,
 	)))
 	topMux.Handle("OPTIONS /api/embed/auth/guest", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	topMux.Handle("POST /api/embed/auth/login", withCORS(withIPRateLimit(
+		handleEmbedLogin(embedConfigStore, authService, embedTokenManager),
+		embedGuestLimiter,
+	)))
+	topMux.Handle("OPTIONS /api/embed/auth/login", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
 	topMux.Handle("POST /api/embed/auth/upgrade", withCORS(withIPRateLimit(
 		handleEmbedUpgradeGuest(guestSvc, embedTokenManager),
 		embedGuestLimiter,

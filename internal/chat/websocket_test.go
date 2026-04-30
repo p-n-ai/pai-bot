@@ -378,9 +378,24 @@ func newTestTokenManager() *auth.TokenManager {
 func issueGuestToken(t *testing.T, tm *auth.TokenManager, userID, tenantID string) string {
 	t.Helper()
 	token, err := tm.Issue(auth.TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     auth.RoleGuest,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         auth.RoleGuest,
+		ParentOrigin: "https://example.com",
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	return token
+}
+
+func issueGuestTokenForOrigin(t *testing.T, tm *auth.TokenManager, userID, tenantID, parentOrigin string) string {
+	t.Helper()
+	token, err := tm.Issue(auth.TokenClaims{
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         auth.RoleGuest,
+		ParentOrigin: parentOrigin,
 	}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -450,6 +465,9 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	defer mu.Unlock()
 	if len(received) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(received))
+	}
+	if received[0].Channel != "embed" {
+		t.Errorf("expected channel embed, got %q", received[0].Channel)
 	}
 	if received[0].UserID != "guest-user-1" {
 		t.Errorf("expected user guest-user-1, got %q", received[0].UserID)
@@ -621,19 +639,87 @@ func TestWSChannel_EmbedRejectsUnlistedOrigin(t *testing.T) {
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
 
-	token := issueGuestToken(t, tm, "evil-user", "tenant-1")
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Connect with valid JWT but from an unlisted origin — should be rejected.
+	// Connect with a token minted for an unlisted parent origin. The browser
+	// WebSocket Origin may be the iframe/backend origin, so the claim must carry
+	// the actual website authority.
+	token := issueGuestTokenForOrigin(t, tm, "evil-user", "tenant-1", "https://evil.com")
 	_, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
 		Subprotocols: []string{"pai-auth." + token},
-		HTTPHeader:   map[string][]string{"Origin": {"https://evil.com"}},
+		HTTPHeader:   map[string][]string{"Origin": {"https://example.com"}},
 	})
 	if err == nil {
 		t.Fatal("expected dial error for unlisted origin, got nil")
 	}
 }
 
+func TestWSChannel_EmbedRejectsMismatchedHandshakeOrigin(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+
+	ws := NewEmbedWSChannel(store, tm)
+	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	token := issueGuestTokenForOrigin(t, tm, "guest-user-1", "tenant-1", "https://example.com")
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {"https://evil.example"}},
+	})
+	if err == nil {
+		t.Fatal("expected dial error for mismatched handshake origin, got nil")
+	}
+}
+
+func TestWSChannel_EmbedRejectsTokenWithoutParentOrigin(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+
+	ws := NewEmbedWSChannel(store, tm)
+	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	token, err := tm.Issue(auth.TokenClaims{
+		Subject:  "legacy-guest",
+		TenantID: "tenant-1",
+		Role:     auth.RoleGuest,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	_, _, err = websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {"https://example.com"}},
+	})
+	if err == nil {
+		t.Fatal("expected dial error for token without parent origin, got nil")
+	}
+}

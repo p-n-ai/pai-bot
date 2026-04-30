@@ -96,9 +96,10 @@ func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, f
 	}
 
 	claims := TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     RoleGuest,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         RoleGuest,
+		ParentOrigin: origin,
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {
@@ -179,9 +180,10 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name
 	}
 
 	claims := TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     RoleStudent,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         RoleStudent,
+		ParentOrigin: "",
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {
