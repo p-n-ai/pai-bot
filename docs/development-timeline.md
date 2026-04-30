@@ -6,6 +6,12 @@
 
 ---
 
+## Recent Dev Log
+
+Presentation-ready weekly summaries live in [thor-development-log.md](thor-development-log.md). Use that when preparing team readouts; keep this file as the source timeline for planned tasks, status, and remarks.
+
+---
+
 ## Scope for pai-bot
 
 pai-bot owns the **core platform**: Go backend, AI gateway, Telegram chat adapter, agent engine, progress tracking, motivation features, and Next.js admin panel. Everything a student interacts with flows through this repo.
