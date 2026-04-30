@@ -4,6 +4,9 @@ const backendOrigin = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_AP
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    optimizePackageImports: ["@phosphor-icons/react", "@tabler/icons-react", "lucide-react"],
+  },
   async rewrites() {
     return [
       {
