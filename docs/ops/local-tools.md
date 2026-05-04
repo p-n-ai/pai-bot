@@ -35,6 +35,8 @@ go run ./cmd/conversation-harness --case Q01 --show-responses
 
 The default fixture is `internal/agent/testdata/ai_quality_conversations.yaml`. Add pilot failures there before changing the prompt, then rerun the harness to compare behavior.
 
+The harness is quiet by default so pass/fail output stays readable. Use `--verbose` when you need curriculum-loader warnings or background-check diagnostics.
+
 For transport-only server checks without a real AI provider key, use the dev mock provider:
 
 ```bash
@@ -47,6 +49,28 @@ One-shot WebSocket check:
 ```bash
 go run ./cmd/terminal-chat --ws ws://127.0.0.1:8080/ws/chat --user-id dev-check --message "Solve 3x - 5 = 16. First step only."
 ```
+
+`cmd/terminal-chat` is quiet by default so student-style transcripts are readable. It also keeps progress/streak/XP side effects off by default so the CLI can be used as a clean AI conversation loop. Use `--progress` to include those side effects, and `--verbose` when diagnosing curriculum loading or background checks.
+
+To hand a local CLI transcript to a UI, write the conversation history as JSON:
+
+```bash
+go run ./cmd/terminal-chat --memory --history-json /tmp/pai-terminal-history.json
+```
+
+To debug the exact model-facing prompt locally, write the full terminal dump:
+
+```bash
+go run ./cmd/terminal-chat --memory --dump-json /tmp/pai-terminal-dump.json
+```
+
+To pull only the latest 10 items for a UI/debug view:
+
+```bash
+go run ./cmd/terminal-chat --memory --dump-json /tmp/pai-terminal-dump.json --turn-limit 10
+```
+
+The dump includes the UI-visible `turns` plus `model_calls[].messages`, which are the system/user/assistant messages sent to the selected AI provider. `--turn-limit` caps both arrays to the newest N items. The file is written owner-only and is local-only debug output; it should not be wired into durable app telemetry.
 
 `LEARN_DEV_MODE=true` keeps `/ws/chat` compatible with terminal-chat first-message auth. Production embed chat still uses JWT subprotocol auth and origin checks.
 

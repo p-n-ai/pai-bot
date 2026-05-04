@@ -7,6 +7,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // TaskType defines the kind of AI task for routing purposes.
@@ -71,6 +72,16 @@ type CompletionResponse struct {
 // TotalTokens returns the sum of input and output tokens.
 func (r CompletionResponse) TotalTokens() int {
 	return r.InputTokens + r.OutputTokens
+}
+
+// CompletionTrace is an opt-in local debugging snapshot of one provider call.
+type CompletionTrace struct {
+	Provider    string              `json:"provider"`
+	Request     CompletionRequest   `json:"request"`
+	Response    *CompletionResponse `json:"response,omitempty"`
+	Error       string              `json:"error,omitempty"`
+	StartedAt   time.Time           `json:"started_at"`
+	CompletedAt time.Time           `json:"completed_at"`
 }
 
 // StreamChunk represents a streaming response chunk.

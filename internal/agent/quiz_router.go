@@ -56,10 +56,17 @@ func (e *Engine) resolveQuizStartTopic(msg chat.InboundMessage, conv *Conversati
 		return "", false
 	}
 
+	explicitTopic := explicitQuizTopicText(msg.Text)
 	if topic, _ := e.resolveCurriculumContext(msg.UserID, conv.TopicID, msg.Text); topic != nil {
 		if _, found := e.curriculumLoader.GetAssessment(topic.ID); found {
+			if explicitTopic != "" && !topicMatchesExplicitQuizTopic(topic.Name, explicitTopic) {
+				return "", false
+			}
 			return topic.ID, true
 		}
+	}
+	if explicitTopic != "" {
+		return "", false
 	}
 	if conv.TopicID != "" {
 		if _, found := e.curriculumLoader.GetAssessment(conv.TopicID); found {
@@ -587,6 +594,31 @@ func detectQuizIntent(text string) bool {
 		"mau",
 	) {
 		return true
+	}
+	return false
+}
+
+func explicitQuizTopicText(text string) string {
+	normalized := " " + strings.ToLower(strings.TrimSpace(text)) + " "
+	for _, marker := range []string{" on ", " about ", " topic ", " tentang ", " pasal "} {
+		if idx := strings.Index(normalized, marker); idx >= 0 {
+			return strings.TrimSpace(normalized[idx+len(marker):])
+		}
+	}
+	return ""
+}
+
+func topicMatchesExplicitQuizTopic(topicName, requested string) bool {
+	topicName = strings.ToLower(topicName)
+	for _, token := range strings.FieldsFunc(strings.ToLower(requested), func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		if len(token) < 3 {
+			continue
+		}
+		if strings.Contains(topicName, token) {
+			return true
+		}
 	}
 	return false
 }

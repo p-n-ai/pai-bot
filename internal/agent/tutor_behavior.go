@@ -15,6 +15,15 @@ var (
 	solvedVariablePattern         = regexp.MustCompile(`(?i)\b[a-z]\s*=\s*-?(?:\d+(?:\.\d+)?|rm\s*\d+(?:\.\d+)?)\b`)
 	shortReplySectionLabelPattern = regexp.MustCompile(`(?m)^\s*(Faham/Understand|Selesaikan/Solve|Semak/Verify|Konsep/Connect|Faham|Understand|Semak|Verify|Konsep|Concept)\s*:\s*`)
 	equationSnippetPattern        = regexp.MustCompile(`(?i)(?:[a-z0-9()]+(?:\s*[+\-*/]\s*[a-z0-9()]+)*\s*=\s*[a-z0-9()]+(?:\s*[+\-*/]\s*[a-z0-9()]+)*)`)
+	linearConstantEquationPattern = regexp.MustCompile(`(?i)^\s*(.+?[a-z].*?)\s*([+-])\s*(-?\d+(?:\.\d+)?)\s*=\s*(-?\d+(?:\.\d+)?)\s*$`)
+	nextOperationPattern          = regexp.MustCompile(`(?is)(?:\b(?:now|then|next|after that|finally)\b.{0,80}\b(?:add|subtract|minus|divide|multiply|split|solve|tambah|tolak|bahagi|darab|selesaikan)\b|\b(?:add|subtract|minus|divide|multiply|split|solve|tambah|tolak|bahagi|darab|selesaikan)\b.{0,80}\bnext\b)`)
+	finalValueQuestionPattern     = regexp.MustCompile(`(?is)\b(?:what(?:'s| is| do you think)\s+[a-z]\s+(?:is|=)|what\s+do\s+you\s+get\s+for\s+[a-z]\b|what\s+number\s+(?:times|multiplied by).{0,80}\b(?:gives|equals)\b|find\s+[a-z]\b|cari\s+[a-z]\b)`)
+	emojiPattern                  = regexp.MustCompile(`[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]`)
+	cannedOpenerLinePattern       = regexp.MustCompile(`(?is)^\s*(?:okay|yep|sure|got you)[^\n]{0,60}\b(?:quick mode|quick one|keep it simple|ringkas je|real talk|super short|nice and short)\b[^\n]*\n+`)
+	toneCommentaryLinePattern     = regexp.MustCompile(`(?im)^\s*(?:okay|yep|sure|got you|want me)?[^\n]{0,80}\b(?:less boring|same vibe|same style|quick mode)\b[^\n]*(?:\n+|$)`)
+	menuOfferLinePattern          = regexp.MustCompile(`(?im)^\s*(?:if you want|want me to|kalau nak|nak aku|kau nak aku|mahu saya|nak saya)[^\n]*(?:\n+|$)`)
+	sureTryOpenerPattern          = regexp.MustCompile(`(?i)^\s*sure\s*[—-]\s*try this one:\s*`)
+	sureHereIsOnePattern          = regexp.MustCompile(`(?i)^\s*sure\s*[—-]\s*here'?s one to try:\s*`)
 )
 
 var (
@@ -22,6 +31,10 @@ var (
 		"first step only",
 		"hint only",
 		"ask for the first step only",
+		"short",
+		"quick",
+		"brief",
+		"simple",
 		"langkah pertama sahaja",
 		"jangan jawapan terus",
 	}
@@ -43,6 +56,7 @@ var (
 	confusionMarkers = []string{
 		"slowly",
 		"not too long",
+		"jangan panjang",
 		"don't get",
 		"dont get",
 		"confused",
@@ -64,7 +78,7 @@ func (e *Engine) maybeHandleOutOfScopeTutorRequest(msg chat.InboundMessage, conv
 	response := outOfScopeCalculusResponse(msg.Text)
 	e.recordDeterministicTutorReply(msg, conv, response, "tutor_scope_redirect", map[string]any{
 		"channel": msg.Channel,
-		"scope":   "kssm_form_1_3_algebra",
+		"scope":   "lower_secondary_kssm_math",
 		"reason":  "calculus",
 	})
 	return response, true
@@ -156,9 +170,9 @@ func asksForHiddenTutorInstructions(text string) bool {
 
 func instructionPrivacyRefusal(text string) string {
 	if detectLatestMessageLanguage(text) == "ms" {
-		return "Saya tak boleh kongsi arahan tersembunyi atau sistem. Saya boleh bantu belajar algebra. Apa langkah pertama yang awak rasa patut cuba?"
+		return "Saya tak boleh kongsi arahan tersembunyi atau sistem. Saya masih boleh bantu belajar. Apa langkah pertama yang awak rasa patut cuba?"
 	}
-	return "I can't share hidden or system instructions. I can still help with algebra. What first step would you try?"
+	return "I can't share hidden or system instructions. I can still help with the learning task. What first step would you try?"
 }
 
 func isLowerSecondaryCalculusRequest(text string) bool {
@@ -173,9 +187,9 @@ func isLowerSecondaryCalculusRequest(text string) bool {
 
 func outOfScopeCalculusResponse(text string) string {
 	if detectLatestMessageLanguage(text) == "ms" {
-		return "Topik itu di luar Algebra KSSM Tingkatan 1-3. Pembezaan datang kemudian.\n\nUntuk asas terdekat, kita boleh berlatih kenal pasti sebutan algebra dahulu. Nak cuba?"
+		return "Topik itu di luar matematik KSSM menengah rendah. Pembezaan datang kemudian.\n\nUntuk asas terdekat, kita boleh berlatih kenal pasti sebutan algebra dahulu. Nak cuba?"
 	}
-	return "That is outside KSSM Form 1-3 Algebra. Differentiation comes later.\n\nFor the nearest prerequisite, we can practise identifying algebraic terms first. Want to try that?"
+	return "That is outside lower-secondary KSSM maths. Differentiation comes later.\n\nFor the nearest prerequisite, we can practise identifying algebraic terms first. Want to try that?"
 }
 
 func latestMessageLanguageInstruction(text string) string {
@@ -195,7 +209,7 @@ func detectLatestMessageLanguage(text string) string {
 		" i ", " i'm ", " im ", " me ", " my ", " you ", " what ", " why ", " how ", " please ", " solve ", " teach ", " explain ", " check ", "variable", "variables", "equation", "differentiate",
 	})
 	msScore := markerScore(lower, []string{
-		" saya ", " awak ", " kamu ", " tolong ", " sahaja", " langkah", " pertama", " persamaan", " jawapan", " semak", " tulis", " caj", " teksi", " tingkatan", " pemboleh ubah", " cari ",
+		" saya ", " awak ", " kamu ", " aku ", " ni ", " apa ", " macam ", " tolong ", " sahaja", " langkah", " pertama", " persamaan", " jawapan", " semak", " tulis", " caj", " teksi", " tingkatan", " pemboleh ubah", " cari ",
 	})
 	if enScore > msScore && enScore > 0 {
 		return "en"
@@ -220,6 +234,9 @@ func markerScore(text string, markers []string) int {
 func postProcessTutorResponse(content, latestUserText string) string {
 	content = suppressInstructionLeakResponse(content)
 	content = suppressDetectableAnswerDump(content, latestUserText)
+	content = suppressOverlongFirstStepResponse(content, latestUserText)
+	content = suppressOverlongVariableConceptResponse(content, latestUserText)
+	content = stripCannedCasualArtifacts(content)
 	return stripShortReplySectionLabels(content, latestUserText)
 }
 
@@ -228,6 +245,16 @@ func suppressInstructionLeakResponse(content string) string {
 		return content
 	}
 	return "I can't share hidden or system instructions. I can still help with the maths. What first step would you try?"
+}
+
+func stripCannedCasualArtifacts(content string) string {
+	content = emojiPattern.ReplaceAllString(content, "")
+	content = cannedOpenerLinePattern.ReplaceAllString(content, "")
+	content = toneCommentaryLinePattern.ReplaceAllString(content, "")
+	content = menuOfferLinePattern.ReplaceAllString(content, "")
+	content = sureTryOpenerPattern.ReplaceAllString(content, "Try this one:\n\n")
+	content = sureHereIsOnePattern.ReplaceAllString(content, "Try this one:\n\n")
+	return strings.TrimSpace(content)
 }
 
 func looksLikeInstructionLeak(content string) bool {
@@ -265,12 +292,47 @@ func suppressDetectableAnswerDump(content, latestUserText string) string {
 	return constrainedTutorResponse(latestUserText)
 }
 
+func suppressOverlongFirstStepResponse(content, latestUserText string) string {
+	if !latestRequestNeedsOneTutorMove(latestUserText) {
+		return content
+	}
+	if !nextOperationPattern.MatchString(content) && !finalValueQuestionPattern.MatchString(content) {
+		return content
+	}
+	return constrainedTutorResponse(latestUserText)
+}
+
+func suppressOverlongVariableConceptResponse(content, latestUserText string) string {
+	if !isVariableConceptQuestion(latestUserText) {
+		return content
+	}
+	if len([]rune(content)) <= 450 && !menuOfferLinePattern.MatchString(content) {
+		return content
+	}
+	if detectLatestMessageLanguage(latestUserText) == "ms" {
+		return "Variable tu huruf yang wakil nombor yang kita belum tahu.\n\nContoh kantin: harga satu air = x. Kalau beli 3 air, jumlahnya 3x.\n\nKalau x = RM2, 3x jadi berapa?"
+	}
+	return "A variable is a letter for a number we do not know yet.\n\nCanteen version: one drink costs x ringgit, so 3 drinks cost 3x.\n\nIf x = 2, what is 3x?"
+}
+
+func isVariableConceptQuestion(text string) bool {
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, "variable") && !strings.Contains(lower, "pemboleh ubah") {
+		return false
+	}
+	return containsMarker(lower, []string{"what", "explain", "apa", "blur", "confused", "tak faham", "maksud"})
+}
+
 func latestRequestForbidsAnswerDump(text string) bool {
 	lower := strings.ToLower(text)
 	return containsMarker(lower, firstStepOnlyMarkers) ||
 		containsMarker(lower, setupOnlyMarkers) ||
 		containsMarker(lower, practiceOnlyMarkers) ||
 		containsMarker(lower, answerOnlyMarkers)
+}
+
+func latestRequestNeedsOneTutorMove(text string) bool {
+	return containsMarker(strings.ToLower(text), firstStepOnlyMarkers)
 }
 
 func containsDetectableFinalAnswer(content string) bool {
@@ -314,11 +376,38 @@ func constrainedTutorResponse(latestUserText string) string {
 		}
 		return "I can help write the equation, but I need the quantities and relationship first. Can you send the full question?"
 	default:
+		if response := constrainedFirstStepResponse(latestUserText, lang); response != "" {
+			return response
+		}
 		if lang == "ms" {
 			return "Jangan lompat ke penyelesaian penuh dulu. Langkah pertama: asingkan sebutan yang ada pemboleh ubah. Apa operasi songsang yang patut dibuat?"
 		}
 		return "Let's not jump to the whole solution yet. First step: isolate the term with the variable. What inverse operation should we use?"
 	}
+}
+
+func constrainedFirstStepResponse(latestUserText, lang string) string {
+	equation := extractEquationOnly(latestUserText)
+	if equation == "" {
+		return ""
+	}
+	matches := linearConstantEquationPattern.FindStringSubmatch(equation)
+	if len(matches) != 5 {
+		return ""
+	}
+	variableTerm := strings.TrimSpace(matches[1])
+	operator := matches[2]
+	constant := strings.TrimSpace(matches[3])
+	if operator == "+" {
+		if lang == "ms" {
+			return "Langkah pertama: buang +" + constant + " dengan tolak " + constant + " pada dua-dua belah.\n\nApa yang awak dapat untuk " + variableTerm + "?"
+		}
+		return "First step: undo the +" + constant + " by subtracting " + constant + " from both sides.\n\nWhat do you get for " + variableTerm + "?"
+	}
+	if lang == "ms" {
+		return "Langkah pertama: buang -" + constant + " dengan tambah " + constant + " pada dua-dua belah.\n\nApa yang awak dapat untuk " + variableTerm + "?"
+	}
+	return "First step: undo the -" + constant + " by adding " + constant + " to both sides.\n\nWhat do you get for " + variableTerm + "?"
 }
 
 func extractEquationOnly(text string) string {

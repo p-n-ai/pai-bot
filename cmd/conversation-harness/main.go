@@ -87,6 +87,7 @@ func main() {
 	var jsonl bool
 	var memory bool
 	var mockResponse string
+	var verbose bool
 
 	flag.StringVar(&fixturePath, "fixture", defaultFixturePath, "YAML conversation fixture")
 	flag.StringVar(&caseID, "case", "", "run one conversation id")
@@ -97,10 +98,15 @@ func main() {
 	flag.BoolVar(&jsonl, "jsonl", false, "print one JSON result per conversation")
 	flag.BoolVar(&memory, "memory", true, "use in-memory state instead of PostgreSQL")
 	flag.StringVar(&mockResponse, "mock-response", "", "use a deterministic mock AI response instead of configured providers")
+	flag.BoolVar(&verbose, "verbose", false, "show diagnostic warnings from curriculum loading and background checks")
 	flag.Parse()
 
+	logLevel := slog.LevelError
+	if verbose {
+		logLevel = slog.LevelWarn
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
+		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
 

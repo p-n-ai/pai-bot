@@ -54,6 +54,39 @@ func TestEngine_ProcessMessage_QuizIntentStartsQuizWithoutSlashCommand(t *testin
 	}
 }
 
+func TestEngine_ProcessMessage_QuizIntentWithUnresolvedExplicitTopicFallsBackToTutor(t *testing.T) {
+	mockAI := ai.NewMockProvider("Try one variable question: x + 4 = 9. What is the first move?")
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:         mockRouter(mockAI),
+		Store:            store,
+		CurriculumLoader: createTestCurriculumLoader(t),
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "telegram",
+		UserID:  "quiz-unresolved-topic",
+		Text:    "test me on variables but dont give answer",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage() error = %v", err)
+	}
+	if contains(resp, "Quiz mode:") {
+		t.Fatalf("should not start quiz on unrelated assessed topic, got %q", resp)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("expected normal tutor AI fallback")
+	}
+
+	conv, found := store.GetActiveConversation("quiz-unresolved-topic")
+	if !found {
+		t.Fatal("expected active conversation")
+	}
+	if conv.State != "teaching" {
+		t.Fatalf("conversation state = %q, want teaching", conv.State)
+	}
+}
+
 func TestEngine_ProcessMessage_QuizStartPersistsKnownNameAndFormWithoutBlockingOnIntensity(t *testing.T) {
 	mockAI := ai.NewMockProvider("should-not-be-used")
 	store := agent.NewMemoryStore()

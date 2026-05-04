@@ -34,6 +34,7 @@ The current implementation lives in `internal/agent/`:
 | `context_packets.go` | Builds, defaults, validates, labels, and summarizes packets. |
 | `prompt_builder.go` | Compiles packets and chat history into model-facing `[]ai.Message`. |
 | `engine.go` | Owns `ProcessMessage`, turn lifecycle, AI call, response persistence, and `agent_turn_completed`. |
+| `tutor_personality.go` | Encodes the active SOUL-style tutor personality block used by the prompt harness. |
 | `cmd/conversation-harness` | Replays scored YAML conversations through the real engine and AI router for prompt/runtime quality checks. |
 | `prompt_builder_test.go` | Regression coverage for prompt ordering, image handling, untrusted data quoting, and invalid packet rejection. |
 | `engine_test.go` | Runtime coverage for event metadata and trace privacy. |
@@ -85,6 +86,8 @@ Mixed-trust records must be split. Example: goal target mastery is system-owned 
 
 The current user message must appear once. Reply context is separate quoted data, not mixed into current input.
 
+The base tutor prompt includes a SOUL-style `ROBOT PERSONALITY ACTIVE: P&AI Study Buddy` block. The runtime uses a distilled in-code block so production does not depend on local tuning notes.
+
 ## Trace Contract
 
 `agent_turn_completed` records metadata only:
@@ -100,6 +103,8 @@ The current user message must appear once. Reply context is separate quoted data
 - status and error text
 
 Never add raw packet data, names, goal summaries, reply text, summaries, image data URLs, full prompts, or chat text to this event.
+
+For local prompt debugging, `cmd/terminal-chat --dump-json <path>` can write an explicit file containing UI-visible turns plus model-facing `messages`. Add `--turn-limit 10` when the UI only needs the latest 10 visible turns/model calls. Keep that path opt-in and local-only; it is not part of `agent_turn_completed` or durable event telemetry.
 
 ## Future Work
 
@@ -127,6 +132,8 @@ The default fixture scores pilot-derived cases for:
 - answer dumping under first-step, setup-only, check-only, and direct-answer pressure
 - prompt extraction attempts that ask for hidden or system instructions
 - naturalness, including short replies and avoiding worksheet-style section labels when the learner asked for a light interaction
-- scope redirects for Form 1-3 Algebra boundaries
+- scope redirects for loaded curriculum and form-level boundaries
 
 Add a failing conversation before changing prompt/runtime behavior. Keep checks broad enough to catch regressions without depending on one exact wording.
+
+The harness suppresses warning logs by default so the result transcript stays focused on pass/fail output. Add `--verbose` when diagnosing curriculum loading or async background checks.

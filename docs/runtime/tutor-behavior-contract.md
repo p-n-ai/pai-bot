@@ -2,7 +2,7 @@
 title: "Tutor Behavior Contract"
 summary: "Runtime contract for enforcing the pai-bot tutor personality with deterministic guards, runtime behavior mechanisms, and smoke-test harness coverage."
 read_when:
-  - You are changing tutor personality, answer pacing, prompt privacy, or algebra scope behavior.
+  - You are changing tutor personality, answer pacing, prompt privacy, or curriculum scope behavior.
   - You are deciding whether a tutor behavior belongs in prompt wording, runtime guards, unit tests, or the AI quality harness.
 ---
 
@@ -36,12 +36,12 @@ The useful idea is layered control: route, provenance, sanitization, determinist
 | asks hidden/system prompt | refuse briefly and redirect to math | pre-AI deterministic guard |
 | confused or frustrated | one tiny explanation plus one tiny check question | prompt policy + label stripper |
 | asks for practice | one question only, no answer/solution | output guard removes detectable answer |
-| outside Form 1-3 Algebra lane | deterministic redirect to nearest algebra prerequisite | pre-AI deterministic guard |
+| outside loaded curriculum or form-level lane | deterministic redirect to nearest prerequisite | pre-AI deterministic guard |
 
 ## Guard layering
 
 1. Conversation state gates: onboarding, language selection, rating, goal, quiz.
-2. Tutor deterministic gates: hidden-prompt extraction and algebra-scope redirect.
+2. Tutor deterministic gates: hidden-prompt extraction and curriculum-scope redirect.
 3. Prompt compiler: trust-labeled context and tutor policy.
 4. Model output post-processing: instruction leak suppression, answer-dump suppression where detectable, short-reply label stripping.
 5. Regression checks: unit tests for deterministic guards; conversation harness for live model smoke.

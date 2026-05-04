@@ -64,29 +64,108 @@ func TestConstrainedTutorResponse_SetupOnlyAsksForFullQuestionWhenMissingEquatio
 	}
 }
 
-func TestLatestRequestForbidsAnswerDumpSharesTutorModeMarkers(t *testing.T) {
-	for _, text := range []string{
-		"first step only",
-		"form an equation only",
-		"similar practice",
-		"give me the answer",
+func TestConstrainedTutorResponse_ShortRequestUsesEquationAwareFirstStep(t *testing.T) {
+	resp := constrainedTutorResponse("explain 3x + 2 = 14 but short")
+
+	assertEquationFirstStepOnly(t, resp)
+}
+
+func TestTutorModeMarkerCoverage(t *testing.T) {
+	tests := []struct {
+		text             string
+		wantAnswerDump   bool
+		wantShortNatural bool
+	}{
+		{text: "first step only", wantAnswerDump: true, wantShortNatural: true},
+		{text: "short", wantAnswerDump: true, wantShortNatural: true},
+		{text: "form an equation only", wantAnswerDump: true, wantShortNatural: true},
+		{text: "similar practice", wantAnswerDump: true, wantShortNatural: true},
+		{text: "give me the answer", wantAnswerDump: true},
+		{text: "check only", wantShortNatural: true},
+		{text: "tak faham", wantShortNatural: true},
+		{text: "jangan panjang", wantShortNatural: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			if got := latestRequestForbidsAnswerDump(tt.text); got != tt.wantAnswerDump {
+				t.Fatalf("latestRequestForbidsAnswerDump(%q) = %v, want %v", tt.text, got, tt.wantAnswerDump)
+			}
+			if got := needsNaturalShortReply(tt.text); got != tt.wantShortNatural {
+				t.Fatalf("needsNaturalShortReply(%q) = %v, want %v", tt.text, got, tt.wantShortNatural)
+			}
+		})
+	}
+}
+
+func TestPostProcessTutorResponse_ShortRequestSuppressesSecondOperation(t *testing.T) {
+	for _, content := range []string{
+		`Yep, quick one.
+
+First, get rid of the +2 by subtracting 2 from both sides.
+
+So it becomes:
+3x = 12
+
+Your turn: what do you divide both sides by next?`,
+		`Sure — keep it simple:
+
+3x + 2 = 14
+Subtract 2 from both sides:
+3x = 12
+
+Now ask yourself: what number times 3 gives 12?`,
 	} {
-		if !latestRequestForbidsAnswerDump(text) {
-			t.Fatalf("expected answer-dump suppression marker for %q", text)
+		resp := postProcessTutorResponse(content, "explain 3x + 2 = 14 but short")
+
+		assertEquationFirstStepOnly(t, resp)
+	}
+}
+
+func TestPostProcessTutorResponse_StripsCannedCasualArtifacts(t *testing.T) {
+	resp := postProcessTutorResponse("Sure — here's one to try:\n\nOkay, quick and less boring 😄\n\n3x + 2 = 14\n\nWant me to make the next one the same vibe?\nKalau nak, aku boleh bagi contoh lagi.\nMahu saya bagi contoh lagi?", "nah make it less boring")
+
+	lower := strings.ToLower(resp)
+	for _, forbidden := range []string{"sure", "quick", "less boring", "same vibe", "kalau nak", "mahu saya"} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("expected canned artifact %q to be stripped, got %q", forbidden, resp)
+		}
+	}
+	if strings.Contains(resp, "😄") {
+		t.Fatalf("expected emoji to be stripped, got %q", resp)
+	}
+	if !strings.Contains(resp, "3x + 2 = 14") {
+		t.Fatalf("expected teaching content to remain, got %q", resp)
+	}
+}
+
+func TestPostProcessTutorResponse_ConstrainOverlongVariableConcept(t *testing.T) {
+	content := strings.Repeat("Variable tu nombor yang belum tahu. ", 30) + "\nKalau nak, aku boleh tunjuk lagi."
+
+	resp := postProcessTutorResponse(content, "aku blur gila variable ni apa sebenarnya, explain macam kawan")
+
+	if len([]rune(resp)) > 260 {
+		t.Fatalf("expected concise variable response, got %q", resp)
+	}
+	for _, want := range []string{"Variable tu huruf", "Contoh kantin", "3x"} {
+		if !strings.Contains(resp, want) {
+			t.Fatalf("response missing %q: %q", want, resp)
 		}
 	}
 }
 
-func TestNeedsNaturalShortReplySharesTutorModeMarkers(t *testing.T) {
-	for _, text := range []string{
-		"first step only",
-		"form an equation only",
-		"similar practice",
-		"check only",
-		"tak faham",
-	} {
-		if !needsNaturalShortReply(text) {
-			t.Fatalf("expected short natural reply marker for %q", text)
+func assertEquationFirstStepOnly(t *testing.T, resp string) {
+	t.Helper()
+
+	for _, want := range []string{"First step", "subtracting 2", "What do you get for 3x"} {
+		if !strings.Contains(resp, want) {
+			t.Fatalf("response missing %q: %q", want, resp)
+		}
+	}
+	lower := strings.ToLower(resp)
+	for _, forbidden := range []string{"yep, super short", "real talk", "divide", "x ="} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("response should stop after one move and avoid canned phrasing %q: %q", forbidden, resp)
 		}
 	}
 }
