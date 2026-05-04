@@ -1,0 +1,171 @@
+---
+title: "MT F1-F5 Telegram QA Script"
+summary: "Detailed QA testing scenarios for KSSM Mathematics Form 1-5, focusing on pedagogical quality, correctness, and multilingual support."
+read_when:
+  - You are performing QA on the Telegram bot.
+  - You need to verify curriculum alignment for MT F1-F5.
+  - You are testing the bot's ability to handle BM, EN, and Mixed language.
+---
+
+# MT F1-F5 Telegram QA Script
+
+This document provides a structured set of scenarios to test the AI Tutor's performance in Mathematics (Form 1 to Form 5). 
+
+---
+
+## 📊 Test Case Summary
+| Pattern Name | Description | Count |
+|---|---|---|
+| **Concept Check** | Testing definitions, properties, or basic "what is" understanding. | 14 |
+| **Skill Application** | Standard procedure or calculation testing. | 16 |
+| **Misconception Test** | Student provides an incorrect answer to test bot's correction logic. | 8 |
+| **Formation Request** | Asking the bot to translate text to math or form a model. | 5 |
+| **Verification** | Student asks the bot to check their work or final answer. | 6 |
+| **KBAT / HOTS** | Real-world application or higher-order analytical questions. | 8 |
+| **Navigation / Syllabus** | Inquiries about chapters, subtopics, or learning paths. | 8 |
+| **Analogy Request** | Asking for a real-life comparison to simplify a concept. | 4 |
+| **Step-by-Step Request** | Asking for a guided walkthrough of a problem. | 4 |
+| **Example Request** | Asking for a specific problem example to practice. | 4 |
+| **Total** | | **77** |
+
+---
+
+## 🎯 Testing Objectives
+1. **Pedagogical Alignment**: Ensure the bot follows the **Dual-Loop** pattern (Understand → Plan → Solve → Verify → Connect).
+2. **Correctness**: Verify mathematical accuracy and adherence to KSSM DSKP standards.
+3. **Response Quality**: Confirm the bot uses the "Stop and Prompt" method (asking questions instead of just giving answers).
+4. **Multilingual Flexibility**: Test how well the bot handles English (EN), Bahasa Melayu (BM), and Mixed (Manglish) inputs.
+
+---
+
+## 🛠️ Tester Setup
+1. Open the Telegram bot.
+2. Type `/start` to initialize the session.
+3. Use `/language` to switch between English and Bahasa Melayu where appropriate, or simply start typing in your preferred language.
+4. (Optional) Set a goal using `/goal Saya nak kuasai Algebra`.
+
+---
+
+## 📋 Quality Checklist
+During testing, check if the bot:
+- [ ] **Greets** the student warmly and establishes the context.
+- [ ] **Identifies** the core problem before jumping to calculations (Understand loop).
+- [ ] **Proposes a plan** and asks the student for the first step (Plan loop).
+- [ ] **Provides analogies** or hints when the student is stuck.
+- [ ] **Detects misconceptions** (e.g., forgetting to flip symbols in inequalities).
+- [ ] **Connects** the topic to real-life or other mathematical concepts (Connect loop).
+
+---
+
+## 🧪 Detailed Test Scenarios
+
+### 🧭 Navigation & Curriculum Inquiries
+Test if the bot can help students navigate the syllabus and understand their learning path.
+
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **NAV-01** | Syllabus Overview | "Tingkatan 1 belajar apa je untuk Math?" (BM) | Navigation | Should list the main chapters for Form 1. | |
+| **NAV-02** | Subtopics | "What are the subtopics for Form 2 Chapter 2?" (EN) | Navigation | Should list subtopics for MT2-02. | |
+| **NAV-03** | Learning Objectives| "I nak tau apa yang I patut pass untuk Bab 1 F3?" (Mixed) | Navigation | Should list the Learning Objectives for MT3-01. | |
+| **NAV-04** | Prerequisites | "Before I start Linear Inequalities, what do I need to know first?" (EN) | Navigation | Should identify Linear Equations (MT1-06) as prerequisite. | |
+| **NAV-05** | Motivation/Why | "Kenapa kena belajar Matriks ni? Susah la." (BM) | KBAT / HOTS | Provide real-life application (logistics/graphics). | |
+| **NAV-06** | Learning Path | "Habis Bab 2 F1, I patut buat Bab apa?" (Mixed) | Navigation | Suggest Bab 3 (Kuasa Dua) or Bab 5 (Algebra) depending on context. | |
+| **NAV-07** | Summary Request | "Can you summarize what I learned in Chapter 6 F1?" (EN) | Navigation | Provide a concise summary of Linear Equations. | |
+| **NAV-08** | Goal Alignment | "Is this Chapter 5 important for my SPM?" (EN) | Navigation | Explain that Algebra is the foundation for almost all SPM topics. | |
+
+### Form 1: Foundation
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **F1-01.1** | MT1-01 (1.1) | "Apa beza integer dengan nombor bulat?" (BM) | Concept Check / TP1 | Explain negative numbers inclusion. | |
+| **F1-01.2** | MT1-01 (1.3) | "Solve -5 + (-3) x 2. I think the answer is -16." (EN) | Misconception / TP3 | Detect BODMAS error. | |
+| **F1-01.3** | MT1-01 (1.1) | "Give me an example of an integer in real life." (EN) | Example Request / TP1| Temperature below zero or lift floors. | |
+| **F1-02.1** | MT1-02 (2.1) | "Senaraikan faktor bagi 12." (BM) | Skill Application / TP2 | Help student find all pairs (1x12, 2x6, 3x4). | |
+| **F1-02.2** | MT1-02 (2.2) | "Show me step-by-step how to find FSTB for 12 and 18." (EN) | Step-by-Step / TP3 | Use repetitive division or prime factors. | |
+| **F1-02.3** | MT1-02 (2.2) | "I got GSTK for 4 and 6 as 24. Is that the smallest?" (Mixed) | Verification / TP3 | Explain that 12 is smaller than 24. | |
+| **F1-04.1** | MT1-04 (4.1) | "If ratio Ali:Abu is 2:3 and Ali has 10 marbles, how many does Abu have?" (EN) | Skill Application / TP3 | Guide to find 1 unit value first. | |
+| **F1-04.2** | MT1-04 (4.4) | "Harga 3 tin susu RM12. Ayah nak beli 10 tin tapi ada RM35 je. Cukup tak?" (BM) | KBAT / HOTS / TP4 | Calculate RM40 vs RM35. | |
+| **F1-04.3** | MT1-04 (4.1) | "Explain the concept of ratio using a cooking analogy." (EN) | Analogy Request / TP1| Mixing water and rice or cordial. | |
+| **F1-05.1** | MT1-05 (5.1) | "Apa maksud 'pemboleh ubah' dalam algebra?" (BM) | Concept Check / TP1 | Explain symbol representing unknown. | |
+| **F1-05.2** | MT1-05 (5.2) | "Simplify 3x + 5y - x + 2y." (EN) | Skill Application / TP2 | Group like terms ($2x + 7y$). | |
+| **F1-05.3** | MT1-05 (5.1) | "Give me an algebraic expression for '5 less than x'." (EN) | Formation / TP2 | Expected: $x - 5$. Watch for $5 - x$ error. | |
+| **F1-06.1** | MT1-06 (6.1) | "Create an equation: A number plus 7 is 15." (EN) | Formation / TP2 | Expected: $x + 7 = 15$. | |
+| **F1-06.2** | MT1-06 (6.2) | "Solve 2(x + 3) = 10. I got x = 7." (Mixed) | Misconception / TP3 | Detect error ($2x+6=10 \to 2x=4 \to x=2$). | |
+| **F1-06.3** | MT1-06 (6.3) | "Explain Linear Equations like I'm 5 years old." (EN) | Analogy Request / TP1| Balanced weighing scale analogy. | |
+| **F1-07.1** | MT1-07 (7.1) | "Apa maksud x > 5?" (BM) | Concept Check / TP1 | Explain numbers larger than 5. | |
+| **F1-07.2** | MT1-07 (7.2) | "Solve -2x < 10. Is the answer x < -5?" (EN) | Misconception / TP3 | **CRITICAL**: Sign flip check. | |
+
+### Form 2: Application
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **F2-01.1** | MT2-01 (1.1) | "Describe the pattern: 2, 5, 8, 11..." (EN) | Skill Application / TP2 | Identify common difference +3. | |
+| **F2-01.2** | MT2-01 (1.3) | "Give me an example of a sequence in nature." (EN) | Example Request / TP1| Fibonacci in flowers or shells. | |
+| **F2-01.3** | MT2-01 (1.3) | "How to find the 100th term without listing all?" (EN) | Step-by-Step / TP3 | Introduce $n$-th term formula. | |
+| **F2-02.1** | MT2-02 (2.1) | "Expand (x + 3)(x - 2)." (EN) | Skill Application / TP2 | Use FOIL/Expansion steps. | |
+| **F2-02.2** | MT2-02 (2.2) | "Faktorkan x^2 - 9." (BM) | Concept Check / TP3 | Difference of two squares. | |
+| **F2-02.3** | MT2-02 (2.1) | "What's an analogy for expanding brackets?" (EN) | Analogy Request / TP1| Distributing gifts or handshakes. | |
+| **F2-03.1** | MT2-03 (3.1) | "Make y the subject of 2x + y = 10." (EN) | Skill Application / TP3 | Isolate y. | |
+| **F2-03.2** | MT2-03 (3.1) | "A rectangle has A = lw. If A=50, l=10, find w." (Mixed) | Skill Application / TP3 | Substitution and solving. | |
+| **F2-03.3** | MT2-03 (3.1) | "Show me another example of changing the subject." (EN) | Example Request / TP2| $V=IR$ or $F=ma$. | |
+| **F2-10.1** | MT2-10 (10.1) | "Apa maksud kecerunan sifar?" (BM) | Concept Check / TP1 | Explain horizontal line. | |
+| **F2-10.2** | MT2-10 (10.1) | "Check my gradient: A(1, 2), B(3, 10), m = (10-2)/(3-1) = 4." (EN) | Verification / TP3 | Confirm $8/2 = 4$. | |
+| **F2-10.3** | MT2-10 (10.1) | "Explain gradient using a mountain hiking story." (EN) | Analogy Request / TP1| Steepness of the trail. | |
+
+### Form 3: Mastery
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **F3-01.1** | MT3-01 (1.2) | "Simplify (2^3)^4." (EN) | Skill Application / TP2 | Power of power law. | |
+| **F3-01.2** | MT3-01 (1.2) | "Is 2^3 + 2^4 = 2^7? I just added the powers." (Mixed) | Misconception / TP3 | Correct the addition vs multiplication law. | |
+| **F3-01.3** | MT3-01 (1.2) | "Give me a hard problem on indices to try." (EN) | Example Request / TP4| $3^x \cdot 9^{x-1} = 27$. | |
+| **F3-02.1** | MT3-02 (2.1) | "Round 0.0456 to 2 sig figures." (EN) | Skill Application / TP2 | Check leading zeros (not sig). | |
+| **F3-02.2** | MT3-02 (2.2) | "Explain Standard Form to my non-math friend." (EN) | Concept Check / TP1 | Scientific notation for big/small numbers. | |
+| **F3-02.3** | MT3-02 (2.2) | "Calculate 1.2e5 times 3.0e2. How to do this?" (EN) | Step-by-Step / TP3 | Add powers of 10. | |
+| **F3-05.1** | MT3-05 (5.1) | "Dalam segitiga bersudut tegak, sin tu apa?" (BM) | Concept Check / TP1 | SOH / Tentang-Senget. | |
+| **F3-05.2** | MT3-05 (5.1) | "I got sin x = 1.2. Is this possible?" (EN) | Misconception / TP3 | Explain $0 \le \sin \le 1$. | |
+| **F3-05.3** | MT3-05 (5.1) | "Give me a real life example where sin is used." (EN) | Example Request / TP1| Height of a kite or ramp angle. | |
+| **F3-09.1** | MT3-09 (9.1) | "Point (1, 5) on line y = 2x + 3?" (EN) | Verification / TP3 | Substitute and confirm. | |
+| **F3-09.2** | MT3-09 (9.1) | "How to find x-intercept for 3x + 2y = 6?" (EN) | Step-by-Step / TP3 | Set y=0. | |
+| **F3-09.3** | MT3-09 (9.1) | "A road has gradient 0.1. What does this mean?" (EN) | KBAT / HOTS / TP4 | Slope of the road (1m rise for 10m run). | |
+
+### Form 4: Advanced
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **F4-01.1** | MT4-01 (1.1) | "Bentuk am fungsi kuadratik tu macam mana?" (BM) | Concept Check / TP1 | $ax^2 + bx + c$. | |
+| **F4-01.2** | MT4-01 (1.1) | "Path h = -5t^2 + 20t. When does it hit the ground?" (Mixed) | KBAT / HOTS / TP5 | Solve roots (t=0, t=4). | |
+| **F4-01.3** | MT4-01 (1.1) | "Does a quadratic always have two roots?" (EN) | Concept Check / TP4 | Explain 0, 1, or 2 roots. | |
+| **F4-02.1** | MT4-02 (2.1) | "Count 1, 2, 3, 4, 10... what base is this?" (EN) | Skill Application / TP2 | Base 5. | |
+| **F4-02.2** | MT4-02 (2.1) | "Check my conversion: 13 base 10 = 1101 base 2?" (EN) | Verification / TP3 | Correct to 1101 (8+4+0+1 = 13). | |
+| **F4-02.3** | MT4-02 (2.1) | "Give me a base 2 addition problem to practice." (EN) | Example Request / TP3| $101 + 011$. | |
+| **F4-03.1** | MT4-03 (3.1) | "Apa maksud 'Jika p, maka q'?" (BM) | Concept Check / TP1 | Conditional statement. | |
+| **F4-03.2** | MT4-03 (3.2) | "Converse of 'If x=2, then x^2=4' is 'If x^2=4, then x=2'. Right?" (EN) | Verification / TP2 | Confirm converse, but note it might be false (x could be -2). | |
+| **F4-03.3** | MT4-03 (3.1) | "Show me how to form a negation using 'not'." (EN) | Step-by-Step / TP2 | Use 'not' or 'not all'. | |
+
+### Form 5: Excellence
+| ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
+|---|---|---|---|---|---|
+| **F5-01.1** | MT5-01 (1.1) | "y varies directly as x. Write equation." (EN) | Formation / TP1 | $y = kx$. | |
+| **F5-01.2** | MT5-01 (1.2) | "y inversely proportional to x^2, y=2, x=3, find k." (Mixed) | Skill Application / TP3 | $k = yx^2 = 18$. | |
+| **F5-01.3** | MT5-01 (1.1) | "Give me a KBAT problem about variations." (EN) | KBAT / HOTS / TP5 | Volume vs Pressure (Boyle's Law) or Salary vs Hours. | |
+| **F5-02.1** | MT5-02 (2.1) | "Can I add 2x2 with 2x3 matrix?" (EN) | Concept Check / TP1 | No, orders must match. | |
+| **F5-02.2** | MT5-02 (2.2) | "How to find determinant for [[a,b],[c,d]]?" (EN) | Concept Check / TP2 | $ad - bc$. | |
+| **F5-02.3** | MT5-02 (2.2) | "Solve [[2,1],[4,3]] X = [[1,0],[0,1]]." (Mixed) | Skill Application / TP4 | Matrix inversion. | |
+| **F5-04.1** | MT5-04 (4.1) | "Cukai pintu vs cukai tanah?" (BM) | Concept Check / TP1 | Local council vs State land. | |
+| **F5-04.2** | MT5-04 (4.1) | "Hitung cukai jika pendapatan bercukai RM45,000." (BM) | KBAT / HOTS / TP4 | Tax bracket calculation. | |
+| **F5-04.3** | MT5-04 (4.1) | "What happens if I don't pay tax?" (EN) | KBAT / HOTS / TP4 | Fines, legal action. | |
+
+---
+
+## 🎮 Feature Testing Scenarios
+
+| ID | Feature | Input | Expected Behavior | Result |
+|---|---|---|---|---|
+| **FE-01** | Goals | "/goal Saya nak habiskan Bab 1 harini" | Bot parses the goal and confirms tracking. | |
+| **FE-02** | Progress | "/progress" | Bot displays a progress summary with Unicode bars/stars. | |
+| **FE-03** | Challenge | "/challenge" | Bot triggers the challenge matchmaking or invites to a 5-question quiz. | |
+| **FE-04** | Language | Type in BM then switch to EN. | Bot should smoothly transition the language of explanation. | |
+
+---
+
+## 📝 General Notes for Tester
+- **Don't provide full answers**: Try to give partial or even wrong answers to see how the bot helps you recover.
+- **Mix the language**: Test how it responds to "Manglish" (e.g., "Bot, help me solve this math questions, I don't know how to do lah").
+- **Check for Nudges**: If you leave the chat for a while, does the bot nudge you later to continue?
