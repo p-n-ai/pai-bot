@@ -201,6 +201,15 @@ type conversationHistory struct {
 	ModelCalls []modelCallJSON        `json:"model_calls,omitempty"`
 }
 
+type conversationHistorySnapshot struct {
+	UserID     string                 `json:"user_id"`
+	Channel    string                 `json:"channel"`
+	CreatedAt  time.Time              `json:"created_at"`
+	TurnLimit  int                    `json:"turn_limit,omitempty"`
+	Turns      []conversationTurnJSON `json:"turns"`
+	ModelCalls []modelCallJSON        `json:"model_calls,omitempty"`
+}
+
 type conversationTurnJSON struct {
 	UserID    string    `json:"user_id"`
 	Channel   string    `json:"channel"`
@@ -313,12 +322,12 @@ func writeConversationHistory(path string, history *conversationHistory, turnLim
 	return os.WriteFile(path, append(b, '\n'), 0o600)
 }
 
-func (h *conversationHistory) snapshot(turnLimit int) conversationHistory {
+func (h *conversationHistory) snapshot(turnLimit int) conversationHistorySnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	turns := latestItems(h.Turns, turnLimit)
 	modelCalls := latestItems(h.ModelCalls, turnLimit)
-	return conversationHistory{
+	return conversationHistorySnapshot{
 		UserID:     h.UserID,
 		Channel:    h.Channel,
 		CreatedAt:  h.CreatedAt,
