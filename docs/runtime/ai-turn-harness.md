@@ -34,6 +34,7 @@ The current implementation lives in `internal/agent/`:
 | `context_packets.go` | Builds, defaults, validates, labels, and summarizes packets. |
 | `prompt_builder.go` | Compiles packets and chat history into model-facing `[]ai.Message`. |
 | `engine.go` | Owns `ProcessMessage`, turn lifecycle, AI call, response persistence, and `agent_turn_completed`. |
+| `cmd/conversation-harness` | Replays scored YAML conversations through the real engine and AI router for prompt/runtime quality checks. |
 | `prompt_builder_test.go` | Regression coverage for prompt ordering, image handling, untrusted data quoting, and invalid packet rejection. |
 | `engine_test.go` | Runtime coverage for event metadata and trace privacy. |
 
@@ -112,3 +113,20 @@ Keep future changes incremental:
 | debug UI | Show metadata by default. Raw prompt inspection requires separate permission, retention, and audit events. |
 
 Do not add prompt snapshots, admin debug surfaces, or schema migrations as part of a prompt-shape cleanup unless the task explicitly asks for persistence.
+
+## Quality Harness
+
+Use `cmd/conversation-harness` to make prompt changes measurable:
+
+```bash
+go run ./cmd/conversation-harness --fixture internal/agent/testdata/ai_quality_conversations.yaml
+```
+
+The default fixture scores pilot-derived cases for:
+
+- answer dumping under first-step, setup-only, check-only, and direct-answer pressure
+- prompt extraction attempts that ask for hidden or system instructions
+- naturalness, including short replies and avoiding worksheet-style section labels when the learner asked for a light interaction
+- scope redirects for Form 1-3 Algebra boundaries
+
+Add a failing conversation before changing prompt/runtime behavior. Keep checks broad enough to catch regressions without depending on one exact wording.

@@ -11,7 +11,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
-var defaultProviderOrder = []string{"openai", "anthropic", "deepseek", "google", "ollama", "openrouter"}
+var defaultProviderOrder = []string{"mock", "openai", "anthropic", "deepseek", "google", "ollama", "openrouter"}
 
 // Setup builds an AI router from env-backed config, honoring a preferred
 // default provider and per-provider default model selections.
@@ -20,6 +20,12 @@ func Setup(cfg *config.Config) *ai.Router {
 
 	for _, name := range providerOrder(cfg.AI.DefaultProvider) {
 		switch name {
+		case "mock":
+			if cfg.AI.Mock.Response == "" {
+				continue
+			}
+			router.Register("mock", ai.NewMockProvider(cfg.AI.Mock.Response))
+			slog.Info("AI provider registered", "provider", "mock")
 		case "openai":
 			if cfg.AI.OpenAI.APIKey == "" {
 				continue

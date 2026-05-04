@@ -3527,6 +3527,7 @@ Update `internal/ai/router.go` to add retry logic with exponential backoff and c
 | 4.2 | `P-W1D4-2` | Session management: new conversation after 30min silence, summarize previous | 🤖 | Update `internal/agent/engine.go` |
 | 4.3 | `P-W1D4-3` | In-chat rating: after every 5th response ask 1-5 rating, log as event (`answer_rating_submitted` with `data.rating` and `data.rated_message_id`). Deduplicate by rated assistant message id. | 🤖 | Update `internal/agent/engine.go` |
 | 4.6 | `A-W1D4-AI-LIVE-1` | Additional (implemented): OpenAI live conversation regression suite using YAML fixtures (30 scenarios, 2-10 turns), run with `-tags=integration` against real provider, with explicit CI skip guard for live calls. | 🤖 | `internal/agent/engine_openai_integration_test.go`, `internal/agent/testdata/openai_live_conversations.yaml` |
+| 4.7 | `A-W1D4-AI-QUALITY-1` | Additional (implemented): scored conversation harness for prompt/runtime quality loops, focused on answer dumping, scope redirects, and natural chat responses. | 🤖 | `cmd/conversation-harness`, `internal/agent/testdata/ai_quality_conversations.yaml`, `just conversation-harness` |
 | 4.4 | `P-W1D4-4` | 🧑 Read ALL pilot conversations, categorize issues, rewrite system prompt v3 | 🧑 | Manual |
 | 4.5 | `P-W1D4-5` | 🧑 Onboard remaining 7 pilot students (total 10) | 🧑 | Manual |
 
@@ -3657,12 +3658,36 @@ go test -tags=integration ./internal/agent -run OpenAILive -v -timeout 30m
 CI=true go test -tags=integration ./internal/agent -run OpenAILive -v
 ```
 
+#### 4.7 — AI Quality Conversation Harness (TDD, Additional Implemented)
+
+This item turns prompt iteration into a measurable loop.
+
+- CLI: `cmd/conversation-harness`
+- Default fixture: `internal/agent/testdata/ai_quality_conversations.yaml`
+- Just recipe: `just conversation-harness`
+- Coverage: pilot-derived cases for first-step-only, setup-only, check-only, direct-answer pressure, frustration, practice-only, out-of-scope calculus, prompt extraction attempts, and natural follow-ups
+- Scoring: non-empty replies, fallback avoidance, no Markdown/LaTeX, forbidden final-answer patterns, forbidden worksheet section labels for natural replies, max lines/chars, language markers, rating flow checks, and required/forbidden phrases
+
+Validation commands:
+
+```bash
+# default quality fixture; requires at least one configured AI provider
+just conversation-harness
+
+# inspect one case
+go run ./cmd/conversation-harness --case Q01 --show-responses
+
+# machine-readable output for comparison scripts
+go run ./cmd/conversation-harness --jsonl
+```
+
 #### Day 4 Exit Criteria
 
 - [ ] `scripts/analytics.sh` — queries events table for key metrics
 - [ ] Session auto-expires after 30min, new session gets context summary
 - [x] In-chat rating prompt every 5th response, logged as event (`answer_rating_submitted` with `data.rating` + `data.rated_message_id` in `events` table), deduped per rated assistant message
 - [x] Additional: OpenAI live conversation regression suite implemented with YAML fixtures + explicit CI skip guard
+- [x] Additional: AI quality conversation harness implemented with scored naturalness and answer-dump checks
 - [ ] 🧑 System prompt v3 applied based on pilot conversation review
 - [ ] 🧑 10 pilot students onboarded
 - [ ] `just test-all` passes

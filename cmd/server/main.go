@@ -203,10 +203,15 @@ func main() {
 	embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
 
 	// WebSocket channel (always enabled — used by terminal-chat and embed web clients).
-	// NewEmbedWSChannel adds origin checking + subprotocol JWT auth while remaining
-	// backward-compatible with first-message auth used by terminal-chat.
+	// Dev mode keeps first-message auth for terminal-chat; production embed mode
+	// requires origin checking and subprotocol JWT auth.
 	embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
-	wsChannel := chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
+	var wsChannel *chat.WSChannel
+	if cfg.Features.DevMode {
+		wsChannel = chat.NewWSChannel()
+	} else {
+		wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
+	}
 	gw.Register("websocket", wsChannel)
 
 	// Wire challenge notifications through the gateway.

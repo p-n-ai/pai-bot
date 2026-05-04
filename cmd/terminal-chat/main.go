@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -32,6 +33,7 @@ func main() {
 	var multi bool
 	var userCount int
 	var wsURL string
+	var oneShotMessage string
 
 	flag.StringVar(&userID, "user-id", "terminal-user", "stable user id for the terminal session")
 	flag.StringVar(&language, "lang", "", "preferred language override (en, ms, zh)")
@@ -40,9 +42,17 @@ func main() {
 	flag.BoolVar(&multi, "multi", false, "multi-user mode: prefix lines with N: to switch users (e.g., 1:hello, 2:/challenge ABC)")
 	flag.IntVar(&userCount, "users", 2, "number of simulated users in multi-user mode")
 	flag.StringVar(&wsURL, "ws", "", "WebSocket server URL (e.g. ws://localhost:8080/ws/chat); when set, runs as pure WS client")
+	flag.StringVar(&oneShotMessage, "message", "", "send one WebSocket message and print one response; requires --ws")
 	flag.Parse()
 
 	if wsURL != "" {
+		if oneShotMessage != "" {
+			if err := runWSClientOnce(wsURL, userID, oneShotMessage); err != nil {
+				fmt.Fprintf(os.Stderr, "ws client error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := runWSClient(wsURL, userID); err != nil {
 			fmt.Fprintf(os.Stderr, "ws client error: %v\n", err)
 			os.Exit(1)
@@ -238,4 +248,59 @@ func runWSClient(serverURL, userID string) error {
 	}
 
 	return scanner.Err()
+}
+
+func runWSClientOnce(serverURL, userID, text string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, serverURL, nil)
+	if err != nil {
+		return fmt.Errorf("connecting to %s: %w", serverURL, err)
+	}
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "bye") }()
+
+	authMsg, _ := json.Marshal(wsInboundMsg{Type: "auth", UserID: userID})
+	if err := conn.Write(ctx, websocket.MessageText, authMsg); err != nil {
+		return fmt.Errorf("sending auth: %w", err)
+	}
+	if err := readExpectedWSMessage(ctx, conn, "auth_ok"); err != nil {
+		return err
+	}
+
+	msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: strings.TrimSpace(text)})
+	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	for {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			return fmt.Errorf("reading response: %w", err)
+		}
+		var resp wsOutboundMsg
+		if err := json.Unmarshal(data, &resp); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+		if resp.Type == "typing" {
+			continue
+		}
+		fmt.Printf("%s\n", resp.Text)
+		return nil
+	}
+}
+
+func readExpectedWSMessage(ctx context.Context, conn *websocket.Conn, want string) error {
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", want, err)
+	}
+	var resp wsOutboundMsg
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return fmt.Errorf("parsing %s: %w", want, err)
+	}
+	if resp.Type != want {
+		return fmt.Errorf("expected %s, got %q", want, resp.Type)
+	}
+	return nil
 }
