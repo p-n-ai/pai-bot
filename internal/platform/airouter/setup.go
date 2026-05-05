@@ -11,7 +11,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
-var defaultProviderOrder = []string{"mock", "openai", "anthropic", "deepseek", "google", "ollama", "openrouter"}
+var defaultProviderOrder = []string{"openai", "anthropic", "deepseek", "google", "ollama", "openrouter"}
 
 // Setup builds an AI router from env-backed config, honoring a preferred
 // default provider and per-provider default model selections.

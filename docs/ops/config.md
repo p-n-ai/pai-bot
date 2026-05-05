@@ -27,8 +27,8 @@ read_when:
 
 | Env var | Default | Purpose |
 |---|---:|---|
-| `LEARN_AI_DEFAULT_PROVIDER` | empty | Optional default provider. Must be one of `mock`, `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter` when set. |
-| `LEARN_AI_MOCK_RESPONSE` | empty | Dev-only deterministic mock AI response for local transport/WebSocket checks when no real provider key or local Ollama model is available. |
+| `LEARN_AI_DEFAULT_PROVIDER` | empty | Optional default provider. Must be one of `mock`, `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter` when set. Set to `mock` to opt into the dev mock provider. |
+| `LEARN_AI_MOCK_RESPONSE` | empty | Dev-only deterministic mock AI response for local transport/WebSocket checks. Ignored by runtime routing unless `LEARN_AI_DEFAULT_PROVIDER=mock`. |
 | `LEARN_AI_OPENAI_API_KEY` | empty | OpenAI API key. |
 | `LEARN_AI_OPENAI_MODEL` | empty | OpenAI model override. |
 | `LEARN_AI_ANTHROPIC_API_KEY` | empty | Anthropic API key. |
@@ -87,7 +87,7 @@ read_when:
 ## Validation rules
 
 - `LEARN_TELEGRAM_BOT_TOKEN` is required unless `LEARN_DEV_MODE=true`.
-- At least one AI provider is required unless `LEARN_DEV_MODE=true`.
+- At least one AI provider is required unless `LEARN_DEV_MODE=true`. `LEARN_AI_MOCK_RESPONSE` counts only when `LEARN_AI_DEFAULT_PROVIDER=mock`.
 - `LEARN_AI_DEFAULT_PROVIDER`, when set, must be a known provider.
 - `LEARN_TENANT_MODE` must be `single` or `multi`.
 - Partial email configuration requires `LEARN_EMAIL_SMTP_ADDR` and `LEARN_EMAIL_FROM_ADDRESS`.

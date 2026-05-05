@@ -438,6 +438,28 @@ func TestHasAIProvider(t *testing.T) {
 	}
 }
 
+func TestHasAIProvider_MockRequiresExplicitDefaultProvider(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_AI_MOCK_RESPONSE", "mock response")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HasAIProvider() {
+		t.Fatal("mock response alone should not count as a runtime AI provider")
+	}
+
+	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "mock")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.HasAIProvider() {
+		t.Fatal("mock response should count when LEARN_AI_DEFAULT_PROVIDER=mock")
+	}
+}
+
 func TestOllamaEnabledParsing(t *testing.T) {
 	tests := []struct {
 		name string

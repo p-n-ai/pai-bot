@@ -306,13 +306,18 @@ func (c *Config) Validate() error {
 
 // HasAIProvider returns true if at least one AI provider is configured.
 func (c *Config) HasAIProvider() bool {
-	return c.AI.Mock.Response != "" ||
+	return c.mockAIProviderEnabled() ||
 		c.AI.OpenAI.APIKey != "" ||
 		c.AI.Anthropic.APIKey != "" ||
 		c.AI.DeepSeek.APIKey != "" ||
 		c.AI.Google.APIKey != "" ||
 		c.AI.OpenRouter.APIKey != "" ||
 		c.AI.Ollama.Enabled
+}
+
+func (c *Config) mockAIProviderEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(c.AI.DefaultProvider), "mock") &&
+		strings.TrimSpace(c.AI.Mock.Response) != ""
 }
 
 func isKnownAIProvider(name string) bool {

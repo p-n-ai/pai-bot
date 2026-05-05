@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
@@ -19,16 +20,26 @@ import (
 
 // capturingProvider captures all requests sent to the AI provider.
 type capturingProvider struct {
+	mu       sync.Mutex
 	requests []ai.CompletionRequest
 }
 
 func (p *capturingProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
+	p.mu.Lock()
 	p.requests = append(p.requests, req)
+	p.mu.Unlock()
 	return ai.CompletionResponse{
 		Content: "Faham/Understand: Kita perlu selesaikan persamaan linear.\nCuba asingkan pemboleh ubah dahulu.\nSemak/Verify: OK.\nKonsep/Connect: Persamaan linear.",
 		Model:   "mock",
 	}, nil
 }
+
+func (p *capturingProvider) Requests() []ai.CompletionRequest {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]ai.CompletionRequest(nil), p.requests...)
+}
+
 func (p *capturingProvider) StreamComplete(context.Context, ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
 	return nil, nil
 }
@@ -61,11 +72,12 @@ func TestAdaptiveDepth_BeginnerInSystemPrompt(t *testing.T) {
 		t.Fatalf("ProcessMessage: %v", err)
 	}
 
-	if len(provider.requests) == 0 {
+	requests := provider.Requests()
+	if len(requests) == 0 {
 		t.Fatal("no AI requests captured")
 	}
 
-	systemPrompt := provider.requests[0].Messages[0].Content
+	systemPrompt := requests[0].Messages[0].Content
 	lower := strings.ToLower(systemPrompt)
 	if !strings.Contains(lower, "beginner") {
 		t.Errorf("expected system prompt to contain BEGINNER depth")
@@ -101,7 +113,11 @@ func TestAdaptiveDepth_ProficientInSystemPrompt(t *testing.T) {
 		t.Fatalf("ProcessMessage: %v", err)
 	}
 
-	systemPrompt := provider.requests[0].Messages[0].Content
+	requests := provider.Requests()
+	if len(requests) == 0 {
+		t.Fatal("no AI requests captured")
+	}
+	systemPrompt := requests[0].Messages[0].Content
 	lower := strings.ToLower(systemPrompt)
 	if !strings.Contains(lower, "proficient") {
 		t.Errorf("expected system prompt to contain PROFICIENT depth")
@@ -139,7 +155,11 @@ func TestAdaptiveDepth_ProgressContextInPrompt(t *testing.T) {
 		t.Fatalf("ProcessMessage: %v", err)
 	}
 
-	systemPrompt := provider.requests[0].Messages[0].Content
+	requests := provider.Requests()
+	if len(requests) == 0 {
+		t.Fatal("no AI requests captured")
+	}
+	systemPrompt := requests[0].Messages[0].Content
 	if !strings.Contains(systemPrompt, "F1-05") {
 		t.Error("expected progress context to include mastered topic F1-05")
 	}
@@ -166,11 +186,12 @@ func TestAdaptiveDepth_NoTrackerNoBlock(t *testing.T) {
 		Text:    "Hello",
 	})
 
-	if len(provider.requests) == 0 {
+	requests := provider.Requests()
+	if len(requests) == 0 {
 		t.Fatal("no AI requests captured")
 	}
 
-	systemPrompt := provider.requests[0].Messages[0].Content
+	systemPrompt := requests[0].Messages[0].Content
 	if strings.Contains(strings.ToLower(systemPrompt), "adaptive explanation depth") {
 		t.Error("expected NO adaptive depth block when tracker is nil")
 	}
