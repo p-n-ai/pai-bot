@@ -47,8 +47,8 @@ func TestFormatTopicMasteredCelebration(t *testing.T) {
 	if !strings.Contains(msg, "50") {
 		t.Errorf("expected XP amount in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "🏆") {
-		t.Errorf("expected trophy emoji in message, got: %s", msg)
+	if strings.ContainsAny(msg, "*🏆⭐💪") {
+		t.Errorf("expected plain chat milestone without markdown/emoji, got: %s", msg)
 	}
 }
 
@@ -57,8 +57,8 @@ func TestFormatXPMilestoneCelebration(t *testing.T) {
 	if !strings.Contains(msg, "1000") {
 		t.Errorf("expected XP amount in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "🌟") {
-		t.Errorf("expected star emoji in message, got: %s", msg)
+	if strings.ContainsAny(msg, "*🌟🎉") {
+		t.Errorf("expected plain chat milestone without markdown/emoji, got: %s", msg)
 	}
 }
 
@@ -67,8 +67,8 @@ func TestFormatSubjectCompleteCelebration(t *testing.T) {
 	if !strings.Contains(msg, "KSSM Matematik Tingkatan 1") {
 		t.Errorf("expected subject name in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "🎓") {
-		t.Errorf("expected graduation emoji in message, got: %s", msg)
+	if strings.ContainsAny(msg, "*🎓🏅") {
+		t.Errorf("expected plain chat milestone without markdown/emoji, got: %s", msg)
 	}
 }
 
@@ -77,8 +77,8 @@ func TestFormatStreakRecordCelebration(t *testing.T) {
 	if !strings.Contains(msg, "14") {
 		t.Errorf("expected streak days in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "🔥") {
-		t.Errorf("expected fire emoji in message, got: %s", msg)
+	if strings.ContainsAny(msg, "*🔥🏅") {
+		t.Errorf("expected plain chat milestone without markdown/emoji, got: %s", msg)
 	}
 }
 

@@ -18,6 +18,9 @@ func TestAdaptiveDepthBlock_Beginner(t *testing.T) {
 	}
 	mustContain(t, block, "simple")
 	mustContain(t, block, "example")
+	if strings.Contains(strings.ToLower(block), "worked example before asking") {
+		t.Fatalf("beginner prompt should not force worked examples on the student's exact problem: %s", block)
+	}
 }
 
 func TestAdaptiveDepthBlock_Developing(t *testing.T) {

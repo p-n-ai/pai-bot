@@ -132,6 +132,46 @@ func TestRouter_UsesConfiguredDefaultModelForProvider(t *testing.T) {
 	}
 }
 
+func TestRouter_TraceFuncCapturesProviderRequest(t *testing.T) {
+	router := newTestRouter()
+	mock := ai.NewMockProvider("Hello!")
+	router.Register("openai", mock)
+	router.SetDefaultModel("openai", "gpt-4.1-mini")
+
+	var traces []ai.CompletionTrace
+	router.SetTraceFunc(func(trace ai.CompletionTrace) {
+		traces = append(traces, trace)
+	})
+
+	_, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages:  []ai.Message{{Role: "user", Content: "hi"}},
+		Task:      ai.TaskTeaching,
+		MaxTokens: 128,
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if len(traces) != 1 {
+		t.Fatalf("trace count = %d, want 1", len(traces))
+	}
+	trace := traces[0]
+	if trace.Provider != "openai" {
+		t.Fatalf("provider = %q, want openai", trace.Provider)
+	}
+	if trace.Request.Model != "gpt-4.1-mini" {
+		t.Fatalf("trace request model = %q, want gpt-4.1-mini", trace.Request.Model)
+	}
+	if trace.Request.Task != ai.TaskTeaching {
+		t.Fatalf("trace request task = %v, want teaching", trace.Request.Task)
+	}
+	if len(trace.Request.Messages) != 1 || trace.Request.Messages[0].Content != "hi" {
+		t.Fatalf("trace request messages = %#v", trace.Request.Messages)
+	}
+	if trace.Response == nil || trace.Response.Content != "Hello!" {
+		t.Fatalf("trace response = %#v", trace.Response)
+	}
+}
+
 func TestRouter_RetryThenSuccess(t *testing.T) {
 	router := newTestRouter()
 	flaky := &countingProvider{failuresBeforeSuccess: 2, response: "ok"}

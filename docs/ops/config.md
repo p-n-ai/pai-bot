@@ -27,7 +27,8 @@ read_when:
 
 | Env var | Default | Purpose |
 |---|---:|---|
-| `LEARN_AI_DEFAULT_PROVIDER` | empty | Optional default provider. Must be one of `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter` when set. |
+| `LEARN_AI_DEFAULT_PROVIDER` | empty | Optional default provider. Must be one of `mock`, `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter` when set. |
+| `LEARN_AI_MOCK_RESPONSE` | empty | Dev-only deterministic mock AI response for local transport/WebSocket checks when no real provider key or local Ollama model is available. |
 | `LEARN_AI_OPENAI_API_KEY` | empty | OpenAI API key. |
 | `LEARN_AI_OPENAI_MODEL` | empty | OpenAI model override. |
 | `LEARN_AI_ANTHROPIC_API_KEY` | empty | Anthropic API key. |

@@ -409,6 +409,9 @@ next-dev:
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app
 
+conversation-harness:
+  go run ./cmd/conversation-harness
+
 nudge-terminal:
   docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id "${USER_ID:-}"
 

@@ -56,6 +56,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_DEV_MODE",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_NUDGES_ENABLED",
+		"LEARN_AI_MOCK_RESPONSE",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
@@ -122,6 +123,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_EMAIL_BASE_URL", "https://admin.example.com")
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
 	t.Setenv("LEARN_AI_OPENAI_MODEL", "gpt-4.1-mini")
+	t.Setenv("LEARN_AI_MOCK_RESPONSE", "mock tutor response")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
 	t.Setenv("LEARN_AI_OLLAMA_MODEL", "qwen3:14b")
 	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "openrouter")
@@ -174,6 +176,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.AI.OpenAI.Model != "gpt-4.1-mini" {
 		t.Errorf("AI.OpenAI.Model = %q, want gpt-4.1-mini", cfg.AI.OpenAI.Model)
+	}
+	if cfg.AI.Mock.Response != "mock tutor response" {
+		t.Errorf("AI.Mock.Response = %q, want mock tutor response", cfg.AI.Mock.Response)
 	}
 	if cfg.AI.Ollama.URL != "http://localhost:11434" {
 		t.Errorf("AI.Ollama.URL = %q, want http://localhost:11434", cfg.AI.Ollama.URL)

@@ -26,6 +26,7 @@ type Router struct {
 	breakerCooldown         time.Duration
 	breakerStateByProvider  map[string]breakerState
 	structuredBreakerState  map[string]breakerState
+	traceFunc               func(CompletionTrace)
 	mu                      sync.RWMutex
 }
 
@@ -103,6 +104,15 @@ func (r *Router) SetDefaultModel(providerName, model string) {
 	r.defaultModels[providerName] = model
 }
 
+// SetTraceFunc registers an opt-in observer for local debugging of provider
+// calls. Production callers should leave this unset because requests can
+// contain raw conversation and prompt content.
+func (r *Router) SetTraceFunc(traceFunc func(CompletionTrace)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.traceFunc = traceFunc
+}
+
 // Complete routes a request to the best available provider.
 func (r *Router) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	providers, order := r.snapshotProviders()
@@ -125,7 +135,16 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 		if providerReq.Model == "" {
 			providerReq.Model = r.defaultModelForProvider(name)
 		}
+		startedAt := time.Now()
 		resp, err := r.completeWithRetry(ctx, provider, providerReq)
+		r.emitTrace(CompletionTrace{
+			Provider:    name,
+			Request:     providerReq,
+			Response:    completionResponsePtr(resp, err),
+			Error:       completionErrorString(err),
+			StartedAt:   startedAt,
+			CompletedAt: time.Now(),
+		})
 		if err != nil {
 			r.markFailure(name)
 			slog.Warn("AI provider failed, trying next",
@@ -181,8 +200,18 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 			continue
 		}
 
+		startedAt := time.Now()
 		resp, err := r.completeWithRetry(ctx, provider, providerReq)
+		trace := CompletionTrace{
+			Provider:    name,
+			Request:     providerReq,
+			Response:    completionResponsePtr(resp, err),
+			Error:       completionErrorString(err),
+			StartedAt:   startedAt,
+			CompletedAt: time.Now(),
+		}
 		if err != nil {
+			r.emitTrace(trace)
 			r.markFailure(name)
 			slog.Warn("AI provider failed structured request, trying next",
 				"provider", name,
@@ -200,6 +229,8 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 			payloadErr = unmarshalStructuredOutput(raw, out)
 		}
 		if payloadErr != nil {
+			trace.Error = payloadErr.Error()
+			r.emitTrace(trace)
 			r.markStructuredFailure(name)
 			slog.Warn("AI provider returned invalid structured payload, trying next",
 				"provider", name,
@@ -212,6 +243,8 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		r.markSuccess(name)
 		r.markStructuredSuccess(name)
 		resp.StructuredOutput = raw
+		trace.Response = &resp
+		r.emitTrace(trace)
 		slog.Debug("AI structured request completed",
 			"provider", name,
 			"model", resp.Model,
@@ -241,6 +274,29 @@ func (r *Router) snapshotProviders() (map[string]Provider, []string) {
 	}
 	order := append([]string(nil), r.fallback...)
 	return providers, order
+}
+
+func (r *Router) emitTrace(trace CompletionTrace) {
+	r.mu.RLock()
+	traceFunc := r.traceFunc
+	r.mu.RUnlock()
+	if traceFunc != nil {
+		traceFunc(trace)
+	}
+}
+
+func completionResponsePtr(resp CompletionResponse, err error) *CompletionResponse {
+	if err != nil {
+		return nil
+	}
+	return &resp
+}
+
+func completionErrorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (r *Router) completeWithRetry(ctx context.Context, provider Provider, req CompletionRequest) (CompletionResponse, error) {

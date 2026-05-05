@@ -28,7 +28,7 @@ func adaptiveDepthBlock(topicMastery float64, allProgress []progress.ProgressIte
 	case topicMastery < 0.3:
 		b.WriteString(`Student mastery level: BEGINNER (below 30%)
 - Use simple, everyday language. Avoid formal math jargon unless defining it.
-- Give more examples — at least one worked example before asking the student to try.
+- If an example is needed, use one tiny analogous example, not the student's exact problem.
 - Break problems into smaller steps than usual.
 - Use concrete numbers and relatable Malaysian contexts (e.g., prices in RM, distances).
 - Be extra patient and encouraging.`)

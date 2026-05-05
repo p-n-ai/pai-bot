@@ -63,12 +63,18 @@ type NATSConfig struct {
 // AIConfig holds configuration for all AI providers.
 type AIConfig struct {
 	DefaultProvider string
+	Mock            MockAIConfig
 	OpenAI          OpenAIConfig
 	Anthropic       AnthropicConfig
 	DeepSeek        DeepSeekConfig
 	Google          GoogleConfig
 	Ollama          OllamaConfig
 	OpenRouter      OpenRouterConfig
+}
+
+// MockAIConfig holds local dev-only mock AI settings.
+type MockAIConfig struct {
+	Response string
 }
 
 // OpenAIConfig holds OpenAI provider settings.
@@ -188,6 +194,9 @@ func Load() (*Config, error) {
 		},
 		AI: AIConfig{
 			DefaultProvider: envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
+			Mock: MockAIConfig{
+				Response: envStr("LEARN_AI_MOCK_RESPONSE", ""),
+			},
 			OpenAI: OpenAIConfig{
 				APIKey: envStr("LEARN_AI_OPENAI_API_KEY", ""),
 				Model:  envStr("LEARN_AI_OPENAI_MODEL", ""),
@@ -297,7 +306,8 @@ func (c *Config) Validate() error {
 
 // HasAIProvider returns true if at least one AI provider is configured.
 func (c *Config) HasAIProvider() bool {
-	return c.AI.OpenAI.APIKey != "" ||
+	return c.AI.Mock.Response != "" ||
+		c.AI.OpenAI.APIKey != "" ||
 		c.AI.Anthropic.APIKey != "" ||
 		c.AI.DeepSeek.APIKey != "" ||
 		c.AI.Google.APIKey != "" ||
@@ -307,7 +317,7 @@ func (c *Config) HasAIProvider() bool {
 
 func isKnownAIProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "openai", "anthropic", "deepseek", "google", "ollama", "openrouter":
+	case "mock", "openai", "anthropic", "deepseek", "google", "ollama", "openrouter":
 		return true
 	default:
 		return false

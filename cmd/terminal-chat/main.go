@@ -12,11 +12,14 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -32,6 +35,12 @@ func main() {
 	var multi bool
 	var userCount int
 	var wsURL string
+	var oneShotMessage string
+	var verbose bool
+	var progressSideEffects bool
+	var historyJSONPath string
+	var dumpJSONPath string
+	var dumpTurnLimit int
 
 	flag.StringVar(&userID, "user-id", "terminal-user", "stable user id for the terminal session")
 	flag.StringVar(&language, "lang", "", "preferred language override (en, ms, zh)")
@@ -40,9 +49,22 @@ func main() {
 	flag.BoolVar(&multi, "multi", false, "multi-user mode: prefix lines with N: to switch users (e.g., 1:hello, 2:/challenge ABC)")
 	flag.IntVar(&userCount, "users", 2, "number of simulated users in multi-user mode")
 	flag.StringVar(&wsURL, "ws", "", "WebSocket server URL (e.g. ws://localhost:8080/ws/chat); when set, runs as pure WS client")
+	flag.StringVar(&oneShotMessage, "message", "", "send one WebSocket message and print one response; requires --ws")
+	flag.BoolVar(&verbose, "verbose", false, "show diagnostic warnings from curriculum loading and background checks")
+	flag.BoolVar(&progressSideEffects, "progress", false, "enable mastery, streak, and XP side effects in local terminal sessions")
+	flag.StringVar(&historyJSONPath, "history-json", "", "write local terminal conversation history to a JSON file when the session ends")
+	flag.StringVar(&dumpJSONPath, "dump-json", "", "write local terminal conversation history plus model-facing AI request/response traces to a JSON file when the session ends")
+	flag.IntVar(&dumpTurnLimit, "turn-limit", 0, "limit exported conversation turns and model calls to the latest N items; 0 exports everything")
 	flag.Parse()
 
 	if wsURL != "" {
+		if oneShotMessage != "" {
+			if err := runWSClientOnce(wsURL, userID, oneShotMessage); err != nil {
+				fmt.Fprintf(os.Stderr, "ws client error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := runWSClient(wsURL, userID); err != nil {
 			fmt.Fprintf(os.Stderr, "ws client error: %v\n", err)
 			os.Exit(1)
@@ -50,8 +72,12 @@ func main() {
 		return
 	}
 
+	logLevel := slog.LevelError
+	if verbose {
+		logLevel = slog.LevelWarn
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelWarn,
+		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
 
@@ -103,43 +129,226 @@ func main() {
 		challengeStore = agent.NewPostgresChallengeStoreForChannel(state.DB.Pool, state.TenantID, channel)
 	}
 
-	engine := agent.NewEngine(agent.EngineConfig{
+	engineCfg := agent.EngineConfig{
 		AIRouter:             router,
 		Store:                state.Store,
 		EventLogger:          state.EventLogger,
 		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
-		Tracker:              state.Tracker,
-		Streaks:              progress.NewMemoryStreakTracker(),
-		XP:                   progress.NewMemoryXPTracker(),
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Features.DevMode,
-	})
+	}
+	if progressSideEffects {
+		engineCfg.Tracker = state.Tracker
+		engineCfg.Streaks = progress.NewMemoryStreakTracker()
+		engineCfg.XP = progress.NewMemoryXPTracker()
+	}
+	engine := agent.NewEngine(engineCfg)
 
+	processor := terminalchat.Processor(engine)
+	var history *conversationHistory
+	if strings.TrimSpace(historyJSONPath) != "" || strings.TrimSpace(dumpJSONPath) != "" {
+		history = newConversationHistory(userID, channel)
+		processor = &historyProcessor{inner: processor, history: history}
+	}
+	if history != nil && strings.TrimSpace(dumpJSONPath) != "" {
+		router.SetTraceFunc(history.appendAITrace)
+	}
+
+	var runErr error
 	if multi {
-		if err := terminalchat.RunMulti(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.MultiConfig{
+		runErr = terminalchat.RunMulti(context.Background(), os.Stdin, os.Stdout, processor, terminalchat.MultiConfig{
 			UserCount:  userCount,
 			UserPrefix: userID,
 			Channel:    channel,
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", err)
-			os.Exit(1)
-		}
+		})
 	} else {
-		if err := terminalchat.Run(context.Background(), os.Stdin, os.Stdout, engine, terminalchat.Config{
+		runErr = terminalchat.Run(context.Background(), os.Stdin, os.Stdout, processor, terminalchat.Config{
 			UserID:  userID,
 			Channel: channel,
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", err)
-			os.Exit(1)
+		})
+	}
+	if history != nil {
+		for _, path := range []string{historyJSONPath, dumpJSONPath} {
+			if strings.TrimSpace(path) == "" {
+				continue
+			}
+			if err := writeConversationHistory(path, history, dumpTurnLimit); err != nil {
+				fmt.Fprintf(os.Stderr, "write history: %v\n", err)
+				os.Exit(1)
+			}
 		}
+	}
+	if runErr != nil {
+		fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", runErr)
+		os.Exit(1)
 	}
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
 	return airouter.Setup(cfg)
+}
+
+type conversationHistory struct {
+	mu         sync.Mutex             `json:"-"`
+	UserID     string                 `json:"user_id"`
+	Channel    string                 `json:"channel"`
+	CreatedAt  time.Time              `json:"created_at"`
+	TurnLimit  int                    `json:"turn_limit,omitempty"`
+	Turns      []conversationTurnJSON `json:"turns"`
+	ModelCalls []modelCallJSON        `json:"model_calls,omitempty"`
+}
+
+type conversationHistorySnapshot struct {
+	UserID     string                 `json:"user_id"`
+	Channel    string                 `json:"channel"`
+	CreatedAt  time.Time              `json:"created_at"`
+	TurnLimit  int                    `json:"turn_limit,omitempty"`
+	Turns      []conversationTurnJSON `json:"turns"`
+	ModelCalls []modelCallJSON        `json:"model_calls,omitempty"`
+}
+
+type conversationTurnJSON struct {
+	UserID    string    `json:"user_id"`
+	Channel   string    `json:"channel"`
+	Role      string    `json:"role"`
+	Text      string    `json:"text"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+type modelCallJSON struct {
+	Provider    string                 `json:"provider"`
+	Task        string                 `json:"task"`
+	Model       string                 `json:"model,omitempty"`
+	MaxTokens   int                    `json:"max_tokens,omitempty"`
+	Temperature float64                `json:"temperature,omitempty"`
+	StartedAt   time.Time              `json:"started_at"`
+	CompletedAt time.Time              `json:"completed_at"`
+	Messages    []ai.Message           `json:"messages"`
+	Response    *modelCallResponseJSON `json:"response,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+}
+
+type modelCallResponseJSON struct {
+	Content      string `json:"content"`
+	Model        string `json:"model"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+}
+
+type historyProcessor struct {
+	inner   terminalchat.Processor
+	history *conversationHistory
+}
+
+func newConversationHistory(userID, channel string) *conversationHistory {
+	return &conversationHistory{
+		UserID:     strings.TrimSpace(userID),
+		Channel:    strings.TrimSpace(channel),
+		CreatedAt:  time.Now(),
+		Turns:      []conversationTurnJSON{},
+		ModelCalls: []modelCallJSON{},
+	}
+}
+
+func (p *historyProcessor) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (string, error) {
+	p.append(msg.UserID, msg.Channel, "student", msg.Text)
+	resp, err := p.inner.ProcessMessage(ctx, msg)
+	if err != nil {
+		p.append(msg.UserID, msg.Channel, "error", err.Error())
+		return resp, err
+	}
+	p.append(msg.UserID, msg.Channel, "assistant", strings.TrimSpace(resp))
+	return resp, nil
+}
+
+func (p *historyProcessor) append(userID, channel, role, text string) {
+	if p == nil || p.history == nil {
+		return
+	}
+	p.history.mu.Lock()
+	defer p.history.mu.Unlock()
+	p.history.Turns = append(p.history.Turns, conversationTurnJSON{
+		UserID:    userID,
+		Channel:   channel,
+		Role:      role,
+		Text:      text,
+		Timestamp: time.Now(),
+	})
+}
+
+func (h *conversationHistory) appendAITrace(trace ai.CompletionTrace) {
+	if h == nil {
+		return
+	}
+	call := modelCallJSON{
+		Provider:    trace.Provider,
+		Task:        trace.Request.Task.String(),
+		Model:       trace.Request.Model,
+		MaxTokens:   trace.Request.MaxTokens,
+		Temperature: trace.Request.Temperature,
+		StartedAt:   trace.StartedAt,
+		CompletedAt: trace.CompletedAt,
+		Messages:    append([]ai.Message(nil), trace.Request.Messages...),
+		Error:       trace.Error,
+	}
+	if trace.Response != nil {
+		call.Response = &modelCallResponseJSON{
+			Content:      trace.Response.Content,
+			Model:        trace.Response.Model,
+			InputTokens:  trace.Response.InputTokens,
+			OutputTokens: trace.Response.OutputTokens,
+		}
+		if call.Model == "" {
+			call.Model = trace.Response.Model
+		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.ModelCalls = append(h.ModelCalls, call)
+}
+
+func writeConversationHistory(path string, history *conversationHistory, turnLimit int) error {
+	if history == nil {
+		return nil
+	}
+	snapshot := history.snapshot(turnLimit)
+	b, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o600)
+}
+
+func (h *conversationHistory) snapshot(turnLimit int) conversationHistorySnapshot {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	turns := latestItems(h.Turns, turnLimit)
+	modelCalls := latestItems(h.ModelCalls, turnLimit)
+	return conversationHistorySnapshot{
+		UserID:     h.UserID,
+		Channel:    h.Channel,
+		CreatedAt:  h.CreatedAt,
+		TurnLimit:  normalizedTurnLimit(turnLimit),
+		Turns:      turns,
+		ModelCalls: modelCalls,
+	}
+}
+
+func latestItems[T any](items []T, limit int) []T {
+	if limit <= 0 || len(items) <= limit {
+		return append([]T(nil), items...)
+	}
+	return append([]T(nil), items[len(items)-limit:]...)
+}
+
+func normalizedTurnLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return limit
 }
 
 // wsInboundMsg mirrors the WebSocket protocol envelope for outgoing client messages.
@@ -238,4 +447,59 @@ func runWSClient(serverURL, userID string) error {
 	}
 
 	return scanner.Err()
+}
+
+func runWSClientOnce(serverURL, userID, text string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, serverURL, nil)
+	if err != nil {
+		return fmt.Errorf("connecting to %s: %w", serverURL, err)
+	}
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "bye") }()
+
+	authMsg, _ := json.Marshal(wsInboundMsg{Type: "auth", UserID: userID})
+	if err := conn.Write(ctx, websocket.MessageText, authMsg); err != nil {
+		return fmt.Errorf("sending auth: %w", err)
+	}
+	if err := readExpectedWSMessage(ctx, conn, "auth_ok"); err != nil {
+		return err
+	}
+
+	msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: strings.TrimSpace(text)})
+	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	for {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			return fmt.Errorf("reading response: %w", err)
+		}
+		var resp wsOutboundMsg
+		if err := json.Unmarshal(data, &resp); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+		if resp.Type == "typing" {
+			continue
+		}
+		fmt.Printf("%s\n", resp.Text)
+		return nil
+	}
+}
+
+func readExpectedWSMessage(ctx context.Context, conn *websocket.Conn, want string) error {
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", want, err)
+	}
+	var resp wsOutboundMsg
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return fmt.Errorf("parsing %s: %w", want, err)
+	}
+	if resp.Type != want {
+		return fmt.Errorf("expected %s, got %q", want, resp.Type)
+	}
+	return nil
 }
