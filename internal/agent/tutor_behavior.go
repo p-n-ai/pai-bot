@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
@@ -31,12 +33,21 @@ var (
 		"first step only",
 		"hint only",
 		"ask for the first step only",
-		"short",
-		"quick",
-		"brief",
-		"simple",
+		"first step",
+		"one step",
 		"langkah pertama sahaja",
 		"jangan jawapan terus",
+	}
+	briefReplyMarkers = []string{
+		"short",
+		"quick",
+		"quickly",
+		"brief",
+		"briefly",
+		"simple",
+		"not too long",
+		"slowly",
+		"jangan panjang",
 	}
 	setupOnlyMarkers = []string{
 		"set up only",
@@ -67,6 +78,74 @@ var (
 		"just give me the answer",
 		"give me the answer",
 		"no explanation",
+	}
+	fullSolutionMarkers = []string{
+		"full working",
+		"show full working",
+		"full solution",
+		"complete solution",
+		"solve fully",
+	}
+	checkRequestMarkers = []string{
+		"check",
+		"verify",
+		"semak",
+		"correct",
+		"betul",
+	}
+	freshProblemIntentMarkers = []string{
+		"solve",
+		"explain",
+		"teach",
+		"selesaikan",
+		"tolong",
+	}
+	strongCalculusMarkers = []string{
+		"derivative",
+		"calculus",
+		"turunan",
+		"pembezaan",
+		"kamiran",
+	}
+	contextualCalculusMarkers = []string{
+		"differentiate",
+		"integrate",
+		"integration",
+		"integral",
+		"limit",
+	}
+	calculusContextExclusionMarkers = []string{
+		"time limit",
+		"word limit",
+		"rate limit",
+		"usage limit",
+		"limit for this quiz",
+		"limit of this quiz",
+		"differentiate between",
+		"integrate this with",
+		"integrate with my",
+		"integration with",
+		"integral to",
+	}
+	calculusMathContextMarkers = []string{
+		"limit of",
+		"find the limit",
+		"evaluate the limit",
+		"calculate the limit",
+		"integral of",
+		"find the integral",
+		"evaluate the integral",
+		"differentiate x",
+		"differentiate y",
+		"integrate x",
+		"integrate y",
+		"with respect to",
+		"power rule",
+		"function",
+		"fungsi",
+		"dx",
+		"dy",
+		"d/dx",
 	}
 )
 
@@ -177,12 +256,23 @@ func instructionPrivacyRefusal(text string) string {
 
 func isLowerSecondaryCalculusRequest(text string) bool {
 	lower := strings.ToLower(text)
-	for _, marker := range []string{"differentiate", "derivative", "calculus", "integrate", "integration", "limit", "turunan", "pembezaan", "kamiran"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
+	if containsMarker(lower, strongCalculusMarkers) {
+		return true
 	}
-	return false
+	if !containsMarker(lower, contextualCalculusMarkers) {
+		return false
+	}
+	return hasCalculusMathContext(lower)
+}
+
+func hasCalculusMathContext(text string) bool {
+	if containsMarker(text, calculusContextExclusionMarkers) {
+		return false
+	}
+	if strings.ContainsAny(text, "^²³∫") {
+		return true
+	}
+	return containsMarker(text, calculusMathContextMarkers)
 }
 
 func outOfScopeCalculusResponse(text string) string {
@@ -328,11 +418,23 @@ func latestRequestForbidsAnswerDump(text string) bool {
 	return containsMarker(lower, firstStepOnlyMarkers) ||
 		containsMarker(lower, setupOnlyMarkers) ||
 		containsMarker(lower, practiceOnlyMarkers) ||
-		containsMarker(lower, answerOnlyMarkers)
+		containsMarker(lower, answerOnlyMarkers) ||
+		briefFreshProblemRequest(lower)
 }
 
 func latestRequestNeedsOneTutorMove(text string) bool {
-	return containsMarker(strings.ToLower(text), firstStepOnlyMarkers)
+	lower := strings.ToLower(text)
+	return containsMarker(lower, firstStepOnlyMarkers) || briefFreshProblemRequest(lower)
+}
+
+func briefFreshProblemRequest(text string) bool {
+	if !containsMarker(text, briefReplyMarkers) {
+		return false
+	}
+	if containsMarker(text, checkRequestMarkers) || containsMarker(text, fullSolutionMarkers) {
+		return false
+	}
+	return equationSnippetPattern.MatchString(text) || containsMarker(text, freshProblemIntentMarkers)
 }
 
 func containsDetectableFinalAnswer(content string) bool {
@@ -426,6 +528,7 @@ func stripShortReplySectionLabels(content, latestUserText string) string {
 func needsNaturalShortReply(text string) bool {
 	lower := strings.ToLower(text)
 	return containsMarker(lower, firstStepOnlyMarkers) ||
+		containsMarker(lower, briefReplyMarkers) ||
 		containsMarker(lower, setupOnlyMarkers) ||
 		containsMarker(lower, checkOnlyMarkers) ||
 		containsMarker(lower, practiceOnlyMarkers) ||
@@ -433,10 +536,44 @@ func needsNaturalShortReply(text string) bool {
 }
 
 func containsMarker(text string, markers []string) bool {
+	text = strings.ToLower(text)
 	for _, marker := range markers {
-		if strings.Contains(text, marker) {
+		if containsBoundedMarker(text, strings.ToLower(marker)) {
 			return true
 		}
 	}
 	return false
+}
+
+func containsBoundedMarker(text, marker string) bool {
+	marker = strings.TrimSpace(marker)
+	if marker == "" {
+		return false
+	}
+	offset := 0
+	for {
+		idx := strings.Index(text[offset:], marker)
+		if idx < 0 {
+			return false
+		}
+		start := offset + idx
+		end := start + len(marker)
+		if hasMarkerBoundary(text, start, -1) && hasMarkerBoundary(text, end, 1) {
+			return true
+		}
+		offset = start + 1
+	}
+}
+
+func hasMarkerBoundary(text string, index, direction int) bool {
+	if index <= 0 || index >= len(text) {
+		return true
+	}
+	var r rune
+	if direction < 0 {
+		r, _ = utf8.DecodeLastRuneInString(text[:index])
+	} else {
+		r, _ = utf8.DecodeRuneInString(text[index:])
+	}
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 }

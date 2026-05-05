@@ -21,6 +21,7 @@ P&AI Bot uses a provider-agnostic AI gateway. All AI calls go through a unified 
 | **Google Gemini** | `LEARN_AI_GOOGLE_API_KEY` | `gemini-3-flash-preview` | `gemini-3-flash-preview` | Latest Gemini fast model; preview API ID. For steadier rate limits, prefer a stable non-preview override such as `gemini-2.5-flash` |
 | **OpenRouter** | `LEARN_AI_OPENROUTER_API_KEY` | `qwen/qwen3-max` | `qwen/qwen3-max` | Current general-purpose OpenRouter default |
 | **Ollama** | `LEARN_AI_OLLAMA_ENABLED=true` | `qwen3` | — (not supported) | Latest local default family in Ollama |
+| **Mock** | `LEARN_AI_DEFAULT_PROVIDER=mock` + `LEARN_AI_MOCK_RESPONSE` | canned response | — (not supported) | Local transport/harness checks only; never part of the default runtime fallback chain |
 
 Chat defaults are set in each provider's `Complete()` method. Structured defaults are set centrally in `router.go` (`defaultStructuredModelForProvider`). DeepSeek reuses the OpenAI provider with a different base URL; its chat requests typically specify a model explicitly.
 
@@ -31,8 +32,10 @@ Chat defaults are set in each provider's `Complete()` method. Structured default
 Providers are tried in registration order. If one fails, the next is attempted:
 
 ```
-OpenAI → Anthropic → DeepSeek → Google → OpenRouter → Ollama
+OpenAI → Anthropic → DeepSeek → Google → Ollama → OpenRouter
 ```
+
+The mock provider is excluded from the default chain. It is only registered when `LEARN_AI_DEFAULT_PROVIDER=mock` is set, so a stray local `LEARN_AI_MOCK_RESPONSE` cannot shadow a real provider key.
 
 ### Circuit Breaker
 
@@ -80,6 +83,13 @@ Token usage is tracked per tenant via an in-memory budget tracker (`InMemoryBudg
 
 ```env
 LEARN_AI_OPENAI_API_KEY=sk-...
+```
+
+### Mock Setup (Local Transport Only)
+
+```env
+LEARN_AI_DEFAULT_PROVIDER=mock
+LEARN_AI_MOCK_RESPONSE=Mock tutor response from local dev.
 ```
 
 ### Full Setup (All Providers)

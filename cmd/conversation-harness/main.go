@@ -87,6 +87,7 @@ func main() {
 	var jsonl bool
 	var memory bool
 	var mockResponse string
+	var progressSideEffects bool
 	var verbose bool
 
 	flag.StringVar(&fixturePath, "fixture", defaultFixturePath, "YAML conversation fixture")
@@ -98,6 +99,7 @@ func main() {
 	flag.BoolVar(&jsonl, "jsonl", false, "print one JSON result per conversation")
 	flag.BoolVar(&memory, "memory", true, "use in-memory state instead of PostgreSQL")
 	flag.StringVar(&mockResponse, "mock-response", "", "use a deterministic mock AI response instead of configured providers")
+	flag.BoolVar(&progressSideEffects, "progress", false, "enable mastery/progress side effects during harness runs")
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic warnings from curriculum loading and background checks")
 	flag.Parse()
 
@@ -121,7 +123,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	engine, cleanup, err := buildEngine(memory, mockResponse)
+	engine, cleanup, err := buildEngine(memory, mockResponse, progressSideEffects)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build harness: %v\n", err)
 		os.Exit(1)
@@ -159,7 +161,7 @@ func loadFixture(path string) (fixtureFile, error) {
 	return fixture, nil
 }
 
-func buildEngine(memory bool, mockResponse string) (*agent.Engine, func(), error) {
+func buildEngine(memory bool, mockResponse string, progressSideEffects bool) (*agent.Engine, func(), error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, nil, fmt.Errorf("load config: %w", err)
@@ -199,18 +201,21 @@ func buildEngine(memory bool, mockResponse string) (*agent.Engine, func(), error
 		challengeStore = agent.NewPostgresChallengeStoreForChannel(state.DB.Pool, state.TenantID, "harness")
 	}
 
-	engine := agent.NewEngine(agent.EngineConfig{
+	engineCfg := agent.EngineConfig{
 		AIRouter:             router,
 		Store:                state.Store,
 		EventLogger:          state.EventLogger,
 		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
 		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
-		Tracker:              state.Tracker,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Features.DevMode,
-	})
+	}
+	if progressSideEffects {
+		engineCfg.Tracker = state.Tracker
+	}
+	engine := agent.NewEngine(engineCfg)
 	return engine, cleanup, nil
 }
 

@@ -35,12 +35,12 @@ go run ./cmd/conversation-harness --case Q01 --show-responses
 
 The default fixture is `internal/agent/testdata/ai_quality_conversations.yaml`. Add pilot failures there before changing the prompt, then rerun the harness to compare behavior.
 
-The harness is quiet by default so pass/fail output stays readable. Use `--verbose` when you need curriculum-loader warnings or background-check diagnostics.
+The harness is quiet by default so pass/fail output stays readable. It also keeps mastery/progress side effects off by default so the rubric loop only scores tutor replies; pass `--progress` if you explicitly want mastery updates during a harness run. Use `--verbose` when you need curriculum-loader warnings or background-check diagnostics.
 
 For transport-only server checks without a real AI provider key, use the dev mock provider:
 
 ```bash
-LEARN_AI_MOCK_RESPONSE="Mock tutor response from local dev." just go
+LEARN_AI_DEFAULT_PROVIDER=mock LEARN_AI_MOCK_RESPONSE="Mock tutor response from local dev." just go
 go run ./cmd/terminal-chat --ws ws://127.0.0.1:8080/ws/chat --user-id dev-check
 ```
 

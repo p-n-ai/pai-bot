@@ -77,7 +77,7 @@ func TestTutorModeMarkerCoverage(t *testing.T) {
 		wantShortNatural bool
 	}{
 		{text: "first step only", wantAnswerDump: true, wantShortNatural: true},
-		{text: "short", wantAnswerDump: true, wantShortNatural: true},
+		{text: "short", wantShortNatural: true},
 		{text: "form an equation only", wantAnswerDump: true, wantShortNatural: true},
 		{text: "similar practice", wantAnswerDump: true, wantShortNatural: true},
 		{text: "give me the answer", wantAnswerDump: true},
@@ -93,6 +93,51 @@ func TestTutorModeMarkerCoverage(t *testing.T) {
 			}
 			if got := needsNaturalShortReply(tt.text); got != tt.wantShortNatural {
 				t.Fatalf("needsNaturalShortReply(%q) = %v, want %v", tt.text, got, tt.wantShortNatural)
+			}
+		})
+	}
+}
+
+func TestPostProcessTutorResponse_DoesNotRewriteQuickCheckAnswer(t *testing.T) {
+	resp := postProcessTutorResponse(
+		"Correct, x = 5.",
+		"Quick check: I got x = 5 for 5x - 7 = 18. Is it correct?",
+	)
+
+	if resp != "Correct, x = 5." {
+		t.Fatalf("quick check response should not be rewritten, got %q", resp)
+	}
+}
+
+func TestPostProcessTutorResponse_DoesNotTreatShortcutAsShortRequest(t *testing.T) {
+	resp := postProcessTutorResponse(
+		"Full working: subtract 5, then divide by 3, so x = 7.",
+		"Don't shortcut. Show full working for 3x - 5 = 16.",
+	)
+
+	if resp != "Full working: subtract 5, then divide by 3, so x = 7." {
+		t.Fatalf("full-working response should not be rewritten, got %q", resp)
+	}
+}
+
+func TestIsLowerSecondaryCalculusRequest_RequiresMathContextForWeakTerms(t *testing.T) {
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{text: "I am Form 1. Differentiate x^2 + 3x.", want: true},
+		{text: "Can you explain the limit of x^2 as x goes to 0?", want: true},
+		{text: "Find the integral of x^2.", want: true},
+		{text: "What is the time limit for this quiz?", want: false},
+		{text: "Can you integrate this with my study goal?", want: false},
+		{text: "Differentiate between variables and constants.", want: false},
+		{text: "This topic is integral to my study plan.", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			if got := isLowerSecondaryCalculusRequest(tt.text); got != tt.want {
+				t.Fatalf("isLowerSecondaryCalculusRequest(%q) = %v, want %v", tt.text, got, tt.want)
 			}
 		})
 	}
