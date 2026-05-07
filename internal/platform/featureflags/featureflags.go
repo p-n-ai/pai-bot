@@ -17,8 +17,8 @@ type Feature string
 type Status string
 
 const (
-	InDevelopment Status = "in_development"
-	Stable        Status = "stable"
+	UnderDevelopment Status = "under_development"
+	Stable           Status = "stable"
 )
 
 const (
@@ -41,7 +41,7 @@ type Features struct {
 var registry = map[Feature]Spec{
 	TurnHooks: {
 		Feature:        TurnHooks,
-		Status:         InDevelopment,
+		Status:         UnderDevelopment,
 		DefaultEnabled: false,
 	},
 }

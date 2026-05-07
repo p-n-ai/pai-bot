@@ -28,7 +28,7 @@ The current registry contains one internal rollout flag:
 
 | Flag | Default | Status | Owner | Behavior |
 |---|---:|---|---|---|
-| `turn_hooks` | off | `in_development` | Tutor Turn runtime | Enables the internal **Turn Hook** runner and **Turn Hook Catalog**. The first catalog contains only `rate_convo_hook`. |
+| `turn_hooks` | off | `under_development` | Tutor Turn runtime | Enables the internal **Turn Hook** runner and **Turn Hook Catalog**. The first catalog contains only `rate_convo_hook`. |
 
 Read [Turn Hooks](turn-hooks.md) before adding, removing, or reviewing hook behavior.
 
@@ -72,7 +72,7 @@ With `LEARN_DEV_MODE=true` and `PAI_FEATURES=turn_hooks`, Terminal Chat may prin
 - Hard-fail unknown feature names and invalid override values.
 - Keep source state minimal: registry defaults plus deploy-time overrides.
 - Derive the effective product feature set from defaults and overrides.
-- Allow future feature status such as `in_development` and `stable` without mixing status with enabled state.
+- Allow future feature status such as `under_development` and `stable` without mixing status with enabled state.
 
 ## Non-Goals
 
