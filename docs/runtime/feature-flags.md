@@ -30,6 +30,8 @@ The current registry contains one internal rollout flag:
 |---|---:|---|---|---|
 | `turn_hooks` | off | `in_development` | Tutor Turn runtime | Enables the internal **Turn Hook** runner and **Turn Hook Catalog**. The first catalog contains only `rate_convo_hook`. |
 
+Read [Turn Hooks](turn-hooks.md) before adding, removing, or reviewing hook behavior.
+
 ## Dev Mode
 
 `LEARN_DEV_MODE` and `PAI_FEATURES` control different things.

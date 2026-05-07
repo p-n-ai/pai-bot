@@ -77,6 +77,8 @@ Mixed-trust records must be split. Example: goal target mastery is system-owned 
 
 **Turn Hooks** are internal runtime extension points that observe or shape a **Tutor Turn** without becoming plugins, YAML config, tenant settings, or user-installed extension points.
 
+For the operating contract, add/remove workflow, privacy rules, and test checklist, read [Turn Hooks](turn-hooks.md).
+
 The **Turn Hook Rollout Flag** is:
 
 ```env

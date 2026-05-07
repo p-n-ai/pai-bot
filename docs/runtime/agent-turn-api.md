@@ -154,6 +154,8 @@ Keep the loader direct. Do not add a second `TurnContext` representation unless 
 
 **Turn Hooks** are package-private runtime extension points for the normal **Tutor Turn** path. They are not React hooks, Git hooks, Codex hooks, plugins, YAML config, tenant settings, or user-installed extensions.
 
+Read [Turn Hooks](turn-hooks.md) for the full operating contract, add/remove workflow, privacy rules, and test checklist.
+
 The **Turn Hook Rollout Flag** is `PAI_FEATURES=turn_hooks`. When it is off, the hook runner does not run. When it is on, the private **Turn Hook Catalog** runs in order. The first catalog contains only `rate_convo_hook`.
 
 A **Turn Hook** returns exactly one **Hook Outcome**:
