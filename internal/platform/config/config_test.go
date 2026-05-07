@@ -54,12 +54,22 @@ func clearEnv(t *testing.T) {
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
 		"LEARN_DEV_MODE",
+		"PAI_FEATURES",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_NUDGES_ENABLED",
 		"LEARN_AI_MOCK_RESPONSE",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
+	}
+}
+
+func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_FEATURES", "unknown_feature")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should reject unknown PAI_FEATURES entry")
 	}
 }
 
@@ -106,6 +116,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if !cfg.Features.AIPersonalizedNudgesEnabled {
 		t.Error("Features.AIPersonalizedNudgesEnabled should default to true")
+	}
+	if cfg.FeatureFlags.Enabled("unknown_feature") {
+		t.Fatal("unknown feature should not be enabled")
 	}
 }
 
