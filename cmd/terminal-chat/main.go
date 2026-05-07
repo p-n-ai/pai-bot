@@ -143,7 +143,7 @@ func main() {
 	}
 	if cfg.Runtime.DevMode {
 		engineCfg.TurnHookNotice = func(notice agent.TurnHookCallNotice) {
-			fmt.Fprintf(os.Stdout, "turn hook called: %s outcome=%s\n", notice.Name, notice.Outcome)
+			_, _ = fmt.Fprintf(os.Stdout, "turn hook called: %s outcome=%s\n", notice.Name, notice.Outcome)
 		}
 	}
 	if progressSideEffects {
