@@ -10,8 +10,35 @@ func TestParseEmptyFeatureSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
+	if features.Enabled(TurnHooks) {
+		t.Fatal("turn_hooks should default to disabled")
+	}
 	if features.Enabled(Feature("missing")) {
 		t.Fatal("missing feature should not be enabled")
+	}
+}
+
+func TestParseTurnHooksFeature(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		enabled bool
+	}{
+		{name: "bare name enables", value: "turn_hooks", enabled: true},
+		{name: "explicit true enables", value: "turn_hooks=true", enabled: true},
+		{name: "explicit false disables", value: "turn_hooks=false", enabled: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			features, err := Parse(tt.value)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if got := features.Enabled(TurnHooks); got != tt.enabled {
+				t.Fatalf("turn_hooks enabled = %v, want %v", got, tt.enabled)
+			}
+		})
 	}
 }
 
@@ -21,8 +48,14 @@ func TestParseUnknownFeature(t *testing.T) {
 	}
 }
 
+func TestParseDuplicateFeature(t *testing.T) {
+	if _, err := Parse("turn_hooks,turn_hooks=false"); err == nil {
+		t.Fatal("Parse() should reject duplicate feature flag override")
+	}
+}
+
 func TestParseInvalidBool(t *testing.T) {
-	if _, err := Parse("unknown_feature=maybe"); err == nil {
+	if _, err := Parse("turn_hooks=maybe"); err == nil {
 		t.Fatal("Parse() should reject invalid bool override")
 	}
 }

@@ -1759,8 +1759,8 @@ PAI_AUTH_SECRET=change-me-in-production
 # --- Tenancy ---
 LEARN_TENANT_MODE=single
 
-# --- Product Feature Flags ---
-# Example: PAI_FEATURES=some_feature=true
+# --- Feature Flags ---
+# Current known flag: PAI_FEATURES=turn_hooks
 PAI_FEATURES=
 
 # --- WhatsApp (Optional) ---
@@ -3683,7 +3683,14 @@ go run ./cmd/conversation-harness --case Q01 --show-responses
 
 # machine-readable output for comparison scripts
 go run ./cmd/conversation-harness --jsonl
+
+# inspect model request payloads without calling a real model
+go run ./cmd/conversation-harness --case Q01 --request-only --dump-requests /tmp/pai-bot-llm-requests.jsonl
 ```
+
+#### Turn Hook rollout
+
+The tutor runtime has an internal **Turn Hook** seam behind `PAI_FEATURES=turn_hooks`. The first **Turn Hook Catalog** contains only `rate_convo_hook`, which preserves existing rating-prompt behavior by injecting the same rating context only when the turn is already due for rating. Terminal Chat may print `turn hook called: rate_convo_hook outcome=<outcome>` only when both `LEARN_DEV_MODE=true` and `PAI_FEATURES=turn_hooks` are set. The notice is console-only and is not model context, chat history, request dump content, or event telemetry.
 
 #### Day 4 Exit Criteria
 
@@ -5074,7 +5081,7 @@ echo ""
 | `PAI_AUTH_SECRET` | 16 | No | `change-me-in-production` |
 | `LEARN_TENANT_MODE` | 23 | No | `single` |
 | `LEARN_WHATSAPP_ENABLED` | 24 | No | `false` |
-| `PAI_FEATURES` | 0 | No | — |
+| `PAI_FEATURES` | 0 | No | empty; known flag: `turn_hooks` |
 | `LEARN_LOG_LEVEL` | 0 | No | `info` |
 
 *At least one AI provider must be configured.

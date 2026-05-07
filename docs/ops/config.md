@@ -77,7 +77,7 @@ read_when:
 | `LEARN_TENANT_MODE` | `single` | Must be `single` or `multi`. |
 | `LEARN_LOG_LEVEL` | `info` | Log level. |
 | `LEARN_LOG_FORMAT` | `json` | Log format. |
-| `PAI_FEATURES` | empty | Comma-separated learner-facing product feature overrides. Example placeholder: `some_feature=true,other_feature=false`. `flag` enables; `flag=true` enables; `flag=false` disables. Unknown names, invalid values, or duplicate feature names fail config load. |
+| `PAI_FEATURES` | empty | Comma-separated feature overrides. Current known flag: `turn_hooks`. `flag` enables; `flag=true` enables; `flag=false` disables. Unknown names, invalid values, or duplicate feature names fail config load. |
 | `LEARN_DEV_MODE` | `false` | Relaxes provider/token requirements for local dev. |
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disables multilingual behavior. |
 | `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Rating prompt cadence. |
@@ -92,4 +92,4 @@ read_when:
 - `LEARN_AI_DEFAULT_PROVIDER`, when set, must be a known provider.
 - `LEARN_TENANT_MODE` must be `single` or `multi`.
 - Partial email configuration requires `LEARN_EMAIL_SMTP_ADDR` and `LEARN_EMAIL_FROM_ADDRESS`.
-- `PAI_FEATURES`, when set, must contain only known product feature flag names and boolean override values. Each feature may appear at most once.
+- `PAI_FEATURES`, when set, must contain only known feature flag names and boolean override values. Each feature may appear at most once.

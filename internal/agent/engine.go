@@ -17,6 +17,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
@@ -66,6 +67,8 @@ type EngineConfig struct {
 	Groups                GroupStore
 	TenantID              string // tenant UUID for bot-side group operations
 	DevMode               bool
+	FeatureFlags          featureflags.Features
+	TurnHookNotice        func(TurnHookCallNotice)
 	Notifier              Notifier
 }
 
@@ -89,6 +92,9 @@ type Engine struct {
 	groups                GroupStore
 	tenantID              string
 	devMode               bool
+	featureFlags          featureflags.Features
+	turnHookNotice        func(TurnHookCallNotice)
+	turnHooks             []turnHook
 	notifier              Notifier
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
@@ -168,6 +174,9 @@ func NewEngine(cfg EngineConfig) *Engine {
 		groups:                groups,
 		tenantID:              cfg.TenantID,
 		devMode:               cfg.DevMode,
+		featureFlags:          cfg.FeatureFlags,
+		turnHookNotice:        cfg.TurnHookNotice,
+		turnHooks:             defaultTurnHookCatalog(),
 		notifier:              notifier,
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
@@ -355,6 +364,25 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	turn.Topic = matchedTopic
 	turn.TeachingNotes = teachingNotes
 	turn.Packets = e.loadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes)
+	if e.turnHooksEnabled() {
+		hookResult, err := e.runTurnHooks(ctx, turn)
+		if err != nil {
+			turn.Model.Error = err.Error()
+			e.logAgentTurnCompleted(turn, "failed")
+			slog.Error("turn hook failed", "error", err)
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
+		}
+		turn.Packets = hookResult.Packets
+		if hookResult.Blocked {
+			e.logAgentTurnCompleted(turn, "blocked")
+			if hookResult.BlockMessage != "" {
+				return hookResult.BlockMessage, nil
+			}
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
+		}
+	} else if turn.RatingPromptRequested {
+		turn.Packets = appendRatingPromptPacket(turn.Packets)
+	}
 	messages := e.buildPromptMessagesFromTurn(turn)
 
 	reqModel := ""
