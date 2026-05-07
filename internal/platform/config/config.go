@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 // Config holds all application configuration.
@@ -25,12 +27,13 @@ type Config struct {
 	Auth           AuthConfig
 	Tenant         TenantConfig
 	Log            LogConfig
-	Features       FeatureConfig
+	Runtime        RuntimeConfig
+	FeatureFlags   featureflags.Features
 	CurriculumPath string
 }
 
-// FeatureConfig holds toggle-able product features.
-type FeatureConfig struct {
+// RuntimeConfig holds runtime knobs. New product experiments use FeatureFlags.
+type RuntimeConfig struct {
 	DisableMultiLanguage        bool
 	RatingPromptEvery           int
 	AIPersonalizedNudgesEnabled bool
@@ -176,6 +179,13 @@ type LogConfig struct {
 
 // Load reads configuration from environment variables.
 func Load() (*Config, error) {
+	// Unlike the one-env-to-one-field values below, PAI_FEATURES is a compact
+	// list of overrides that needs validation before it can be stored.
+	parsedFeatureFlags, err := featureflags.Parse(envStr("PAI_FEATURES", ""))
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		Server: ServerConfig{
 			Port: envInt("LEARN_SERVER_PORT", 8080),
@@ -264,12 +274,13 @@ func Load() (*Config, error) {
 			Level:  envStr("LEARN_LOG_LEVEL", "info"),
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
 		},
-		Features: FeatureConfig{
+		Runtime: RuntimeConfig{
 			DevMode:                     envBool("LEARN_DEV_MODE", false),
 			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
 			RatingPromptEvery:           envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
 			AIPersonalizedNudgesEnabled: envBoolWithFallback("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "LEARN_AI_NUDGES_ENABLED", true),
 		},
+		FeatureFlags:   parsedFeatureFlags,
 		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),
 	}
 
@@ -278,11 +289,11 @@ func Load() (*Config, error) {
 
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
-	if c.Telegram.BotToken == "" && !c.Features.DevMode {
+	if c.Telegram.BotToken == "" && !c.Runtime.DevMode {
 		return fmt.Errorf("LEARN_TELEGRAM_BOT_TOKEN is required")
 	}
 
-	if !c.HasAIProvider() && !c.Features.DevMode {
+	if !c.HasAIProvider() && !c.Runtime.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
 	}
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {

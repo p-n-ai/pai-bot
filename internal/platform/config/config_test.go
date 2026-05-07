@@ -54,12 +54,22 @@ func clearEnv(t *testing.T) {
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
 		"LEARN_DEV_MODE",
+		"PAI_FEATURES",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_NUDGES_ENABLED",
 		"LEARN_AI_MOCK_RESPONSE",
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
+	}
+}
+
+func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_FEATURES", "unknown_feature")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should reject unknown PAI_FEATURES entry")
 	}
 }
 
@@ -104,8 +114,11 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.CurriculumPath != "./oss" {
 		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
 	}
-	if !cfg.Features.AIPersonalizedNudgesEnabled {
-		t.Error("Features.AIPersonalizedNudgesEnabled should default to true")
+	if !cfg.Runtime.AIPersonalizedNudgesEnabled {
+		t.Error("Runtime.AIPersonalizedNudgesEnabled should default to true")
+	}
+	if cfg.FeatureFlags.Enabled("unknown_feature") {
+		t.Fatal("unknown feature should not be enabled")
 	}
 }
 
@@ -219,8 +232,8 @@ func TestLoad_FromEnv(t *testing.T) {
 	if cfg.CurriculumPath != "/tmp/oss" {
 		t.Errorf("CurriculumPath = %q, want /tmp/oss", cfg.CurriculumPath)
 	}
-	if cfg.Features.AIPersonalizedNudgesEnabled {
-		t.Error("Features.AIPersonalizedNudgesEnabled should be false when configured")
+	if cfg.Runtime.AIPersonalizedNudgesEnabled {
+		t.Error("Runtime.AIPersonalizedNudgesEnabled should be false when configured")
 	}
 }
 
@@ -233,7 +246,7 @@ func TestLoad_AIPersonalizedNudges_FallbackToDeprecatedEnv(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if cfg.Features.AIPersonalizedNudgesEnabled {
+	if cfg.Runtime.AIPersonalizedNudgesEnabled {
 		t.Error("deprecated LEARN_AI_NUDGES_ENABLED should still disable AI personalized nudges")
 	}
 }

@@ -1728,7 +1728,7 @@ analytics-example:
 ```bash
 # P&AI Bot Configuration
 # Copy to .env and fill in your values
-# All variables use the LEARN_ prefix
+# Core runtime variables use LEARN_; auth and product flags use PAI_.
 
 # --- Server ---
 LEARN_SERVER_PORT=8080
@@ -1758,6 +1758,10 @@ PAI_AUTH_SECRET=change-me-in-production
 
 # --- Tenancy ---
 LEARN_TENANT_MODE=single
+
+# --- Product Feature Flags ---
+# Example: PAI_FEATURES=some_feature=true
+PAI_FEATURES=
 
 # --- WhatsApp (Optional) ---
 LEARN_WHATSAPP_ENABLED=false
@@ -5070,6 +5074,7 @@ echo ""
 | `PAI_AUTH_SECRET` | 16 | No | `change-me-in-production` |
 | `LEARN_TENANT_MODE` | 23 | No | `single` |
 | `LEARN_WHATSAPP_ENABLED` | 24 | No | `false` |
+| `PAI_FEATURES` | 0 | No | — |
 | `LEARN_LOG_LEVEL` | 0 | No | `info` |
 
 *At least one AI provider must be configured.

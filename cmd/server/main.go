@@ -81,7 +81,7 @@ func main() {
 	// Initialize AI router with configured providers.
 	router := setupAIRouter(cfg)
 	if !router.HasProvider() {
-		if cfg.Features.DevMode {
+		if cfg.Runtime.DevMode {
 			slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
 		} else {
 			slog.Error("no AI providers configured")
@@ -146,8 +146,8 @@ func main() {
 		EventLogger:          eventLogger,
 		CurriculumLoader:     loader,
 		RetrievalService:     retrievalService,
-		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
-		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
+		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
+		RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
 		Tracker:              tracker,
 		Streaks:              streakTracker,
 		XP:                   xpTracker,
@@ -155,7 +155,7 @@ func main() {
 		Challenges:           challengeStore,
 		Groups:               groupStore,
 		TenantID:             store.TenantID(),
-		DevMode:              cfg.Features.DevMode,
+		DevMode:              cfg.Runtime.DevMode,
 	})
 
 	gw := chat.NewGateway()
@@ -165,7 +165,7 @@ func main() {
 			slog.Error("failed to create Telegram channel", "error", err)
 			os.Exit(1)
 		}
-		tg.SetDevMode(cfg.Features.DevMode)
+		tg.SetDevMode(cfg.Runtime.DevMode)
 		gw.Register("telegram", tg)
 	} else {
 		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
@@ -207,7 +207,7 @@ func main() {
 	// requires origin checking and subprotocol JWT auth.
 	embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
 	var wsChannel *chat.WSChannel
-	if cfg.Features.DevMode {
+	if cfg.Runtime.DevMode {
 		wsChannel = chat.NewWSChannel()
 	} else {
 		wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
@@ -223,7 +223,7 @@ func main() {
 		agent.SchedulerConfig{
 			CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
 			MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
-			AIPersonalizedNudgesEnabled: cfg.Features.AIPersonalizedNudgesEnabled,
+			AIPersonalizedNudgesEnabled: cfg.Runtime.AIPersonalizedNudgesEnabled,
 		},
 		tracker,
 		streakTracker,
