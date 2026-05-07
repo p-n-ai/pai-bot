@@ -27,13 +27,13 @@ type Config struct {
 	Auth           AuthConfig
 	Tenant         TenantConfig
 	Log            LogConfig
-	Features       FeatureConfig
+	Runtime        RuntimeConfig
 	FeatureFlags   featureflags.Features
 	CurriculumPath string
 }
 
-// FeatureConfig holds legacy env knobs. New product experiments use FeatureFlags.
-type FeatureConfig struct {
+// RuntimeConfig holds runtime knobs. New product experiments use FeatureFlags.
+type RuntimeConfig struct {
 	DisableMultiLanguage        bool
 	RatingPromptEvery           int
 	AIPersonalizedNudgesEnabled bool
@@ -274,7 +274,7 @@ func Load() (*Config, error) {
 			Level:  envStr("LEARN_LOG_LEVEL", "info"),
 			Format: envStr("LEARN_LOG_FORMAT", "json"),
 		},
-		Features: FeatureConfig{
+		Runtime: RuntimeConfig{
 			DevMode:                     envBool("LEARN_DEV_MODE", false),
 			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
 			RatingPromptEvery:           envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
@@ -289,11 +289,11 @@ func Load() (*Config, error) {
 
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
-	if c.Telegram.BotToken == "" && !c.Features.DevMode {
+	if c.Telegram.BotToken == "" && !c.Runtime.DevMode {
 		return fmt.Errorf("LEARN_TELEGRAM_BOT_TOKEN is required")
 	}
 
-	if !c.HasAIProvider() && !c.Features.DevMode {
+	if !c.HasAIProvider() && !c.Runtime.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
 	}
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {

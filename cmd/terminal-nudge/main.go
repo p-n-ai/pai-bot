@@ -90,7 +90,7 @@ func main() {
 		agent.SchedulerConfig{
 			CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
 			MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
-			AIPersonalizedNudgesEnabled: cfg.Features.AIPersonalizedNudgesEnabled,
+			AIPersonalizedNudgesEnabled: cfg.Runtime.AIPersonalizedNudgesEnabled,
 		},
 		state.Tracker,
 		nil,

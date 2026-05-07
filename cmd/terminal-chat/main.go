@@ -134,11 +134,11 @@ func main() {
 		Store:                state.Store,
 		EventLogger:          state.EventLogger,
 		CurriculumLoader:     loader,
-		DisableMultiLanguage: cfg.Features.DisableMultiLanguage,
-		RatingPromptEvery:    cfg.Features.RatingPromptEvery,
+		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
+		RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
-		DevMode:              cfg.Features.DevMode,
+		DevMode:              cfg.Runtime.DevMode,
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
