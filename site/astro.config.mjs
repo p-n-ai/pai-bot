@@ -2,8 +2,12 @@ import { defineConfig } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 import starlight from "@astrojs/starlight";
 
+const site = process.env.SITE_URL;
+const base = site ? new URL(site).pathname.replace(/\/$/, "") || "/" : "/";
+
 export default defineConfig({
-  site: process.env.SITE_URL || undefined,
+  site,
+  base,
   integrations: [
     starlight({
       title: "P&AI Bot",

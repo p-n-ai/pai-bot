@@ -24,6 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -51,7 +55,7 @@ jobs:
       - name: Build
         working-directory: site
         env:
-          SITE_URL: ${{ vars.SITE_URL || 'https://p-n-ai.github.io/pai-bot' }}
+          SITE_URL: ${{ vars.SITE_URL || steps.pages.outputs.base_url }}
         run: pnpm build
 
       - uses: actions/upload-pages-artifact@v3
