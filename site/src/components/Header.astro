@@ -1,15 +1,17 @@
 ---
 const navItems = [
   { label: "Home", href: "/" },
-  { label: "Docs", href: "/getting-started/introduction" },
+  { label: "Docs", href: "/getting-started/introduction/" },
   { label: "GitHub", href: "https://github.com/p-n-ai/pai-bot", external: true },
 ];
+
+const withBase = (path) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path}`;
 ---
 
 <header
   class="sticky top-4 z-50 mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-full border border-border/80 bg-background/92 px-3 py-2 shadow-[0_10px_28px_color-mix(in_oklch,var(--foreground)_5%,transparent)] backdrop-blur sm:gap-6 sm:px-5 sm:py-3"
 >
-  <a href="/" class="flex shrink-0 items-center gap-2 sm:gap-3">
+  <a href={withBase("/")} class="flex shrink-0 items-center gap-2 sm:gap-3">
     <div class="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground sm:size-10 sm:rounded-2xl">
       <svg class="size-4 sm:size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -24,7 +26,7 @@ const navItems = [
   <nav class="flex items-center gap-0.5 sm:gap-1">
     {navItems.map(({ label, href, external }) => (
       <a
-        href={href}
+        href={external ? href : withBase(href)}
         class="rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground sm:px-4 sm:py-2 sm:text-sm"
         {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       >
