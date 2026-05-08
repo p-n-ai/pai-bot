@@ -37,6 +37,14 @@ The default fixture is `internal/agent/testdata/ai_quality_conversations.yaml`. 
 
 The harness is quiet by default so pass/fail output stays readable. It also keeps mastery/progress side effects off by default so the rubric loop only scores tutor replies; pass `--progress` if you explicitly want mastery updates during a harness run. Use `--verbose` when you need curriculum-loader warnings or background-check diagnostics.
 
+To inspect model request payloads without calling a real model:
+
+```bash
+go run ./cmd/conversation-harness --case Q01 --request-only --dump-requests /tmp/pai-bot-llm-requests.jsonl
+```
+
+`--dump-requests` writes JSONL from the real turn harness and AI router trace, forcing a mock provider when no `--mock-response` is supplied. The dump includes model-facing messages and can contain raw learner text, so the file is local-only and written owner-only.
+
 For transport-only server checks without a real AI provider key, use the dev mock provider:
 
 ```bash

@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -77,6 +79,23 @@ type caseResult struct {
 	Failures []string `json:"failures,omitempty"`
 }
 
+type requestDumpRecord struct {
+	Sequence    int                  `json:"sequence"`
+	Provider    string               `json:"provider"`
+	Request     ai.CompletionRequest `json:"request"`
+	StartedAt   time.Time            `json:"started_at"`
+	CompletedAt time.Time            `json:"completed_at"`
+	Error       string               `json:"error,omitempty"`
+}
+
+type requestDumper struct {
+	mu      sync.Mutex
+	file    *os.File
+	encoder *json.Encoder
+	nextSeq int
+	err     error
+}
+
 func main() {
 	var fixturePath string
 	var caseID string
@@ -89,6 +108,8 @@ func main() {
 	var mockResponse string
 	var progressSideEffects bool
 	var verbose bool
+	var dumpRequestsPath string
+	var requestOnly bool
 
 	flag.StringVar(&fixturePath, "fixture", defaultFixturePath, "YAML conversation fixture")
 	flag.StringVar(&caseID, "case", "", "run one conversation id")
@@ -101,7 +122,13 @@ func main() {
 	flag.StringVar(&mockResponse, "mock-response", "", "use a deterministic mock AI response instead of configured providers")
 	flag.BoolVar(&progressSideEffects, "progress", false, "enable mastery/progress side effects during harness runs")
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic warnings from curriculum loading and background checks")
+	flag.StringVar(&dumpRequestsPath, "dump-requests", "", "write mock AI completion requests as JSONL to this path")
+	flag.BoolVar(&requestOnly, "request-only", false, "skip behavior scoring; useful with --dump-requests")
 	flag.Parse()
+	if err := validateRequestOnlyMode(requestOnly, dumpRequestsPath); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 
 	logLevel := slog.LevelError
 	if verbose {
@@ -123,7 +150,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	engine, cleanup, err := buildEngine(memory, mockResponse, progressSideEffects)
+	var dumper *requestDumper
+	if dumpRequestsPath != "" {
+		if mockResponse == "" {
+			mockResponse = "mock tutor response"
+		}
+		dumper, err = newRequestDumper(dumpRequestsPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open request dump: %v\n", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := dumper.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "close request dump: %v\n", err)
+				os.Exit(1)
+			}
+		}()
+	}
+
+	engine, cleanup, err := buildEngine(memory, mockResponse, progressSideEffects, traceFuncForDumper(dumper))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build harness: %v\n", err)
 		os.Exit(1)
@@ -132,7 +177,7 @@ func main() {
 
 	results := make([]caseResult, 0, len(conversations))
 	for _, conv := range conversations {
-		result := runConversation(engine, conv, timeout, showResponses)
+		result := runConversation(engine, conv, timeout, showResponses, !requestOnly)
 		results = append(results, result)
 		if jsonl {
 			_ = json.NewEncoder(os.Stdout).Encode(result)
@@ -144,6 +189,76 @@ func main() {
 	if failedCount(results) > 0 {
 		os.Exit(1)
 	}
+}
+
+func newRequestDumper(path string) (*requestDumper, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("path is required")
+	}
+	if dir := filepath.Dir(path); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return &requestDumper{
+		file:    file,
+		encoder: json.NewEncoder(file),
+	}, nil
+}
+
+func traceFuncForDumper(dumper *requestDumper) func(ai.CompletionTrace) {
+	if dumper == nil {
+		return nil
+	}
+	return dumper.Record
+}
+
+func (d *requestDumper) Record(trace ai.CompletionTrace) {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.err != nil {
+		return
+	}
+	d.nextSeq++
+	d.err = d.encoder.Encode(requestDumpRecord{
+		Sequence:    d.nextSeq,
+		Provider:    trace.Provider,
+		Request:     trace.Request,
+		StartedAt:   trace.StartedAt,
+		CompletedAt: trace.CompletedAt,
+		Error:       trace.Error,
+	})
+}
+
+func (d *requestDumper) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.err != nil {
+		_ = d.file.Close()
+		return d.err
+	}
+	return d.file.Close()
+}
+
+func validateRequestOnlyMode(requestOnly bool, dumpRequestsPath string) error {
+	if requestOnly && strings.TrimSpace(dumpRequestsPath) == "" {
+		return fmt.Errorf("--request-only requires --dump-requests")
+	}
+	return nil
 }
 
 func loadFixture(path string) (fixtureFile, error) {
@@ -161,7 +276,7 @@ func loadFixture(path string) (fixtureFile, error) {
 	return fixture, nil
 }
 
-func buildEngine(memory bool, mockResponse string, progressSideEffects bool) (*agent.Engine, func(), error) {
+func buildEngine(memory bool, mockResponse string, progressSideEffects bool, traceFunc func(ai.CompletionTrace)) (*agent.Engine, func(), error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, nil, fmt.Errorf("load config: %w", err)
@@ -177,6 +292,9 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool) (*a
 		if !router.HasProvider() {
 			return nil, nil, fmt.Errorf("no AI providers configured")
 		}
+	}
+	if traceFunc != nil {
+		router.SetTraceFunc(traceFunc)
 	}
 
 	loader, err := curriculum.NewLoader(cfg.CurriculumPath)
@@ -211,6 +329,7 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool) (*a
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
+		FeatureFlags:         cfg.FeatureFlags,
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
@@ -238,7 +357,7 @@ func selectConversations(conversations []conversationSpec, caseID, tag string, m
 	return selected
 }
 
-func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.Duration, showResponses bool) caseResult {
+func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.Duration, showResponses bool, runChecks bool) caseResult {
 	userID := "harness-" + strings.ToLower(conv.ID) + "-" + fmt.Sprint(time.Now().UnixNano())
 	responses := make([]string, 0, len(conv.Turns))
 	failures := []string{}
@@ -259,9 +378,13 @@ func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.D
 		if showResponses {
 			fmt.Printf("\n[%s turn %d]\nUser: %s\nAssistant: %s\n", conv.ID, i+1, turn.User, resp)
 		}
-		failures = append(failures, checkTurn(i+1, resp, conv.Checks)...)
+		if runChecks {
+			failures = append(failures, checkTurn(i+1, resp, conv.Checks)...)
+		}
 	}
-	failures = append(failures, checkConversation(conv.Checks, responses)...)
+	if runChecks {
+		failures = append(failures, checkConversation(conv.Checks, responses)...)
+	}
 
 	return caseResult{
 		ID:       conv.ID,

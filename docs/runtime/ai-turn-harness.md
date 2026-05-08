@@ -15,6 +15,7 @@ The AI turn harness makes one normal tutoring message explicit:
 ProcessMessage
   -> agentTurn
   -> loadContextPackets
+  -> runTurnHooks (when PAI_FEATURES=turn_hooks)
   -> buildPromptMessagesFromTurn
   -> promptCompiler.compile
   -> aiRouter.Complete
@@ -32,6 +33,7 @@ The current implementation lives in `internal/agent/`:
 | `turn.go` | Defines package-private `agentTurn`, `contextPacket`, trust/render/trace enums, prompt manifest, and model result metadata. |
 | `context_loader.go` | Reads current stores and creates trust-labeled packets for the turn. |
 | `context_packets.go` | Builds, defaults, validates, labels, and summarizes packets. |
+| `turn_hooks.go` | Defines the private Turn Hook runner, Hook Outcomes, Turn Hook Catalog, and `rate_convo_hook`. |
 | `prompt_builder.go` | Compiles packets and chat history into model-facing `[]ai.Message`. |
 | `engine.go` | Owns `ProcessMessage`, turn lifecycle, AI call, response persistence, and `agent_turn_completed`. |
 | `tutor_personality.go` | Encodes the active SOUL-style tutor personality block used by the prompt harness. |
@@ -66,9 +68,36 @@ Validation rejects any non-system-owned packet that tries to render as system co
 - streak and XP
 - replied-to text
 - image instruction and image attachment
-- rating prompt instruction
+
+When `PAI_FEATURES=turn_hooks` is off, existing rating prompt behavior is appended after base packet loading. When `PAI_FEATURES=turn_hooks` is on, `rate_convo_hook` injects the same `rating.prompt` packet only when the turn is already due for rating.
 
 Mixed-trust records must be split. Example: goal target mastery is system-owned metadata; goal summary is learner-provided text.
+
+## Turn Hooks
+
+**Turn Hooks** are internal runtime extension points that observe or shape a **Tutor Turn** without becoming plugins, YAML config, tenant settings, or user-installed extension points.
+
+For the operating contract, add/remove workflow, privacy rules, and test checklist, read [Turn Hooks](turn-hooks.md).
+
+The **Turn Hook Rollout Flag** is:
+
+```env
+PAI_FEATURES=turn_hooks
+```
+
+When the flag is disabled, the hook runner does not run. When the flag is enabled, the private **Turn Hook Catalog** runs in order. The first catalog contains only **Rate Conversation Turn Hook** (`rate_convo_hook`).
+
+Each **Turn Hook** returns one **Hook Outcome**:
+
+| Outcome | Meaning |
+|---|---|
+| `continue` | Leave the **Tutor Turn** unchanged. |
+| `inject` | Add trace-safe context packets, then validate them with the existing packet validation rules. |
+| `block` | Stop the model call with a runtime-owned block response. No production hook uses this yet. |
+
+`rate_convo_hook` is behavior-preserving. It does not decide when rating is due; it only turns the existing rating decision into hook-shaped context.
+
+Add or remove hooks through the **Turn Hook Catalog** only. Do not add per-hook feature flags, dynamic hook config, or public plugin behavior for this slice.
 
 ## Prompt Shape
 
@@ -106,6 +135,14 @@ Never add raw packet data, names, goal summaries, reply text, summaries, image d
 
 For local prompt debugging, `cmd/terminal-chat --dump-json <path>` can write an explicit file containing UI-visible turns plus model-facing `messages`. Add `--turn-limit 10` when the UI only needs the latest 10 visible turns/model calls. Keep that path opt-in and local-only; it is not part of `agent_turn_completed` or durable event telemetry.
 
+When `LEARN_DEV_MODE=true` and `PAI_FEATURES=turn_hooks`, Terminal Chat may print one **Hook Call Notice** per hook call:
+
+```text
+turn hook called: rate_convo_hook outcome=continue
+```
+
+The notice contains only hook name and **Hook Outcome**. It is not sent to the model, saved to chat history, included in `--dump-json`, emitted by `cmd/conversation-harness`, or persisted as an event.
+
 ## Future Work
 
 Keep future changes incremental:
@@ -137,3 +174,11 @@ The default fixture scores pilot-derived cases for:
 Add a failing conversation before changing prompt/runtime behavior. Keep checks broad enough to catch regressions without depending on one exact wording.
 
 The harness suppresses warning logs by default so the result transcript stays focused on pass/fail output. Add `--verbose` when diagnosing curriculum loading or async background checks.
+
+For local request inspection without calling a real model, dump the mock provider requests:
+
+```bash
+go run ./cmd/conversation-harness --case Q01 --request-only --dump-requests /tmp/pai-bot-llm-requests.jsonl
+```
+
+`--dump-requests` writes JSONL records from the real turn harness and router trace, but forces a mock provider when no `--mock-response` is supplied. The file contains model-facing `messages`, model/task/max-token request fields, and provider timing metadata. Treat the dump as local-only because it can include raw learner text and prompt context.

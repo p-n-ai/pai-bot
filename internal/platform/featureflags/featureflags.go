@@ -1,7 +1,7 @@
 // Copyright 2026 the P&AI authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package featureflags owns learner-facing product experiment gates.
+// Package featureflags owns deploy-time product and internal rollout gates.
 package featureflags
 
 import (
@@ -10,15 +10,20 @@ import (
 	"strings"
 )
 
-// Feature names a learner-facing product experiment.
+// Feature names a known deploy-time feature gate.
 type Feature string
 
 // Status describes feature maturity, not whether the feature is enabled.
 type Status string
 
 const (
-	InDevelopment Status = "in_development"
-	Stable        Status = "stable"
+	UnderDevelopment Status = "under_development"
+	Stable           Status = "stable"
+)
+
+const (
+	// TurnHooks enables the internal Tutor Turn hook seam.
+	TurnHooks Feature = "turn_hooks"
 )
 
 // Spec describes a known feature flag.
@@ -28,12 +33,18 @@ type Spec struct {
 	DefaultEnabled bool
 }
 
-// Features is the effective product feature set for this process.
+// Features is the effective feature set for this process.
 type Features struct {
 	enabled map[Feature]struct{}
 }
 
-var registry = map[Feature]Spec{}
+var registry = map[Feature]Spec{
+	TurnHooks: {
+		Feature:        TurnHooks,
+		Status:         UnderDevelopment,
+		DefaultEnabled: false,
+	},
+}
 
 // Parse builds an effective feature set from comma-separated overrides.
 func Parse(value string) (Features, error) {

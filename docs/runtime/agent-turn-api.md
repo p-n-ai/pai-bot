@@ -29,6 +29,7 @@ The turn harness is package-private on purpose:
 - `agentTurn`
 - `contextPacket`
 - `loadContextPackets`
+- `runTurnHooks`
 - `buildPromptMessagesFromTurn`
 - `promptCompiler.compile`
 
@@ -47,6 +48,7 @@ Non-goals for the current surface:
 ProcessMessage
   -> agentTurn
   -> loadContextPackets
+  -> runTurnHooks (when PAI_FEATURES=turn_hooks)
   -> buildPromptMessagesFromTurn
   -> promptCompiler.compile
   -> aiRouter.Complete
@@ -143,9 +145,26 @@ Current sources:
 - XP
 - replied-to text
 - image instruction and attachment
-- rating prompt instruction
+
+When `PAI_FEATURES=turn_hooks` is disabled, existing rating prompt behavior is appended after base context loading. When `PAI_FEATURES=turn_hooks` is enabled, the **Rate Conversation Turn Hook** (`rate_convo_hook`) injects the same `rating.prompt` packet only when `agentTurn.RatingPromptRequested` is already true.
 
 Keep the loader direct. Do not add a second `TurnContext` representation unless multiple callers need the same intermediate shape.
+
+## Turn Hook contract
+
+**Turn Hooks** are package-private runtime extension points for the normal **Tutor Turn** path. They are not React hooks, Git hooks, Codex hooks, plugins, YAML config, tenant settings, or user-installed extensions.
+
+Read [Turn Hooks](turn-hooks.md) for the full operating contract, add/remove workflow, privacy rules, and test checklist.
+
+The **Turn Hook Rollout Flag** is `PAI_FEATURES=turn_hooks`. When it is off, the hook runner does not run. When it is on, the private **Turn Hook Catalog** runs in order. The first catalog contains only `rate_convo_hook`.
+
+A **Turn Hook** returns exactly one **Hook Outcome**:
+
+- `continue`: leave the **Tutor Turn** unchanged.
+- `inject`: append trace-safe `contextPacket` values and validate them through the existing packet validation rules.
+- `block`: stop the model call with a runtime-owned block response. No production hook uses this yet.
+
+Add or remove hooks by editing the **Turn Hook Catalog**. Do not add per-hook feature flags or dynamic hook configuration.
 
 ## Prompt compiler contract
 

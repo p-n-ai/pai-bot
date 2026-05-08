@@ -139,6 +139,12 @@ func main() {
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
+		FeatureFlags:         cfg.FeatureFlags,
+	}
+	if cfg.Runtime.DevMode {
+		engineCfg.TurnHookNotice = func(notice agent.TurnHookCallNotice) {
+			_, _ = fmt.Fprintf(os.Stdout, "turn hook called: %s outcome=%s\n", notice.Name, notice.Outcome)
+		}
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
@@ -319,7 +325,10 @@ func writeConversationHistory(path string, history *conversationHistory, turnLim
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o600)
+	if err := os.WriteFile(path, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 func (h *conversationHistory) snapshot(turnLimit int) conversationHistorySnapshot {

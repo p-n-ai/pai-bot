@@ -156,6 +156,7 @@ func main() {
 		Groups:               groupStore,
 		TenantID:             store.TenantID(),
 		DevMode:              cfg.Runtime.DevMode,
+		FeatureFlags:         cfg.FeatureFlags,
 	})
 
 	gw := chat.NewGateway()

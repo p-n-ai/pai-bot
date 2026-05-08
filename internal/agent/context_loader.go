@@ -163,16 +163,6 @@ func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat
 	if turn.ImageDataURL != "" {
 		packets = appendImagePackets(packets, turn.ImageDataURL)
 	}
-	if turn.RatingPromptRequested {
-		packets = append(packets, newContextPacket(contextPacket{
-			ID:       "rating.prompt",
-			Kind:     contextKindControlInstruction,
-			Trust:    contextTrustSystemOwned,
-			Source:   "rating",
-			Data:     ratingPromptInstruction,
-			RenderAs: contextRenderSystemInstruction,
-		}))
-	}
 
 	return packets
 }

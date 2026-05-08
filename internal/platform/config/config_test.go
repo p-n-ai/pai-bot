@@ -6,6 +6,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 // clearEnv unsets all LEARN_ environment variables for a clean test.
@@ -120,6 +122,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.FeatureFlags.Enabled("unknown_feature") {
 		t.Fatal("unknown feature should not be enabled")
 	}
+	if cfg.FeatureFlags.Enabled(featureflags.TurnHooks) {
+		t.Fatal("turn_hooks should default to disabled")
+	}
 }
 
 func TestLoad_FromEnv(t *testing.T) {
@@ -151,6 +156,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_TENANT_MODE", "multi")
 	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
 	t.Setenv("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "false")
+	t.Setenv("PAI_FEATURES", "turn_hooks")
 
 	cfg, err := Load()
 	if err != nil {
@@ -234,6 +240,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Runtime.AIPersonalizedNudgesEnabled {
 		t.Error("Runtime.AIPersonalizedNudgesEnabled should be false when configured")
+	}
+	if !cfg.FeatureFlags.Enabled(featureflags.TurnHooks) {
+		t.Fatal("turn_hooks should be enabled from PAI_FEATURES")
 	}
 }
 
