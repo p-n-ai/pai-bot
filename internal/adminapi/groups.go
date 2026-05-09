@@ -82,6 +82,7 @@ type AdminLeaderboardEntry struct {
 
 const adminJoinCodeLen = 6
 const adminJoinCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+const adminLeaderboardLimit = 10
 
 func (s *Service) ListGroups(groupType string) ([]AdminGroup, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -90,9 +91,10 @@ func (s *Service) ListGroups(groupType string) ([]AdminGroup, error) {
 	query := fmt.Sprintf(`
 		SELECT g.id::text, g.name, g.type, g.description, g.syllabus, g.subject, g.cadence,
 		       g.join_code, g.created_at, g.updated_at,
-		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)::int,
+		       COUNT(gm.id)::int,
 		       g.closed
 		FROM groups g
+		LEFT JOIN group_members gm ON gm.group_id = g.id
 		WHERE %s`, s.tenantPredicate("g.tenant_id", 1))
 
 	args := []any{s.tenantArg()}
@@ -100,7 +102,7 @@ func (s *Service) ListGroups(groupType string) ([]AdminGroup, error) {
 		query += ` AND g.type = $2`
 		args = append(args, groupType)
 	}
-	query += ` ORDER BY g.created_at DESC`
+	query += ` GROUP BY g.id ORDER BY g.created_at DESC`
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -361,27 +363,54 @@ func (s *Service) GetGroupLeaderboard(id string) ([]AdminLeaderboardEntry, error
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+	query, args := s.buildGroupLeaderboardQuery(id)
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query group leaderboard: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]AdminLeaderboardEntry, 0, adminLeaderboardLimit)
+	for rows.Next() {
+		var e AdminLeaderboardEntry
+		if err := rows.Scan(&e.UserID, &e.UserName, &e.MasteryGain, &e.Rank); err != nil {
+			return nil, fmt.Errorf("scan leaderboard entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func (s *Service) buildGroupLeaderboardQuery(groupID string) (string, []any) {
+	return fmt.Sprintf(`
 		WITH members AS (
-			SELECT gm.user_id
+			SELECT gm.user_id, gm.tenant_id
 			FROM group_members gm
 			JOIN groups g ON g.id = gm.group_id
 			JOIN users u ON u.id = gm.user_id AND u.role = 'student'
 			WHERE gm.group_id = $1::uuid AND %s
-		),`, s.tenantPredicate("g.tenant_id", 2))+`
+		),
 		current_scores AS (
-			SELECT lp.user_id, lp.topic_id, lp.mastery_score
-			FROM learning_progress lp
-			WHERE lp.user_id IN (SELECT user_id FROM members)
+			SELECT m.user_id, lp.topic_id, lp.mastery_score
+			FROM members m
+			JOIN learning_progress lp
+			  ON lp.user_id = m.user_id
+			 AND lp.tenant_id = m.tenant_id
+		),
+		snapshot_window AS (
+			SELECT m.user_id, ms.topic_id, ms.mastery_score, ms.snapshot_date
+			FROM members m
+			JOIN mastery_snapshots ms
+			  ON ms.user_id = m.user_id
+			 AND ms.tenant_id = m.tenant_id
+			WHERE ms.snapshot_date >= (CURRENT_DATE - INTERVAL '7 days')::date
+			  AND ms.snapshot_date < CURRENT_DATE
 		),
 		baseline_scores AS (
-			SELECT DISTINCT ON (ms.user_id, ms.topic_id)
-			       ms.user_id, ms.topic_id, ms.mastery_score
-			FROM mastery_snapshots ms
-			WHERE ms.user_id IN (SELECT user_id FROM members)
-			  AND ms.snapshot_date >= (CURRENT_DATE - INTERVAL '7 days')::date
-			  AND ms.snapshot_date < CURRENT_DATE
-			ORDER BY ms.user_id, ms.topic_id, ms.snapshot_date ASC
+			SELECT DISTINCT ON (user_id, topic_id)
+			       user_id, topic_id, mastery_score
+			FROM snapshot_window
+			ORDER BY user_id, topic_id, snapshot_date ASC
 		),
 		gains AS (
 			SELECT cs.user_id,
@@ -395,23 +424,8 @@ func (s *Service) GetGroupLeaderboard(id string) ([]AdminLeaderboardEntry, error
 		FROM gains g
 		JOIN users u ON u.id = g.user_id
 		ORDER BY g.avg_gain DESC
-		LIMIT 10`,
-		id, s.tenantArg(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query group leaderboard: %w", err)
-	}
-	defer rows.Close()
-
-	var entries []AdminLeaderboardEntry
-	for rows.Next() {
-		var e AdminLeaderboardEntry
-		if err := rows.Scan(&e.UserID, &e.UserName, &e.MasteryGain, &e.Rank); err != nil {
-			return nil, fmt.Errorf("scan leaderboard entry: %w", err)
-		}
-		entries = append(entries, e)
-	}
-	return entries, rows.Err()
+		LIMIT %d`, s.tenantPredicate("g.tenant_id", 2), adminLeaderboardLimit),
+		[]any{groupID, s.tenantArg()}
 }
 
 // GetGroupClassProgress returns class progress for a real group (by UUID).

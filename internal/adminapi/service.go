@@ -918,25 +918,27 @@ func (s *Service) GetUserManagement() (UserManagementView, error) {
 			u.id::text,
 			u.name,
 			u.role,
-			COALESCE(
-				(SELECT ai.identifier
-				 FROM auth_identities ai
-				 WHERE ai.user_id = u.id
-				   AND ai.provider = 'password'
-				 ORDER BY ai.created_at ASC
-				 LIMIT 1),
-				(SELECT COALESCE(ai.provider_email, ai.identifier)
-				 FROM auth_identities ai
-				 WHERE ai.user_id = u.id
-				   AND ai.provider = 'google'
-				 ORDER BY ai.created_at ASC
-				 LIMIT 1),
-				''
-			) AS email,
+			COALESCE(password_identity.identifier, google_identity.email, '') AS email,
 			u.created_at,
 			COALESCE(t.name, '')
 		FROM users u
 		LEFT JOIN tenants t ON t.id = u.tenant_id
+		LEFT JOIN LATERAL (
+			SELECT ai.identifier
+			FROM auth_identities ai
+			WHERE ai.user_id = u.id
+				AND ai.provider = 'password'
+			ORDER BY ai.created_at ASC
+			LIMIT 1
+		) password_identity ON true
+		LEFT JOIN LATERAL (
+			SELECT COALESCE(ai.provider_email, ai.identifier) AS email
+			FROM auth_identities ai
+			WHERE ai.user_id = u.id
+				AND ai.provider = 'google'
+			ORDER BY ai.created_at ASC
+			LIMIT 1
+		) google_identity ON true
 		WHERE %s
 			AND u.role IN ('teacher', 'parent', 'admin', 'platform_admin')
 		ORDER BY
@@ -1314,7 +1316,7 @@ func (s *Service) loadRetention(ctx context.Context) ([]RetentionPoint, error) {
 			FROM users u
 			WHERE %s
 				AND u.role = 'student'
-				AND DATE(u.created_at AT TIME ZONE 'UTC') <= DATE(NOW() AT TIME ZONE 'UTC') - 1
+				AND u.created_at < DATE(NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
 		),
 		activity AS (
 			SELECT DISTINCT e.user_id, DATE(e.created_at AT TIME ZONE 'UTC') AS activity_date
