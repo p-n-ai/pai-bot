@@ -144,7 +144,7 @@ func TestNewContentBuildsDeterministicSearchText(t *testing.T) {
 	if countryIndex < 0 || gradeIndex < 0 || topicIndex < 0 {
 		t.Fatalf("search text missing metadata:\n%s", row.SearchText)
 	}
-	if !(countryIndex < gradeIndex && gradeIndex < topicIndex) {
+	if countryIndex >= gradeIndex || gradeIndex >= topicIndex {
 		t.Fatalf("metadata should be sorted in search text:\n%s", row.SearchText)
 	}
 }

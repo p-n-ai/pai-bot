@@ -112,7 +112,7 @@ func downloadArchive(ctx context.Context, sourceURL string, dst string) error {
 	if err != nil {
 		return fmt.Errorf("download source archive: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("download source archive: status %d", resp.StatusCode)
@@ -122,10 +122,12 @@ func downloadArchive(ctx context.Context, sourceURL string, dst string) error {
 	if err != nil {
 		return fmt.Errorf("create archive file: %w", err)
 	}
-	defer out.Close()
-
 	if _, err := io.Copy(out, resp.Body); err != nil {
+		_ = out.Close()
 		return fmt.Errorf("write archive file: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close archive file: %w", err)
 	}
 	return nil
 }
@@ -135,7 +137,7 @@ func extractZip(src string, dst string) error {
 	if err != nil {
 		return fmt.Errorf("open source archive: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	for _, file := range reader.File {
 		cleanName := filepath.Clean(file.Name)
@@ -179,16 +181,18 @@ func extractZipFile(file *zip.File, target string) error {
 	if err != nil {
 		return fmt.Errorf("open archive member: %w", err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(target)
 	if err != nil {
 		return fmt.Errorf("create extracted file: %w", err)
 	}
-	defer out.Close()
-
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return fmt.Errorf("extract archive member: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close extracted file: %w", err)
 	}
 	return nil
 }
