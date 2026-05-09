@@ -155,7 +155,7 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name
 	if err != nil {
 		return "", fmt.Errorf("begin upgrade transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE users SET role = 'student', name = $3, updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid`,

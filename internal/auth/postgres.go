@@ -18,7 +18,12 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 )
 
-const authDBTimeout = 5 * time.Second
+const (
+	authDBTimeout             = 5 * time.Second
+	authRollbackTimeout       = 2 * time.Second
+	authSessionRefreshWindow  = 24 * time.Hour
+	authSessionRefreshDivisor = 4
+)
 
 type PostgresService struct {
 	pool             *pgxpool.Pool
@@ -72,7 +77,7 @@ func (s *PostgresService) EnsureBootstrapPlatformAdmin(ctx context.Context, emai
 	if err != nil {
 		return false, fmt.Errorf("begin bootstrap transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(8_420_001)); err != nil {
 		return false, fmt.Errorf("lock bootstrap platform admin creation: %w", err)
@@ -135,100 +140,12 @@ func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session,
 		return Session{}, ErrInvalidCredentials
 	}
 
-	var (
-		userID       string
-		resolvedTID  string
-		tenantSlug   string
-		tenantName   string
-		role         string
-		name         string
-		passwordHash string
-	)
-	if tenantID != "" {
-		err := s.pool.QueryRow(ctx, `
-			SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
-			FROM auth_identities ai
-			JOIN users u ON u.id = ai.user_id
-			LEFT JOIN tenants t ON t.id = u.tenant_id
-			WHERE ai.tenant_id = $1::uuid
-			  AND ai.provider = 'password'
-			  AND ai.identifier_normalized = $2
-			LIMIT 1
-		`, tenantID, email).Scan(&userID, &resolvedTID, &tenantSlug, &tenantName, &role, &name, &passwordHash)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return Session{}, ErrInvalidCredentials
-			}
-			return Session{}, fmt.Errorf("query login identity: %w", err)
-		}
-	} else {
-		rows, err := s.pool.Query(ctx, `
-			SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
-			FROM auth_identities ai
-			JOIN users u ON u.id = ai.user_id
-			LEFT JOIN tenants t ON t.id = u.tenant_id
-			WHERE ai.provider = 'password'
-			  AND ai.identifier_normalized = $1
-			ORDER BY u.created_at ASC
-			LIMIT 10
-		`, email)
-		if err != nil {
-			return Session{}, fmt.Errorf("query login identities: %w", err)
-		}
-		defer rows.Close()
-
-		type candidate struct {
-			userID       string
-			tenantID     string
-			tenantSlug   string
-			tenantName   string
-			role         string
-			name         string
-			passwordHash string
-		}
-
-		var candidates []candidate
-		for rows.Next() {
-			var c candidate
-			if err := rows.Scan(&c.userID, &c.tenantID, &c.tenantSlug, &c.tenantName, &c.role, &c.name, &c.passwordHash); err != nil {
-				return Session{}, fmt.Errorf("scan login identity: %w", err)
-			}
-			candidates = append(candidates, c)
-		}
-		if err := rows.Err(); err != nil {
-			return Session{}, fmt.Errorf("iterate login identities: %w", err)
-		}
-		switch len(candidates) {
-		case 0:
-			return Session{}, ErrInvalidCredentials
-		case 1:
-			chosen := candidates[0]
-			userID = chosen.userID
-			resolvedTID = chosen.tenantID
-			tenantSlug = chosen.tenantSlug
-			tenantName = chosen.tenantName
-			role = chosen.role
-			name = chosen.name
-			passwordHash = chosen.passwordHash
-			tenantID = resolvedTID
-		default:
-			chosen := candidates[0]
-			userID = chosen.userID
-			resolvedTID = chosen.tenantID
-			tenantSlug = chosen.tenantSlug
-			tenantName = chosen.tenantName
-			role = chosen.role
-			name = chosen.name
-			passwordHash = chosen.passwordHash
-			tenantID = resolvedTID
-		}
+	candidate, err := s.resolvePasswordLoginCandidate(ctx, tenantID, email)
+	if err != nil {
+		return Session{}, err
 	}
-	if err := ComparePassword(passwordHash, req.Password); err != nil {
+	if err := ComparePassword(candidate.passwordHash, req.Password); err != nil {
 		return Session{}, ErrInvalidCredentials
-	}
-
-	if tenantID == "" {
-		tenantID = resolvedTID
 	}
 
 	now := s.now().UTC()
@@ -236,41 +153,13 @@ func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session,
 	if err != nil {
 		return Session{}, fmt.Errorf("begin login transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
-	if tenantID != "" {
-		if _, err := tx.Exec(ctx, `
-			UPDATE auth_identities
-			SET last_login_at = $3,
-			    updated_at = $3
-			WHERE tenant_id = $1::uuid
-			  AND provider = 'password'
-			  AND identifier_normalized = $2
-		`, tenantID, email, now); err != nil {
-			return Session{}, fmt.Errorf("update last_login_at: %w", err)
-		}
-	} else {
-		if _, err := tx.Exec(ctx, `
-			UPDATE auth_identities
-			SET last_login_at = $2,
-			    updated_at = $2
-			WHERE tenant_id IS NULL
-			  AND provider = 'password'
-			  AND identifier_normalized = $1
-		`, email, now); err != nil {
-			return Session{}, fmt.Errorf("update last_login_at: %w", err)
-		}
+	if err := touchPasswordIdentityLoginTx(ctx, tx, candidate.tenantID, email, now, "update last_login_at"); err != nil {
+		return Session{}, err
 	}
 
-	pair, err := s.issueSession(ctx, tx, sessionUser{
-		UserID:     userID,
-		TenantID:   tenantID,
-		TenantSlug: tenantSlug,
-		TenantName: tenantName,
-		Role:       Role(role),
-		Name:       name,
-		Email:      email,
-	}, now)
+	pair, err := s.issueSession(ctx, tx, candidate.sessionUser(email), now)
 	if err != nil {
 		return Session{}, err
 	}
@@ -284,6 +173,122 @@ func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session,
 	}
 
 	return pair, nil
+}
+
+type passwordLoginCandidate struct {
+	userID       string
+	tenantID     string
+	tenantSlug   string
+	tenantName   string
+	role         string
+	name         string
+	passwordHash string
+}
+
+func (c passwordLoginCandidate) sessionUser(email string) sessionUser {
+	return sessionUser{
+		UserID:     c.userID,
+		TenantID:   c.tenantID,
+		TenantSlug: c.tenantSlug,
+		TenantName: c.tenantName,
+		Role:       Role(c.role),
+		Name:       c.name,
+		Email:      email,
+	}
+}
+
+func (s *PostgresService) resolvePasswordLoginCandidate(ctx context.Context, tenantID, email string) (passwordLoginCandidate, error) {
+	if tenantID != "" {
+		return passwordLoginCandidateByTenant(ctx, s.pool, tenantID, email, "query login identity")
+	}
+
+	candidates, err := passwordLoginCandidatesByEmail(ctx, s.pool, email)
+	if err != nil {
+		return passwordLoginCandidate{}, err
+	}
+	if len(candidates) == 0 {
+		return passwordLoginCandidate{}, ErrInvalidCredentials
+	}
+	return candidates[0], nil
+}
+
+func passwordLoginCandidateByTenant(ctx context.Context, q authRowQueryer, tenantID, email, errPrefix string) (passwordLoginCandidate, error) {
+	var c passwordLoginCandidate
+	err := q.QueryRow(ctx, `
+		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
+		FROM auth_identities ai
+		JOIN users u ON u.id = ai.user_id
+		LEFT JOIN tenants t ON t.id = u.tenant_id
+		WHERE ai.tenant_id = $1::uuid
+		  AND ai.provider = 'password'
+		  AND ai.identifier_normalized = $2
+		LIMIT 1
+	`, tenantID, email).Scan(&c.userID, &c.tenantID, &c.tenantSlug, &c.tenantName, &c.role, &c.name, &c.passwordHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return passwordLoginCandidate{}, ErrInvalidCredentials
+		}
+		return passwordLoginCandidate{}, fmt.Errorf("%s: %w", errPrefix, err)
+	}
+	return c, nil
+}
+
+func passwordLoginCandidatesByEmail(ctx context.Context, q authQueryer, email string) ([]passwordLoginCandidate, error) {
+	rows, err := q.Query(ctx, `
+		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
+		FROM auth_identities ai
+		JOIN users u ON u.id = ai.user_id
+		LEFT JOIN tenants t ON t.id = u.tenant_id
+		WHERE ai.provider = 'password'
+		  AND ai.identifier_normalized = $1
+		ORDER BY u.created_at ASC
+		LIMIT 10
+	`, email)
+	if err != nil {
+		return nil, fmt.Errorf("query login identities: %w", err)
+	}
+	defer rows.Close()
+
+	var candidates []passwordLoginCandidate
+	for rows.Next() {
+		var c passwordLoginCandidate
+		if err := rows.Scan(&c.userID, &c.tenantID, &c.tenantSlug, &c.tenantName, &c.role, &c.name, &c.passwordHash); err != nil {
+			return nil, fmt.Errorf("scan login identity: %w", err)
+		}
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate login identities: %w", err)
+	}
+	return candidates, nil
+}
+
+func touchPasswordIdentityLoginTx(ctx context.Context, tx pgx.Tx, tenantID, email string, now time.Time, errPrefix string) error {
+	if tenantID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE auth_identities
+			SET last_login_at = $3,
+			    updated_at = $3
+			WHERE tenant_id = $1::uuid
+			  AND provider = 'password'
+			  AND identifier_normalized = $2
+		`, tenantID, email, now); err != nil {
+			return fmt.Errorf("%s: %w", errPrefix, err)
+		}
+		return nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_identities
+		SET last_login_at = $2,
+		    updated_at = $2
+		WHERE tenant_id IS NULL
+	  AND provider = 'password'
+	  AND identifier_normalized = $1
+	`, email, now); err != nil {
+		return fmt.Errorf("%s: %w", errPrefix, err)
+	}
+	return nil
 }
 
 func (s *PostgresService) AcceptInvite(ctx context.Context, req AcceptInviteRequest) (Session, error) {
@@ -307,90 +312,22 @@ func (s *PostgresService) AcceptInvite(ctx context.Context, req AcceptInviteRequ
 	if err != nil {
 		return Session{}, fmt.Errorf("begin accept invite transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
-	var (
-		inviteID   string
-		tenantID   string
-		tenantSlug string
-		tenantName string
-		email      string
-		role       string
-		expires    time.Time
-		accepted   *time.Time
-	)
-	err = tx.QueryRow(ctx, `
-		SELECT i.id::text, i.tenant_id::text, t.slug, t.name, i.email_normalized, i.role, i.expires_at, i.accepted_at
-		FROM auth_invites i
-		JOIN tenants t ON t.id = i.tenant_id
-		WHERE token_hash = $1
-		LIMIT 1
-		FOR UPDATE
-	`, HashOpaqueToken(req.Token)).Scan(&inviteID, &tenantID, &tenantSlug, &tenantName, &email, &role, &expires, &accepted)
+	invite, err := loadInviteForAcceptTx(ctx, tx, HashOpaqueToken(req.Token))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Session{}, ErrInvalidInvite
-		}
-		return Session{}, fmt.Errorf("query invite: %w", err)
+		return Session{}, err
 	}
-	if accepted != nil {
-		return Session{}, ErrInvalidInvite
-	}
-	if !expires.After(now) {
-		return Session{}, ErrInviteExpired
+	if err := validateInviteForAccept(invite, now); err != nil {
+		return Session{}, err
 	}
 
-	var existing bool
-	if err := tx.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM auth_identities
-			WHERE tenant_id = $1::uuid
-			  AND provider = 'password'
-			  AND identifier_normalized = $2
-		)
-	`, tenantID, email).Scan(&existing); err != nil {
-		return Session{}, fmt.Errorf("check existing identity: %w", err)
-	}
-	if existing {
-		return Session{}, ErrInvalidInvite
+	user, err := createInvitedPasswordUserTx(ctx, tx, invite, strings.TrimSpace(req.Name), passwordHash, now)
+	if err != nil {
+		return Session{}, err
 	}
 
-	var userID string
-	if err := tx.QueryRow(ctx, `
-		INSERT INTO users (tenant_id, role, name, channel, config, created_at, updated_at)
-		VALUES ($1::uuid, $2, $3, 'web', '{}'::jsonb, $4, $4)
-		RETURNING id::text
-	`, tenantID, role, strings.TrimSpace(req.Name), now).Scan(&userID); err != nil {
-		return Session{}, fmt.Errorf("insert user: %w", err)
-	}
-
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO auth_identities (
-			user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
-		)
-		VALUES ($1::uuid, $2::uuid, 'password', $3, $4, $5, $6, $6, $6, $6)
-	`, userID, tenantID, email, email, passwordHash, now); err != nil {
-		return Session{}, fmt.Errorf("insert auth identity: %w", err)
-	}
-
-	if _, err := tx.Exec(ctx, `
-		UPDATE auth_invites
-		SET accepted_at = $2
-		WHERE id = $1::uuid
-	`, inviteID, now); err != nil {
-		return Session{}, fmt.Errorf("mark invite accepted: %w", err)
-	}
-
-	pair, err := s.issueSession(ctx, tx, sessionUser{
-		UserID:     userID,
-		TenantID:   tenantID,
-		TenantSlug: tenantSlug,
-		TenantName: tenantName,
-		Role:       Role(role),
-		Name:       strings.TrimSpace(req.Name),
-		Email:      email,
-	}, now)
+	pair, err := s.issueSession(ctx, tx, user, now)
 	if err != nil {
 		return Session{}, err
 	}
@@ -400,6 +337,100 @@ func (s *PostgresService) AcceptInvite(ctx context.Context, req AcceptInviteRequ
 	}
 
 	return pair, nil
+}
+
+type acceptInviteRecord struct {
+	id         string
+	tenantID   string
+	tenantSlug string
+	tenantName string
+	email      string
+	role       string
+	expiresAt  time.Time
+	acceptedAt *time.Time
+}
+
+func loadInviteForAcceptTx(ctx context.Context, tx pgx.Tx, tokenHash string) (acceptInviteRecord, error) {
+	var invite acceptInviteRecord
+	err := tx.QueryRow(ctx, `
+		SELECT i.id::text, i.tenant_id::text, t.slug, t.name, i.email_normalized, i.role, i.expires_at, i.accepted_at
+		FROM auth_invites i
+		JOIN tenants t ON t.id = i.tenant_id
+		WHERE token_hash = $1
+		LIMIT 1
+		FOR UPDATE
+	`, tokenHash).Scan(&invite.id, &invite.tenantID, &invite.tenantSlug, &invite.tenantName, &invite.email, &invite.role, &invite.expiresAt, &invite.acceptedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return acceptInviteRecord{}, ErrInvalidInvite
+		}
+		return acceptInviteRecord{}, fmt.Errorf("query invite: %w", err)
+	}
+	return invite, nil
+}
+
+func validateInviteForAccept(invite acceptInviteRecord, now time.Time) error {
+	if invite.acceptedAt != nil {
+		return ErrInvalidInvite
+	}
+	if !invite.expiresAt.After(now) {
+		return ErrInviteExpired
+	}
+	return nil
+}
+
+func createInvitedPasswordUserTx(ctx context.Context, tx pgx.Tx, invite acceptInviteRecord, name, passwordHash string, now time.Time) (sessionUser, error) {
+	var existing bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM auth_identities
+			WHERE tenant_id = $1::uuid
+			  AND provider = 'password'
+			  AND identifier_normalized = $2
+		)
+	`, invite.tenantID, invite.email).Scan(&existing); err != nil {
+		return sessionUser{}, fmt.Errorf("check existing identity: %w", err)
+	}
+	if existing {
+		return sessionUser{}, ErrInvalidInvite
+	}
+
+	var userID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO users (tenant_id, role, name, channel, config, created_at, updated_at)
+		VALUES ($1::uuid, $2, $3, 'web', '{}'::jsonb, $4, $4)
+		RETURNING id::text
+	`, invite.tenantID, invite.role, name, now).Scan(&userID); err != nil {
+		return sessionUser{}, fmt.Errorf("insert user: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO auth_identities (
+			user_id, tenant_id, provider, identifier, identifier_normalized, password_hash, email_verified_at, last_login_at, created_at, updated_at
+		)
+		VALUES ($1::uuid, $2::uuid, 'password', $3, $4, $5, $6, $6, $6, $6)
+	`, userID, invite.tenantID, invite.email, invite.email, passwordHash, now); err != nil {
+		return sessionUser{}, fmt.Errorf("insert auth identity: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE auth_invites
+		SET accepted_at = $2
+		WHERE id = $1::uuid
+	`, invite.id, now); err != nil {
+		return sessionUser{}, fmt.Errorf("mark invite accepted: %w", err)
+	}
+
+	return sessionUser{
+		UserID:     userID,
+		TenantID:   invite.tenantID,
+		TenantSlug: invite.tenantSlug,
+		TenantName: invite.tenantName,
+		Role:       Role(invite.role),
+		Name:       name,
+		Email:      invite.email,
+	}, nil
 }
 
 func (s *PostgresService) IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error) {
@@ -480,7 +511,7 @@ func (s *PostgresService) ReissueInvite(ctx context.Context, req ReissueInviteRe
 	if err != nil {
 		return InviteRecord{}, fmt.Errorf("begin reissue invite transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
 	var (
 		email      string
@@ -550,12 +581,6 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 	}
 
 	now := s.now().UTC()
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return Session{}, fmt.Errorf("begin session transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
 	var (
 		userID     string
 		tenantID   string
@@ -567,7 +592,7 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 		expiresAt  time.Time
 		revokedAt  *time.Time
 	)
-	err = tx.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, `
 		SELECT u.id::text,
 		       COALESCE(u.tenant_id::text, ''),
 		       COALESCE(t.slug, ''),
@@ -586,7 +611,6 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 		LEFT JOIN tenants t ON t.id = u.tenant_id
 		WHERE rt.token_hash = $1
 		LIMIT 1
-		FOR UPDATE OF rt, u
 	`, HashOpaqueToken(sessionToken)).Scan(&userID, &tenantID, &tenantSlug, &tenantName, &role, &name, &email, &expiresAt, &revokedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -598,22 +622,26 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 		return Session{}, ErrInvalidCredentials
 	}
 
-	expiresAt = now.Add(s.sessionTTL)
-	if _, err := tx.Exec(ctx, `
-		UPDATE auth_sessions
-		SET expires_at = $2
-		WHERE token_hash = $1
-	`, HashOpaqueToken(sessionToken), expiresAt); err != nil {
-		return Session{}, fmt.Errorf("extend session: %w", err)
+	if shouldRefreshAuthSession(now, expiresAt, s.sessionTTL) {
+		expiresAt = now.Add(s.sessionTTL)
+		tag, err := s.pool.Exec(ctx, `
+			UPDATE auth_sessions
+			SET expires_at = $2
+			WHERE token_hash = $1
+			  AND revoked_at IS NULL
+			  AND expires_at > $3
+		`, HashOpaqueToken(sessionToken), expiresAt, now)
+		if err != nil {
+			return Session{}, fmt.Errorf("extend session: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return Session{}, ErrInvalidCredentials
+		}
 	}
 
-	tenantChoices, err := s.tenantOptionsByEmail(ctx, tx, email)
+	tenantChoices, err := s.tenantOptionsByEmail(ctx, s.pool, email)
 	if err != nil {
 		return Session{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return Session{}, fmt.Errorf("commit session transaction: %w", err)
 	}
 
 	session := Session{
@@ -646,84 +674,29 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, sessionToken, tenant
 	if err != nil {
 		return Session{}, fmt.Errorf("begin switch tenant transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
-	var (
-		tokenID      string
-		currentEmail string
-		expiresAt    time.Time
-		revokedAt    *time.Time
-	)
-	err = tx.QueryRow(ctx, `
-		SELECT rt.id::text, COALESCE(ai.identifier_normalized, ''), rt.expires_at, rt.revoked_at
-		FROM auth_sessions rt
-		JOIN users u ON u.id = rt.user_id
-		LEFT JOIN auth_identities ai
-		  ON ai.user_id = u.id
-		 AND ai.provider = 'password'
-		WHERE rt.token_hash = $1
-		LIMIT 1
-		FOR UPDATE OF rt, u
-	`, HashOpaqueToken(sessionToken)).Scan(&tokenID, &currentEmail, &expiresAt, &revokedAt)
+	current, err := loadSwitchTenantSessionTx(ctx, tx, HashOpaqueToken(sessionToken))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Session{}, ErrInvalidCredentials
-		}
-		return Session{}, fmt.Errorf("query switch tenant token: %w", err)
+		return Session{}, err
 	}
-	if revokedAt != nil || !expiresAt.After(now) || strings.TrimSpace(currentEmail) == "" {
+	if current.revokedAt != nil || !current.expiresAt.After(now) || strings.TrimSpace(current.email) == "" {
 		return Session{}, ErrInvalidCredentials
 	}
 
-	var (
-		userID       string
-		resolvedTID  string
-		tenantSlug   string
-		tenantName   string
-		role         string
-		name         string
-		passwordHash string
-	)
-	err = tx.QueryRow(ctx, `
-		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
-		FROM auth_identities ai
-		JOIN users u ON u.id = ai.user_id
-		LEFT JOIN tenants t ON t.id = u.tenant_id
-		WHERE ai.tenant_id = $1::uuid
-		  AND ai.provider = 'password'
-		  AND ai.identifier_normalized = $2
-		LIMIT 1
-	`, tenantID, currentEmail).Scan(&userID, &resolvedTID, &tenantSlug, &tenantName, &role, &name, &passwordHash)
+	candidate, err := passwordLoginCandidateByTenant(ctx, tx, tenantID, current.email, "query target tenant identity")
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Session{}, ErrInvalidCredentials
-		}
-		return Session{}, fmt.Errorf("query target tenant identity: %w", err)
+		return Session{}, err
 	}
-	if err := ComparePassword(passwordHash, password); err != nil {
+	if err := ComparePassword(candidate.passwordHash, password); err != nil {
 		return Session{}, ErrInvalidCredentials
 	}
 
-	if _, err := tx.Exec(ctx, `
-		UPDATE auth_identities
-		SET last_login_at = $3,
-		    updated_at = $3
-		WHERE tenant_id = $1::uuid
-		  AND provider = 'password'
-		  AND identifier_normalized = $2
-	`, resolvedTID, currentEmail, now); err != nil {
-		return Session{}, fmt.Errorf("update switch tenant last_login_at: %w", err)
+	if err := touchPasswordIdentityLoginTx(ctx, tx, candidate.tenantID, current.email, now, "update switch tenant last_login_at"); err != nil {
+		return Session{}, err
 	}
 
-	pair, newTokenID, err := s.issueSessionWithID(ctx, tx, sessionUser{
-		UserID:     userID,
-		TenantID:   resolvedTID,
-		TenantSlug: tenantSlug,
-		TenantName: tenantName,
-		Role:       Role(role),
-		Name:       name,
-		Email:      currentEmail,
-	}, now)
+	pair, newTokenID, err := s.issueSessionWithID(ctx, tx, candidate.sessionUser(current.email), now)
 	if err != nil {
 		return Session{}, err
 	}
@@ -733,19 +706,48 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, sessionToken, tenant
 		SET revoked_at = $2,
 		    replaced_by = $3::uuid
 		WHERE id = $1::uuid
-	`, tokenID, now, newTokenID); err != nil {
+	`, current.tokenID, now, newTokenID); err != nil {
 		return Session{}, fmt.Errorf("revoke previous session: %w", err)
+	}
+
+	pair.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, current.email)
+	if err != nil {
+		return Session{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return Session{}, fmt.Errorf("commit switch tenant transaction: %w", err)
 	}
-
-	pair.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, currentEmail)
-	if err != nil {
-		return Session{}, err
-	}
 	return pair, nil
+}
+
+type switchTenantSession struct {
+	tokenID   string
+	email     string
+	expiresAt time.Time
+	revokedAt *time.Time
+}
+
+func loadSwitchTenantSessionTx(ctx context.Context, tx pgx.Tx, tokenHash string) (switchTenantSession, error) {
+	var current switchTenantSession
+	err := tx.QueryRow(ctx, `
+		SELECT rt.id::text, COALESCE(ai.identifier_normalized, ''), rt.expires_at, rt.revoked_at
+		FROM auth_sessions rt
+		JOIN users u ON u.id = rt.user_id
+		LEFT JOIN auth_identities ai
+		  ON ai.user_id = u.id
+		 AND ai.provider = 'password'
+		WHERE rt.token_hash = $1
+		LIMIT 1
+		FOR UPDATE OF rt, u
+	`, tokenHash).Scan(&current.tokenID, &current.email, &current.expiresAt, &current.revokedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return switchTenantSession{}, ErrInvalidCredentials
+		}
+		return switchTenantSession{}, fmt.Errorf("query switch tenant token: %w", err)
+	}
+	return current, nil
 }
 
 func (s *PostgresService) Logout(ctx context.Context, sessionToken string) error {
@@ -824,7 +826,32 @@ func generateOpaqueToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (s *PostgresService) tenantOptionsByEmail(ctx context.Context, q pgx.Tx, email string) ([]TenantOption, error) {
+type authQueryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+type authRowQueryer interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func rollbackAuthTx(tx pgx.Tx) {
+	ctx, cancel := context.WithTimeout(context.Background(), authRollbackTimeout)
+	defer cancel()
+	_ = tx.Rollback(ctx)
+}
+
+func shouldRefreshAuthSession(now, expiresAt time.Time, ttl time.Duration) bool {
+	if ttl <= 0 {
+		return true
+	}
+	window := ttl / authSessionRefreshDivisor
+	if window <= 0 || window > authSessionRefreshWindow {
+		window = authSessionRefreshWindow
+	}
+	return !expiresAt.After(now.Add(window))
+}
+
+func (s *PostgresService) tenantOptionsByEmail(ctx context.Context, q authQueryer, email string) ([]TenantOption, error) {
 	email = NormalizeIdentifier(email)
 	if email == "" {
 		return nil, nil

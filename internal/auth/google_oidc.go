@@ -827,7 +827,7 @@ func (s *PostgresService) completeGoogleLink(ctx context.Context, userID string,
 	if err != nil {
 		return Session{}, fmt.Errorf("begin Google link transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
 
 	user, err := loadSessionUserByUserID(ctx, tx, userID)
 	if err != nil {
@@ -852,22 +852,8 @@ func (s *PostgresService) completeGoogleLogin(ctx context.Context, identity goog
 	if user, ok, err := s.googleUserBySubject(ctx, identity.Sub); err != nil {
 		return Session{}, false, err
 	} else if ok {
-		tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-		if err != nil {
-			return Session{}, false, fmt.Errorf("begin Google login transaction: %w", err)
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-		if err := s.touchGoogleIdentityTx(ctx, tx, user.UserID, identity, now); err != nil {
-			return Session{}, false, err
-		}
-		session, err := s.issueSession(ctx, tx, user, now)
-		if err != nil {
-			return Session{}, false, err
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return Session{}, false, fmt.Errorf("commit Google login transaction: %w", err)
-		}
-		return session, false, nil
+		session, err := s.completeExistingGoogleLogin(ctx, user, identity, now)
+		return session, false, err
 	}
 
 	if !identity.EmailVerified || strings.TrimSpace(identity.Email) == "" {
@@ -886,27 +872,55 @@ func (s *PostgresService) completeGoogleLogin(ctx context.Context, identity goog
 	}
 	chosen := candidates[0]
 
+	session, err := s.completeGoogleAutoLink(ctx, chosen, identity, now)
+	if err != nil {
+		return Session{}, false, err
+	}
+	return session, true, nil
+}
+
+func (s *PostgresService) completeExistingGoogleLogin(ctx context.Context, user sessionUser, identity googleIdentity, now time.Time) (Session, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return Session{}, false, fmt.Errorf("begin Google auto-link transaction: %w", err)
+		return Session{}, fmt.Errorf("begin Google login transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAuthTx(tx)
+
+	if err := s.touchGoogleIdentityTx(ctx, tx, user.UserID, identity, now); err != nil {
+		return Session{}, err
+	}
+	session, err := s.issueSession(ctx, tx, user, now)
+	if err != nil {
+		return Session{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Session{}, fmt.Errorf("commit Google login transaction: %w", err)
+	}
+	return session, nil
+}
+
+func (s *PostgresService) completeGoogleAutoLink(ctx context.Context, chosen sessionUser, identity googleIdentity, now time.Time) (Session, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return Session{}, fmt.Errorf("begin Google auto-link transaction: %w", err)
+	}
+	defer rollbackAuthTx(tx)
 
 	if err := s.linkGoogleIdentityTx(ctx, tx, chosen, identity, now); err != nil {
-		return Session{}, false, err
+		return Session{}, err
 	}
 	session, err := s.issueSession(ctx, tx, chosen, now)
 	if err != nil {
-		return Session{}, false, err
+		return Session{}, err
 	}
 	session.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, chosen.Email)
 	if err != nil {
-		return Session{}, false, err
+		return Session{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Session{}, false, fmt.Errorf("commit Google auto-link transaction: %w", err)
+		return Session{}, fmt.Errorf("commit Google auto-link transaction: %w", err)
 	}
-	return session, true, nil
+	return session, nil
 }
 
 func (s *PostgresService) googleUserBySubject(ctx context.Context, subject string) (sessionUser, bool, error) {
