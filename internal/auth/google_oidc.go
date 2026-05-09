@@ -873,7 +873,10 @@ func (s *PostgresService) completeGoogleLogin(ctx context.Context, identity goog
 	chosen := candidates[0]
 
 	session, err := s.completeGoogleAutoLink(ctx, chosen, identity, now)
-	return session, true, err
+	if err != nil {
+		return Session{}, false, err
+	}
+	return session, true, nil
 }
 
 func (s *PostgresService) completeExistingGoogleLogin(ctx context.Context, user sessionUser, identity googleIdentity, now time.Time) (Session, error) {
