@@ -13,6 +13,15 @@ import (
 
 const dbTimeout = 5 * time.Second
 
+const targetUserCTE = `WITH target_user AS (
+	SELECT id
+	FROM users
+	WHERE external_id = $1
+	  AND tenant_id = $2::uuid
+	ORDER BY created_at ASC
+	LIMIT 1
+)`
+
 // PostgresTracker is a PostgreSQL-backed implementation of Tracker.
 type PostgresTracker struct {
 	pool     *pgxpool.Pool
@@ -108,14 +117,7 @@ func (p *PostgresTracker) GetMastery(userID, syllabusID, topicID string) (float6
 
 	var score float64
 	err := p.pool.QueryRow(ctx,
-		`WITH target_user AS (
-			SELECT id
-			FROM users
-			WHERE external_id = $1
-			  AND tenant_id = $2::uuid
-			ORDER BY created_at ASC
-			LIMIT 1
-		 )
+		targetUserCTE+`
 		 SELECT lp.mastery_score
 		 FROM target_user u
 		 JOIN learning_progress lp ON lp.user_id = u.id
@@ -136,14 +138,7 @@ func (p *PostgresTracker) GetAllProgress(userID string) ([]ProgressItem, error) 
 	defer cancel()
 
 	rows, err := p.pool.Query(ctx,
-		`WITH target_user AS (
-			SELECT id
-			FROM users
-			WHERE external_id = $1
-			  AND tenant_id = $2::uuid
-			ORDER BY created_at ASC
-			LIMIT 1
-		 )
+		targetUserCTE+`
 		 SELECT lp.syllabus_id, lp.topic_id, lp.mastery_score, lp.ease_factor, lp.interval_days, lp.repetitions, lp.next_review_at, lp.last_studied_at
 		 FROM target_user u
 		 JOIN learning_progress lp ON lp.user_id = u.id
@@ -173,14 +168,7 @@ func (p *PostgresTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 	defer cancel()
 
 	rows, err := p.pool.Query(ctx,
-		`WITH target_user AS (
-			SELECT id
-			FROM users
-			WHERE external_id = $1
-			  AND tenant_id = $2::uuid
-			ORDER BY created_at ASC
-			LIMIT 1
-		 )
+		targetUserCTE+`
 		 SELECT lp.syllabus_id, lp.topic_id, lp.mastery_score, lp.ease_factor, lp.interval_days, lp.repetitions, lp.next_review_at, lp.last_studied_at
 		 FROM target_user u
 		 JOIN learning_progress lp ON lp.user_id = u.id
