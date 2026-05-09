@@ -17,6 +17,8 @@ type PostgresNudgeTracker struct {
 	tenantID string
 }
 
+const nudgeDayTimeZone = "Asia/Kuala_Lumpur"
+
 // NewPostgresNudgeTracker creates a PostgreSQL-backed nudge tracker.
 func NewPostgresNudgeTracker(pool *pgxpool.Pool, tenantID string) *PostgresNudgeTracker {
 	return &PostgresNudgeTracker{
@@ -30,22 +32,31 @@ func (t *PostgresNudgeTracker) NudgeCountToday(userID string) (int, error) {
 	defer cancel()
 
 	var count int
-	err := t.pool.QueryRow(ctx,
-		`SELECT COUNT(*)
-		 FROM nudge_log nl
-		 JOIN users u ON u.id = nl.user_id
-		 WHERE nl.tenant_id = $1::uuid
-		   AND u.external_id = $2
-		   AND (nl.sent_at AT TIME ZONE 'Asia/Kuala_Lumpur')::date =
-		       (NOW() AT TIME ZONE 'Asia/Kuala_Lumpur')::date`,
-		t.tenantID,
-		userID,
-	).Scan(&count)
+	query, args := buildNudgeCountTodayQuery(t.tenantID, userID)
+	err := t.pool.QueryRow(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count nudges today: %w", err)
 	}
 
 	return count, nil
+}
+
+func buildNudgeCountTodayQuery(tenantID, userID string) (string, []any) {
+	return `WITH target_user AS (
+			SELECT id
+			FROM users
+			WHERE tenant_id = $1::uuid
+			  AND external_id = $2
+			ORDER BY created_at ASC
+			LIMIT 1
+		 )
+		 SELECT COUNT(*)
+		 FROM nudge_log nl
+		 JOIN target_user u ON u.id = nl.user_id
+		 WHERE nl.tenant_id = $1::uuid
+		   AND nl.sent_at >= date_trunc('day', NOW() AT TIME ZONE $3) AT TIME ZONE $3
+		   AND nl.sent_at < (date_trunc('day', NOW() AT TIME ZONE $3) + INTERVAL '1 day') AT TIME ZONE $3`,
+		[]any{tenantID, userID, nudgeDayTimeZone}
 }
 
 func (t *PostgresNudgeTracker) RecordNudge(userID, nudgeType, topicID string) error {

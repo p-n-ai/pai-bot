@@ -158,6 +158,35 @@ func TestTenantPredicate(t *testing.T) {
 	}
 }
 
+func TestBuildGroupLeaderboardQueryUsesJoinedMemberSet(t *testing.T) {
+	service := Service{tenantID: "11111111-1111-1111-1111-111111111111"}
+
+	query, args := service.buildGroupLeaderboardQuery("22222222-2222-2222-2222-222222222222")
+
+	if len(args) != 2 {
+		t.Fatalf("args len = %d, want 2", len(args))
+	}
+	if args[0] != "22222222-2222-2222-2222-222222222222" || args[1] != service.tenantID {
+		t.Fatalf("args = %#v, want group id and tenant id", args)
+	}
+	if strings.Contains(query, "IN (SELECT user_id FROM members)") {
+		t.Fatalf("query should join the member set instead of repeated IN subqueries:\n%s", query)
+	}
+	for _, want := range []string{
+		"SELECT gm.user_id, gm.tenant_id",
+		"JOIN learning_progress lp",
+		"ON lp.user_id = m.user_id",
+		"AND lp.tenant_id = m.tenant_id",
+		"JOIN mastery_snapshots ms",
+		"AND ms.tenant_id = m.tenant_id",
+		"($2::uuid IS NULL OR g.tenant_id = $2::uuid)",
+	} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("query missing %q:\n%s", want, query)
+		}
+	}
+}
+
 func TestComputeRetentionSeries(t *testing.T) {
 	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
 

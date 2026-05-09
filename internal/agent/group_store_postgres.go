@@ -244,12 +244,14 @@ func (s *PostgresGroupStore) GetUserGroups(userID string) ([]Group, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT g.id::text, g.tenant_id::text, g.name, g.type, g.description, g.syllabus, g.subject, g.cadence,
 		       g.join_code, COALESCE(g.created_by::text, ''), g.created_at, g.updated_at,
-		       (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id)::int,
+		       COUNT(gm_count.id)::int,
 		       g.closed
 		FROM groups g
-		JOIN group_members gm ON gm.group_id = g.id
-		WHERE gm.user_id = $1::uuid
-		ORDER BY gm.joined_at DESC`,
+		JOIN group_members user_membership ON user_membership.group_id = g.id
+		LEFT JOIN group_members gm_count ON gm_count.group_id = g.id
+		WHERE user_membership.user_id = $1::uuid
+		GROUP BY g.id, user_membership.joined_at
+		ORDER BY user_membership.joined_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -276,9 +278,10 @@ func (s *PostgresGroupStore) ListGroups(tenantID, groupType string) ([]Group, er
 	query := `
 		SELECT g.id::text, g.tenant_id::text, g.name, g.type, g.description, g.syllabus, g.subject, g.cadence,
 		       g.join_code, COALESCE(g.created_by::text, ''), g.created_at, g.updated_at,
-		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)::int,
+		       COUNT(gm.id)::int,
 		       g.closed
 		FROM groups g
+		LEFT JOIN group_members gm ON gm.group_id = g.id
 		WHERE g.tenant_id = $1::uuid`
 	args := []any{tenantID}
 
@@ -286,7 +289,7 @@ func (s *PostgresGroupStore) ListGroups(tenantID, groupType string) ([]Group, er
 		query += ` AND g.type = $2`
 		args = append(args, groupType)
 	}
-	query += ` ORDER BY g.created_at DESC`
+	query += ` GROUP BY g.id ORDER BY g.created_at DESC`
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -343,29 +346,53 @@ func (s *PostgresGroupStore) GetWeeklyLeaderboard(groupID string, limit int) ([]
 		limit = 10
 	}
 
-	// Compare current mastery_score with the oldest snapshot within the past 7 days.
-	// Uses DISTINCT ON to pick the earliest snapshot per user/topic in the window.
-	// Only includes students (not teachers/leaders).
-	rows, err := s.pool.Query(ctx, `
+	query, args := buildWeeklyLeaderboardQuery(groupID, limit)
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query weekly leaderboard: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]LeaderboardEntry, 0, limit)
+	for rows.Next() {
+		var e LeaderboardEntry
+		if err := rows.Scan(&e.UserID, &e.UserName, &e.MasteryGain, &e.Rank); err != nil {
+			return nil, fmt.Errorf("scan leaderboard entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func buildWeeklyLeaderboardQuery(groupID string, limit int) (string, []any) {
+	return `
 		WITH members AS (
-			SELECT gm.user_id
+			SELECT gm.user_id, gm.tenant_id
 			FROM group_members gm
 			JOIN users u ON u.id = gm.user_id AND u.role = 'student'
 			WHERE gm.group_id = $1::uuid
 		),
 		current_scores AS (
-			SELECT lp.user_id, lp.topic_id, lp.mastery_score
-			FROM learning_progress lp
-			WHERE lp.user_id IN (SELECT user_id FROM members)
+			SELECT m.user_id, lp.topic_id, lp.mastery_score
+			FROM members m
+			JOIN learning_progress lp
+			  ON lp.user_id = m.user_id
+			 AND lp.tenant_id = m.tenant_id
+		),
+		snapshot_window AS (
+			SELECT m.user_id, ms.topic_id, ms.mastery_score, ms.snapshot_date
+			FROM members m
+			JOIN mastery_snapshots ms
+			  ON ms.user_id = m.user_id
+			 AND ms.tenant_id = m.tenant_id
+			WHERE ms.snapshot_date >= (CURRENT_DATE - INTERVAL '7 days')::date
+			  AND ms.snapshot_date < CURRENT_DATE
 		),
 		baseline_scores AS (
-			SELECT DISTINCT ON (ms.user_id, ms.topic_id)
-			       ms.user_id, ms.topic_id, ms.mastery_score
-			FROM mastery_snapshots ms
-			WHERE ms.user_id IN (SELECT user_id FROM members)
-			  AND ms.snapshot_date >= (CURRENT_DATE - INTERVAL '7 days')::date
-			  AND ms.snapshot_date < CURRENT_DATE
-			ORDER BY ms.user_id, ms.topic_id, ms.snapshot_date ASC
+			SELECT DISTINCT ON (user_id, topic_id)
+			       user_id, topic_id, mastery_score
+			FROM snapshot_window
+			ORDER BY user_id, topic_id, snapshot_date ASC
 		),
 		gains AS (
 			SELECT cs.user_id,
@@ -379,23 +406,7 @@ func (s *PostgresGroupStore) GetWeeklyLeaderboard(groupID string, limit int) ([]
 		FROM gains g
 		JOIN users u ON u.id = g.user_id
 		ORDER BY g.avg_gain DESC
-		LIMIT $2`,
-		groupID, limit,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query weekly leaderboard: %w", err)
-	}
-	defer rows.Close()
-
-	var entries []LeaderboardEntry
-	for rows.Next() {
-		var e LeaderboardEntry
-		if err := rows.Scan(&e.UserID, &e.UserName, &e.MasteryGain, &e.Rank); err != nil {
-			return nil, fmt.Errorf("scan leaderboard entry: %w", err)
-		}
-		entries = append(entries, e)
-	}
-	return entries, rows.Err()
+		LIMIT $2`, []any{groupID, limit}
 }
 
 const joinCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no I/O/0/1 to avoid confusion
