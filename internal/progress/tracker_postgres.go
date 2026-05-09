@@ -13,6 +13,15 @@ import (
 
 const dbTimeout = 5 * time.Second
 
+const targetUserCTE = `WITH target_user AS (
+	SELECT id
+	FROM users
+	WHERE external_id = $1
+	  AND tenant_id = $2::uuid
+	ORDER BY created_at ASC
+	LIMIT 1
+)`
+
 // PostgresTracker is a PostgreSQL-backed implementation of Tracker.
 type PostgresTracker struct {
 	pool     *pgxpool.Pool
@@ -108,9 +117,13 @@ func (p *PostgresTracker) GetMastery(userID, syllabusID, topicID string) (float6
 
 	var score float64
 	err := p.pool.QueryRow(ctx,
-		`SELECT mastery_score FROM learning_progress
-		 WHERE user_id = (SELECT id FROM users WHERE external_id = $1 AND tenant_id = $2)
-		   AND syllabus_id = $3 AND topic_id = $4`,
+		targetUserCTE+`
+		 SELECT lp.mastery_score
+		 FROM target_user u
+		 JOIN learning_progress lp ON lp.user_id = u.id
+		 WHERE lp.tenant_id = $2::uuid
+		   AND lp.syllabus_id = $3
+		   AND lp.topic_id = $4`,
 		userID, p.tenantID, syllabusID, topicID,
 	).Scan(&score)
 
@@ -125,10 +138,12 @@ func (p *PostgresTracker) GetAllProgress(userID string) ([]ProgressItem, error) 
 	defer cancel()
 
 	rows, err := p.pool.Query(ctx,
-		`SELECT syllabus_id, topic_id, mastery_score, ease_factor, interval_days, repetitions, next_review_at, last_studied_at
-		 FROM learning_progress
-		 WHERE user_id = (SELECT id FROM users WHERE external_id = $1 AND tenant_id = $2)
-		 ORDER BY last_studied_at DESC`,
+		targetUserCTE+`
+		 SELECT lp.syllabus_id, lp.topic_id, lp.mastery_score, lp.ease_factor, lp.interval_days, lp.repetitions, lp.next_review_at, lp.last_studied_at
+		 FROM target_user u
+		 JOIN learning_progress lp ON lp.user_id = u.id
+		 WHERE lp.tenant_id = $2::uuid
+		 ORDER BY lp.last_studied_at DESC`,
 		userID, p.tenantID,
 	)
 	if err != nil {
@@ -153,11 +168,13 @@ func (p *PostgresTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 	defer cancel()
 
 	rows, err := p.pool.Query(ctx,
-		`SELECT syllabus_id, topic_id, mastery_score, ease_factor, interval_days, repetitions, next_review_at, last_studied_at
-		 FROM learning_progress
-		 WHERE user_id = (SELECT id FROM users WHERE external_id = $1 AND tenant_id = $2)
-		   AND next_review_at <= NOW()
-		 ORDER BY next_review_at ASC`,
+		targetUserCTE+`
+		 SELECT lp.syllabus_id, lp.topic_id, lp.mastery_score, lp.ease_factor, lp.interval_days, lp.repetitions, lp.next_review_at, lp.last_studied_at
+		 FROM target_user u
+		 JOIN learning_progress lp ON lp.user_id = u.id
+		 WHERE lp.tenant_id = $2::uuid
+		   AND lp.next_review_at <= NOW()
+		 ORDER BY lp.next_review_at ASC`,
 		userID, p.tenantID,
 	)
 	if err != nil {
