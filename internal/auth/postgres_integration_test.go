@@ -347,27 +347,44 @@ func TestPostgresService_SwitchTenantRequiresTargetTenantPassword(t *testing.T) 
 	assertSessionStored(t, ctx, pool, loginPair.Token, false)
 }
 
-func TestAuthIdentityTenantConstraintRejectsMismatchedTenant(t *testing.T) {
+func TestUsersTenantScopeConstraintRejectsInvalidRoleTenantShape(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)
 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
-	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
-	userID := seedWebUser(t, ctx, pool, defaultTenantID, RoleTeacher, "Teacher One")
 
-	_, err := pool.Exec(ctx,
-		`INSERT INTO auth_identities (user_id, tenant_id, provider, identifier, identifier_normalized)
-		 VALUES ($1::uuid, $2::uuid, 'password', $3, $4)`,
-		userID,
-		secondTenantID,
-		"teacher@example.com",
-		NormalizeIdentifier("teacher@example.com"),
-	)
-	if err == nil {
-		t.Fatal("expected auth identity insert with mismatched tenant to fail")
+	tests := []struct {
+		name     string
+		tenantID any
+		role     Role
+	}{
+		{
+			name:     "non platform admin requires tenant",
+			tenantID: nil,
+			role:     RoleTeacher,
+		},
+		{
+			name:     "platform admin must be global",
+			tenantID: defaultTenantID,
+			role:     RolePlatformAdmin,
+		},
 	}
-	if !strings.Contains(err.Error(), "auth_identities_user_id_tenant_id_fkey") {
-		t.Fatalf("constraint error = %v, want auth_identities_user_id_tenant_id_fkey", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := pool.Exec(ctx,
+				`INSERT INTO users (tenant_id, role, name, channel)
+				 VALUES ($1, $2, 'Invalid User', 'web')`,
+				tt.tenantID,
+				string(tt.role),
+			)
+			if err == nil {
+				t.Fatal("expected invalid role/tenant shape to fail")
+			}
+			if !strings.Contains(err.Error(), "users_tenant_scope_check") {
+				t.Fatalf("constraint error = %v, want users_tenant_scope_check", err)
+			}
+		})
 	}
 }
 
@@ -406,6 +423,57 @@ func TestPostgresService_PlatformAdminLoginWithoutTenant(t *testing.T) {
 	assertSessionStored(t, ctx, pool, pair.Token, false)
 }
 
+func TestPostgresService_SessionRefreshesOnlyNearExpiry(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+
+	tenantID := loadDefaultTenantID(t, ctx, pool)
+	seedPasswordUser(t, ctx, pool, tenantID, "teacher@example.com", RoleTeacher, "secret-123")
+
+	farSession, err := svc.Login(ctx, LoginRequest{
+		TenantID: tenantID,
+		Email:    "teacher@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("Login(far) error = %v", err)
+	}
+	farExpiry := now.Add(6 * 24 * time.Hour)
+	setSessionExpiry(t, ctx, pool, farSession.Token, farExpiry)
+
+	session, err := svc.Session(ctx, farSession.Token)
+	if err != nil {
+		t.Fatalf("Session(far) error = %v", err)
+	}
+	if !session.ExpiresAt.Equal(farExpiry) {
+		t.Fatalf("far session expires_at = %v, want unchanged %v", session.ExpiresAt, farExpiry)
+	}
+	assertSessionExpiry(t, ctx, pool, farSession.Token, farExpiry)
+
+	nearSession, err := svc.Login(ctx, LoginRequest{
+		TenantID: tenantID,
+		Email:    "teacher@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("Login(near) error = %v", err)
+	}
+	nearExpiry := now.Add(23 * time.Hour)
+	setSessionExpiry(t, ctx, pool, nearSession.Token, nearExpiry)
+
+	session, err = svc.Session(ctx, nearSession.Token)
+	if err != nil {
+		t.Fatalf("Session(near) error = %v", err)
+	}
+	wantExtended := now.Add(7 * 24 * time.Hour)
+	if !session.ExpiresAt.Equal(wantExtended) {
+		t.Fatalf("near session expires_at = %v, want extended %v", session.ExpiresAt, wantExtended)
+	}
+	assertSessionExpiry(t, ctx, pool, nearSession.Token, wantExtended)
+}
+
 func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 
@@ -442,6 +510,8 @@ func startAuthPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100500_global_platform_admins.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260403110000_google_auth_oidc.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260403130000_auth_sessions.sql"))
+	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260403163500_repair_auth_refresh_tokens.sql"))
 	applyAuthMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260406110000_invite_delivery.sql"))
 
 	return pool
@@ -705,6 +775,37 @@ func assertSessionStored(t *testing.T, ctx context.Context, pool *pgxpool.Pool, 
 	}
 	if !wantRevoked && revokedAt != nil {
 		t.Fatal("session should be active")
+	}
+}
+
+func setSessionExpiry(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rawToken string, expiresAt time.Time) {
+	t.Helper()
+
+	tag, err := pool.Exec(ctx,
+		`UPDATE auth_sessions SET expires_at = $2 WHERE token_hash = $1`,
+		HashOpaqueToken(rawToken),
+		expiresAt,
+	)
+	if err != nil {
+		t.Fatalf("update session expiry: %v", err)
+	}
+	if tag.RowsAffected() != 1 {
+		t.Fatalf("updated session expiry rows = %d, want 1", tag.RowsAffected())
+	}
+}
+
+func assertSessionExpiry(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rawToken string, want time.Time) {
+	t.Helper()
+
+	var got time.Time
+	if err := pool.QueryRow(ctx,
+		`SELECT expires_at FROM auth_sessions WHERE token_hash = $1`,
+		HashOpaqueToken(rawToken),
+	).Scan(&got); err != nil {
+		t.Fatalf("query session expiry: %v", err)
+	}
+	if !got.Equal(want) {
+		t.Fatalf("stored session expires_at = %v, want %v", got, want)
 	}
 }
 

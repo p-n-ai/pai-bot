@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestTenantRequiredErrorWrapsSentinel(t *testing.T) {
@@ -71,5 +72,50 @@ func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 	_, err = svc.ListLinkedIdentities(context.Background(), "user-1")
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("ListLinkedIdentities() error = %v, want ErrNotImplemented", err)
+	}
+}
+
+func TestShouldRefreshAuthSession(t *testing.T) {
+	now := time.Date(2026, 5, 9, 14, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		expiresAt time.Time
+		ttl       time.Duration
+		want      bool
+	}{
+		{
+			name:      "does not refresh far from expiry",
+			expiresAt: now.Add(6 * 24 * time.Hour),
+			ttl:       7 * 24 * time.Hour,
+			want:      false,
+		},
+		{
+			name:      "refreshes inside capped refresh window",
+			expiresAt: now.Add(23 * time.Hour),
+			ttl:       7 * 24 * time.Hour,
+			want:      true,
+		},
+		{
+			name:      "refreshes inside short ttl divisor window",
+			expiresAt: now.Add(10 * time.Minute),
+			ttl:       time.Hour,
+			want:      true,
+		},
+		{
+			name:      "refreshes invalid ttl defensively",
+			expiresAt: now.Add(6 * 24 * time.Hour),
+			ttl:       0,
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRefreshAuthSession(now, tt.expiresAt, tt.ttl)
+			if got != tt.want {
+				t.Fatalf("shouldRefreshAuthSession() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
