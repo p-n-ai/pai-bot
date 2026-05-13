@@ -1,7 +1,7 @@
-import { AdminPageSection } from '@/components/shared/admin-page-section'
 import { ParentSummaryPanel } from './parent-summary-panel'
 import { StudentDetailPanel } from './student-detail-panel'
 import type { ReactNode } from 'react'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
 
 interface EntityDetailRouteSectionProps {
   children: ReactNode
