@@ -260,6 +260,7 @@ describe('admin dashboard API', () => {
         teachers: 1,
         parents: 1,
         pending_invites: 1,
+        students: 0,
         total_users: 3,
       },
       active_users: [
@@ -283,6 +284,7 @@ describe('admin dashboard API', () => {
           invited_by: 'Admin',
         },
       ],
+      students: [],
     }
     const fetcher = vi
       .fn()
