@@ -117,7 +117,7 @@ resource "aws_instance" "app" {
   root_block_device {
     volume_size = var.volume_size_gb
     volume_type = "gp3"
-    encrypted   = true
+    encrypted   = false # existing instance was launched unencrypted
   }
 
   metadata_options {
@@ -128,6 +128,12 @@ resource "aws_instance" "app" {
   user_data = templatefile("${path.module}/user-data.sh", {
     app_dir = var.app_dir
   })
+
+  # Prevent Terraform from destroying/recreating the instance when AMI
+  # or user-data changes. These only apply at launch time anyway.
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
 
   tags = {
     Name    = "${var.project}-server"
