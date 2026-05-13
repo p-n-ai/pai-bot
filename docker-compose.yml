@@ -58,6 +58,8 @@ services:
     env_file:
       - .env
     environment:
+      LEARN_SERVER_HOST: 0.0.0.0
+      LEARN_SERVER_PORT: 8080
       LEARN_DATABASE_URL: postgres://pai:${POSTGRES_PASSWORD:-pai}@postgres:5432/pai?sslmode=disable
       LEARN_CACHE_URL: redis://dragonfly:6379
       LEARN_NATS_URL: nats://nats:4222
@@ -87,16 +89,10 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.admin
-      args:
-        INTERNAL_API_URL: http://app:8080
-        NEXT_PUBLIC_API_URL: ""
     expose:
       - "3000"
     env_file:
       - .env
-    environment:
-      INTERNAL_API_URL: http://app:8080
-      NEXT_PUBLIC_API_URL: ""
     depends_on:
       app:
         condition: service_healthy

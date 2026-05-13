@@ -58,16 +58,16 @@ The bot is now running and listening for Telegram messages.
 
 ## Admin Panel
 
-To also start the Next.js admin panel:
+To also start the Vite/TanStack admin SPA:
 
 ```bash
-just next    # Starts backend (if needed) + admin panel on :3000
+just admin-spa    # Starts backend (if needed) + admin SPA on :5173
 ```
 
-Or for frontend-only development:
+For the legacy Next.js admin fallback:
 
 ```bash
-just frontend    # Starts only Next.js admin on :3000
+just next    # Starts backend (if needed) + legacy admin panel on :3000
 ```
 
 ## Environment Variables

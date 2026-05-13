@@ -292,10 +292,11 @@ pai-bot/
 │       ├── cache/                   # Dragonfly client (go-redis)
 │       ├── mailer/                  # SMTP email delivery
 │       └── seed/                    # Demo data seeding
-├── admin/                           # Next.js admin panel
+├── admin/                           # Legacy Next.js admin panel
+├── admin-spa/                       # Vite/TanStack admin SPA
 │   └── src/
-│       ├── app/                     # App Router pages
-│       └── components/              # Shared UI components (shadcn/ui)
+│       ├── routes/                  # TanStack Router routes
+│       └── components/              # Admin UI components (shadcn/ui)
 ├── migrations/                      # SQL migration files (goose)
 ├── deploy/
 │   ├── docker/

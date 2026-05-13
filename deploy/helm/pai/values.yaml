@@ -24,7 +24,7 @@ app:
   # -- Pod annotations
   podAnnotations: {}
 
-# -- Admin (Next.js panel)
+# -- Admin SPA
 admin:
   enabled: true
   image:

@@ -31,6 +31,13 @@ read_when:
 | `/setup/onboard` | `admin/src/app/(onboarding)/setup/onboard/page.tsx` | Onboarding setup wizard. |
 | `/api/retrieval-lab/search` | `admin/src/app/api/retrieval-lab/search/route.ts` | Next.js proxy route for retrieval-lab search. |
 
+## Admin SPA migration routes
+
+| App path | File | Purpose |
+|---|---|---|
+| `/settings/budget` | `admin-spa/src/routes/_authenticated/settings/budget.tsx` | Admin/platform-admin token budget route using `/api/admin/ai/usage` and `/api/admin/ai/budget-window`. |
+| `/settings/embed` | `admin-spa/src/routes/_authenticated/settings/embed.tsx` | Admin/platform-admin embed configuration route using `/api/admin/embed/config` and `/api/admin/embed/origins`. |
+
 ## Backend route groups
 
 | Group | Routes |
@@ -38,7 +45,7 @@ read_when:
 | health/docs | `GET /healthz`, `GET /readyz`, `GET /openapi.json`, `GET /docs` |
 | auth | `POST /api/auth/login`, `GET /api/auth/google/start`, `GET /api/auth/google/callback`, `POST /api/auth/google/link/start`, `GET /api/auth/identities`, `POST /api/auth/invitations/accept`, `GET /api/auth/session`, `POST /api/auth/switch-tenant`, `POST /api/auth/logout` |
 | public join | `GET /api/join/{slug}` |
-| admin users/onboarding/invites | `GET /api/admin/users`, `GET|POST /api/admin/onboarding`, `POST /api/admin/invites`, `POST /api/admin/invites/{id}/reissue` |
+| admin users/onboarding/invites | `GET /api/admin/users` (students plus platform users/invites), `GET|POST /api/admin/onboarding`, `POST /api/admin/invites`, `POST /api/admin/invites/{id}/reissue` |
 | dashboard data | `GET /api/admin/classes/{id}/progress`, `GET /api/admin/students/{id}`, `GET /api/admin/students/{id}/conversations`, `POST /api/admin/students/{id}/nudge`, `GET /api/admin/metrics`, `GET /api/admin/ai/usage`, `POST /api/admin/ai/budget-window` |
 | exports | `GET /api/admin/export/students`, `GET /api/admin/export/conversations`, `GET /api/admin/export/progress`, `GET /api/admin/analytics/report` |
 | parent view | `GET /api/admin/parents/{id}` |

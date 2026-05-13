@@ -159,7 +159,8 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 | **Parent Provisioning** | Invite and manage parent accounts, link to students |
 | **User & Invite Management** | Review active teacher, parent, admin, and platform-admin access plus pending invites in one workspace view, with invite-email delivery status and resend for pending records |
 | **Class Configuration** | Create classes, generate join codes, assign curriculum |
-| **Token Budget Management** | Set tenant-level token allowance windows, monitor token consumption by class/student, configure AI fallback strategies, and later add USD cost projections |
+| **Token Budget Management** | Set tenant-level token allowance windows, monitor remaining token budget, and keep token usage visible to school admins; class/student cost breakdowns and fallback strategy controls remain planned |
+| **Embed Configuration** | Enable the embeddable chat surface for a tenant and manage allowed website origins from the admin workspace |
 | **School Onboarding Wizard** | Interactive multi-step setup centered on curriculum selection, first class creation, bot setup, optional school name, a stable public join link for the first class, and a post-save teacher invite handoff |
 | **Data Export** | Export students (CSV), conversations (JSON), progress data (CSV) |
 | **All Teacher Features** | Full access to mastery heatmaps, student details, analytics, nudges |
@@ -169,10 +170,11 @@ School administrators manage classes, teachers, parents, and budgets. They have 
 - Current: tenant token budget window, used tokens, remaining tokens
 - Current: daily token usage trend
 - Current: per-student average tokens
+- Current: admin/platform-admin `/settings/budget` route for editing the tenant token allowance window
 - Planned: monthly USD cost visualization
 - Planned: by-provider cost breakdown
 - Planned: per-student average cost
-- Planned: budget limit editing with alerts
+- Planned: budget alerts
 - Planned: fallback strategy settings (paid → free model degradation)
 
 ---
@@ -207,7 +209,8 @@ Platform administrators manage the entire multi-tenant deployment across all sch
 | Class Management | `/dashboard/classes` | Teacher, Admin, Platform Admin | Current |
 | Parent Child View | `/parents/[id]` | Parent | Current |
 | User & Invite Management | `/settings/users` | Admin, Platform Admin | Current |
-| Token Budget | `/settings/budget` | Admin, Platform Admin | Planned |
+| Token Budget | `/settings/budget` | Admin, Platform Admin | Current |
+| Embed Configuration | `/settings/embed` | Admin, Platform Admin | Current |
 | Data Export | `/export` | Admin, Platform Admin | Current |
 | School Onboarding | `/setup/onboard` | Admin, Platform Admin | Current |
 | Public Join Link | `/join/[slug]` | Public | Current |
@@ -241,14 +244,23 @@ Public route exception:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/admin/ai/usage` | Teacher, Admin, Platform Admin | Token usage by provider, daily trends, and the current tenant token budget window. Current scope is AI-token-only. |
-| `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window. No current admin UI ships for this in the slice. |
+| `POST` | `/api/admin/ai/budget-window` | Admin | Create or update a tenant token budget window from the admin budget UI. |
 | `GET` | `/api/admin/analytics/report` | Admin, Platform Admin | Comprehensive analytics report |
+
+### Embed Configuration
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/admin/embed/config` | Admin, Platform Admin | Read the tenant embed configuration and allowed origins |
+| `PUT` | `/api/admin/embed/config` | Admin, Platform Admin | Enable or disable the tenant embed surface and update theme settings |
+| `POST` | `/api/admin/embed/origins` | Admin, Platform Admin | Add an allowed website origin for embed guest auth and WebSocket origin checks |
+| `DELETE` | `/api/admin/embed/origins` | Admin, Platform Admin | Remove an allowed website origin |
 
 ### User & Invite Management
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/admin/users` | Admin, Platform Admin | Active teacher, parent, admin, and platform-admin users plus pending invite records for the current workspace scope |
+| `GET` | `/api/admin/users` | Admin, Platform Admin | Student learner records, active teacher/parent/admin/platform-admin accounts, and pending invite records for the current workspace scope |
 | `POST` | `/api/admin/invites` | Admin, Platform Admin | Create an invite, attempt invite-email delivery, and return the `/activate` token/link payload plus delivery status |
 | `POST` | `/api/admin/invites/{id}/reissue` | Admin, Platform Admin | Rotate the token for a pending invite, resend the invite email, and return the refreshed `/activate` token/link payload plus delivery status |
 

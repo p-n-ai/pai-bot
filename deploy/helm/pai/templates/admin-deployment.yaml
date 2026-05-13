@@ -35,11 +35,6 @@ spec:
             - name: http
               containerPort: 3000
               protocol: TCP
-          env:
-            - name: INTERNAL_API_URL
-              value: "http://{{ include "pai.fullname" . }}-app:{{ .Values.config.serverPort }}"
-            - name: NEXT_PUBLIC_API_URL
-              value: ""
           livenessProbe:
             httpGet:
               path: /
