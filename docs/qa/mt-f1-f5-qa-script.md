@@ -64,35 +64,35 @@ Test if the bot can help students navigate the syllabus and understand their lea
 
 | ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
 |---|---|---|---|---|---|
-| **NAV-01** | Syllabus Overview | "Tingkatan 1 belajar apa je untuk Math?" (BM) | Navigation | Should list the main chapters for Form 1. | |
-| **NAV-02** | Subtopics | "What are the subtopics for Form 2 Chapter 2?" (EN) | Navigation | Should list subtopics for MT2-02. | |
-| **NAV-03** | Learning Objectives| "I nak tau apa yang I patut pass untuk Bab 1 F3?" (Mixed) | Navigation | Should list the Learning Objectives for MT3-01. | |
-| **NAV-04** | Prerequisites | "Before I start Linear Inequalities, what do I need to know first?" (EN) | Navigation | Should identify Linear Equations (MT1-06) as prerequisite. | |
-| **NAV-05** | Motivation/Why | "Kenapa kena belajar Matriks ni? Susah la." (BM) | KBAT / HOTS | Provide real-life application (logistics/graphics). | |
-| **NAV-06** | Learning Path | "Habis Bab 2 F1, I patut buat Bab apa?" (Mixed) | Navigation | Suggest Bab 3 (Kuasa Dua) or Bab 5 (Algebra) depending on context. | |
-| **NAV-07** | Summary Request | "Can you summarize what I learned in Chapter 6 F1?" (EN) | Navigation | Provide a concise summary of Linear Equations. | |
-| **NAV-08** | Goal Alignment | "Is this Chapter 5 important for my SPM?" (EN) | Navigation | Explain that Algebra is the foundation for almost all SPM topics. | |
+| **NAV-01** | Syllabus Overview | "Tingkatan 1 belajar apa je untuk Math?" (BM) | Navigation | Should list the main chapters for Form 1. | **Pass (Delayed)**: Initially confused with Science. Listed Math chapters only after being re-centered on Math topics. |
+| **NAV-02** | Subtopics | "What are the subtopics for Form 2 Chapter 2?" (EN) | Navigation | Should list subtopics for MT2-02. | **Fail**: Asked for subject confirmation (Math/Science) instead of listing subtopics directly. |
+| **NAV-03** | Learning Objectives| "I nak tau apa yang I patut pass untuk Bab 1 F3?" (Mixed) | Navigation | Should list the Learning Objectives for MT3-01. | **Fail**: Provided generic AI filler instead of specific KSSM objectives (Indices). Repeatedly asked for subject confirmation. |
+| **NAV-04** | Prerequisites | "Before I start Linear Inequalities, what do I need to know first?" (EN) | Navigation | Should identify Linear Equations (MT1-06) as prerequisite. | **Pass**: Correctly identified Linear Equations and handling negatives as key prerequisites. |
+| **NAV-05** | Motivation/Why | "Kenapa kena belajar Matriks ni? Susah la." (BM) | KBAT / HOTS | Provide real-life application (logistics/graphics). | **Pass**: Provided a relevant "jadual stok kedai" (inventory) analogy and focused on data organization. |
+| **NAV-06** | Learning Path | "Habis Bab 2 F1, I patut buat Bab apa?" (Mixed) | Navigation | Suggest Bab 3 (Kuasa Dua) or Bab 5 (Algebra) depending on context. | **Fail**: Repeated the "confirm subject" pattern and didn't provide a suggestion. |
+| **NAV-07** | Summary Request | "Can you summarize what I learned in Chapter 6 F1?" (EN) | Navigation | Provide a concise summary of Linear Equations. | **Fail**: Refused to summarize even after confirmation of subject; claimed KSSM ordering is school-dependent. |
+| **NAV-08** | Goal Alignment | "Is this Chapter 5 important for my SPM?" (EN) | Navigation | Explain that Algebra is the foundation for almost all SPM topics. | **Partial Pass**: Confirmed its importance as a foundation but was slightly vague on the specific topic (Algebra). |
 
 ### Form 1: Foundation
 | ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
 |---|---|---|---|---|---|
-| **F1-01.1** | MT1-01 (1.1) | "Apa beza integer dengan nombor bulat?" (BM) | Concept Check / TP1 | Explain negative numbers inclusion. | |
-| **F1-01.2** | MT1-01 (1.3) | "Solve -5 + (-3) x 2. I think the answer is -16." (EN) | Misconception / TP3 | Detect BODMAS error. | |
-| **F1-01.3** | MT1-01 (1.1) | "Give me an example of an integer in real life." (EN) | Example Request / TP1| Temperature below zero or lift floors. | |
-| **F1-02.1** | MT1-02 (2.1) | "Senaraikan faktor bagi 12." (BM) | Skill Application / TP2 | Help student find all pairs (1x12, 2x6, 3x4). | |
-| **F1-02.2** | MT1-02 (2.2) | "Show me step-by-step how to find FSTB for 12 and 18." (EN) | Step-by-Step / TP3 | Use repetitive division or prime factors. | |
-| **F1-02.3** | MT1-02 (2.2) | "I got GSTK for 4 and 6 as 24. Is that the smallest?" (Mixed) | Verification / TP3 | Explain that 12 is smaller than 24. | |
-| **F1-04.1** | MT1-04 (4.1) | "If ratio Ali:Abu is 2:3 and Ali has 10 marbles, how many does Abu have?" (EN) | Skill Application / TP3 | Guide to find 1 unit value first. | |
-| **F1-04.2** | MT1-04 (4.4) | "Harga 3 tin susu RM12. Ayah nak beli 10 tin tapi ada RM35 je. Cukup tak?" (BM) | KBAT / HOTS / TP4 | Calculate RM40 vs RM35. | |
-| **F1-04.3** | MT1-04 (4.1) | "Explain the concept of ratio using a cooking analogy." (EN) | Analogy Request / TP1| Mixing water and rice or cordial. | |
-| **F1-05.1** | MT1-05 (5.1) | "Apa maksud 'pemboleh ubah' dalam algebra?" (BM) | Concept Check / TP1 | Explain symbol representing unknown. | |
-| **F1-05.2** | MT1-05 (5.2) | "Simplify 3x + 5y - x + 2y." (EN) | Skill Application / TP2 | Group like terms ($2x + 7y$). | |
-| **F1-05.3** | MT1-05 (5.1) | "Give me an algebraic expression for '5 less than x'." (EN) | Formation / TP2 | Expected: $x - 5$. Watch for $5 - x$ error. | |
-| **F1-06.1** | MT1-06 (6.1) | "Create an equation: A number plus 7 is 15." (EN) | Formation / TP2 | Expected: $x + 7 = 15$. | |
-| **F1-06.2** | MT1-06 (6.2) | "Solve 2(x + 3) = 10. I got x = 7." (Mixed) | Misconception / TP3 | Detect error ($2x+6=10 \to 2x=4 \to x=2$). | |
-| **F1-06.3** | MT1-06 (6.3) | "Explain Linear Equations like I'm 5 years old." (EN) | Analogy Request / TP1| Balanced weighing scale analogy. | |
-| **F1-07.1** | MT1-07 (7.1) | "Apa maksud x > 5?" (BM) | Concept Check / TP1 | Explain numbers larger than 5. | |
-| **F1-07.2** | MT1-07 (7.2) | "Solve -2x < 10. Is the answer x < -5?" (EN) | Misconception / TP3 | **CRITICAL**: Sign flip check. | |
+| **F1-01.1** | MT1-01 (1.1) | "Apa beza integer dengan nombor bulat?" (BM) | Concept Check / TP1 | Explain negative numbers inclusion. | **Pass**: Clear explanation highlighting negative numbers and ended with a "Stop and Prompt" question. |
+| **F1-01.2** | MT1-01 (1.3) | "Solve -5 + (-3) x 2. I think the answer is -16." (EN) | Misconception / TP3 | Detect BODMAS error. | **Pass**: Detected the BODMAS error, showed correct steps, and prompted user to reflect on the mistake. |
+| **F1-01.3** | MT1-01 (1.1) | "Give me an example of an integer in real life." (EN) | Example Request / TP1| Temperature below zero or lift floors. | **Pass**: Provided temperature and debt examples, and prompted the student for a third one. |
+| **F1-02.1** | MT1-02 (2.1) | "Senaraikan faktor bagi 12." (BM) | Skill Application / TP2 | Help student find all pairs (1x12, 2x6, 3x4). | **Partial Pass**: Listed the factors directly instead of guiding the student to find them in pairs. |
+| **F1-02.2** | MT1-02 (2.2) | "Show me step-by-step how to find FSTB for 12 and 18." (EN) | Step-by-Step / TP3 | Use repetitive division or prime factors. | **Partial Pass**: Used the "listing factors" method instead of the standard KSSM repetitive division or prime factors. |
+| **F1-02.3** | MT1-02 (2.2) | "I got GSTK for 4 and 6 as 24. Is that the smallest?" (Mixed) | Verification / TP3 | Explain that 12 is smaller than 24. | **Fail**: Significant math error. Hallucinated that 24 is the smallest common multiple despite listing 12 in both sequences. |
+| **F1-04.1** | MT1-04 (4.1) | "If ratio Ali:Abu is 2:3 and Ali has 10 marbles, how many does Abu have?" (EN) | Skill Application / TP3 | Guide to find 1 unit value first. | **Pass**: Correctly guided the student to find the 1-unit value first and left the final step for them. |
+| **F1-04.2** | MT1-04 (4.4) | "Harga 3 tin susu RM12. Ayah nak beli 10 tin tapi ada RM35 je. Cukup tak?" (BM) | KBAT / HOTS / TP4 | Calculate RM40 vs RM35. | **Pass**: Correctly calculated the unitary value and total cost, then prompted the student for the final comparison. |
+| **F1-04.3** | MT1-04 (4.1) | "Explain the concept of ratio using a cooking analogy." (EN) | Analogy Request / TP1| Mixing water and rice or cordial. | **Pass**: Used a syrup/water analogy and explained equivalent ratios (maintaining taste). |
+| **F1-05.1** | MT1-05 (5.1) | "Apa maksud 'pemboleh ubah' dalam algebra?" (BM) | Concept Check / TP1 | Explain symbol representing unknown. | **Pass**: Used the "empty container" analogy and correctly defined the concept of variables. |
+| **F1-05.2** | MT1-05 (5.2) | "Simplify 3x + 5y - x + 2y." (EN) | Skill Application / TP2 | Group like terms ($2x + 7y$). | **Pass**: Correctly simplified the expression to $2x + 7y$ (noted: switched to BM despite EN prompt). |
+| **F1-05.3** | MT1-05 (5.1) | "Give me an algebraic expression for '5 less than x'." (EN) | Formation / TP2 | Expected: $x - 5$. Watch for $5 - x$ error. | **Pass**: Correctly identified $x - 5$ and explained the logic behind the order. |
+| **F1-06.1** | MT1-06 (6.1) | "Create an equation: A number plus 7 is 15." (EN) | Formation / TP2 | Expected: $x + 7 = 15$. | **Pass**: Correctly formed the equation $x + 7 = 15$ (minor language mixing at the end). |
+| **F1-06.2** | MT1-06 (6.2) | "Solve 2(x + 3) = 10. I got x = 7." (Mixed) | Misconception / TP3 | Detect error ($2x+6=10 \to 2x=4 \to x=2$). | **Pass**: Correctly identified the error, provided clear steps to solve ($x = 2$), and prompted for reflection. |
+| **F1-06.3** | MT1-06 (6.3) | "Explain Linear Equations like I'm 5 years old." (EN) | Analogy Request / TP1| Balanced weighing scale analogy. | **Pass**: Used the "balance scale" analogy and a "stickers in a bag" example for a simple explanation. |
+| **F1-07.1** | MT1-07 (7.1) | "Apa maksud x > 5?" (BM) | Concept Check / TP1 | Explain numbers larger than 5. | **Pass**: Correctly explained that x is any number greater than 5, and clarified that 5 is excluded. |
+| **F1-07.2** | MT1-07 (7.2) | "Solve -2x < 10. Is the answer x < -5?" (EN) | Misconception / TP3 | **CRITICAL**: Sign flip check. | **Pass**: Correctly identified the sign flip requirement and provided the correct solution $x > -5$. |
 
 ### Form 2: Application
 | ID | Topic | Student Input (Language) | Pattern / TP | Expected Bot Behavior | Result |
