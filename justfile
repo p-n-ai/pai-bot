@@ -100,6 +100,46 @@ db-seed-state:
   fi; \
   "$psql_bin" "$db_url" -Atqc "SELECT CASE WHEN to_regclass('public.auth_identities') IS NULL OR to_regclass('public.auth_invites') IS NULL OR to_regclass('public.auth_sessions') IS NULL OR to_regclass('public.auth_oidc_flows') IS NULL THEN 'missing_auth_schema' WHEN EXISTS (SELECT 1 FROM auth_identities WHERE identifier_normalized IN ('teacher@example.com','platform-admin@example.com')) THEN 'seeded' ELSE 'not_seeded' END"
 
+db-migration-preflight:
+  @env_goose_dsn="${GOOSE_DSN:-}"; \
+  env_learn_database_url="${LEARN_DATABASE_URL:-}"; \
+  if [ -f .env ]; then \
+    set -a; \
+    source .env; \
+    set +a; \
+  fi; \
+  if [ -n "$env_goose_dsn" ]; then \
+    GOOSE_DSN="$env_goose_dsn"; \
+  fi; \
+  if [ -n "$env_learn_database_url" ]; then \
+    LEARN_DATABASE_URL="$env_learn_database_url"; \
+  fi; \
+  effective_goose_dsn="${GOOSE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}"; \
+  check_local_db_url() { \
+    label="$1"; \
+    url="$2"; \
+    if [ -z "$url" ]; then \
+      return 0; \
+    fi; \
+    host="${url#*://}"; \
+    host="${host%%/*}"; \
+    host="${host##*@}"; \
+    host="${host%%:*}"; \
+    host="${host#[}"; \
+    host="${host%]}"; \
+    case "$host" in \
+      ""|localhost|127.*|::1|postgres) \
+        return 0; \
+        ;; \
+    esac; \
+    redacted="$(printf '%s\n' "$url" | sed -E 's#(postgres(ql)?://)[^/@:]+(:[^@]*)?@#\1***:***@#')"; \
+    echo "refusing database migration: $label points to non-local database $redacted" >&2; \
+    echo "run migrations only against local Docker postgres from this checkout" >&2; \
+    exit 1; \
+  }; \
+  check_local_db_url "GOOSE_DSN" "$effective_goose_dsn"; \
+  check_local_db_url "LEARN_DATABASE_URL" "${LEARN_DATABASE_URL:-}"
+
 check-local-db:
   @db_url="$(just db-url)"; \
   db_url_redacted="$(just db-url-redacted)"; \
@@ -192,6 +232,56 @@ go:
 
 frontend-deps:
   cd admin && pnpm install
+
+admin-spa:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  state_dir="{{dev-state-dir}}"
+  mkdir -p "$state_dir"
+  if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+  fi
+  backend_port="${BACKEND_PORT:-${LEARN_SERVER_PORT:-8080}}"
+  frontend_port="${FRONTEND_PORT:-5173}"
+  started_backend="no"
+  backend_pid=""
+  cleanup() {
+    code="$?"
+    rm -f "$state_dir/backend.pid"
+    if [ "$started_backend" = "yes" ] && [ -n "$backend_pid" ] && kill -0 "$backend_pid" >/dev/null 2>&1; then
+      kill "$backend_pid" >/dev/null 2>&1 || true
+      wait "$backend_pid" >/dev/null 2>&1 || true
+    fi
+    exit "$code"
+  }
+  trap cleanup INT TERM EXIT
+  if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+    echo "backend already running on http://127.0.0.1:$backend_port"
+  elif lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port $backend_port is already in use"
+    lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN
+    exit 1
+  else
+    echo "starting Go server on http://127.0.0.1:$backend_port"
+    just go >/tmp/pai-go.log 2>&1 &
+    backend_pid="$!"
+    printf '%s\n' "$backend_pid" >"$state_dir/backend.pid"
+    started_backend="yes"
+    for _ in {1..20}; do
+      if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
+      echo "backend failed to start; continuing with admin-spa only"
+      echo "check /tmp/pai-go.log for backend boot errors"
+    fi
+  fi
+  cd admin-spa
+  pnpm dev --host 127.0.0.1 --port "$frontend_port"
 
 emulate-auth:
   npx -y emulate@{{emulate_version}} --service google,vercel --port 4000 --seed tools/emulate/emulate.config.yaml
@@ -448,9 +538,11 @@ test-cover:
 
 # Database
 migrate:
+  just db-migration-preflight
   docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir /app/migrations "${GOOSE_DRIVER:-postgres}" "${GOOSE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" up -allow-missing
 
 migrate-down:
+  just db-migration-preflight
   docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir /app/migrations "${GOOSE_DRIVER:-postgres}" "${GOOSE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" down
 
 migrate-status:
