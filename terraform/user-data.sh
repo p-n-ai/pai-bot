@@ -28,6 +28,6 @@ apt-get install -y git jq
 
 # --- Create app directory ---
 mkdir -p ${app_dir}
-chown ubuntu:ubuntu ${app_dir}
+chown ubuntu:ubuntu "${app_dir}"
 
 echo "=== Setup complete ==="
