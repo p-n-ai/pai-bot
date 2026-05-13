@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { WhatsAppStatus } from '@/lib/whatsapp-types'
-import { AuthErrorAlert } from '@/components/auth-error-alert'
+import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
-import { LoadState } from '@/components/load-state'
-import { StatePanel } from '@/components/state-panel'
+import { LoadState } from '@/components/shared/load-state'
+import { StatePanel } from '@/components/shared/state-panel'
 import { disconnectWhatsApp, getWhatsAppStatus } from '@/lib/admin-api'
 import { useSubmitStatus } from '@/hooks/use-submit-status'
 

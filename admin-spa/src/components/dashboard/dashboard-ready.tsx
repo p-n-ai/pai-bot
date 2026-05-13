@@ -2,10 +2,10 @@ import { BellRingIcon, ChevronRightIcon } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 
 import type { ClassProgress } from '@/lib/dashboard-types'
-import { AdminSurface, AdminSurfaceHeader } from '@/components/admin-surface'
-import { StatePanel } from '@/components/state-panel'
-import { StatCard } from '@/components/stat-card'
-import { StudentDetailPanel } from '@/components/student-detail-panel'
+import { AdminSurface, AdminSurfaceHeader } from '@/components/shared/admin-surface'
+import { StatePanel } from '@/components/shared/state-panel'
+import { StatCard } from '@/components/shared/stat-card'
+import { StudentDetailPanel } from '@/components/dashboard/student-detail-panel'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,

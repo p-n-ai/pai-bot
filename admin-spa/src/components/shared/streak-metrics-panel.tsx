@@ -1,5 +1,5 @@
-import { AdminHighlightPanel } from '@/components/admin-highlight-panel'
-import { Metric } from '@/components/metric'
+import { AdminHighlightPanel } from '@/components/shared/admin-highlight-panel'
+import { Metric } from '@/components/shared/metric'
 import { formatDayCount } from '@/lib/date-format'
 
 export function StreakMetricsPanel({

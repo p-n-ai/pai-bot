@@ -2,11 +2,11 @@ import { useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
-import { AuthErrorAlert } from '@/components/auth-error-alert'
+import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { StatePanel } from '@/components/state-panel'
+import { StatePanel } from '@/components/shared/state-panel'
 import { upsertTokenBudgetWindow } from '@/lib/admin-api'
 import { useSubmitStatus } from '@/hooks/use-submit-status'
 

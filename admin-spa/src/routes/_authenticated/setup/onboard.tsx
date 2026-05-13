@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { OnboardingPanel } from '@/components/onboarding-panel'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { OnboardingPanel } from '@/components/onboarding/onboarding-panel'
 
 export const Route = createFileRoute('/_authenticated/setup/onboard')({
   component: OnboardingRoute,

@@ -1,7 +1,7 @@
 import type { AIUsageView } from '@/lib/ai-usage-view'
-import { AIUsageProviderSummary } from '@/components/ai-usage-provider-summary'
-import { AIUsageProviderTable } from '@/components/ai-usage-provider-table'
-import { SurfaceSection } from '@/components/surface-section'
+import { AIUsageProviderSummary } from '@/components/ai-usage/ai-usage-provider-summary'
+import { AIUsageProviderTable } from '@/components/ai-usage/ai-usage-provider-table'
+import { SurfaceSection } from '@/components/shared/surface-section'
 
 export function AIUsageProviderBreakdown({ view }: { view: AIUsageView }) {
   return (

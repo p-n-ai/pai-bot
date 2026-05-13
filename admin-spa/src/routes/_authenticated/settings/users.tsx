@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { UserManagementPanel } from '@/components/user-management-panel'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { UserManagementPanel } from '@/components/users/user-management-panel'
 
 export const Route = createFileRoute('/_authenticated/settings/users')({
   component: UsersSettingsRoute,

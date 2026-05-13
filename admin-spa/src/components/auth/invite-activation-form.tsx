@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { FormEvent } from 'react'
 
 import type { AuthSession } from '@/lib/auth-types'
-import { AuthErrorAlert } from '@/components/auth-error-alert'
+import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

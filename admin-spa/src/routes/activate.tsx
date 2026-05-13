@@ -3,7 +3,7 @@ import { useCallback } from 'react'
 
 import type { AuthSession } from '@/lib/auth-types'
 import { useAuth } from '@/auth-provider'
-import { InviteActivationForm } from '@/components/invite-activation-form'
+import { InviteActivationForm } from '@/components/auth/invite-activation-form'
 import { parseActivationSearch } from '@/lib/activation-search'
 import { getDefaultRouteForUser } from '@/lib/rbac'
 

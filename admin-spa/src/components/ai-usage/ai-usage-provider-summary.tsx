@@ -1,5 +1,5 @@
 import type { AIUsageView } from '@/lib/ai-usage-view'
-import { StatItem } from '@/components/stat-item'
+import { StatItem } from '@/components/shared/stat-item'
 import { formatBudgetAmount } from '@/lib/ai-usage-view'
 
 export function AIUsageProviderSummary({ view }: { view: AIUsageView }) {

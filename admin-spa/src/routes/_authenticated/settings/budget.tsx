@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { AIUsageBudgetSection } from '@/components/ai-usage-budget-section'
-import { AIUsageLoadBoundary } from '@/components/ai-usage-load-boundary'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { AIUsageBudgetSection } from '@/components/ai-usage/ai-usage-budget-section'
+import { AIUsageLoadBoundary } from '@/components/ai-usage/ai-usage-load-boundary'
 import { useAuth } from '@/auth-provider'
 import { useAIUsageState } from '@/hooks/use-ai-usage-state'
 import { getAIUsageView } from '@/lib/ai-usage-view'

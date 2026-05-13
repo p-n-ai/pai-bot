@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { WhatsAppSetupPanel } from '@/components/whatsapp-setup-panel'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { WhatsAppSetupPanel } from '@/components/settings/whatsapp-setup-panel'
 
 export const Route = createFileRoute('/_authenticated/settings/whatsapp')({
   component: WhatsAppSettingsRoute,

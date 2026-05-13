@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { StudentDetailRouteSection } from '@/components/entity-detail-route-section'
+import { StudentDetailRouteSection } from '@/components/dashboard/entity-detail-route-section'
 
 export const Route = createFileRoute('/_authenticated/students/$id')({
   component: StudentDetailRoute,

@@ -6,11 +6,11 @@ import type {
   SubmitOnboardingInput,
   SubmitOnboardingResult,
 } from '@/lib/onboarding-types'
-import { AuthErrorAlert } from '@/components/auth-error-alert'
-import { OnboardingResultActions } from '@/components/onboarding-result-actions'
-import { OnboardingWizardFlow } from '@/components/onboarding-wizard-flow'
-import { LoadState } from '@/components/load-state'
-import { StatePanel } from '@/components/state-panel'
+import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
+import { OnboardingResultActions } from '@/components/onboarding/onboarding-result-actions'
+import { OnboardingWizardFlow } from '@/components/onboarding/onboarding-wizard-flow'
+import { LoadState } from '@/components/shared/load-state'
+import { StatePanel } from '@/components/shared/state-panel'
 import { getOnboarding, submitOnboarding } from '@/lib/admin-api'
 import {
   buildInitialOnboardingInput,

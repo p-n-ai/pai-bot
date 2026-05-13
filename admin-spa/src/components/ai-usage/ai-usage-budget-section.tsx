@@ -1,9 +1,9 @@
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
 import type { AIUsageView } from '@/lib/ai-usage-view'
-import { AIUsageBudgetEditor } from '@/components/ai-usage-budget-editor'
+import { AIUsageBudgetEditor } from '@/components/ai-usage/ai-usage-budget-editor'
 import { Badge } from '@/components/ui/badge'
-import { StatItem } from '@/components/stat-item'
-import { SurfaceSection } from '@/components/surface-section'
+import { StatItem } from '@/components/shared/stat-item'
+import { SurfaceSection } from '@/components/shared/surface-section'
 import { formatBudgetAmount } from '@/lib/ai-usage-view'
 
 export function AIUsageBudgetSection({

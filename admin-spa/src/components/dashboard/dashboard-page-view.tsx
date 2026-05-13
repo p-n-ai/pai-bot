@@ -1,8 +1,8 @@
 import type { DashboardProgressResult } from '@/lib/dashboard-progress'
-import { AdminPageSection } from '@/components/admin-page-section'
-import { AdminSurface } from '@/components/admin-surface'
-import { DashboardReady } from '@/components/dashboard-ready'
-import { StatePanel } from '@/components/state-panel'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { AdminSurface } from '@/components/shared/admin-surface'
+import { DashboardReady } from '@/components/dashboard/dashboard-ready'
+import { StatePanel } from '@/components/shared/state-panel'
 import { Card, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 

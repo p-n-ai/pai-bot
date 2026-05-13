@@ -3,7 +3,7 @@ import { DownloadIcon } from 'lucide-react'
 import { adminExportLinks } from '@/lib/export-links'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DataTable } from '@/components/data-table'
+import { DataTable } from '@/components/shared/data-table'
 
 export function ExportPanel() {
   const rows = adminExportLinks.map((item) => ({

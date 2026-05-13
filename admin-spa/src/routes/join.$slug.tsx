@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
 import type { JoinClassView } from '@/lib/join-types'
-import { JoinClassCard } from '@/components/join-class-card'
-import { LoadState } from '@/components/load-state'
+import { JoinClassCard } from '@/components/auth/join-class-card'
+import { LoadState } from '@/components/shared/load-state'
 import { getJoinClass } from '@/lib/admin-api'
 
 export const Route = createFileRoute('/join/$slug')({

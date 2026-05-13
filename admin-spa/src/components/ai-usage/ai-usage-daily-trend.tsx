@@ -1,6 +1,6 @@
 import type { AIUsageView } from '@/lib/ai-usage-view'
-import { StatePanel } from '@/components/state-panel'
-import { SurfaceSection } from '@/components/surface-section'
+import { StatePanel } from '@/components/shared/state-panel'
+import { SurfaceSection } from '@/components/shared/surface-section'
 import {
   formatAIUsageDateLabel,
   formatCompactNumber,

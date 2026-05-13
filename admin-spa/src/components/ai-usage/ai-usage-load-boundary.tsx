@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 import type { AIUsageLoadState } from '@/hooks/use-ai-usage-state'
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
-import { LoadState } from '@/components/load-state'
+import { LoadState } from '@/components/shared/load-state'
 
 export function AIUsageLoadBoundary({
   children,

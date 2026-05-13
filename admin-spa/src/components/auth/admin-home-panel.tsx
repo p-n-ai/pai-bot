@@ -7,7 +7,7 @@ import {
 
 import type { AuthState } from '@/auth-provider'
 import type { AuthSession } from '@/lib/auth-types'
-import { LoginForm } from '@/components/login-form'
+import { LoginForm } from '@/components/auth/login-form'
 
 export function AdminHomePanel({
   auth,

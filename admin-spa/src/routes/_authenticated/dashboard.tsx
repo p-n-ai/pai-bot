@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 
-import type { DashboardState } from '@/components/dashboard-page-view'
-import { DashboardPageView } from '@/components/dashboard-page-view'
+import type { DashboardState } from '@/components/dashboard/dashboard-page-view'
+import { DashboardPageView } from '@/components/dashboard/dashboard-page-view'
 import { runWhenActive } from '@/lib/active-guard'
 import { sendStudentNudge } from '@/lib/admin-api'
 import { getNudgeSuccessMessage } from '@/lib/dashboard-nudge-copy'

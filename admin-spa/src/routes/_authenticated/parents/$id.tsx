@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ParentSummaryRouteSection } from '@/components/entity-detail-route-section'
+import { ParentSummaryRouteSection } from '@/components/dashboard/entity-detail-route-section'
 
 export const Route = createFileRoute('/_authenticated/parents/$id')({
   component: ParentSummaryRoute,

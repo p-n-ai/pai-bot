@@ -12,12 +12,12 @@ import type {
   StudentConversation,
   StudentDetail,
 } from '@/lib/student-detail-types'
-import { AdminInsetPanel } from '@/components/admin-inset-panel'
-import { AdminSurface, AdminSurfaceHeader } from '@/components/admin-surface'
-import { LoadState } from '@/components/load-state'
-import { PageHero } from '@/components/page-hero'
-import { StatePanel } from '@/components/state-panel'
-import { StreakMetricsPanel } from '@/components/streak-metrics-panel'
+import { AdminInsetPanel } from '@/components/shared/admin-inset-panel'
+import { AdminSurface, AdminSurfaceHeader } from '@/components/shared/admin-surface'
+import { LoadState } from '@/components/shared/load-state'
+import { PageHero } from '@/components/shared/page-hero'
+import { StatePanel } from '@/components/shared/state-panel'
+import { StreakMetricsPanel } from '@/components/shared/streak-metrics-panel'
 import { getStudentConversations, getStudentDetail } from '@/lib/admin-api'
 import { formatAdminDateTime } from '@/lib/date-format'
 import {

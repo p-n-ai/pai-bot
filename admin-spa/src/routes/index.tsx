@@ -3,7 +3,7 @@ import { useCallback, useEffect } from 'react'
 
 import type { AuthSession } from '@/lib/auth-types'
 import { useAuth } from '@/auth-provider'
-import { AdminHomePanel } from '@/components/admin-home-panel'
+import { AdminHomePanel } from '@/components/auth/admin-home-panel'
 import { getDefaultRouteForUser } from '@/lib/rbac'
 import { parseRootSearch } from '@/lib/root-search'
 import { getAuthenticatedRootRedirectTarget } from '@/lib/root-redirect-target'

@@ -1,4 +1,4 @@
-import { InviteForm } from './user-management-invite-form'
+import { InviteForm } from '@/components/users/user-management-invite-form'
 import { useInviteWorkflow } from '@/hooks/use-invite-workflow'
 
 export function ClassInvitePanel() {

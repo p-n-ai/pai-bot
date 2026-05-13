@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import type { EmbedConfig } from '@/lib/embed-config-types'
-import { AuthErrorAlert } from '@/components/auth-error-alert'
+import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { LoadState } from '@/components/load-state'
-import { StatePanel } from '@/components/state-panel'
+import { LoadState } from '@/components/shared/load-state'
+import { StatePanel } from '@/components/shared/state-panel'
 import {
   addEmbedOrigin,
   getEmbedConfig,

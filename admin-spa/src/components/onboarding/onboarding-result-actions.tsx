@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react'
 import type { SubmitOnboardingResult } from '@/lib/onboarding-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { OnboardingTeacherInvites } from '@/components/onboarding-teacher-invites'
-import { StatePanel } from '@/components/state-panel'
+import { OnboardingTeacherInvites } from '@/components/onboarding/onboarding-teacher-invites'
+import { StatePanel } from '@/components/shared/state-panel'
 
 export function OnboardingResultActions({
   onEditSetup,

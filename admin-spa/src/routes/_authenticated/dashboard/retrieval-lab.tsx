@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { RetrievalLab } from '@/components/retrieval-lab'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { RetrievalLab } from '@/components/retrieval/retrieval-lab'
 
 export const Route = createFileRoute('/_authenticated/dashboard/retrieval-lab')(
   {

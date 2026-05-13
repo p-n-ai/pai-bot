@@ -16,8 +16,8 @@ import type * as TanStackRouter from '@tanstack/react-router'
 
 import type { ClassProgress } from '@/lib/dashboard-types'
 import { getNudgeSuccessMessage } from '@/lib/dashboard-nudge-copy'
-import { DashboardPageView } from '@/components/dashboard-page-view'
-import { DashboardReady } from '@/components/dashboard-ready'
+import { DashboardPageView } from '@/components/dashboard/dashboard-page-view'
+import { DashboardReady } from '@/components/dashboard/dashboard-ready'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof TanStackRouter>()

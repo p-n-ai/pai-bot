@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 
-import type { ClassesState } from '@/components/classes-management'
-import { AdminPageSection } from '@/components/admin-page-section'
-import { ClassesContent } from '@/components/classes-management'
+import type { ClassesState } from '@/components/classes/classes-management'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { ClassesContent } from '@/components/classes/classes-management'
 import { listGroups } from '@/lib/admin-api'
 
 export const Route = createFileRoute('/_authenticated/dashboard/classes')({

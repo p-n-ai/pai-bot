@@ -5,7 +5,7 @@ import type { InviteIssueRole, InviteRecord } from '@/lib/user-management-types'
 import {
   copyInviteLink,
   resolveInviteLink,
-} from '@/components/user-management-invite-form'
+} from '@/components/users/user-management-invite-form'
 import { issueInvite, reissueInvite } from '@/lib/admin-api'
 
 interface InviteWorkflowOptions {

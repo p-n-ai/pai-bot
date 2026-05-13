@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { GroupDetail, GroupRecord } from '@/lib/group-types'
-import { AssignedTopicsPanel } from '@/components/assigned-topics-panel'
-import { ClassCreateForm } from '@/components/class-create-form'
-import { ClassInvitePanel } from '@/components/class-invite-panel'
+import { AssignedTopicsPanel } from '@/components/classes/assigned-topics-panel'
+import { ClassCreateForm } from '@/components/classes/class-create-form'
+import { ClassInvitePanel } from '@/components/classes/class-invite-panel'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -12,10 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { DataTable } from '@/components/data-table'
-import { LoadingStatus, StatePanel } from '@/components/state-panel'
-import { StatItem } from '@/components/stat-item'
-import { SurfaceSection } from '@/components/surface-section'
+import { DataTable } from '@/components/shared/data-table'
+import { LoadingStatus, StatePanel } from '@/components/shared/state-panel'
+import { StatItem } from '@/components/shared/stat-item'
+import { SurfaceSection } from '@/components/shared/surface-section'
 import { getGroupDetail } from '@/lib/admin-api'
 
 export type ClassesState =

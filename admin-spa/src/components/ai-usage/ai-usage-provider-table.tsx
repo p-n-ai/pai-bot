@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
-import { DataTable } from '@/components/data-table'
-import { StatePanel } from '@/components/state-panel'
+import { DataTable } from '@/components/shared/data-table'
+import { StatePanel } from '@/components/shared/state-panel'
 import { formatCompactNumber } from '@/lib/ai-usage-view'
 
 const providerColumns = ['Provider', 'Model', 'Messages', 'Tokens']

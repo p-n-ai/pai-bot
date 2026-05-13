@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AdminPageSection } from '@/components/admin-page-section'
-import { EmbedConfigPanel } from '@/components/embed-config-panel'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
+import { EmbedConfigPanel } from '@/components/settings/embed-config-panel'
 
 export const Route = createFileRoute('/_authenticated/settings/embed')({
   component: EmbedSettingsRoute,

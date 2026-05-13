@@ -41,8 +41,15 @@ Read [docs/admin-spa-migration.md](../admin-spa-migration.md) before working in 
 | Path                           | Purpose                                                                                                |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `admin-spa/src/routes/`        | TanStack Router file-based routes for the SPA migration.                                               |
-| `admin-spa/src/components/`    | Route panels, shared admin surfaces, sidebar shell, tables, forms, and feature components for the SPA. |
-| `admin-spa/src/components/ui/` | shadcn/ui primitives for the migration app.                                                            |
+| `admin-spa/src/components/`    | Feature-grouped route panels and reusable admin components for the SPA.                                |
+| `admin-spa/src/components/ai-usage/` | AI usage dashboards, budget editing, provider breakdowns, and related tests.                     |
+| `admin-spa/src/components/auth/` | Login, activation, join, and root entry components.                                                  |
+| `admin-spa/src/components/classes/` | Class management, invite, assigned-topic, and create-class components.                            |
+| `admin-spa/src/components/dashboard/` | Dashboard overview plus parent/student detail panels.                                           |
+| `admin-spa/src/components/onboarding/` | Onboarding setup flow components and tests.                                                     |
+| `admin-spa/src/components/settings/` | Settings panels such as embed config and WhatsApp setup.                                         |
+| `admin-spa/src/components/shared/` | Reusable admin surfaces, state panels, tables, metrics, and page chrome.                          |
+| `admin-spa/src/components/ui/` | shadcn/ui primitives for the migration app. Keep these separate from app-specific behavior.             |
 | `admin-spa/src/lib/`           | SPA helpers, utilities, typed API clients, route guards, and response guards.                          |
 | `admin-spa/src/hooks/`         | SPA hooks for submit, invite, usage, and route state workflows.                                        |
 | `admin-spa/src/stores/`        | Zustand app state for SPA shell behavior.                                                              |

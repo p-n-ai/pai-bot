@@ -1,4 +1,4 @@
-import { AdminPageSection } from './admin-page-section'
+import { AdminPageSection } from '@/components/shared/admin-page-section'
 import { ParentSummaryPanel } from './parent-summary-panel'
 import { StudentDetailPanel } from './student-detail-panel'
 import type { ReactNode } from 'react'

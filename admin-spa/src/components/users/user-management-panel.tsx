@@ -7,10 +7,10 @@ import type {
   InviteRecord,
   UserManagementView,
 } from '@/lib/user-management-types'
-import { DataTable } from '@/components/data-table'
-import { LoadState } from '@/components/load-state'
-import { StatePanel } from '@/components/state-panel'
-import { StatItem } from '@/components/stat-item'
+import { DataTable } from '@/components/shared/data-table'
+import { LoadState } from '@/components/shared/load-state'
+import { StatePanel } from '@/components/shared/state-panel'
+import { StatItem } from '@/components/shared/stat-item'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +24,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { InviteForm } from '@/components/user-management-invite-form'
+import { InviteForm } from '@/components/users/user-management-invite-form'
 import { useInviteWorkflow } from '@/hooks/use-invite-workflow'
 import { runWhenActive } from '@/lib/active-guard'
 import { getUserManagement } from '@/lib/admin-api'
