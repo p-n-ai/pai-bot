@@ -104,7 +104,6 @@ jobs:
       - name: Build and push admin image
         run: |
           docker build -f deploy/docker/Dockerfile.admin \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
             -t ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }} \
             -t ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest .
           docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}

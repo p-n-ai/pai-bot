@@ -15,7 +15,7 @@ P&AI Bot supports two deployment models today: local development and single-serv
 
 ```bash
 just go       # Start backend: infra + migrations + Go server
-just next     # Start backend + Next.js admin panel
+just admin-spa # Start backend + Vite/TanStack admin SPA
 just stop     # Stop everything
 ```
 
@@ -140,12 +140,13 @@ Multi-stage build:
 ### Admin Panel (`deploy/docker/Dockerfile.admin`)
 
 Multi-stage build:
-- **Builder:** Node.js with pnpm, builds Next.js app
-- **Runtime:** Node.js Alpine, serves on `:3000`
+- **Builder:** Node.js with pnpm, builds the Vite/TanStack Router app from `admin-spa/`
+- **Runtime:** nginx Alpine, serves static SPA assets on `:3000`
+- **Routing:** Caddy sends `/api/*`, `/healthz`, `/ws/*`, `/embed/*`, and `/webhook/*` to the Go app before falling back to the admin SPA
 
 ## Kubernetes (Helm)
 
-A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, Next.js admin, PostgreSQL, Dragonfly, NATS, with database migrations, health probes, and ingress routing.
+A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, admin SPA, PostgreSQL, Dragonfly, NATS, with database migrations, health probes, and ingress routing.
 
 ### Prerequisites
 
@@ -211,7 +212,7 @@ k3d cluster delete pai-local
 | Resource | Type | Purpose |
 |----------|------|---------|
 | `pai-app` | Deployment | Go backend (port 8080) |
-| `pai-admin` | Deployment | Next.js admin panel (port 3000) |
+| `pai-admin` | Deployment | Vite/TanStack admin SPA (port 3000) |
 | `pai-postgres` | StatefulSet + PVC | PostgreSQL 17 database |
 | `pai-dragonfly` | StatefulSet + PVC | Dragonfly cache (Redis-compatible) |
 | `pai-nats` | Deployment | NATS with JetStream |

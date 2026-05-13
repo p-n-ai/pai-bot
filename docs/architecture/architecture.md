@@ -27,7 +27,7 @@ Chat Gateway ──► Agent Engine ──► AI Gateway ──► Provider (Ope
     │          Scheduler (nudges)
     │
     ▼
-Admin Panel (Next.js) ◄──► Admin API (Go)
+Admin SPA (Vite/TanStack Router) ◄──► Admin API (Go)
 ```
 
 ## Domain Packages
@@ -123,7 +123,7 @@ NATS with JetStream is configured in Docker Compose and the config package but n
 │  Caddy (reverse proxy, auto-HTTPS)          │
 │  /api/* → app:8080  |  /* → admin:3000      │
 ├─────────────────────────────────────────────┤
-│  Go Server (:8080)  │  Next.js Admin (:3000)│
+│  Go Server (:8080)  │  Admin SPA (:3000)    │
 ├─────────────────────────────────────────────┤
 │  PostgreSQL 17  │  Dragonfly  │  NATS       │
 └─────────────────────────────────────────────┘

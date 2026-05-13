@@ -12,6 +12,10 @@ admin/coverage
 admin/out
 admin/.vercel
 admin/*.tsbuildinfo
+admin-spa/node_modules
+admin-spa/dist
+admin-spa/coverage
+admin-spa/*.tsbuildinfo
 dist
 tmp
 *.log
