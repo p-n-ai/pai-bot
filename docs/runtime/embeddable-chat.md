@@ -47,6 +47,8 @@ read_when:
 
 Admin embed routes require admin or platform-admin role.
 
+`admin-spa` exposes the current admin UI at `/settings/embed`. The route reads the tenant embed config, toggles embed availability, and adds or removes allowed origins through the admin routes above.
+
 ## Security Boundary
 
 - Guest auth validates tenant slug plus request origin through `EmbedConfigStore`.
@@ -61,4 +63,4 @@ Admin embed routes require admin or platform-admin role.
 - The widget is tenant-routed by slug.
 - Embed origins must be explicitly configured per tenant.
 - The chat shell is intentionally minimal and iframe-based.
-- Future polish can add widget events, unread state, resize events, richer theming, and admin UI for embed config.
+- Future polish can add widget events, unread state, resize events, richer theming, and fuller theme editing in the admin UI.
