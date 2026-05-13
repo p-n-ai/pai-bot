@@ -21,7 +21,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8377',
+        // the backend url will be available thru admin-spa.example.com/api/**
+        target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
     },
