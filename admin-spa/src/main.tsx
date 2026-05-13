@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { AdminApp } from './app'
 import { AuthProvider } from './auth-provider'
 import './styles.css'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const rootElement = document.getElementById('root')
 
@@ -15,7 +16,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AuthProvider>
-      <AdminApp />
+      <TooltipProvider>
+        <AdminApp />
+      </TooltipProvider>
     </AuthProvider>
     {import.meta.env.DEV ? (
       <Agentation endpoint='http://localhost:4747' />
