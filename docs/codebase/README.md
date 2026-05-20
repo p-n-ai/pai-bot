@@ -9,7 +9,7 @@ read_when:
 
 # Codebase Map
 
-`pai-bot` is the runtime/admin/deploy repository for the P&AI bot product. It consumes curriculum/content from `oss`, serves the chat runtime, exposes admin APIs, ships the Next.js admin app, and carries deploy assets.
+`pai-bot` is the runtime/admin/deploy repository for the P&AI bot product. It consumes curriculum/content from `oss`, serves the chat runtime, exposes admin APIs, ships the admin SPA, and carries deploy assets.
 
 ## Top-level folders
 
@@ -17,7 +17,8 @@ read_when:
 |---|---|---|
 | `cmd/` | Go binaries | Thin entrypoints. Keep product logic in `internal/`.
 | `internal/` | Go backend packages | Main runtime code: agent engine, chat channels, admin API, auth, AI, curriculum, retrieval, progress, tenancy, platform adapters.
-| `admin/` | Next.js admin app | Teacher/admin/dashboard UI, API proxy routes, auth shell, login/onboarding, retrieval lab.
+| `admin/` | Legacy Next.js admin app | Source/fallback history for teacher/admin/dashboard UI.
+| `admin-spa/` | Vite/TanStack admin SPA | Current admin product surface and deployed admin frontend.
 | `site/` | Astro marketing/docs surface | Public site content and styling. Separate from admin app.
 | `oss/` | Checked-in curriculum/content source | Canonical curriculum mirror inside this repo. Do not treat it as backend runtime code.
 | `migrations/` | PostgreSQL schema migrations | Goose-style timestamped SQL. Keep schema changes here.

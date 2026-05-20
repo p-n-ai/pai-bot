@@ -210,6 +210,7 @@ type ClassProgress struct {
 type UserManagementSummary struct {
 	Teachers       int `json:"teachers"`
 	Parents        int `json:"parents"`
+	Students       int `json:"students"`
 	PendingInvites int `json:"pending_invites"`
 	TotalUsers     int `json:"total_users"`
 }
@@ -241,7 +242,16 @@ type PendingInvite struct {
 type UserManagementView struct {
 	Summary        UserManagementSummary `json:"summary"`
 	ActiveUsers    []ManagedUser         `json:"active_users"`
+	Students       []Student             `json:"students"`
 	PendingInvites []PendingInvite       `json:"pending_invites"`
+}
+
+func newUserManagementView() UserManagementView {
+	return UserManagementView{
+		ActiveUsers:    []ManagedUser{},
+		Students:       []Student{},
+		PendingInvites: []PendingInvite{},
+	}
 }
 
 type StudentExportRow struct {
@@ -956,7 +966,7 @@ func (s *Service) GetUserManagement() (UserManagementView, error) {
 	}
 	defer rows.Close()
 
-	view := UserManagementView{}
+	view := newUserManagementView()
 	for rows.Next() {
 		var item ManagedUser
 		if err := rows.Scan(&item.ID, &item.Name, &item.Role, &item.Email, &item.CreatedAt, &item.TenantName); err != nil {
@@ -975,6 +985,36 @@ func (s *Service) GetUserManagement() (UserManagementView, error) {
 		return UserManagementView{}, fmt.Errorf("iterate managed users: %w", err)
 	}
 	view.Summary.TotalUsers = len(view.ActiveUsers)
+
+	studentRows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			COALESCE(NULLIF(u.external_id, ''), u.id::text) AS student_id,
+			u.name,
+			COALESCE(u.external_id, ''),
+			u.channel,
+			COALESCE(u.form, ''),
+			u.created_at
+		FROM users u
+		WHERE %s
+			AND u.role = 'student'
+		ORDER BY u.created_at DESC, u.name ASC
+	`, s.tenantPredicate("u.tenant_id", 1)), s.tenantArg())
+	if err != nil {
+		return UserManagementView{}, fmt.Errorf("query managed students: %w", err)
+	}
+	defer studentRows.Close()
+
+	for studentRows.Next() {
+		var item Student
+		if err := studentRows.Scan(&item.ID, &item.Name, &item.ExternalID, &item.Channel, &item.Form, &item.CreatedAt); err != nil {
+			return UserManagementView{}, fmt.Errorf("scan managed student: %w", err)
+		}
+		view.Students = append(view.Students, item)
+	}
+	if err := studentRows.Err(); err != nil {
+		return UserManagementView{}, fmt.Errorf("iterate managed students: %w", err)
+	}
+	view.Summary.Students = len(view.Students)
 
 	inviteRows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT

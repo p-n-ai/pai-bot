@@ -386,6 +386,15 @@ func main() {
 		waDisconnectHandler := withCORS(waAuth(waMeowChannel.DisconnectHandler()))
 		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
 		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
+	} else {
+		manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+		waAuth := chain(
+			authenticateRequests(authService, manager, time.Now),
+			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+		)
+		waStatusHandler := withCORS(waAuth(handleWhatsAppDisabledStatus()))
+		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
+		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
 	}
 	// Embed admin routes (admin/platform_admin only).
 	{
@@ -426,6 +435,15 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+func handleWhatsAppDisabledStatus() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"connected": false,
+			"enabled":   false,
+		})
+	})
 }
 
 const (

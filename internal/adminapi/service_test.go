@@ -4,6 +4,7 @@
 package adminapi
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -184,6 +185,24 @@ func TestBuildGroupLeaderboardQueryUsesJoinedMemberSet(t *testing.T) {
 		if !strings.Contains(query, want) {
 			t.Fatalf("query missing %q:\n%s", want, query)
 		}
+	}
+}
+
+func TestNewUserManagementViewEncodesEmptyCollections(t *testing.T) {
+	payload, err := json.Marshal(newUserManagementView())
+	if err != nil {
+		t.Fatalf("marshal user management view: %v", err)
+	}
+
+	body := string(payload)
+	if strings.Contains(body, "null") {
+		t.Fatalf("user management view = %s, want empty arrays instead of null", body)
+	}
+	if !strings.Contains(body, `"active_users":[]`) {
+		t.Fatalf("user management view = %s, want active_users empty array", body)
+	}
+	if !strings.Contains(body, `"pending_invites":[]`) {
+		t.Fatalf("user management view = %s, want pending_invites empty array", body)
 	}
 }
 

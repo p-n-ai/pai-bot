@@ -220,6 +220,8 @@ Current shell note:
 - On success → redirect to the role-appropriate workspace
 - Teachers/admins/platform admins land on `/dashboard`
 - Parents land on `/parents/{id}` (child summary)
+- The sign-in page should read as a school workspace entry point: focused form, clear school-selection state, and lightweight context about classes, users, budget, exports, onboarding, and API-gated access.
+- Do not use implementation labels such as SPA or migration language in the visible login UI.
 - The hero headline should use a short one-time mount reveal with Emil-style ease-out timing, reduced-motion fallback, and only a very small entry blur that resolves immediately.
 - If email maps to multiple schools, the form switches into a guided school-pick state:
   - keep email/password visible as locked summaries

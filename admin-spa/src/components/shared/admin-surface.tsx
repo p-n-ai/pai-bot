@@ -1,0 +1,53 @@
+import type { ReactNode } from 'react'
+
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+
+export function AdminSurface({
+  children,
+  className,
+  contentClassName,
+}: {
+  children: ReactNode
+  className?: string
+  contentClassName?: string
+}) {
+  return (
+    <Card className={cn('rounded-xl border bg-card shadow-xs', className)}>
+      <CardContent className={cn('p-6', contentClassName)}>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function AdminSurfaceHeader({
+  action,
+  className,
+  description,
+  title,
+}: {
+  title: ReactNode
+  description?: ReactNode
+  action?: ReactNode
+  className?: string
+}) {
+  return (
+    <CardHeader
+      className={cn(
+        'flex flex-row items-center justify-between gap-3 p-0',
+        className,
+      )}
+    >
+      <div>
+        <h2 className='text-xl leading-none font-semibold tracking-tight text-foreground'>
+          {title}
+        </h2>
+        {description ? (
+          <p className='mt-1 text-sm text-muted-foreground'>{description}</p>
+        ) : null}
+      </div>
+      {action}
+    </CardHeader>
+  )
+}

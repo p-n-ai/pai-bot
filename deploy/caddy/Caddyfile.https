@@ -7,6 +7,18 @@
 		reverse_proxy app:8080
 	}
 
+	handle /ws/* {
+		reverse_proxy app:8080
+	}
+
+	handle /embed/* {
+		reverse_proxy app:8080
+	}
+
+	handle /webhook/* {
+		reverse_proxy app:8080
+	}
+
 	handle {
 		reverse_proxy admin:3000
 	}
