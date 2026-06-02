@@ -27,7 +27,6 @@ const (
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
 	defaultRatingPromptEvery     = 5
-	ratingPromptText             = "Sebelum kita teruskan, boleh beri rating 1-5 untuk bantuan setakat ini? (1=tak membantu, 5=sangat membantu)"
 	// ReviewActionCode is a control marker emitted by AI to trigger rating UI/actions.
 	ReviewActionCode = "[[PAI_REVIEW]]"
 	langPrefCodeEN   = "[[PAI_PREF_LANG:en]]"
