@@ -65,3 +65,6 @@ output/
 *.pem
 *.key
 .env.secret
+
+# pi agent tooling cache/scratch (generated, machine-local)
+.pi/
