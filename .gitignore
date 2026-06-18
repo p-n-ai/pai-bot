@@ -65,3 +65,9 @@ output/
 *.pem
 *.key
 .env.secret
+
+# pi agent tooling cache/scratch (generated, machine-local)
+.pi/
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/
