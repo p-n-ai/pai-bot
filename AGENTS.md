@@ -95,3 +95,17 @@ cd admin-spa && pnpm build
 - Local runtime should stay local: never run migrations with `GOOSE_DSN`/`LEARN_DATABASE_URL` aimed at remote DBs.
 - `just frontend` starts the Next admin plus Agentation MCP; keep Agentation wiring dev-only.
 - `docs/**` may describe plans; verify current behavior against code before relying on docs.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are private local markdown files under `.issues/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the default five `Status:` values. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain docs use a single-context layout. See `docs/agents/domain.md`.
