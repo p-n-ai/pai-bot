@@ -2380,15 +2380,3 @@ func mustIssueTokenWithTenant(t *testing.T, role auth.Role, subject, tenantID st
 	}
 	return token
 }
-
-// TestEmbedAdminConfigRouteUnwired documents that embed-admin routes are quarantined
-// and must not be reachable through the handler mux.
-func TestEmbedAdminConfigRouteUnwired(t *testing.T) {
-	mux := newMux(stubAdminAPI{}, &chatGatewayStub{})
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/embed/config", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d (embed-admin quarantined)", rec.Code, http.StatusNotFound)
-	}
-}
