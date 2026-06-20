@@ -355,22 +355,6 @@ func main() {
 	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
 	topMux.Handle("GET /embed/chat", chat.HandleChatPage(embedConfigStore))
 
-	// Embed guest auth (public, rate-limited: 5 req/min/IP).
-	guestSvc := auth.NewGuestService(db.Pool, embedTokenManager)
-	embedGuestLimiter := newFixedWindowLimiter(5, time.Minute)
-	topMux.Handle("POST /api/embed/auth/guest", withCORS(withIPRateLimit(
-		handleEmbedGuestAuth(embedConfigStore, guestSvc),
-		embedGuestLimiter,
-	)))
-	topMux.Handle("OPTIONS /api/embed/auth/guest", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-	topMux.Handle("POST /api/embed/auth/upgrade", withCORS(withIPRateLimit(
-		handleEmbedUpgradeGuest(guestSvc, embedTokenManager),
-		embedGuestLimiter,
-	)))
-	topMux.Handle("OPTIONS /api/embed/auth/upgrade", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-	topMux.Handle("GET /api/embed/messages", withCORS(handleEmbedMessages(db.Pool, embedTokenManager)))
-	topMux.Handle("OPTIONS /api/embed/messages", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-
 	if waCloudChannel != nil {
 		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
 	}
@@ -396,21 +380,6 @@ func main() {
 		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
 		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
 	}
-	// Embed admin routes (admin/platform_admin only).
-	{
-		embedManager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
-		embedAdminAuth := chain(
-			authenticateRequests(authService, embedManager, time.Now),
-			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
-		)
-		topMux.Handle("GET /api/admin/embed/config", withCORS(embedAdminAuth(handleAdminGetEmbedConfig(embedConfigStore))))
-		topMux.Handle("PUT /api/admin/embed/config", withCORS(embedAdminAuth(handleAdminUpdateEmbedConfig(embedConfigStore))))
-		topMux.Handle("POST /api/admin/embed/origins", withCORS(embedAdminAuth(handleAdminAddEmbedOrigin(embedConfigStore))))
-		topMux.Handle("DELETE /api/admin/embed/origins", withCORS(embedAdminAuth(handleAdminDeleteEmbedOrigin(embedConfigStore))))
-		topMux.Handle("OPTIONS /api/admin/embed/config", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-		topMux.Handle("OPTIONS /api/admin/embed/origins", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
-	}
-
 	topMux.Handle("/", apiHandler)
 
 	// Atomically swap to the full handler — no port gap, no reconnect.

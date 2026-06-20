@@ -107,39 +107,6 @@ func withAPIRateLimit(next http.Handler, now func() time.Time, apiLimiter, authL
 	})
 }
 
-// withIPRateLimit wraps a handler with IP-based rate limiting.
-func withIPRateLimit(next http.HandlerFunc, limiter *fixedWindowLimiter) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		key := "ip:" + clientIP(r)
-		allowed, retryAfter := limiter.Allow(key, time.Now().UTC())
-		if !allowed {
-			seconds := int(math.Ceil(retryAfter.Seconds()))
-			if seconds < 1 {
-				seconds = 1
-			}
-			w.Header().Set("Retry-After", strconv.Itoa(seconds))
-			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
-			return
-		}
-		next.ServeHTTP(w, r)
-	}
-}
-
-// clientIP extracts the client IP from the request.
-func clientIP(r *http.Request) string {
-	if xff := firstForwardedFor(r.Header.Get("X-Forwarded-For")); xff != "" {
-		return xff
-	}
-	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
-		return xri
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return "unknown"
-}
-
 func withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
