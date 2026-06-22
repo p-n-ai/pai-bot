@@ -17,7 +17,6 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
+	"github.com/p-n-ai/pai-bot/internal/server"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
 )
 
@@ -53,356 +53,335 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start the HTTP server immediately with only /healthz so Docker/K8s
-	// health checks pass while the rest of the application initialises
-	// (curriculum seeding, retrieval indexing, Telegram sync can take >60 s
-	// on small instances).  The handler is atomically swapped to the full
-	// mux once initialisation completes.
-	var handler atomic.Pointer[http.Handler]
-	initialHandler := http.Handler(http.HandlerFunc(handleHealthz))
-	handler.Store(&initialHandler)
-	srv := &http.Server{
-		Addr: fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			(*handler.Load()).ServeHTTP(w, r)
-		}),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-	go func() {
-		slog.Info("server starting", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
-		}
-	}()
-
-	// Initialize AI router with configured providers.
-	router := setupAIRouter(cfg)
-	if !router.HasProvider() {
-		if cfg.Runtime.DevMode {
-			slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
-		} else {
-			slog.Error("no AI providers configured")
-			os.Exit(1)
-		}
-	}
-
-	// Initialize PostgreSQL-backed conversation store.
-	db, err := database.New(context.Background(), cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
-	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
-	if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
-		slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
-		os.Exit(1)
-	}
-
-	// Initialize cache (warn if unavailable, don't fail).
-	if cfg.Cache.URL != "" {
-		c, err := cache.New(context.Background(), cfg.Cache.URL)
-		if err != nil {
-			slog.Warn("cache not connected", "error", err)
-		} else {
-			defer func() { _ = c.Close() }()
-			slog.Info("cache connected")
-		}
-	} else {
-		slog.Warn("cache not configured, running without cache")
-	}
-
-	store, err := agent.NewPostgresStore(context.Background(), db.Pool)
-	if err != nil {
-		slog.Error("failed to initialize conversation store", "error", err)
-		os.Exit(1)
-	}
-
-	// Load curriculum (warn if unavailable, don't fail).
-	loader, err := curriculum.NewLoader(cfg.CurriculumPath)
-	if err != nil {
-		slog.Warn("curriculum not loaded", "error", err, "path", cfg.CurriculumPath)
-	} else {
-		topics := loader.AllTopics()
-		slog.Info("curriculum ready", "topics", len(topics))
-	}
-	retrievalService := newBootstrapRetrievalService(loader)
-
-	// Create agent engine with streaks and XP tracking.
-	eventLogger := agent.NewPostgresEventLogger(db.Pool)
-	tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
-	streakTracker := progress.NewMemoryStreakTracker()
-	xpTracker := progress.NewMemoryXPTracker()
-	goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
-	challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
-	groupStore := agent.NewPostgresGroupStore(db.Pool)
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:             router,
-		Store:                store,
-		EventLogger:          eventLogger,
-		CurriculumLoader:     loader,
-		RetrievalService:     retrievalService,
-		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
-		RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
-		Tracker:              tracker,
-		Streaks:              streakTracker,
-		XP:                   xpTracker,
-		Goals:                goalStore,
-		Challenges:           challengeStore,
-		Groups:               groupStore,
-		TenantID:             store.TenantID(),
-		DevMode:              cfg.Runtime.DevMode,
-		FeatureFlags:         cfg.FeatureFlags,
-	})
-
-	gw := chat.NewGateway()
-	if strings.TrimSpace(cfg.Telegram.BotToken) != "" {
-		tg, err := chat.NewTelegramChannel(cfg.Telegram.BotToken)
-		if err != nil {
-			slog.Error("failed to create Telegram channel", "error", err)
-			os.Exit(1)
-		}
-		tg.SetDevMode(cfg.Runtime.DevMode)
-		gw.Register("telegram", tg)
-	} else {
-		slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
-	}
-
-	// WhatsApp channel (behind feature flag).
-	var waCloudChannel *chat.WhatsAppChannel
-	var waMeowChannel *chat.WhatsAppMeowChannel
-	if cfg.WhatsApp.Enabled {
-		switch cfg.WhatsApp.Backend {
-		case "cloudapi":
-			var waErr error
-			waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
-			if waErr != nil {
-				slog.Error("failed to create WhatsApp Cloud API channel", "error", waErr)
-				os.Exit(1)
-			}
-			gw.Register("whatsapp", waCloudChannel)
-			slog.Info("whatsapp backend: Cloud API")
-		default: // "meow"
-			var waErr error
-			waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
-			if waErr != nil {
-				slog.Error("failed to create WhatsApp meow channel", "error", waErr)
-				os.Exit(1)
-			}
-			gw.Register("whatsapp", waMeowChannel)
-			slog.Info("whatsapp backend: whatsmeow")
-		}
-	} else {
-		slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
-	}
-
-	// Embed config store (for embeddable web chat widget).
-	embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
-
-	// WebSocket channel (always enabled — used by terminal-chat and embed web clients).
-	// Dev mode keeps first-message auth for terminal-chat; production embed mode
-	// requires origin checking and subprotocol JWT auth.
-	embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
-	var wsChannel *chat.WSChannel
-	if cfg.Runtime.DevMode {
-		wsChannel = chat.NewWSChannel()
-	} else {
-		wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
-	}
-	gw.Register("websocket", wsChannel)
-
-	// Wire challenge notifications through the gateway.
-	engine.SetNotifier(gatewayNotifier{gw: gw, pool: db.Pool})
-
-	// Start proactive scheduler (nudges for due reviews).
-	nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
-	scheduler := agent.NewScheduler(
-		agent.SchedulerConfig{
-			CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
-			MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
-			AIPersonalizedNudgesEnabled: cfg.Runtime.AIPersonalizedNudgesEnabled,
-		},
-		tracker,
-		streakTracker,
-		xpTracker,
-		goalStore,
-		nudgeTracker,
-		gw,
-		router,
-		store,
-	)
-	scheduler.SetWeeklyParentReportSource(weeklyParentReportSource{admin: adminapi.New(db.Pool, store.TenantID())})
-
-	scheduler.SetGroupStore(groupStore, store.TenantID())
-
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-
-	// Scheduler runs in background; user list is empty initially — will be populated
-	// when we add user enumeration from the database.
-	go scheduler.Start(ctx, []string{})
-
-	// Start long-polling with message handler.
-	// Shared inbound message handler for all channels.
-	handleInbound := func(msg chat.InboundMessage) {
-		// Show typing indicator while processing.
-		if err := gw.SendTyping(ctx, msg.Channel, msg.UserID); err != nil {
-			slog.Warn("failed to send typing indicator", "error", err)
+	var cleanup []func()
+	defer func() {
+		for i := len(cleanup) - 1; i >= 0; i-- {
+			cleanup[i]()
 		}
+	}()
 
-		resp, err := engine.ProcessMessage(ctx, msg)
-		if err != nil {
-			slog.Error("ProcessMessage failed", "error", err, "user_id", msg.UserID)
-			return
-		}
+	if err := server.Run(ctx, server.Options{
+		Addr:            fmt.Sprintf(":%d", cfg.Server.Port),
+		ReadTimeout:     10 * time.Second,
+		WriteTimeout:    30 * time.Second,
+		IdleTimeout:     60 * time.Second,
+		ShutdownTimeout: 10 * time.Second,
+		BuildHandler: func(ctx context.Context) (http.Handler, func(context.Context) error, error) {
 
-		// Strip review action codes from all channels (Telegram renders
-		// them as inline buttons; other channels should never show the raw tag).
-		cleanResp := chat.StripReviewActionCodes(resp)
+			// Initialize AI router with configured providers.
+			router := setupAIRouter(cfg)
+			if !router.HasProvider() {
+				if cfg.Runtime.DevMode {
+					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
+				} else {
+					slog.Error("no AI providers configured")
+					os.Exit(1)
+				}
+			}
 
-		out := chat.OutboundMessage{
-			Channel: msg.Channel,
-			UserID:  msg.UserID,
-			Text:    cleanResp,
-		}
-		if msg.Channel == "telegram" {
-			out.Text = chat.ConvertLaTeXToUnicode(resp)
-			out.Text = chat.NormalizeTelegramMarkdown(out.Text)
-			out.ParseMode = "Markdown"
-			out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
-			out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
-			out.Text = chat.StripReviewActionCodes(out.Text)
-		}
-		if strings.TrimSpace(out.Text) == "" {
-			return
-		}
+			// Initialize PostgreSQL-backed conversation store.
+			db, err := database.New(context.Background(), cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
+			if err != nil {
+				slog.Error("failed to connect to database", "error", err)
+				os.Exit(1)
+			}
+			cleanup = append(cleanup, db.Close)
 
-		if err := gw.Send(ctx, out); err != nil {
-			slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
-		}
-	}
+			// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
+			if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
+				slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
+				os.Exit(1)
+			}
 
-	authService := auth.NewPostgresService(
-		db.Pool,
-		defaultSessionTTL,
-	)
-	authService.ConfigureGoogleOAuth(auth.GoogleOAuthProviderConfig{
-		ClientID:              cfg.Auth.Google.ClientID,
-		ClientSecret:          cfg.Auth.Google.ClientSecret,
-		DiscoveryURL:          cfg.Auth.Google.DiscoveryURL,
-		Policy:                googleOAuthPolicy(cfg),
-		EmulatorSigningSecret: cfg.Auth.Google.EmulatorSigningSecret,
-	})
-	if strings.TrimSpace(cfg.Email.SMTPAddr) != "" && strings.TrimSpace(cfg.Email.FromAddress) != "" {
-		inviteMailer, err := mailer.NewSMTPSender(mailer.SMTPConfig{
-			Addr:        cfg.Email.SMTPAddr,
-			Username:    cfg.Email.SMTPUsername,
-			Password:    cfg.Email.SMTPPassword,
-			FromAddress: cfg.Email.FromAddress,
-			FromName:    cfg.Email.FromName,
-		})
-		if err != nil {
-			slog.Error("failed to create invite mailer", "error", err)
-			os.Exit(1)
-		}
-		authService.ConfigureInviteEmail(inviteMailer)
-	}
-	createdBootstrapAdmin, err := authService.EnsureBootstrapPlatformAdmin(
-		context.Background(),
-		cfg.Auth.BootstrapAdmin.Email,
-		cfg.Auth.BootstrapAdmin.Password,
-	)
-	if err != nil {
-		slog.Error("failed to ensure bootstrap platform admin", "error", err)
-		os.Exit(1)
-	}
-	if createdBootstrapAdmin {
-		slog.Info("bootstrap platform admin created", "email", cfg.Auth.BootstrapAdmin.Email)
-	}
+			// Initialize cache (warn if unavailable, don't fail).
+			if cfg.Cache.URL != "" {
+				c, err := cache.New(context.Background(), cfg.Cache.URL)
+				if err != nil {
+					slog.Warn("cache not connected", "error", err)
+				} else {
+					cleanup = append(cleanup, func() { _ = c.Close() })
+					slog.Info("cache connected")
+				}
+			} else {
+				slog.Warn("cache not configured, running without cache")
+			}
 
-	// HTTP endpoints.
-	apiHandler := newHandlerWithAdminProvider(
-		tenantAdminDataSourceProvider{
-			newForTenant: func(tenantID string) adminDataSource {
-				return adminapi.New(db.Pool, tenantID)
-			},
-			newForPlatform: func() adminDataSource {
-				return adminapi.NewPlatform(db.Pool)
-			},
-			defaultTenantID: func(ctx context.Context) (string, error) {
-				return lookupDefaultTenantID(ctx, db.Pool)
-			},
+			store, err := agent.NewPostgresStore(context.Background(), db.Pool)
+			if err != nil {
+				slog.Error("failed to initialize conversation store", "error", err)
+				os.Exit(1)
+			}
+
+			// Load curriculum (warn if unavailable, don't fail).
+			loader, err := curriculum.NewLoader(cfg.CurriculumPath)
+			if err != nil {
+				slog.Warn("curriculum not loaded", "error", err, "path", cfg.CurriculumPath)
+			} else {
+				topics := loader.AllTopics()
+				slog.Info("curriculum ready", "topics", len(topics))
+			}
+			retrievalService := newBootstrapRetrievalService(loader)
+
+			// Create agent engine with streaks and XP tracking.
+			eventLogger := agent.NewPostgresEventLogger(db.Pool)
+			tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
+			streakTracker := progress.NewMemoryStreakTracker()
+			xpTracker := progress.NewMemoryXPTracker()
+			goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
+			challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
+			groupStore := agent.NewPostgresGroupStore(db.Pool)
+			engine := agent.NewEngine(agent.EngineConfig{
+				AIRouter:             router,
+				Store:                store,
+				EventLogger:          eventLogger,
+				CurriculumLoader:     loader,
+				RetrievalService:     retrievalService,
+				DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
+				RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
+				Tracker:              tracker,
+				Streaks:              streakTracker,
+				XP:                   xpTracker,
+				Goals:                goalStore,
+				Challenges:           challengeStore,
+				Groups:               groupStore,
+				TenantID:             store.TenantID(),
+				DevMode:              cfg.Runtime.DevMode,
+				FeatureFlags:         cfg.FeatureFlags,
+			})
+
+			gw := chat.NewGateway()
+			if strings.TrimSpace(cfg.Telegram.BotToken) != "" {
+				tg, err := chat.NewTelegramChannel(cfg.Telegram.BotToken)
+				if err != nil {
+					slog.Error("failed to create Telegram channel", "error", err)
+					os.Exit(1)
+				}
+				tg.SetDevMode(cfg.Runtime.DevMode)
+				gw.Register("telegram", tg)
+			} else {
+				slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
+			}
+
+			// WhatsApp channel (behind feature flag).
+			var waCloudChannel *chat.WhatsAppChannel
+			var waMeowChannel *chat.WhatsAppMeowChannel
+			if cfg.WhatsApp.Enabled {
+				switch cfg.WhatsApp.Backend {
+				case "cloudapi":
+					var waErr error
+					waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
+					if waErr != nil {
+						slog.Error("failed to create WhatsApp Cloud API channel", "error", waErr)
+						os.Exit(1)
+					}
+					gw.Register("whatsapp", waCloudChannel)
+					slog.Info("whatsapp backend: Cloud API")
+				default: // "meow"
+					var waErr error
+					waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
+					if waErr != nil {
+						slog.Error("failed to create WhatsApp meow channel", "error", waErr)
+						os.Exit(1)
+					}
+					gw.Register("whatsapp", waMeowChannel)
+					slog.Info("whatsapp backend: whatsmeow")
+				}
+			} else {
+				slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
+			}
+
+			// Embed config store (for embeddable web chat widget).
+			embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
+
+			// WebSocket channel (always enabled — used by terminal-chat and embed web clients).
+			// Dev mode keeps first-message auth for terminal-chat; production embed mode
+			// requires origin checking and subprotocol JWT auth.
+			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
+			var wsChannel *chat.WSChannel
+			if cfg.Runtime.DevMode {
+				wsChannel = chat.NewWSChannel()
+			} else {
+				wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
+			}
+			gw.Register("websocket", wsChannel)
+
+			// Wire challenge notifications through the gateway.
+			engine.SetNotifier(gatewayNotifier{gw: gw, pool: db.Pool})
+
+			// Start proactive scheduler (nudges for due reviews).
+			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
+			scheduler := agent.NewScheduler(
+				agent.SchedulerConfig{
+					CheckInterval:               agent.DefaultSchedulerConfig().CheckInterval,
+					MaxNudgesPerDay:             agent.DefaultSchedulerConfig().MaxNudgesPerDay,
+					AIPersonalizedNudgesEnabled: cfg.Runtime.AIPersonalizedNudgesEnabled,
+				},
+				tracker,
+				streakTracker,
+				xpTracker,
+				goalStore,
+				nudgeTracker,
+				gw,
+				router,
+				store,
+			)
+			scheduler.SetWeeklyParentReportSource(weeklyParentReportSource{admin: adminapi.New(db.Pool, store.TenantID())})
+
+			scheduler.SetGroupStore(groupStore, store.TenantID())
+
+			// Scheduler runs in background; user list is empty initially — will be populated
+			// when we add user enumeration from the database.
+			go scheduler.Start(ctx, []string{})
+
+			// Start long-polling with message handler.
+			// Shared inbound message handler for all channels.
+			handleInbound := func(msg chat.InboundMessage) {
+				// Show typing indicator while processing.
+				if err := gw.SendTyping(ctx, msg.Channel, msg.UserID); err != nil {
+					slog.Warn("failed to send typing indicator", "error", err)
+				}
+
+				resp, err := engine.ProcessMessage(ctx, msg)
+				if err != nil {
+					slog.Error("ProcessMessage failed", "error", err, "user_id", msg.UserID)
+					return
+				}
+
+				// Strip review action codes from all channels (Telegram renders
+				// them as inline buttons; other channels should never show the raw tag).
+				cleanResp := chat.StripReviewActionCodes(resp)
+
+				out := chat.OutboundMessage{
+					Channel: msg.Channel,
+					UserID:  msg.UserID,
+					Text:    cleanResp,
+				}
+				if msg.Channel == "telegram" {
+					out.Text = chat.ConvertLaTeXToUnicode(resp)
+					out.Text = chat.NormalizeTelegramMarkdown(out.Text)
+					out.ParseMode = "Markdown"
+					out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
+					out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, telegramInlineKeyboardContext(store, msg.UserID))
+					out.Text = chat.StripReviewActionCodes(out.Text)
+				}
+				if strings.TrimSpace(out.Text) == "" {
+					return
+				}
+
+				if err := gw.Send(ctx, out); err != nil {
+					slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
+				}
+			}
+
+			authService := auth.NewPostgresService(
+				db.Pool,
+				defaultSessionTTL,
+			)
+			authService.ConfigureGoogleOAuth(auth.GoogleOAuthProviderConfig{
+				ClientID:              cfg.Auth.Google.ClientID,
+				ClientSecret:          cfg.Auth.Google.ClientSecret,
+				DiscoveryURL:          cfg.Auth.Google.DiscoveryURL,
+				Policy:                googleOAuthPolicy(cfg),
+				EmulatorSigningSecret: cfg.Auth.Google.EmulatorSigningSecret,
+			})
+			if strings.TrimSpace(cfg.Email.SMTPAddr) != "" && strings.TrimSpace(cfg.Email.FromAddress) != "" {
+				inviteMailer, err := mailer.NewSMTPSender(mailer.SMTPConfig{
+					Addr:        cfg.Email.SMTPAddr,
+					Username:    cfg.Email.SMTPUsername,
+					Password:    cfg.Email.SMTPPassword,
+					FromAddress: cfg.Email.FromAddress,
+					FromName:    cfg.Email.FromName,
+				})
+				if err != nil {
+					slog.Error("failed to create invite mailer", "error", err)
+					os.Exit(1)
+				}
+				authService.ConfigureInviteEmail(inviteMailer)
+			}
+			createdBootstrapAdmin, err := authService.EnsureBootstrapPlatformAdmin(
+				context.Background(),
+				cfg.Auth.BootstrapAdmin.Email,
+				cfg.Auth.BootstrapAdmin.Password,
+			)
+			if err != nil {
+				slog.Error("failed to ensure bootstrap platform admin", "error", err)
+				os.Exit(1)
+			}
+			if createdBootstrapAdmin {
+				slog.Info("bootstrap platform admin created", "email", cfg.Auth.BootstrapAdmin.Email)
+			}
+
+			// HTTP endpoints.
+			apiHandler := newHandlerWithAdminProvider(
+				tenantAdminDataSourceProvider{
+					newForTenant: func(tenantID string) adminDataSource {
+						return adminapi.New(db.Pool, tenantID)
+					},
+					newForPlatform: func() adminDataSource {
+						return adminapi.NewPlatform(db.Pool)
+					},
+					defaultTenantID: func(ctx context.Context) (string, error) {
+						return lookupDefaultTenantID(ctx, db.Pool)
+					},
+				},
+				adminapi.NewPublic(db.Pool),
+				gatewaySender{gw},
+				retrievalService,
+				authService,
+				cfg.Auth.JWTSecret,
+				defaultAccessTokenTTL,
+				cfg.Email.BaseURL,
+			)
+
+			// Top-level mux adds the WebSocket upgrade route alongside the API handler.
+			topMux := http.NewServeMux()
+			topMux.Handle("GET /ws/chat", wsChannel.Handler())
+
+			// Embed widget routes (public, no auth).
+			topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
+			topMux.Handle("GET /embed/chat", chat.HandleChatPage(embedConfigStore))
+
+			if waCloudChannel != nil {
+				topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
+			}
+			if waMeowChannel != nil {
+				manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+				waAuth := chain(
+					authenticateRequests(authService, manager, time.Now),
+					auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+				)
+				waStatusHandler := withCORS(waAuth(waMeowChannel.StatusHandler()))
+				topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
+				topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
+				waDisconnectHandler := withCORS(waAuth(waMeowChannel.DisconnectHandler()))
+				topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
+				topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
+			} else {
+				manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
+				waAuth := chain(
+					authenticateRequests(authService, manager, time.Now),
+					auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
+				)
+				waStatusHandler := withCORS(waAuth(handleWhatsAppDisabledStatus()))
+				topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
+				topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
+			}
+			topMux.Handle("/", apiHandler)
+
+			return http.Handler(topMux), func(ctx context.Context) error {
+				if err := gw.StartAll(ctx, handleInbound); err != nil {
+					return err
+				}
+				slog.Info("P&AI Bot is running")
+				return nil
+			}, nil
 		},
-		adminapi.NewPublic(db.Pool),
-		gatewaySender{gw},
-		retrievalService,
-		authService,
-		cfg.Auth.JWTSecret,
-		defaultAccessTokenTTL,
-		cfg.Email.BaseURL,
-	)
-
-	// Top-level mux adds the WebSocket upgrade route alongside the API handler.
-	topMux := http.NewServeMux()
-	topMux.Handle("GET /ws/chat", wsChannel.Handler())
-
-	// Embed widget routes (public, no auth).
-	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
-	topMux.Handle("GET /embed/chat", chat.HandleChatPage(embedConfigStore))
-
-	if waCloudChannel != nil {
-		topMux.Handle("/webhook/whatsapp", waCloudChannel.WebhookHandler(handleInbound))
-	}
-	if waMeowChannel != nil {
-		manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
-		waAuth := chain(
-			authenticateRequests(authService, manager, time.Now),
-			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
-		)
-		waStatusHandler := withCORS(waAuth(waMeowChannel.StatusHandler()))
-		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
-		waDisconnectHandler := withCORS(waAuth(waMeowChannel.DisconnectHandler()))
-		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
-	} else {
-		manager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultAccessTokenTTL)
-		waAuth := chain(
-			authenticateRequests(authService, manager, time.Now),
-			auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
-		)
-		waStatusHandler := withCORS(waAuth(handleWhatsAppDisabledStatus()))
-		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
-	}
-	topMux.Handle("/", apiHandler)
-
-	// Atomically swap to the full handler — no port gap, no reconnect.
-	fullHandler := http.Handler(topMux)
-	handler.Store(&fullHandler)
-	slog.Info("full handler active")
-
-	// Start chat channels now that the full HTTP handler is live.
-	if err := gw.StartAll(ctx, handleInbound); err != nil {
-		slog.Error("failed to start channels", "error", err)
+	}); err != nil {
+		slog.Error("server stopped", "error", err)
 		os.Exit(1)
-	}
-
-	slog.Info("P&AI Bot is running")
-
-	<-ctx.Done()
-	slog.Info("shutting down")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Error("shutdown error", "error", err)
 	}
 }
 
