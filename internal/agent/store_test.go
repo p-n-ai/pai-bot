@@ -103,6 +103,21 @@ func TestConversationStore_UserExists_NotFound(t *testing.T) {
 	}
 }
 
+func TestConversationStore_UserChannel(t *testing.T) {
+	store := agent.NewMemoryStore()
+	if _, ok := store.UserChannel("u-channel"); ok {
+		t.Fatal("UserChannel() hit before user exists, want miss")
+	}
+
+	if err := store.SetUserName("u-channel", "Channel User"); err != nil {
+		t.Fatalf("SetUserName() error = %v", err)
+	}
+	channel, ok := store.UserChannel("u-channel")
+	if !ok || channel != "telegram" {
+		t.Fatalf("UserChannel() = %q, %v, want telegram, true", channel, ok)
+	}
+}
+
 func TestConversationStore_QuizIntensityPreference(t *testing.T) {
 	store := agent.NewMemoryStore()
 

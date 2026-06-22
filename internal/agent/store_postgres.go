@@ -352,6 +352,27 @@ func (s *PostgresStore) GetUserABGroup(externalID string) (string, bool) {
 	return *group, true
 }
 
+func (s *PostgresStore) UserChannel(externalID string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var channel string
+	err := s.pool.QueryRow(ctx,
+		`SELECT channel
+		 FROM users
+		 WHERE tenant_id = $1::uuid
+		   AND external_id = $2
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		s.tenantID,
+		externalID,
+	).Scan(&channel)
+	if err != nil || strings.TrimSpace(channel) == "" {
+		return "", false
+	}
+	return channel, true
+}
+
 func (s *PostgresStore) SetUserABGroup(externalID, group string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()

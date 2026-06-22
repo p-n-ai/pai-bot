@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/apidocs"
@@ -38,8 +37,8 @@ type TenantAdminDataSourceProvider = tenantAdminDataSourceProvider
 type GatewayNotifier = gatewayNotifier
 
 func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw: gw} }
-func NewGatewayNotifier(gw *chat.Gateway, pool *pgxpool.Pool) GatewayNotifier {
-	return gatewayNotifier{gw: gw, pool: pool}
+func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
+	return gatewayNotifier{gw: gw, channels: channels}
 }
 func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSource {
 	return weeklyParentReportSource{admin: admin}
@@ -247,6 +246,10 @@ type messageSender interface {
 	Send(ctx context.Context, msg outboundMessage) error
 }
 
+type userChannelLookup interface {
+	UserChannel(externalID string) (string, bool)
+}
+
 type gatewaySender struct {
 	gw *chat.Gateway
 }
@@ -262,20 +265,15 @@ func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
 // gatewayNotifier implements agent.Notifier by looking up the user's channel
 // from the database and sending to the correct one.
 type gatewayNotifier struct {
-	gw   *chat.Gateway
-	pool *pgxpool.Pool
+	gw       *chat.Gateway
+	channels userChannelLookup
 }
 
 func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {
-	// Look up which channel this user is on.
-	var channel string
-	err := g.pool.QueryRow(ctx,
-		`SELECT channel FROM users WHERE external_id = $1 LIMIT 1`,
-		userID,
-	).Scan(&channel)
-	if err != nil {
+	channel, ok := g.channels.UserChannel(userID)
+	if !ok {
 		// User not found — try all channels as fallback.
-		slog.Warn("notifier: user channel lookup failed, trying all channels", "user_id", userID, "error", err)
+		slog.Warn("notifier: user channel lookup failed, trying all channels", "user_id", userID)
 		for _, ch := range g.gw.ChannelNames() {
 			_ = g.gw.Send(ctx, chat.OutboundMessage{Channel: ch, UserID: userID, Text: text})
 		}
@@ -304,23 +302,6 @@ func telegramInlineKeyboardContext(store agent.ConversationStore, userID string)
 		ctx.QuizActive = false
 	}
 	return ctx
-}
-
-func lookupDefaultTenantID(ctx context.Context, pool *pgxpool.Pool) (string, error) {
-	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var tenantID string
-	if err := pool.QueryRow(queryCtx, `
-		SELECT id::text
-		FROM tenants
-		WHERE slug = 'default'
-		ORDER BY created_at ASC, id ASC
-		LIMIT 1
-	`).Scan(&tenantID); err != nil {
-		return "", fmt.Errorf("lookup default tenant: %w", err)
-	}
-	return tenantID, nil
 }
 
 // newMux creates the HTTP router with health check and admin endpoints.

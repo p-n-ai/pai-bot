@@ -24,12 +24,12 @@ type StoredMessage struct {
 
 // ConversationQuizState is the persisted runtime state for an active quiz.
 type ConversationQuizState struct {
-	TopicID        string `json:"topic_id"`
-	Intensity      string `json:"intensity"`
-	CurrentIndex   int    `json:"current_index"`
-	CorrectAnswers int    `json:"correct_answers"`
-	RunState          string        `json:"run_state,omitempty"`
-	SuspendedBy       string        `json:"suspended_by,omitempty"`
+	TopicID            string         `json:"topic_id"`
+	Intensity          string         `json:"intensity"`
+	CurrentIndex       int            `json:"current_index"`
+	CorrectAnswers     int            `json:"correct_answers"`
+	RunState           string         `json:"run_state,omitempty"`
+	SuspendedBy        string         `json:"suspended_by,omitempty"`
 	GeneratedQuestions []QuizQuestion `json:"generated_questions,omitempty"`
 }
 
@@ -65,19 +65,19 @@ type PendingGoalDraft struct {
 
 // Conversation represents a teaching conversation session.
 type Conversation struct {
-	ID                 string                 `json:"id"`
-	UserID             string                 `json:"user_id"`
-	TopicID            string                 `json:"topic_id,omitempty"`
-	State              string                 `json:"state"`
-	Messages           []StoredMessage        `json:"messages"`
-	Summary            string                 `json:"summary,omitempty"`
-	CompactedAt        int                    `json:"compacted_at,omitempty"` // number of messages included in Summary
-	PendingQuizTopicID string                 `json:"pending_quiz_topic_id,omitempty"`
-	QuizState          *ConversationQuizState `json:"quiz_state,omitempty"`
-	PendingGoal    *PendingGoalDraft           `json:"pending_goal,omitempty"`
-	ChallengeState *ConversationChallengeState `json:"challenge_state,omitempty"`
-	StartedAt      time.Time                   `json:"started_at"`
-	EndedAt        *time.Time                  `json:"ended_at,omitempty"`
+	ID                 string                      `json:"id"`
+	UserID             string                      `json:"user_id"`
+	TopicID            string                      `json:"topic_id,omitempty"`
+	State              string                      `json:"state"`
+	Messages           []StoredMessage             `json:"messages"`
+	Summary            string                      `json:"summary,omitempty"`
+	CompactedAt        int                         `json:"compacted_at,omitempty"` // number of messages included in Summary
+	PendingQuizTopicID string                      `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState      `json:"quiz_state,omitempty"`
+	PendingGoal        *PendingGoalDraft           `json:"pending_goal,omitempty"`
+	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
+	StartedAt          time.Time                   `json:"started_at"`
+	EndedAt            *time.Time                  `json:"ended_at,omitempty"`
 }
 
 // ConversationStore persists conversation state and message history.
@@ -93,6 +93,7 @@ type ConversationStore interface {
 	SetUserPreferredQuizIntensity(userID, intensity string) error
 	GetUserABGroup(userID string) (string, bool)
 	SetUserABGroup(userID, group string) error
+	UserChannel(externalID string) (string, bool)
 	CreateConversation(conv Conversation) (string, error)
 	GetConversation(id string) (*Conversation, error)
 	GetActiveConversation(userID string) (*Conversation, bool)
@@ -281,6 +282,13 @@ func (s *MemoryStore) SetUserABGroup(userID, group string) error {
 	}
 	s.userABGroup[userID] = group
 	return nil
+}
+
+func (s *MemoryStore) UserChannel(externalID string) (string, bool) {
+	if s.UserExists(externalID) {
+		return defaultChannel, true
+	}
+	return "", false
 }
 
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {

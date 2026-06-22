@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -26,6 +25,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
+	platformtenant "github.com/p-n-ai/pai-bot/internal/platform/tenant"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/server"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
@@ -201,7 +201,7 @@ func main() {
 			gw.Register("websocket", wsChannel)
 
 			// Wire challenge notifications through the gateway.
-			engine.SetNotifier(server.NewGatewayNotifier(gw, db.Pool))
+			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
 
 			// Start proactive scheduler (nudges for due reviews).
 			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -316,7 +316,7 @@ func main() {
 						return adminapi.NewPlatform(db.Pool)
 					},
 					func(ctx context.Context) (string, error) {
-						return lookupDefaultTenantID(ctx, db.Pool)
+						return platformtenant.DefaultTenantID(ctx, db.Pool)
 					},
 				),
 				adminapi.NewPublic(db.Pool),
@@ -388,21 +388,4 @@ func newLogHandler(cfg config.LogConfig) slog.Handler {
 		return slog.NewTextHandler(os.Stdout, opts)
 	}
 	return slog.NewJSONHandler(os.Stdout, opts)
-}
-
-func lookupDefaultTenantID(ctx context.Context, pool *pgxpool.Pool) (string, error) {
-	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var tenantID string
-	if err := pool.QueryRow(queryCtx, `
-		SELECT id::text
-		FROM tenants
-		WHERE slug = 'default'
-		ORDER BY created_at ASC, id ASC
-		LIMIT 1
-	`).Scan(&tenantID); err != nil {
-		return "", fmt.Errorf("lookup default tenant: %w", err)
-	}
-	return tenantID, nil
 }

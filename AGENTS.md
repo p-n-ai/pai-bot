@@ -26,7 +26,7 @@ pai-bot/
 
 | Task | Location |
 |------|----------|
-| Server startup/routes | `cmd/server/main.go`, `internal/adminapi`, `internal/apidocs` |
+| Server startup/routes | `internal/server`, `cmd/server/main.go` entrypoint wrapper, `internal/adminapi`, `internal/apidocs` |
 | Tutor turn behavior | `internal/agent/engine.go`, `internal/agent/turn.go`, `internal/agent/prompt_builder.go` |
 | Bot/chat channels | `internal/chat`, `internal/agent/dev_commands.go` |
 | AI providers/routing | `internal/ai`, `internal/platform/airouter`, `internal/platform/config` |
@@ -41,6 +41,7 @@ pai-bot/
 ## CONVENTIONS
 
 - `cmd/*` parses flags/env and wires dependencies; reusable behavior belongs in `internal/*`.
+- `cmd/server` stays a thin entrypoint; `internal/server` owns HTTP lifecycle, handlers, middleware, chat HTTP mounts, and server adapters.
 - Backend I/O paths take `context.Context` first: DB, cache, AI, HTTP-ish orchestration.
 - Postgres code uses `*_postgres.go`; integration tests are explicit with `_integration_test.go` naming/build tags where used.
 - Tenant data paths preserve `tenant_id`; platform-admin/global access is explicit, not fallback.
