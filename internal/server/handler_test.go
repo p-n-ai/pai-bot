@@ -1,7 +1,7 @@
 // Copyright 2026 the P&AI authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package server
 
 import (
 	"context"
@@ -1632,7 +1632,7 @@ func (stubAdminAPI) GetMetrics() (adminapi.MetricsSummary, error) {
 
 func (stubAdminAPI) GetAnalyticsReport() (adminapi.AnalyticsReport, error) {
 	return adminapi.AnalyticsReport{
-		WindowDays: 42,
+		WindowDays:  42,
 		GeneratedAt: time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
 		Overview: adminapi.AnalyticsOverview{
 			TotalActiveLearners: 41,
@@ -1837,7 +1837,7 @@ func (stubAdminAPI) GetGroupDetail(_ string) (adminapi.AdminGroupDetail, error) 
 func (stubAdminAPI) UpdateGroup(_ string, _ adminapi.AdminUpdateGroupInput) (adminapi.AdminGroup, error) {
 	return adminapi.AdminGroup{}, nil
 }
-func (stubAdminAPI) DeleteGroup(_ string) error { return nil }
+func (stubAdminAPI) DeleteGroup(_ string) error          { return nil }
 func (stubAdminAPI) AddGroupMember(_, _, _ string) error { return nil }
 func (stubAdminAPI) RemoveGroupMember(_, _ string) error { return nil }
 func (stubAdminAPI) GetGroupLeaderboard(_ string) ([]adminapi.AdminLeaderboardEntry, error) {
@@ -1886,44 +1886,44 @@ func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
 }
 
 type stubAuthService struct {
-	loginReq         auth.LoginRequest
-	loginResp        auth.Session
-	loginErr         error
-	inviteReq        auth.IssueInviteRequest
-	inviteResp       auth.InviteRecord
-	inviteErr        error
-	reissueReq       auth.ReissueInviteRequest
-	reissueResp      auth.InviteRecord
-	reissueErr       error
-	bootstrapEmail   string
+	loginReq          auth.LoginRequest
+	loginResp         auth.Session
+	loginErr          error
+	inviteReq         auth.IssueInviteRequest
+	inviteResp        auth.InviteRecord
+	inviteErr         error
+	reissueReq        auth.ReissueInviteRequest
+	reissueResp       auth.InviteRecord
+	reissueErr        error
+	bootstrapEmail    string
 	bootstrapPassword string
-	bootstrapCreated bool
-	bootstrapErr     error
-	acceptReq        auth.AcceptInviteRequest
-	acceptResp       auth.Session
-	acceptErr        error
-	sessionToken     string
-	sessionResp      auth.Session
-	sessionErr       error
-	switchToken      string
-	switchTenantID   string
-	switchPassword   string
-	switchResp       auth.Session
-	switchErr        error
-	googleStartReq   auth.StartGoogleFlowRequest
-	googleStartURL   string
-	googleStartErr   error
-	googleLinkReq    auth.StartGoogleFlowRequest
-	googleLinkURL    string
-	googleLinkErr    error
-	googleCBReq      auth.GoogleCallbackRequest
-	googleCBResp     auth.GoogleCallbackResult
-	googleCBErr      error
-	identitiesUserID string
-	identitiesResp   []auth.LinkedIdentity
-	identitiesErr    error
-	logoutToken      string
-	logoutErr        error
+	bootstrapCreated  bool
+	bootstrapErr      error
+	acceptReq         auth.AcceptInviteRequest
+	acceptResp        auth.Session
+	acceptErr         error
+	sessionToken      string
+	sessionResp       auth.Session
+	sessionErr        error
+	switchToken       string
+	switchTenantID    string
+	switchPassword    string
+	switchResp        auth.Session
+	switchErr         error
+	googleStartReq    auth.StartGoogleFlowRequest
+	googleStartURL    string
+	googleStartErr    error
+	googleLinkReq     auth.StartGoogleFlowRequest
+	googleLinkURL     string
+	googleLinkErr     error
+	googleCBReq       auth.GoogleCallbackRequest
+	googleCBResp      auth.GoogleCallbackResult
+	googleCBErr       error
+	identitiesUserID  string
+	identitiesResp    []auth.LinkedIdentity
+	identitiesErr     error
+	logoutToken       string
+	logoutErr         error
 }
 
 func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.Session, error) {
