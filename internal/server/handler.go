@@ -108,11 +108,6 @@ func handleWhatsAppDisabledStatus() http.Handler {
 	})
 }
 
-const (
-	defaultAccessTokenTTL = 15 * time.Minute
-	defaultSessionTTL     = 7 * 24 * time.Hour
-)
-
 type adminDataSource interface {
 	GetClassProgress(classID string) (adminapi.ClassProgress, error)
 	GetStudentDetail(studentID string) (adminapi.StudentDetail, error)
