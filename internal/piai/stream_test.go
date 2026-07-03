@@ -66,7 +66,6 @@ func TestEventStreamResultWithoutDraining(t *testing.T) {
 		s.Push(piai.AssistantMessageEvent{Type: piai.EventDone, Reason: piai.StopReasonStop, Message: &final})
 	}()
 
-	// No consumer drains events; Result must still return.
 	msg, err := s.Result()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -75,7 +74,6 @@ func TestEventStreamResultWithoutDraining(t *testing.T) {
 		t.Fatalf("stopReason = %q, want stop", msg.StopReason)
 	}
 
-	// A late consumer still sees every event.
 	if got := eventTypes(collectEvents(s)); !equalTypes(got, piai.EventStart, piai.EventTextDelta, piai.EventDone) {
 		t.Fatalf("late consumer events: %v", got)
 	}
