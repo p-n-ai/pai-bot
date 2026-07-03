@@ -11,10 +11,8 @@ import (
 	"time"
 )
 
-// Faux provider — the in-package test double, port of pi-ai's faux provider.
-// It replays queued responses through the real streaming protocol, estimates
-// usage from the serialized context (~4 chars/token), and simulates per-session
-// prompt caching, so consumers exercise the exact contract live adapters obey.
+// Faux provider — in-package test double, port of pi-ai's faux provider. Replays
+// queued responses through the real streaming protocol with simulated usage/caching.
 
 const (
 	fauxDefaultProvider     = "faux"
@@ -237,8 +235,7 @@ func (f *FauxProvider) errorMessage(model Model, errText string) AssistantMessag
 	}
 }
 
-// streamWithDeltas replays a resolved message block-by-block through the
-// event protocol, honoring pacing and ctx cancellation between chunks.
+// streamWithDeltas replays the message through the event protocol, honoring pacing and ctx cancellation between chunks.
 func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg AssistantMessage) {
 	partial := msg
 	partial.Content = nil
@@ -348,9 +345,8 @@ func (f *FauxProvider) splitByTokenSize(text string) []string {
 	return chunks
 }
 
-// withUsageEstimate fills Usage from the serialized prompt (~4 chars/token)
-// and simulates prompt caching per sessionID via longest common prefix, so
-// totalTokens always equals input+output+cacheRead+cacheWrite.
+// withUsageEstimate estimates usage (~4 chars/token) and simulates per-session prompt
+// caching via longest common prefix; totalTokens = input+output+cacheRead+cacheWrite.
 func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *StreamOptions) AssistantMessage {
 	promptText := serializeContext(c)
 	promptTokens := estimateTokens(promptText)

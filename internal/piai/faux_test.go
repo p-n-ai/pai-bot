@@ -1,6 +1,5 @@
-// Port of pi-ai's faux-provider.test.ts plus the total-tokens invariant from
-// total-tokens.test.ts: totalTokens must equal input+output+cacheRead+cacheWrite
-// on every response — it is the base for context-size accounting.
+// Port of pi-ai's faux-provider.test.ts plus total-tokens.test.ts's invariant:
+// totalTokens == input+output+cacheRead+cacheWrite on every response.
 package piai_test
 
 import (
@@ -533,7 +532,6 @@ func TestFauxAbortBeforeFirstChunk(t *testing.T) {
 		t.Fatalf("terminal = %+v", events[0].Message)
 	}
 
-	// Cancellation is classified: the error channel says aborted, not error.
 	_, err := stream.Result()
 	var streamErr *piai.StreamError
 	if !errors.As(err, &streamErr) || streamErr.Reason != piai.StopReasonAborted {

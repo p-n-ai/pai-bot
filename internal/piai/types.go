@@ -1,9 +1,6 @@
-// Package piai is a Go port of pi-ai (@earendil-works/pi-ai): a unified
-// multi-provider LLM API. Providers absorb vendor quirks and expose one
-// contract: Stream(model, context) → event stream → AssistantMessage.
-//
-// This package has no callers yet; adapters and the cut-over from
-// internal/ai land in follow-up PRs. See NOTICE for attribution.
+// Package piai is a Go port of pi-ai (@earendil-works/pi-ai), a unified
+// multi-provider LLM API: Stream(model, context) → event stream →
+// AssistantMessage. See NOTICE for attribution.
 package piai
 
 import (
@@ -44,9 +41,6 @@ type Usage struct {
 	Cost        Cost `json:"cost"`
 }
 
-// Content blocks. User messages carry text/image; assistant messages carry
-// text/thinking/tool-call. The marker interfaces encode those unions.
-
 type TextContent struct {
 	Text string `json:"text"`
 }
@@ -58,8 +52,7 @@ type ImageContent struct {
 
 type ThinkingContent struct {
 	Thinking string `json:"thinking"`
-	// Signature is an opaque provider payload (e.g. reasoning item ID or
-	// encrypted redacted thinking) replayed for multi-turn continuity.
+	// Signature: opaque provider payload replayed for multi-turn continuity.
 	Signature string `json:"thinkingSignature,omitempty"`
 	Redacted  bool   `json:"redacted,omitempty"`
 }

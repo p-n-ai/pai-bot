@@ -6,9 +6,8 @@ import (
 	"sync"
 )
 
-// EventType tags AssistantMessageEvent. Streams emit start first, then
-// per-block start/delta/end triples, and terminate with exactly one done or
-// error event.
+// EventType tags AssistantMessageEvent. Streams emit start, then per-block
+// start/delta/end triples, and terminate with exactly one done or error event.
 type EventType string
 
 const (
@@ -26,9 +25,9 @@ const (
 	EventError         EventType = "error"
 )
 
-// AssistantMessageEvent is one streaming event. Which fields are set depends
-// on Type: deltas carry Delta, *_end carries Content or ToolCall, done/error
-// carry Reason and the final Message. Partial is the message assembled so far.
+// AssistantMessageEvent is one streaming event. Fields set depend on Type:
+// deltas carry Delta, *_end carries Content or ToolCall, done/error carry
+// Reason and the final Message. Partial is the message assembled so far.
 type AssistantMessageEvent struct {
 	Type         EventType
 	ContentIndex int
@@ -37,13 +36,12 @@ type AssistantMessageEvent struct {
 	ToolCall     *ToolCall
 	Partial      *AssistantMessage
 	Reason       StopReason
-	Message      *AssistantMessage // final message on done/error
+	Message      *AssistantMessage
 }
 
-// EventStream carries AssistantMessageEvents from a provider to a consumer.
-// The queue is unbounded so Push never blocks and Result can be awaited
-// without draining events. A done or error event completes the stream;
-// further pushes are dropped.
+// EventStream carries AssistantMessageEvents from provider to consumer. The
+// queue is unbounded so Push never blocks and Result can be awaited without
+// draining events; a terminal event completes the stream, later pushes drop.
 type EventStream struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -59,8 +57,7 @@ func NewEventStream() *EventStream {
 	return s
 }
 
-// Push appends an event. A done or error event must carry Message and
-// completes the stream.
+// Push appends an event; a done or error event must carry Message and completes the stream.
 func (s *EventStream) Push(ev AssistantMessageEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -99,9 +96,8 @@ func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 	}
 }
 
-// StreamError is the typed failure returned by Result when a stream
-// terminates with stopReason "error" or "aborted". Reason lets callers
-// distinguish cancellation from provider failure without string matching.
+// StreamError is Result's typed failure for stopReason "error" or "aborted";
+// Reason distinguishes cancellation from provider failure without string matching.
 type StreamError struct {
 	Reason  StopReason // StopReasonError or StopReasonAborted
 	Message string
@@ -109,9 +105,8 @@ type StreamError struct {
 
 func (e *StreamError) Error() string { return fmt.Sprintf("piai: %s: %s", e.Reason, e.Message) }
 
-// Result blocks until the stream completes and returns the final
-// AssistantMessage. The error is a *StreamError when the stream terminated
-// with stopReason "error" or "aborted"; the message still carries the details.
+// Result blocks until the stream completes and returns the final message.
+// On stopReason "error"/"aborted" it also returns a *StreamError.
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
 	if s.final.StopReason == StopReasonError || s.final.StopReason == StopReasonAborted {
@@ -120,7 +115,6 @@ func (s *EventStream) Result() (AssistantMessage, error) {
 	return s.final, nil
 }
 
-// endWithError terminates the stream with an error-shaped AssistantMessage.
 func (s *EventStream) endWithError(msg AssistantMessage) {
 	reason := msg.StopReason
 	if reason != StopReasonAborted {
