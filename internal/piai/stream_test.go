@@ -1,6 +1,7 @@
 package piai_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/piai"
@@ -88,8 +89,12 @@ func TestEventStreamErrorTerminal(t *testing.T) {
 	s.Push(piai.AssistantMessageEvent{Type: piai.EventError, Reason: piai.StopReasonError, Message: &errMsg})
 
 	msg, err := s.Result()
-	if err == nil {
-		t.Fatal("expected error from Result on error-terminated stream")
+	var streamErr *piai.StreamError
+	if !errors.As(err, &streamErr) {
+		t.Fatalf("expected *StreamError from Result, got %v", err)
+	}
+	if streamErr.Reason != piai.StopReasonError || streamErr.Message != "upstream failed" {
+		t.Fatalf("stream error = %+v", streamErr)
 	}
 	if msg.StopReason != piai.StopReasonError || msg.ErrorMessage != "upstream failed" {
 		t.Fatalf("final message = %+v", msg)

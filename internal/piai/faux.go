@@ -312,6 +312,9 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 			partial.Content[i] = b
 			toolCall := b
 			push(EventToolCallEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.ToolCall = &toolCall })
+		default:
+			// AssistantContent is sealed; a new variant must be handled here.
+			panic(fmt.Sprintf("piai: unhandled assistant content block %T", block))
 		}
 	}
 

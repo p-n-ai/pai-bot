@@ -99,13 +99,23 @@ func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 	}
 }
 
+// StreamError is the typed failure returned by Result when a stream
+// terminates with stopReason "error" or "aborted". Reason lets callers
+// distinguish cancellation from provider failure without string matching.
+type StreamError struct {
+	Reason  StopReason // StopReasonError or StopReasonAborted
+	Message string
+}
+
+func (e *StreamError) Error() string { return fmt.Sprintf("piai: %s: %s", e.Reason, e.Message) }
+
 // Result blocks until the stream completes and returns the final
-// AssistantMessage. The error is non-nil when the stream terminated with
-// stopReason "error" or "aborted"; the message still carries the details.
+// AssistantMessage. The error is a *StreamError when the stream terminated
+// with stopReason "error" or "aborted"; the message still carries the details.
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
 	if s.final.StopReason == StopReasonError || s.final.StopReason == StopReasonAborted {
-		return s.final, fmt.Errorf("piai: %s: %s", s.final.StopReason, s.final.ErrorMessage)
+		return s.final, &StreamError{Reason: s.final.StopReason, Message: s.final.ErrorMessage}
 	}
 	return s.final, nil
 }

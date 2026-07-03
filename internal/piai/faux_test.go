@@ -524,12 +524,20 @@ func TestFauxAbortBeforeFirstChunk(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	events := collectEvents(piai.Stream(ctx, f.Model(), userContext("hi"), nil))
+	stream := piai.Stream(ctx, f.Model(), userContext("hi"), nil)
+	events := collectEvents(stream)
 	if len(events) != 1 || events[0].Type != piai.EventError {
 		t.Fatalf("events = %v", eventTypes(events))
 	}
 	if events[0].Reason != piai.StopReasonAborted || events[0].Message.StopReason != piai.StopReasonAborted {
 		t.Fatalf("terminal = %+v", events[0].Message)
+	}
+
+	// Cancellation is classified: the error channel says aborted, not error.
+	_, err := stream.Result()
+	var streamErr *piai.StreamError
+	if !errors.As(err, &streamErr) || streamErr.Reason != piai.StopReasonAborted {
+		t.Fatalf("expected aborted StreamError, got %v", err)
 	}
 }
 
