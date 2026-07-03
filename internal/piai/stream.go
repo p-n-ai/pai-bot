@@ -6,8 +6,6 @@ import (
 	"sync"
 )
 
-// EventType tags AssistantMessageEvent. Streams emit start, then per-block
-// start/delta/end triples, and terminate with exactly one done or error event.
 type EventType string
 
 const (
@@ -25,9 +23,6 @@ const (
 	EventError         EventType = "error"
 )
 
-// AssistantMessageEvent is one streaming event. Fields set depend on Type:
-// deltas carry Delta, *_end carries Content or ToolCall, done/error carry
-// Reason and the final Message. Partial is the message assembled so far.
 type AssistantMessageEvent struct {
 	Type         EventType
 	ContentIndex int
@@ -39,9 +34,6 @@ type AssistantMessageEvent struct {
 	Message      *AssistantMessage
 }
 
-// EventStream carries AssistantMessageEvents from provider to consumer. The
-// queue is unbounded so Push never blocks and Result can be awaited without
-// draining events; a terminal event completes the stream, later pushes drop.
 type EventStream struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -57,7 +49,6 @@ func NewEventStream() *EventStream {
 	return s
 }
 
-// Push appends an event; a done or error event must carry Message and completes the stream.
 func (s *EventStream) Push(ev AssistantMessageEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -73,7 +64,6 @@ func (s *EventStream) Push(ev AssistantMessageEvent) {
 	s.cond.Broadcast()
 }
 
-// Events iterates all events in order, ending after the terminal event.
 func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 	return func(yield func(AssistantMessageEvent) bool) {
 		i := 0
@@ -96,17 +86,13 @@ func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 	}
 }
 
-// StreamError is Result's typed failure for stopReason "error" or "aborted";
-// Reason distinguishes cancellation from provider failure without string matching.
 type StreamError struct {
-	Reason  StopReason // StopReasonError or StopReasonAborted
+	Reason  StopReason
 	Message string
 }
 
 func (e *StreamError) Error() string { return fmt.Sprintf("piai: %s: %s", e.Reason, e.Message) }
 
-// Result blocks until the stream completes and returns the final message.
-// On stopReason "error"/"aborted" it also returns a *StreamError.
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
 	if s.final.StopReason == StopReasonError || s.final.StopReason == StopReasonAborted {

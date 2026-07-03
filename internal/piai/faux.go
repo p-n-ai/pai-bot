@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// Faux provider — in-package test double, port of pi-ai's faux provider. Replays
-// queued responses through the real streaming protocol with simulated usage/caching.
-
 const (
 	fauxDefaultProvider     = "faux"
 	fauxDefaultModelID      = "faux-1"
@@ -25,11 +22,8 @@ const (
 
 var fauxCounter atomic.Int64
 
-// FauxStep produces one queued response. callCount is 1-based across the
-// registration. A returned error terminates the stream as an error event.
 type FauxStep func(c Context, opts *StreamOptions, callCount int, model Model) (AssistantMessage, error)
 
-// FauxRespond queues a fixed message.
 func FauxRespond(msg AssistantMessage) FauxStep {
 	return func(Context, *StreamOptions, int, Model) (AssistantMessage, error) { return msg, nil }
 }
@@ -46,8 +40,6 @@ func FauxToolCall(name string, arguments map[string]any) ToolCall {
 	}
 }
 
-// FauxAssistantMessage builds an assistant message with stopReason "stop";
-// callers mutate StopReason/ErrorMessage for error shapes.
 func FauxAssistantMessage(blocks ...AssistantContent) AssistantMessage {
 	return AssistantMessage{
 		Content:    blocks,
@@ -59,30 +51,25 @@ func FauxAssistantMessage(blocks ...AssistantContent) AssistantMessage {
 	}
 }
 
-// FauxAssistantText builds a single-text-block assistant message.
 func FauxAssistantText(text string) AssistantMessage {
 	return FauxAssistantMessage(FauxText(text))
 }
 
-// FauxModel customizes one model exposed by a faux registration.
 type FauxModel struct {
 	ID        string
 	Name      string
 	Reasoning bool
 }
 
-// FauxOptions configures RegisterFauxProvider. Zero value works: unique API,
-// one default model, random 3–5-token chunks, no pacing.
 type FauxOptions struct {
 	API             string
 	Provider        string
 	Models          []FauxModel
-	TokensPerSecond float64 // 0 = emit chunks without delay
+	TokensPerSecond float64
 	TokenSizeMin    int
 	TokenSizeMax    int
 }
 
-// FauxProvider is a registered faux provider with a mutable response queue.
 type FauxProvider struct {
 	API      string
 	Models   []Model
@@ -95,11 +82,9 @@ type FauxProvider struct {
 	mu          sync.Mutex
 	pending     []FauxStep
 	callCount   int
-	promptCache map[string]string // sessionID → last serialized prompt
+	promptCache map[string]string
 }
 
-// RegisterFauxProvider registers a faux provider in the global registry and
-// returns its handle. Call Unregister in test cleanup.
 func RegisterFauxProvider(opts FauxOptions) *FauxProvider {
 	n := fauxCounter.Add(1)
 	api := opts.API
@@ -151,10 +136,8 @@ func RegisterFauxProvider(opts FauxOptions) *FauxProvider {
 	return f
 }
 
-// Model returns the first registered model.
 func (f *FauxProvider) Model() Model { return f.Models[0] }
 
-// ModelByID returns the model with the given ID, or false.
 func (f *FauxProvider) ModelByID(id string) (Model, bool) {
 	for _, m := range f.Models {
 		if m.ID == id {
@@ -235,7 +218,6 @@ func (f *FauxProvider) errorMessage(model Model, errText string) AssistantMessag
 	}
 }
 
-// streamWithDeltas replays the message through the event protocol, honoring pacing and ctx cancellation between chunks.
 func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg AssistantMessage) {
 	partial := msg
 	partial.Content = nil
@@ -310,7 +292,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 			toolCall := b
 			push(EventToolCallEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.ToolCall = &toolCall })
 		default:
-			// AssistantContent is sealed; a new variant must be handled here.
+
 			panic(fmt.Sprintf("piai: unhandled assistant content block %T", block))
 		}
 	}
@@ -345,8 +327,6 @@ func (f *FauxProvider) splitByTokenSize(text string) []string {
 	return chunks
 }
 
-// withUsageEstimate estimates usage (~4 chars/token) and simulates per-session prompt
-// caching via longest common prefix; totalTokens = input+output+cacheRead+cacheWrite.
 func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *StreamOptions) AssistantMessage {
 	promptText := serializeContext(c)
 	promptTokens := estimateTokens(promptText)

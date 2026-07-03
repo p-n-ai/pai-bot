@@ -1,6 +1,3 @@
-// Package piai is a Go port of pi-ai (@earendil-works/pi-ai), a unified
-// multi-provider LLM API: Stream(model, context) → event stream →
-// AssistantMessage. See NOTICE for attribution.
 package piai
 
 import (
@@ -8,8 +5,6 @@ import (
 	"time"
 )
 
-// StopReason mirrors pi-ai's stop reasons. "error" and "aborted" terminate a
-// stream via an error event; the others via a done event.
 type StopReason string
 
 const (
@@ -20,7 +15,6 @@ const (
 	StopReasonAborted StopReason = "aborted"
 )
 
-// Cost is USD cost per usage component.
 type Cost struct {
 	Input      float64 `json:"input"`
 	Output     float64 `json:"output"`
@@ -29,9 +23,6 @@ type Cost struct {
 	Total      float64 `json:"total"`
 }
 
-// Usage is token usage for one assistant response. TotalTokens is the total
-// processed by the LLM — input (with cache) plus output — and must equal
-// Input + Output + CacheRead + CacheWrite.
 type Usage struct {
 	Input       int  `json:"input"`
 	Output      int  `json:"output"`
@@ -46,13 +37,13 @@ type TextContent struct {
 }
 
 type ImageContent struct {
-	Data     string `json:"data"` // base64
+	Data     string `json:"data"`
 	MimeType string `json:"mimeType"`
 }
 
 type ThinkingContent struct {
 	Thinking string `json:"thinking"`
-	// Signature: opaque provider payload replayed for multi-turn continuity.
+
 	Signature string `json:"thinkingSignature,omitempty"`
 	Redacted  bool   `json:"redacted,omitempty"`
 }
@@ -63,10 +54,8 @@ type ToolCall struct {
 	Arguments map[string]any `json:"arguments"`
 }
 
-// UserContent is TextContent or ImageContent.
 type UserContent interface{ isUserContent() }
 
-// AssistantContent is TextContent, ThinkingContent, or ToolCall.
 type AssistantContent interface{ isAssistantContent() }
 
 func (TextContent) isUserContent()          {}
@@ -75,7 +64,6 @@ func (TextContent) isAssistantContent()     {}
 func (ThinkingContent) isAssistantContent() {}
 func (ToolCall) isAssistantContent()        {}
 
-// Message is UserMessage, AssistantMessage, or ToolResultMessage.
 type Message interface{ isMessage() }
 
 type UserMessage struct {
@@ -107,27 +95,22 @@ func (UserMessage) isMessage()       {}
 func (AssistantMessage) isMessage()  {}
 func (ToolResultMessage) isMessage() {}
 
-// UserText builds a plain-text user message.
 func UserText(text string) UserMessage {
 	return UserMessage{Content: []UserContent{TextContent{Text: text}}, Timestamp: time.Now()}
 }
 
-// Tool describes a callable tool. Parameters is a JSON Schema document.
 type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Parameters  json.RawMessage `json:"parameters"`
 }
 
-// Context is the full request context for one completion.
 type Context struct {
 	SystemPrompt string
 	Messages     []Message
 	Tools        []Tool
 }
 
-// CacheRetention is the prompt-cache retention preference. Zero value means
-// the provider default ("short"); "none" disables caching.
 type CacheRetention string
 
 const (
@@ -136,9 +119,6 @@ const (
 	CacheRetentionLong  CacheRetention = "long"
 )
 
-// StreamOptions are per-request options shared by all providers. Cancellation
-// rides the context.Context passed to StreamFunction, not an option. Fields
-// grow as adapters need them.
 type StreamOptions struct {
 	Temperature    *float64
 	MaxTokens      int
@@ -148,15 +128,14 @@ type StreamOptions struct {
 	Headers        map[string]string
 }
 
-// Model identifies a concrete model behind an API shape.
 type Model struct {
 	ID            string
 	Name          string
-	API           string // API wire shape, e.g. "openai-completions"
-	Provider      string // provider slug, e.g. "openai"
+	API           string
+	Provider      string
 	BaseURL       string
 	Reasoning     bool
-	Cost          Cost // $/million tokens per component
+	Cost          Cost
 	ContextWindow int
 	MaxTokens     int
 }

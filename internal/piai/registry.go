@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// StreamFunction is the provider contract: all failures surface as a terminal error
-// event on the stream (never a Go error or panic); ctx cancel ends with stopReason "aborted".
 type StreamFunction func(ctx context.Context, model Model, c Context, opts *StreamOptions) *EventStream
 
 type registeredProvider struct {
@@ -21,14 +19,12 @@ var (
 	registry   = map[string]registeredProvider{}
 )
 
-// RegisterProvider registers a StreamFunction for an API shape; sourceID groups registrations for UnregisterProviders.
 func RegisterProvider(api string, stream StreamFunction, sourceID string) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	registry[api] = registeredProvider{stream: stream, sourceID: sourceID}
 }
 
-// UnregisterProviders removes all providers registered under sourceID.
 func UnregisterProviders(sourceID string) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -39,8 +35,6 @@ func UnregisterProviders(sourceID string) {
 	}
 }
 
-// Stream starts a completion against model.API's registered provider; a missing
-// provider is reported as a terminal error event, keeping one failure path for callers.
 func Stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *EventStream {
 	registryMu.RLock()
 	entry, ok := registry[model.API]
@@ -60,7 +54,6 @@ func Stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *E
 	return entry.stream(ctx, model, c, opts)
 }
 
-// Complete runs Stream to completion and returns the final message.
 func Complete(ctx context.Context, model Model, c Context, opts *StreamOptions) (AssistantMessage, error) {
 	return Stream(ctx, model, c, opts).Result()
 }

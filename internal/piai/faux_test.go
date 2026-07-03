@@ -1,5 +1,3 @@
-// Port of pi-ai's faux-provider.test.ts plus total-tokens.test.ts's invariant:
-// totalTokens == input+output+cacheRead+cacheWrite on every response.
 package piai_test
 
 import (
@@ -591,7 +589,7 @@ func TestFauxPacingSpreadsDeltasOverTime(t *testing.T) {
 	if _, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	// 32 chars → 4 chunks of 2 tokens at 200 tok/s → ≥ 40ms total.
+
 	if elapsed := time.Since(start); elapsed < 30*time.Millisecond {
 		t.Fatalf("elapsed = %v, expected pacing delay", elapsed)
 	}
