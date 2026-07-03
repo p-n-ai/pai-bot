@@ -1,0 +1,453 @@
+package piai
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math/rand/v2"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Faux provider — the in-package test double, port of pi-ai's faux provider.
+// It replays queued responses through the real streaming protocol, estimates
+// usage from the serialized context (~4 chars/token), and simulates per-session
+// prompt caching, so consumers exercise the exact contract live adapters obey.
+
+const (
+	fauxDefaultProvider     = "faux"
+	fauxDefaultModelID      = "faux-1"
+	fauxDefaultModelName    = "Faux Model"
+	fauxDefaultBaseURL      = "http://localhost:0"
+	fauxDefaultMinTokenSize = 3
+	fauxDefaultMaxTokenSize = 5
+)
+
+var fauxCounter atomic.Int64
+
+// FauxStep produces one queued response. callCount is 1-based across the
+// registration. A returned error terminates the stream as an error event.
+type FauxStep func(c Context, opts *StreamOptions, callCount int, model Model) (AssistantMessage, error)
+
+// FauxRespond queues a fixed message.
+func FauxRespond(msg AssistantMessage) FauxStep {
+	return func(Context, *StreamOptions, int, Model) (AssistantMessage, error) { return msg, nil }
+}
+
+func FauxText(text string) TextContent { return TextContent{Text: text} }
+
+func FauxThinking(thinking string) ThinkingContent { return ThinkingContent{Thinking: thinking} }
+
+func FauxToolCall(name string, arguments map[string]any) ToolCall {
+	return ToolCall{
+		ID:        fmt.Sprintf("tool:%d", fauxCounter.Add(1)),
+		Name:      name,
+		Arguments: arguments,
+	}
+}
+
+// FauxAssistantMessage builds an assistant message with stopReason "stop";
+// callers mutate StopReason/ErrorMessage for error shapes.
+func FauxAssistantMessage(blocks ...AssistantContent) AssistantMessage {
+	return AssistantMessage{
+		Content:    blocks,
+		API:        "faux",
+		Provider:   fauxDefaultProvider,
+		Model:      fauxDefaultModelID,
+		StopReason: StopReasonStop,
+		Timestamp:  time.Now(),
+	}
+}
+
+// FauxAssistantText builds a single-text-block assistant message.
+func FauxAssistantText(text string) AssistantMessage {
+	return FauxAssistantMessage(FauxText(text))
+}
+
+// FauxModel customizes one model exposed by a faux registration.
+type FauxModel struct {
+	ID        string
+	Name      string
+	Reasoning bool
+}
+
+// FauxOptions configures RegisterFauxProvider. Zero value works: unique API,
+// one default model, random 3–5-token chunks, no pacing.
+type FauxOptions struct {
+	API             string
+	Provider        string
+	Models          []FauxModel
+	TokensPerSecond float64 // 0 = emit chunks without delay
+	TokenSizeMin    int
+	TokenSizeMax    int
+}
+
+// FauxProvider is a registered faux provider with a mutable response queue.
+type FauxProvider struct {
+	API      string
+	Models   []Model
+	sourceID string
+	provider string
+	minTok   int
+	maxTok   int
+	tps      float64
+
+	mu          sync.Mutex
+	pending     []FauxStep
+	callCount   int
+	promptCache map[string]string // sessionID → last serialized prompt
+}
+
+// RegisterFauxProvider registers a faux provider in the global registry and
+// returns its handle. Call Unregister in test cleanup.
+func RegisterFauxProvider(opts FauxOptions) *FauxProvider {
+	n := fauxCounter.Add(1)
+	api := opts.API
+	if api == "" {
+		api = fmt.Sprintf("faux:%d", n)
+	}
+	provider := opts.Provider
+	if provider == "" {
+		provider = fauxDefaultProvider
+	}
+	minTok := opts.TokenSizeMin
+	if minTok < 1 {
+		minTok = fauxDefaultMinTokenSize
+	}
+	maxTok := opts.TokenSizeMax
+	if maxTok < minTok {
+		maxTok = max(minTok, fauxDefaultMaxTokenSize)
+	}
+	defs := opts.Models
+	if len(defs) == 0 {
+		defs = []FauxModel{{ID: fauxDefaultModelID, Name: fauxDefaultModelName}}
+	}
+	f := &FauxProvider{
+		API:         api,
+		sourceID:    fmt.Sprintf("faux-provider:%d", n),
+		provider:    provider,
+		minTok:      minTok,
+		maxTok:      maxTok,
+		tps:         opts.TokensPerSecond,
+		promptCache: map[string]string{},
+	}
+	for _, def := range defs {
+		name := def.Name
+		if name == "" {
+			name = def.ID
+		}
+		f.Models = append(f.Models, Model{
+			ID:            def.ID,
+			Name:          name,
+			API:           api,
+			Provider:      provider,
+			BaseURL:       fauxDefaultBaseURL,
+			Reasoning:     def.Reasoning,
+			ContextWindow: 128000,
+			MaxTokens:     16384,
+		})
+	}
+	RegisterProvider(api, f.stream, f.sourceID)
+	return f
+}
+
+// Model returns the first registered model.
+func (f *FauxProvider) Model() Model { return f.Models[0] }
+
+// ModelByID returns the model with the given ID, or false.
+func (f *FauxProvider) ModelByID(id string) (Model, bool) {
+	for _, m := range f.Models {
+		if m.ID == id {
+			return m, true
+		}
+	}
+	return Model{}, false
+}
+
+func (f *FauxProvider) SetResponses(steps ...FauxStep) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pending = append([]FauxStep(nil), steps...)
+}
+
+func (f *FauxProvider) AppendResponses(steps ...FauxStep) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pending = append(f.pending, steps...)
+}
+
+func (f *FauxProvider) PendingResponses() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.pending)
+}
+
+func (f *FauxProvider) CallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.callCount
+}
+
+func (f *FauxProvider) Unregister() { UnregisterProviders(f.sourceID) }
+
+func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *EventStream {
+	s := NewEventStream()
+	f.mu.Lock()
+	var step FauxStep
+	if len(f.pending) > 0 {
+		step = f.pending[0]
+		f.pending = f.pending[1:]
+	}
+	f.callCount++
+	count := f.callCount
+	f.mu.Unlock()
+
+	go func() {
+		if step == nil {
+			s.endWithError(f.withUsageEstimate(f.errorMessage(model, "no more faux responses queued"), c, opts))
+			return
+		}
+		resolved, err := step(c, opts, count, model)
+		if err != nil {
+			s.endWithError(f.errorMessage(model, err.Error()))
+			return
+		}
+		resolved.API = f.API
+		resolved.Provider = f.provider
+		resolved.Model = model.ID
+		if resolved.Timestamp.IsZero() {
+			resolved.Timestamp = time.Now()
+		}
+		resolved = f.withUsageEstimate(resolved, c, opts)
+		f.streamWithDeltas(ctx, s, resolved)
+	}()
+	return s
+}
+
+func (f *FauxProvider) errorMessage(model Model, errText string) AssistantMessage {
+	return AssistantMessage{
+		API:          f.API,
+		Provider:     f.provider,
+		Model:        model.ID,
+		StopReason:   StopReasonError,
+		ErrorMessage: errText,
+		Timestamp:    time.Now(),
+	}
+}
+
+// streamWithDeltas replays a resolved message block-by-block through the
+// event protocol, honoring pacing and ctx cancellation between chunks.
+func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg AssistantMessage) {
+	partial := msg
+	partial.Content = nil
+	abort := func() {
+		aborted := partial
+		aborted.StopReason = StopReasonAborted
+		aborted.ErrorMessage = "request was aborted"
+		aborted.Timestamp = time.Now()
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonAborted, Message: &aborted})
+	}
+	push := func(typ EventType, mutate func(*AssistantMessageEvent)) {
+		snapshot := partial
+		snapshot.Content = append([]AssistantContent(nil), partial.Content...)
+		ev := AssistantMessageEvent{Type: typ, Partial: &snapshot}
+		if mutate != nil {
+			mutate(&ev)
+		}
+		s.Push(ev)
+	}
+
+	if ctx.Err() != nil {
+		abort()
+		return
+	}
+	push(EventStart, nil)
+
+	for i, block := range msg.Content {
+		switch b := block.(type) {
+		case ThinkingContent:
+			partial.Content = append(partial.Content, ThinkingContent{})
+			push(EventThinkingStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
+			written := 0
+			for _, chunk := range f.splitByTokenSize(b.Thinking) {
+				f.pace(chunk)
+				if ctx.Err() != nil {
+					abort()
+					return
+				}
+				written += len(chunk)
+				partial.Content[i] = ThinkingContent{Thinking: b.Thinking[:written]}
+				push(EventThinkingDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
+			}
+			push(EventThinkingEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Thinking })
+		case TextContent:
+			partial.Content = append(partial.Content, TextContent{})
+			push(EventTextStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
+			written := 0
+			for _, chunk := range f.splitByTokenSize(b.Text) {
+				f.pace(chunk)
+				if ctx.Err() != nil {
+					abort()
+					return
+				}
+				written += len(chunk)
+				partial.Content[i] = TextContent{Text: b.Text[:written]}
+				push(EventTextDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
+			}
+			push(EventTextEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Text })
+		case ToolCall:
+			partial.Content = append(partial.Content, ToolCall{ID: b.ID, Name: b.Name, Arguments: map[string]any{}})
+			push(EventToolCallStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
+			args, _ := json.Marshal(b.Arguments)
+			for _, chunk := range f.splitByTokenSize(string(args)) {
+				f.pace(chunk)
+				if ctx.Err() != nil {
+					abort()
+					return
+				}
+				push(EventToolCallDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
+			}
+			partial.Content[i] = b
+			toolCall := b
+			push(EventToolCallEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.ToolCall = &toolCall })
+		}
+	}
+
+	final := msg
+	if final.StopReason == StopReasonError || final.StopReason == StopReasonAborted {
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: final.StopReason, Message: &final})
+		return
+	}
+	s.Push(AssistantMessageEvent{Type: EventDone, Reason: final.StopReason, Message: &final})
+}
+
+func (f *FauxProvider) pace(chunk string) {
+	if f.tps <= 0 {
+		return
+	}
+	time.Sleep(time.Duration(float64(estimateTokens(chunk)) / f.tps * float64(time.Second)))
+}
+
+func (f *FauxProvider) splitByTokenSize(text string) []string {
+	var chunks []string
+	for i := 0; i < len(text); {
+		tok := f.minTok + rand.IntN(f.maxTok-f.minTok+1)
+		size := max(1, tok*4)
+		end := min(len(text), i+size)
+		chunks = append(chunks, text[i:end])
+		i = end
+	}
+	if len(chunks) == 0 {
+		chunks = []string{""}
+	}
+	return chunks
+}
+
+// withUsageEstimate fills Usage from the serialized prompt (~4 chars/token)
+// and simulates prompt caching per sessionID via longest common prefix, so
+// totalTokens always equals input+output+cacheRead+cacheWrite.
+func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *StreamOptions) AssistantMessage {
+	promptText := serializeContext(c)
+	promptTokens := estimateTokens(promptText)
+	outputTokens := estimateTokens(assistantContentToText(msg.Content))
+	input := promptTokens
+	cacheRead, cacheWrite := 0, 0
+
+	if opts != nil && opts.SessionID != "" && opts.CacheRetention != CacheRetentionNone {
+		f.mu.Lock()
+		previous := f.promptCache[opts.SessionID]
+		f.promptCache[opts.SessionID] = promptText
+		f.mu.Unlock()
+		if previous != "" {
+			cached := commonPrefixLen(previous, promptText)
+			cacheRead = estimateTokens(previous[:cached])
+			cacheWrite = estimateTokens(promptText[cached:])
+			input = max(0, promptTokens-cacheRead)
+		} else {
+			cacheWrite = promptTokens
+		}
+	}
+
+	msg.Usage = Usage{
+		Input:       input,
+		Output:      outputTokens,
+		CacheRead:   cacheRead,
+		CacheWrite:  cacheWrite,
+		TotalTokens: input + outputTokens + cacheRead + cacheWrite,
+	}
+	return msg
+}
+
+func estimateTokens(text string) int { return (len(text) + 3) / 4 }
+
+func commonPrefixLen(a, b string) int {
+	n := min(len(a), len(b))
+	i := 0
+	for i < n && a[i] == b[i] {
+		i++
+	}
+	return i
+}
+
+func userContentToText(content []UserContent) string {
+	parts := make([]string, 0, len(content))
+	for _, block := range content {
+		switch b := block.(type) {
+		case TextContent:
+			parts = append(parts, b.Text)
+		case ImageContent:
+			parts = append(parts, fmt.Sprintf("[image:%s:%d]", b.MimeType, len(b.Data)))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func assistantContentToText(content []AssistantContent) string {
+	parts := make([]string, 0, len(content))
+	for _, block := range content {
+		switch b := block.(type) {
+		case TextContent:
+			parts = append(parts, b.Text)
+		case ThinkingContent:
+			parts = append(parts, b.Thinking)
+		case ToolCall:
+			args, _ := json.Marshal(b.Arguments)
+			parts = append(parts, b.Name+":"+string(args))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func messageToText(m Message) (role, text string) {
+	switch msg := m.(type) {
+	case UserMessage:
+		return "user", userContentToText(msg.Content)
+	case AssistantMessage:
+		return "assistant", assistantContentToText(msg.Content)
+	case ToolResultMessage:
+		parts := []string{msg.ToolName}
+		for _, block := range msg.Content {
+			parts = append(parts, userContentToText([]UserContent{block}))
+		}
+		return "toolResult", strings.Join(parts, "\n")
+	}
+	return "", ""
+}
+
+func serializeContext(c Context) string {
+	var parts []string
+	if c.SystemPrompt != "" {
+		parts = append(parts, "system:"+c.SystemPrompt)
+	}
+	for _, m := range c.Messages {
+		role, text := messageToText(m)
+		parts = append(parts, role+":"+text)
+	}
+	if len(c.Tools) > 0 {
+		tools, _ := json.Marshal(c.Tools)
+		parts = append(parts, "tools:"+string(tools))
+	}
+	return strings.Join(parts, "\n\n")
+}
