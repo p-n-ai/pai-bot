@@ -92,7 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := setupAIRouter(cfg)
+	router := airouter.Setup(cfg.AI)
 	if !router.HasProvider() {
 		fmt.Fprintln(os.Stderr, "no AI providers configured")
 		os.Exit(1)
@@ -192,10 +192,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", runErr)
 		os.Exit(1)
 	}
-}
-
-func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg.AI)
 }
 
 type conversationHistory struct {
