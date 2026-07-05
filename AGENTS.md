@@ -48,6 +48,14 @@ pai-bot/
 - AI decisions route through `internal/ai`; tutor/chat packages stay provider-neutral.
 - Admin SPA mirrors backend JSON shapes in `src/lib/*-types.ts` and keeps route files thin.
 
+## COMMIT & PR CONVENTIONS
+
+- No internal plan/sequence labels ("PR1", "PR3", "step 2", "phase 4") in commit messages, PR titles, or PR bodies. GitHub's own number is the only PR number.
+- `.humanlayer/`, `.agents/`, `.issues/` are local working artifacts: never commit them, never link or mention them in commit messages or PR descriptions.
+- PR descriptions describe the code diff only — no walkthrough/artifact generation into `.humanlayer/`, no cloud artifact links, no deviation-from-plan sections referencing local plan files. Skip those steps when a PR-description skill asks for them.
+- Branch, commit, and PR names say what the change does in plain words — no codenames or plan shorthand.
+- Comments stay sparse everywhere: only tricky or bug-prone logic. `internal/llm` is comment-free (attribution in `NOTICE`).
+
 ## ANTI-PATTERNS
 
 - No imports from `cmd/` into `internal/`.
