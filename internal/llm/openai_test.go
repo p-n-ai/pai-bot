@@ -1,4 +1,4 @@
-package piai_test
+package llm_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/p-n-ai/pai-bot/internal/piai"
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 type capturedRequest struct {
@@ -35,14 +35,14 @@ func sseServer(t *testing.T, lines []string) (*httptest.Server, *capturedRequest
 	return srv, captured
 }
 
-func openAIModel(baseURL string) piai.Model {
-	return piai.Model{
+func openAIModel(baseURL string) llm.Model {
+	return llm.Model{
 		ID:       "gpt-test",
 		Name:     "GPT Test",
-		API:      piai.APIOpenAICompletions,
+		API:      llm.APIOpenAICompletions,
 		Provider: "openai",
 		BaseURL:  baseURL + "/v1",
-		Cost:     piai.Cost{Input: 1, Output: 2, CacheRead: 0.5, CacheWrite: 1.5},
+		Cost:     llm.Cost{Input: 1, Output: 2, CacheRead: 0.5, CacheWrite: 1.5},
 	}
 }
 
@@ -58,9 +58,9 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	})
 
 	temp := 0.3
-	msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-		piai.Context{SystemPrompt: "Be brief.", Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test", Temperature: &temp, MaxTokens: 128},
+	msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+		llm.Context{SystemPrompt: "Be brief.", Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test", Temperature: &temp, MaxTokens: 128},
 	).Result()
 	if err != nil {
 		t.Fatalf("Result: %v", err)
@@ -69,7 +69,7 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	if got := textOf(t, msg); got != "Hello" {
 		t.Fatalf("text = %q", got)
 	}
-	if msg.ResponseID != "chatcmpl-1" || msg.StopReason != piai.StopReasonStop {
+	if msg.ResponseID != "chatcmpl-1" || msg.StopReason != llm.StopReasonStop {
 		t.Fatalf("responseID=%q stopReason=%q", msg.ResponseID, msg.StopReason)
 	}
 
@@ -110,10 +110,10 @@ func TestOpenAIStreamsToolCallDeltas(t *testing.T) {
 		"data: [DONE]",
 	})
 
-	tool := piai.Tool{Name: "echo", Description: "Echo", Parameters: json.RawMessage(`{"type":"object"}`)}
-	stream := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}, Tools: []piai.Tool{tool}},
-		&piai.StreamOptions{APIKey: "sk-test"},
+	tool := llm.Tool{Name: "echo", Description: "Echo", Parameters: json.RawMessage(`{"type":"object"}`)}
+	stream := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}, Tools: []llm.Tool{tool}},
+		&llm.StreamOptions{APIKey: "sk-test"},
 	)
 	events := collectEvents(stream)
 	msg, err := stream.Result()
@@ -121,14 +121,14 @@ func TestOpenAIStreamsToolCallDeltas(t *testing.T) {
 		t.Fatalf("Result: %v", err)
 	}
 
-	if msg.StopReason != piai.StopReasonToolUse {
+	if msg.StopReason != llm.StopReasonToolUse {
 		t.Fatalf("stopReason = %q", msg.StopReason)
 	}
-	tc, ok := msg.Content[0].(piai.ToolCall)
+	tc, ok := msg.Content[0].(llm.ToolCall)
 	if !ok || tc.ID != "call_1" || tc.Name != "echo" || tc.Arguments["text"] != "hi" {
 		t.Fatalf("toolCall = %#v", msg.Content[0])
 	}
-	for _, want := range []piai.EventType{piai.EventToolCallStart, piai.EventToolCallDelta, piai.EventToolCallEnd, piai.EventDone} {
+	for _, want := range []llm.EventType{llm.EventToolCallStart, llm.EventToolCallDelta, llm.EventToolCallEnd, llm.EventDone} {
 		if !containsType(events, want) {
 			t.Fatalf("missing %q in %v", want, eventTypes(events))
 		}
@@ -149,9 +149,9 @@ func TestOpenAIStreamsMultipleToolCallsByIndex(t *testing.T) {
 		"data: [DONE]",
 	})
 
-	msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"},
+	msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
 	).Result()
 	if err != nil {
 		t.Fatalf("Result: %v", err)
@@ -159,7 +159,7 @@ func TestOpenAIStreamsMultipleToolCallsByIndex(t *testing.T) {
 	if len(msg.Content) != 2 {
 		t.Fatalf("content blocks = %d", len(msg.Content))
 	}
-	a, b := msg.Content[0].(piai.ToolCall), msg.Content[1].(piai.ToolCall)
+	a, b := msg.Content[0].(llm.ToolCall), msg.Content[1].(llm.ToolCall)
 	if a.ID != "call_1" || b.ID != "call_2" {
 		t.Fatalf("ids = %q, %q", a.ID, b.ID)
 	}
@@ -168,23 +168,23 @@ func TestOpenAIStreamsMultipleToolCallsByIndex(t *testing.T) {
 func TestOpenAIFinishReasonMapping(t *testing.T) {
 	cases := []struct {
 		finish  string
-		want    piai.StopReason
+		want    llm.StopReason
 		wantErr bool
 	}{
-		{"length", piai.StopReasonLength, false},
-		{"content_filter", piai.StopReasonError, true},
+		{"length", llm.StopReasonLength, false},
+		{"content_filter", llm.StopReasonError, true},
 	}
 	for _, tc := range cases {
 		srv, _ := sseServer(t, []string{
 			chunk(`{"id":"c","choices":[{"delta":{"content":"x"},"finish_reason":"` + tc.finish + `"}]}`),
 			"data: [DONE]",
 		})
-		msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-			piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-			&piai.StreamOptions{APIKey: "sk-test"},
+		msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+			llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+			&llm.StreamOptions{APIKey: "sk-test"},
 		).Result()
 		if tc.wantErr {
-			if err == nil || msg.StopReason != piai.StopReasonError {
+			if err == nil || msg.StopReason != llm.StopReasonError {
 				t.Fatalf("%s: expected error terminal, got %+v", tc.finish, msg)
 			}
 			if !strings.Contains(msg.ErrorMessage, tc.finish) {
@@ -203,9 +203,9 @@ func TestOpenAIStreamWithoutFinishReasonIsError(t *testing.T) {
 		chunk(`{"id":"c","choices":[{"delta":{"content":"x"}}]}`),
 		"data: [DONE]",
 	})
-	msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"},
+	msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
 	).Result()
 	if err == nil || !strings.Contains(msg.ErrorMessage, "finish_reason") {
 		t.Fatalf("expected finish_reason error, got %+v err=%v", msg, err)
@@ -218,12 +218,12 @@ func TestOpenAIHTTPErrorBecomesTerminalErrorEvent(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"},
+	msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
 	).Result()
-	var streamErr *piai.StreamError
-	if !errors.As(err, &streamErr) || streamErr.Reason != piai.StopReasonError {
+	var streamErr *llm.StreamError
+	if !errors.As(err, &streamErr) || streamErr.Reason != llm.StopReasonError {
 		t.Fatalf("expected StreamError, got %v", err)
 	}
 	if !strings.Contains(msg.ErrorMessage, "HTTP 400") || !strings.Contains(msg.ErrorMessage, "bad model") {
@@ -232,8 +232,8 @@ func TestOpenAIHTTPErrorBecomesTerminalErrorEvent(t *testing.T) {
 }
 
 func TestOpenAIMissingAPIKeyIsError(t *testing.T) {
-	msg, err := piai.StreamOpenAICompletions(context.Background(), openAIModel("http://localhost:0"),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}}, nil,
+	msg, err := llm.StreamOpenAICompletions(context.Background(), openAIModel("http://localhost:0"),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}}, nil,
 	).Result()
 	if err == nil || !strings.Contains(msg.ErrorMessage, "no API key") {
 		t.Fatalf("expected missing-key error, got %+v err=%v", msg, err)
@@ -251,17 +251,17 @@ func TestOpenAIAbortMidStream(t *testing.T) {
 	t.Cleanup(func() { close(release); srv.Close() })
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stream := piai.StreamOpenAICompletions(ctx, openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"},
+	stream := llm.StreamOpenAICompletions(ctx, openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
 	)
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
 	msg, err := stream.Result()
-	var streamErr *piai.StreamError
-	if !errors.As(err, &streamErr) || streamErr.Reason != piai.StopReasonAborted {
+	var streamErr *llm.StreamError
+	if !errors.As(err, &streamErr) || streamErr.Reason != llm.StopReasonAborted {
 		t.Fatalf("expected aborted, got %v (msg=%+v)", err, msg)
 	}
 }
@@ -272,26 +272,26 @@ func TestOpenAIMessageConversion(t *testing.T) {
 		"data: [DONE]",
 	})
 
-	prior := piai.FauxAssistantMessage(
-		piai.FauxText("calling"),
-		piai.ToolCall{ID: "call_1", Name: "echo", Arguments: map[string]any{"text": "hi"}},
+	prior := llm.FauxAssistantMessage(
+		llm.FauxText("calling"),
+		llm.ToolCall{ID: "call_1", Name: "echo", Arguments: map[string]any{"text": "hi"}},
 	)
-	aborted := piai.FauxAssistantMessage()
-	c := piai.Context{
-		Messages: []piai.Message{
-			piai.UserMessage{Content: []piai.UserContent{
-				piai.TextContent{Text: "look"},
-				piai.ImageContent{MimeType: "image/png", Data: "abcd"},
+	aborted := llm.FauxAssistantMessage()
+	c := llm.Context{
+		Messages: []llm.Message{
+			llm.UserMessage{Content: []llm.UserContent{
+				llm.TextContent{Text: "look"},
+				llm.ImageContent{MimeType: "image/png", Data: "abcd"},
 			}},
 			prior,
-			piai.ToolResultMessage{ToolCallID: "call_1", ToolName: "echo",
-				Content: []piai.UserContent{piai.TextContent{Text: "echoed"}}},
+			llm.ToolResultMessage{ToolCallID: "call_1", ToolName: "echo",
+				Content: []llm.UserContent{llm.TextContent{Text: "echoed"}}},
 			aborted,
-			piai.UserText("next"),
+			llm.UserText("next"),
 		},
 	}
-	if _, err := piai.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL), c,
-		&piai.StreamOptions{APIKey: "sk-test"}).Result(); err != nil {
+	if _, err := llm.StreamOpenAICompletions(context.Background(), openAIModel(srv.URL), c,
+		&llm.StreamOptions{APIKey: "sk-test"}).Result(); err != nil {
 		t.Fatalf("Result: %v", err)
 	}
 
@@ -328,9 +328,9 @@ func TestOpenAIDeveloperRoleForReasoningModels(t *testing.T) {
 	model := openAIModel(srv.URL)
 	model.Reasoning = true
 
-	if _, err := piai.StreamOpenAICompletions(context.Background(), model,
-		piai.Context{SystemPrompt: "sys", Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"}).Result(); err != nil {
+	if _, err := llm.StreamOpenAICompletions(context.Background(), model,
+		llm.Context{SystemPrompt: "sys", Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"}).Result(); err != nil {
 		t.Fatalf("Result: %v", err)
 	}
 	first := captured.body["messages"].([]any)[0].(map[string]any)
@@ -344,11 +344,11 @@ func TestOpenAIRegistersInRegistry(t *testing.T) {
 		chunk(`{"id":"c","choices":[{"delta":{"content":"via registry"},"finish_reason":"stop"}]}`),
 		"data: [DONE]",
 	})
-	piai.RegisterOpenAICompletions()
+	llm.RegisterOpenAICompletions()
 
-	msg, err := piai.Complete(context.Background(), openAIModel(srv.URL),
-		piai.Context{Messages: []piai.Message{piai.UserText("hi")}},
-		&piai.StreamOptions{APIKey: "sk-test"})
+	msg, err := llm.Complete(context.Background(), openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-test"})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
