@@ -12,23 +12,30 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 const openRouterAPIKeySecret = "openrouter_api_key"
 
-// Store persists the single runtime_settings row.
+// Store persists the single runtime_settings row layered over the env baseline captured at boot.
 type Store struct {
-	pool   *pgxpool.Pool
-	secret string
+	pool     *pgxpool.Pool
+	secret   string
+	envAI    config.AIConfig
+	envFlags featureflags.Features
 
-	mu      sync.RWMutex
-	current Settings // in-process snapshot; single-process app, no cross-instance invalidation
+	updateMu sync.Mutex // orders Update commit+apply pairs within this process
+	mu       sync.RWMutex
+	current  Settings // in-process snapshot; single-process app, no cross-instance invalidation
 }
 
 // New builds a Store; secret is the auth secret used to encrypt stored keys.
-func New(pool *pgxpool.Pool, secret string) *Store {
-	return &Store{pool: pool, secret: secret}
+func New(pool *pgxpool.Pool, secret string, envAI config.AIConfig, envFlags featureflags.Features) *Store {
+	return &Store{pool: pool, secret: secret, envAI: envAI, envFlags: envFlags}
 }
 
 // Start loads the initial snapshot served by Current.
@@ -52,6 +59,50 @@ func (s *Store) setCurrent(st Settings) {
 	s.mu.Lock()
 	s.current = st
 	s.mu.Unlock()
+}
+
+// Effective returns the merged env+DB view of the current snapshot.
+func (s *Store) Effective() EffectiveSettings {
+	return Effective(s.envAI, s.envFlags, s.Current())
+}
+
+// Update mutates the row re-read under a Postgres row lock and saves in the same tx; apply (nil ok) runs before updateMu releases, in commit order.
+func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, error), apply func(Settings)) (Settings, error) {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Settings{}, fmt.Errorf("begin runtime settings update: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Insert-if-missing first so FOR UPDATE always has a row to lock.
+	if _, err := tx.Exec(ctx, `INSERT INTO runtime_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`); err != nil {
+		return Settings{}, fmt.Errorf("init runtime settings row: %w", err)
+	}
+	var aiJSON, flagsJSON, secretsJSON []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT ai, flags, secrets FROM runtime_settings WHERE id = 1 FOR UPDATE`,
+	).Scan(&aiJSON, &flagsJSON, &secretsJSON); err != nil {
+		return Settings{}, fmt.Errorf("load runtime settings for update: %w", err)
+	}
+
+	st, err := mutate(decodeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON))
+	if err != nil {
+		return Settings{}, err
+	}
+	if err := saveSettingsRow(ctx, tx, s.secret, st); err != nil {
+		return Settings{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Settings{}, fmt.Errorf("commit runtime settings update: %w", err)
+	}
+	s.setCurrent(st)
+	if apply != nil {
+		apply(st)
+	}
+	return st, nil
 }
 
 // Load reads the settings row; a missing row yields zero Settings and a
@@ -99,9 +150,13 @@ func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Set
 	return st
 }
 
-// Save upserts the settings row, encrypting the OpenRouter API key.
+type settingsExecer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// saveSettingsRow upserts the settings row, encrypting the OpenRouter API key.
 // An empty key stores no secret, removing any previous one.
-func (s *Store) Save(ctx context.Context, st Settings) error {
+func saveSettingsRow(ctx context.Context, db settingsExecer, secret string, st Settings) error {
 	aiJSON, err := json.Marshal(st.AI)
 	if err != nil {
 		return fmt.Errorf("marshal ai settings: %w", err)
@@ -116,7 +171,7 @@ func (s *Store) Save(ctx context.Context, st Settings) error {
 	}
 	secrets := map[string]string{}
 	if st.AI.OpenRouterAPIKey != "" {
-		blob, err := encryptString(s.secret, st.AI.OpenRouterAPIKey)
+		blob, err := encryptString(secret, st.AI.OpenRouterAPIKey)
 		if err != nil {
 			return fmt.Errorf("encrypt openrouter api key: %w", err)
 		}
@@ -127,7 +182,7 @@ func (s *Store) Save(ctx context.Context, st Settings) error {
 		return fmt.Errorf("marshal secrets: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	_, err = db.Exec(ctx, `
 		INSERT INTO runtime_settings (id, ai, flags, secrets, updated_at)
 		VALUES (1, $1, $2, $3, now())
 		ON CONFLICT (id) DO UPDATE
@@ -136,6 +191,5 @@ func (s *Store) Save(ctx context.Context, st Settings) error {
 	if err != nil {
 		return fmt.Errorf("save runtime settings: %w", err)
 	}
-	s.setCurrent(st)
 	return nil
 }

@@ -80,7 +80,7 @@ func main() {
 			}
 
 			// Runtime settings overlay env config; admin saves re-apply live.
-			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret)
+			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret, cfg.AI, cfg.FeatureFlags)
 			if err := settingsStore.Start(context.Background()); err != nil {
 				// Degrade to env-only config: a crash loop here would lock
 				// admins out of the very UI that repairs the stored settings.
@@ -103,7 +103,7 @@ func main() {
 
 			var warnFlagOverrides sync.Once
 			flagsProvider := func() featureflags.Features {
-				merged, err := settings.MergeFlags(cfg.FeatureFlags, settingsStore.Current().Flags)
+				merged, err := cfg.FeatureFlags.WithOverrides(settingsStore.Current().Flags)
 				if err != nil {
 					// Bad DB overrides must never crash a turn; fall back to env flags.
 					warnFlagOverrides.Do(func() {

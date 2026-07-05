@@ -14,6 +14,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 func TestStore_SaveLoadRoundtrip(t *testing.T) {
@@ -30,7 +33,7 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	t.Cleanup(pool.Close)
 	applyRuntimeSettingsMigration(t, ctx, pool)
 
-	store := New(pool, "test-auth-secret")
+	store := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 
 	empty, err := store.Load(ctx)
 	if err != nil {
@@ -48,8 +51,8 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 		},
 		Flags: map[string]bool{"turn_hooks": true},
 	}
-	if err := store.Save(ctx, want); err != nil {
-		t.Fatalf("Save() error = %v", err)
+	if _, err := store.Update(ctx, func(Settings) (Settings, error) { return want, nil }, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
 	}
 
 	var rawAI, rawSecrets string
@@ -72,9 +75,23 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 		t.Fatalf("Load().Flags = %v, want turn_hooks=true", got.Flags)
 	}
 
-	want.AI.OpenRouterAPIKey = ""
-	if err := store.Save(ctx, want); err != nil {
-		t.Fatalf("Save(cleared key) error = %v", err)
+	staleStore := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
+	merged, err := staleStore.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.AI.OpenRouterModel = "deepseek/deepseek-chat"
+		return cur, nil
+	}, nil)
+	if err != nil {
+		t.Fatalf("Update(stale instance) error = %v", err)
+	}
+	if merged.AI.OpenRouterAPIKey != want.AI.OpenRouterAPIKey || merged.AI.DefaultProvider != want.AI.DefaultProvider {
+		t.Fatalf("Update(stale instance) = %+v, want key and provider merged from DB row", merged.AI)
+	}
+
+	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.AI.OpenRouterAPIKey = ""
+		return cur, nil
+	}, nil); err != nil {
+		t.Fatalf("Update(cleared key) error = %v", err)
 	}
 	got, err = store.Load(ctx)
 	if err != nil {
@@ -82,6 +99,9 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	}
 	if got.AI.OpenRouterAPIKey != "" {
 		t.Fatal("cleared API key should not survive a save/load roundtrip")
+	}
+	if got.AI.OpenRouterModel != "deepseek/deepseek-chat" {
+		t.Fatalf("Load().AI.OpenRouterModel = %q, want stale instance's write preserved", got.AI.OpenRouterModel)
 	}
 }
 

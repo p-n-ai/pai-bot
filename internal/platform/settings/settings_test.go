@@ -85,34 +85,53 @@ func TestMergeAI(t *testing.T) {
 	}
 }
 
-func TestMergeFlags(t *testing.T) {
-	base, err := featureflags.Parse("")
+func TestEffective(t *testing.T) {
+	envFlags, err := featureflags.Parse("turn_hooks=true")
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
-	on, err := MergeFlags(base, map[string]bool{"turn_hooks": true})
-	if err != nil {
-		t.Fatalf("MergeFlags(on) error = %v", err)
-	}
-	if !on.Enabled(featureflags.TurnHooks) {
-		t.Fatal("turn_hooks should be enabled by override")
-	}
-	if base.Enabled(featureflags.TurnHooks) {
-		t.Fatal("MergeFlags must not mutate the base feature set")
-	}
+	t.Run("env only", func(t *testing.T) {
+		eff := Effective(envAIConfig(), envFlags, Settings{})
+		if eff.DefaultProvider != "openai" || eff.DefaultProviderSource != SourceEnv {
+			t.Fatalf("DefaultProvider = %q (%s), want openai (env)", eff.DefaultProvider, eff.DefaultProviderSource)
+		}
+		if eff.OpenRouterAPIKey != "env-key" || eff.OpenRouterKeySource != SourceEnv {
+			t.Fatalf("OpenRouterAPIKey = %q (%s), want env-key (env)", eff.OpenRouterAPIKey, eff.OpenRouterKeySource)
+		}
+		if !eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceEnv {
+			t.Fatalf("turn_hooks = %v (%s), want true (env)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
+		}
+	})
 
-	off, err := MergeFlags(on, map[string]bool{"turn_hooks": false})
-	if err != nil {
-		t.Fatalf("MergeFlags(off) error = %v", err)
-	}
-	if off.Enabled(featureflags.TurnHooks) {
-		t.Fatal("turn_hooks should be disabled by override")
-	}
+	t.Run("db overrides env", func(t *testing.T) {
+		eff := Effective(envAIConfig(), envFlags, Settings{
+			AI:    AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "db-key"},
+			Flags: map[string]bool{"turn_hooks": false},
+		})
+		if eff.DefaultProvider != "openrouter" || eff.DefaultProviderSource != SourceDB {
+			t.Fatalf("DefaultProvider = %q (%s), want openrouter (db)", eff.DefaultProvider, eff.DefaultProviderSource)
+		}
+		if eff.OpenRouterAPIKey != "db-key" || eff.OpenRouterKeySource != SourceDB {
+			t.Fatalf("OpenRouterAPIKey = %q (%s), want db-key (db)", eff.OpenRouterAPIKey, eff.OpenRouterKeySource)
+		}
+		if eff.OpenRouterModel != "env-model" || eff.OpenRouterModelSource != SourceEnv {
+			t.Fatalf("OpenRouterModel = %q (%s), want env-model (env)", eff.OpenRouterModel, eff.OpenRouterModelSource)
+		}
+		if eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceDB {
+			t.Fatalf("turn_hooks = %v (%s), want false (db)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
+		}
+	})
 
-	if _, err := MergeFlags(base, map[string]bool{"unknown_flag": true}); err == nil {
-		t.Fatal("MergeFlags should reject unknown flag names")
-	}
+	t.Run("nothing set", func(t *testing.T) {
+		eff := Effective(config.AIConfig{}, featureflags.Features{}, Settings{})
+		if eff.DefaultProvider != "" || eff.DefaultProviderSource != SourceNone {
+			t.Fatalf("DefaultProvider = %q (%s), want empty (none)", eff.DefaultProvider, eff.DefaultProviderSource)
+		}
+		if eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceNone {
+			t.Fatalf("turn_hooks = %v (%s), want false (none)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
+		}
+	})
 }
 
 func TestKeyLast4(t *testing.T) {
@@ -121,7 +140,8 @@ func TestKeyLast4(t *testing.T) {
 		want string
 	}{
 		{key: "", want: ""},
-		{key: "abc", want: "abc"},
+		{key: "abc", want: ""},
+		{key: "sk-1234", want: ""},
 		{key: "sk-or-v1-abcd1234", want: "1234"},
 	}
 	for _, tt := range tests {

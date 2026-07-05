@@ -13,21 +13,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 type memorySettingsStore struct {
-	current settings.Settings
-	saves   int
+	envAI    config.AIConfig
+	envFlags featureflags.Features
+	current  settings.Settings
+	saves    int
 }
 
-func (m *memorySettingsStore) Current() settings.Settings { return m.current }
+func (m *memorySettingsStore) Effective() settings.EffectiveSettings {
+	return settings.Effective(m.envAI, m.envFlags, m.current)
+}
 
-func (m *memorySettingsStore) Save(_ context.Context, st settings.Settings) error {
+func (m *memorySettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), apply func(settings.Settings)) (settings.Settings, error) {
+	st, err := mutate(m.current)
+	if err != nil {
+		return settings.Settings{}, err
+	}
 	m.current = st
 	m.saves++
-	return nil
+	if apply != nil {
+		apply(st)
+	}
+	return st, nil
 }
 
 func newAISettingsHandler(store runtimeSettingsStore, apply func(settings.Settings)) http.Handler {
@@ -54,8 +67,14 @@ type aiSettingsPayload struct {
 		Set   bool   `json:"set"`
 		Last4 string `json:"last4"`
 	} `json:"openrouterKey"`
-	Flags              map[string]bool `json:"flags"`
-	AvailableProviders []string        `json:"availableProviders"`
+	Flags   map[string]bool `json:"flags"`
+	Sources struct {
+		DefaultProvider string            `json:"defaultProvider"`
+		OpenRouterModel string            `json:"openrouterModel"`
+		OpenRouterKey   string            `json:"openrouterKey"`
+		Flags           map[string]string `json:"flags"`
+	} `json:"sources"`
+	AvailableProviders []string `json:"availableProviders"`
 }
 
 func decodeAISettingsPayload(t *testing.T, rec *httptest.ResponseRecorder) aiSettingsPayload {
@@ -88,6 +107,47 @@ func TestAdminAISettingsGetZeroState(t *testing.T) {
 			t.Fatalf("availableProviders = %v, want %q included", payload.AvailableProviders, name)
 		}
 	}
+	if payload.Sources.DefaultProvider != "none" || payload.Sources.OpenRouterKey != "none" || payload.Sources.Flags["turn_hooks"] != "none" {
+		t.Fatalf("sources = %#v, want all none", payload.Sources)
+	}
+}
+
+func TestAdminAISettingsGetReportsEffectiveState(t *testing.T) {
+	envFlags, err := featureflags.Parse("turn_hooks=true")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	envAI := config.AIConfig{DefaultProvider: "openai"}
+	envAI.OpenRouter.APIKey = "sk-or-env-5678"
+	envAI.OpenRouter.Model = "env-model"
+	store := &memorySettingsStore{envAI: envAI, envFlags: envFlags}
+	handler := newAISettingsHandler(store, nil)
+
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodGet, mustIssueAdminToken(t), ""))
+	if payload.DefaultProvider != "openai" || payload.Sources.DefaultProvider != "env" {
+		t.Fatalf("defaultProvider = %q (%s), want openai (env)", payload.DefaultProvider, payload.Sources.DefaultProvider)
+	}
+	if !payload.OpenRouterKey.Set || payload.OpenRouterKey.Last4 != "5678" || payload.Sources.OpenRouterKey != "env" {
+		t.Fatalf("openrouterKey = %#v (%s), want env key set with last4 5678", payload.OpenRouterKey, payload.Sources.OpenRouterKey)
+	}
+	if !payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "env" {
+		t.Fatalf("turn_hooks = %v (%s), want true (env)", payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
+	}
+
+	store.current = settings.Settings{
+		AI:    settings.AISettings{DefaultProvider: "openrouter"},
+		Flags: map[string]bool{"turn_hooks": false},
+	}
+	payload = decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodGet, mustIssueAdminToken(t), ""))
+	if payload.DefaultProvider != "openrouter" || payload.Sources.DefaultProvider != "db" {
+		t.Fatalf("defaultProvider = %q (%s), want openrouter (db)", payload.DefaultProvider, payload.Sources.DefaultProvider)
+	}
+	if payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "db" {
+		t.Fatalf("turn_hooks = %v (%s), want false (db)", payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
+	}
+	if payload.OpenRouterModel != "env-model" || payload.Sources.OpenRouterModel != "env" {
+		t.Fatalf("openrouterModel = %q (%s), want env-model (env)", payload.OpenRouterModel, payload.Sources.OpenRouterModel)
+	}
 }
 
 func TestAdminAISettingsPutSetsKeyAndNeverReturnsIt(t *testing.T) {
@@ -119,7 +179,7 @@ func TestAdminAISettingsPutSetsKeyAndNeverReturnsIt(t *testing.T) {
 
 func TestAdminAISettingsPutAbsentFieldsUnchanged(t *testing.T) {
 	store := &memorySettingsStore{current: settings.Settings{
-		AI:    settings.AISettings{DefaultProvider: "openrouter", OpenRouterModel: "old-model", OpenRouterAPIKey: "sk-1234"},
+		AI:    settings.AISettings{DefaultProvider: "openrouter", OpenRouterModel: "old-model", OpenRouterAPIKey: "sk-or-1234"},
 		Flags: map[string]bool{"turn_hooks": true},
 	}}
 	handler := newAISettingsHandler(store, nil)
@@ -131,7 +191,7 @@ func TestAdminAISettingsPutAbsentFieldsUnchanged(t *testing.T) {
 	if payload.DefaultProvider != "openrouter" || !payload.OpenRouterKey.Set || payload.OpenRouterKey.Last4 != "1234" {
 		t.Fatalf("payload = %#v, want provider and key untouched", payload)
 	}
-	if store.current.AI.OpenRouterAPIKey != "sk-1234" || !store.current.Flags["turn_hooks"] {
+	if store.current.AI.OpenRouterAPIKey != "sk-or-1234" || !store.current.Flags["turn_hooks"] {
 		t.Fatalf("stored settings = %#v, want key and flags untouched", store.current)
 	}
 }
