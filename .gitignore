@@ -69,5 +69,7 @@ output/
 # pi agent tooling cache/scratch (generated, machine-local)
 .pi/
 
-# Riptide artifacts (cloud-synced)
-.humanlayer/tasks/
+# Local agent working artifacts (never commit)
+.humanlayer/
+.agents/
+.issues/
