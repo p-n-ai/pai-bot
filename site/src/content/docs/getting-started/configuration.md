@@ -38,7 +38,6 @@ Set `LEARN_AI_DEFAULT_PROVIDER` to choose which provider handles requests by def
 | `LEARN_SERVER_HOST` | `0.0.0.0` | HTTP server bind address |
 | `LEARN_DATABASE_URL` | `postgres://localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | `redis://localhost:6379` | Dragonfly/Redis connection |
-| `LEARN_NATS_URL` | `nats://localhost:4222` | NATS server URL |
 
 ## WhatsApp (Optional)
 
@@ -63,8 +62,8 @@ Set `LEARN_AI_DEFAULT_PROVIDER` to choose which provider handles requests by def
 |----------|---------|-------------|
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disable language selection |
 | `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Ask for rating every N replies |
-| `LEARN_FEATURES_AI_NUDGES` | `true` | Use AI for nudge personalization |
-| `LEARN_FEATURES_DEV_MODE` | `false` | Enable dev commands |
+| `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | `true` | Use AI for nudge personalization |
+| `LEARN_DEV_MODE` | `false` | Enable dev commands |
 | `LEARN_TENANT_MODE` | `single` | `single` or `multi` tenant mode |
 
 ## Email (Optional)

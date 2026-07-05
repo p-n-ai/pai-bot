@@ -21,7 +21,6 @@ read_when:
 | `LEARN_DATABASE_MAX_CONNS` | `25` | Max Postgres pool connections. |
 | `LEARN_DATABASE_MIN_CONNS` | `5` | Min Postgres pool connections. |
 | `LEARN_CACHE_URL` | `redis://localhost:6379` | Dragonfly/Redis URL. |
-| `LEARN_NATS_URL` | `nats://localhost:4222` | NATS URL. |
 
 ## AI providers
 
@@ -82,7 +81,6 @@ read_when:
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disables multilingual behavior. |
 | `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Rating prompt cadence. |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | `true` | Enables AI-personalized nudges. |
-| `LEARN_AI_NUDGES_ENABLED` | fallback only | Legacy fallback for personalized nudges. |
 | `LEARN_CURRICULUM_PATH` | `./oss` | Curriculum source path. |
 
 ## Validation rules

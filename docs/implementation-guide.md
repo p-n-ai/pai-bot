@@ -318,7 +318,6 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Cache    CacheConfig
-	NATS     NATSConfig
 	AI       AIConfig
 	Telegram TelegramConfig
 	WhatsApp WhatsAppConfig
@@ -339,10 +338,6 @@ type DatabaseConfig struct {
 }
 
 type CacheConfig struct {
-	URL string
-}
-
-type NATSConfig struct {
 	URL string
 }
 
@@ -408,9 +403,6 @@ func Load() (*Config, error) {
 		},
 		Cache: CacheConfig{
 			URL: envStr("LEARN_CACHE_URL", "redis://localhost:6379"),
-		},
-		NATS: NATSConfig{
-			URL: envStr("LEARN_NATS_URL", "nats://localhost:4222"),
 		},
 		AI: AIConfig{
 			OpenAI: OpenAIConfig{
@@ -732,15 +724,6 @@ services:
       timeout: 3s
       retries: 5
 
-  nats:
-    image: nats:2.10-alpine
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
-    volumes:
-      - nats-data:/data
-
   app:
     build:
       context: .
@@ -754,8 +737,6 @@ services:
         condition: service_healthy
       dragonfly:
         condition: service_healthy
-      nats:
-        condition: service_started
     restart: unless-stopped
 
   ollama:
@@ -770,7 +751,6 @@ services:
 volumes:
   postgres-data:
   dragonfly-data:
-  nats-data:
   ollama-data:
 ```
 
@@ -1740,9 +1720,6 @@ LEARN_DATABASE_MAX_CONNS=25
 # --- Cache (Dragonfly/Redis) ---
 LEARN_CACHE_URL=redis://localhost:6379
 
-# --- NATS ---
-LEARN_NATS_URL=nats://localhost:4222
-
 # --- Telegram (Required) ---
 LEARN_TELEGRAM_BOT_TOKEN=
 
@@ -1787,7 +1764,7 @@ go test ./...
 go build ./cmd/server
 
 # Start infrastructure
-docker compose up -d postgres dragonfly nats
+docker compose up -d postgres dragonfly
 
 # Run migrations (goose; records applied versions in goose_db_version)
 just migrate
@@ -1810,7 +1787,7 @@ docker compose down
 - [x] `internal/platform/database/` — pgx pool wrapper with tests
 - [x] `internal/platform/cache/` — go-redis wrapper with tests
 - [x] `internal/ai/` — Provider interface, MockProvider, OpenAI, Anthropic, Google, Ollama, OpenRouter, Router with tests
-- [x] `docker-compose.yml` — Postgres 17, Dragonfly, NATS, app, optional Ollama
+- [x] `docker-compose.yml` — Postgres 17, Dragonfly, app, optional Ollama
 - [x] `migrations/20260318100000_initial.sql` — tenants, users, conversations, messages, learning_progress, events
 - [x] `Makefile`, `.env.example`, `.github/workflows/ci.yml`
 - [x] `go test ./...` passes with zero failures
@@ -1863,8 +1840,8 @@ just setup
 # 4. Verify all tests pass (45+ tests, should take <5 seconds)
 just test
 
-# 5. Start infrastructure (Postgres, Dragonfly, NATS)
-docker compose up -d postgres dragonfly nats
+# 5. Start infrastructure (Postgres, Dragonfly)
+docker compose up -d postgres dragonfly
 
 # 6. Apply database migrations
 just migrate
@@ -4942,7 +4919,7 @@ fi
 
 # Start infrastructure
 echo "🐳 Starting Docker services..."
-docker compose up -d postgres dragonfly nats
+docker compose up -d postgres dragonfly
 
 # Wait for Postgres
 echo "⏳ Waiting for PostgreSQL..."
@@ -5071,7 +5048,6 @@ echo ""
 | `LEARN_SERVER_PORT` | 0 | No | `8080` |
 | `LEARN_DATABASE_URL` | 0 | No | `postgres://pai:pai@localhost:5432/pai` |
 | `LEARN_CACHE_URL` | 0 | No | `redis://localhost:6379` |
-| `LEARN_NATS_URL` | 0 | No | `nats://localhost:4222` |
 | `LEARN_TELEGRAM_BOT_TOKEN` | 0 | Yes | — |
 | `LEARN_AI_OPENAI_API_KEY` | 0 | No* | — |
 | `LEARN_AI_ANTHROPIC_API_KEY` | 0 | No* | — |
