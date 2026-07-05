@@ -21,6 +21,7 @@ import { Route as AuthenticatedSettingsWhatsappRouteImport } from './routes/_aut
 import { Route as AuthenticatedSettingsUsersRouteImport } from './routes/_authenticated/settings/users'
 import { Route as AuthenticatedSettingsEmbedRouteImport } from './routes/_authenticated/settings/embed'
 import { Route as AuthenticatedSettingsBudgetRouteImport } from './routes/_authenticated/settings/budget'
+import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
 import { Route as AuthenticatedParentsIdRouteImport } from './routes/_authenticated/parents/$id'
 import { Route as AuthenticatedDashboardRetrievalLabRouteImport } from './routes/_authenticated/dashboard/retrieval-lab'
 import { Route as AuthenticatedDashboardMetricsRouteImport } from './routes/_authenticated/dashboard/metrics'
@@ -91,6 +92,11 @@ const AuthenticatedSettingsBudgetRoute =
     path: '/settings/budget',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
+  id: '/settings/ai',
+  path: '/settings/ai',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedParentsIdRoute = AuthenticatedParentsIdRouteImport.update({
   id: '/parents/$id',
   path: '/parents/$id',
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/metrics': typeof AuthenticatedDashboardMetricsRoute
   '/dashboard/retrieval-lab': typeof AuthenticatedDashboardRetrievalLabRoute
   '/parents/$id': typeof AuthenticatedParentsIdRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/dashboard/metrics': typeof AuthenticatedDashboardMetricsRoute
   '/dashboard/retrieval-lab': typeof AuthenticatedDashboardRetrievalLabRoute
   '/parents/$id': typeof AuthenticatedParentsIdRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
@@ -170,6 +178,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/metrics': typeof AuthenticatedDashboardMetricsRoute
   '/_authenticated/dashboard/retrieval-lab': typeof AuthenticatedDashboardRetrievalLabRoute
   '/_authenticated/parents/$id': typeof AuthenticatedParentsIdRoute
+  '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/_authenticated/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/_authenticated/settings/users': typeof AuthenticatedSettingsUsersRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/dashboard/metrics'
     | '/dashboard/retrieval-lab'
     | '/parents/$id'
+    | '/settings/ai'
     | '/settings/budget'
     | '/settings/embed'
     | '/settings/users'
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
     | '/dashboard/metrics'
     | '/dashboard/retrieval-lab'
     | '/parents/$id'
+    | '/settings/ai'
     | '/settings/budget'
     | '/settings/embed'
     | '/settings/users'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/metrics'
     | '/_authenticated/dashboard/retrieval-lab'
     | '/_authenticated/parents/$id'
+    | '/_authenticated/settings/ai'
     | '/_authenticated/settings/budget'
     | '/_authenticated/settings/embed'
     | '/_authenticated/settings/users'
@@ -328,6 +340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsBudgetRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/settings/ai': {
+      id: '/_authenticated/settings/ai'
+      path: '/settings/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/parents/$id': {
       id: '/_authenticated/parents/$id'
       path: '/parents/$id'
@@ -391,6 +410,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRouteWithChildren
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedParentsIdRoute: typeof AuthenticatedParentsIdRoute
+  AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsBudgetRoute: typeof AuthenticatedSettingsBudgetRoute
   AuthenticatedSettingsEmbedRoute: typeof AuthenticatedSettingsEmbedRoute
   AuthenticatedSettingsUsersRoute: typeof AuthenticatedSettingsUsersRoute
@@ -403,6 +423,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRouteWithChildren,
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedParentsIdRoute: AuthenticatedParentsIdRoute,
+  AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsBudgetRoute: AuthenticatedSettingsBudgetRoute,
   AuthenticatedSettingsEmbedRoute: AuthenticatedSettingsEmbedRoute,
   AuthenticatedSettingsUsersRoute: AuthenticatedSettingsUsersRoute,

@@ -60,6 +60,10 @@ function isElevatedRoute(user: AuthUser, pathname: string): boolean {
     return canUseSetupRoutes(user)
   }
 
+  if (pathname.startsWith('/settings/ai')) {
+    return canUseSetupRoutes(user)
+  }
+
   return (
     elevatedPrefixes.some((prefix) => pathname.startsWith(prefix)) ||
     isDataExportRoute(user, pathname) ||

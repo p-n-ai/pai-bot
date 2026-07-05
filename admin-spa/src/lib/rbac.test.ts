@@ -77,6 +77,12 @@ describe('admin SPA RBAC', () => {
     expect(canAccessPath(teacher, '/settings/embed')).toBe(false)
   })
 
+  it('limits AI settings to admin roles', () => {
+    expect(canAccessPath(admin, '/settings/ai')).toBe(true)
+    expect(canAccessPath(platformAdmin, '/settings/ai')).toBe(true)
+    expect(canAccessPath(teacher, '/settings/ai')).toBe(false)
+  })
+
   it('rejects redirect values that could escape the admin app or loop login', () => {
     expect(isSafeRedirectPath('/dashboard')).toBe(true)
     expect(isSafeRedirectPath('/')).toBe(false)

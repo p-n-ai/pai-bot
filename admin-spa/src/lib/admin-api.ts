@@ -1,4 +1,5 @@
 import { readClassProgress } from './dashboard-types'
+import { readAISettings } from './ai-settings-types'
 import { isAIUsageSummary } from './ai-usage-types'
 import { isGroupDetail, isGroupRecord } from './group-types'
 import { isInviteRecord, isUserManagementView } from './user-management-types'
@@ -9,6 +10,7 @@ import { isStudentConversations, isStudentDetail } from './student-detail-types'
 import { isWhatsAppStatus } from './whatsapp-types'
 import { readEmbedConfig } from './embed-config-types'
 import type { ClassProgress } from './dashboard-types'
+import type { AISettings, UpdateAISettingsInput } from './ai-settings-types'
 import type { EmbedConfig, UpdateEmbedConfigInput } from './embed-config-types'
 import type {
   AIUsageSummary,
@@ -135,6 +137,36 @@ export async function upsertTokenBudgetWindow(
   }
 
   return payload
+}
+
+export async function getAISettings(
+  fetcher: typeof fetch = fetch,
+): Promise<AISettings> {
+  const payload = await fetchJSON('/api/admin/ai/settings', fetcher)
+  const settings = readAISettings(payload)
+
+  if (!settings) {
+    throw new APIContractError('Invalid AI settings response')
+  }
+
+  return settings
+}
+
+export async function updateAISettings(
+  input: UpdateAISettingsInput,
+  fetcher: typeof fetch = fetch,
+): Promise<AISettings> {
+  const payload = await fetchJSON('/api/admin/ai/settings', fetcher, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+  const settings = readAISettings(payload)
+
+  if (!settings) {
+    throw new APIContractError('Invalid AI settings response')
+  }
+
+  return settings
 }
 
 export async function getUserManagement(
