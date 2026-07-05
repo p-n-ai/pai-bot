@@ -822,6 +822,50 @@ func TestAuthLoginEndpoint(t *testing.T) {
 	assertAuthCookies(t, rec.Result().Cookies(), "session-123")
 }
 
+func TestAuthSessionPayloadAISettingsCapability(t *testing.T) {
+	cases := []struct {
+		name        string
+		role        auth.Role
+		multiTenant bool
+		want        bool
+	}{
+		{name: "admin single-tenant", role: auth.RoleAdmin, multiTenant: false, want: true},
+		{name: "admin multi-tenant", role: auth.RoleAdmin, multiTenant: true, want: false},
+		{name: "platform admin multi-tenant", role: auth.RolePlatformAdmin, multiTenant: true, want: true},
+		{name: "teacher single-tenant", role: auth.RoleTeacher, multiTenant: false, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			authSvc := &stubAuthService{sessionResp: auth.Session{
+				Token:     "session-next",
+				ExpiresAt: time.Date(2026, 3, 23, 10, 0, 0, 0, time.UTC),
+				User:      auth.UserSession{UserID: "user-1", TenantID: "tenant-abc", Role: tc.role},
+			}}
+			handler := newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: stubAdminAPI{}}, nil, &chatGatewayStub{}, retrieval.NewMemoryService(), authSvc, "change-me-in-production", time.Hour, "", &memorySettingsStore{}, nil, tc.multiTenant)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+			req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "session-old"})
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			var payload struct {
+				User struct {
+					CanManageAISettings bool `json:"can_manage_ai_settings"`
+				} `json:"user"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("json.Unmarshal() error = %v", err)
+			}
+			if payload.User.CanManageAISettings != tc.want {
+				t.Fatalf("can_manage_ai_settings = %v, want %v", payload.User.CanManageAISettings, tc.want)
+			}
+		})
+	}
+}
+
 func TestAuthSessionEndpointReturnsUserAndRefreshesCookie(t *testing.T) {
 	authSvc := &stubAuthService{
 		sessionResp: auth.Session{

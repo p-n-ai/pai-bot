@@ -6,6 +6,12 @@ import {
 import type { AuthUser } from './auth-types'
 
 const elevatedPrefixes = ['/dashboard', '/settings', '/students', '/parents']
+const setupSettingsPrefixes = [
+  '/settings/whatsapp',
+  '/settings/users',
+  '/settings/budget',
+  '/settings/embed',
+]
 const publicExactPaths = new Set(['/', '/activate'])
 
 export function isPublicPath(pathname: string): boolean {
@@ -42,25 +48,13 @@ function isParentSelfRoute(user: AuthUser, pathname: string): boolean {
   return pathname === parentPath || pathname.startsWith(`${parentPath}/`)
 }
 
-// fallow-ignore-next-line complexity
 function isElevatedRoute(user: AuthUser, pathname: string): boolean {
-  if (pathname.startsWith('/settings/whatsapp')) {
-    return canUseSetupRoutes(user)
-  }
-
-  if (pathname.startsWith('/settings/users')) {
-    return canUseSetupRoutes(user)
-  }
-
-  if (pathname.startsWith('/settings/budget')) {
-    return canUseSetupRoutes(user)
-  }
-
-  if (pathname.startsWith('/settings/embed')) {
-    return canUseSetupRoutes(user)
-  }
-
   if (pathname.startsWith('/settings/ai')) {
+    // AI settings are platform-global; the backend withholds this capability from tenant admins in multi-tenant mode.
+    return user.can_manage_ai_settings === true
+  }
+
+  if (setupSettingsPrefixes.some((prefix) => pathname.startsWith(prefix))) {
     return canUseSetupRoutes(user)
   }
 

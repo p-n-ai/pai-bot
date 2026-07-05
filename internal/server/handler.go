@@ -325,8 +325,8 @@ func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender,
 }
 
 // settingsStore and applySettings back the admin runtime-settings endpoints:
-// handlers save through the store, then applySettings rewires the live AI
-// router. A nil settingsStore leaves the /api/admin/ai/settings routes
+// handlers save through the store, which runs applySettings to rewire the
+// live AI router. A nil settingsStore leaves the /api/admin/ai/settings routes
 // unregistered (tests, unwired deployments). multiTenant restricts those
 // routes to platform admins: the settings row is platform-global.
 func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
@@ -334,6 +334,13 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
 	retrievalService = ensureRetrievalService(retrievalService)
+
+	canManageAISettings := func(role auth.Role) bool {
+		if settingsStore == nil {
+			return false
+		}
+		return role == auth.RolePlatformAdmin || (!multiTenant && role == auth.RoleAdmin)
+	}
 
 	teacherOrAbove := chain(
 		authenticated,
@@ -351,14 +358,14 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 		authenticated,
 		auth.RequireRoles(auth.RoleAdmin),
 	)
-	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
+	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc, canManageAISettings))
 	mux.Handle("GET /api/auth/google/start", handleAuthGoogleStart(authSvc))
 	mux.Handle("GET /api/auth/google/callback", handleAuthGoogleCallback(authSvc))
 	mux.Handle("POST /api/auth/google/link/start", authenticated(handleAuthGoogleLinkStart(authSvc)))
 	mux.Handle("GET /api/auth/identities", authenticated(handleAuthIdentities(authSvc)))
-	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
-	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc))
-	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
+	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc, canManageAISettings))
+	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc, canManageAISettings))
+	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc, canManageAISettings))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("GET /api/join/{slug}", handlePublicJoinClass(joinSource))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc, inviteBaseURL)))
@@ -1529,7 +1536,7 @@ func handleAdminInviteReissue(authSvc authService, defaultBaseURL string) http.H
 	}
 }
 
-func handleAuthLogin(authSvc authService) http.HandlerFunc {
+func handleAuthLogin(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		TenantID string `json:"tenant_id"`
 		Email    string `json:"email"`
@@ -1557,7 +1564,7 @@ func handleAuthLogin(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp, canManageAISettings)
 	}
 }
 
@@ -1645,7 +1652,7 @@ func handleAuthIdentities(authSvc authService) http.HandlerFunc {
 	}
 }
 
-func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
+func handleAuthAcceptInvite(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		Token    string `json:"token"`
 		Name     string `json:"name"`
@@ -1673,11 +1680,11 @@ func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusCreated, resp)
+		writeAuthSessionResponse(w, r, http.StatusCreated, resp, canManageAISettings)
 	}
 }
 
-func handleAuthSession(authSvc authService) http.HandlerFunc {
+func handleAuthSession(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sessionToken := readCookieValue(r, auth.SessionCookieName)
 		if sessionToken == "" {
@@ -1691,11 +1698,11 @@ func handleAuthSession(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, session)
+		writeAuthSessionResponse(w, r, http.StatusOK, session, canManageAISettings)
 	}
 }
 
-func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
+func handleAuthSwitchTenant(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		SessionToken string `json:"session_token"`
 		TenantID     string `json:"tenant_id"`
@@ -1731,7 +1738,7 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp, canManageAISettings)
 	}
 }
 
@@ -1806,17 +1813,25 @@ func decodeOptionalJSONBody(r *http.Request, target any) (err error) {
 	return nil
 }
 
+type authSessionUser struct {
+	auth.UserSession
+	CanManageAISettings bool `json:"can_manage_ai_settings"`
+}
+
 type authSessionResponse struct {
 	ExpiresAt     time.Time           `json:"expires_at"`
-	User          auth.UserSession    `json:"user"`
+	User          authSessionUser     `json:"user"`
 	TenantChoices []auth.TenantOption `json:"tenant_choices,omitempty"`
 }
 
-func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, session auth.Session) {
+func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, session auth.Session, canManageAISettings func(auth.Role) bool) {
 	setSessionCookies(w, r, session)
 	writeJSON(w, status, authSessionResponse{
-		ExpiresAt:     session.ExpiresAt,
-		User:          session.User,
+		ExpiresAt: session.ExpiresAt,
+		User: authSessionUser{
+			UserSession:         session.User,
+			CanManageAISettings: canManageAISettings(session.User.Role),
+		},
 		TenantChoices: session.TenantChoices,
 	})
 }

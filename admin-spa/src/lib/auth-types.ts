@@ -16,6 +16,7 @@ export interface AuthUser {
   role: AdminRole
   name?: string
   email?: string
+  can_manage_ai_settings?: boolean
 }
 
 export interface SchoolChoice {
