@@ -2095,7 +2095,7 @@ func TestAdminEndpointsUseTenantFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+mustIssueTokenWithTenant(t, auth.RoleTeacher, "teacher-1", "tenant-second"))
 	rec := httptest.NewRecorder()
 
-	newHandlerWithAdminProvider(provider, stubAdminAPI{}, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "").ServeHTTP(rec, req)
+	newHandlerWithAdminProvider(provider, stubAdminAPI{}, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "", nil, nil, false).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -2338,6 +2338,11 @@ func TestRetrievalSourceEndpoints_CreateListAndDelete(t *testing.T) {
 func mustIssueAdminToken(t *testing.T) string {
 	t.Helper()
 	return mustIssueToken(t, auth.RoleAdmin)
+}
+
+func mustIssuePlatformAdminToken(t *testing.T) string {
+	t.Helper()
+	return mustIssueTokenWithTenant(t, auth.RolePlatformAdmin, "platform-admin-1", "")
 }
 
 func mustIssueTeacherToken(t *testing.T) string {

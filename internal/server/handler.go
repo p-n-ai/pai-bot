@@ -23,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
@@ -35,6 +36,7 @@ type AuthService = authService
 
 type TenantAdminDataSourceProvider = tenantAdminDataSourceProvider
 type GatewayNotifier = gatewayNotifier
+type RuntimeSettingsStore = runtimeSettingsStore
 
 func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw: gw} }
 func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
@@ -46,8 +48,8 @@ func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSour
 func NewBootstrapRetrievalService(loader *curriculum.Loader) *retrieval.Service {
 	return newBootstrapRetrievalService(loader)
 }
-func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
-	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL)
+func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
+	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
 }
 func NewTenantAdminDataSourceProvider(newForTenant func(string) AdminDataSource, newForPlatform func() AdminDataSource, defaultTenantID func(context.Context) (string, error)) TenantAdminDataSourceProvider {
 	return tenantAdminDataSourceProvider{newForTenant: newForTenant, newForPlatform: newForPlatform, defaultTenantID: defaultTenantID}
@@ -319,10 +321,15 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 
 func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	joinSource, _ := admin.(joinClassSource)
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "", nil, nil, false)
 }
 
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
+// settingsStore and applySettings back the admin runtime-settings endpoints:
+// handlers save through the store, then applySettings rewires the live AI
+// router. A nil settingsStore leaves the /api/admin/ai/settings routes
+// unregistered (tests, unwired deployments). multiTenant restricts those
+// routes to platform admins: the settings row is platform-global.
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -367,6 +374,18 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
 	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
+	if settingsStore != nil {
+		// AI settings are platform-global (single row, one process-wide AI
+		// router): a tenant admin may manage them only in single-tenant mode,
+		// otherwise any school admin could swap every tenant's provider key.
+		settingsRoles := []auth.Role{auth.RoleAdmin, auth.RolePlatformAdmin}
+		if multiTenant {
+			settingsRoles = []auth.Role{auth.RolePlatformAdmin}
+		}
+		settingsAdmin := chain(authenticated, auth.RequireRoles(settingsRoles...))
+		mux.Handle("GET /api/admin/ai/settings", settingsAdmin(handleAdminGetAISettings(settingsStore)))
+		mux.Handle("PUT /api/admin/ai/settings", settingsAdmin(handleAdminUpdateAISettings(settingsStore, applySettings)))
+	}
 	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
 	mux.Handle("GET /api/admin/export/progress", adminOrAbove(handleAdminExportProgress(adminProvider)))
