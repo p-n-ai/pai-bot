@@ -11,12 +11,12 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
-	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
@@ -24,7 +24,9 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/platform/mailer"
+	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	platformtenant "github.com/p-n-ai/pai-bot/internal/platform/tenant"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/server"
@@ -63,17 +65,6 @@ func main() {
 		ShutdownTimeout: 10 * time.Second,
 		BuildHandler: func(ctx context.Context) (http.Handler, func(context.Context) error, error) {
 
-			// Initialize AI router with configured providers.
-			router := setupAIRouter(cfg)
-			if !router.HasProvider() {
-				if cfg.Runtime.DevMode {
-					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
-				} else {
-					slog.Error("no AI providers configured")
-					os.Exit(1)
-				}
-			}
-
 			// Initialize PostgreSQL-backed conversation store.
 			db, err := database.New(context.Background(), cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
 			if err != nil {
@@ -86,6 +77,41 @@ func main() {
 			if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
 				slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
 				os.Exit(1)
+			}
+
+			// Runtime settings overlay env config; admin saves re-apply live.
+			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret)
+			if err := settingsStore.Start(context.Background()); err != nil {
+				// Degrade to env-only config: a crash loop here would lock
+				// admins out of the very UI that repairs the stored settings.
+				slog.Warn("runtime settings unavailable; using env config", "error", err)
+			}
+
+			// Initialize AI router with configured providers.
+			router := airouter.Setup(settings.MergeAI(cfg.AI, settingsStore.Current()))
+			if !router.HasProvider() {
+				if cfg.Runtime.DevMode {
+					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
+				} else {
+					slog.Error("no AI providers configured")
+					os.Exit(1)
+				}
+			}
+			applySettings := func(st settings.Settings) {
+				airouter.Apply(router, settings.MergeAI(cfg.AI, st))
+			}
+
+			var warnFlagOverrides sync.Once
+			flagsProvider := func() featureflags.Features {
+				merged, err := settings.MergeFlags(cfg.FeatureFlags, settingsStore.Current().Flags)
+				if err != nil {
+					// Bad DB overrides must never crash a turn; fall back to env flags.
+					warnFlagOverrides.Do(func() {
+						slog.Warn("invalid runtime feature flag overrides; using env flags", "error", err)
+					})
+					return cfg.FeatureFlags
+				}
+				return merged
 			}
 
 			// Initialize cache (warn if unavailable, don't fail).
@@ -141,7 +167,7 @@ func main() {
 				Groups:               groupStore,
 				TenantID:             store.TenantID(),
 				DevMode:              cfg.Runtime.DevMode,
-				FeatureFlags:         cfg.FeatureFlags,
+				FeatureFlags:         flagsProvider,
 			})
 
 			gw := chat.NewGateway()
@@ -326,6 +352,9 @@ func main() {
 				cfg.Auth.JWTSecret,
 				defaultAccessTokenTTL,
 				cfg.Email.BaseURL,
+				settingsStore,
+				applySettings,
+				cfg.Tenant.Mode == "multi",
 			)
 
 			topMux := server.NewTopMux(server.TopMuxOptions{
@@ -358,10 +387,6 @@ const (
 	defaultAccessTokenTTL = 15 * time.Minute
 	defaultSessionTTL     = 7 * 24 * time.Hour
 )
-
-func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg)
-}
 
 func googleOAuthPolicy(cfg *config.Config) auth.GoogleOAuthPolicy {
 	if cfg == nil {

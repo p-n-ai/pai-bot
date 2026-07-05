@@ -23,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
 )
@@ -103,7 +104,7 @@ func main() {
 		slog.Warn("curriculum not loaded", "path", cfg.CurriculumPath, "error", err)
 	}
 
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{
+	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{
 		Memory:  memory,
 		Channel: channel,
 	}, terminalchat.StateDeps{})
@@ -139,7 +140,7 @@ func main() {
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
-		FeatureFlags:         cfg.FeatureFlags,
+		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
 	}
 	if cfg.Runtime.DevMode {
 		engineCfg.TurnHookNotice = func(notice agent.TurnHookCallNotice) {
@@ -194,7 +195,7 @@ func main() {
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg)
+	return airouter.Setup(cfg.AI)
 }
 
 type conversationHistory struct {

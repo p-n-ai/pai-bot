@@ -25,7 +25,7 @@ func TestEngine_ProcessMessage_TurnHooksMoveRatingPromptBehindFlag(t *testing.T)
 		AIRouter:          mockRouter(tracker),
 		Store:             agent.NewMemoryStore(),
 		RatingPromptEvery: 1,
-		FeatureFlags:      features,
+		FeatureFlags:      func() featureflags.Features { return features },
 		DevMode:           true,
 		TurnHookNotice: func(notice agent.TurnHookCallNotice) {
 			notices = append(notices, notice)
@@ -68,7 +68,7 @@ func TestEngine_ProcessMessage_TurnHooksNoticeContinueOutcome(t *testing.T) {
 		AIRouter:          mockRouter(ai.NewMockProvider("AI response")),
 		Store:             agent.NewMemoryStore(),
 		RatingPromptEvery: 5,
-		FeatureFlags:      features,
+		FeatureFlags:      func() featureflags.Features { return features },
 		DevMode:           true,
 		TurnHookNotice: func(notice agent.TurnHookCallNotice) {
 			notices = append(notices, notice)
@@ -132,7 +132,7 @@ func TestEngine_ProcessMessage_TurnHookNoticeDisabledWithoutDevMode(t *testing.T
 		AIRouter:          mockRouter(ai.NewMockProvider("AI response")),
 		Store:             agent.NewMemoryStore(),
 		RatingPromptEvery: 1,
-		FeatureFlags:      features,
+		FeatureFlags:      func() featureflags.Features { return features },
 		TurnHookNotice: func(notice agent.TurnHookCallNotice) {
 			notices = append(notices, notice)
 		},

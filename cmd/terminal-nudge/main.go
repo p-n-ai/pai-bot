@@ -63,7 +63,7 @@ func main() {
 		}
 	}
 
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{}, terminalchat.StateDeps{})
+	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{}, terminalchat.StateDeps{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build nudge state: %v\n", err)
 		os.Exit(1)
@@ -111,5 +111,5 @@ func main() {
 }
 
 func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg)
+	return airouter.Setup(cfg.AI)
 }

@@ -56,7 +56,7 @@ func TestRunTurnHooks_ContinuesInjectsAndBlocks(t *testing.T) {
 	}
 	skippedHook := &stubTurnHook{name: "skipped", result: turnHookResult{Outcome: turnHookOutcomeContinue}}
 	engine := NewEngine(EngineConfig{
-		FeatureFlags: features,
+		FeatureFlags: func() featureflags.Features { return features },
 		DevMode:      true,
 		TurnHookNotice: func(notice TurnHookCallNotice) {
 			notices = append(notices, notice)

@@ -23,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
 )
 
@@ -288,7 +289,7 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 		if !cfg.HasAIProvider() {
 			return nil, nil, fmt.Errorf("at least one AI provider must be configured")
 		}
-		router = airouter.Setup(cfg)
+		router = airouter.Setup(cfg.AI)
 		if !router.HasProvider() {
 			return nil, nil, fmt.Errorf("no AI providers configured")
 		}
@@ -301,7 +302,7 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 	if err != nil {
 		slog.Warn("curriculum not loaded", "path", cfg.CurriculumPath, "error", err)
 	}
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{
+	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{
 		Memory:  memory,
 		Channel: "harness",
 	}, terminalchat.StateDeps{})
@@ -329,7 +330,7 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
-		FeatureFlags:         cfg.FeatureFlags,
+		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
