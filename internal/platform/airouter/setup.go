@@ -26,69 +26,64 @@ func Setup(cfg config.AIConfig) *ai.Router {
 	return router
 }
 
-// Apply (re)registers providers and provider order from cfg onto a live
-// router. It serves both boot and runtime settings changes; it never
-// unregisters, so providers dropped from cfg keep their last registration.
+// Apply replaces the router's provider set from cfg; providers with no config (e.g. a cleared API key) unregister.
 func Apply(router *ai.Router, cfg config.AIConfig) {
-	order := providerOrder(cfg.DefaultProvider)
-	for _, name := range order {
-		switch name {
-		case "mock":
-			if cfg.Mock.Response == "" {
-				continue
-			}
-			router.Register("mock", ai.NewMockProvider(cfg.Mock.Response))
-			slog.Info("AI provider registered", "provider", "mock")
-		case "openai":
-			if cfg.OpenAI.APIKey == "" {
-				continue
-			}
-			router.Register("openai", ai.NewOpenAIProvider(cfg.OpenAI.APIKey))
-			router.SetDefaultModel("openai", cfg.OpenAI.Model)
-			slog.Info("AI provider registered", "provider", "openai", "model", strings.TrimSpace(cfg.OpenAI.Model))
-		case "anthropic":
-			if cfg.Anthropic.APIKey == "" {
-				continue
-			}
-			provider, err := ai.NewAnthropicProvider(cfg.Anthropic.APIKey)
-			if err != nil {
-				slog.Warn("failed to create Anthropic provider", "error", err)
-				continue
-			}
-			router.Register("anthropic", provider)
-			router.SetDefaultModel("anthropic", cfg.Anthropic.Model)
-			slog.Info("AI provider registered", "provider", "anthropic", "model", strings.TrimSpace(cfg.Anthropic.Model))
-		case "deepseek":
-			if cfg.DeepSeek.APIKey == "" {
-				continue
-			}
-			router.Register("deepseek", ai.NewDeepSeekProvider(cfg.DeepSeek.APIKey))
-			router.SetDefaultModel("deepseek", cfg.DeepSeek.Model)
-			slog.Info("AI provider registered", "provider", "deepseek", "model", strings.TrimSpace(cfg.DeepSeek.Model))
-		case "google":
-			if cfg.Google.APIKey == "" {
-				continue
-			}
-			router.Register("google", ai.NewGoogleProvider(cfg.Google.APIKey))
-			router.SetDefaultModel("google", cfg.Google.Model)
-			slog.Info("AI provider registered", "provider", "google", "model", strings.TrimSpace(cfg.Google.Model))
-		case "ollama":
-			if !cfg.Ollama.Enabled {
-				continue
-			}
-			router.Register("ollama", ai.NewOllamaProvider(cfg.Ollama.URL))
-			router.SetDefaultModel("ollama", cfg.Ollama.Model)
-			slog.Info("AI provider registered", "provider", "ollama", "model", strings.TrimSpace(cfg.Ollama.Model))
-		case "openrouter":
-			if cfg.OpenRouter.APIKey == "" {
-				continue
-			}
-			router.Register("openrouter", ai.NewOpenRouterProvider(cfg.OpenRouter.APIKey))
-			router.SetDefaultModel("openrouter", cfg.OpenRouter.Model)
-			slog.Info("AI provider registered", "provider", "openrouter", "model", strings.TrimSpace(cfg.OpenRouter.Model))
+	var regs []ai.ProviderRegistration
+	for _, name := range providerOrder(cfg.DefaultProvider) {
+		reg, ok := buildProvider(name, cfg)
+		if !ok {
+			continue
 		}
+		regs = append(regs, reg)
+		slog.Info("AI provider registered", "provider", name, "model", strings.TrimSpace(reg.DefaultModel))
 	}
-	router.SetProviderOrder(order)
+	router.ReplaceProviders(regs)
+}
+
+func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, bool) {
+	switch name {
+	case "mock":
+		if cfg.Mock.Response == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewMockProvider(cfg.Mock.Response)}, true
+	case "openai":
+		if cfg.OpenAI.APIKey == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true
+	case "anthropic":
+		if cfg.Anthropic.APIKey == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		provider, err := ai.NewAnthropicProvider(cfg.Anthropic.APIKey)
+		if err != nil {
+			slog.Warn("failed to create Anthropic provider", "error", err)
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Anthropic.Model}, true
+	case "deepseek":
+		if cfg.DeepSeek.APIKey == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewDeepSeekProvider(cfg.DeepSeek.APIKey), DefaultModel: cfg.DeepSeek.Model}, true
+	case "google":
+		if cfg.Google.APIKey == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewGoogleProvider(cfg.Google.APIKey), DefaultModel: cfg.Google.Model}, true
+	case "ollama":
+		if !cfg.Ollama.Enabled {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOllamaProvider(cfg.Ollama.URL), DefaultModel: cfg.Ollama.Model}, true
+	case "openrouter":
+		if cfg.OpenRouter.APIKey == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterProvider(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
+	}
+	return ai.ProviderRegistration{}, false
 }
 
 func providerOrder(preferred string) []string {

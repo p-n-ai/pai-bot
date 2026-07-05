@@ -4,8 +4,11 @@
 package airouter
 
 import (
+	"context"
+	"strings"
 	"testing"
 
+	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
@@ -41,5 +44,28 @@ func TestApplyReordersLiveRouter(t *testing.T) {
 	order = router.ProviderOrder()
 	if len(order) != 2 || order[0] != "openrouter" || order[1] != "openai" {
 		t.Fatalf("Apply order = %v, want [openrouter openai] without duplicates", order)
+	}
+}
+
+func TestApplyUnregistersProviderWhenKeyCleared(t *testing.T) {
+	cfg := config.AIConfig{}
+	cfg.OpenRouter.APIKey = "sk-or-old-key"
+
+	router := Setup(cfg)
+	if order := router.ProviderOrder(); len(order) != 1 || order[0] != "openrouter" {
+		t.Fatalf("Setup order = %v, want [openrouter]", order)
+	}
+
+	cfg.OpenRouter.APIKey = ""
+	Apply(router, cfg)
+
+	if router.HasProvider() {
+		t.Fatalf("stale openrouter provider still registered after key clear: %v", router.ProviderOrder())
+	}
+	_, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "no providers registered") {
+		t.Fatalf("Complete() error = %v, want no-providers failure without touching the stale provider", err)
 	}
 }

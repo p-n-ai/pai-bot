@@ -90,6 +90,41 @@ func (r *Router) Register(name string, provider Provider) {
 	}
 }
 
+// ProviderRegistration pairs a provider with its optional default model; slice order is the fallback order.
+type ProviderRegistration struct {
+	Name         string
+	Provider     Provider
+	DefaultModel string
+}
+
+// ReplaceProviders atomically swaps the full provider set; absent providers unregister and breaker state resets.
+func (r *Router) ReplaceProviders(regs []ProviderRegistration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.providers = make(map[string]Provider, len(regs))
+	r.fallback = nil
+	r.defaultModels = make(map[string]string, len(regs))
+	r.breakerStateByProvider = make(map[string]breakerState, len(regs))
+	r.structuredBreakerState = make(map[string]breakerState, len(regs))
+	for _, reg := range regs {
+		name := strings.TrimSpace(reg.Name)
+		if name == "" || reg.Provider == nil {
+			continue
+		}
+		if _, dup := r.providers[name]; dup {
+			continue
+		}
+		r.providers[name] = reg.Provider
+		r.fallback = append(r.fallback, name)
+		if model := strings.TrimSpace(reg.DefaultModel); model != "" {
+			r.defaultModels[name] = model
+		}
+		r.breakerStateByProvider[name] = breakerState{}
+		r.structuredBreakerState[name] = breakerState{}
+	}
+}
+
 // SetProviderOrder reorders the fallback chain to match order, skipping names
 // that are not registered. Registered providers missing from order keep their
 // current relative position at the end.
