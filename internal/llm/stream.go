@@ -1,4 +1,4 @@
-package piai
+package llm
 
 import (
 	"fmt"
@@ -91,7 +91,7 @@ type StreamError struct {
 	Message string
 }
 
-func (e *StreamError) Error() string { return fmt.Sprintf("piai: %s: %s", e.Reason, e.Message) }
+func (e *StreamError) Error() string { return fmt.Sprintf("llm: %s: %s", e.Reason, e.Message) }
 
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done

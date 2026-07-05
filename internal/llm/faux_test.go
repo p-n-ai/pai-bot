@@ -1,4 +1,4 @@
-package piai_test
+package llm_test
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/p-n-ai/pai-bot/internal/piai"
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
-func requireTotalTokensEqualsComponents(t *testing.T, u piai.Usage) {
+func requireTotalTokensEqualsComponents(t *testing.T, u llm.Usage) {
 	t.Helper()
 	computed := u.Input + u.Output + u.CacheRead + u.CacheWrite
 	if u.TotalTokens != computed {
@@ -20,16 +20,16 @@ func requireTotalTokensEqualsComponents(t *testing.T, u piai.Usage) {
 	}
 }
 
-func userContext(text string) piai.Context {
-	return piai.Context{Messages: []piai.Message{piai.UserText(text)}}
+func userContext(text string) llm.Context {
+	return llm.Context{Messages: []llm.Message{llm.UserText(text)}}
 }
 
-func textOf(t *testing.T, msg piai.AssistantMessage) string {
+func textOf(t *testing.T, msg llm.AssistantMessage) string {
 	t.Helper()
 	if len(msg.Content) != 1 {
 		t.Fatalf("expected single content block, got %d", len(msg.Content))
 	}
-	block, ok := msg.Content[0].(piai.TextContent)
+	block, ok := msg.Content[0].(llm.TextContent)
 	if !ok {
 		t.Fatalf("expected text block, got %T", msg.Content[0])
 	}
@@ -37,12 +37,12 @@ func textOf(t *testing.T, msg piai.AssistantMessage) string {
 }
 
 func TestFauxRegistersProviderAndEstimatesUsage(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("hello world")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("hello world")))
 
-	c := piai.Context{SystemPrompt: "Be concise.", Messages: []piai.Message{piai.UserText("hi there")}}
-	msg, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	c := llm.Context{SystemPrompt: "Be concise.", Messages: []llm.Message{llm.UserText("hi there")}}
+	msg, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -62,49 +62,49 @@ func TestFauxRegistersProviderAndEstimatesUsage(t *testing.T) {
 }
 
 func TestFauxHelperBlocks(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	reply := piai.FauxAssistantMessage(
-		piai.FauxThinking("think"),
-		piai.FauxToolCall("echo", map[string]any{"text": "hi"}),
-		piai.FauxText("done"),
+	reply := llm.FauxAssistantMessage(
+		llm.FauxThinking("think"),
+		llm.FauxToolCall("echo", map[string]any{"text": "hi"}),
+		llm.FauxText("done"),
 	)
-	reply.StopReason = piai.StopReasonToolUse
-	f.SetResponses(piai.FauxRespond(reply))
+	reply.StopReason = llm.StopReasonToolUse
+	f.SetResponses(llm.FauxRespond(reply))
 
-	msg, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil)
+	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	if msg.StopReason != piai.StopReasonToolUse {
+	if msg.StopReason != llm.StopReasonToolUse {
 		t.Fatalf("stopReason = %q", msg.StopReason)
 	}
 	if len(msg.Content) != 3 {
 		t.Fatalf("content blocks = %d", len(msg.Content))
 	}
-	if th, ok := msg.Content[0].(piai.ThinkingContent); !ok || th.Thinking != "think" {
+	if th, ok := msg.Content[0].(llm.ThinkingContent); !ok || th.Thinking != "think" {
 		t.Fatalf("block 0 = %#v", msg.Content[0])
 	}
-	tc, ok := msg.Content[1].(piai.ToolCall)
+	tc, ok := msg.Content[1].(llm.ToolCall)
 	if !ok || tc.Name != "echo" || tc.ID == "" || tc.Arguments["text"] != "hi" {
 		t.Fatalf("block 1 = %#v", msg.Content[1])
 	}
-	if txt, ok := msg.Content[2].(piai.TextContent); !ok || txt.Text != "done" {
+	if txt, ok := msg.Content[2].(llm.TextContent); !ok || txt.Text != "done" {
 		t.Fatalf("block 2 = %#v", msg.Content[2])
 	}
 	requireTotalTokensEqualsComponents(t, msg.Usage)
 }
 
 func TestFauxMultipleModelsAndModelAwareFactories(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{
-		Models: []piai.FauxModel{
+	f := llm.RegisterFauxProvider(llm.FauxOptions{
+		Models: []llm.FauxModel{
 			{ID: "faux-fast", Name: "Faux Fast"},
 			{ID: "faux-thinker", Name: "Faux Thinker", Reasoning: true},
 		},
 	})
 	defer f.Unregister()
-	factory := func(_ piai.Context, _ *piai.StreamOptions, _ int, model piai.Model) (piai.AssistantMessage, error) {
-		return piai.FauxAssistantText(fmt.Sprintf("%s:%t", model.ID, model.Reasoning)), nil
+	factory := func(_ llm.Context, _ *llm.StreamOptions, _ int, model llm.Model) (llm.AssistantMessage, error) {
+		return llm.FauxAssistantText(fmt.Sprintf("%s:%t", model.ID, model.Reasoning)), nil
 	}
 	f.SetResponses(factory, factory)
 
@@ -120,11 +120,11 @@ func TestFauxMultipleModelsAndModelAwareFactories(t *testing.T) {
 		t.Fatalf("first model = %q", f.Model().ID)
 	}
 
-	fastMsg, err := piai.Complete(context.Background(), fast, userContext("hi"), nil)
+	fastMsg, err := llm.Complete(context.Background(), fast, userContext("hi"), nil)
 	if err != nil {
 		t.Fatalf("Complete fast: %v", err)
 	}
-	thinkerMsg, err := piai.Complete(context.Background(), thinker, userContext("hi"), nil)
+	thinkerMsg, err := llm.Complete(context.Background(), thinker, userContext("hi"), nil)
 	if err != nil {
 		t.Fatalf("Complete thinker: %v", err)
 	}
@@ -134,15 +134,15 @@ func TestFauxMultipleModelsAndModelAwareFactories(t *testing.T) {
 }
 
 func TestFauxRewritesAPIProviderModel(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{
+	f := llm.RegisterFauxProvider(llm.FauxOptions{
 		API:      "faux:test",
 		Provider: "faux-provider",
-		Models:   []piai.FauxModel{{ID: "faux-model"}},
+		Models:   []llm.FauxModel{{ID: "faux-model"}},
 	})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("hello")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("hello")))
 
-	msg, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil)
+	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -152,27 +152,27 @@ func TestFauxRewritesAPIProviderModel(t *testing.T) {
 }
 
 func TestFauxConsumesQueueInOrderAndErrorsWhenExhausted(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	f.SetResponses(
-		piai.FauxRespond(piai.FauxAssistantText("first")),
-		piai.FauxRespond(piai.FauxAssistantText("second")),
+		llm.FauxRespond(llm.FauxAssistantText("first")),
+		llm.FauxRespond(llm.FauxAssistantText("second")),
 	)
 
 	c := userContext("hi")
-	first, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	first, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err != nil || textOf(t, first) != "first" {
 		t.Fatalf("first = %q err=%v", textOf(t, first), err)
 	}
-	second, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	second, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err != nil || textOf(t, second) != "second" {
 		t.Fatalf("second = %q err=%v", textOf(t, second), err)
 	}
-	exhausted, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	exhausted, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err == nil {
 		t.Fatal("expected error when queue exhausted")
 	}
-	if exhausted.StopReason != piai.StopReasonError || exhausted.ErrorMessage != "no more faux responses queued" {
+	if exhausted.StopReason != llm.StopReasonError || exhausted.ErrorMessage != "no more faux responses queued" {
 		t.Fatalf("exhausted = %+v", exhausted)
 	}
 	requireTotalTokensEqualsComponents(t, exhausted.Usage)
@@ -182,12 +182,12 @@ func TestFauxConsumesQueueInOrderAndErrorsWhenExhausted(t *testing.T) {
 }
 
 func TestFauxReplaceAndAppendResponses(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	c := userContext("hi")
 	mustText := func(want string) {
 		t.Helper()
-		msg, err := piai.Complete(context.Background(), f.Model(), c, nil)
+		msg, err := llm.Complete(context.Background(), f.Model(), c, nil)
 		if err != nil {
 			t.Fatalf("Complete: %v", err)
 		}
@@ -196,21 +196,21 @@ func TestFauxReplaceAndAppendResponses(t *testing.T) {
 		}
 	}
 
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("first")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("first")))
 	mustText("first")
 	if f.PendingResponses() != 0 {
 		t.Fatalf("pending = %d", f.PendingResponses())
 	}
 
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("second")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("second")))
 	if f.PendingResponses() != 1 {
 		t.Fatalf("pending = %d", f.PendingResponses())
 	}
 	mustText("second")
 
 	f.AppendResponses(
-		piai.FauxRespond(piai.FauxAssistantText("third")),
-		piai.FauxRespond(piai.FauxAssistantText("fourth")),
+		llm.FauxRespond(llm.FauxAssistantText("third")),
+		llm.FauxRespond(llm.FauxAssistantText("fourth")),
 	)
 	if f.PendingResponses() != 2 {
 		t.Fatalf("pending = %d", f.PendingResponses())
@@ -220,13 +220,13 @@ func TestFauxReplaceAndAppendResponses(t *testing.T) {
 }
 
 func TestFauxFactorySeesContextAndCallCount(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	f.SetResponses(func(c piai.Context, _ *piai.StreamOptions, callCount int, _ piai.Model) (piai.AssistantMessage, error) {
-		return piai.FauxAssistantText(fmt.Sprintf("%d:%d", len(c.Messages), callCount)), nil
+	f.SetResponses(func(c llm.Context, _ *llm.StreamOptions, callCount int, _ llm.Model) (llm.AssistantMessage, error) {
+		return llm.FauxAssistantText(fmt.Sprintf("%d:%d", len(c.Messages), callCount)), nil
 	})
 
-	msg, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil)
+	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -236,57 +236,57 @@ func TestFauxFactorySeesContextAndCallCount(t *testing.T) {
 }
 
 func TestFauxFactoryErrorBecomesTerminalErrorEvent(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	f.SetResponses(func(piai.Context, *piai.StreamOptions, int, piai.Model) (piai.AssistantMessage, error) {
-		return piai.AssistantMessage{}, errors.New("boom")
+	f.SetResponses(func(llm.Context, *llm.StreamOptions, int, llm.Model) (llm.AssistantMessage, error) {
+		return llm.AssistantMessage{}, errors.New("boom")
 	})
 
-	events := collectEvents(piai.Stream(context.Background(), f.Model(), userContext("hi"), nil))
-	if len(events) != 1 || events[0].Type != piai.EventError {
+	events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+	if len(events) != 1 || events[0].Type != llm.EventError {
 		t.Fatalf("events = %v", eventTypes(events))
 	}
-	if events[0].Message.StopReason != piai.StopReasonError || events[0].Message.ErrorMessage != "boom" {
+	if events[0].Message.StopReason != llm.StopReasonError || events[0].Message.ErrorMessage != "boom" {
 		t.Fatalf("terminal = %+v", events[0].Message)
 	}
 }
 
 func TestFauxEstimatesTokensFromSerializedContext(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("done")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("done")))
 
-	tool := piai.Tool{
+	tool := llm.Tool{
 		Name:        "echo",
 		Description: "Echo back text",
 		Parameters:  json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}}}`),
 	}
-	prior := piai.FauxAssistantText("prior")
-	c := piai.Context{
+	prior := llm.FauxAssistantText("prior")
+	c := llm.Context{
 		SystemPrompt: "sys",
-		Messages: []piai.Message{
-			piai.UserMessage{
-				Content: []piai.UserContent{
-					piai.TextContent{Text: "hello"},
-					piai.ImageContent{MimeType: "image/png", Data: "abcd"},
+		Messages: []llm.Message{
+			llm.UserMessage{
+				Content: []llm.UserContent{
+					llm.TextContent{Text: "hello"},
+					llm.ImageContent{MimeType: "image/png", Data: "abcd"},
 				},
 			},
 			prior,
-			piai.ToolResultMessage{
+			llm.ToolResultMessage{
 				ToolCallID: "tool-1",
 				ToolName:   "echo",
-				Content:    []piai.UserContent{piai.TextContent{Text: "tool out"}},
+				Content:    []llm.UserContent{llm.TextContent{Text: "tool out"}},
 			},
 		},
-		Tools: []piai.Tool{tool},
+		Tools: []llm.Tool{tool},
 	}
 
-	msg, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	msg, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 
-	toolsJSON, _ := json.Marshal([]piai.Tool{tool})
+	toolsJSON, _ := json.Marshal([]llm.Tool{tool})
 	promptText := strings.Join([]string{
 		"system:sys",
 		"user:hello\n[image:image/png:4]",
@@ -307,17 +307,17 @@ func TestFauxEstimatesTokensFromSerializedContext(t *testing.T) {
 }
 
 func TestFauxSimulatesPromptCachingPerSession(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	f.SetResponses(
-		piai.FauxRespond(piai.FauxAssistantText("first")),
-		piai.FauxRespond(piai.FauxAssistantText("second")),
+		llm.FauxRespond(llm.FauxAssistantText("first")),
+		llm.FauxRespond(llm.FauxAssistantText("second")),
 	)
 
-	c := piai.Context{SystemPrompt: "Be concise.", Messages: []piai.Message{piai.UserText("hello")}}
-	opts := &piai.StreamOptions{SessionID: "session-1", CacheRetention: piai.CacheRetentionShort}
+	c := llm.Context{SystemPrompt: "Be concise.", Messages: []llm.Message{llm.UserText("hello")}}
+	opts := &llm.StreamOptions{SessionID: "session-1", CacheRetention: llm.CacheRetentionShort}
 
-	first, err := piai.Complete(context.Background(), f.Model(), c, opts)
+	first, err := llm.Complete(context.Background(), f.Model(), c, opts)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -326,8 +326,8 @@ func TestFauxSimulatesPromptCachingPerSession(t *testing.T) {
 	}
 	requireTotalTokensEqualsComponents(t, first.Usage)
 
-	c.Messages = append(c.Messages, first, piai.UserText("follow up"))
-	second, err := piai.Complete(context.Background(), f.Model(), c, opts)
+	c.Messages = append(c.Messages, first, llm.UserText("follow up"))
+	second, err := llm.Complete(context.Background(), f.Model(), c, opts)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -338,17 +338,17 @@ func TestFauxSimulatesPromptCachingPerSession(t *testing.T) {
 }
 
 func TestFauxDoesNotShareCacheAcrossSessionsOrWithoutSessionID(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	f.SetResponses(
-		piai.FauxRespond(piai.FauxAssistantText("first")),
-		piai.FauxRespond(piai.FauxAssistantText("second")),
-		piai.FauxRespond(piai.FauxAssistantText("third")),
+		llm.FauxRespond(llm.FauxAssistantText("first")),
+		llm.FauxRespond(llm.FauxAssistantText("second")),
+		llm.FauxRespond(llm.FauxAssistantText("third")),
 	)
 
 	c := userContext("hello")
-	first, err := piai.Complete(context.Background(), f.Model(), c,
-		&piai.StreamOptions{SessionID: "session-1", CacheRetention: piai.CacheRetentionShort})
+	first, err := llm.Complete(context.Background(), f.Model(), c,
+		&llm.StreamOptions{SessionID: "session-1", CacheRetention: llm.CacheRetentionShort})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -356,9 +356,9 @@ func TestFauxDoesNotShareCacheAcrossSessionsOrWithoutSessionID(t *testing.T) {
 		t.Fatalf("first usage = %+v", first.Usage)
 	}
 
-	c.Messages = append(c.Messages, first, piai.UserText("follow up"))
-	second, err := piai.Complete(context.Background(), f.Model(), c,
-		&piai.StreamOptions{SessionID: "session-2", CacheRetention: piai.CacheRetentionShort})
+	c.Messages = append(c.Messages, first, llm.UserText("follow up"))
+	second, err := llm.Complete(context.Background(), f.Model(), c,
+		&llm.StreamOptions{SessionID: "session-2", CacheRetention: llm.CacheRetentionShort})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestFauxDoesNotShareCacheAcrossSessionsOrWithoutSessionID(t *testing.T) {
 		t.Fatalf("second usage = %+v", second.Usage)
 	}
 
-	third, err := piai.Complete(context.Background(), f.Model(), c, nil)
+	third, err := llm.Complete(context.Background(), f.Model(), c, nil)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -376,20 +376,20 @@ func TestFauxDoesNotShareCacheAcrossSessionsOrWithoutSessionID(t *testing.T) {
 }
 
 func TestFauxNoCachingWhenRetentionNone(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	f.SetResponses(
-		piai.FauxRespond(piai.FauxAssistantText("first")),
-		piai.FauxRespond(piai.FauxAssistantText("second")),
+		llm.FauxRespond(llm.FauxAssistantText("first")),
+		llm.FauxRespond(llm.FauxAssistantText("second")),
 	)
 
 	c := userContext("hello")
-	opts := &piai.StreamOptions{SessionID: "session-1", CacheRetention: piai.CacheRetentionNone}
-	if _, err := piai.Complete(context.Background(), f.Model(), c, opts); err != nil {
+	opts := &llm.StreamOptions{SessionID: "session-1", CacheRetention: llm.CacheRetentionNone}
+	if _, err := llm.Complete(context.Background(), f.Model(), c, opts); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	c.Messages = append(c.Messages, piai.FauxAssistantText("first"), piai.UserText("follow up"))
-	second, err := piai.Complete(context.Background(), f.Model(), c, opts)
+	c.Messages = append(c.Messages, llm.FauxAssistantText("first"), llm.UserText("follow up"))
+	second, err := llm.Complete(context.Background(), f.Model(), c, opts)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -399,28 +399,28 @@ func TestFauxNoCachingWhenRetentionNone(t *testing.T) {
 }
 
 func TestFauxStreamsThinkingTextAndToolCallDeltas(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	reply := piai.FauxAssistantMessage(
-		piai.FauxThinking("thinking text"),
-		piai.FauxText("answer text"),
-		piai.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "hi", "count": float64(12)}},
+	reply := llm.FauxAssistantMessage(
+		llm.FauxThinking("thinking text"),
+		llm.FauxText("answer text"),
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "hi", "count": float64(12)}},
 	)
-	reply.StopReason = piai.StopReasonToolUse
-	f.SetResponses(piai.FauxRespond(reply))
+	reply.StopReason = llm.StopReasonToolUse
+	f.SetResponses(llm.FauxRespond(reply))
 
 	var toolCallDeltas []string
-	events := collectEvents(piai.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+	events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
 	for _, ev := range events {
-		if ev.Type == piai.EventToolCallDelta {
+		if ev.Type == llm.EventToolCallDelta {
 			toolCallDeltas = append(toolCallDeltas, ev.Delta)
 		}
 	}
 
-	for _, want := range []piai.EventType{
-		piai.EventThinkingStart, piai.EventThinkingDelta,
-		piai.EventTextStart, piai.EventTextDelta,
-		piai.EventToolCallStart, piai.EventToolCallDelta, piai.EventToolCallEnd,
+	for _, want := range []llm.EventType{
+		llm.EventThinkingStart, llm.EventThinkingDelta,
+		llm.EventTextStart, llm.EventTextDelta,
+		llm.EventToolCallStart, llm.EventToolCallDelta, llm.EventToolCallEnd,
 	} {
 		if !containsType(events, want) {
 			t.Fatalf("missing event %q in %v", want, eventTypes(events))
@@ -439,45 +439,45 @@ func TestFauxStreamsThinkingTextAndToolCallDeltas(t *testing.T) {
 }
 
 func TestFauxStreamsExactEventOrderForFixedChunks(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{TokenSizeMin: 1, TokenSizeMax: 1})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{TokenSizeMin: 1, TokenSizeMax: 1})
 	defer f.Unregister()
-	reply := piai.FauxAssistantMessage(
-		piai.FauxThinking("go"),
-		piai.FauxText("ok"),
-		piai.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{}},
+	reply := llm.FauxAssistantMessage(
+		llm.FauxThinking("go"),
+		llm.FauxText("ok"),
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{}},
 	)
-	reply.StopReason = piai.StopReasonToolUse
-	f.SetResponses(piai.FauxRespond(reply))
+	reply.StopReason = llm.StopReasonToolUse
+	f.SetResponses(llm.FauxRespond(reply))
 
-	events := collectEvents(piai.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+	events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
 	if !equalTypes(eventTypes(events),
-		piai.EventStart,
-		piai.EventThinkingStart, piai.EventThinkingDelta, piai.EventThinkingEnd,
-		piai.EventTextStart, piai.EventTextDelta, piai.EventTextEnd,
-		piai.EventToolCallStart, piai.EventToolCallDelta, piai.EventToolCallEnd,
-		piai.EventDone,
+		llm.EventStart,
+		llm.EventThinkingStart, llm.EventThinkingDelta, llm.EventThinkingEnd,
+		llm.EventTextStart, llm.EventTextDelta, llm.EventTextEnd,
+		llm.EventToolCallStart, llm.EventToolCallDelta, llm.EventToolCallEnd,
+		llm.EventDone,
 	) {
 		t.Fatalf("event order = %v", eventTypes(events))
 	}
 }
 
 func TestFauxStreamsMultipleToolCalls(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
-	reply := piai.FauxAssistantMessage(
-		piai.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "one"}},
-		piai.ToolCall{ID: "tool-2", Name: "echo", Arguments: map[string]any{"text": "two"}},
+	reply := llm.FauxAssistantMessage(
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "one"}},
+		llm.ToolCall{ID: "tool-2", Name: "echo", Arguments: map[string]any{"text": "two"}},
 	)
-	reply.StopReason = piai.StopReasonToolUse
-	f.SetResponses(piai.FauxRespond(reply))
+	reply.StopReason = llm.StopReasonToolUse
+	f.SetResponses(llm.FauxRespond(reply))
 
-	events := collectEvents(piai.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+	events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
 	starts, ends := 0, 0
 	for _, ev := range events {
 		switch ev.Type {
-		case piai.EventToolCallStart:
+		case llm.EventToolCallStart:
 			starts++
-		case piai.EventToolCallEnd:
+		case llm.EventToolCallEnd:
 			ends++
 		}
 	}
@@ -488,21 +488,21 @@ func TestFauxStreamsMultipleToolCalls(t *testing.T) {
 
 func TestFauxExplicitErrorMessageStreamsAsTerminalError(t *testing.T) {
 	for _, tc := range []struct {
-		reason  piai.StopReason
+		reason  llm.StopReason
 		errText string
 	}{
-		{piai.StopReasonError, "upstream failed"},
-		{piai.StopReasonAborted, "request was aborted"},
+		{llm.StopReasonError, "upstream failed"},
+		{llm.StopReasonAborted, "request was aborted"},
 	} {
-		f := piai.RegisterFauxProvider(piai.FauxOptions{TokenSizeMin: 2, TokenSizeMax: 2})
-		reply := piai.FauxAssistantText("partial")
+		f := llm.RegisterFauxProvider(llm.FauxOptions{TokenSizeMin: 2, TokenSizeMax: 2})
+		reply := llm.FauxAssistantText("partial")
 		reply.StopReason = tc.reason
 		reply.ErrorMessage = tc.errText
-		f.SetResponses(piai.FauxRespond(reply))
+		f.SetResponses(llm.FauxRespond(reply))
 
-		events := collectEvents(piai.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+		events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
 		if !equalTypes(eventTypes(events),
-			piai.EventStart, piai.EventTextStart, piai.EventTextDelta, piai.EventTextEnd, piai.EventError,
+			llm.EventStart, llm.EventTextStart, llm.EventTextDelta, llm.EventTextEnd, llm.EventError,
 		) {
 			t.Fatalf("%s: event order = %v", tc.reason, eventTypes(events))
 		}
@@ -515,40 +515,40 @@ func TestFauxExplicitErrorMessageStreamsAsTerminalError(t *testing.T) {
 }
 
 func TestFauxAbortBeforeFirstChunk(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{TokensPerSecond: 50, TokenSizeMin: 3, TokenSizeMax: 3})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{TokensPerSecond: 50, TokenSizeMin: 3, TokenSizeMax: 3})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("abcdefghijklmnopqrstuvwxyz")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("abcdefghijklmnopqrstuvwxyz")))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	stream := piai.Stream(ctx, f.Model(), userContext("hi"), nil)
+	stream := llm.Stream(ctx, f.Model(), userContext("hi"), nil)
 	events := collectEvents(stream)
-	if len(events) != 1 || events[0].Type != piai.EventError {
+	if len(events) != 1 || events[0].Type != llm.EventError {
 		t.Fatalf("events = %v", eventTypes(events))
 	}
-	if events[0].Reason != piai.StopReasonAborted || events[0].Message.StopReason != piai.StopReasonAborted {
+	if events[0].Reason != llm.StopReasonAborted || events[0].Message.StopReason != llm.StopReasonAborted {
 		t.Fatalf("terminal = %+v", events[0].Message)
 	}
 
 	_, err := stream.Result()
-	var streamErr *piai.StreamError
-	if !errors.As(err, &streamErr) || streamErr.Reason != piai.StopReasonAborted {
+	var streamErr *llm.StreamError
+	if !errors.As(err, &streamErr) || streamErr.Reason != llm.StopReasonAborted {
 		t.Fatalf("expected aborted StreamError, got %v", err)
 	}
 }
 
 func TestFauxAbortMidTextStream(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{TokensPerSecond: 100, TokenSizeMin: 3, TokenSizeMax: 3})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{TokensPerSecond: 100, TokenSizeMin: 3, TokenSizeMax: 3})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("abcdefghijklmnopqrstuvwxyz")))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("abcdefghijklmnopqrstuvwxyz")))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var events []piai.AssistantMessageEvent
+	var events []llm.AssistantMessageEvent
 	textDeltas := 0
-	for ev := range piai.Stream(ctx, f.Model(), userContext("hi"), nil).Events() {
+	for ev := range llm.Stream(ctx, f.Model(), userContext("hi"), nil).Events() {
 		events = append(events, ev)
-		if ev.Type == piai.EventTextDelta {
+		if ev.Type == llm.EventTextDelta {
 			textDeltas++
 			cancel()
 		}
@@ -557,20 +557,20 @@ func TestFauxAbortMidTextStream(t *testing.T) {
 	if textDeltas != 1 {
 		t.Fatalf("text deltas = %d, want 1", textDeltas)
 	}
-	if !containsType(events, piai.EventTextStart) || !containsType(events, piai.EventError) {
+	if !containsType(events, llm.EventTextStart) || !containsType(events, llm.EventError) {
 		t.Fatalf("events = %v", eventTypes(events))
 	}
-	if containsType(events, piai.EventTextEnd) {
+	if containsType(events, llm.EventTextEnd) {
 		t.Fatalf("unexpected text_end after abort: %v", eventTypes(events))
 	}
 }
 
 func TestFauxUnregister(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{})
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText("hello")))
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("hello")))
 	f.Unregister()
 
-	msg, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil)
+	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
 	if err == nil {
 		t.Fatal("expected error for unregistered provider")
 	}
@@ -581,12 +581,12 @@ func TestFauxUnregister(t *testing.T) {
 }
 
 func TestFauxPacingSpreadsDeltasOverTime(t *testing.T) {
-	f := piai.RegisterFauxProvider(piai.FauxOptions{TokensPerSecond: 200, TokenSizeMin: 2, TokenSizeMax: 2})
+	f := llm.RegisterFauxProvider(llm.FauxOptions{TokensPerSecond: 200, TokenSizeMin: 2, TokenSizeMax: 2})
 	defer f.Unregister()
-	f.SetResponses(piai.FauxRespond(piai.FauxAssistantText(strings.Repeat("a", 32))))
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText(strings.Repeat("a", 32))))
 
 	start := time.Now()
-	if _, err := piai.Complete(context.Background(), f.Model(), userContext("hi"), nil); err != nil {
+	if _, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 

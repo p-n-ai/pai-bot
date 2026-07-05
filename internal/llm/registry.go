@@ -1,4 +1,4 @@
-package piai
+package llm
 
 import (
 	"context"

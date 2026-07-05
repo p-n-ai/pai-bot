@@ -1,4 +1,4 @@
-package piai
+package llm
 
 import (
 	"context"
@@ -293,7 +293,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 			push(EventToolCallEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.ToolCall = &toolCall })
 		default:
 
-			panic(fmt.Sprintf("piai: unhandled assistant content block %T", block))
+			panic(fmt.Sprintf("llm: unhandled assistant content block %T", block))
 		}
 	}
 
