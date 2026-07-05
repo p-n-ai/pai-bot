@@ -72,18 +72,58 @@ func NewRouterWithConfig(cfg RouterConfig) *Router {
 	}
 }
 
-// Register adds a provider to the router.
+// Register adds a provider to the router. Re-registering an existing name
+// replaces the provider in place so the fallback order stays stable and
+// duplicate-free (required for live re-apply of runtime settings).
 func (r *Router) Register(name string, provider Provider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if _, exists := r.providers[name]; !exists {
+		r.fallback = append(r.fallback, name)
+	}
 	r.providers[name] = provider
-	r.fallback = append(r.fallback, name)
 	if _, ok := r.breakerStateByProvider[name]; !ok {
 		r.breakerStateByProvider[name] = breakerState{}
 	}
 	if _, ok := r.structuredBreakerState[name]; !ok {
 		r.structuredBreakerState[name] = breakerState{}
 	}
+}
+
+// SetProviderOrder reorders the fallback chain to match order, skipping names
+// that are not registered. Registered providers missing from order keep their
+// current relative position at the end.
+func (r *Router) SetProviderOrder(order []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	next := make([]string, 0, len(r.fallback))
+	seen := make(map[string]struct{}, len(r.fallback))
+	for _, name := range order {
+		if _, registered := r.providers[name]; !registered {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		next = append(next, name)
+	}
+	for _, name := range r.fallback {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		next = append(next, name)
+	}
+	r.fallback = next
+}
+
+// ProviderOrder returns the current fallback order.
+func (r *Router) ProviderOrder() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]string(nil), r.fallback...)
 }
 
 // SetDefaultModel sets the provider-specific default model used when a request

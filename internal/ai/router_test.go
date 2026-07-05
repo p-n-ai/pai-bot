@@ -271,3 +271,56 @@ func (p *countingProvider) Models() []ai.ModelInfo {
 func (p *countingProvider) HealthCheck(_ context.Context) error {
 	return nil
 }
+
+func TestRouter_ReRegisterReplacesInPlace(t *testing.T) {
+	router := newTestRouter()
+	router.Register("openai", ai.NewMockProvider("first"))
+	router.Register("ollama", ai.NewMockProvider("other"))
+	router.Register("openai", ai.NewMockProvider("second"))
+
+	order := router.ProviderOrder()
+	if len(order) != 2 || order[0] != "openai" || order[1] != "ollama" {
+		t.Fatalf("ProviderOrder() = %v, want [openai ollama]", order)
+	}
+
+	resp, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if resp.Content != "second" {
+		t.Errorf("Content = %q, want %q (re-registered provider must replace the old one)", resp.Content, "second")
+	}
+}
+
+func TestRouter_SetProviderOrder(t *testing.T) {
+	router := newTestRouter()
+	router.Register("openai", ai.NewMockProvider("from openai"))
+	router.Register("ollama", ai.NewMockProvider("from ollama"))
+	router.Register("mock", ai.NewMockProvider("from mock"))
+
+	// Unregistered names are skipped; registered-but-unlisted keep their spot at the end.
+	router.SetProviderOrder([]string{"deepseek", "ollama", "openai"})
+
+	order := router.ProviderOrder()
+	want := []string{"ollama", "openai", "mock"}
+	if len(order) != len(want) {
+		t.Fatalf("ProviderOrder() = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("ProviderOrder() = %v, want %v", order, want)
+		}
+	}
+
+	resp, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if resp.Content != "from ollama" {
+		t.Errorf("Content = %q, want %q (order must steer routing)", resp.Content, "from ollama")
+	}
+}
