@@ -27,7 +27,7 @@ docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
 docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
 
 echo "--- Ensuring infra services ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly nats
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly
 sleep 3
 
 echo "--- Running migrations ---"

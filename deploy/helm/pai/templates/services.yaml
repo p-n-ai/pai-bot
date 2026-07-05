@@ -78,27 +78,3 @@ spec:
     {{- include "pai.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: dragonfly
 {{- end }}
----
-{{- if .Values.nats.enabled }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "pai.fullname" . }}-nats
-  labels:
-    {{- include "pai.labels" . | nindent 4 }}
-    app.kubernetes.io/component: nats
-spec:
-  type: ClusterIP
-  ports:
-    - port: 4222
-      targetPort: client
-      protocol: TCP
-      name: client
-    - port: 8222
-      targetPort: monitor
-      protocol: TCP
-      name: monitor
-  selector:
-    {{- include "pai.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: nats
-{{- end }}

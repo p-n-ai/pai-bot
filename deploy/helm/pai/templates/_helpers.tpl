@@ -43,9 +43,3 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "redis://%s-dragonfly:6379" (include "pai.fullname" .) }}
 {{- end }}
 {{- end }}
-
-{{- define "pai.natsUrl" -}}
-{{- if .Values.nats.enabled }}
-{{- printf "nats://%s-nats:4222" (include "pai.fullname" .) }}
-{{- end }}
-{{- end }}

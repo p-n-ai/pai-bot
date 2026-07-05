@@ -79,19 +79,6 @@ dragonfly:
     limits:
       memory: 300Mi
 
-# -- NATS (message queue)
-nats:
-  enabled: true
-  image:
-    repository: nats
-    tag: "2.10-alpine"
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      memory: 128Mi
-
 # -- Configuration (non-secret env vars)
 config:
   # -- Server

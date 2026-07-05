@@ -20,13 +20,6 @@ services:
         limits:
           memory: 300M
 
-  nats:
-    ports: !reset []
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
   app:
     image: pai-bot:latest
     build: !reset null

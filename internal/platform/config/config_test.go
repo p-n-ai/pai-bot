@@ -20,7 +20,6 @@ func clearEnv(t *testing.T) {
 		"LEARN_DATABASE_MAX_CONNS",
 		"LEARN_DATABASE_MIN_CONNS",
 		"LEARN_CACHE_URL",
-		"LEARN_NATS_URL",
 		"LEARN_TELEGRAM_BOT_TOKEN",
 		"LEARN_EMAIL_SMTP_ADDR",
 		"LEARN_EMAIL_SMTP_USERNAME",
@@ -58,7 +57,6 @@ func clearEnv(t *testing.T) {
 		"LEARN_DEV_MODE",
 		"PAI_FEATURES",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
-		"LEARN_AI_NUDGES_ENABLED",
 		"LEARN_AI_MOCK_RESPONSE",
 	}
 	for _, v := range envVars {
@@ -97,9 +95,6 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.Cache.URL != "redis://localhost:6379" {
 		t.Errorf("Cache.URL = %q, want redis://localhost:6379", cfg.Cache.URL)
-	}
-	if cfg.NATS.URL != "nats://localhost:4222" {
-		t.Errorf("NATS.URL = %q, want nats://localhost:4222", cfg.NATS.URL)
 	}
 	if cfg.Tenant.Mode != "single" {
 		t.Errorf("Tenant.Mode = %q, want single", cfg.Tenant.Mode)
@@ -243,20 +238,6 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if !cfg.FeatureFlags.Enabled(featureflags.TurnHooks) {
 		t.Fatal("turn_hooks should be enabled from PAI_FEATURES")
-	}
-}
-
-func TestLoad_AIPersonalizedNudges_FallbackToDeprecatedEnv(t *testing.T) {
-	clearEnv(t)
-	t.Setenv("LEARN_AI_NUDGES_ENABLED", "false")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	if cfg.Runtime.AIPersonalizedNudgesEnabled {
-		t.Error("deprecated LEARN_AI_NUDGES_ENABLED should still disable AI personalized nudges")
 	}
 }
 

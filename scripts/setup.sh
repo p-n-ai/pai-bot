@@ -119,8 +119,8 @@ echo ""
 
 # ── Infrastructure ─────────────────────────────────────────────────────────
 
-echo "Starting infrastructure (PostgreSQL, Dragonfly, NATS)..."
-docker compose up -d postgres dragonfly nats
+echo "Starting infrastructure (PostgreSQL, Dragonfly)..."
+docker compose up -d postgres dragonfly
 
 # Wait for Postgres to be ready.
 echo "Waiting for PostgreSQL to accept connections..."

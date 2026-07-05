@@ -147,7 +147,6 @@ jobs:
               "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
               "LEARN_DATABASE_MAX_CONNS=25" \
               "LEARN_CACHE_URL=redis://dragonfly:6379" \
-              "LEARN_NATS_URL=nats://nats:4222" \
               "LEARN_TELEGRAM_BOT_TOKEN=${TG_TOKEN}" \
               "PAI_AUTH_SECRET=${AUTH_SECRET}" \
               "PAI_AUTH_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
