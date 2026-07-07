@@ -442,7 +442,7 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
-| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; currently used for JWT signing |
+| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; signs JWTs and derives the AES-256-GCM key for API keys stored via admin AI settings. Rotating it makes stored keys undecryptable (rotate back to recover, or re-enter via the admin UI); storing keys is refused while it is the default value |
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 

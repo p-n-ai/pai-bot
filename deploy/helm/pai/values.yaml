@@ -99,7 +99,10 @@ config:
 
 # -- Secrets (sensitive credentials)
 secrets:
-  # -- Auth secret for JWT signing. MUST override in production.
+  # -- Auth secret for JWT signing; also derives the AES-256-GCM key for API keys
+  # stored via admin AI settings. Rotating it makes stored keys undecryptable
+  # (rotate back to recover, or re-enter via the admin UI); storing keys is refused
+  # while this is the default. MUST override in production.
   authSecret: change-me-in-production
   # -- Telegram bot token (required unless devMode)
   telegramBotToken: ""

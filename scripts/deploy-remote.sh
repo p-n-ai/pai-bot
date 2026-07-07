@@ -37,7 +37,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools 
   -dir /app/migrations postgres "$DB_URL" up -allow-missing
 
 echo "--- Rolling out ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# --remove-orphans drops the pre-existing nats container; its volume needs a one-time `docker volume rm pai-bot_nats-data`
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 
 echo "--- Health check: app container ---"
 APP_CONTAINER=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app)
