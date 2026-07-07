@@ -40,6 +40,12 @@ func Apply(router *ai.Router, cfg config.AIConfig) {
 	router.ReplaceProviders(regs)
 }
 
+// WouldRegister reports whether Apply would register provider name under cfg.
+func WouldRegister(name string, cfg config.AIConfig) bool {
+	_, ok := buildProvider(name, cfg)
+	return ok
+}
+
 func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, bool) {
 	switch name {
 	case "mock":

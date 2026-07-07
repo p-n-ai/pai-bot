@@ -47,6 +47,20 @@ func TestApplyReordersLiveRouter(t *testing.T) {
 	}
 }
 
+func TestWouldRegister(t *testing.T) {
+	cfg := config.AIConfig{}
+	cfg.OpenRouter.APIKey = "sk-or-test-key"
+
+	if !WouldRegister("openrouter", cfg) {
+		t.Fatal("WouldRegister(openrouter) = false with key set, want true")
+	}
+	for _, name := range []string{"anthropic", "openai", "unknown"} {
+		if WouldRegister(name, cfg) {
+			t.Fatalf("WouldRegister(%s) = true without config, want false", name)
+		}
+	}
+}
+
 func TestApplyUnregistersProviderWhenKeyCleared(t *testing.T) {
 	cfg := config.AIConfig{}
 	cfg.OpenRouter.APIKey = "sk-or-old-key"

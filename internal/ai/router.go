@@ -27,7 +27,10 @@ type Router struct {
 	breakerStateByProvider  map[string]breakerState
 	structuredBreakerState  map[string]breakerState
 	traceFunc               func(CompletionTrace)
-	mu                      sync.RWMutex
+	// gen bumps on ReplaceProviders so in-flight requests from an older
+	// provider set cannot pollute the fresh breaker maps by name.
+	gen uint64
+	mu  sync.RWMutex
 }
 
 type breakerState struct {
@@ -102,6 +105,7 @@ func (r *Router) ReplaceProviders(regs []ProviderRegistration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	r.gen++
 	r.providers = make(map[string]Provider, len(regs))
 	r.fallback = nil
 	r.defaultModels = make(map[string]string, len(regs))
@@ -125,58 +129,11 @@ func (r *Router) ReplaceProviders(regs []ProviderRegistration) {
 	}
 }
 
-// SetProviderOrder reorders the fallback chain to match order, skipping names
-// that are not registered. Registered providers missing from order keep their
-// current relative position at the end.
-func (r *Router) SetProviderOrder(order []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	next := make([]string, 0, len(r.fallback))
-	seen := make(map[string]struct{}, len(r.fallback))
-	for _, name := range order {
-		if _, registered := r.providers[name]; !registered {
-			continue
-		}
-		if _, dup := seen[name]; dup {
-			continue
-		}
-		seen[name] = struct{}{}
-		next = append(next, name)
-	}
-	for _, name := range r.fallback {
-		if _, dup := seen[name]; dup {
-			continue
-		}
-		seen[name] = struct{}{}
-		next = append(next, name)
-	}
-	r.fallback = next
-}
-
 // ProviderOrder returns the current fallback order.
 func (r *Router) ProviderOrder() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return append([]string(nil), r.fallback...)
-}
-
-// SetDefaultModel sets the provider-specific default model used when a request
-// does not specify one explicitly.
-func (r *Router) SetDefaultModel(providerName, model string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	providerName = strings.TrimSpace(providerName)
-	model = strings.TrimSpace(model)
-	if providerName == "" {
-		return
-	}
-	if model == "" {
-		delete(r.defaultModels, providerName)
-		return
-	}
-	r.defaultModels[providerName] = model
 }
 
 // SetTraceFunc registers an opt-in observer for local debugging of provider
@@ -190,7 +147,7 @@ func (r *Router) SetTraceFunc(traceFunc func(CompletionTrace)) {
 
 // Complete routes a request to the best available provider.
 func (r *Router) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
-	providers, order := r.snapshotProviders()
+	providers, order, gen := r.snapshotProviders()
 	if len(order) == 0 {
 		return CompletionResponse{}, fmt.Errorf("all AI providers failed (no providers registered)")
 	}
@@ -221,7 +178,7 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 			CompletedAt: time.Now(),
 		})
 		if err != nil {
-			r.markFailure(name)
+			r.markFailure(name, gen)
 			slog.Warn("AI provider failed, trying next",
 				"provider", name,
 				"error", err,
@@ -230,7 +187,7 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 			continue
 		}
 
-		r.markSuccess(name)
+		r.markSuccess(name, gen)
 		slog.Debug("AI request completed",
 			"provider", name,
 			"model", resp.Model,
@@ -250,7 +207,7 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		return CompletionResponse{}, err
 	}
 
-	providers, order := r.snapshotProviders()
+	providers, order, gen := r.snapshotProviders()
 	if len(order) == 0 {
 		return CompletionResponse{}, fmt.Errorf("all AI providers failed (no providers registered)")
 	}
@@ -287,7 +244,7 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		}
 		if err != nil {
 			r.emitTrace(trace)
-			r.markFailure(name)
+			r.markFailure(name, gen)
 			slog.Warn("AI provider failed structured request, trying next",
 				"provider", name,
 				"error", err,
@@ -306,7 +263,7 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 		if payloadErr != nil {
 			trace.Error = payloadErr.Error()
 			r.emitTrace(trace)
-			r.markStructuredFailure(name)
+			r.markStructuredFailure(name, gen)
 			slog.Warn("AI provider returned invalid structured payload, trying next",
 				"provider", name,
 				"error", payloadErr,
@@ -315,8 +272,8 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 			continue
 		}
 
-		r.markSuccess(name)
-		r.markStructuredSuccess(name)
+		r.markSuccess(name, gen)
+		r.markStructuredSuccess(name, gen)
 		resp.StructuredOutput = raw
 		trace.Response = &resp
 		r.emitTrace(trace)
@@ -339,7 +296,7 @@ func (r *Router) HasProvider() bool {
 	return len(r.providers) > 0
 }
 
-func (r *Router) snapshotProviders() (map[string]Provider, []string) {
+func (r *Router) snapshotProviders() (map[string]Provider, []string, uint64) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -348,7 +305,7 @@ func (r *Router) snapshotProviders() (map[string]Provider, []string) {
 		providers[name] = provider
 	}
 	order := append([]string(nil), r.fallback...)
-	return providers, order
+	return providers, order, r.gen
 }
 
 func (r *Router) emitTrace(trace CompletionTrace) {
@@ -413,10 +370,13 @@ func (r *Router) isStructuredCircuitOpen(providerName string) bool {
 	return time.Now().Before(state.openUntil)
 }
 
-func (r *Router) markFailure(providerName string) {
+func (r *Router) markFailure(providerName string, gen uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if gen != r.gen {
+		return
+	}
 	state := r.breakerStateByProvider[providerName]
 	state.consecutiveFailures++
 	if state.consecutiveFailures >= r.breakerFailureThreshold {
@@ -430,19 +390,25 @@ func (r *Router) markFailure(providerName string) {
 	r.breakerStateByProvider[providerName] = state
 }
 
-func (r *Router) markSuccess(providerName string) {
+func (r *Router) markSuccess(providerName string, gen uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if gen != r.gen {
+		return
+	}
 	state := r.breakerStateByProvider[providerName]
 	state.consecutiveFailures = 0
 	state.openUntil = time.Time{}
 	r.breakerStateByProvider[providerName] = state
 }
 
-func (r *Router) markStructuredFailure(providerName string) {
+func (r *Router) markStructuredFailure(providerName string, gen uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if gen != r.gen {
+		return
+	}
 	state := r.structuredBreakerState[providerName]
 	state.consecutiveFailures++
 	if state.consecutiveFailures >= r.breakerFailureThreshold {
@@ -456,9 +422,12 @@ func (r *Router) markStructuredFailure(providerName string) {
 	r.structuredBreakerState[providerName] = state
 }
 
-func (r *Router) markStructuredSuccess(providerName string) {
+func (r *Router) markStructuredSuccess(providerName string, gen uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if gen != r.gen {
+		return
+	}
 	state := r.structuredBreakerState[providerName]
 	state.consecutiveFailures = 0
 	state.openUntil = time.Time{}

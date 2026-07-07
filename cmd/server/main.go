@@ -88,7 +88,8 @@ func main() {
 			}
 
 			// Initialize AI router with configured providers.
-			router := airouter.Setup(settings.MergeAI(cfg.AI, settingsStore.Current()))
+			lastApplied := settings.MergeAI(cfg.AI, settingsStore.Current())
+			router := airouter.Setup(lastApplied)
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
 					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
@@ -98,7 +99,13 @@ func main() {
 				}
 			}
 			applySettings := func(st settings.Settings) {
-				airouter.Apply(router, settings.MergeAI(cfg.AI, st))
+				// Applies run in commit order under the store's update lock, so a plain lastApplied variable is safe.
+				merged := settings.MergeAI(cfg.AI, st)
+				if merged == lastApplied {
+					return
+				}
+				lastApplied = merged
+				airouter.Apply(router, merged)
 			}
 
 			var warnFlagOverrides sync.Once
