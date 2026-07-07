@@ -14,6 +14,15 @@ export const aiSettingsFixture = {
     proactive_nudges: false,
   },
   availableProviders: ['openai', 'openrouter'],
+  sources: {
+    defaultProvider: 'db',
+    openrouterModel: 'env',
+    openrouterKey: 'db',
+    flags: {
+      turn_hooks: 'db',
+      proactive_nudges: 'env',
+    },
+  },
 }
 
 describe('AI settings response guard', () => {
@@ -69,6 +78,31 @@ describe('AI settings response guard', () => {
     ).toBeNull()
     expect(
       readAISettings({ ...aiSettingsFixture, availableProviders: 'openai' }),
+    ).toBeNull()
+  })
+
+  it('rejects payloads with missing or mistyped sources', () => {
+    expect(
+      readAISettings({ ...aiSettingsFixture, sources: undefined }),
+    ).toBeNull()
+    expect(readAISettings({ ...aiSettingsFixture, sources: 'db' })).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        sources: { ...aiSettingsFixture.sources, openrouterKey: 7 },
+      }),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        sources: { ...aiSettingsFixture.sources, flags: { turn_hooks: true } },
+      }),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        sources: { ...aiSettingsFixture.sources, flags: null },
+      }),
     ).toBeNull()
   })
 })

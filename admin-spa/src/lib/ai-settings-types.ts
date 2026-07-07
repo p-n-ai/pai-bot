@@ -5,19 +5,28 @@ export interface AISettingsKeyStatus {
   last4: string
 }
 
+export interface AISettingsSources {
+  defaultProvider: string
+  openrouterModel: string
+  openrouterKey: string
+  flags: Record<string, string>
+}
+
 export interface AISettings {
   defaultProvider: string
   openrouterModel: string
   openrouterKey: AISettingsKeyStatus
   flags: Record<string, boolean>
   availableProviders: Array<string>
+  sources: AISettingsSources
 }
 
 export interface UpdateAISettingsInput {
   defaultProvider?: string
   openrouterModel?: string
   openrouterApiKey?: string
-  flags?: Record<string, boolean>
+  // null deletes the DB override so the value falls back to env/default.
+  flags?: Record<string, boolean | null>
 }
 
 export function readAISettings(value: unknown): AISettings | null {
@@ -30,13 +39,15 @@ function readAISettingsRecord(
   const openrouterKey = readKeyStatus(value.openrouterKey)
   const flags = readFlags(value.flags)
   const availableProviders = readProviderList(value.availableProviders)
+  const sources = readSources(value.sources)
 
   if (
     !isString(value.defaultProvider) ||
     !isString(value.openrouterModel) ||
     openrouterKey === null ||
     flags === null ||
-    availableProviders === null
+    availableProviders === null ||
+    sources === null
   ) {
     return null
   }
@@ -47,7 +58,50 @@ function readAISettingsRecord(
     openrouterKey,
     flags,
     availableProviders,
+    sources,
   }
+}
+
+function readSources(value: unknown): AISettingsSources | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const flags = readFlagSources(value.flags)
+
+  if (
+    !isString(value.defaultProvider) ||
+    !isString(value.openrouterModel) ||
+    !isString(value.openrouterKey) ||
+    flags === null
+  ) {
+    return null
+  }
+
+  return {
+    defaultProvider: value.defaultProvider,
+    openrouterModel: value.openrouterModel,
+    openrouterKey: value.openrouterKey,
+    flags,
+  }
+}
+
+function readFlagSources(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const sources: Record<string, string> = {}
+
+  for (const [name, source] of Object.entries(value)) {
+    if (!isString(source)) {
+      return null
+    }
+
+    sources[name] = source
+  }
+
+  return sources
 }
 
 function readKeyStatus(value: unknown): AISettingsKeyStatus | null {

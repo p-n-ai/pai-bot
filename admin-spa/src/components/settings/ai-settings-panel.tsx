@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
 import type { AISettings, UpdateAISettingsInput } from '@/lib/ai-settings-types'
@@ -18,17 +18,19 @@ import {
 import { getAISettings, updateAISettings } from '@/lib/admin-api'
 import { useSubmitStatus } from '@/hooks/use-submit-status'
 
-type AISettingsLoadState = 'loading' | 'ready' | 'error'
+type PanelState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; settings: AISettings }
 
 type SubmitStatus = ReturnType<typeof useSubmitStatus>
 
 export function AISettingsPanel() {
-  const [settings, setSettings] = useState<AISettings | null>(null)
-  const [loadState, setLoadState] = useState<AISettingsLoadState>('loading')
-  const [loadError, setLoadError] = useState('')
+  const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [model, setModel] = useState('')
   const [keyInput, setKeyInput] = useState('')
   const [isReplacingKey, setIsReplacingKey] = useState(false)
+  const requestSeq = useRef(0)
   const providerSubmit = useSubmitStatus('')
   const modelSubmit = useSubmitStatus('')
   const keySubmit = useSubmitStatus('')
@@ -37,17 +39,17 @@ export function AISettingsPanel() {
   useEffect(() => {
     getAISettings()
       .then((payload) => {
-        setSettings(payload)
+        setState({ status: 'ready', settings: payload })
         setModel(payload.openrouterModel)
-        setLoadState('ready')
       })
       .catch((caught: unknown) => {
-        setLoadState('error')
-        setLoadError(
-          caught instanceof Error
-            ? caught.message
-            : 'AI settings could not be loaded.',
-        )
+        setState({
+          status: 'error',
+          message:
+            caught instanceof Error
+              ? caught.message
+              : 'AI settings could not be loaded.',
+        })
       })
   }, [])
 
@@ -58,10 +60,16 @@ export function AISettingsPanel() {
       fallbackMessage: string,
       onSaved?: (next: AISettings) => void,
     ) => {
+      // Overlapping saves can resolve out of order; only the newest wins.
+      const seq = ++requestSeq.current
       submit.beginSubmit()
       updateAISettings(input)
         .then((next) => {
-          setSettings(next)
+          if (seq !== requestSeq.current) {
+            return
+          }
+
+          setState({ status: 'ready', settings: next })
           onSaved?.(next)
         })
         .catch((caught: unknown) => {
@@ -145,24 +153,29 @@ export function AISettingsPanel() {
     [flagsSubmit, submitSettings],
   )
 
-  if (loadState !== 'ready') {
+  const handleFlagReset = useCallback(
+    (name: string) => {
+      submitSettings(
+        { flags: { [name]: null } },
+        flagsSubmit,
+        'Feature flag could not be reset.',
+      )
+    },
+    [flagsSubmit, submitSettings],
+  )
+
+  if (state.status !== 'ready') {
     return (
       <LoadState
-        error={loadError}
+        error={state.status === 'error' ? state.message : null}
         errorTitle='Could not load AI settings'
         loadingTitle='Loading AI settings'
-        status={loadState}
+        status={state.status}
       />
     )
   }
 
-  if (!settings) {
-    return (
-      <StatePanel title='AI settings unavailable'>
-        The backend did not return platform AI settings.
-      </StatePanel>
-    )
-  }
+  const { settings } = state
 
   return (
     <div className='grid gap-5'>
@@ -184,6 +197,7 @@ export function AISettingsPanel() {
         isPending={keySubmit.isPending}
         isReplacing={isReplacingKey}
         keyInput={keyInput}
+        keySource={settings.sources.openrouterKey}
         keyStatus={settings.openrouterKey}
         onCancelReplace={handleReplaceCancel}
         onClear={handleKeyClear}
@@ -195,7 +209,9 @@ export function AISettingsPanel() {
         error={flagsSubmit.error}
         flags={settings.flags}
         isPending={flagsSubmit.isPending}
+        onReset={handleFlagReset}
         onToggle={handleFlagToggle}
+        sources={settings.sources.flags}
       />
     </div>
   )
@@ -251,7 +267,7 @@ function DefaultProviderSection({
           value={settings.defaultProvider}
         >
           <SelectTrigger className='sm:max-w-xs' id='ai-default-provider'>
-            <SelectValue />
+            <SelectValue placeholder='Not set' />
           </SelectTrigger>
           <SelectContent>
             {settings.availableProviders.map((provider) => (
@@ -321,6 +337,7 @@ function OpenRouterKeySection({
   isPending,
   isReplacing,
   keyInput,
+  keySource,
   keyStatus,
   onCancelReplace,
   onClear,
@@ -332,6 +349,7 @@ function OpenRouterKeySection({
   isPending: boolean
   isReplacing: boolean
   keyInput: string
+  keySource: string
   keyStatus: AISettings['openrouterKey']
   onCancelReplace: () => void
   onClear: () => void
@@ -349,6 +367,7 @@ function OpenRouterKeySection({
     >
       {showMaskedState ? (
         <ConfiguredKeyState
+          fromEnv={keySource === 'env'}
           isPending={isPending}
           last4={keyStatus.last4}
           onClear={onClear}
@@ -370,11 +389,13 @@ function OpenRouterKeySection({
 }
 
 function ConfiguredKeyState({
+  fromEnv,
   isPending,
   last4,
   onClear,
   onReplace,
 }: {
+  fromEnv: boolean
   isPending: boolean
   last4: string
   onClear: () => void
@@ -384,6 +405,11 @@ function ConfiguredKeyState({
     <div className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
       <span className='font-mono text-foreground'>
         configured &middot;&middot;&middot;&middot; {last4}
+        {fromEnv ? (
+          <span className='ml-2 font-sans text-muted-foreground'>
+            from environment
+          </span>
+        ) : null}
       </span>
       <div className='flex gap-2'>
         <Button
@@ -394,14 +420,20 @@ function ConfiguredKeyState({
         >
           Replace key
         </Button>
-        <Button
-          disabled={isPending}
-          onClick={onClear}
-          type='button'
-          variant='outline'
-        >
-          Clear key
-        </Button>
+        {fromEnv ? (
+          <span className='self-center text-muted-foreground'>
+            Set in server environment; clear it there.
+          </span>
+        ) : (
+          <Button
+            disabled={isPending}
+            onClick={onClear}
+            type='button'
+            variant='outline'
+          >
+            Clear key
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -467,12 +499,16 @@ function FeatureFlagsSection({
   error,
   flags,
   isPending,
+  onReset,
   onToggle,
+  sources,
 }: {
   error: string
   flags: Record<string, boolean>
   isPending: boolean
+  onReset: (name: string) => void
   onToggle: (name: string, enabled: boolean) => void
+  sources: Record<string, string>
 }) {
   // Object.keys already returns a fresh array, so sorting in place is safe.
   const names = Object.keys(flags).sort()
@@ -495,7 +531,9 @@ function FeatureFlagsSection({
               isPending={isPending}
               key={name}
               name={name}
+              onReset={onReset}
               onToggle={onToggle}
+              source={sources[name] ?? 'none'}
             />
           ))}
         </ul>
@@ -509,16 +547,23 @@ function FeatureFlagItem({
   enabled,
   isPending,
   name,
+  onReset,
   onToggle,
+  source,
 }: {
   enabled: boolean
   isPending: boolean
   name: string
+  onReset: (name: string) => void
   onToggle: (name: string, enabled: boolean) => void
+  source: string
 }) {
   const handleToggle = useCallback(() => {
     onToggle(name, enabled)
   }, [enabled, name, onToggle])
+  const handleReset = useCallback(() => {
+    onReset(name)
+  }, [name, onReset])
 
   return (
     <li className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
@@ -527,15 +572,31 @@ function FeatureFlagItem({
         <span className='ml-2 text-muted-foreground'>
           {enabled ? 'Enabled' : 'Disabled'}
         </span>
+        <span className='ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'>
+          {source}
+        </span>
       </span>
-      <Button
-        disabled={isPending}
-        onClick={handleToggle}
-        type='button'
-        variant={enabled ? 'outline' : 'default'}
-      >
-        {enabled ? 'Disable' : 'Enable'}
-      </Button>
+      <div className='flex gap-2'>
+        {source === 'db' ? (
+          <Button
+            aria-label={`Reset ${name}`}
+            disabled={isPending}
+            onClick={handleReset}
+            type='button'
+            variant='outline'
+          >
+            Reset
+          </Button>
+        ) : null}
+        <Button
+          disabled={isPending}
+          onClick={handleToggle}
+          type='button'
+          variant={enabled ? 'outline' : 'default'}
+        >
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </div>
     </li>
   )
 }
