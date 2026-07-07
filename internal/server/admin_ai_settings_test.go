@@ -30,6 +30,10 @@ func (m *memorySettingsStore) Effective() settings.EffectiveSettings {
 	return settings.Effective(m.envAI, m.envFlags, m.current)
 }
 
+func (m *memorySettingsStore) MergedAI(st settings.Settings) config.AIConfig {
+	return settings.MergeAI(m.envAI, st)
+}
+
 func (m *memorySettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), apply func(settings.Settings)) (settings.Settings, error) {
 	st, err := mutate(m.current)
 	if err != nil {
@@ -237,8 +241,115 @@ func TestAdminAISettingsPutRejectsUnknownFlag(t *testing.T) {
 	}
 }
 
-func TestAdminAISettingsPutAppliesSettings(t *testing.T) {
+func TestAdminAISettingsPutNullFlagRemovesOverride(t *testing.T) {
+	envFlags, err := featureflags.Parse("turn_hooks=true")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	store := &memorySettingsStore{envFlags: envFlags, current: settings.Settings{
+		Flags: map[string]bool{"turn_hooks": false},
+	}}
+	handler := newAISettingsHandler(store, nil)
+
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"flags":{"turn_hooks":null}}`))
+	if !payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "env" {
+		t.Fatalf("turn_hooks = %v (%s), want true (env) after override removal", payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
+	}
+	if _, ok := store.current.Flags["turn_hooks"]; ok {
+		t.Fatalf("stored flags = %#v, want turn_hooks override deleted", store.current.Flags)
+	}
+}
+
+func TestAdminAISettingsPutNullUnknownFlagRejected(t *testing.T) {
 	store := &memorySettingsStore{}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"flags":{"warp_drive":null}}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if store.saves != 0 {
+		t.Fatalf("saves = %d, want 0", store.saves)
+	}
+}
+
+func TestAdminAISettingsPutRejectsUnconfiguredDefaultProvider(t *testing.T) {
+	store := &memorySettingsStore{}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"defaultProvider":"anthropic"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "no usable configuration") {
+		t.Fatalf("body = %q, want no-usable-configuration error", rec.Body.String())
+	}
+	if store.saves != 0 {
+		t.Fatalf("saves = %d, want 0", store.saves)
+	}
+}
+
+func TestAdminAISettingsPutClearKeyKeepsStaleDefault(t *testing.T) {
+	store := &memorySettingsStore{current: settings.Settings{
+		AI: settings.AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "sk-or-1234"},
+	}}
+	handler := newAISettingsHandler(store, nil)
+
+	// The request does not set defaultProvider, so the stale default must not
+	// block clearing the key.
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterApiKey":""}`))
+	if payload.OpenRouterKey.Set {
+		t.Fatalf("openrouterKey = %#v, want cleared", payload.OpenRouterKey)
+	}
+	if store.current.AI.DefaultProvider != "openrouter" || store.current.AI.OpenRouterAPIKey != "" {
+		t.Fatalf("stored settings = %#v, want default kept and key cleared", store.current.AI)
+	}
+}
+
+func TestAdminAISettingsPutRejectsUnknownField(t *testing.T) {
+	store := &memorySettingsStore{}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterKey":"x"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if store.saves != 0 {
+		t.Fatalf("saves = %d, want 0", store.saves)
+	}
+}
+
+// failingSettingsStore succeeds mutate but fails the save, like the Postgres
+// store refusing to encrypt under the default auth secret.
+type failingSettingsStore struct {
+	memorySettingsStore
+	saveErr error
+}
+
+func (f *failingSettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), _ func(settings.Settings)) (settings.Settings, error) {
+	if _, err := mutate(f.current); err != nil {
+		return settings.Settings{}, err
+	}
+	return settings.Settings{}, f.saveErr
+}
+
+func TestAdminAISettingsPutMapsDefaultAuthSecretTo400(t *testing.T) {
+	store := &failingSettingsStore{saveErr: settings.ErrDefaultAuthSecret}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterApiKey":"sk-or-new-key"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "PAI_AUTH_SECRET") {
+		t.Fatalf("body = %q, want PAI_AUTH_SECRET message", rec.Body.String())
+	}
+}
+
+func TestAdminAISettingsPutAppliesSettings(t *testing.T) {
+	envAI := config.AIConfig{}
+	envAI.OpenRouter.APIKey = "sk-or-env-1234"
+	store := &memorySettingsStore{envAI: envAI}
 	var applied []settings.Settings
 	handler := newAISettingsHandler(store, func(st settings.Settings) { applied = append(applied, st) })
 
@@ -266,7 +377,9 @@ func TestAdminAISettingsRejectsTeacherRole(t *testing.T) {
 }
 
 func TestAdminAISettingsAllowsPlatformAdmin(t *testing.T) {
-	handler := newAISettingsHandler(&memorySettingsStore{}, nil)
+	envAI := config.AIConfig{}
+	envAI.OpenRouter.APIKey = "sk-or-env-1234"
+	handler := newAISettingsHandler(&memorySettingsStore{envAI: envAI}, nil)
 
 	decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodGet, mustIssuePlatformAdminToken(t), ""))
 	payload := decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodPut, mustIssuePlatformAdminToken(t), `{"defaultProvider":"openrouter"}`))

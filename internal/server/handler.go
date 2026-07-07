@@ -335,11 +335,15 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
 	retrievalService = ensureRetrievalService(retrievalService)
 
+	// AI settings are platform-global (single row, one process-wide AI
+	// router): a tenant admin may manage them only in single-tenant mode,
+	// otherwise any school admin could swap every tenant's provider key.
+	settingsRoles := []auth.Role{auth.RoleAdmin, auth.RolePlatformAdmin}
+	if multiTenant {
+		settingsRoles = []auth.Role{auth.RolePlatformAdmin}
+	}
 	canManageAISettings := func(role auth.Role) bool {
-		if settingsStore == nil {
-			return false
-		}
-		return role == auth.RolePlatformAdmin || (!multiTenant && role == auth.RoleAdmin)
+		return settingsStore != nil && slices.Contains(settingsRoles, role)
 	}
 
 	teacherOrAbove := chain(
@@ -382,13 +386,6 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	if settingsStore != nil {
-		// AI settings are platform-global (single row, one process-wide AI
-		// router): a tenant admin may manage them only in single-tenant mode,
-		// otherwise any school admin could swap every tenant's provider key.
-		settingsRoles := []auth.Role{auth.RoleAdmin, auth.RolePlatformAdmin}
-		if multiTenant {
-			settingsRoles = []auth.Role{auth.RolePlatformAdmin}
-		}
 		settingsAdmin := chain(authenticated, auth.RequireRoles(settingsRoles...))
 		mux.Handle("GET /api/admin/ai/settings", settingsAdmin(handleAdminGetAISettings(settingsStore)))
 		mux.Handle("PUT /api/admin/ai/settings", settingsAdmin(handleAdminUpdateAISettings(settingsStore, applySettings)))
