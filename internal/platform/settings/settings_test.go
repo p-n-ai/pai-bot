@@ -5,6 +5,7 @@ package settings
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -157,20 +158,42 @@ func TestDecodeSettingsRowDropsUndecryptableKey(t *testing.T) {
 		t.Fatalf("encryptString() error = %v", err)
 	}
 
-	st := decodeSettingsRow("rotated-auth-secret",
+	st, secrets, err := decodeSettingsRow("rotated-auth-secret",
 		[]byte(`{"default_provider":"openrouter","openrouter_model":"m"}`),
 		[]byte(`{"turn_hooks":true}`),
 		[]byte(`{"openrouter_api_key":"`+blob+`"}`))
+	if err != nil {
+		t.Fatalf("decodeSettingsRow() error = %v", err)
+	}
 
 	if st.AI.OpenRouterAPIKey != "" {
 		t.Fatal("undecryptable key must be dropped, not returned")
+	}
+	if secrets["openrouter_api_key"] != blob {
+		t.Fatal("raw secrets map must keep the undecryptable blob")
 	}
 	if st.AI.DefaultProvider != "openrouter" || st.AI.OpenRouterModel != "m" || !st.Flags["turn_hooks"] {
 		t.Fatalf("decodeSettingsRow() = %+v, want other settings kept", st)
 	}
 }
 
-func TestDecodeSettingsRowDegradesCorruptedJSON(t *testing.T) {
+func TestDecodeSettingsRowPrunesUnknownFlags(t *testing.T) {
+	st, _, err := decodeSettingsRow("secret",
+		[]byte(`{}`),
+		[]byte(`{"turn_hooks":true,"ghost_flag":true}`),
+		[]byte(`{}`))
+	if err != nil {
+		t.Fatalf("decodeSettingsRow() error = %v", err)
+	}
+	if _, ok := st.Flags["ghost_flag"]; ok {
+		t.Fatalf("Flags = %v, want ghost_flag pruned", st.Flags)
+	}
+	if !st.Flags["turn_hooks"] {
+		t.Fatalf("Flags = %v, want turn_hooks kept", st.Flags)
+	}
+}
+
+func TestDecodeSettingsRowCorruptedJSON(t *testing.T) {
 	good := []byte(`{}`)
 	bad := []byte(`{corrupt`)
 	tests := []struct {
@@ -183,12 +206,71 @@ func TestDecodeSettingsRowDegradesCorruptedJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st := decodeSettingsRow("secret", tt.aiJSON, tt.flagsJSON, tt.secrets)
+			if _, _, err := decodeSettingsRow("secret", tt.aiJSON, tt.flagsJSON, tt.secrets); err == nil {
+				t.Fatal("decodeSettingsRow() should reject corrupted jsonb")
+			}
+			st := degradeSettingsRow("secret", tt.aiJSON, tt.flagsJSON, tt.secrets)
 			if st.AI != (AISettings{}) || len(st.Flags) != 0 {
-				t.Fatalf("decodeSettingsRow() = %+v, want zero Settings", st)
+				t.Fatalf("degradeSettingsRow() = %+v, want zero Settings", st)
 			}
 		})
 	}
+}
+
+func TestMergeSecrets(t *testing.T) {
+	prev := map[string]string{openRouterAPIKeySecret: "stored-blob"}
+
+	t.Run("unchanged key preserves blob", func(t *testing.T) {
+		got, err := mergeSecrets("s", prev, "sk-old", "sk-old")
+		if err != nil {
+			t.Fatalf("mergeSecrets() error = %v", err)
+		}
+		if got[openRouterAPIKeySecret] != "stored-blob" {
+			t.Fatalf("secrets = %v, want stored blob preserved", got)
+		}
+	})
+
+	t.Run("undecryptable blob survives unrelated update", func(t *testing.T) {
+		// Decoded key is "" because the blob did not decrypt; mutate left it "".
+		got, err := mergeSecrets("s", prev, "", "")
+		if err != nil {
+			t.Fatalf("mergeSecrets() error = %v", err)
+		}
+		if got[openRouterAPIKeySecret] != "stored-blob" {
+			t.Fatalf("secrets = %v, want undecryptable blob preserved", got)
+		}
+	})
+
+	t.Run("explicit clear deletes entry", func(t *testing.T) {
+		got, err := mergeSecrets("s", prev, "sk-old", "")
+		if err != nil {
+			t.Fatalf("mergeSecrets() error = %v", err)
+		}
+		if _, ok := got[openRouterAPIKeySecret]; ok {
+			t.Fatalf("secrets = %v, want entry deleted", got)
+		}
+	})
+
+	t.Run("new key replaces entry", func(t *testing.T) {
+		got, err := mergeSecrets("s", prev, "sk-old", "sk-new")
+		if err != nil {
+			t.Fatalf("mergeSecrets() error = %v", err)
+		}
+		key, err := decryptString("s", got[openRouterAPIKeySecret])
+		if err != nil || key != "sk-new" {
+			t.Fatalf("decrypt stored blob = %q, %v; want sk-new", key, err)
+		}
+		if prev[openRouterAPIKeySecret] != "stored-blob" {
+			t.Fatal("mergeSecrets() must not mutate prev")
+		}
+	})
+
+	t.Run("default auth secret refused", func(t *testing.T) {
+		_, err := mergeSecrets(config.DefaultAuthSecret, nil, "", "sk-new")
+		if !errors.Is(err, ErrDefaultAuthSecret) {
+			t.Fatalf("mergeSecrets() error = %v, want ErrDefaultAuthSecret", err)
+		}
+	})
 }
 
 func TestAISettingsAPIKeyNeverSerializes(t *testing.T) {

@@ -20,18 +20,7 @@ import (
 )
 
 func TestStore_SaveLoadRoundtrip(t *testing.T) {
-	dbURL := strings.TrimSpace(os.Getenv("LEARN_TEST_DATABASE_URL"))
-	if dbURL == "" {
-		t.Skip("LEARN_TEST_DATABASE_URL is not set; skipping runtime settings postgres test")
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbURL)
-	if err != nil {
-		t.Fatalf("pgxpool.New() error = %v", err)
-	}
-	t.Cleanup(pool.Close)
-	applyRuntimeSettingsMigration(t, ctx, pool)
+	ctx, pool := settingsTestPool(t)
 
 	store := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 
@@ -103,6 +92,109 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	if got.AI.OpenRouterModel != "deepseek/deepseek-chat" {
 		t.Fatalf("Load().AI.OpenRouterModel = %q, want stale instance's write preserved", got.AI.OpenRouterModel)
 	}
+}
+
+func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
+	ctx, pool := settingsTestPool(t)
+
+	s1 := New(pool, "secret-one", config.AIConfig{}, featureflags.Features{})
+	if _, err := s1.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.AI.OpenRouterAPIKey = "sk-or-v1-original"
+		return cur, nil
+	}, nil); err != nil {
+		t.Fatalf("Update(store key) error = %v", err)
+	}
+	var before string
+	if err := pool.QueryRow(ctx, `SELECT secrets::text FROM runtime_settings WHERE id = 1`).Scan(&before); err != nil {
+		t.Fatalf("select secrets: %v", err)
+	}
+
+	// Rotated auth secret: the blob no longer decrypts, but a flag-only
+	// update must not destroy it.
+	s2 := New(pool, "secret-two", config.AIConfig{}, featureflags.Features{})
+	if _, err := s2.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.Flags = map[string]bool{"turn_hooks": true}
+		return cur, nil
+	}, nil); err != nil {
+		t.Fatalf("Update(flags only) error = %v", err)
+	}
+
+	var after string
+	if err := pool.QueryRow(ctx, `SELECT secrets::text FROM runtime_settings WHERE id = 1`).Scan(&after); err != nil {
+		t.Fatalf("select secrets: %v", err)
+	}
+	if after != before {
+		t.Fatalf("secrets column changed:\nbefore %s\nafter  %s", before, after)
+	}
+
+	got, err := s1.Load(ctx)
+	if err != nil {
+		t.Fatalf("Load(original secret) error = %v", err)
+	}
+	if got.AI.OpenRouterAPIKey != "sk-or-v1-original" {
+		t.Fatalf("Load(original secret).OpenRouterAPIKey = %q, want key recoverable after reverting the auth secret", got.AI.OpenRouterAPIKey)
+	}
+}
+
+func TestStore_UpdateRejectsCorruptRow(t *testing.T) {
+	ctx, pool := settingsTestPool(t)
+
+	store := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
+	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.AI.OpenRouterModel = "openrouter/auto"
+		return cur, nil
+	}, nil); err != nil {
+		t.Fatalf("Update(seed) error = %v", err)
+	}
+	// jsonb rejects invalid JSON, so corrupt the shape instead: a string
+	// where a flag object is expected.
+	if _, err := pool.Exec(ctx, `UPDATE runtime_settings SET flags = '"corrupt"'::jsonb WHERE id = 1`); err != nil {
+		t.Fatalf("corrupt flags column: %v", err)
+	}
+	var before string
+	if err := pool.QueryRow(ctx, `SELECT ai::text || flags::text || secrets::text FROM runtime_settings WHERE id = 1`).Scan(&before); err != nil {
+		t.Fatalf("select row: %v", err)
+	}
+
+	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.Flags = map[string]bool{"turn_hooks": true}
+		return cur, nil
+	}, nil); err == nil {
+		t.Fatal("Update() should refuse to rebuild a corrupt row")
+	}
+
+	var after string
+	if err := pool.QueryRow(ctx, `SELECT ai::text || flags::text || secrets::text FROM runtime_settings WHERE id = 1`).Scan(&after); err != nil {
+		t.Fatalf("select row: %v", err)
+	}
+	if after != before {
+		t.Fatalf("row changed after failed Update:\nbefore %s\nafter  %s", before, after)
+	}
+
+	got, err := store.Load(ctx)
+	if err != nil {
+		t.Fatalf("Load(corrupt row) error = %v", err)
+	}
+	if got.AI != (AISettings{}) || len(got.Flags) != 0 {
+		t.Fatalf("Load(corrupt row) = %+v, want degraded zero Settings", got)
+	}
+}
+
+func settingsTestPool(t *testing.T) (context.Context, *pgxpool.Pool) {
+	t.Helper()
+
+	dbURL := strings.TrimSpace(os.Getenv("LEARN_TEST_DATABASE_URL"))
+	if dbURL == "" {
+		t.Skip("LEARN_TEST_DATABASE_URL is not set; skipping runtime settings postgres test")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Fatalf("pgxpool.New() error = %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyRuntimeSettingsMigration(t, ctx, pool)
+	return ctx, pool
 }
 
 func applyRuntimeSettingsMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {

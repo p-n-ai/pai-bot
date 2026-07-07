@@ -14,6 +14,10 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
+// DefaultAuthSecret is the dev fallback for PAI_AUTH_SECRET; secrets must
+// never be encrypted under it.
+const DefaultAuthSecret = "change-me-in-production"
+
 // Config holds all application configuration.
 type Config struct {
 	Server         ServerConfig
@@ -245,7 +249,7 @@ func Load() (*Config, error) {
 			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
 		},
 		Auth: AuthConfig{
-			JWTSecret: envStr("PAI_AUTH_SECRET", "change-me-in-production"),
+			JWTSecret: envStr("PAI_AUTH_SECRET", DefaultAuthSecret),
 			Google: GoogleOAuthConfig{
 				ClientID:              envStr("PAI_AUTH_GOOGLE_CLIENT_ID", ""),
 				ClientSecret:          envStr("PAI_AUTH_GOOGLE_CLIENT_SECRET", ""),

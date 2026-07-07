@@ -9,10 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -20,6 +20,10 @@ import (
 )
 
 const openRouterAPIKeySecret = "openrouter_api_key"
+
+// ErrDefaultAuthSecret refuses to encrypt API keys under the well-known
+// default auth secret; the HTTP layer maps it to a 400.
+var ErrDefaultAuthSecret = errors.New("set PAI_AUTH_SECRET before storing API keys")
 
 // Store persists the single runtime_settings row layered over the env baseline captured at boot.
 type Store struct {
@@ -66,6 +70,9 @@ func (s *Store) Effective() EffectiveSettings {
 	return Effective(s.envAI, s.envFlags, s.Current())
 }
 
+// MergedAI returns the env AI baseline with st layered on top.
+func (s *Store) MergedAI(st Settings) config.AIConfig { return MergeAI(s.envAI, st) }
+
 // Update mutates the row re-read under a Postgres row lock and saves in the same tx; apply (nil ok) runs before updateMu releases, in commit order.
 func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, error), apply func(Settings)) (Settings, error) {
 	s.updateMu.Lock()
@@ -88,11 +95,18 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 		return Settings{}, fmt.Errorf("load runtime settings for update: %w", err)
 	}
 
-	st, err := mutate(decodeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON))
+	// Strict decode: never rebuild the row from a degraded read, that would
+	// persist the data loss.
+	cur, prevSecrets, err := decodeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON)
+	if err != nil {
+		return Settings{}, fmt.Errorf("decode runtime settings for update: %w", err)
+	}
+	decodedKey := cur.AI.OpenRouterAPIKey
+	st, err := mutate(cur)
 	if err != nil {
 		return Settings{}, err
 	}
-	if err := saveSettingsRow(ctx, tx, s.secret, st); err != nil {
+	if err := saveSettingsRow(ctx, tx, s.secret, st, prevSecrets, decodedKey); err != nil {
 		return Settings{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -118,27 +132,26 @@ func (s *Store) Load(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("load runtime settings: %w", err)
 	}
-	return decodeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON), nil
+	return degradeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON), nil
 }
 
-// decodeSettingsRow never fails: corrupted jsonb degrades to zero Settings,
-// and an undecryptable key (e.g. PAI_AUTH_SECRET rotated after the key was
-// stored) is dropped so the server boots and an admin can re-enter it.
-func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Settings {
+// decodeSettingsRow strictly decodes the row, also returning the raw secrets
+// map for save paths. Corrupt jsonb is an error; an undecryptable key blob
+// (e.g. PAI_AUTH_SECRET rotated after the key was stored) is not — the key is
+// dropped with a warning so an admin can re-enter it.
+func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) (Settings, map[string]string, error) {
 	var st Settings
 	if err := json.Unmarshal(aiJSON, &st.AI); err != nil {
-		slog.Warn("runtime settings: corrupted ai column; using env config", "error", err)
-		return Settings{}
+		return Settings{}, nil, fmt.Errorf("decode ai column: %w", err)
 	}
 	if err := json.Unmarshal(flagsJSON, &st.Flags); err != nil {
-		slog.Warn("runtime settings: corrupted flags column; using env config", "error", err)
-		return Settings{}
+		return Settings{}, nil, fmt.Errorf("decode flags column: %w", err)
 	}
 	var secrets map[string]string
 	if err := json.Unmarshal(secretsJSON, &secrets); err != nil {
-		slog.Warn("runtime settings: corrupted secrets column; using env config", "error", err)
-		return Settings{}
+		return Settings{}, nil, fmt.Errorf("decode secrets column: %w", err)
 	}
+	pruneUnknownFlags(st.Flags)
 	if blob := secrets[openRouterAPIKeySecret]; blob != "" {
 		key, err := decryptString(secret, blob)
 		if err != nil {
@@ -147,16 +160,67 @@ func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Set
 			st.AI.OpenRouterAPIKey = key
 		}
 	}
+	return st, secrets, nil
+}
+
+// degradeSettingsRow never fails: a corrupted row degrades to zero Settings so
+// the server boots on env config and an admin can repair the stored settings.
+func degradeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Settings {
+	st, _, err := decodeSettingsRow(secret, aiJSON, flagsJSON, secretsJSON)
+	if err != nil {
+		slog.Warn("runtime settings: corrupted row; using env config", "error", err)
+		return Settings{}
+	}
 	return st
 }
 
-type settingsExecer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+// pruneUnknownFlags drops stale flag names so decode, Effective, and
+// WithOverrides agree; the next save rewrites the row without them.
+func pruneUnknownFlags(flags map[string]bool) {
+	known := featureflags.Defaults()
+	var dropped []string
+	for name := range flags {
+		if _, ok := known[name]; !ok {
+			dropped = append(dropped, name)
+			delete(flags, name)
+		}
+	}
+	if len(dropped) > 0 {
+		slices.Sort(dropped)
+		slog.Warn("runtime settings: dropping unknown feature flags", "flags", dropped)
+	}
 }
 
-// saveSettingsRow upserts the settings row, encrypting the OpenRouter API key.
-// An empty key stores no secret, removing any previous one.
-func saveSettingsRow(ctx context.Context, db settingsExecer, secret string, st Settings) error {
+// mergeSecrets returns the secrets map to persist: prev with only the
+// openrouter key entry changed when the mutated key differs from decodedKey.
+func mergeSecrets(secret string, prev map[string]string, decodedKey, key string) (map[string]string, error) {
+	secrets := make(map[string]string, len(prev))
+	for name, blob := range prev {
+		secrets[name] = blob
+	}
+	switch {
+	case key == decodedKey:
+		// Unchanged (including "" after an undecryptable blob was dropped at
+		// decode): keep the stored blob byte-for-byte so reverting
+		// PAI_AUTH_SECRET can still recover the key.
+	case key == "":
+		delete(secrets, openRouterAPIKeySecret)
+	default:
+		if secret == config.DefaultAuthSecret {
+			return nil, ErrDefaultAuthSecret
+		}
+		blob, err := encryptString(secret, key)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt openrouter api key: %w", err)
+		}
+		secrets[openRouterAPIKeySecret] = blob
+	}
+	return secrets, nil
+}
+
+// saveSettingsRow upserts the settings row; prevSecrets and decodedKey come
+// from the strict decode of the locked row (see mergeSecrets).
+func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings, prevSecrets map[string]string, decodedKey string) error {
 	aiJSON, err := json.Marshal(st.AI)
 	if err != nil {
 		return fmt.Errorf("marshal ai settings: %w", err)
@@ -169,20 +233,16 @@ func saveSettingsRow(ctx context.Context, db settingsExecer, secret string, st S
 	if err != nil {
 		return fmt.Errorf("marshal flags: %w", err)
 	}
-	secrets := map[string]string{}
-	if st.AI.OpenRouterAPIKey != "" {
-		blob, err := encryptString(secret, st.AI.OpenRouterAPIKey)
-		if err != nil {
-			return fmt.Errorf("encrypt openrouter api key: %w", err)
-		}
-		secrets[openRouterAPIKeySecret] = blob
+	secrets, err := mergeSecrets(secret, prevSecrets, decodedKey, st.AI.OpenRouterAPIKey)
+	if err != nil {
+		return err
 	}
 	secretsJSON, err := json.Marshal(secrets)
 	if err != nil {
 		return fmt.Errorf("marshal secrets: %w", err)
 	}
 
-	_, err = db.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO runtime_settings (id, ai, flags, secrets, updated_at)
 		VALUES (1, $1, $2, $3, now())
 		ON CONFLICT (id) DO UPDATE
