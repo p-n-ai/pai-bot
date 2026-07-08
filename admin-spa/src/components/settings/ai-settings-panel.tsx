@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
 import type { AISettings, UpdateAISettingsInput } from '@/lib/ai-settings-types'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -205,23 +206,22 @@ export function AISettingsPanel() {
         onProviderChange={handleProviderChange}
         settings={settings}
       />
-      <OpenRouterModelSection
-        error={modelSubmit.error}
-        isPending={modelSubmit.isPending}
-        model={model}
-        onModelChange={setModel}
-        onSave={handleModelSave}
-      />
-      <OpenRouterKeySection
-        error={keySubmit.error}
-        isPending={keySubmit.isPending}
+      <OpenRouterSection
+        keyError={keySubmit.error}
+        isKeyPending={keySubmit.isPending}
+        isModelPending={modelSubmit.isPending}
         isReplacing={isReplacingKey}
         keyInput={keyInput}
         keySource={settings.sources.openrouterKey}
         keyStatus={settings.openrouterKey}
+        model={model}
+        modelError={modelSubmit.error}
+        modelSource={settings.sources.openrouterModel}
         onCancelReplace={handleReplaceCancel}
         onClear={handleKeyClear}
         onKeyInputChange={setKeyInput}
+        onModelChange={setModel}
+        onModelSave={handleModelSave}
         onReplace={handleReplaceKey}
         onSave={handleKeySave}
       />
@@ -251,14 +251,44 @@ function SettingsSection({
   return (
     <section
       aria-label={label}
-      className='grid gap-4 rounded-lg border border-border bg-card p-6'
+      className='grid gap-5 rounded-lg border border-border bg-card p-6'
     >
       <header>
-        <h2 className='m-0 text-2xl leading-tight text-foreground'>{title}</h2>
-        <p className='mt-2 mb-0 text-muted-foreground'>{description}</p>
+        <h2 className='m-0 text-lg leading-tight font-semibold text-foreground'>
+          {title}
+        </h2>
+        <p className='mt-1 mb-0 text-sm text-muted-foreground'>{description}</p>
       </header>
       {children}
     </section>
+  )
+}
+
+// Badges admins see next to each field: saved override vs env-provided.
+function SourceBadge({ source }: { source: string }) {
+  if (source === 'db') {
+    return <Badge variant='secondary'>Override</Badge>
+  }
+  if (source === 'env') {
+    return <Badge variant='outline'>Environment</Badge>
+  }
+  return null
+}
+
+function FieldHeading({
+  htmlFor,
+  source,
+  text,
+}: {
+  htmlFor?: string
+  source: string
+  text: string
+}) {
+  return (
+    <div className='flex items-center gap-2'>
+      <Label htmlFor={htmlFor}>{text}</Label>
+      <SourceBadge source={source} />
+    </div>
   )
 }
 
@@ -280,7 +310,11 @@ function DefaultProviderSection({
       title='Default provider'
     >
       <div className='flex flex-col gap-2'>
-        <Label htmlFor='ai-default-provider'>Provider</Label>
+        <FieldHeading
+          htmlFor='ai-default-provider'
+          source={settings.sources.defaultProvider}
+          text='Provider'
+        />
         <Select
           disabled={isPending}
           onValueChange={onProviderChange}
@@ -303,25 +337,49 @@ function DefaultProviderSection({
   )
 }
 
-function OpenRouterModelSection({
-  error,
-  isPending,
+function OpenRouterSection({
+  isKeyPending,
+  isModelPending,
+  isReplacing,
+  keyError,
+  keyInput,
+  keySource,
+  keyStatus,
   model,
+  modelError,
+  modelSource,
+  onCancelReplace,
+  onClear,
+  onKeyInputChange,
   onModelChange,
+  onModelSave,
+  onReplace,
   onSave,
 }: {
-  error: string
-  isPending: boolean
+  isKeyPending: boolean
+  isModelPending: boolean
+  isReplacing: boolean
+  keyError: string
+  keyInput: string
+  keySource: string
+  keyStatus: AISettings['openrouterKey']
   model: string
+  modelError: string
+  modelSource: string
+  onCancelReplace: () => void
+  onClear: () => void
+  onKeyInputChange: (value: string) => void
   onModelChange: (model: string) => void
+  onModelSave: () => void
+  onReplace: () => void
   onSave: () => void
 }) {
-  const handleSubmit = useCallback(
+  const handleModelSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      onSave()
+      onModelSave()
     },
-    [onSave],
+    [onModelSave],
   )
   const handleModelChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -329,81 +387,62 @@ function OpenRouterModelSection({
     },
     [onModelChange],
   )
-
-  return (
-    <SettingsSection
-      description='Model slug requested when turns route through OpenRouter.'
-      label='OpenRouter model'
-      title='OpenRouter model'
-    >
-      <form className='flex flex-col gap-3 sm:flex-row' onSubmit={handleSubmit}>
-        <Input
-          aria-label='OpenRouter model'
-          onChange={handleModelChange}
-          placeholder='anthropic/claude-sonnet-4.5'
-          value={model}
-        />
-        <Button disabled={isPending} type='submit'>
-          Save model
-        </Button>
-      </form>
-      <AuthErrorAlert message={error} title='Model update failed.' />
-    </SettingsSection>
-  )
-}
-
-function OpenRouterKeySection({
-  error,
-  isPending,
-  isReplacing,
-  keyInput,
-  keySource,
-  keyStatus,
-  onCancelReplace,
-  onClear,
-  onKeyInputChange,
-  onReplace,
-  onSave,
-}: {
-  error: string
-  isPending: boolean
-  isReplacing: boolean
-  keyInput: string
-  keySource: string
-  keyStatus: AISettings['openrouterKey']
-  onCancelReplace: () => void
-  onClear: () => void
-  onKeyInputChange: (value: string) => void
-  onReplace: () => void
-  onSave: () => void
-}) {
   const showMaskedState = keyStatus.set && !isReplacing
 
   return (
     <SettingsSection
-      description='The key is write-only: it is stored encrypted and never shown again.'
-      label='OpenRouter API key'
-      title='OpenRouter API key'
+      description='Model slug and API key used when turns route through OpenRouter.'
+      label='OpenRouter'
+      title='OpenRouter'
     >
-      {showMaskedState ? (
-        <ConfiguredKeyState
-          fromEnv={keySource === 'env'}
-          isPending={isPending}
-          last4={keyStatus.last4}
-          onClear={onClear}
-          onReplace={onReplace}
+      <div className='flex flex-col gap-2'>
+        <FieldHeading
+          htmlFor='ai-openrouter-model'
+          source={modelSource}
+          text='Model'
         />
-      ) : (
-        <KeyEntryForm
-          isPending={isPending}
-          isReplacing={isReplacing}
-          keyInput={keyInput}
-          onCancelReplace={onCancelReplace}
-          onKeyInputChange={onKeyInputChange}
-          onSave={onSave}
-        />
-      )}
-      <AuthErrorAlert message={error} title='API key update failed.' />
+        <form
+          className='flex flex-col gap-3 sm:flex-row'
+          onSubmit={handleModelSubmit}
+        >
+          <Input
+            aria-label='OpenRouter model'
+            id='ai-openrouter-model'
+            onChange={handleModelChange}
+            placeholder='anthropic/claude-sonnet-4.5'
+            value={model}
+          />
+          <Button disabled={isModelPending} type='submit'>
+            Save model
+          </Button>
+        </form>
+        <AuthErrorAlert message={modelError} title='Model update failed.' />
+      </div>
+      <div className='flex flex-col gap-2'>
+        <FieldHeading source={keySource} text='API key' />
+        <p className='m-0 text-sm text-muted-foreground'>
+          The key is write-only: it is stored encrypted and never shown again.
+        </p>
+        {showMaskedState ? (
+          <ConfiguredKeyState
+            fromEnv={keySource === 'env'}
+            isPending={isKeyPending}
+            last4={keyStatus.last4}
+            onClear={onClear}
+            onReplace={onReplace}
+          />
+        ) : (
+          <KeyEntryForm
+            isPending={isKeyPending}
+            isReplacing={isReplacing}
+            keyInput={keyInput}
+            onCancelReplace={onCancelReplace}
+            onKeyInputChange={onKeyInputChange}
+            onSave={onSave}
+          />
+        )}
+        <AuthErrorAlert message={keyError} title='API key update failed.' />
+      </div>
     </SettingsSection>
   )
 }
@@ -587,14 +626,14 @@ function FeatureFlagItem({
 
   return (
     <li className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
-      <span className='break-all text-foreground'>
-        {name}
-        <span className='ml-2 text-muted-foreground'>
+      <span className='flex flex-wrap items-center gap-2'>
+        <span className='font-mono text-[13px] break-all text-foreground'>
+          {name}
+        </span>
+        <span className='text-muted-foreground'>
           {enabled ? 'Enabled' : 'Disabled'}
         </span>
-        <span className='ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'>
-          {source}
-        </span>
+        <SourceBadge source={source} />
       </span>
       <div className='flex gap-2'>
         {source === 'db' ? (
