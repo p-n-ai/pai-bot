@@ -53,10 +53,10 @@ type aiSettingsResponseDoc struct {
 }
 
 type aiSettingsUpdateRequestDoc struct {
-	DefaultProvider  *string          `json:"defaultProvider"`
-	OpenRouterModel  *string          `json:"openrouterModel"`
-	OpenRouterAPIKey *string          `json:"openrouterApiKey"`
-	Flags            map[string]*bool `json:"flags"`
+	DefaultProvider  *string          `json:"defaultProvider,omitempty"`
+	OpenRouterModel  *string          `json:"openrouterModel,omitempty"`
+	OpenRouterAPIKey *string          `json:"openrouterApiKey,omitempty"`
+	Flags            map[string]*bool `json:"flags,omitempty"`
 }
 
 type healthResponse struct {
@@ -369,8 +369,6 @@ func route(method string, operation Operation) *PathItem {
 		item.Get = &operation
 	case "POST":
 		item.Post = &operation
-	case "PUT":
-		item.Put = &operation
 	default:
 		panic(fmt.Sprintf("unsupported method %q", method))
 	}

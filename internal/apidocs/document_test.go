@@ -33,6 +33,13 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 	if aiSettings.Get == nil || aiSettings.Put == nil {
 		t.Fatalf("/api/admin/ai/settings = %#v, want GET and PUT", aiSettings)
 	}
+	updateSchema, ok := doc.Components.Schemas["aiSettingsUpdateRequestDoc"]
+	if !ok {
+		t.Fatal("missing aiSettingsUpdateRequestDoc schema")
+	}
+	if len(updateSchema.Required) != 0 {
+		t.Fatalf("aiSettingsUpdateRequestDoc required = %v, want no required fields", updateSchema.Required)
+	}
 
 	sessionSchema, ok := doc.Components.Schemas["Session"]
 	if !ok {
