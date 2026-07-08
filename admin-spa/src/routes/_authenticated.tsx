@@ -8,6 +8,7 @@ import {
   DownloadIcon,
   GaugeIcon,
   LogOutIcon,
+  SparklesIcon,
   UsersIcon,
   WalletCardsIcon,
 } from 'lucide-react'
@@ -75,6 +76,12 @@ const navigationGroups = [
         Icon: UsersIcon,
         href: '/settings/users',
         label: 'Users',
+      },
+      {
+        // Visible only with can_manage_ai_settings (canAccessPath filter).
+        Icon: SparklesIcon,
+        href: '/settings/ai',
+        label: 'AI',
       },
       {
         Icon: DownloadIcon,
