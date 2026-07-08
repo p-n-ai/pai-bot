@@ -199,7 +199,7 @@ export function AISettingsPanel() {
   const { settings } = state
 
   return (
-    <div className='grid gap-5'>
+    <div className='mt-8 grid gap-6'>
       <DefaultProviderSection
         error={providerSubmit.error}
         isPending={providerSubmit.isPending}
