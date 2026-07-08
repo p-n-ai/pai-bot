@@ -94,7 +94,7 @@ LEARN_AI_OLLAMA_MODEL=qwen3
 docker compose up -d
 ```
 
-This starts: PostgreSQL, Dragonfly (cache), NATS (messaging), the Go server, and the admin panel.
+This starts: PostgreSQL, Dragonfly (cache), the Go server, and the admin panel.
 
 If you want demo rows in PostgreSQL for local testing, run:
 
@@ -108,7 +108,7 @@ If the app is running in Docker, seed through the app container instead:
 just seed-docker
 ```
 
-When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres`, `dragonfly`, and `nats` instead of `localhost`. The `app` service already reads `.env`, so school admins can choose AI provider and default model purely with Docker env vars. For Ollama, Compose overrides `LEARN_AI_OLLAMA_URL` inside the app container to `http://ollama:11434`.
+When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres` and `dragonfly` instead of `localhost`. The `app` service already reads `.env`, so school admins can choose AI provider and default model purely with Docker env vars. For Ollama, Compose overrides `LEARN_AI_OLLAMA_URL` inside the app container to `http://ollama:11434`.
 
 ### 3. Pull a free AI model (optional)
 
@@ -190,7 +190,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 │  │           Agent Engine                   │       │
 │  │  ┌──────────────┐  ┌──────────────────┐  │       │
 │  │  │ Conversation │  │ Proactive        │  │       │
-│  │  │ State Machine│  │ Scheduler (NATS) │  │       │
+│  │  │ State Machine│  │ Scheduler        │  │       │
 │  │  └──────────────┘  └──────────────────┘  │       │
 │  │  ┌─────────────┐  ┌──────────────────┐   │       │
 │  │  │ Progress    │  │ Pedagogical      │   │       │
@@ -224,7 +224,6 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Backend** | Go 1.22+ (stdlib) | Goroutines handle millions of concurrent connections. Single binary, ~15MB. |
 | **Database** | PostgreSQL 17 | Standard, portable. Every cloud has managed Postgres. |
 | **Cache** | Dragonfly | Redis-compatible, multi-threaded, 80% less memory. |
-| **Messaging** | NATS + JetStream | Proactive nudge scheduling, background jobs, event-driven communication. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
 | **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
@@ -415,7 +414,6 @@ P&AI is designed to run on any cloud without lock-in:
 | Compute | EKS | GKE | AKS | Any K8s |
 | Database | RDS PostgreSQL | Cloud SQL | Azure DB | PostgreSQL |
 | Cache | (self-hosted Dragonfly) | (self-hosted) | (self-hosted) | Dragonfly/Redis |
-| Messaging | (self-hosted NATS) | (self-hosted) | (self-hosted) | NATS |
 | Storage | S3 | GCS | Blob | MinIO |
 
 ---
@@ -429,7 +427,6 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from @BotFather |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
-| `LEARN_NATS_URL` | No | `nats://localhost:4222` | NATS messaging server |
 | `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
 | `LEARN_AI_OPENAI_API_KEY` | No* | — | OpenAI API key |
 | `LEARN_AI_OPENAI_MODEL` | No | — | Default OpenAI model when request model is not set |
@@ -445,7 +442,7 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
-| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; currently used for JWT signing |
+| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; signs JWTs and derives the AES-256-GCM key for API keys stored via admin AI settings. Rotating it makes stored keys undecryptable (rotate back to recover, or re-enter via the admin UI); storing keys is refused while it is the default value |
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 
@@ -486,8 +483,8 @@ Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Do
 `just go` / `just next` require `LEARN_DATABASE_URL` to be present in `.env`; the local bootstrap path no longer falls back to an implicit default DSN or shell override.
 
 ```bash
-# Start infrastructure (Postgres, Dragonfly, NATS, Ollama)
-docker compose up -d postgres dragonfly nats ollama
+# Start infrastructure (Postgres, Dragonfly, Ollama)
+docker compose up -d postgres dragonfly ollama
 
 # Run database migrations
 just migrate

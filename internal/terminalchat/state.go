@@ -38,7 +38,7 @@ type StateDeps struct {
 
 // BuildState constructs terminal chat state dependencies.
 // Persistent PostgreSQL-backed state is the default; in-memory mode must be explicit.
-func BuildState(ctx context.Context, cfg *config.Config, opts StateOptions, deps StateDeps) (State, func(), error) {
+func BuildState(ctx context.Context, dbCfg config.DatabaseConfig, opts StateOptions, deps StateDeps) (State, func(), error) {
 	if opts.Memory {
 		return State{
 			Store:       agent.NewMemoryStore(),
@@ -79,7 +79,7 @@ func BuildState(ctx context.Context, cfg *config.Config, opts StateOptions, deps
 		}
 	}
 
-	db, err := openDB(ctx, cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
+	db, err := openDB(ctx, dbCfg.URL, dbCfg.MaxConns, dbCfg.MinConns)
 	if err != nil {
 		return State{}, nil, fmt.Errorf("connect database: %w", err)
 	}

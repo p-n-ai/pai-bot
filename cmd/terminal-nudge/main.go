@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
-	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
@@ -47,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := setupAIRouter(cfg)
+	router := airouter.Setup(cfg.AI)
 	if !router.HasProvider() {
 		fmt.Fprintln(os.Stderr, "no AI providers configured")
 		os.Exit(1)
@@ -63,7 +62,7 @@ func main() {
 		}
 	}
 
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{}, terminalchat.StateDeps{})
+	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{}, terminalchat.StateDeps{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build nudge state: %v\n", err)
 		os.Exit(1)
@@ -108,8 +107,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "terminal nudge error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg)
 }

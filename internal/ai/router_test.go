@@ -115,8 +115,9 @@ func TestRouter_FallbackOrder(t *testing.T) {
 func TestRouter_UsesConfiguredDefaultModelForProvider(t *testing.T) {
 	router := newTestRouter()
 	mock := ai.NewMockProvider("Hello!")
-	router.Register("openai", mock)
-	router.SetDefaultModel("openai", "gpt-4.1-mini")
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "openai", Provider: mock, DefaultModel: "gpt-4.1-mini"},
+	})
 
 	_, err := router.Complete(context.Background(), ai.CompletionRequest{
 		Messages: []ai.Message{{Role: "user", Content: "hi"}},
@@ -135,8 +136,9 @@ func TestRouter_UsesConfiguredDefaultModelForProvider(t *testing.T) {
 func TestRouter_TraceFuncCapturesProviderRequest(t *testing.T) {
 	router := newTestRouter()
 	mock := ai.NewMockProvider("Hello!")
-	router.Register("openai", mock)
-	router.SetDefaultModel("openai", "gpt-4.1-mini")
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "openai", Provider: mock, DefaultModel: "gpt-4.1-mini"},
+	})
 
 	var traces []ai.CompletionTrace
 	router.SetTraceFunc(func(trace ai.CompletionTrace) {
@@ -269,5 +271,95 @@ func (p *countingProvider) Models() []ai.ModelInfo {
 }
 
 func (p *countingProvider) HealthCheck(_ context.Context) error {
+	return nil
+}
+
+func TestRouter_ReRegisterReplacesInPlace(t *testing.T) {
+	router := newTestRouter()
+	router.Register("openai", ai.NewMockProvider("first"))
+	router.Register("ollama", ai.NewMockProvider("other"))
+	router.Register("openai", ai.NewMockProvider("second"))
+
+	order := router.ProviderOrder()
+	if len(order) != 2 || order[0] != "openai" || order[1] != "ollama" {
+		t.Fatalf("ProviderOrder() = %v, want [openai ollama]", order)
+	}
+
+	resp, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if resp.Content != "second" {
+		t.Errorf("Content = %q, want %q (re-registered provider must replace the old one)", resp.Content, "second")
+	}
+}
+
+func TestRouter_ReplaceProvidersInvalidatesInFlightBreakerUpdates(t *testing.T) {
+	router := ai.NewRouterWithConfig(ai.RouterConfig{
+		RetryBackoff:            []time.Duration{1 * time.Millisecond},
+		BreakerFailureThreshold: 1, // any counted failure opens the circuit
+		BreakerCooldown:         time.Minute,
+	})
+
+	stale := &blockingFailProvider{
+		started: make(chan struct{}, 1),
+		release: make(chan struct{}),
+	}
+	router.Register("openai", stale)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := router.Complete(context.Background(), ai.CompletionRequest{
+			Messages: []ai.Message{{Role: "user", Content: "hi"}},
+		})
+		done <- err
+	}()
+
+	<-stale.started
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "openai", Provider: ai.NewMockProvider("fresh")},
+	})
+	close(stale.release)
+	if err := <-done; err == nil {
+		t.Fatal("stale in-flight request should fail")
+	}
+
+	// The stale failure must not open the fresh provider's circuit.
+	resp, err := router.Complete(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() after swap error = %v", err)
+	}
+	if resp.Content != "fresh" {
+		t.Fatalf("Content = %q, want %q", resp.Content, "fresh")
+	}
+}
+
+type blockingFailProvider struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *blockingFailProvider) Complete(_ context.Context, _ ai.CompletionRequest) (ai.CompletionResponse, error) {
+	select {
+	case p.started <- struct{}{}:
+	default:
+	}
+	<-p.release
+	return ai.CompletionResponse{}, errors.New("stale provider failure")
+}
+
+func (p *blockingFailProvider) StreamComplete(_ context.Context, _ ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingFailProvider) Models() []ai.ModelInfo {
+	return nil
+}
+
+func (p *blockingFailProvider) HealthCheck(_ context.Context) error {
 	return nil
 }

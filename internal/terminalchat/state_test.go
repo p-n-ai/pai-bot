@@ -19,12 +19,10 @@ func TestBuildState_DefaultsToPersistentMode(t *testing.T) {
 	var postgresTrackerCalled bool
 	var postgresLoggerCalled bool
 
-	state, cleanup, err := BuildState(context.Background(), &config.Config{
-		Database: config.DatabaseConfig{
-			URL:      "postgres://example",
-			MaxConns: 5,
-			MinConns: 1,
-		},
+	state, cleanup, err := BuildState(context.Background(), config.DatabaseConfig{
+		URL:      "postgres://example",
+		MaxConns: 5,
+		MinConns: 1,
 	}, StateOptions{}, StateDeps{
 		OpenDB: func(context.Context, string, int, int) (*database.DB, error) {
 			openDBCalled = true
@@ -63,7 +61,7 @@ func TestBuildState_DefaultsToPersistentMode(t *testing.T) {
 func TestBuildState_MemoryModeSkipsDatabase(t *testing.T) {
 	var openDBCalled bool
 
-	state, cleanup, err := BuildState(context.Background(), &config.Config{}, StateOptions{
+	state, cleanup, err := BuildState(context.Background(), config.DatabaseConfig{}, StateOptions{
 		Memory: true,
 	}, StateDeps{
 		OpenDB: func(context.Context, string, int, int) (*database.DB, error) {

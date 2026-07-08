@@ -54,8 +54,45 @@ func TestParseDuplicateFeature(t *testing.T) {
 	}
 }
 
+func TestWithOverrides(t *testing.T) {
+	base, err := Parse("")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	on, err := base.WithOverrides(map[string]bool{"turn_hooks": true})
+	if err != nil {
+		t.Fatalf("WithOverrides() error = %v", err)
+	}
+	if !on.Enabled(TurnHooks) {
+		t.Fatal("turn_hooks should be enabled after override")
+	}
+	if base.Enabled(TurnHooks) {
+		t.Fatal("WithOverrides must not mutate the receiver")
+	}
+
+	off, err := on.WithOverrides(map[string]bool{"turn_hooks": false})
+	if err != nil {
+		t.Fatalf("WithOverrides(false) error = %v", err)
+	}
+	if off.Enabled(TurnHooks) {
+		t.Fatal("turn_hooks should be disabled after override")
+	}
+
+	if _, err := base.WithOverrides(map[string]bool{"unknown_flag": true}); err == nil {
+		t.Fatal("WithOverrides should reject unknown feature flag")
+	}
+}
+
 func TestParseInvalidBool(t *testing.T) {
 	if _, err := Parse("turn_hooks=maybe"); err == nil {
 		t.Fatal("Parse() should reject invalid bool override")
+	}
+}
+
+func TestDefaults(t *testing.T) {
+	defaults := Defaults()
+	if enabled, ok := defaults["turn_hooks"]; !ok || enabled {
+		t.Fatalf("Defaults()[turn_hooks] = %v, %v; want false, present", enabled, ok)
 	}
 }

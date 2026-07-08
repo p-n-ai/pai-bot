@@ -37,6 +37,7 @@ type Paths map[string]*PathItem
 type PathItem struct {
 	Get  *Operation `json:"get,omitempty"`
 	Post *Operation `json:"post,omitempty"`
+	Put  *Operation `json:"put,omitempty"`
 }
 
 type Operation struct {

@@ -107,12 +107,6 @@ Dragonfly (Redis-compatible) used for:
 - Rate limiting (per-user, per-tenant)
 - Session data
 
-## Messaging (Planned)
-
-NATS with JetStream is configured in Docker Compose and the config package but not yet integrated in application code. Planned uses:
-- Event streaming (session events, AI usage)
-- Cross-service communication if the monolith splits
-
 ## Infrastructure
 
 ```
@@ -122,7 +116,7 @@ NATS with JetStream is configured in Docker Compose and the config package but n
 ├─────────────────────────────────────────────┤
 │  Go Server (:8080)  │  Next.js Admin (:3000)│
 ├─────────────────────────────────────────────┤
-│  PostgreSQL 17  │  Dragonfly  │  NATS       │
+│  PostgreSQL 17  │  Dragonfly                │
 └─────────────────────────────────────────────┘
 ```
 

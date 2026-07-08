@@ -77,6 +77,19 @@ describe('admin SPA RBAC', () => {
     expect(canAccessPath(teacher, '/settings/embed')).toBe(false)
   })
 
+  it('limits AI settings to the session capability from the backend', () => {
+    const grantedAdmin: AuthUser = { ...admin, can_manage_ai_settings: true }
+    const grantedPlatformAdmin: AuthUser = {
+      ...platformAdmin,
+      can_manage_ai_settings: true,
+    }
+
+    expect(canAccessPath(grantedAdmin, '/settings/ai')).toBe(true)
+    expect(canAccessPath(grantedPlatformAdmin, '/settings/ai')).toBe(true)
+    expect(canAccessPath(admin, '/settings/ai')).toBe(false)
+    expect(canAccessPath(teacher, '/settings/ai')).toBe(false)
+  })
+
   it('rejects redirect values that could escape the admin app or loop login', () => {
     expect(isSafeRedirectPath('/dashboard')).toBe(true)
     expect(isSafeRedirectPath('/')).toBe(false)

@@ -66,7 +66,7 @@ type EngineConfig struct {
 	Groups                GroupStore
 	TenantID              string // tenant UUID for bot-side group operations
 	DevMode               bool
-	FeatureFlags          featureflags.Features
+	FeatureFlags          func() featureflags.Features // called per check so runtime overrides apply without restart
 	TurnHookNotice        func(TurnHookCallNotice)
 	Notifier              Notifier
 }
@@ -91,7 +91,7 @@ type Engine struct {
 	groups                GroupStore
 	tenantID              string
 	devMode               bool
-	featureFlags          featureflags.Features
+	featureFlags          func() featureflags.Features
 	turnHookNotice        func(TurnHookCallNotice)
 	turnHooks             []turnHook
 	notifier              Notifier
@@ -154,6 +154,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if notifier == nil {
 		notifier = NopNotifier{}
 	}
+	flags := cfg.FeatureFlags
+	if flags == nil {
+		flags = func() featureflags.Features { return featureflags.Features{} }
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -173,7 +177,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		groups:                groups,
 		tenantID:              cfg.TenantID,
 		devMode:               cfg.DevMode,
-		featureFlags:          cfg.FeatureFlags,
+		featureFlags:          flags,
 		turnHookNotice:        cfg.TurnHookNotice,
 		turnHooks:             defaultTurnHookCatalog(),
 		notifier:              notifier,

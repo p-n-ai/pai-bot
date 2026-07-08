@@ -4,6 +4,7 @@ import {
   addEmbedOrigin,
   createGroup,
   disconnectWhatsApp,
+  getAISettings,
   getAIUsage,
   getClassProgress,
   getEmbedConfig,
@@ -21,9 +22,11 @@ import {
   removeEmbedOrigin,
   sendStudentNudge,
   submitOnboarding,
+  updateAISettings,
   updateEmbedConfig,
   upsertTokenBudgetWindow,
 } from './admin-api'
+import { aiSettingsFixture } from './ai-settings-types.test'
 import { parentSummaryFixture } from './parent-summary-types.test'
 import {
   studentConversationFixture,
@@ -252,6 +255,59 @@ describe('admin dashboard API', () => {
       credentials: 'include',
       cache: 'no-store',
     })
+  })
+
+  it('reads and updates AI settings without echoing the key', async () => {
+    const updated = {
+      ...aiSettingsFixture,
+      defaultProvider: 'openrouter',
+      openrouterKey: { set: true, last4: 'z9y8' },
+    }
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(aiSettingsFixture)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(updated)))
+
+    await expect(getAISettings(fetcher)).resolves.toEqual(aiSettingsFixture)
+    await expect(
+      updateAISettings(
+        {
+          defaultProvider: 'openrouter',
+          openrouterApiKey: 'sk-or-secret',
+        },
+        fetcher,
+      ),
+    ).resolves.toEqual(updated)
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, '/api/admin/ai/settings', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {},
+    })
+    expect(fetcher).toHaveBeenNthCalledWith(2, '/api/admin/ai/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        defaultProvider: 'openrouter',
+        openrouterApiKey: 'sk-or-secret',
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      cache: 'no-store',
+    })
+  })
+
+  it('rejects AI settings responses that break the contract', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ defaultProvider: 'openai' })),
+      )
+
+    await expect(getAISettings(fetcher)).rejects.toThrow(
+      'Invalid AI settings response',
+    )
   })
 
   it('reads user management data with a typed contract', async () => {

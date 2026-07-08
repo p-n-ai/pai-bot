@@ -22,9 +22,6 @@ data:
   {{- if .Values.dragonfly.enabled }}
   LEARN_CACHE_URL: {{ include "pai.cacheUrl" . | quote }}
   {{- end }}
-  {{- if .Values.nats.enabled }}
-  LEARN_NATS_URL: {{ include "pai.natsUrl" . | quote }}
-  {{- end }}
   {{- if .Values.secrets.ollama.enabled }}
   LEARN_AI_OLLAMA_ENABLED: "true"
   LEARN_AI_OLLAMA_URL: {{ .Values.secrets.ollama.url | quote }}

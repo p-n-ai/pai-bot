@@ -66,7 +66,7 @@ func defaultTurnHookCatalog() []turnHook {
 }
 
 func (e *Engine) turnHooksEnabled() bool {
-	return e.featureFlags.Enabled(featureflags.TurnHooks)
+	return e.featureFlags().Enabled(featureflags.TurnHooks)
 }
 
 func (e *Engine) runTurnHooks(ctx context.Context, turn *agentTurn) (turnHookRunResult, error) {

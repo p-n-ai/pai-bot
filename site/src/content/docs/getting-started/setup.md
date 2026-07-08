@@ -48,7 +48,7 @@ The bot is now running and listening for Telegram messages.
 ## What `just go` Does
 
 1. Installs Go modules and frontend packages (if missing)
-2. Starts infrastructure: PostgreSQL, Dragonfly (cache), NATS (messaging)
+2. Starts infrastructure: PostgreSQL, Dragonfly (cache)
 3. Runs database migrations via `goose`
 4. Seeds the default tenant (in single-tenant mode)
 5. Starts the Go server on `:8080`

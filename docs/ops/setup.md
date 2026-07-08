@@ -51,7 +51,7 @@ The bot is now running and listening for Telegram messages.
 ## What `just go` Does
 
 1. Installs Go modules and frontend packages (if missing)
-2. Starts infrastructure: PostgreSQL, Dragonfly (cache), NATS (messaging)
+2. Starts infrastructure: PostgreSQL, Dragonfly (cache)
 3. Runs database migrations via `goose`
 4. Seeds the default tenant (in single-tenant mode)
 5. Starts the Go server on `:8080`
@@ -92,7 +92,7 @@ Copy `.env.example` for the full list. The key ones:
 | `LEARN_AI_OPENROUTER_MODEL` | No | Default OpenRouter model when no request-specific model is set |
 | `LEARN_AI_OLLAMA_ENABLED` | No* | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_MODEL` | No | Default Ollama model when no request-specific model is set |
-| `PAI_AUTH_SECRET` | No | JWT signing secret (default: `change-me-in-production`) |
+| `PAI_AUTH_SECRET` | No | JWT signing secret; also derives the encryption key for API keys stored via admin AI settings (default: `change-me-in-production`; storing keys is refused on the default) |
 | `LEARN_TENANT_MODE` | No | `single` (default) or `multi` |
 
 *At least one AI provider must be configured.

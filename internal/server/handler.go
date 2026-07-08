@@ -23,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
@@ -35,6 +36,7 @@ type AuthService = authService
 
 type TenantAdminDataSourceProvider = tenantAdminDataSourceProvider
 type GatewayNotifier = gatewayNotifier
+type RuntimeSettingsStore = runtimeSettingsStore
 
 func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw: gw} }
 func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
@@ -46,8 +48,8 @@ func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSour
 func NewBootstrapRetrievalService(loader *curriculum.Loader) *retrieval.Service {
 	return newBootstrapRetrievalService(loader)
 }
-func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
-	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL)
+func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
+	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
 }
 func NewTenantAdminDataSourceProvider(newForTenant func(string) AdminDataSource, newForPlatform func() AdminDataSource, defaultTenantID func(context.Context) (string, error)) TenantAdminDataSourceProvider {
 	return tenantAdminDataSourceProvider{newForTenant: newForTenant, newForPlatform: newForPlatform, defaultTenantID: defaultTenantID}
@@ -319,14 +321,30 @@ func newHandlerWithServices(admin adminDataSource, sender messageSender, authSvc
 
 func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration) http.Handler {
 	joinSource, _ := admin.(joinClassSource)
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "")
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: admin}, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, "", nil, nil, false)
 }
 
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string) http.Handler {
+// settingsStore and applySettings back the admin runtime-settings endpoints:
+// handlers save through the store, which runs applySettings to rewire the
+// live AI router. A nil settingsStore leaves the /api/admin/ai/settings routes
+// unregistered (tests, unwired deployments). multiTenant restricts those
+// routes to platform admins: the settings row is platform-global.
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
 	retrievalService = ensureRetrievalService(retrievalService)
+
+	// AI settings are platform-global (single row, one process-wide AI
+	// router): a tenant admin may manage them only in single-tenant mode,
+	// otherwise any school admin could swap every tenant's provider key.
+	settingsRoles := []auth.Role{auth.RoleAdmin, auth.RolePlatformAdmin}
+	if multiTenant {
+		settingsRoles = []auth.Role{auth.RolePlatformAdmin}
+	}
+	canManageAISettings := func(role auth.Role) bool {
+		return settingsStore != nil && slices.Contains(settingsRoles, role)
+	}
 
 	teacherOrAbove := chain(
 		authenticated,
@@ -344,14 +362,14 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 		authenticated,
 		auth.RequireRoles(auth.RoleAdmin),
 	)
-	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc))
+	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc, canManageAISettings))
 	mux.Handle("GET /api/auth/google/start", handleAuthGoogleStart(authSvc))
 	mux.Handle("GET /api/auth/google/callback", handleAuthGoogleCallback(authSvc))
 	mux.Handle("POST /api/auth/google/link/start", authenticated(handleAuthGoogleLinkStart(authSvc)))
 	mux.Handle("GET /api/auth/identities", authenticated(handleAuthIdentities(authSvc)))
-	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc))
-	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc))
-	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc))
+	mux.Handle("POST /api/auth/invitations/accept", handleAuthAcceptInvite(authSvc, canManageAISettings))
+	mux.Handle("GET /api/auth/session", handleAuthSession(authSvc, canManageAISettings))
+	mux.Handle("POST /api/auth/switch-tenant", handleAuthSwitchTenant(authSvc, canManageAISettings))
 	mux.Handle("POST /api/auth/logout", handleAuthLogout(authSvc))
 	mux.Handle("GET /api/join/{slug}", handlePublicJoinClass(joinSource))
 	mux.Handle("POST /api/admin/invites", adminOrAbove(handleAdminInvite(authSvc, inviteBaseURL)))
@@ -367,6 +385,11 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	mux.Handle("GET /api/admin/ai/usage", teacherOrAbove(handleAdminAIUsage(adminProvider)))
 	mux.Handle("GET /api/admin/analytics/report", adminOrAbove(handleAdminAnalyticsReport(adminProvider)))
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
+	if settingsStore != nil {
+		settingsAdmin := chain(authenticated, auth.RequireRoles(settingsRoles...))
+		mux.Handle("GET /api/admin/ai/settings", settingsAdmin(handleAdminGetAISettings(settingsStore)))
+		mux.Handle("PUT /api/admin/ai/settings", settingsAdmin(handleAdminUpdateAISettings(settingsStore, applySettings)))
+	}
 	mux.Handle("GET /api/admin/export/students", adminOrAbove(handleAdminExportStudents(adminProvider)))
 	mux.Handle("GET /api/admin/export/conversations", adminOrAbove(handleAdminExportConversations(adminProvider)))
 	mux.Handle("GET /api/admin/export/progress", adminOrAbove(handleAdminExportProgress(adminProvider)))
@@ -1510,7 +1533,7 @@ func handleAdminInviteReissue(authSvc authService, defaultBaseURL string) http.H
 	}
 }
 
-func handleAuthLogin(authSvc authService) http.HandlerFunc {
+func handleAuthLogin(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		TenantID string `json:"tenant_id"`
 		Email    string `json:"email"`
@@ -1538,7 +1561,7 @@ func handleAuthLogin(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp, canManageAISettings)
 	}
 }
 
@@ -1626,7 +1649,7 @@ func handleAuthIdentities(authSvc authService) http.HandlerFunc {
 	}
 }
 
-func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
+func handleAuthAcceptInvite(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		Token    string `json:"token"`
 		Name     string `json:"name"`
@@ -1654,11 +1677,11 @@ func handleAuthAcceptInvite(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusCreated, resp)
+		writeAuthSessionResponse(w, r, http.StatusCreated, resp, canManageAISettings)
 	}
 }
 
-func handleAuthSession(authSvc authService) http.HandlerFunc {
+func handleAuthSession(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sessionToken := readCookieValue(r, auth.SessionCookieName)
 		if sessionToken == "" {
@@ -1672,11 +1695,11 @@ func handleAuthSession(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, session)
+		writeAuthSessionResponse(w, r, http.StatusOK, session, canManageAISettings)
 	}
 }
 
-func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
+func handleAuthSwitchTenant(authSvc authService, canManageAISettings func(auth.Role) bool) http.HandlerFunc {
 	type request struct {
 		SessionToken string `json:"session_token"`
 		TenantID     string `json:"tenant_id"`
@@ -1712,7 +1735,7 @@ func handleAuthSwitchTenant(authSvc authService) http.HandlerFunc {
 			return
 		}
 
-		writeAuthSessionResponse(w, r, http.StatusOK, resp)
+		writeAuthSessionResponse(w, r, http.StatusOK, resp, canManageAISettings)
 	}
 }
 
@@ -1787,17 +1810,25 @@ func decodeOptionalJSONBody(r *http.Request, target any) (err error) {
 	return nil
 }
 
+type authSessionUser struct {
+	auth.UserSession
+	CanManageAISettings bool `json:"can_manage_ai_settings"`
+}
+
 type authSessionResponse struct {
 	ExpiresAt     time.Time           `json:"expires_at"`
-	User          auth.UserSession    `json:"user"`
+	User          authSessionUser     `json:"user"`
 	TenantChoices []auth.TenantOption `json:"tenant_choices,omitempty"`
 }
 
-func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, session auth.Session) {
+func writeAuthSessionResponse(w http.ResponseWriter, r *http.Request, status int, session auth.Session, canManageAISettings func(auth.Role) bool) {
 	setSessionCookies(w, r, session)
 	writeJSON(w, status, authSessionResponse{
-		ExpiresAt:     session.ExpiresAt,
-		User:          session.User,
+		ExpiresAt: session.ExpiresAt,
+		User: authSessionUser{
+			UserSession:         session.User,
+			CanManageAISettings: canManageAISettings(session.User.Role),
+		},
 		TenantChoices: session.TenantChoices,
 	})
 }

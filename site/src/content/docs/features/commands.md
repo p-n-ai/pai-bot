@@ -49,7 +49,7 @@ P&AI Bot supports the following slash commands. These are available in Telegram'
 
 ## Dev Commands
 
-These are only available when `LEARN_FEATURES_DEV_MODE=true`:
+These are only available when `LEARN_DEV_MODE=true`:
 
 | Command | Description |
 |---------|-------------|

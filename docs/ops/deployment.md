@@ -73,7 +73,6 @@ docker compose logs -f app            # Watch logs
 | **caddy** | `caddy:2-alpine` | 80, 443 | 128 MB |
 | **postgres** | `postgres:17-alpine` | 5432 (internal) | 512 MB |
 | **dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly` | 6379 (internal) | 300 MB |
-| **nats** | `nats:2.10-alpine` | 4222 (internal) | 128 MB |
 
 ### Reverse Proxy (Caddy)
 
@@ -106,7 +105,7 @@ The `scripts/deploy-remote.sh` script handles remote deployment:
 
 It performs:
 1. Pull latest images from container registry
-2. Start infrastructure (Postgres, Dragonfly, NATS)
+2. Start infrastructure (Postgres, Dragonfly)
 3. Run database migrations
 4. Start application with health checks
 5. Smoke tests (health endpoint, bot commands)
@@ -146,7 +145,7 @@ Multi-stage build:
 
 ## Kubernetes (Helm)
 
-A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, admin SPA, PostgreSQL, Dragonfly, NATS, with database migrations, health probes, and ingress routing.
+A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, admin SPA, PostgreSQL, and Dragonfly, with database migrations, health probes, and ingress routing.
 
 ### Prerequisites
 
@@ -215,7 +214,6 @@ k3d cluster delete pai-local
 | `pai-admin` | Deployment | Vite/TanStack admin SPA (port 3000) |
 | `pai-postgres` | StatefulSet + PVC | PostgreSQL 17 database |
 | `pai-dragonfly` | StatefulSet + PVC | Dragonfly cache (Redis-compatible) |
-| `pai-nats` | Deployment | NATS with JetStream |
 | `pai` | ConfigMap | Non-secret environment variables |
 | `pai` | Secret | API keys, auth secret, DB password |
 | `pai` | Ingress | Routes `/api/*` to app, `/` to admin |
@@ -241,7 +239,6 @@ Key values in `values.yaml`:
 | `secrets.ai.openaiApiKey` | `""` | OpenAI API key |
 | `postgres.enabled` | `true` | Use built-in PostgreSQL (set `false` for external DB) |
 | `dragonfly.enabled` | `true` | Use built-in Dragonfly cache |
-| `nats.enabled` | `true` | Use built-in NATS |
 | `admin.enabled` | `true` | Deploy admin panel |
 | `ingress.enabled` | `false` | Create ingress resource |
 | `ingress.host` | `pai.example.com` | Ingress hostname |

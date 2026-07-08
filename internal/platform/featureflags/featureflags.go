@@ -113,6 +113,32 @@ func (f Features) set(feature Feature, enabled bool) {
 	delete(f.enabled, feature)
 }
 
+// WithOverrides returns a copy of f with overrides applied on top.
+// Unknown flag names are rejected against the registry; f is not mutated.
+func (f Features) WithOverrides(overrides map[string]bool) (Features, error) {
+	merged := Features{enabled: map[Feature]struct{}{}}
+	for feature := range f.enabled {
+		merged.enabled[feature] = struct{}{}
+	}
+	for name, enabled := range overrides {
+		feature := Feature(name)
+		if _, ok := registry[feature]; !ok {
+			return Features{}, fmt.Errorf("unknown feature flag %q", name)
+		}
+		merged.set(feature, enabled)
+	}
+	return merged, nil
+}
+
+// Defaults returns every registered flag name with its default enabled state.
+func Defaults() map[string]bool {
+	defaults := make(map[string]bool, len(registry))
+	for feature, spec := range registry {
+		defaults[string(feature)] = spec.DefaultEnabled
+	}
+	return defaults
+}
+
 // Enabled reports whether feature is active.
 func (f Features) Enabled(feature Feature) bool {
 	_, ok := f.enabled[feature]

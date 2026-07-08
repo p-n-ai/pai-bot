@@ -26,7 +26,7 @@ Maximum **3 nudges per day** per student to prevent notification fatigue. The sc
 
 ## Personalization
 
-When AI nudges are enabled (`LEARN_FEATURES_AI_NUDGES=true`), nudge messages include personalized context:
+When AI nudges are enabled (`LEARN_AI_PERSONALIZED_NUDGES_ENABLED=true`), nudge messages include personalized context:
 
 - Current streak count
 - Active goal progress

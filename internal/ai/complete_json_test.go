@@ -212,8 +212,9 @@ func TestRouter_CompleteJSON_UsesAnthropicStructuredDefaults(t *testing.T) {
 func TestRouter_CompleteJSON_UsesConfiguredStructuredModelForProvider(t *testing.T) {
 	router := newTestRouter()
 	mock := ai.NewMockProvider(`{"final_answer":"ok"}`)
-	router.Register("openai", mock)
-	router.SetDefaultModel("openai", "gpt-4.1-mini")
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "openai", Provider: mock, DefaultModel: "gpt-4.1-mini"},
+	})
 
 	var out structuredReply
 	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{

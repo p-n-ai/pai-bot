@@ -21,7 +21,6 @@ read_when:
 | `LEARN_DATABASE_MAX_CONNS` | `25` | Max Postgres pool connections. |
 | `LEARN_DATABASE_MIN_CONNS` | `5` | Min Postgres pool connections. |
 | `LEARN_CACHE_URL` | `redis://localhost:6379` | Dragonfly/Redis URL. |
-| `LEARN_NATS_URL` | `nats://localhost:4222` | NATS URL. |
 
 ## AI providers
 
@@ -55,7 +54,7 @@ read_when:
 | `LEARN_WHATSAPP_VERIFY_TOKEN` | empty | Meta webhook verification token. |
 | `LEARN_WHATSAPP_MEOW_DB` | SQLite DSN | whatsmeow session DB path. |
 | `LEARN_WHATSAPP_QR_TOKEN` | empty | Token for QR/admin WhatsApp flows. |
-| `PAI_AUTH_SECRET` | `change-me-in-production` | JWT signing secret. |
+| `PAI_AUTH_SECRET` | `change-me-in-production` | JWT signing secret; also derives the AES-256-GCM key for API keys stored via admin AI settings. Rotating it makes stored keys undecryptable (they stay in the DB, so rotating back recovers them; otherwise re-enter via the admin UI). Storing keys is refused while this is the default value. |
 | `PAI_AUTH_GOOGLE_CLIENT_ID` | empty | Google OAuth client ID. |
 | `PAI_AUTH_GOOGLE_CLIENT_SECRET` | empty | Google OAuth client secret. |
 | `PAI_AUTH_GOOGLE_ALLOWED_DOMAIN` | empty | Optional Google hosted-domain allowlist. |
@@ -82,7 +81,6 @@ read_when:
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disables multilingual behavior. |
 | `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Rating prompt cadence. |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | `true` | Enables AI-personalized nudges. |
-| `LEARN_AI_NUDGES_ENABLED` | fallback only | Legacy fallback for personalized nudges. |
 | `LEARN_CURRICULUM_PATH` | `./oss` | Curriculum source path. |
 
 ## Validation rules

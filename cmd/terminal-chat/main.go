@@ -23,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
 )
@@ -91,7 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := setupAIRouter(cfg)
+	router := airouter.Setup(cfg.AI)
 	if !router.HasProvider() {
 		fmt.Fprintln(os.Stderr, "no AI providers configured")
 		os.Exit(1)
@@ -103,7 +104,7 @@ func main() {
 		slog.Warn("curriculum not loaded", "path", cfg.CurriculumPath, "error", err)
 	}
 
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg, terminalchat.StateOptions{
+	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{
 		Memory:  memory,
 		Channel: channel,
 	}, terminalchat.StateDeps{})
@@ -139,7 +140,7 @@ func main() {
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
-		FeatureFlags:         cfg.FeatureFlags,
+		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
 	}
 	if cfg.Runtime.DevMode {
 		engineCfg.TurnHookNotice = func(notice agent.TurnHookCallNotice) {
@@ -191,10 +192,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "terminal chat error: %v\n", runErr)
 		os.Exit(1)
 	}
-}
-
-func setupAIRouter(cfg *config.Config) *ai.Router {
-	return airouter.Setup(cfg)
 }
 
 type conversationHistory struct {
