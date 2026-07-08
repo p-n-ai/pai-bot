@@ -183,7 +183,7 @@ func buildAISettingsResponse(eff settings.EffectiveSettings) aiSettingsResponse 
 	return aiSettingsResponse{
 		DefaultProvider: eff.DefaultProvider,
 		OpenRouterModel: eff.OpenRouterModel,
-		OpenRouterKey:   aiSettingsKeyStatus{Set: eff.OpenRouterAPIKey != "", Last4: settings.KeyLast4(eff.OpenRouterAPIKey)},
+		OpenRouterKey:   aiSettingsKeyStatus{Set: eff.OpenRouterKeySet, Last4: eff.OpenRouterKeyLast4},
 		Flags:           eff.Flags,
 		Sources: aiSettingsSources{
 			DefaultProvider: eff.DefaultProviderSource,

@@ -97,8 +97,8 @@ func TestEffective(t *testing.T) {
 		if eff.DefaultProvider != "openai" || eff.DefaultProviderSource != SourceEnv {
 			t.Fatalf("DefaultProvider = %q (%s), want openai (env)", eff.DefaultProvider, eff.DefaultProviderSource)
 		}
-		if eff.OpenRouterAPIKey != "env-key" || eff.OpenRouterKeySource != SourceEnv {
-			t.Fatalf("OpenRouterAPIKey = %q (%s), want env-key (env)", eff.OpenRouterAPIKey, eff.OpenRouterKeySource)
+		if !eff.OpenRouterKeySet || eff.OpenRouterKeyLast4 != "" || eff.OpenRouterKeySource != SourceEnv {
+			t.Fatalf("OpenRouterKey = set:%v last4:%q (%s), want set with no hint (env)", eff.OpenRouterKeySet, eff.OpenRouterKeyLast4, eff.OpenRouterKeySource)
 		}
 		if !eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceEnv {
 			t.Fatalf("turn_hooks = %v (%s), want true (env)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
@@ -107,14 +107,14 @@ func TestEffective(t *testing.T) {
 
 	t.Run("db overrides env", func(t *testing.T) {
 		eff := Effective(envAIConfig(), envFlags, Settings{
-			AI:    AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "db-key"},
+			AI:    AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "db-secret-1234"},
 			Flags: map[string]bool{"turn_hooks": false},
 		})
 		if eff.DefaultProvider != "openrouter" || eff.DefaultProviderSource != SourceDB {
 			t.Fatalf("DefaultProvider = %q (%s), want openrouter (db)", eff.DefaultProvider, eff.DefaultProviderSource)
 		}
-		if eff.OpenRouterAPIKey != "db-key" || eff.OpenRouterKeySource != SourceDB {
-			t.Fatalf("OpenRouterAPIKey = %q (%s), want db-key (db)", eff.OpenRouterAPIKey, eff.OpenRouterKeySource)
+		if !eff.OpenRouterKeySet || eff.OpenRouterKeyLast4 != "1234" || eff.OpenRouterKeySource != SourceDB {
+			t.Fatalf("OpenRouterKey = set:%v last4:%q (%s), want set with last4 1234 (db)", eff.OpenRouterKeySet, eff.OpenRouterKeyLast4, eff.OpenRouterKeySource)
 		}
 		if eff.OpenRouterModel != "env-model" || eff.OpenRouterModelSource != SourceEnv {
 			t.Fatalf("OpenRouterModel = %q (%s), want env-model (env)", eff.OpenRouterModel, eff.OpenRouterModelSource)

@@ -53,7 +53,8 @@ type EffectiveSettings struct {
 	DefaultProviderSource string
 	OpenRouterModel       string
 	OpenRouterModelSource string
-	OpenRouterAPIKey      string
+	OpenRouterKeySet      bool
+	OpenRouterKeyLast4    string
 	OpenRouterKeySource   string
 	Flags                 map[string]bool
 	FlagSources           map[string]string
@@ -74,7 +75,10 @@ func Effective(envAI config.AIConfig, envFlags featureflags.Features, st Setting
 	var eff EffectiveSettings
 	eff.DefaultProvider, eff.DefaultProviderSource = pick(st.AI.DefaultProvider, envAI.DefaultProvider)
 	eff.OpenRouterModel, eff.OpenRouterModelSource = pick(st.AI.OpenRouterModel, envAI.OpenRouter.Model)
-	eff.OpenRouterAPIKey, eff.OpenRouterKeySource = pick(st.AI.OpenRouterAPIKey, envAI.OpenRouter.APIKey)
+	openRouterKey, openRouterKeySource := pick(st.AI.OpenRouterAPIKey, envAI.OpenRouter.APIKey)
+	eff.OpenRouterKeySet = openRouterKey != ""
+	eff.OpenRouterKeyLast4 = KeyLast4(openRouterKey)
+	eff.OpenRouterKeySource = openRouterKeySource
 
 	defaults := featureflags.Defaults()
 	eff.Flags = make(map[string]bool, len(defaults))
