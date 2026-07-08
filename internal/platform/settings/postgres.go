@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 
@@ -195,15 +196,13 @@ func pruneUnknownFlags(flags map[string]bool) {
 // openrouter key entry changed when the mutated key differs from decodedKey.
 func mergeSecrets(secret string, prev map[string]string, decodedKey, key string) (map[string]string, error) {
 	secrets := make(map[string]string, len(prev))
-	for name, blob := range prev {
-		secrets[name] = blob
-	}
-	switch {
-	case key == decodedKey:
+	maps.Copy(secrets, prev)
+	switch key {
+	case decodedKey:
 		// Unchanged (including "" after an undecryptable blob was dropped at
 		// decode): keep the stored blob byte-for-byte so reverting
 		// PAI_AUTH_SECRET can still recover the key.
-	case key == "":
+	case "":
 		delete(secrets, openRouterAPIKeySecret)
 	default:
 		if secret == config.DefaultAuthSecret {
