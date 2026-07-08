@@ -165,7 +165,8 @@ func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) (Se
 }
 
 // degradeSettingsRow never fails: a corrupted row degrades to zero Settings so
-// the server boots on env config and an admin can repair the stored settings.
+// the server boots on env config. Updates refuse to overwrite corrupted rows,
+// so the stored settings need manual repair.
 func degradeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Settings {
 	st, _, err := decodeSettingsRow(secret, aiJSON, flagsJSON, secretsJSON)
 	if err != nil {
