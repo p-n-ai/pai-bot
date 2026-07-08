@@ -31,6 +31,34 @@ type manualNudgeResponse struct {
 	Channel string `json:"channel"`
 }
 
+type aiSettingsKeyStatusDoc struct {
+	Set   bool   `json:"set"`
+	Last4 string `json:"last4"`
+}
+
+type aiSettingsSourcesDoc struct {
+	DefaultProvider string            `json:"defaultProvider"`
+	OpenRouterModel string            `json:"openrouterModel"`
+	OpenRouterKey   string            `json:"openrouterKey"`
+	Flags           map[string]string `json:"flags"`
+}
+
+type aiSettingsResponseDoc struct {
+	DefaultProvider    string                 `json:"defaultProvider"`
+	OpenRouterModel    string                 `json:"openrouterModel"`
+	OpenRouterKey      aiSettingsKeyStatusDoc `json:"openrouterKey"`
+	Flags              map[string]bool        `json:"flags"`
+	Sources            aiSettingsSourcesDoc   `json:"sources"`
+	AvailableProviders []string               `json:"availableProviders"`
+}
+
+type aiSettingsUpdateRequestDoc struct {
+	DefaultProvider  *string          `json:"defaultProvider"`
+	OpenRouterModel  *string          `json:"openrouterModel"`
+	OpenRouterAPIKey *string          `json:"openrouterApiKey"`
+	Flags            map[string]*bool `json:"flags"`
+}
+
 type healthResponse struct {
 	Status string `json:"status"`
 }
@@ -241,6 +269,30 @@ func Build() (*Document, error) {
 			protectedErrors(),
 		),
 	})
+	doc.Paths["/api/admin/ai/settings"] = &PathItem{
+		Get: &Operation{
+			Summary:     "Get effective AI settings for admins and platform admins",
+			Description: "Returns defaultProvider, openrouterModel, masked openrouterKey status, flags, per-field sources, and availableProviders. The API key itself is never returned. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Tags:        []string{"Admin"},
+			Security:    protected,
+			Responses: mergeResponses(
+				responseJSON("200", "Effective AI settings view.", registry.refFor(aiSettingsResponseDoc{})),
+				protectedErrors(),
+			),
+		},
+		Put: &Operation{
+			Summary:     "Update AI settings for admins and platform admins",
+			Description: "Partially updates defaultProvider, openrouterModel, openrouterApiKey, and flags, then returns the effective AI settings view. A null flag deletes the DB override; an empty openrouterApiKey clears the stored key; unknown fields are rejected with 400. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Tags:        []string{"Admin"},
+			Security:    protected,
+			RequestBody: jsonBody(registry.refFor(aiSettingsUpdateRequestDoc{})),
+			Responses: mergeResponses(
+				responseJSON("200", "Updated effective AI settings view.", registry.refFor(aiSettingsResponseDoc{})),
+				protectedErrors(),
+				responseText("400", "Request body is invalid, contains an unknown field, or would leave AI providers unusable."),
+			),
+		},
+	}
 	doc.Paths["/api/admin/analytics/report"] = route("GET", Operation{
 		Summary:  "Get comprehensive 6-week analytics report",
 		Tags:     []string{"Admin"},
@@ -317,6 +369,8 @@ func route(method string, operation Operation) *PathItem {
 		item.Get = &operation
 	case "POST":
 		item.Post = &operation
+	case "PUT":
+		item.Put = &operation
 	default:
 		panic(fmt.Sprintf("unsupported method %q", method))
 	}

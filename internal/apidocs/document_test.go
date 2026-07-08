@@ -26,6 +26,13 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 	if _, ok := doc.Paths["/api/admin/ai/usage"]; !ok {
 		t.Fatal("missing /api/admin/ai/usage path")
 	}
+	aiSettings, ok := doc.Paths["/api/admin/ai/settings"]
+	if !ok {
+		t.Fatal("missing /api/admin/ai/settings path")
+	}
+	if aiSettings.Get == nil || aiSettings.Put == nil {
+		t.Fatalf("/api/admin/ai/settings = %#v, want GET and PUT", aiSettings)
+	}
 
 	sessionSchema, ok := doc.Components.Schemas["Session"]
 	if !ok {
