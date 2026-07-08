@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -80,6 +81,13 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 				!airouter.WouldRegister(next.AI.DefaultProvider, store.MergedAI(next)) {
 				err = fmt.Errorf("provider %q has no usable configuration", next.AI.DefaultProvider)
 			}
+			// Clearing the key is the only update that can remove a provider;
+			// an empty router would crash-loop the next boot outside dev mode,
+			// taking down the admin UI that could repair it.
+			if err == nil && body.OpenRouterAPIKey != nil && next.AI.OpenRouterAPIKey == "" &&
+				!anyProviderRegistrable(store.MergedAI(next)) {
+				err = errors.New("clearing the API key would leave no AI providers configured")
+			}
 			badReq = err
 			if err != nil {
 				return settings.Settings{}, err
@@ -100,6 +108,12 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 		}
 		writeJSON(w, http.StatusOK, buildAISettingsResponse(store.Effective()))
 	}
+}
+
+func anyProviderRegistrable(cfg config.AIConfig) bool {
+	return slices.ContainsFunc(airouter.ProviderNames(), func(name string) bool {
+		return airouter.WouldRegister(name, cfg)
+	})
 }
 
 // decodeStrictJSONBody mirrors decodeJSONBody but rejects unknown fields and
@@ -151,9 +165,7 @@ func applyAISettingsUpdate(st settings.Settings, req aiSettingsUpdateRequest) (s
 		}
 		// Copy before writing: st.Flags may alias the caller's settings map.
 		flags := make(map[string]bool, len(st.Flags)+len(req.Flags))
-		for name, enabled := range st.Flags {
-			flags[name] = enabled
-		}
+		maps.Copy(flags, st.Flags)
 		for name, v := range req.Flags {
 			if v == nil {
 				delete(flags, name)

@@ -201,9 +201,11 @@ func TestAdminAISettingsPutAbsentFieldsUnchanged(t *testing.T) {
 }
 
 func TestAdminAISettingsPutEmptyKeyClears(t *testing.T) {
-	store := &memorySettingsStore{current: settings.Settings{
-		AI: settings.AISettings{OpenRouterAPIKey: "sk-1234"},
-	}}
+	store := &memorySettingsStore{
+		envAI: config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "sk-env"}},
+		current: settings.Settings{
+			AI: settings.AISettings{OpenRouterAPIKey: "sk-1234"},
+		}}
 	handler := newAISettingsHandler(store, nil)
 
 	payload := decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterApiKey":""}`))
@@ -290,9 +292,11 @@ func TestAdminAISettingsPutRejectsUnconfiguredDefaultProvider(t *testing.T) {
 }
 
 func TestAdminAISettingsPutClearKeyKeepsStaleDefault(t *testing.T) {
-	store := &memorySettingsStore{current: settings.Settings{
-		AI: settings.AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "sk-or-1234"},
-	}}
+	store := &memorySettingsStore{
+		envAI: config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "sk-env"}},
+		current: settings.Settings{
+			AI: settings.AISettings{DefaultProvider: "openrouter", OpenRouterAPIKey: "sk-or-1234"},
+		}}
 	handler := newAISettingsHandler(store, nil)
 
 	// The request does not set defaultProvider, so the stale default must not
@@ -303,6 +307,26 @@ func TestAdminAISettingsPutClearKeyKeepsStaleDefault(t *testing.T) {
 	}
 	if store.current.AI.DefaultProvider != "openrouter" || store.current.AI.OpenRouterAPIKey != "" {
 		t.Fatalf("stored settings = %#v, want default kept and key cleared", store.current.AI)
+	}
+}
+
+func TestAdminAISettingsPutRejectsClearingLastProvider(t *testing.T) {
+	// No env providers: clearing the only key would empty the router and
+	// crash-loop the next non-dev boot.
+	store := &memorySettingsStore{current: settings.Settings{
+		AI: settings.AISettings{OpenRouterAPIKey: "sk-or-1234"},
+	}}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterApiKey":""}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "no AI providers") {
+		t.Fatalf("body = %q, want no-AI-providers error", rec.Body.String())
+	}
+	if store.saves != 0 || store.current.AI.OpenRouterAPIKey != "sk-or-1234" {
+		t.Fatalf("saves = %d, stored key = %q; want no save and key kept", store.saves, store.current.AI.OpenRouterAPIKey)
 	}
 }
 
