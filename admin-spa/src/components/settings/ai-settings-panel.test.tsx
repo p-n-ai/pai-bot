@@ -4,6 +4,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -14,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AISettingsPanel } from './ai-settings-panel'
 import type * as AdminAPI from '@/lib/admin-api'
+import type { AISettings } from '@/lib/ai-settings-types'
 import { aiSettingsFixture } from '@/lib/ai-settings-types.test'
 
 const getAISettings = vi.hoisted(() => vi.fn())
@@ -33,6 +35,16 @@ const unsetKeySettings = {
   ...aiSettingsFixture,
   openrouterKey: { set: false, last4: '' },
   sources: { ...aiSettingsFixture.sources, openrouterKey: 'none' },
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
 }
 
 describe('AISettingsPanel', () => {
@@ -147,6 +159,66 @@ describe('AISettingsPanel', () => {
       expect(
         screen.queryByRole('button', { name: 'Reset turn_hooks' }),
       ).not.toBeInTheDocument()
+    })
+  })
+
+  it('finishes cross-section pending states when overlapping saves resolve out of order', async () => {
+    getAISettings.mockResolvedValue(aiSettingsFixture)
+    const flagSave = deferred<AISettings>()
+    const modelSave = deferred<AISettings>()
+    updateAISettings.mockImplementation((input) => {
+      if ('flags' in input) {
+        return flagSave.promise
+      }
+      if ('openrouterModel' in input) {
+        return modelSave.promise
+      }
+      return Promise.resolve(aiSettingsFixture)
+    })
+
+    render(<AISettingsPanel />)
+
+    await screen.findByRole('button', { name: 'Reset turn_hooks' })
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        flags: { turn_hooks: false },
+      })
+    })
+
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'OpenRouter model' }),
+      {
+        target: { value: 'openrouter/new-model' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        openrouterModel: 'openrouter/new-model',
+      })
+    })
+
+    await act(async () => {
+      modelSave.resolve({
+        ...aiSettingsFixture,
+        openrouterModel: 'openrouter/new-model',
+      })
+      await modelSave.promise
+    })
+    await act(async () => {
+      flagSave.resolve({
+        ...aiSettingsFixture,
+        flags: { ...aiSettingsFixture.flags, turn_hooks: false },
+      })
+      await flagSave.promise
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Reset turn_hooks' }),
+      ).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Disable' })).toBeEnabled()
     })
   })
 })

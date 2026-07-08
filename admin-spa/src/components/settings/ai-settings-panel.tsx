@@ -24,6 +24,7 @@ type PanelState =
   | { status: 'ready'; settings: AISettings }
 
 type SubmitStatus = ReturnType<typeof useSubmitStatus>
+type SubmitSection = 'provider' | 'model' | 'key' | 'flags'
 
 export function AISettingsPanel() {
   const [state, setState] = useState<PanelState>({ status: 'loading' })
@@ -31,6 +32,7 @@ export function AISettingsPanel() {
   const [keyInput, setKeyInput] = useState('')
   const [isReplacingKey, setIsReplacingKey] = useState(false)
   const requestSeq = useRef(0)
+  const sectionSeq = useRef<Record<string, number>>({})
   const providerSubmit = useSubmitStatus('')
   const modelSubmit = useSubmitStatus('')
   const keySubmit = useSubmitStatus('')
@@ -55,6 +57,7 @@ export function AISettingsPanel() {
 
   const submitSettings = useCallback(
     (
+      section: SubmitSection,
       input: UpdateAISettingsInput,
       submit: SubmitStatus,
       fallbackMessage: string,
@@ -62,6 +65,7 @@ export function AISettingsPanel() {
     ) => {
       // Overlapping saves can resolve out of order; only the newest wins.
       const seq = ++requestSeq.current
+      sectionSeq.current[section] = seq
       submit.beginSubmit()
       updateAISettings(input)
         .then((next) => {
@@ -73,11 +77,21 @@ export function AISettingsPanel() {
           onSaved?.(next)
         })
         .catch((caught: unknown) => {
+          if (seq !== sectionSeq.current[section]) {
+            return
+          }
+
           submit.setError(
             caught instanceof Error ? caught.message : fallbackMessage,
           )
         })
-        .finally(submit.finishSubmit)
+        .finally(() => {
+          if (seq !== sectionSeq.current[section]) {
+            return
+          }
+
+          submit.finishSubmit()
+        })
     },
     [],
   )
@@ -85,6 +99,7 @@ export function AISettingsPanel() {
   const handleProviderChange = useCallback(
     (provider: string) => {
       submitSettings(
+        'provider',
         { defaultProvider: provider },
         providerSubmit,
         'Default provider could not be changed.',
@@ -95,6 +110,7 @@ export function AISettingsPanel() {
 
   const handleModelSave = useCallback(() => {
     submitSettings(
+      'model',
       { openrouterModel: model.trim() },
       modelSubmit,
       'OpenRouter model could not be saved.',
@@ -111,6 +127,7 @@ export function AISettingsPanel() {
     // Write-only secret: drop the submitted key from state as soon as the
     // backend confirms; only set/last4 ever comes back.
     submitSettings(
+      'key',
       { openrouterApiKey: keyInput },
       keySubmit,
       'OpenRouter API key could not be saved.',
@@ -123,6 +140,7 @@ export function AISettingsPanel() {
 
   const handleKeyClear = useCallback(() => {
     submitSettings(
+      'key',
       { openrouterApiKey: '' },
       keySubmit,
       'OpenRouter API key could not be cleared.',
@@ -145,6 +163,7 @@ export function AISettingsPanel() {
   const handleFlagToggle = useCallback(
     (name: string, enabled: boolean) => {
       submitSettings(
+        'flags',
         { flags: { [name]: !enabled } },
         flagsSubmit,
         'Feature flag could not be changed.',
@@ -156,6 +175,7 @@ export function AISettingsPanel() {
   const handleFlagReset = useCallback(
     (name: string) => {
       submitSettings(
+        'flags',
         { flags: { [name]: null } },
         flagsSubmit,
         'Feature flag could not be reset.',
