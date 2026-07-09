@@ -113,6 +113,10 @@ func (ToolCall) isAssistantContent()        {}
 
 type Message interface{ isMessage() }
 
+type SystemMessage struct {
+	Content string
+}
+
 type UserMessage struct {
 	Content   []UserContent
 	Timestamp time.Time
@@ -140,6 +144,7 @@ type ToolResultMessage struct {
 	Timestamp  time.Time
 }
 
+func (SystemMessage) isMessage()     {}
 func (UserMessage) isMessage()       {}
 func (AssistantMessage) isMessage()  {}
 func (ToolResultMessage) isMessage() {}

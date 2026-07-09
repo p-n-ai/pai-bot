@@ -273,19 +273,13 @@ func openRouterSupportsCacheControl(model Model) bool {
 func convertOpenRouterMessages(model Model, c Context) ([]components.ChatMessages, error) {
 	messages := make([]components.ChatMessages, 0, len(c.Messages)+1)
 	if c.SystemPrompt != "" {
-		if openRouterUsesDeveloperRole(model) {
-			messages = append(messages, components.CreateChatMessagesDeveloper(components.ChatDeveloperMessage{
-				Content: components.CreateChatDeveloperMessageContentStr(c.SystemPrompt),
-			}))
-		} else {
-			messages = append(messages, components.CreateChatMessagesSystem(components.ChatSystemMessage{
-				Content: components.CreateChatSystemMessageContentStr(c.SystemPrompt),
-			}))
-		}
+		messages = append(messages, openRouterSystemMessage(model, c.SystemPrompt))
 	}
 
 	for _, m := range c.Messages {
 		switch msg := m.(type) {
+		case SystemMessage:
+			messages = append(messages, openRouterSystemMessage(model, msg.Content))
 		case UserMessage:
 			messages = append(messages, components.CreateChatMessagesUser(components.ChatUserMessage{
 				Content: openRouterUserContent(msg.Content),
@@ -306,6 +300,17 @@ func convertOpenRouterMessages(model Model, c Context) ([]components.ChatMessage
 		}
 	}
 	return messages, nil
+}
+
+func openRouterSystemMessage(model Model, content string) components.ChatMessages {
+	if openRouterUsesDeveloperRole(model) {
+		return components.CreateChatMessagesDeveloper(components.ChatDeveloperMessage{
+			Content: components.CreateChatDeveloperMessageContentStr(content),
+		})
+	}
+	return components.CreateChatMessagesSystem(components.ChatSystemMessage{
+		Content: components.CreateChatSystemMessageContentStr(content),
+	})
 }
 
 func openRouterUsesDeveloperRole(model Model) bool {
