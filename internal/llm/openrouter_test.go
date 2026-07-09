@@ -493,6 +493,59 @@ func TestOpenRouterHTTPErrorBecomesTerminalError(t *testing.T) {
 	}
 }
 
+func TestOpenRouterBoundsErrorBodies(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(strings.Repeat("x", 2<<20)))
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	var apiErr *sdkerrors.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected SDK APIError cause, got %v", err)
+	}
+	if len(apiErr.Body) > 64<<10 {
+		t.Fatalf("error body length = %d", len(apiErr.Body))
+	}
+}
+
+func TestOpenRouterRejectsTransportOwnedHeaders(t *testing.T) {
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel("http://127.0.0.1:0"),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test", Headers: map[string]string{"authorization": "Bearer attacker"}},
+	).Result()
+	if err == nil || !strings.Contains(msg.ErrorMessage, `header "Authorization" is managed by the transport`) {
+		t.Fatalf("expected reserved header error, got %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterStreamParseErrorDoesNotLeakPayload(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-bad-stream","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning.text","text":{"secret":"TOP_SECRET"}}]},"finish_reason":null}]}`),
+		"data: [DONE]",
+	})
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err == nil || !strings.Contains(msg.ErrorMessage, "invalid event stream") {
+		t.Fatalf("expected stream parse error, got %+v err=%v", msg, err)
+	}
+	if strings.Contains(msg.ErrorMessage, "TOP_SECRET") || strings.Contains(err.Error(), "TOP_SECRET") {
+		t.Fatalf("stream error leaks payload: msg=%q err=%v", msg.ErrorMessage, err)
+	}
+}
+
 func TestOpenRouterMissingFinishReasonIsError(t *testing.T) {
 	srv, _ := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-no-finish","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":null}]}`),

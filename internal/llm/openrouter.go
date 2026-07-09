@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -24,9 +26,35 @@ const (
 	openRouterDefaultBaseURL = "https://openrouter.ai/api/v1"
 	openRouterHTTPReferer    = "https://pandai.org"
 	openRouterTitle          = "P&AI Bot"
+	openRouterMaxErrorBody   = 64 << 10
 )
 
-var openRouterHTTPClient = &http.Client{}
+type openRouterTransport struct {
+	base http.RoundTripper
+}
+
+type openRouterLimitedReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
+func (t openRouterTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	mediaType, _, mediaErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	isEventStream := mediaErr == nil && strings.EqualFold(mediaType, "text/event-stream")
+	if resp.StatusCode != http.StatusOK || !isEventStream {
+		resp.Body = openRouterLimitedReadCloser{
+			Reader: io.LimitReader(resp.Body, openRouterMaxErrorBody),
+			Closer: resp.Body,
+		}
+	}
+	return resp, nil
+}
+
+var openRouterHTTPClient = &http.Client{Transport: openRouterTransport{base: http.DefaultTransport}}
 
 func RegisterOpenRouterChat() {
 	RegisterProvider(APIOpenRouterChat, StreamOpenRouterChat, "builtin:openrouter-chat")
@@ -71,12 +99,10 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 		}
 		clientOpts = append(clientOpts, openrouter.WithServerURL(baseURL))
 
-		headers := map[string]string{
-			http.CanonicalHeaderKey("HTTP-Referer"): openRouterHTTPReferer,
-			http.CanonicalHeaderKey("X-Title"):      openRouterTitle,
-		}
-		for k, v := range opts.Headers {
-			headers[http.CanonicalHeaderKey(k)] = v
+		headers, err := openRouterHeaders(opts.Headers)
+		if err != nil {
+			fail(err)
+			return
 		}
 
 		client := openrouter.New(clientOpts...)
@@ -102,6 +128,22 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 		}
 	}()
 	return s
+}
+
+func openRouterHeaders(custom map[string]string) (map[string]string, error) {
+	headers := map[string]string{
+		http.CanonicalHeaderKey("HTTP-Referer"): openRouterHTTPReferer,
+		http.CanonicalHeaderKey("X-Title"):      openRouterTitle,
+	}
+	for name, value := range custom {
+		canonical := http.CanonicalHeaderKey(name)
+		switch canonical {
+		case "Accept", "Authorization", "Content-Length", "Content-Type", "Host", "Transfer-Encoding":
+			return nil, fmt.Errorf("openrouter-chat: header %q is managed by the transport", canonical)
+		}
+		headers[canonical] = value
+	}
+	return headers, nil
 }
 
 func sanitizeOpenRouterError(err error) error {
@@ -521,8 +563,11 @@ func consumeOpenRouterStream(
 		}
 	}
 
-	if err := stream.Err(); err != nil {
-		return err
+	if stream.Err() != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("openrouter-chat: invalid event stream")
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
