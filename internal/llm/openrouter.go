@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -41,13 +42,17 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 			Timestamp:  time.Now(),
 		}
 		fail := func(err error) {
+			cause := err
 			out.StopReason = StopReasonError
-			if ctx.Err() != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
 				out.StopReason = StopReasonAborted
+				if !errors.Is(err, ctxErr) {
+					cause = errors.Join(ctxErr, err)
+				}
 			}
 			out.ErrorMessage = err.Error()
 			out.Timestamp = time.Now()
-			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out})
+			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out, Err: cause})
 		}
 
 		if opts == nil || opts.APIKey == "" {
@@ -105,7 +110,10 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 }
 
 func buildOpenRouterRequest(model Model, c Context, opts *StreamOptions) (components.ChatRequest, error) {
-	messages := convertOpenRouterMessages(model, c)
+	messages, err := convertOpenRouterMessages(model, c)
+	if err != nil {
+		return components.ChatRequest{}, err
+	}
 	tools, err := convertOpenRouterTools(c.Tools)
 	if err != nil {
 		return components.ChatRequest{}, err
@@ -151,7 +159,7 @@ func openRouterSupportsCacheControl(model Model) bool {
 	return strings.HasPrefix(strings.TrimPrefix(model.ID, "~"), "anthropic/")
 }
 
-func convertOpenRouterMessages(model Model, c Context) []components.ChatMessages {
+func convertOpenRouterMessages(model Model, c Context) ([]components.ChatMessages, error) {
 	messages := make([]components.ChatMessages, 0, len(c.Messages)+1)
 	if c.SystemPrompt != "" {
 		if openRouterUsesDeveloperRole(model) {
@@ -172,7 +180,10 @@ func convertOpenRouterMessages(model Model, c Context) []components.ChatMessages
 				Content: openRouterUserContent(msg.Content),
 			}))
 		case AssistantMessage:
-			assistant, ok := openRouterAssistantMessage(msg)
+			assistant, ok, err := openRouterAssistantMessage(msg)
+			if err != nil {
+				return nil, err
+			}
 			if ok {
 				messages = append(messages, components.CreateChatMessagesAssistant(assistant))
 			}
@@ -183,7 +194,7 @@ func convertOpenRouterMessages(model Model, c Context) []components.ChatMessages
 			}))
 		}
 	}
-	return messages
+	return messages, nil
 }
 
 func openRouterUsesDeveloperRole(model Model) bool {
@@ -240,11 +251,23 @@ func openRouterContentItems(content []UserContent) []components.ChatContentItems
 	return items
 }
 
-func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantMessage, bool) {
+func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantMessage, bool, error) {
 	texts := make([]string, 0, len(msg.Content))
 	thoughts := make([]string, 0, len(msg.Content))
+	refusals := make([]string, 0, len(msg.Content))
 	toolCalls := make([]components.ChatToolCall, 0, len(msg.Content))
-	reasoningDetails := make([]components.ReasoningDetailUnion, 0, len(msg.Content))
+	reasoningDetails := make([]components.ReasoningDetailUnion, 0, len(msg.ReasoningDetails))
+	for i, raw := range msg.ReasoningDetails {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return components.ChatAssistantMessage{}, false, fmt.Errorf("openrouter-chat: reasoning detail %d: %w", i, err)
+		}
+		var detail components.ReasoningDetailUnion
+		if err := json.Unmarshal(encoded, &detail); err != nil {
+			return components.ChatAssistantMessage{}, false, fmt.Errorf("openrouter-chat: reasoning detail %d: %w", i, err)
+		}
+		reasoningDetails = append(reasoningDetails, detail)
+	}
 	for _, item := range msg.Content {
 		switch block := item.(type) {
 		case TextContent:
@@ -255,8 +278,15 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 			if strings.TrimSpace(block.Thinking) != "" {
 				thoughts = append(thoughts, block.Thinking)
 			}
+		case RefusalContent:
+			if strings.TrimSpace(block.Refusal) != "" {
+				refusals = append(refusals, block.Refusal)
+			}
 		case ToolCall:
-			args, _ := json.Marshal(block.Arguments)
+			args, err := json.Marshal(block.Arguments)
+			if err != nil {
+				return components.ChatAssistantMessage{}, false, fmt.Errorf("openrouter-chat: tool call %q arguments: %w", block.Name, err)
+			}
 			toolCalls = append(toolCalls, components.ChatToolCall{
 				ID:   block.ID,
 				Type: components.ChatToolCallTypeFunction,
@@ -265,12 +295,6 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 					Arguments: string(args),
 				},
 			})
-			if block.ThoughtSignature != "" {
-				var detail components.ReasoningDetailUnion
-				if json.Unmarshal([]byte(block.ThoughtSignature), &detail) == nil {
-					reasoningDetails = append(reasoningDetails, detail)
-				}
-			}
 		}
 	}
 
@@ -282,7 +306,10 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 	if reasoning := strings.Join(thoughts, ""); reasoning != "" {
 		assistant.Reasoning = optionalnullable.From(&reasoning)
 	}
-	return assistant, assistant.Content.IsSet() || assistant.Reasoning.IsSet() || len(assistant.ToolCalls) > 0
+	if refusal := strings.Join(refusals, ""); refusal != "" {
+		assistant.Refusal = optionalnullable.From(&refusal)
+	}
+	return assistant, assistant.Content.IsSet() || assistant.Reasoning.IsSet() || assistant.Refusal.IsSet() || len(assistant.ReasoningDetails) > 0 || len(assistant.ToolCalls) > 0, nil
 }
 
 func convertOpenRouterTools(tools []Tool) ([]components.ChatFunctionTool, error) {
@@ -330,10 +357,9 @@ func consumeOpenRouterStream(
 
 	textIndex := -1
 	thinkingIndex := -1
+	refusalIndex := -1
 	toolByStreamIndex := map[int64]*openRouterStreamingToolCall{}
 	toolByContentIndex := map[int]*openRouterStreamingToolCall{}
-	toolByID := map[string]*openRouterStreamingToolCall{}
-	pendingReasoningDetails := map[string]string{}
 	hasFinish := false
 
 	for stream.Next() {
@@ -393,6 +419,18 @@ func consumeOpenRouterStream(
 			s.Push(AssistantMessageEvent{Type: EventThinkingDelta, ContentIndex: thinkingIndex, Delta: *reasoning, Partial: snapshot(out)})
 		}
 
+		if refusal, ok := choice.Delta.Refusal.Get(); ok && refusal != nil && *refusal != "" {
+			if refusalIndex == -1 {
+				out.Content = append(out.Content, RefusalContent{})
+				refusalIndex = len(out.Content) - 1
+				s.Push(AssistantMessageEvent{Type: EventRefusalStart, ContentIndex: refusalIndex, Partial: snapshot(out)})
+			}
+			block := out.Content[refusalIndex].(RefusalContent)
+			block.Refusal += *refusal
+			out.Content[refusalIndex] = block
+			s.Push(AssistantMessageEvent{Type: EventRefusalDelta, ContentIndex: refusalIndex, Delta: *refusal, Partial: snapshot(out)})
+		}
+
 		for _, tc := range choice.Delta.ToolCalls {
 			tool := toolByStreamIndex[tc.Index]
 			if tool == nil {
@@ -423,44 +461,20 @@ func consumeOpenRouterStream(
 				args = *tc.Function.Arguments
 				tool.partialArgs.WriteString(args)
 			}
-			ids := []string{block.ID}
-			if tc.ID != nil && *tc.ID != "" && *tc.ID != block.ID {
-				ids = append(ids, *tc.ID)
-			}
-			for _, id := range ids {
-				if id == "" {
-					continue
-				}
-				toolByID[id] = tool
-				if signature, ok := pendingReasoningDetails[id]; ok {
-					block.ThoughtSignature = signature
-					delete(pendingReasoningDetails, id)
-				}
-			}
 			out.Content[tool.contentIndex] = block
 			s.Push(AssistantMessageEvent{Type: EventToolCallDelta, ContentIndex: tool.contentIndex, Delta: args, Partial: snapshot(out)})
 		}
 
 		for _, detail := range choice.Delta.ReasoningDetails {
-			encrypted := detail.ReasoningDetailEncrypted
-			if encrypted == nil {
-				continue
-			}
-			id, ok := encrypted.ID.Get()
-			if !ok || id == nil || *id == "" {
-				continue
-			}
 			encoded, err := json.Marshal(detail)
 			if err != nil {
 				return fmt.Errorf("openrouter-chat: encode reasoning detail: %w", err)
 			}
-			if tool := toolByID[*id]; tool != nil {
-				block := out.Content[tool.contentIndex].(ToolCall)
-				block.ThoughtSignature = string(encoded)
-				out.Content[tool.contentIndex] = block
-			} else {
-				pendingReasoningDetails[*id] = string(encoded)
+			parsed, err := parseReasoningDetail(encoded)
+			if err != nil {
+				return fmt.Errorf("openrouter-chat: decode reasoning detail: %w", err)
 			}
+			out.ReasoningDetails = append(out.ReasoningDetails, parsed)
 		}
 	}
 
@@ -477,6 +491,8 @@ func consumeOpenRouterStream(
 			s.Push(AssistantMessageEvent{Type: EventTextEnd, ContentIndex: i, Content: block.Text, Partial: snapshot(out)})
 		case ThinkingContent:
 			s.Push(AssistantMessageEvent{Type: EventThinkingEnd, ContentIndex: i, Content: block.Thinking, Partial: snapshot(out)})
+		case RefusalContent:
+			s.Push(AssistantMessageEvent{Type: EventRefusalEnd, ContentIndex: i, Content: block.Refusal, Partial: snapshot(out)})
 		case ToolCall:
 			tool := toolByContentIndex[i]
 			if tool != nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -140,7 +141,7 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 
 func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 	srv, _ := sseServer(t, []string{
-		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"answer","reasoning":"think","tool_calls":[{"index":0,"id":"read-first","type":"function","function":{"name":"read","arguments":"{\"path\":\"README"}},{"index":1,"id":"grep-first","type":"function","function":{"name":"grep","arguments":"{\"pattern\":\"TODO"}}],"reasoning_details":[{"type":"reasoning.encrypted","id":"read-changed","data":"changed-id-signature"}]},"finish_reason":null}]}`),
+		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"answer","reasoning":"think","tool_calls":[{"index":0,"id":"read-first","type":"function","function":{"name":"read","arguments":"{\"path\":\"README"}},{"index":1,"id":"grep-first","type":"function","function":{"name":"grep","arguments":"{\"pattern\":\"TODO"}}]},"finish_reason":null}]}`),
 		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"grep-changed","type":"function","function":{"arguments":"\",\"path\":\"src\"}"}},{"index":0,"id":"read-changed","type":"function","function":{"arguments":".md\"}"}}]},"finish_reason":"tool_calls"}]}`),
 		"data: [DONE]",
 	})
@@ -160,7 +161,7 @@ func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 		t.Fatalf("message = %+v", msg)
 	}
 	readCall, ok := msg.Content[2].(llm.ToolCall)
-	if !ok || readCall.ID != "read-first" || readCall.Name != "read" || readCall.Arguments["path"] != "README.md" || !strings.Contains(readCall.ThoughtSignature, `"data":"changed-id-signature"`) {
+	if !ok || readCall.ID != "read-first" || readCall.Name != "read" || readCall.Arguments["path"] != "README.md" {
 		t.Fatalf("read call = %#v", msg.Content[2])
 	}
 	grepCall, ok := msg.Content[3].(llm.ToolCall)
@@ -186,9 +187,9 @@ func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 	}
 }
 
-func TestOpenRouterPreservesEncryptedReasoningBeforeToolCall(t *testing.T) {
+func TestOpenRouterPreservesOrderedReasoningDetails(t *testing.T) {
 	srv, captured := sseServer(t, []string{
-		openRouterChunk(`{"id":"or-reasoning","model":"google/gemini-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning.encrypted","id":"call-1","data":"encrypted-signature"}]},"finish_reason":null}]}`),
+		openRouterChunk(`{"id":"or-reasoning","model":"google/gemini-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning.summary","summary":"brief","index":0},{"type":"reasoning.text","text":"step","signature":"text-signature","id":"reasoning-1","index":1},{"type":"reasoning.encrypted","id":"call-1","data":"encrypted-signature","index":2}]},"finish_reason":null}]}`),
 		openRouterChunk(`{"id":"or-reasoning","model":"google/gemini-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"inspect","arguments":"{\"path\":\"README.md\"}"}}]},"finish_reason":"tool_calls"}]}`),
 		"data: [DONE]",
 	})
@@ -204,9 +205,21 @@ func TestOpenRouterPreservesEncryptedReasoningBeforeToolCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Result: %v", err)
 	}
-	toolCall, ok := first.Content[0].(llm.ToolCall)
-	if !ok || !strings.Contains(toolCall.ThoughtSignature, `"data":"encrypted-signature"`) {
-		t.Fatalf("tool call = %#v", first.Content[0])
+	wantDetails := []any{
+		map[string]any{"type": "reasoning.summary", "summary": "brief", "index": float64(0)},
+		map[string]any{"type": "reasoning.text", "text": "step", "signature": "text-signature", "id": "reasoning-1", "index": float64(1)},
+		map[string]any{"type": "reasoning.encrypted", "id": "call-1", "data": "encrypted-signature", "index": float64(2)},
+	}
+	encoded, err := json.Marshal(first.ReasoningDetails)
+	if err != nil {
+		t.Fatalf("marshal reasoning details: %v", err)
+	}
+	var gotDetails []any
+	if err := json.Unmarshal(encoded, &gotDetails); err != nil {
+		t.Fatalf("decode reasoning details: %v", err)
+	}
+	if !reflect.DeepEqual(gotDetails, wantDetails) {
+		t.Fatalf("reasoning details = %+v, want %+v", gotDetails, wantDetails)
 	}
 
 	_, err = llm.StreamOpenRouterChat(
@@ -226,9 +239,61 @@ func TestOpenRouterPreservesEncryptedReasoningBeforeToolCall(t *testing.T) {
 	messages := captured.body["messages"].([]any)
 	assistant := messages[1].(map[string]any)
 	details := assistant["reasoning_details"].([]any)
-	detail := details[0].(map[string]any)
-	if detail["type"] != "reasoning.encrypted" || detail["id"] != "call-1" || detail["data"] != "encrypted-signature" {
-		t.Fatalf("reasoning_details = %+v", details)
+	if !reflect.DeepEqual(details, wantDetails) {
+		t.Fatalf("reasoning_details = %+v, want %+v", details, wantDetails)
+	}
+}
+
+func TestOpenRouterPreservesRefusal(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-refusal","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"refusal":"I can"},"finish_reason":null}]}`),
+		openRouterChunk(`{"id":"or-refusal","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"refusal":"not help with that."},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+	model := openRouterModel(srv.URL)
+	firstUser := llm.UserText("unsafe request")
+	stream := llm.StreamOpenRouterChat(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	)
+	events := collectEvents(stream)
+	first, err := stream.Result()
+	if err != nil {
+		t.Fatalf("first Result: %v", err)
+	}
+	if len(first.Content) != 1 {
+		t.Fatalf("content = %#v", first.Content)
+	}
+	refusal, ok := first.Content[0].(llm.RefusalContent)
+	if !ok || refusal.Refusal != "I cannot help with that." {
+		t.Fatalf("refusal = %#v", first.Content[0])
+	}
+	wantEvents := []llm.EventType{
+		llm.EventStart,
+		llm.EventRefusalStart,
+		llm.EventRefusalDelta,
+		llm.EventRefusalDelta,
+		llm.EventRefusalEnd,
+		llm.EventDone,
+	}
+	if got := eventTypes(events); !equalTypes(got, wantEvents...) {
+		t.Fatalf("events = %v, want %v", got, wantEvents)
+	}
+
+	_, err = llm.StreamOpenRouterChat(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser, first, llm.UserText("try another")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("second Result: %v", err)
+	}
+	assistant := captured.body["messages"].([]any)[1].(map[string]any)
+	if assistant["refusal"] != "I cannot help with that." {
+		t.Fatalf("assistant = %+v", assistant)
 	}
 }
 
@@ -323,6 +388,27 @@ func TestOpenRouterRejectsInvalidToolSchema(t *testing.T) {
 	}
 }
 
+func TestOpenRouterRejectsUnencodableToolArguments(t *testing.T) {
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel("http://127.0.0.1:0"),
+		llm.Context{Messages: []llm.Message{
+			llm.UserText("call the tool"),
+			llm.AssistantMessage{Content: []llm.AssistantContent{
+				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+			}},
+		}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err == nil || !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) || !strings.Contains(msg.ErrorMessage, "unsupported type") {
+		t.Fatalf("expected argument encoding error, got %+v err=%v", msg, err)
+	}
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) {
+		t.Fatalf("expected wrapped UnsupportedTypeError, got %v", err)
+	}
+}
+
 func TestOpenRouterInlineStreamError(t *testing.T) {
 	srv, _ := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-error","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[],"error":{"code":429,"message":"provider overloaded"}}`),
@@ -390,6 +476,23 @@ func TestOpenRouterMissingAPIKeyIsError(t *testing.T) {
 	}
 }
 
+func TestOpenRouterPreCanceledRequestPreservesContextCause(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	msg, err := llm.StreamOpenRouterChat(
+		ctx,
+		openRouterModel("http://127.0.0.1:0"),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		nil,
+	).Result()
+	if msg.StopReason != llm.StopReasonAborted || !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected aborted context cause, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, "no API key") {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
 func TestOpenRouterAbortMidStream(t *testing.T) {
 	started := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -414,6 +517,9 @@ func TestOpenRouterAbortMidStream(t *testing.T) {
 	var streamErr *llm.StreamError
 	if !errors.As(err, &streamErr) || streamErr.Reason != llm.StopReasonAborted {
 		t.Fatalf("expected aborted StreamError, got %v (msg=%+v)", err, msg)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected wrapped context cancellation, got %v", err)
 	}
 }
 

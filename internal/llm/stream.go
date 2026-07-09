@@ -16,6 +16,9 @@ const (
 	EventThinkingStart EventType = "thinking_start"
 	EventThinkingDelta EventType = "thinking_delta"
 	EventThinkingEnd   EventType = "thinking_end"
+	EventRefusalStart  EventType = "refusal_start"
+	EventRefusalDelta  EventType = "refusal_delta"
+	EventRefusalEnd    EventType = "refusal_end"
 	EventToolCallStart EventType = "toolcall_start"
 	EventToolCallDelta EventType = "toolcall_delta"
 	EventToolCallEnd   EventType = "toolcall_end"
@@ -32,6 +35,7 @@ type AssistantMessageEvent struct {
 	Partial      *AssistantMessage
 	Reason       StopReason
 	Message      *AssistantMessage
+	Err          error
 }
 
 type EventStream struct {
@@ -40,6 +44,7 @@ type EventStream struct {
 	queue  []AssistantMessageEvent
 	closed bool
 	final  AssistantMessage
+	err    error
 	done   chan struct{}
 }
 
@@ -59,6 +64,7 @@ func (s *EventStream) Push(ev AssistantMessageEvent) {
 	if ev.Type == EventDone || ev.Type == EventError {
 		s.closed = true
 		s.final = *ev.Message
+		s.err = ev.Err
 		close(s.done)
 	}
 	s.cond.Broadcast()
@@ -89,23 +95,26 @@ func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 type StreamError struct {
 	Reason  StopReason
 	Message string
+	Cause   error
 }
 
 func (e *StreamError) Error() string { return fmt.Sprintf("llm: %s: %s", e.Reason, e.Message) }
 
+func (e *StreamError) Unwrap() error { return e.Cause }
+
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
 	if s.final.StopReason == StopReasonError || s.final.StopReason == StopReasonAborted {
-		return s.final, &StreamError{Reason: s.final.StopReason, Message: s.final.ErrorMessage}
+		return s.final, &StreamError{Reason: s.final.StopReason, Message: s.final.ErrorMessage, Cause: s.err}
 	}
 	return s.final, nil
 }
 
-func (s *EventStream) endWithError(msg AssistantMessage) {
+func (s *EventStream) endWithError(msg AssistantMessage, err error) {
 	reason := msg.StopReason
 	if reason != StopReasonAborted {
 		reason = StopReasonError
 		msg.StopReason = StopReasonError
 	}
-	s.Push(AssistantMessageEvent{Type: EventError, Reason: reason, Message: &msg})
+	s.Push(AssistantMessageEvent{Type: EventError, Reason: reason, Message: &msg, Err: err})
 }

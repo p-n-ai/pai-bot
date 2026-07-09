@@ -54,7 +54,7 @@ func chunk(s string) string { return "data: " + s }
 
 func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	srv, captured := sseServer(t, []string{
-		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{"content":"Hel"}}]}`),
+		chunk(`{"id":"chatcmpl-1","model":"gpt-routed","choices":[{"delta":{"content":"Hel"}}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{"content":"lo"}}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{},"finish_reason":"stop"}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[],"usage":{"prompt_tokens":100,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":40}}}`),
@@ -73,8 +73,8 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	if got := textOf(t, msg); got != "Hello" {
 		t.Fatalf("text = %q", got)
 	}
-	if msg.ResponseID != "chatcmpl-1" || msg.StopReason != llm.StopReasonStop {
-		t.Fatalf("responseID=%q stopReason=%q", msg.ResponseID, msg.StopReason)
+	if msg.ResponseID != "chatcmpl-1" || msg.ResponseModel != "gpt-routed" || msg.StopReason != llm.StopReasonStop {
+		t.Fatalf("responseID=%q responseModel=%q stopReason=%q", msg.ResponseID, msg.ResponseModel, msg.StopReason)
 	}
 
 	if msg.Usage.Input != 60 || msg.Usage.CacheRead != 40 || msg.Usage.Output != 10 {
@@ -102,6 +102,58 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	first := msgs[0].(map[string]any)
 	if first["role"] != "system" || first["content"] != "Be brief." {
 		t.Fatalf("system message = %+v", first)
+	}
+}
+
+func TestOpenAIStreamsAndReplaysRefusal(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"I can"}}]}`),
+		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"not help."},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+	model := openAIModel(srv.URL)
+	firstUser := llm.UserText("unsafe request")
+	stream := llm.StreamOpenAICompletions(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	)
+	events := collectEvents(stream)
+	first, err := stream.Result()
+	if err != nil {
+		t.Fatalf("first Result: %v", err)
+	}
+	if len(first.Content) != 1 {
+		t.Fatalf("content = %#v", first.Content)
+	}
+	refusal, ok := first.Content[0].(llm.RefusalContent)
+	if !ok || refusal.Refusal != "I cannot help." {
+		t.Fatalf("refusal = %#v", first.Content[0])
+	}
+	if got := eventTypes(events); !equalTypes(got,
+		llm.EventStart,
+		llm.EventRefusalStart,
+		llm.EventRefusalDelta,
+		llm.EventRefusalDelta,
+		llm.EventRefusalEnd,
+		llm.EventDone,
+	) {
+		t.Fatalf("events = %v", got)
+	}
+
+	_, err = llm.StreamOpenAICompletions(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser, first, llm.UserText("try another")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("second Result: %v", err)
+	}
+	assistant := captured.body["messages"].([]any)[1].(map[string]any)
+	if assistant["refusal"] != "I cannot help." {
+		t.Fatalf("assistant = %+v", assistant)
 	}
 }
 

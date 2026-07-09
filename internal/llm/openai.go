@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,13 +32,17 @@ func StreamOpenAICompletions(ctx context.Context, model Model, c Context, opts *
 			Timestamp:  time.Now(),
 		}
 		fail := func(err error) {
+			cause := err
 			out.StopReason = StopReasonError
-			if ctx.Err() != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
 				out.StopReason = StopReasonAborted
+				if !errors.Is(err, ctxErr) {
+					cause = errors.Join(ctxErr, err)
+				}
 			}
 			out.ErrorMessage = err.Error()
 			out.Timestamp = time.Now()
-			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out})
+			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out, Err: cause})
 		}
 
 		if opts == nil || opts.APIKey == "" {
@@ -87,6 +92,7 @@ func openAIEndpoint(baseURL string) string {
 type oaMessage struct {
 	Role       string       `json:"role"`
 	Content    any          `json:"content,omitempty"`
+	Refusal    string       `json:"refusal,omitempty"`
 	ToolCalls  []oaToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string       `json:"tool_call_id,omitempty"`
 }
@@ -190,6 +196,7 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 			params = append(params, convertOpenAIUserMessage(msg)...)
 		case AssistantMessage:
 			var texts []string
+			var refusals []string
 			var toolCalls []oaToolCall
 			for _, b := range msg.Content {
 				switch block := b.(type) {
@@ -205,14 +212,18 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 					})
 				case ThinkingContent:
 
+				case RefusalContent:
+					if strings.TrimSpace(block.Refusal) != "" {
+						refusals = append(refusals, block.Refusal)
+					}
 				}
 			}
-			am := oaMessage{Role: "assistant", ToolCalls: toolCalls}
+			am := oaMessage{Role: "assistant", Refusal: strings.Join(refusals, ""), ToolCalls: toolCalls}
 			if text := strings.Join(texts, ""); text != "" {
 				am.Content = text
 			}
 
-			if am.Content == nil && len(am.ToolCalls) == 0 {
+			if am.Content == nil && am.Refusal == "" && len(am.ToolCalls) == 0 {
 				continue
 			}
 			params = append(params, am)
@@ -285,6 +296,7 @@ type oaChoice struct {
 	FinishReason string `json:"finish_reason"`
 	Delta        struct {
 		Content   string `json:"content"`
+		Refusal   string `json:"refusal"`
 		ToolCalls []struct {
 			Index    *int   `json:"index"`
 			ID       string `json:"id"`
@@ -305,6 +317,7 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 	s.Push(AssistantMessageEvent{Type: EventStart, Partial: snapshot(out)})
 
 	textIndex := -1
+	refusalIndex := -1
 	toolByStreamIndex := map[int]*streamingToolCall{}
 	var toolOrder []*streamingToolCall
 	var currentTool *streamingToolCall
@@ -333,6 +346,9 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 		if out.ResponseID == "" {
 			out.ResponseID = chunk.ID
 		}
+		if out.ResponseModel == "" && chunk.Model != "" && chunk.Model != model.ID {
+			out.ResponseModel = chunk.Model
+		}
 		if chunk.Usage != nil {
 			out.Usage = parseOpenAIUsage(*chunk.Usage, model)
 		}
@@ -358,6 +374,18 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 			block.Text += choice.Delta.Content
 			out.Content[textIndex] = block
 			s.Push(AssistantMessageEvent{Type: EventTextDelta, ContentIndex: textIndex, Delta: choice.Delta.Content, Partial: snapshot(out)})
+		}
+
+		if choice.Delta.Refusal != "" {
+			if refusalIndex == -1 {
+				out.Content = append(out.Content, RefusalContent{})
+				refusalIndex = len(out.Content) - 1
+				s.Push(AssistantMessageEvent{Type: EventRefusalStart, ContentIndex: refusalIndex, Partial: snapshot(out)})
+			}
+			block := out.Content[refusalIndex].(RefusalContent)
+			block.Refusal += choice.Delta.Refusal
+			out.Content[refusalIndex] = block
+			s.Push(AssistantMessageEvent{Type: EventRefusalDelta, ContentIndex: refusalIndex, Delta: choice.Delta.Refusal, Partial: snapshot(out)})
 		}
 
 		for _, tc := range choice.Delta.ToolCalls {
@@ -409,6 +437,10 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 		text := out.Content[textIndex].(TextContent).Text
 		s.Push(AssistantMessageEvent{Type: EventTextEnd, ContentIndex: textIndex, Content: text, Partial: snapshot(out)})
 	}
+	if refusalIndex != -1 {
+		refusal := out.Content[refusalIndex].(RefusalContent).Refusal
+		s.Push(AssistantMessageEvent{Type: EventRefusalEnd, ContentIndex: refusalIndex, Content: refusal, Partial: snapshot(out)})
+	}
 	for _, tool := range toolOrder {
 		block := out.Content[tool.contentIndex].(ToolCall)
 		var args map[string]any
@@ -433,6 +465,7 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 func snapshot(out *AssistantMessage) *AssistantMessage {
 	cp := *out
 	cp.Content = append([]AssistantContent(nil), out.Content...)
+	cp.ReasoningDetails = append([]ReasoningDetail(nil), out.ReasoningDetails...)
 	return &cp
 }
 

@@ -41,14 +41,15 @@ func Stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *E
 	registryMu.RUnlock()
 	if !ok {
 		s := NewEventStream()
+		err := fmt.Errorf("no API provider registered for api: %s", model.API)
 		s.endWithError(AssistantMessage{
 			API:          model.API,
 			Provider:     model.Provider,
 			Model:        model.ID,
 			StopReason:   StopReasonError,
-			ErrorMessage: fmt.Sprintf("no API provider registered for api: %s", model.API),
+			ErrorMessage: err.Error(),
 			Timestamp:    time.Now(),
-		})
+		}, err)
 		return s
 	}
 	return entry.stream(ctx, model, c, opts)

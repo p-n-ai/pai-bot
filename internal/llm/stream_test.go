@@ -81,15 +81,19 @@ func TestEventStreamResultWithoutDraining(t *testing.T) {
 
 func TestEventStreamErrorTerminal(t *testing.T) {
 	s := llm.NewEventStream()
+	cause := errors.New("upstream cause")
 	errMsg := llm.FauxAssistantText("")
 	errMsg.StopReason = llm.StopReasonError
 	errMsg.ErrorMessage = "upstream failed"
-	s.Push(llm.AssistantMessageEvent{Type: llm.EventError, Reason: llm.StopReasonError, Message: &errMsg})
+	s.Push(llm.AssistantMessageEvent{Type: llm.EventError, Reason: llm.StopReasonError, Message: &errMsg, Err: cause})
 
 	msg, err := s.Result()
 	var streamErr *llm.StreamError
 	if !errors.As(err, &streamErr) {
 		t.Fatalf("expected *StreamError from Result, got %v", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("expected wrapped cause, got %v", err)
 	}
 	if streamErr.Reason != llm.StopReasonError || streamErr.Message != "upstream failed" {
 		t.Fatalf("stream error = %+v", streamErr)

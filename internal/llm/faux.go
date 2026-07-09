@@ -187,12 +187,13 @@ func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts 
 
 	go func() {
 		if step == nil {
-			s.endWithError(f.withUsageEstimate(f.errorMessage(model, "no more faux responses queued"), c, opts))
+			err := fmt.Errorf("no more faux responses queued")
+			s.endWithError(f.withUsageEstimate(f.errorMessage(model, err.Error()), c, opts), err)
 			return
 		}
 		resolved, err := step(c, opts, count, model)
 		if err != nil {
-			s.endWithError(f.errorMessage(model, err.Error()))
+			s.endWithError(f.errorMessage(model, err.Error()), err)
 			return
 		}
 		resolved.API = f.API
@@ -226,7 +227,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 		aborted.StopReason = StopReasonAborted
 		aborted.ErrorMessage = "request was aborted"
 		aborted.Timestamp = time.Now()
-		s.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonAborted, Message: &aborted})
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonAborted, Message: &aborted, Err: ctx.Err()})
 	}
 	push := func(typ EventType, mutate func(*AssistantMessageEvent)) {
 		snapshot := partial
@@ -276,6 +277,21 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 				push(EventTextDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
 			}
 			push(EventTextEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Text })
+		case RefusalContent:
+			partial.Content = append(partial.Content, RefusalContent{})
+			push(EventRefusalStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
+			written := 0
+			for _, chunk := range f.splitByTokenSize(b.Refusal) {
+				f.pace(chunk)
+				if ctx.Err() != nil {
+					abort()
+					return
+				}
+				written += len(chunk)
+				partial.Content[i] = RefusalContent{Refusal: b.Refusal[:written]}
+				push(EventRefusalDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
+			}
+			push(EventRefusalEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Refusal })
 		case ToolCall:
 			partial.Content = append(partial.Content, ToolCall{ID: b.ID, Name: b.Name, Arguments: map[string]any{}})
 			push(EventToolCallStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
@@ -391,6 +407,8 @@ func assistantContentToText(content []AssistantContent) string {
 			parts = append(parts, b.Text)
 		case ThinkingContent:
 			parts = append(parts, b.Thinking)
+		case RefusalContent:
+			parts = append(parts, b.Refusal)
 		case ToolCall:
 			args, _ := json.Marshal(b.Arguments)
 			parts = append(parts, b.Name+":"+string(args))

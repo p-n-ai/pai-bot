@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -48,11 +49,47 @@ type ThinkingContent struct {
 	Redacted  bool   `json:"redacted,omitempty"`
 }
 
+type RefusalContent struct {
+	Refusal string `json:"refusal"`
+}
+
 type ToolCall struct {
-	ID               string         `json:"id"`
-	Name             string         `json:"name"`
-	Arguments        map[string]any `json:"arguments"`
-	ThoughtSignature string         `json:"thoughtSignature,omitempty"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+type ReasoningDetail struct {
+	raw json.RawMessage
+}
+
+func parseReasoningDetail(data []byte) (ReasoningDetail, error) {
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return ReasoningDetail{}, fmt.Errorf("reasoning detail must be a JSON object: %w", err)
+	}
+	if envelope.Type == "" {
+		return ReasoningDetail{}, fmt.Errorf("reasoning detail must have a type")
+	}
+	return ReasoningDetail{raw: append(json.RawMessage(nil), data...)}, nil
+}
+
+func (d ReasoningDetail) MarshalJSON() ([]byte, error) {
+	if len(d.raw) == 0 {
+		return nil, fmt.Errorf("reasoning detail is empty")
+	}
+	return append([]byte(nil), d.raw...), nil
+}
+
+func (d *ReasoningDetail) UnmarshalJSON(data []byte) error {
+	parsed, err := parseReasoningDetail(data)
+	if err != nil {
+		return err
+	}
+	*d = parsed
+	return nil
 }
 
 type UserContent interface{ isUserContent() }
@@ -63,6 +100,7 @@ func (TextContent) isUserContent()          {}
 func (ImageContent) isUserContent()         {}
 func (TextContent) isAssistantContent()     {}
 func (ThinkingContent) isAssistantContent() {}
+func (RefusalContent) isAssistantContent()  {}
 func (ToolCall) isAssistantContent()        {}
 
 type Message interface{ isMessage() }
@@ -73,16 +111,17 @@ type UserMessage struct {
 }
 
 type AssistantMessage struct {
-	Content       []AssistantContent
-	API           string
-	Provider      string
-	Model         string
-	ResponseModel string
-	ResponseID    string
-	Usage         Usage
-	StopReason    StopReason
-	ErrorMessage  string
-	Timestamp     time.Time
+	Content          []AssistantContent
+	ReasoningDetails []ReasoningDetail
+	API              string
+	Provider         string
+	Model            string
+	ResponseModel    string
+	ResponseID       string
+	Usage            Usage
+	StopReason       StopReason
+	ErrorMessage     string
+	Timestamp        time.Time
 }
 
 type ToolResultMessage struct {
