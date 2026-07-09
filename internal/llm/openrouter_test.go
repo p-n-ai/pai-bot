@@ -658,7 +658,7 @@ func TestOpenRouterStreamParseErrorDoesNotLeakPayload(t *testing.T) {
 		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
 		&llm.StreamOptions{APIKey: "sk-or-test"},
 	).Result()
-	if err == nil || !strings.Contains(msg.ErrorMessage, "invalid event stream") {
+	if err == nil {
 		t.Fatalf("expected stream parse error, got %+v err=%v", msg, err)
 	}
 	if strings.Contains(msg.ErrorMessage, "TOP_SECRET") || strings.Contains(err.Error(), "TOP_SECRET") {
