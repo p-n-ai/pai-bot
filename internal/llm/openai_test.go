@@ -105,7 +105,7 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	}
 }
 
-func TestOpenAIStreamsAndReplaysRefusal(t *testing.T) {
+func TestOpenAIStreamsRefusalAsText(t *testing.T) {
 	srv, captured := sseServer(t, []string{
 		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"I can"}}]}`),
 		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"not help."},"finish_reason":"stop"}]}`),
@@ -127,16 +127,16 @@ func TestOpenAIStreamsAndReplaysRefusal(t *testing.T) {
 	if len(first.Content) != 1 {
 		t.Fatalf("content = %#v", first.Content)
 	}
-	refusal, ok := first.Content[0].(llm.RefusalContent)
-	if !ok || refusal.Refusal != "I cannot help." {
-		t.Fatalf("refusal = %#v", first.Content[0])
+	text, ok := first.Content[0].(llm.TextContent)
+	if !ok || text.Text != "I cannot help." {
+		t.Fatalf("text = %#v", first.Content[0])
 	}
 	if got := eventTypes(events); !equalTypes(got,
 		llm.EventStart,
-		llm.EventRefusalStart,
-		llm.EventRefusalDelta,
-		llm.EventRefusalDelta,
-		llm.EventRefusalEnd,
+		llm.EventTextStart,
+		llm.EventTextDelta,
+		llm.EventTextDelta,
+		llm.EventTextEnd,
 		llm.EventDone,
 	) {
 		t.Fatalf("events = %v", got)
@@ -152,7 +152,7 @@ func TestOpenAIStreamsAndReplaysRefusal(t *testing.T) {
 		t.Fatalf("second Result: %v", err)
 	}
 	assistant := captured.body["messages"].([]any)[1].(map[string]any)
-	if assistant["refusal"] != "I cannot help." {
+	if assistant["content"] != "I cannot help." {
 		t.Fatalf("assistant = %+v", assistant)
 	}
 }

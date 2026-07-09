@@ -316,7 +316,6 @@ func openRouterContentItems(content []UserContent) []components.ChatContentItems
 func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantMessage, bool, error) {
 	texts := make([]string, 0, len(msg.Content))
 	thoughts := make([]string, 0, len(msg.Content))
-	refusals := make([]string, 0, len(msg.Content))
 	toolCalls := make([]components.ChatToolCall, 0, len(msg.Content))
 	reasoningDetails := make([]components.ReasoningDetailUnion, 0, len(msg.ReasoningDetails))
 	for i, raw := range msg.ReasoningDetails {
@@ -339,10 +338,6 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 		case ThinkingContent:
 			if strings.TrimSpace(block.Thinking) != "" {
 				thoughts = append(thoughts, block.Thinking)
-			}
-		case RefusalContent:
-			if strings.TrimSpace(block.Refusal) != "" {
-				refusals = append(refusals, block.Refusal)
 			}
 		case ToolCall:
 			args, err := marshalToolArguments(block.Arguments)
@@ -368,10 +363,7 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 	if reasoning := strings.Join(thoughts, ""); reasoning != "" {
 		assistant.Reasoning = optionalnullable.From(&reasoning)
 	}
-	if refusal := strings.Join(refusals, ""); refusal != "" {
-		assistant.Refusal = optionalnullable.From(&refusal)
-	}
-	return assistant, assistant.Content.IsSet() || assistant.Reasoning.IsSet() || assistant.Refusal.IsSet() || len(assistant.ReasoningDetails) > 0 || len(assistant.ToolCalls) > 0, nil
+	return assistant, assistant.Content.IsSet() || assistant.Reasoning.IsSet() || len(assistant.ReasoningDetails) > 0 || len(assistant.ToolCalls) > 0, nil
 }
 
 func convertOpenRouterTools(tools []Tool) ([]components.ChatFunctionTool, error) {
@@ -422,7 +414,6 @@ func consumeOpenRouterStream(
 
 	textIndex := -1
 	thinkingIndex := -1
-	refusalIndex := -1
 	toolByStreamIndex := map[int64]*openRouterStreamingToolCall{}
 	toolByContentIndex := map[int]*openRouterStreamingToolCall{}
 	var currentTool *openRouterStreamingToolCall
@@ -471,16 +462,23 @@ func consumeOpenRouterStream(
 			hasFinish = true
 		}
 
-		if text, ok := choice.Delta.Content.Get(); ok && text != nil && *text != "" {
+		textDelta := ""
+		if text, ok := choice.Delta.Content.Get(); ok && text != nil {
+			textDelta += *text
+		}
+		if refusal, ok := choice.Delta.Refusal.Get(); ok && refusal != nil {
+			textDelta += *refusal
+		}
+		if textDelta != "" {
 			if textIndex == -1 {
 				out.Content = append(out.Content, TextContent{})
 				textIndex = len(out.Content) - 1
 				s.Push(AssistantMessageEvent{Type: EventTextStart, ContentIndex: textIndex, Partial: snapshot(out)})
 			}
 			block := out.Content[textIndex].(TextContent)
-			block.Text += *text
+			block.Text += textDelta
 			out.Content[textIndex] = block
-			s.Push(AssistantMessageEvent{Type: EventTextDelta, ContentIndex: textIndex, Delta: *text, Partial: snapshot(out)})
+			s.Push(AssistantMessageEvent{Type: EventTextDelta, ContentIndex: textIndex, Delta: textDelta, Partial: snapshot(out)})
 		}
 
 		if reasoning, ok := choice.Delta.Reasoning.Get(); ok && reasoning != nil && *reasoning != "" {
@@ -493,18 +491,6 @@ func consumeOpenRouterStream(
 			block.Thinking += *reasoning
 			out.Content[thinkingIndex] = block
 			s.Push(AssistantMessageEvent{Type: EventThinkingDelta, ContentIndex: thinkingIndex, Delta: *reasoning, Partial: snapshot(out)})
-		}
-
-		if refusal, ok := choice.Delta.Refusal.Get(); ok && refusal != nil && *refusal != "" {
-			if refusalIndex == -1 {
-				out.Content = append(out.Content, RefusalContent{})
-				refusalIndex = len(out.Content) - 1
-				s.Push(AssistantMessageEvent{Type: EventRefusalStart, ContentIndex: refusalIndex, Partial: snapshot(out)})
-			}
-			block := out.Content[refusalIndex].(RefusalContent)
-			block.Refusal += *refusal
-			out.Content[refusalIndex] = block
-			s.Push(AssistantMessageEvent{Type: EventRefusalDelta, ContentIndex: refusalIndex, Delta: *refusal, Partial: snapshot(out)})
 		}
 
 		var streamIndices []struct {
@@ -603,8 +589,6 @@ func consumeOpenRouterStream(
 			s.Push(AssistantMessageEvent{Type: EventTextEnd, ContentIndex: i, Content: block.Text, Partial: snapshot(out)})
 		case ThinkingContent:
 			s.Push(AssistantMessageEvent{Type: EventThinkingEnd, ContentIndex: i, Content: block.Thinking, Partial: snapshot(out)})
-		case RefusalContent:
-			s.Push(AssistantMessageEvent{Type: EventRefusalEnd, ContentIndex: i, Content: block.Refusal, Partial: snapshot(out)})
 		case ToolCall:
 			tool := toolByContentIndex[i]
 			if tool != nil {

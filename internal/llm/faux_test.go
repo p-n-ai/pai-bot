@@ -461,29 +461,6 @@ func TestFauxStreamsExactEventOrderForFixedChunks(t *testing.T) {
 	}
 }
 
-func TestFauxStreamsRefusal(t *testing.T) {
-	f := llm.RegisterFauxProvider(llm.FauxOptions{TokenSizeMin: 1, TokenSizeMax: 1})
-	defer f.Unregister()
-	f.SetResponses(llm.FauxRespond(llm.FauxAssistantMessage(llm.RefusalContent{Refusal: "no"})))
-
-	stream := llm.Stream(context.Background(), f.Model(), userContext("hi"), nil)
-	events := collectEvents(stream)
-	msg, err := stream.Result()
-	if err != nil {
-		t.Fatalf("Result: %v", err)
-	}
-	if refusal, ok := msg.Content[0].(llm.RefusalContent); !ok || refusal.Refusal != "no" {
-		t.Fatalf("refusal = %#v", msg.Content[0])
-	}
-	if !equalTypes(eventTypes(events),
-		llm.EventStart,
-		llm.EventRefusalStart, llm.EventRefusalDelta, llm.EventRefusalEnd,
-		llm.EventDone,
-	) {
-		t.Fatalf("event order = %v", eventTypes(events))
-	}
-}
-
 func TestFauxRejectsUnencodableToolArguments(t *testing.T) {
 	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()

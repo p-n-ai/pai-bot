@@ -50,10 +50,6 @@ type ThinkingContent struct {
 	Redacted  bool   `json:"redacted,omitempty"`
 }
 
-type RefusalContent struct {
-	Refusal string `json:"refusal"`
-}
-
 type ToolCall struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
@@ -113,7 +109,6 @@ func (TextContent) isUserContent()          {}
 func (ImageContent) isUserContent()         {}
 func (TextContent) isAssistantContent()     {}
 func (ThinkingContent) isAssistantContent() {}
-func (RefusalContent) isAssistantContent()  {}
 func (ToolCall) isAssistantContent()        {}
 
 type Message interface{ isMessage() }

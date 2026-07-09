@@ -290,21 +290,6 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 				push(EventTextDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
 			}
 			push(EventTextEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Text })
-		case RefusalContent:
-			partial.Content = append(partial.Content, RefusalContent{})
-			push(EventRefusalStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
-			written := 0
-			for _, chunk := range f.splitByTokenSize(b.Refusal) {
-				f.pace(chunk)
-				if ctx.Err() != nil {
-					abort()
-					return nil
-				}
-				written += len(chunk)
-				partial.Content[i] = RefusalContent{Refusal: b.Refusal[:written]}
-				push(EventRefusalDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
-			}
-			push(EventRefusalEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Refusal })
 		case ToolCall:
 			args, err := marshalToolArguments(b.Arguments)
 			if err != nil {
@@ -431,8 +416,6 @@ func assistantContentToText(content []AssistantContent) (string, error) {
 			parts = append(parts, b.Text)
 		case ThinkingContent:
 			parts = append(parts, b.Thinking)
-		case RefusalContent:
-			parts = append(parts, b.Refusal)
 		case ToolCall:
 			args, err := marshalToolArguments(b.Arguments)
 			if err != nil {
