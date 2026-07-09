@@ -2,6 +2,8 @@ package llm
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -54,6 +56,51 @@ type ToolCall struct {
 	Arguments map[string]any `json:"arguments"`
 }
 
+func marshalToolArguments(arguments map[string]any) (string, error) {
+	if arguments == nil {
+		return "{}", nil
+	}
+	encoded, err := json.Marshal(arguments)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func parseToolArguments(encoded string) (map[string]any, error) {
+	if strings.TrimSpace(encoded) == "" {
+		return map[string]any{}, nil
+	}
+	var arguments map[string]any
+	if err := json.Unmarshal([]byte(encoded), &arguments); err != nil {
+		return nil, err
+	}
+	if arguments == nil {
+		return nil, fmt.Errorf("arguments must be a JSON object")
+	}
+	return arguments, nil
+}
+
+type ReasoningDetail struct {
+	raw json.RawMessage
+}
+
+func (d ReasoningDetail) MarshalJSON() ([]byte, error) {
+	if len(d.raw) == 0 {
+		return nil, fmt.Errorf("reasoning detail is empty")
+	}
+	return append([]byte(nil), d.raw...), nil
+}
+
+func (d *ReasoningDetail) UnmarshalJSON(data []byte) error {
+	parsed, err := parseReasoningDetail(data)
+	if err != nil {
+		return err
+	}
+	*d = parsed
+	return nil
+}
+
 type UserContent interface{ isUserContent() }
 
 type AssistantContent interface{ isAssistantContent() }
@@ -72,15 +119,17 @@ type UserMessage struct {
 }
 
 type AssistantMessage struct {
-	Content      []AssistantContent
-	API          string
-	Provider     string
-	Model        string
-	ResponseID   string
-	Usage        Usage
-	StopReason   StopReason
-	ErrorMessage string
-	Timestamp    time.Time
+	Content          []AssistantContent
+	ReasoningDetails []ReasoningDetail
+	API              string
+	Provider         string
+	Model            string
+	ResponseModel    string
+	ResponseID       string
+	Usage            Usage
+	StopReason       StopReason
+	ErrorMessage     string
+	Timestamp        time.Time
 }
 
 type ToolResultMessage struct {

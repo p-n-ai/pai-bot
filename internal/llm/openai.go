@@ -31,13 +31,11 @@ func StreamOpenAICompletions(ctx context.Context, model Model, c Context, opts *
 			Timestamp:  time.Now(),
 		}
 		fail := func(err error) {
-			out.StopReason = StopReasonError
-			if ctx.Err() != nil {
-				out.StopReason = StopReasonAborted
-			}
+			var cause error
+			out.StopReason, cause = classifyStreamFailure(ctx, err)
 			out.ErrorMessage = err.Error()
 			out.Timestamp = time.Now()
-			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out})
+			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out, Err: cause})
 		}
 
 		if opts == nil || opts.APIKey == "" {
@@ -124,9 +122,13 @@ type oaTool struct {
 }
 
 func buildOpenAIRequest(model Model, c Context, opts *StreamOptions) ([]byte, error) {
+	messages, err := convertOpenAIMessages(model, c)
+	if err != nil {
+		return nil, err
+	}
 	params := map[string]any{
 		"model":          model.ID,
-		"messages":       convertOpenAIMessages(model, c),
+		"messages":       messages,
 		"stream":         true,
 		"stream_options": map[string]any{"include_usage": true},
 	}
@@ -175,7 +177,7 @@ func convertOpenAITools(tools []Tool) []oaTool {
 	return out
 }
 
-func convertOpenAIMessages(model Model, c Context) []oaMessage {
+func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 	var params []oaMessage
 	if c.SystemPrompt != "" {
 		role := "system"
@@ -198,10 +200,13 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 						texts = append(texts, block.Text)
 					}
 				case ToolCall:
-					args, _ := json.Marshal(block.Arguments)
+					args, err := marshalToolArguments(block.Arguments)
+					if err != nil {
+						return nil, fmt.Errorf("openai-completions: tool call %q arguments: %w", block.Name, err)
+					}
 					toolCalls = append(toolCalls, oaToolCall{
 						ID: block.ID, Type: "function",
-						Function: oaFunction{Name: block.Name, Arguments: string(args)},
+						Function: oaFunction{Name: block.Name, Arguments: args},
 					})
 				case ThinkingContent:
 
@@ -230,7 +235,7 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 			params = append(params, oaMessage{Role: "tool", Content: content, ToolCallID: msg.ToolCallID})
 		}
 	}
-	return params
+	return params, nil
 }
 
 func convertOpenAIUserMessage(msg UserMessage) []oaMessage {
@@ -285,6 +290,7 @@ type oaChoice struct {
 	FinishReason string `json:"finish_reason"`
 	Delta        struct {
 		Content   string `json:"content"`
+		Refusal   string `json:"refusal"`
 		ToolCalls []struct {
 			Index    *int   `json:"index"`
 			ID       string `json:"id"`
@@ -333,6 +339,9 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 		if out.ResponseID == "" {
 			out.ResponseID = chunk.ID
 		}
+		if out.ResponseModel == "" && chunk.Model != "" && chunk.Model != model.ID {
+			out.ResponseModel = chunk.Model
+		}
 		if chunk.Usage != nil {
 			out.Usage = parseOpenAIUsage(*chunk.Usage, model)
 		}
@@ -348,16 +357,17 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 			hasFinish = true
 		}
 
-		if choice.Delta.Content != "" {
+		textDelta := choice.Delta.Content + choice.Delta.Refusal
+		if textDelta != "" {
 			if textIndex == -1 {
 				out.Content = append(out.Content, TextContent{})
 				textIndex = len(out.Content) - 1
 				s.Push(AssistantMessageEvent{Type: EventTextStart, ContentIndex: textIndex, Partial: snapshot(out)})
 			}
 			block := out.Content[textIndex].(TextContent)
-			block.Text += choice.Delta.Content
+			block.Text += textDelta
 			out.Content[textIndex] = block
-			s.Push(AssistantMessageEvent{Type: EventTextDelta, ContentIndex: textIndex, Delta: choice.Delta.Content, Partial: snapshot(out)})
+			s.Push(AssistantMessageEvent{Type: EventTextDelta, ContentIndex: textIndex, Delta: textDelta, Partial: snapshot(out)})
 		}
 
 		for _, tc := range choice.Delta.ToolCalls {
@@ -411,10 +421,11 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 	}
 	for _, tool := range toolOrder {
 		block := out.Content[tool.contentIndex].(ToolCall)
-		var args map[string]any
-		if err := json.Unmarshal([]byte(tool.partialArgs.String()), &args); err == nil {
-			block.Arguments = args
+		args, err := parseToolArguments(tool.partialArgs.String())
+		if err != nil {
+			return fmt.Errorf("openai-completions: tool call %q arguments: %w", block.Name, err)
 		}
+		block.Arguments = args
 		out.Content[tool.contentIndex] = block
 		s.Push(AssistantMessageEvent{Type: EventToolCallEnd, ContentIndex: tool.contentIndex, ToolCall: &block, Partial: snapshot(out)})
 	}
@@ -433,6 +444,7 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 func snapshot(out *AssistantMessage) *AssistantMessage {
 	cp := *out
 	cp.Content = append([]AssistantContent(nil), out.Content...)
+	cp.ReasoningDetails = append([]ReasoningDetail(nil), out.ReasoningDetails...)
 	return &cp
 }
 

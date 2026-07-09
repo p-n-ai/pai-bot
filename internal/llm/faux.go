@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -175,6 +176,12 @@ func (f *FauxProvider) Unregister() { UnregisterProviders(f.sourceID) }
 
 func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *EventStream {
 	s := NewEventStream()
+	fail := func(err error) {
+		msg := f.errorMessage(model, err.Error())
+		var cause error
+		msg.StopReason, cause = classifyStreamFailure(ctx, err)
+		s.endWithError(msg, cause)
+	}
 	f.mu.Lock()
 	var step FauxStep
 	if len(f.pending) > 0 {
@@ -187,12 +194,13 @@ func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts 
 
 	go func() {
 		if step == nil {
-			s.endWithError(f.withUsageEstimate(f.errorMessage(model, "no more faux responses queued"), c, opts))
+			err := fmt.Errorf("no more faux responses queued")
+			fail(err)
 			return
 		}
 		resolved, err := step(c, opts, count, model)
 		if err != nil {
-			s.endWithError(f.errorMessage(model, err.Error()))
+			fail(err)
 			return
 		}
 		resolved.API = f.API
@@ -201,8 +209,14 @@ func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts 
 		if resolved.Timestamp.IsZero() {
 			resolved.Timestamp = time.Now()
 		}
-		resolved = f.withUsageEstimate(resolved, c, opts)
-		f.streamWithDeltas(ctx, s, resolved)
+		resolved, err = f.withUsageEstimate(resolved, c, opts)
+		if err != nil {
+			fail(err)
+			return
+		}
+		if err := f.streamWithDeltas(ctx, s, resolved); err != nil {
+			fail(err)
+		}
 	}()
 	return s
 }
@@ -218,7 +232,7 @@ func (f *FauxProvider) errorMessage(model Model, errText string) AssistantMessag
 	}
 }
 
-func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg AssistantMessage) {
+func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg AssistantMessage) error {
 	partial := msg
 	partial.Content = nil
 	abort := func() {
@@ -226,7 +240,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 		aborted.StopReason = StopReasonAborted
 		aborted.ErrorMessage = "request was aborted"
 		aborted.Timestamp = time.Now()
-		s.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonAborted, Message: &aborted})
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: StopReasonAborted, Message: &aborted, Err: ctx.Err()})
 	}
 	push := func(typ EventType, mutate func(*AssistantMessageEvent)) {
 		snapshot := partial
@@ -240,7 +254,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 
 	if ctx.Err() != nil {
 		abort()
-		return
+		return nil
 	}
 	push(EventStart, nil)
 
@@ -254,7 +268,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 				f.pace(chunk)
 				if ctx.Err() != nil {
 					abort()
-					return
+					return nil
 				}
 				written += len(chunk)
 				partial.Content[i] = ThinkingContent{Thinking: b.Thinking[:written]}
@@ -269,7 +283,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 				f.pace(chunk)
 				if ctx.Err() != nil {
 					abort()
-					return
+					return nil
 				}
 				written += len(chunk)
 				partial.Content[i] = TextContent{Text: b.Text[:written]}
@@ -277,14 +291,17 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 			}
 			push(EventTextEnd, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Content = b.Text })
 		case ToolCall:
+			args, err := marshalToolArguments(b.Arguments)
+			if err != nil {
+				return fmt.Errorf("faux: tool call %q arguments: %w", b.Name, err)
+			}
 			partial.Content = append(partial.Content, ToolCall{ID: b.ID, Name: b.Name, Arguments: map[string]any{}})
 			push(EventToolCallStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
-			args, _ := json.Marshal(b.Arguments)
-			for _, chunk := range f.splitByTokenSize(string(args)) {
+			for _, chunk := range f.splitByTokenSize(args) {
 				f.pace(chunk)
 				if ctx.Err() != nil {
 					abort()
-					return
+					return nil
 				}
 				push(EventToolCallDelta, func(ev *AssistantMessageEvent) { ev.ContentIndex = i; ev.Delta = chunk })
 			}
@@ -299,10 +316,11 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 
 	final := msg
 	if final.StopReason == StopReasonError || final.StopReason == StopReasonAborted {
-		s.Push(AssistantMessageEvent{Type: EventError, Reason: final.StopReason, Message: &final})
-		return
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: final.StopReason, Message: &final, Err: errors.New(final.ErrorMessage)})
+		return nil
 	}
 	s.Push(AssistantMessageEvent{Type: EventDone, Reason: final.StopReason, Message: &final})
+	return nil
 }
 
 func (f *FauxProvider) pace(chunk string) {
@@ -327,10 +345,17 @@ func (f *FauxProvider) splitByTokenSize(text string) []string {
 	return chunks
 }
 
-func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *StreamOptions) AssistantMessage {
-	promptText := serializeContext(c)
+func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *StreamOptions) (AssistantMessage, error) {
+	promptText, err := serializeContext(c)
+	if err != nil {
+		return AssistantMessage{}, fmt.Errorf("faux: serialize context: %w", err)
+	}
+	outputText, err := assistantContentToText(msg.Content)
+	if err != nil {
+		return AssistantMessage{}, fmt.Errorf("faux: serialize response: %w", err)
+	}
 	promptTokens := estimateTokens(promptText)
-	outputTokens := estimateTokens(assistantContentToText(msg.Content))
+	outputTokens := estimateTokens(outputText)
 	input := promptTokens
 	cacheRead, cacheWrite := 0, 0
 
@@ -356,7 +381,7 @@ func (f *FauxProvider) withUsageEstimate(msg AssistantMessage, c Context, opts *
 		CacheWrite:  cacheWrite,
 		TotalTokens: input + outputTokens + cacheRead + cacheWrite,
 	}
-	return msg
+	return msg, nil
 }
 
 func estimateTokens(text string) int { return (len(text) + 3) / 4 }
@@ -383,7 +408,7 @@ func userContentToText(content []UserContent) string {
 	return strings.Join(parts, "\n")
 }
 
-func assistantContentToText(content []AssistantContent) string {
+func assistantContentToText(content []AssistantContent) (string, error) {
 	parts := make([]string, 0, len(content))
 	for _, block := range content {
 		switch b := block.(type) {
@@ -392,41 +417,51 @@ func assistantContentToText(content []AssistantContent) string {
 		case ThinkingContent:
 			parts = append(parts, b.Thinking)
 		case ToolCall:
-			args, _ := json.Marshal(b.Arguments)
-			parts = append(parts, b.Name+":"+string(args))
+			args, err := marshalToolArguments(b.Arguments)
+			if err != nil {
+				return "", fmt.Errorf("tool call %q arguments: %w", b.Name, err)
+			}
+			parts = append(parts, b.Name+":"+args)
 		}
 	}
-	return strings.Join(parts, "\n")
+	return strings.Join(parts, "\n"), nil
 }
 
-func messageToText(m Message) (role, text string) {
+func messageToText(m Message) (role, text string, err error) {
 	switch msg := m.(type) {
 	case UserMessage:
-		return "user", userContentToText(msg.Content)
+		return "user", userContentToText(msg.Content), nil
 	case AssistantMessage:
-		return "assistant", assistantContentToText(msg.Content)
+		text, err := assistantContentToText(msg.Content)
+		return "assistant", text, err
 	case ToolResultMessage:
 		parts := []string{msg.ToolName}
 		for _, block := range msg.Content {
 			parts = append(parts, userContentToText([]UserContent{block}))
 		}
-		return "toolResult", strings.Join(parts, "\n")
+		return "toolResult", strings.Join(parts, "\n"), nil
 	}
-	return "", ""
+	return "", "", nil
 }
 
-func serializeContext(c Context) string {
+func serializeContext(c Context) (string, error) {
 	var parts []string
 	if c.SystemPrompt != "" {
 		parts = append(parts, "system:"+c.SystemPrompt)
 	}
 	for _, m := range c.Messages {
-		role, text := messageToText(m)
+		role, text, err := messageToText(m)
+		if err != nil {
+			return "", err
+		}
 		parts = append(parts, role+":"+text)
 	}
 	if len(c.Tools) > 0 {
-		tools, _ := json.Marshal(c.Tools)
+		tools, err := json.Marshal(c.Tools)
+		if err != nil {
+			return "", fmt.Errorf("tools: %w", err)
+		}
 		parts = append(parts, "tools:"+string(tools))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), nil
 }

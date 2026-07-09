@@ -16,6 +16,8 @@ import (
 type capturedRequest struct {
 	body    map[string]any
 	headers http.Header
+	method  string
+	path    string
 }
 
 func sseServer(t *testing.T, lines []string) (*httptest.Server, *capturedRequest) {
@@ -23,6 +25,8 @@ func sseServer(t *testing.T, lines []string) (*httptest.Server, *capturedRequest
 	captured := &capturedRequest{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.headers = r.Header.Clone()
+		captured.method = r.Method
+		captured.path = r.URL.Path
 		if err := json.NewDecoder(r.Body).Decode(&captured.body); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
@@ -50,7 +54,7 @@ func chunk(s string) string { return "data: " + s }
 
 func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	srv, captured := sseServer(t, []string{
-		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{"content":"Hel"}}]}`),
+		chunk(`{"id":"chatcmpl-1","model":"gpt-routed","choices":[{"delta":{"content":"Hel"}}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{"content":"lo"}}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[{"delta":{},"finish_reason":"stop"}]}`),
 		chunk(`{"id":"chatcmpl-1","choices":[],"usage":{"prompt_tokens":100,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":40}}}`),
@@ -69,8 +73,8 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	if got := textOf(t, msg); got != "Hello" {
 		t.Fatalf("text = %q", got)
 	}
-	if msg.ResponseID != "chatcmpl-1" || msg.StopReason != llm.StopReasonStop {
-		t.Fatalf("responseID=%q stopReason=%q", msg.ResponseID, msg.StopReason)
+	if msg.ResponseID != "chatcmpl-1" || msg.ResponseModel != "gpt-routed" || msg.StopReason != llm.StopReasonStop {
+		t.Fatalf("responseID=%q responseModel=%q stopReason=%q", msg.ResponseID, msg.ResponseModel, msg.StopReason)
 	}
 
 	if msg.Usage.Input != 60 || msg.Usage.CacheRead != 40 || msg.Usage.Output != 10 {
@@ -98,6 +102,58 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	first := msgs[0].(map[string]any)
 	if first["role"] != "system" || first["content"] != "Be brief." {
 		t.Fatalf("system message = %+v", first)
+	}
+}
+
+func TestOpenAIStreamsRefusalAsText(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"I can"}}]}`),
+		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"not help."},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+	model := openAIModel(srv.URL)
+	firstUser := llm.UserText("unsafe request")
+	stream := llm.StreamOpenAICompletions(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	)
+	events := collectEvents(stream)
+	first, err := stream.Result()
+	if err != nil {
+		t.Fatalf("first Result: %v", err)
+	}
+	if len(first.Content) != 1 {
+		t.Fatalf("content = %#v", first.Content)
+	}
+	text, ok := first.Content[0].(llm.TextContent)
+	if !ok || text.Text != "I cannot help." {
+		t.Fatalf("text = %#v", first.Content[0])
+	}
+	if got := eventTypes(events); !equalTypes(got,
+		llm.EventStart,
+		llm.EventTextStart,
+		llm.EventTextDelta,
+		llm.EventTextDelta,
+		llm.EventTextEnd,
+		llm.EventDone,
+	) {
+		t.Fatalf("events = %v", got)
+	}
+
+	_, err = llm.StreamOpenAICompletions(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{firstUser, first, llm.UserText("try another")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("second Result: %v", err)
+	}
+	assistant := captured.body["messages"].([]any)[1].(map[string]any)
+	if assistant["content"] != "I cannot help." {
+		t.Fatalf("assistant = %+v", assistant)
 	}
 }
 
@@ -162,6 +218,47 @@ func TestOpenAIStreamsMultipleToolCallsByIndex(t *testing.T) {
 	a, b := msg.Content[0].(llm.ToolCall), msg.Content[1].(llm.ToolCall)
 	if a.ID != "call_1" || b.ID != "call_2" {
 		t.Fatalf("ids = %q, %q", a.ID, b.ID)
+	}
+}
+
+func TestOpenAIRejectsMalformedStreamedToolArguments(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		chunk(`{"id":"c","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"bad","arguments":"{not-json"}}]},"finish_reason":"tool_calls"}]}`),
+		"data: [DONE]",
+	})
+	msg, err := llm.StreamOpenAICompletions(
+		context.Background(),
+		openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("call the tool")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	var syntaxErr *json.SyntaxError
+	if !errors.As(err, &syntaxErr) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected malformed tool arguments error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
+func TestOpenAIRejectsUnencodableToolArguments(t *testing.T) {
+	msg, err := llm.StreamOpenAICompletions(
+		context.Background(),
+		openAIModel("http://127.0.0.1:0"),
+		llm.Context{Messages: []llm.Message{
+			llm.UserText("call the tool"),
+			llm.AssistantMessage{Content: []llm.AssistantContent{
+				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+			}},
+		}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected argument encoding error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
 	}
 }
 

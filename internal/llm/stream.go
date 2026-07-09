@@ -1,6 +1,8 @@
 package llm
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"sync"
@@ -32,6 +34,7 @@ type AssistantMessageEvent struct {
 	Partial      *AssistantMessage
 	Reason       StopReason
 	Message      *AssistantMessage
+	Err          error
 }
 
 type EventStream struct {
@@ -40,6 +43,7 @@ type EventStream struct {
 	queue  []AssistantMessageEvent
 	closed bool
 	final  AssistantMessage
+	err    error
 	done   chan struct{}
 }
 
@@ -59,6 +63,7 @@ func (s *EventStream) Push(ev AssistantMessageEvent) {
 	if ev.Type == EventDone || ev.Type == EventError {
 		s.closed = true
 		s.final = *ev.Message
+		s.err = ev.Err
 		close(s.done)
 	}
 	s.cond.Broadcast()
@@ -89,23 +94,37 @@ func (s *EventStream) Events() iter.Seq[AssistantMessageEvent] {
 type StreamError struct {
 	Reason  StopReason
 	Message string
+	Cause   error
 }
 
 func (e *StreamError) Error() string { return fmt.Sprintf("llm: %s: %s", e.Reason, e.Message) }
 
+func (e *StreamError) Unwrap() error { return e.Cause }
+
+func classifyStreamFailure(ctx context.Context, err error) (StopReason, error) {
+	ctxErr := ctx.Err()
+	if ctxErr == nil {
+		return StopReasonError, err
+	}
+	if errors.Is(err, ctxErr) {
+		return StopReasonAborted, err
+	}
+	return StopReasonAborted, errors.Join(ctxErr, err)
+}
+
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
 	if s.final.StopReason == StopReasonError || s.final.StopReason == StopReasonAborted {
-		return s.final, &StreamError{Reason: s.final.StopReason, Message: s.final.ErrorMessage}
+		return s.final, &StreamError{Reason: s.final.StopReason, Message: s.final.ErrorMessage, Cause: s.err}
 	}
 	return s.final, nil
 }
 
-func (s *EventStream) endWithError(msg AssistantMessage) {
+func (s *EventStream) endWithError(msg AssistantMessage, err error) {
 	reason := msg.StopReason
 	if reason != StopReasonAborted {
 		reason = StopReasonError
 		msg.StopReason = StopReasonError
 	}
-	s.Push(AssistantMessageEvent{Type: EventError, Reason: reason, Message: &msg})
+	s.Push(AssistantMessageEvent{Type: EventError, Reason: reason, Message: &msg, Err: err})
 }

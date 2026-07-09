@@ -3,6 +3,7 @@ module github.com/p-n-ai/pai-bot
 go 1.25.0
 
 require (
+	github.com/OpenRouterTeam/go-sdk v0.5.9
 	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/redis/go-redis/v9 v9.18.0
@@ -77,6 +78,7 @@ require (
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spyzhov/ajson v0.8.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
 	github.com/tiendc/go-deepcopy v1.7.1 // indirect
