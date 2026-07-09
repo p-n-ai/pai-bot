@@ -12,6 +12,7 @@ import (
 	openrouter "github.com/OpenRouterTeam/go-sdk"
 	"github.com/OpenRouterTeam/go-sdk/models/components"
 	"github.com/OpenRouterTeam/go-sdk/models/operations"
+	"github.com/OpenRouterTeam/go-sdk/models/sdkerrors"
 	"github.com/OpenRouterTeam/go-sdk/optionalnullable"
 	"github.com/OpenRouterTeam/go-sdk/retry"
 	sdkstream "github.com/OpenRouterTeam/go-sdk/types/stream"
@@ -93,7 +94,7 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 			operations.WithSetHeaders(headers),
 		)
 		if err != nil {
-			fail(err)
+			fail(sanitizeOpenRouterError(err))
 			return
 		}
 		if resp == nil || resp.EventStream == nil {
@@ -107,6 +108,54 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 		}
 	}()
 	return s
+}
+
+func sanitizeOpenRouterError(err error) error {
+	var apiErr *sdkerrors.APIError
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	return sdkerrors.NewAPIError(apiErr.Message, apiErr.StatusCode, apiErr.Body, nil)
+}
+
+func parseReasoningDetail(data []byte) (ReasoningDetail, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return ReasoningDetail{}, fmt.Errorf("openrouter-chat: reasoning detail must be a JSON object: %w", err)
+	}
+	if fields == nil {
+		return ReasoningDetail{}, fmt.Errorf("openrouter-chat: reasoning detail must be a JSON object")
+	}
+	rawType, ok := fields["type"]
+	if !ok {
+		return ReasoningDetail{}, fmt.Errorf("openrouter-chat: reasoning detail type is required")
+	}
+	var detailType string
+	if err := json.Unmarshal(rawType, &detailType); err != nil || detailType == "" {
+		return ReasoningDetail{}, fmt.Errorf("openrouter-chat: reasoning detail type must be a non-empty string")
+	}
+	requiredField := ""
+	switch detailType {
+	case "reasoning.encrypted":
+		requiredField = "data"
+	case "reasoning.summary":
+		requiredField = "summary"
+	case "reasoning.text":
+	default:
+		return ReasoningDetail{raw: append(json.RawMessage(nil), data...)}, nil
+	}
+	if requiredField != "" {
+		raw, ok := fields[requiredField]
+		var value *string
+		if !ok || json.Unmarshal(raw, &value) != nil || value == nil {
+			return ReasoningDetail{}, fmt.Errorf("openrouter-chat: invalid %s detail", detailType)
+		}
+	}
+	var detail components.ReasoningDetailUnion
+	if err := json.Unmarshal(data, &detail); err != nil {
+		return ReasoningDetail{}, fmt.Errorf("openrouter-chat: invalid %s detail", detailType)
+	}
+	return ReasoningDetail{raw: append(json.RawMessage(nil), data...)}, nil
 }
 
 func buildOpenRouterRequest(model Model, c Context, opts *StreamOptions) (components.ChatRequest, error) {

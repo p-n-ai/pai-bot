@@ -89,19 +89,6 @@ type ReasoningDetail struct {
 	raw json.RawMessage
 }
 
-func parseReasoningDetail(data []byte) (ReasoningDetail, error) {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return ReasoningDetail{}, fmt.Errorf("reasoning detail must be a JSON object: %w", err)
-	}
-	if envelope.Type == "" {
-		return ReasoningDetail{}, fmt.Errorf("reasoning detail must have a type")
-	}
-	return ReasoningDetail{raw: append(json.RawMessage(nil), data...)}, nil
-}
-
 func (d ReasoningDetail) MarshalJSON() ([]byte, error) {
 	if len(d.raw) == 0 {
 		return nil, fmt.Errorf("reasoning detail is empty")

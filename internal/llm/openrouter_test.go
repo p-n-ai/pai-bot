@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OpenRouterTeam/go-sdk/models/sdkerrors"
 	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
@@ -244,6 +245,24 @@ func TestOpenRouterPreservesOrderedReasoningDetails(t *testing.T) {
 	}
 }
 
+func TestReasoningDetailRejectsInvalidKnownPayload(t *testing.T) {
+	var detail llm.ReasoningDetail
+	err := json.Unmarshal([]byte(`{"type":"reasoning.text","text":{"secret":"TOP_SECRET"}}`), &detail)
+	if err == nil {
+		t.Fatal("expected invalid reasoning text error")
+	}
+	if strings.Contains(err.Error(), "TOP_SECRET") {
+		t.Fatalf("validation error leaks raw payload: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`{"type":"reasoning.encrypted"}`), &detail); err == nil {
+		t.Fatal("expected missing encrypted reasoning data error")
+	}
+
+	if err := json.Unmarshal([]byte(`{"type":"reasoning.future","payload":{"nested":true}}`), &detail); err != nil {
+		t.Fatalf("unknown reasoning variant must remain opaque: %v", err)
+	}
+}
+
 func TestOpenRouterPreservesRefusal(t *testing.T) {
 	srv, captured := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-refusal","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"refusal":"I can"},"finish_reason":null}]}`),
@@ -461,6 +480,13 @@ func TestOpenRouterHTTPErrorBecomesTerminalError(t *testing.T) {
 	var streamErr *llm.StreamError
 	if !errors.As(err, &streamErr) || streamErr.Reason != llm.StopReasonError {
 		t.Fatalf("expected StreamError, got %v", err)
+	}
+	var apiErr *sdkerrors.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected SDK APIError cause, got %v", err)
+	}
+	if apiErr.RawResponse != nil {
+		t.Fatalf("SDK error exposes raw response request")
 	}
 	if !strings.Contains(msg.ErrorMessage, "429") || !strings.Contains(msg.ErrorMessage, "rate limited") {
 		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
