@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -57,6 +58,31 @@ type ToolCall struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
 	Arguments map[string]any `json:"arguments"`
+}
+
+func marshalToolArguments(arguments map[string]any) (string, error) {
+	if arguments == nil {
+		return "{}", nil
+	}
+	encoded, err := json.Marshal(arguments)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func parseToolArguments(encoded string) (map[string]any, error) {
+	if strings.TrimSpace(encoded) == "" {
+		return map[string]any{}, nil
+	}
+	var arguments map[string]any
+	if err := json.Unmarshal([]byte(encoded), &arguments); err != nil {
+		return nil, err
+	}
+	if arguments == nil {
+		return nil, fmt.Errorf("arguments must be a JSON object")
+	}
+	return arguments, nil
 }
 
 type ReasoningDetail struct {

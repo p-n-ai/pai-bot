@@ -283,7 +283,7 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 				refusals = append(refusals, block.Refusal)
 			}
 		case ToolCall:
-			args, err := json.Marshal(block.Arguments)
+			args, err := marshalToolArguments(block.Arguments)
 			if err != nil {
 				return components.ChatAssistantMessage{}, false, fmt.Errorf("openrouter-chat: tool call %q arguments: %w", block.Name, err)
 			}
@@ -292,7 +292,7 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 				Type: components.ChatToolCallTypeFunction,
 				Function: components.ChatToolCallFunction{
 					Name:      block.Name,
-					Arguments: string(args),
+					Arguments: args,
 				},
 			})
 		}
@@ -496,10 +496,11 @@ func consumeOpenRouterStream(
 		case ToolCall:
 			tool := toolByContentIndex[i]
 			if tool != nil {
-				var args map[string]any
-				if err := json.Unmarshal([]byte(tool.partialArgs.String()), &args); err == nil {
-					block.Arguments = args
+				args, err := parseToolArguments(tool.partialArgs.String())
+				if err != nil {
+					return fmt.Errorf("openrouter-chat: tool call %q arguments: %w", block.Name, err)
 				}
+				block.Arguments = args
 				out.Content[i] = block
 			}
 			s.Push(AssistantMessageEvent{Type: EventToolCallEnd, ContentIndex: i, ToolCall: &block, Partial: snapshot(out)})

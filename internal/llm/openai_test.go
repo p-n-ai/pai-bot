@@ -221,6 +221,47 @@ func TestOpenAIStreamsMultipleToolCallsByIndex(t *testing.T) {
 	}
 }
 
+func TestOpenAIRejectsMalformedStreamedToolArguments(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		chunk(`{"id":"c","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"bad","arguments":"{not-json"}}]},"finish_reason":"tool_calls"}]}`),
+		"data: [DONE]",
+	})
+	msg, err := llm.StreamOpenAICompletions(
+		context.Background(),
+		openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("call the tool")}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	var syntaxErr *json.SyntaxError
+	if !errors.As(err, &syntaxErr) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected malformed tool arguments error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
+func TestOpenAIRejectsUnencodableToolArguments(t *testing.T) {
+	msg, err := llm.StreamOpenAICompletions(
+		context.Background(),
+		openAIModel("http://127.0.0.1:0"),
+		llm.Context{Messages: []llm.Message{
+			llm.UserText("call the tool"),
+			llm.AssistantMessage{Content: []llm.AssistantContent{
+				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+			}},
+		}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected argument encoding error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
 func TestOpenAIFinishReasonMapping(t *testing.T) {
 	cases := []struct {
 		finish  string

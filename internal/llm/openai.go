@@ -130,9 +130,13 @@ type oaTool struct {
 }
 
 func buildOpenAIRequest(model Model, c Context, opts *StreamOptions) ([]byte, error) {
+	messages, err := convertOpenAIMessages(model, c)
+	if err != nil {
+		return nil, err
+	}
 	params := map[string]any{
 		"model":          model.ID,
-		"messages":       convertOpenAIMessages(model, c),
+		"messages":       messages,
 		"stream":         true,
 		"stream_options": map[string]any{"include_usage": true},
 	}
@@ -181,7 +185,7 @@ func convertOpenAITools(tools []Tool) []oaTool {
 	return out
 }
 
-func convertOpenAIMessages(model Model, c Context) []oaMessage {
+func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 	var params []oaMessage
 	if c.SystemPrompt != "" {
 		role := "system"
@@ -205,10 +209,13 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 						texts = append(texts, block.Text)
 					}
 				case ToolCall:
-					args, _ := json.Marshal(block.Arguments)
+					args, err := marshalToolArguments(block.Arguments)
+					if err != nil {
+						return nil, fmt.Errorf("openai-completions: tool call %q arguments: %w", block.Name, err)
+					}
 					toolCalls = append(toolCalls, oaToolCall{
 						ID: block.ID, Type: "function",
-						Function: oaFunction{Name: block.Name, Arguments: string(args)},
+						Function: oaFunction{Name: block.Name, Arguments: args},
 					})
 				case ThinkingContent:
 
@@ -241,7 +248,7 @@ func convertOpenAIMessages(model Model, c Context) []oaMessage {
 			params = append(params, oaMessage{Role: "tool", Content: content, ToolCallID: msg.ToolCallID})
 		}
 	}
-	return params
+	return params, nil
 }
 
 func convertOpenAIUserMessage(msg UserMessage) []oaMessage {
@@ -443,10 +450,11 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 	}
 	for _, tool := range toolOrder {
 		block := out.Content[tool.contentIndex].(ToolCall)
-		var args map[string]any
-		if err := json.Unmarshal([]byte(tool.partialArgs.String()), &args); err == nil {
-			block.Arguments = args
+		args, err := parseToolArguments(tool.partialArgs.String())
+		if err != nil {
+			return fmt.Errorf("openai-completions: tool call %q arguments: %w", block.Name, err)
 		}
+		block.Arguments = args
 		out.Content[tool.contentIndex] = block
 		s.Push(AssistantMessageEvent{Type: EventToolCallEnd, ContentIndex: tool.contentIndex, ToolCall: &block, Partial: snapshot(out)})
 	}

@@ -409,6 +409,26 @@ func TestOpenRouterRejectsUnencodableToolArguments(t *testing.T) {
 	}
 }
 
+func TestOpenRouterRejectsMalformedStreamedToolArguments(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-bad-tool","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"bad","arguments":"{not-json"}}]},"finish_reason":"tool_calls"}]}`),
+		"data: [DONE]",
+	})
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("call the tool")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	var syntaxErr *json.SyntaxError
+	if !errors.As(err, &syntaxErr) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected malformed tool arguments error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
 func TestOpenRouterInlineStreamError(t *testing.T) {
 	srv, _ := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-error","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[],"error":{"code":429,"message":"provider overloaded"}}`),
