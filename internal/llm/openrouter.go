@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -28,6 +29,8 @@ const (
 )
 
 var openRouterHTTPClient = &http.Client{}
+
+var openRouterSSEBoundary = regexp.MustCompile(`\r\n\r\n|\r\n\r|\r\n\n|\r\r\n|\n\r\n|\r\r|\n\r|\n\n`)
 
 func RegisterOpenRouterChat() {
 	RegisterProvider(APIOpenRouterChat, StreamOpenRouterChat, "builtin:openrouter-chat")
@@ -403,6 +406,39 @@ type openRouterStreamingToolCall struct {
 	partialArgs  strings.Builder
 }
 
+func splitOpenRouterSSEEvents(data []byte, atEOF bool) (int, []byte, error) {
+	if len(data) == 0 && atEOF {
+		return 0, nil, nil
+	}
+	if boundary := openRouterSSEBoundary.FindIndex(data); boundary != nil {
+		return boundary[1], data[:boundary[0]], nil
+	}
+	if atEOF {
+		return len(data), bytes.TrimRight(data, "\r\n"), nil
+	}
+	return 0, nil, nil
+}
+
+func openRouterSSEData(event []byte) (string, bool) {
+	text := strings.ReplaceAll(string(event), "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	text = strings.TrimPrefix(text, "\uFEFF")
+	var data strings.Builder
+	found := false
+	for _, line := range strings.Split(text, "\n") {
+		value, ok := strings.CutPrefix(line, "data:")
+		if !ok {
+			continue
+		}
+		if found {
+			data.WriteByte('\n')
+		}
+		data.WriteString(strings.TrimPrefix(value, " "))
+		found = true
+	}
+	return data.String(), found
+}
+
 func consumeOpenRouterStream(
 	ctx context.Context,
 	s *EventStream,
@@ -415,24 +451,28 @@ func consumeOpenRouterStream(
 	textIndex := -1
 	thinkingIndex := -1
 	toolByStreamIndex := map[int64]*openRouterStreamingToolCall{}
+	toolByID := map[string]*openRouterStreamingToolCall{}
 	toolByContentIndex := map[int]*openRouterStreamingToolCall{}
 	var currentTool *openRouterStreamingToolCall
 	hasFinish := false
 
 	scanner := bufio.NewScanner(body)
+	scanner.Split(splitOpenRouterSSEEvents)
 	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
 	for scanner.Scan() {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		line := scanner.Text()
-		data, ok := strings.CutPrefix(line, "data:")
+		data, ok := openRouterSSEData(scanner.Bytes())
 		if !ok {
 			continue
 		}
 		data = strings.TrimSpace(data)
-		if data == "" || data == "[DONE]" {
+		if data == "" {
 			continue
+		}
+		if data == "[DONE]" {
+			break
 		}
 		var chunk components.ChatStreamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
@@ -523,7 +563,7 @@ func consumeOpenRouterStream(
 			if streamIndex != nil {
 				tool = toolByStreamIndex[*streamIndex]
 			} else if tc.ID != nil && *tc.ID != "" {
-				tool = nil
+				tool = toolByID[*tc.ID]
 			}
 			if tool == nil {
 				id := ""
@@ -539,6 +579,9 @@ func consumeOpenRouterStream(
 				if streamIndex != nil {
 					toolByStreamIndex[*streamIndex] = tool
 				}
+				if id != "" {
+					toolByID[id] = tool
+				}
 				toolByContentIndex[tool.contentIndex] = tool
 				s.Push(AssistantMessageEvent{Type: EventToolCallStart, ContentIndex: tool.contentIndex, Partial: snapshot(out)})
 			}
@@ -547,6 +590,9 @@ func consumeOpenRouterStream(
 			block := out.Content[tool.contentIndex].(ToolCall)
 			if block.ID == "" && tc.ID != nil {
 				block.ID = *tc.ID
+			}
+			if tc.ID != nil && *tc.ID != "" {
+				toolByID[*tc.ID] = tool
 			}
 			if block.Name == "" && tc.Function != nil && tc.Function.Name != nil {
 				block.Name = *tc.Function.Name

@@ -243,6 +243,31 @@ func TestOpenRouterSeparatesIndexlessParallelToolCalls(t *testing.T) {
 	}
 }
 
+func TestOpenRouterCoalescesIndexlessToolCallByID(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call-1","type":"function","function":{"name":"read","arguments":"{\"path\":\"READ"}}]},"finish_reason":null}]}`),
+		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call-1","type":"function","function":{"arguments":"ME.md\"}"}}]},"finish_reason":"tool_calls"}]}`),
+		"data: [DONE]",
+	})
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("use tools")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+	if len(msg.Content) != 1 {
+		t.Fatalf("content = %#v", msg.Content)
+	}
+	call := msg.Content[0].(llm.ToolCall)
+	if call.ID != "call-1" || call.Name != "read" || call.Arguments["path"] != "README.md" {
+		t.Fatalf("call = %#v", call)
+	}
+}
+
 func TestOpenRouterPreservesOrderedReasoningDetails(t *testing.T) {
 	srv, captured := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-reasoning","model":"google/gemini-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning.summary","summary":"brief","index":0},{"type":"reasoning.text","text":"step","signature":"text-signature","id":"reasoning-1","index":1},{"type":"reasoning.encrypted","id":"call-1","data":"encrypted-signature","index":2}]},"finish_reason":null}]}`),
@@ -707,6 +732,63 @@ func TestOpenRouterAcceptsLargeSSEEvent(t *testing.T) {
 	}
 	if got := textOf(t, msg); got != want {
 		t.Fatalf("content length = %d, want %d", len(got), len(want))
+	}
+}
+
+func TestOpenRouterJoinsMultilineSSEData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"id\":\"or-multiline\",\"model\":\"openai/gpt-test\",\n")
+		_, _ = io.WriteString(w, "data: \"object\":\"chat.completion.chunk\",\"created\":1,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil || textOf(t, msg) != "ok" {
+		t.Fatalf("message = %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterAcceptsUTF8BOM(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "\uFEFF"+openRouterChunk(`{"id":"or-bom","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`)+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil || textOf(t, msg) != "ok" {
+		t.Fatalf("message = %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterStopsAtDoneSentinel(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-done","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+		strings.Repeat("x", 2<<20),
+	})
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil || textOf(t, msg) != "ok" {
+		t.Fatalf("message = %+v err=%v", msg, err)
 	}
 }
 
