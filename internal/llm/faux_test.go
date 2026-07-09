@@ -583,7 +583,8 @@ func TestFauxExplicitErrorMessageStreamsAsTerminalError(t *testing.T) {
 		reply.ErrorMessage = tc.errText
 		f.SetResponses(llm.FauxRespond(reply))
 
-		events := collectEvents(llm.Stream(context.Background(), f.Model(), userContext("hi"), nil))
+		stream := llm.Stream(context.Background(), f.Model(), userContext("hi"), nil)
+		events := collectEvents(stream)
 		if !equalTypes(eventTypes(events),
 			llm.EventStart, llm.EventTextStart, llm.EventTextDelta, llm.EventTextEnd, llm.EventError,
 		) {
@@ -592,6 +593,12 @@ func TestFauxExplicitErrorMessageStreamsAsTerminalError(t *testing.T) {
 		terminal := events[len(events)-1]
 		if terminal.Reason != tc.reason || terminal.Message.StopReason != tc.reason || terminal.Message.ErrorMessage != tc.errText {
 			t.Fatalf("%s: terminal = %+v", tc.reason, terminal.Message)
+		}
+		if terminal.Err == nil {
+			t.Fatalf("%s: terminal error cause is nil", tc.reason)
+		}
+		if _, err := stream.Result(); err == nil {
+			t.Fatalf("%s: Result returned nil error", tc.reason)
 		}
 		f.Unregister()
 	}

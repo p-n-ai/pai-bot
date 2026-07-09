@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -330,7 +331,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 
 	final := msg
 	if final.StopReason == StopReasonError || final.StopReason == StopReasonAborted {
-		s.Push(AssistantMessageEvent{Type: EventError, Reason: final.StopReason, Message: &final})
+		s.Push(AssistantMessageEvent{Type: EventError, Reason: final.StopReason, Message: &final, Err: errors.New(final.ErrorMessage)})
 		return nil
 	}
 	s.Push(AssistantMessageEvent{Type: EventDone, Reason: final.StopReason, Message: &final})

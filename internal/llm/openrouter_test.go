@@ -145,6 +145,28 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	}
 }
 
+func TestOpenRouterSendsShortCacheTTL(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-cache","model":"anthropic/claude-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+	model := openRouterModel(srv.URL)
+	model.ID = "anthropic/claude-test"
+	_, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		model,
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test", CacheRetention: llm.CacheRetentionShort},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+	cache := captured.body["cache_control"].(map[string]any)
+	if cache["type"] != "ephemeral" || cache["ttl"] != "5m" {
+		t.Fatalf("cache_control = %+v", cache)
+	}
+}
+
 func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 	srv, _ := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"answer","reasoning":"think","tool_calls":[{"index":0,"id":"read-first","type":"function","function":{"name":"read","arguments":"{\"path\":\"README"}},{"index":1,"id":"grep-first","type":"function","function":{"name":"grep","arguments":"{\"pattern\":\"TODO"}}]},"finish_reason":null}]}`),
@@ -495,6 +517,46 @@ func TestOpenRouterInlineStreamError(t *testing.T) {
 	).Result()
 	if err == nil || !strings.Contains(msg.ErrorMessage, "provider overloaded") {
 		t.Fatalf("expected inline stream error, got %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterFinishReasonMapping(t *testing.T) {
+	cases := []struct {
+		finish  string
+		want    llm.StopReason
+		wantErr bool
+	}{
+		{"length", llm.StopReasonLength, false},
+		{"content_filter", llm.StopReasonError, true},
+		{"error", llm.StopReasonError, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.finish, func(t *testing.T) {
+			srv, _ := sseServer(t, []string{
+				openRouterChunk(`{"id":"or-finish","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"x"},"finish_reason":"` + tc.finish + `"}]}`),
+				"data: [DONE]",
+			})
+			stream := llm.StreamOpenRouterChat(
+				context.Background(),
+				openRouterModel(srv.URL),
+				llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+				&llm.StreamOptions{APIKey: "sk-or-test"},
+			)
+			events := collectEvents(stream)
+			msg, err := stream.Result()
+			if tc.wantErr {
+				if err == nil || msg.StopReason != llm.StopReasonError || !strings.Contains(msg.ErrorMessage, tc.finish) {
+					t.Fatalf("message = %+v err=%v", msg, err)
+				}
+				if got := eventTypes(events); !equalTypes(got, llm.EventStart, llm.EventTextStart, llm.EventTextDelta, llm.EventTextEnd, llm.EventError) {
+					t.Fatalf("events = %v", got)
+				}
+				return
+			}
+			if err != nil || msg.StopReason != tc.want {
+				t.Fatalf("message = %+v err=%v", msg, err)
+			}
+		})
 	}
 }
 
