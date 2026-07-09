@@ -16,6 +16,8 @@ import (
 type capturedRequest struct {
 	body    map[string]any
 	headers http.Header
+	method  string
+	path    string
 }
 
 func sseServer(t *testing.T, lines []string) (*httptest.Server, *capturedRequest) {
@@ -23,6 +25,8 @@ func sseServer(t *testing.T, lines []string) (*httptest.Server, *capturedRequest
 	captured := &capturedRequest{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.headers = r.Header.Clone()
+		captured.method = r.Method
+		captured.path = r.URL.Path
 		if err := json.NewDecoder(r.Body).Decode(&captured.body); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
