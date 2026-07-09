@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/OpenRouterTeam/go-sdk/models/sdkerrors"
@@ -130,6 +131,9 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	if _, ok := captured.body["tools"]; ok {
 		t.Fatalf("tools must be omitted when no tools are configured: %+v", captured.body["tools"])
 	}
+	if _, ok := captured.body["response_format"]; ok {
+		t.Fatalf("response_format must be omitted when structured output is not configured: %+v", captured.body["response_format"])
+	}
 	cache := captured.body["cache_control"].(map[string]any)
 	if cache["type"] != "ephemeral" || cache["ttl"] != "1h" {
 		t.Fatalf("cache_control = %+v", cache)
@@ -142,6 +146,94 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	first := messages[0].(map[string]any)
 	if first["role"] != "developer" || first["content"] != "Be brief." {
 		t.Fatalf("developer message = %+v", first)
+	}
+}
+
+func TestOpenRouterSendsStructuredOutputResponseFormat(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-structured","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"{\"answer\":\"ok\"}"},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+	schema := json.RawMessage(`{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`)
+
+	_, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("return JSON")}},
+		&llm.StreamOptions{
+			APIKey: "sk-or-test",
+			StructuredOutput: &llm.StructuredOutputSpec{
+				Name:       "tutor_response",
+				JSONSchema: schema,
+				Strict:     true,
+			},
+		},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+
+	var decodedSchema map[string]any
+	if err := json.Unmarshal(schema, &decodedSchema); err != nil {
+		t.Fatalf("decode expected schema: %v", err)
+	}
+	want := map[string]any{
+		"type": "json_schema",
+		"json_schema": map[string]any{
+			"name":   "tutor_response",
+			"schema": decodedSchema,
+			"strict": true,
+		},
+	}
+	if got := captured.body["response_format"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("response_format = %#v, want %#v", got, want)
+	}
+}
+
+func TestOpenRouterRejectsInvalidStructuredOutputBeforeRequest(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, openRouterChunk(`{"id":"unexpected","choices":[{"delta":{"content":"unexpected"},"finish_reason":"stop"}]}`)+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	tests := []struct {
+		name string
+		spec llm.StructuredOutputSpec
+		want string
+	}{
+		{name: "missing name", spec: llm.StructuredOutputSpec{JSONSchema: json.RawMessage(`{}`)}, want: "name is required"},
+		{name: "invalid name", spec: llm.StructuredOutputSpec{Name: "invalid name", JSONSchema: json.RawMessage(`{}`)}, want: "name must match"},
+		{name: "name too long", spec: llm.StructuredOutputSpec{Name: strings.Repeat("a", 65), JSONSchema: json.RawMessage(`{}`)}, want: "name must match"},
+		{name: "missing schema", spec: llm.StructuredOutputSpec{Name: "reply"}, want: "JSON schema is required"},
+		{name: "malformed schema", spec: llm.StructuredOutputSpec{Name: "reply", JSONSchema: json.RawMessage(`{"schema-secret-marker":`)}, want: "must contain valid JSON"},
+		{name: "multiple schemas", spec: llm.StructuredOutputSpec{Name: "reply", JSONSchema: json.RawMessage(`{} {}`)}, want: "must contain valid JSON"},
+		{name: "array schema", spec: llm.StructuredOutputSpec{Name: "reply", JSONSchema: json.RawMessage(`[]`)}, want: "must be a JSON object"},
+		{name: "null schema", spec: llm.StructuredOutputSpec{Name: "reply", JSONSchema: json.RawMessage(`null`)}, want: "must be a JSON object"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := requests.Load()
+			msg, err := llm.StreamOpenRouterChat(
+				context.Background(),
+				openRouterModel(srv.URL),
+				llm.Context{Messages: []llm.Message{llm.UserText("return JSON")}},
+				&llm.StreamOptions{APIKey: "sk-secret-that-must-not-leak", StructuredOutput: &tt.spec},
+			).Result()
+			if err == nil || !strings.Contains(msg.ErrorMessage, tt.want) {
+				t.Fatalf("expected %q error, got message=%+v err=%v", tt.want, msg, err)
+			}
+			if strings.Contains(msg.ErrorMessage, "schema-secret-marker") || strings.Contains(msg.ErrorMessage, "sk-secret-that-must-not-leak") {
+				t.Fatalf("error leaks request data: %q", msg.ErrorMessage)
+			}
+			if got := requests.Load(); got != before {
+				t.Fatalf("requests = %d, want %d", got, before)
+			}
+		})
 	}
 }
 

@@ -168,13 +168,20 @@ const (
 	CacheRetentionLong  CacheRetention = "long"
 )
 
+type StructuredOutputSpec struct {
+	Name       string
+	JSONSchema json.RawMessage
+	Strict     bool
+}
+
 type StreamOptions struct {
-	Temperature    *float64
-	MaxTokens      int
-	APIKey         string
-	SessionID      string
-	CacheRetention CacheRetention
-	Headers        map[string]string
+	Temperature      *float64
+	MaxTokens        int
+	APIKey           string
+	SessionID        string
+	CacheRetention   CacheRetention
+	Headers          map[string]string
+	StructuredOutput *StructuredOutputSpec
 }
 
 type Model struct {

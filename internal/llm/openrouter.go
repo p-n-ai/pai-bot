@@ -31,6 +31,7 @@ const (
 var openRouterHTTPClient = &http.Client{}
 
 var openRouterSSEBoundary = regexp.MustCompile(`\r\n\r\n|\r\n\r|\r\n\n|\r\r\n|\n\r\n|\r\r|\n\r|\n\n`)
+var openRouterStructuredOutputName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 func RegisterOpenRouterChat() {
 	RegisterProvider(APIOpenRouterChat, StreamOpenRouterChat, "builtin:openrouter-chat")
@@ -183,14 +184,19 @@ func buildOpenRouterRequest(model Model, c Context, opts *StreamOptions) (compon
 	if err != nil {
 		return components.ChatRequest{}, err
 	}
+	responseFormat, err := openRouterJSONSchemaResponseFormat(opts.StructuredOutput)
+	if err != nil {
+		return components.ChatRequest{}, err
+	}
 
 	streamOptions := components.ChatStreamOptions{IncludeUsage: openrouter.Pointer(true)}
 	req := components.ChatRequest{
-		Messages:      messages,
-		Model:         openrouter.Pointer(model.ID),
-		Stream:        openrouter.Pointer(true),
-		StreamOptions: optionalnullable.From(&streamOptions),
-		Tools:         tools,
+		Messages:       messages,
+		Model:          openrouter.Pointer(model.ID),
+		ResponseFormat: responseFormat,
+		Stream:         openrouter.Pointer(true),
+		StreamOptions:  optionalnullable.From(&streamOptions),
+		Tools:          tools,
 	}
 	if opts.Temperature != nil {
 		req.Temperature = optionalnullable.From(opts.Temperature)
@@ -218,6 +224,46 @@ func buildOpenRouterRequest(model Model, c Context, opts *StreamOptions) (compon
 		}
 	}
 	return req, nil
+}
+
+func openRouterJSONSchemaResponseFormat(spec *StructuredOutputSpec) (*components.ResponseFormat, error) {
+	if spec == nil {
+		return nil, nil
+	}
+	if spec.Name == "" {
+		return nil, fmt.Errorf("openrouter-chat: structured output name is required")
+	}
+	if !openRouterStructuredOutputName.MatchString(spec.Name) {
+		return nil, fmt.Errorf("openrouter-chat: structured output name must match [A-Za-z0-9_-]{1,64}")
+	}
+
+	rawSchema := bytes.TrimSpace(spec.JSONSchema)
+	if len(rawSchema) == 0 {
+		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema is required")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(rawSchema))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil || len(bytes.TrimSpace(rawSchema[decoder.InputOffset():])) != 0 {
+		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema must contain valid JSON")
+	}
+	schema, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema must be a JSON object")
+	}
+
+	jsonSchema := components.ChatJSONSchemaConfig{
+		Name:   spec.Name,
+		Schema: schema,
+	}
+	if spec.Strict {
+		jsonSchema.Strict = optionalnullable.From(openrouter.Pointer(true))
+	}
+	responseFormat := components.CreateResponseFormatJSONSchema(components.ChatFormatJSONSchemaConfig{
+		JSONSchema: jsonSchema,
+	})
+	return &responseFormat, nil
 }
 
 func openRouterSupportsCacheControl(model Model) bool {
