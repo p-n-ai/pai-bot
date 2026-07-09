@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -125,6 +127,9 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	if captured.body["session_id"] != "session-1" {
 		t.Fatalf("session_id = %+v", captured.body["session_id"])
 	}
+	if _, ok := captured.body["tools"]; ok {
+		t.Fatalf("tools must be omitted when no tools are configured: %+v", captured.body["tools"])
+	}
 	cache := captured.body["cache_control"].(map[string]any)
 	if cache["type"] != "ephemeral" || cache["ttl"] != "1h" {
 		t.Fatalf("cache_control = %+v", cache)
@@ -185,6 +190,34 @@ func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 	}
 	if starts != 2 || deltas != 4 || ends != 2 {
 		t.Fatalf("tool events: starts=%d deltas=%d ends=%d", starts, deltas, ends)
+	}
+}
+
+func TestOpenRouterSeparatesIndexlessParallelToolCalls(t *testing.T) {
+	srv, _ := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-tools","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"id":"first","type":"function","function":{"name":"read","arguments":"{\"path\":\"README.md\"}"}},{"id":"second","type":"function","function":{"name":"grep","arguments":"{\"pattern\":\"TODO\"}"}}]},"finish_reason":"tool_calls"}]}`),
+		"data: [DONE]",
+	})
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("use tools")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+	if len(msg.Content) != 2 {
+		t.Fatalf("content = %#v", msg.Content)
+	}
+	first := msg.Content[0].(llm.ToolCall)
+	second := msg.Content[1].(llm.ToolCall)
+	if first.ID != "first" || first.Name != "read" || first.Arguments["path"] != "README.md" {
+		t.Fatalf("first = %#v", first)
+	}
+	if second.ID != "second" || second.Name != "grep" || second.Arguments["pattern"] != "TODO" {
+		t.Fatalf("second = %#v", second)
 	}
 }
 
@@ -560,6 +593,58 @@ func TestOpenRouterMissingFinishReasonIsError(t *testing.T) {
 	).Result()
 	if err == nil || !strings.Contains(msg.ErrorMessage, "finish_reason") {
 		t.Fatalf("expected finish_reason error, got %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterReportsTruncationAfterFinishReason(t *testing.T) {
+	finish := openRouterChunk(`{"id":"or-truncated","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`) + "\n\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Length", fmt.Sprint(len(finish)+100))
+		_, _ = io.WriteString(w, finish)
+	}))
+	t.Cleanup(srv.Close)
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err == nil || !strings.Contains(msg.ErrorMessage, "reading stream") {
+		t.Fatalf("expected stream read error, got %+v err=%v", msg, err)
+	}
+}
+
+func TestOpenRouterAcceptsLargeSSEEvent(t *testing.T) {
+	want := strings.Repeat("x", 70<<10)
+	chunk, err := json.Marshal(map[string]any{
+		"id":      "or-large",
+		"model":   "openai/gpt-test",
+		"object":  "chat.completion.chunk",
+		"created": 1,
+		"choices": []any{map[string]any{
+			"index":         0,
+			"delta":         map[string]any{"content": want},
+			"finish_reason": "stop",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, _ := sseServer(t, []string{openRouterChunk(string(chunk)), "data: [DONE]"})
+
+	msg, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+	if got := textOf(t, msg); got != want {
+		t.Fatalf("content length = %d, want %d", len(got), len(want))
 	}
 }
 

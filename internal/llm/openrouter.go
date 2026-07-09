@@ -1,9 +1,10 @@
 package llm
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -13,11 +14,8 @@ import (
 
 	openrouter "github.com/OpenRouterTeam/go-sdk"
 	"github.com/OpenRouterTeam/go-sdk/models/components"
-	"github.com/OpenRouterTeam/go-sdk/models/operations"
 	"github.com/OpenRouterTeam/go-sdk/models/sdkerrors"
 	"github.com/OpenRouterTeam/go-sdk/optionalnullable"
-	"github.com/OpenRouterTeam/go-sdk/retry"
-	sdkstream "github.com/OpenRouterTeam/go-sdk/types/stream"
 )
 
 const APIOpenRouterChat = "openrouter-chat"
@@ -29,32 +27,7 @@ const (
 	openRouterMaxErrorBody   = 64 << 10
 )
 
-type openRouterTransport struct {
-	base http.RoundTripper
-}
-
-type openRouterLimitedReadCloser struct {
-	io.Reader
-	io.Closer
-}
-
-func (t openRouterTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := t.base.RoundTrip(req)
-	if err != nil || resp == nil {
-		return resp, err
-	}
-	mediaType, _, mediaErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	isEventStream := mediaErr == nil && strings.EqualFold(mediaType, "text/event-stream")
-	if resp.StatusCode != http.StatusOK || !isEventStream {
-		resp.Body = openRouterLimitedReadCloser{
-			Reader: io.LimitReader(resp.Body, openRouterMaxErrorBody),
-			Closer: resp.Body,
-		}
-	}
-	return resp, nil
-}
-
-var openRouterHTTPClient = &http.Client{Transport: openRouterTransport{base: http.DefaultTransport}}
+var openRouterHTTPClient = &http.Client{}
 
 func RegisterOpenRouterChat() {
 	RegisterProvider(APIOpenRouterChat, StreamOpenRouterChat, "builtin:openrouter-chat")
@@ -88,42 +61,50 @@ func StreamOpenRouterChat(ctx context.Context, model Model, c Context, opts *Str
 			return
 		}
 
-		clientOpts := []openrouter.SDKOption{
-			openrouter.WithSecurity(opts.APIKey),
-			openrouter.WithClient(openRouterHTTPClient),
-			openrouter.WithRetryConfig(retry.Config{Strategy: "none"}),
-		}
 		baseURL := model.BaseURL
 		if baseURL == "" {
 			baseURL = openRouterDefaultBaseURL
 		}
-		clientOpts = append(clientOpts, openrouter.WithServerURL(baseURL))
-
 		headers, err := openRouterHeaders(opts.Headers)
 		if err != nil {
 			fail(err)
 			return
 		}
-
-		client := openrouter.New(clientOpts...)
-		resp, err := client.Chat.Send(
-			ctx,
-			req,
-			nil,
-			operations.WithAcceptHeaderOverride(operations.AcceptHeaderEnumTextEventStream),
-			operations.WithSetHeaders(headers),
-		)
+		body, err := json.Marshal(req)
 		if err != nil {
-			fail(sanitizeOpenRouterError(err))
+			fail(fmt.Errorf("openrouter-chat: encode request: %w", err))
 			return
 		}
-		if resp == nil || resp.EventStream == nil {
-			fail(fmt.Errorf("openrouter-chat: expected streaming response"))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, openRouterEndpoint(baseURL), bytes.NewReader(body))
+		if err != nil {
+			fail(err)
 			return
 		}
-		defer func() { _ = resp.EventStream.Close() }()
+		httpReq.Header.Set("Authorization", "Bearer "+opts.APIKey)
+		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set("Content-Type", "application/json")
+		for name, value := range headers {
+			httpReq.Header.Set(name, value)
+		}
 
-		if err := consumeOpenRouterStream(ctx, s, &out, model, resp.EventStream); err != nil {
+		resp, err := openRouterHTTPClient.Do(httpReq)
+		if err != nil {
+			fail(err)
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		mediaType, _, mediaErr := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if resp.StatusCode != http.StatusOK || mediaErr != nil || !strings.EqualFold(mediaType, "text/event-stream") {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, openRouterMaxErrorBody))
+			message := "openrouter-chat request failed"
+			if resp.StatusCode == http.StatusOK {
+				message = fmt.Sprintf("unknown content-type received: %s", resp.Header.Get("Content-Type"))
+			}
+			fail(sdkerrors.NewAPIError(message, resp.StatusCode, strings.TrimSpace(string(raw)), nil))
+			return
+		}
+
+		if err := consumeOpenRouterStream(ctx, s, &out, model, resp.Body); err != nil {
 			fail(err)
 		}
 	}()
@@ -146,12 +127,8 @@ func openRouterHeaders(custom map[string]string) (map[string]string, error) {
 	return headers, nil
 }
 
-func sanitizeOpenRouterError(err error) error {
-	var apiErr *sdkerrors.APIError
-	if !errors.As(err, &apiErr) {
-		return err
-	}
-	return sdkerrors.NewAPIError(apiErr.Message, apiErr.StatusCode, apiErr.Body, nil)
+func openRouterEndpoint(baseURL string) string {
+	return strings.TrimRight(baseURL, "/") + "/chat/completions"
 }
 
 func parseReasoningDetail(data []byte) (ReasoningDetail, error) {
@@ -398,6 +375,9 @@ func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantM
 }
 
 func convertOpenRouterTools(tools []Tool) ([]components.ChatFunctionTool, error) {
+	if len(tools) == 0 {
+		return nil, nil
+	}
 	converted := make([]components.ChatFunctionTool, 0, len(tools))
 	for _, tool := range tools {
 		parameters := map[string]any{}
@@ -436,7 +416,7 @@ func consumeOpenRouterStream(
 	s *EventStream,
 	out *AssistantMessage,
 	model Model,
-	stream *sdkstream.EventStream[components.ChatStreamingResponse],
+	body io.Reader,
 ) error {
 	s.Push(AssistantMessageEvent{Type: EventStart, Partial: snapshot(out)})
 
@@ -445,17 +425,28 @@ func consumeOpenRouterStream(
 	refusalIndex := -1
 	toolByStreamIndex := map[int64]*openRouterStreamingToolCall{}
 	toolByContentIndex := map[int]*openRouterStreamingToolCall{}
+	var currentTool *openRouterStreamingToolCall
 	hasFinish := false
 
-	for stream.Next() {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	for scanner.Scan() {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		event := stream.Value()
-		if event == nil {
+		line := scanner.Text()
+		data, ok := strings.CutPrefix(line, "data:")
+		if !ok {
 			continue
 		}
-		chunk := event.Data
+		data = strings.TrimSpace(data)
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk components.ChatStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return fmt.Errorf("openrouter-chat: invalid event stream")
+		}
 		if out.ResponseID == "" && chunk.ID != "" {
 			out.ResponseID = chunk.ID
 		}
@@ -516,8 +507,38 @@ func consumeOpenRouterStream(
 			s.Push(AssistantMessageEvent{Type: EventRefusalDelta, ContentIndex: refusalIndex, Delta: *refusal, Partial: snapshot(out)})
 		}
 
-		for _, tc := range choice.Delta.ToolCalls {
-			tool := toolByStreamIndex[tc.Index]
+		var streamIndices []struct {
+			Index *int64 `json:"index"`
+		}
+		if len(choice.Delta.ToolCalls) > 0 {
+			var wire struct {
+				Choices []struct {
+					Delta struct {
+						ToolCalls []struct {
+							Index *int64 `json:"index"`
+						} `json:"tool_calls"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal([]byte(data), &wire); err != nil {
+				return fmt.Errorf("openrouter-chat: invalid event stream")
+			}
+			if len(wire.Choices) > 0 {
+				streamIndices = wire.Choices[0].Delta.ToolCalls
+			}
+		}
+
+		for i, tc := range choice.Delta.ToolCalls {
+			tool := currentTool
+			var streamIndex *int64
+			if i < len(streamIndices) {
+				streamIndex = streamIndices[i].Index
+			}
+			if streamIndex != nil {
+				tool = toolByStreamIndex[*streamIndex]
+			} else if tc.ID != nil && *tc.ID != "" {
+				tool = nil
+			}
 			if tool == nil {
 				id := ""
 				name := ""
@@ -529,10 +550,13 @@ func consumeOpenRouterStream(
 				}
 				out.Content = append(out.Content, ToolCall{ID: id, Name: name, Arguments: map[string]any{}})
 				tool = &openRouterStreamingToolCall{contentIndex: len(out.Content) - 1}
-				toolByStreamIndex[tc.Index] = tool
+				if streamIndex != nil {
+					toolByStreamIndex[*streamIndex] = tool
+				}
 				toolByContentIndex[tool.contentIndex] = tool
 				s.Push(AssistantMessageEvent{Type: EventToolCallStart, ContentIndex: tool.contentIndex, Partial: snapshot(out)})
 			}
+			currentTool = tool
 
 			block := out.Content[tool.contentIndex].(ToolCall)
 			if block.ID == "" && tc.ID != nil {
@@ -563,11 +587,11 @@ func consumeOpenRouterStream(
 		}
 	}
 
-	if stream.Err() != nil {
+	if err := scanner.Err(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return fmt.Errorf("openrouter-chat: invalid event stream")
+		return fmt.Errorf("openrouter-chat: reading stream: %w", err)
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
