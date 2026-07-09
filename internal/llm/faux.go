@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -177,14 +176,9 @@ func (f *FauxProvider) Unregister() { UnregisterProviders(f.sourceID) }
 func (f *FauxProvider) stream(ctx context.Context, model Model, c Context, opts *StreamOptions) *EventStream {
 	s := NewEventStream()
 	fail := func(err error) {
-		cause := err
 		msg := f.errorMessage(model, err.Error())
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			msg.StopReason = StopReasonAborted
-			if !errors.Is(err, ctxErr) {
-				cause = errors.Join(ctxErr, err)
-			}
-		}
+		var cause error
+		msg.StopReason, cause = classifyStreamFailure(ctx, err)
 		s.endWithError(msg, cause)
 	}
 	f.mu.Lock()

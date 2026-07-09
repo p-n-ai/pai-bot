@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,14 +31,8 @@ func StreamOpenAICompletions(ctx context.Context, model Model, c Context, opts *
 			Timestamp:  time.Now(),
 		}
 		fail := func(err error) {
-			cause := err
-			out.StopReason = StopReasonError
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				out.StopReason = StopReasonAborted
-				if !errors.Is(err, ctxErr) {
-					cause = errors.Join(ctxErr, err)
-				}
-			}
+			var cause error
+			out.StopReason, cause = classifyStreamFailure(ctx, err)
 			out.ErrorMessage = err.Error()
 			out.Timestamp = time.Now()
 			s.Push(AssistantMessageEvent{Type: EventError, Reason: out.StopReason, Message: &out, Err: cause})

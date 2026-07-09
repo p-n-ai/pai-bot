@@ -1,6 +1,8 @@
 package llm
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"sync"
@@ -101,6 +103,17 @@ type StreamError struct {
 func (e *StreamError) Error() string { return fmt.Sprintf("llm: %s: %s", e.Reason, e.Message) }
 
 func (e *StreamError) Unwrap() error { return e.Cause }
+
+func classifyStreamFailure(ctx context.Context, err error) (StopReason, error) {
+	ctxErr := ctx.Err()
+	if ctxErr == nil {
+		return StopReasonError, err
+	}
+	if errors.Is(err, ctxErr) {
+		return StopReasonAborted, err
+	}
+	return StopReasonAborted, errors.Join(ctxErr, err)
+}
 
 func (s *EventStream) Result() (AssistantMessage, error) {
 	<-s.done
