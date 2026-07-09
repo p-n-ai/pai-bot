@@ -49,9 +49,10 @@ type ThinkingContent struct {
 }
 
 type ToolCall struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Arguments map[string]any `json:"arguments"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	Arguments        map[string]any `json:"arguments"`
+	ThoughtSignature string         `json:"thoughtSignature,omitempty"`
 }
 
 type UserContent interface{ isUserContent() }
@@ -72,15 +73,16 @@ type UserMessage struct {
 }
 
 type AssistantMessage struct {
-	Content      []AssistantContent
-	API          string
-	Provider     string
-	Model        string
-	ResponseID   string
-	Usage        Usage
-	StopReason   StopReason
-	ErrorMessage string
-	Timestamp    time.Time
+	Content       []AssistantContent
+	API           string
+	Provider      string
+	Model         string
+	ResponseModel string
+	ResponseID    string
+	Usage         Usage
+	StopReason    StopReason
+	ErrorMessage  string
+	Timestamp     time.Time
 }
 
 type ToolResultMessage struct {
