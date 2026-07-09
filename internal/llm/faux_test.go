@@ -484,6 +484,66 @@ func TestFauxStreamsRefusal(t *testing.T) {
 	}
 }
 
+func TestFauxRejectsUnencodableToolArguments(t *testing.T) {
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
+	defer f.Unregister()
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantMessage(
+		llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+	)))
+
+	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected argument encoding error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
+func TestFauxRejectsUnencodableContextToolArguments(t *testing.T) {
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
+	defer f.Unregister()
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("done")))
+	contextWithBadTool := llm.Context{Messages: []llm.Message{
+		llm.UserText("call the tool"),
+		llm.AssistantMessage{Content: []llm.AssistantContent{
+			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+		}},
+	}}
+
+	msg, err := llm.Complete(context.Background(), f.Model(), contextWithBadTool, nil)
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) || msg.StopReason != llm.StopReasonError {
+		t.Fatalf("expected context encoding error, got %+v err=%v", msg, err)
+	}
+	if !strings.Contains(msg.ErrorMessage, `tool call "bad" arguments`) {
+		t.Fatalf("errorMessage = %q", msg.ErrorMessage)
+	}
+}
+
+func TestFauxPreCanceledRequestPreservesContextCause(t *testing.T) {
+	f := llm.RegisterFauxProvider(llm.FauxOptions{})
+	defer f.Unregister()
+	f.SetResponses(llm.FauxRespond(llm.FauxAssistantText("done")))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	contextWithBadTool := llm.Context{Messages: []llm.Message{
+		llm.AssistantMessage{Content: []llm.AssistantContent{
+			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+		}},
+	}}
+
+	msg, err := llm.Complete(ctx, f.Model(), contextWithBadTool, nil)
+	if msg.StopReason != llm.StopReasonAborted || !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected aborted context cause, got %+v err=%v", msg, err)
+	}
+	var unsupportedType *json.UnsupportedTypeError
+	if !errors.As(err, &unsupportedType) {
+		t.Fatalf("expected joined argument encoding error, got %v", err)
+	}
+}
+
 func TestFauxStreamsMultipleToolCalls(t *testing.T) {
 	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
