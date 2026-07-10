@@ -21,22 +21,52 @@ import (
 )
 
 func TestEngine_ProcessMessage(t *testing.T) {
-	mockAI := ai.NewMockProvider("This is the AI response about algebra.")
+	const (
+		userID   = "123"
+		question = "What is algebra?"
+		reply    = "This is the AI response about algebra."
+	)
+	mockAI := ai.NewMockProvider(reply)
+	store := agent.NewMemoryStore()
 
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter: mockRouter(mockAI),
+		Store:    store,
 	})
 
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",
-		UserID:  "123",
-		Text:    "What is algebra?",
+		UserID:  userID,
+		Text:    question,
 	})
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if resp == "" {
-		t.Error("ProcessMessage() returned empty response")
+	if resp != reply {
+		t.Fatalf("ProcessMessage() response = %q, want %q", resp, reply)
+	}
+	if mockAI.LastRequest == nil {
+		t.Fatal("ProcessMessage() did not call the AI router")
+	}
+	if mockAI.LastRequest.Task != ai.TaskTeaching {
+		t.Fatalf("AI task = %s, want teaching", mockAI.LastRequest.Task)
+	}
+	if got := countMessagesContaining(mockAI.LastRequest.Messages, "user", question); got != 1 {
+		t.Fatalf("current learner message count = %d, want 1", got)
+	}
+
+	conv, found := store.GetActiveConversation(userID)
+	if !found {
+		t.Fatal("active conversation not persisted")
+	}
+	if len(conv.Messages) != 2 {
+		t.Fatalf("stored message count = %d, want 2", len(conv.Messages))
+	}
+	if got := conv.Messages[0]; got.Role != "user" || got.Content != question {
+		t.Fatalf("stored learner message = %#v", got)
+	}
+	if got := conv.Messages[1]; got.Role != "assistant" || got.Content != reply || got.Model != "mock" {
+		t.Fatalf("stored assistant message = %#v", got)
 	}
 }
 
