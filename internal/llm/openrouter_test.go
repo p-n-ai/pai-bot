@@ -48,11 +48,12 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 		model,
 		llm.Context{SystemPrompt: "Be brief.", Messages: []llm.Message{llm.UserText("hi")}},
 		&llm.StreamOptions{
-			APIKey:         "sk-or-test",
-			Temperature:    &temperature,
-			MaxTokens:      128,
-			SessionID:      "session-1",
-			CacheRetention: llm.CacheRetentionLong,
+			APIKey:          "sk-or-test",
+			Temperature:     &temperature,
+			MaxTokens:       128,
+			SessionID:       "session-1",
+			CacheRetention:  llm.CacheRetentionLong,
+			ReasoningEffort: llm.ReasoningEffortMinimal,
 			Headers: map[string]string{
 				"http-referer": "https://review.example",
 				"x-title":      "Review Bot",
@@ -124,6 +125,9 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	}
 	if captured.body["temperature"] != 0.3 || captured.body["max_completion_tokens"] != float64(128) {
 		t.Fatalf("params = %+v", captured.body)
+	}
+	if captured.body["reasoning_effort"] != "minimal" {
+		t.Fatalf("reasoning_effort = %#v", captured.body["reasoning_effort"])
 	}
 	if captured.body["session_id"] != "session-1" {
 		t.Fatalf("session_id = %+v", captured.body["session_id"])

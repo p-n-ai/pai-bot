@@ -205,6 +205,10 @@ func buildOpenRouterRequest(model Model, c Context, opts *StreamOptions) (compon
 	if opts.MaxTokens > 0 {
 		req.MaxCompletionTokens = optionalnullable.From(openrouter.Pointer(int64(opts.MaxTokens)))
 	}
+	if opts.ReasoningEffort != "" {
+		effort := components.ChatRequestReasoningEffort(opts.ReasoningEffort)
+		req.ReasoningEffort = optionalnullable.From(&effort)
+	}
 	if opts.SessionID != "" {
 		req.SessionID = openrouter.Pointer(opts.SessionID)
 	}

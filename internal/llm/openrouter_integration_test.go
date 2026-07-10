@@ -67,6 +67,31 @@ func TestOpenRouterLiveStreaming(t *testing.T) {
 	})
 }
 
+func TestOpenRouterLiveGPT54MiniMinimalReasoning(t *testing.T) {
+	key := liveOpenRouterKey(t)
+	model := liveOpenRouterModel()
+	model.ID = "openai/gpt-5.4-mini"
+	retryLive(t, func(ctx context.Context) error {
+		message, err := llm.StreamOpenRouterChat(
+			ctx,
+			model,
+			llm.Context{Messages: []llm.Message{llm.UserText("Reply with exactly: OR_GPT_MINIMAL_OK")}},
+			&llm.StreamOptions{
+				APIKey:          key,
+				MaxTokens:       32,
+				ReasoningEffort: llm.ReasoningEffortMinimal,
+			},
+		).Result()
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(joinedText(message), "OR_GPT_MINIMAL_OK") {
+			return fmt.Errorf("response text = %q", joinedText(message))
+		}
+		return nil
+	})
+}
+
 func TestOpenRouterLiveMultiTurn(t *testing.T) {
 	key := liveOpenRouterKey(t)
 	model := liveOpenRouterModel()
