@@ -626,6 +626,35 @@ func TestOpenRouterConvertsMessagesToolsAndImages(t *testing.T) {
 	}
 }
 
+func TestOpenRouterOmitsAbsentAssistantToolCallsAndReasoningDetails(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-history","model":"qwen/qwen3-max","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"COBALT"},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+
+	_, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{Messages: []llm.Message{
+			llm.UserText("Remember COBALT."),
+			llm.AssistantMessage{Content: []llm.AssistantContent{llm.TextContent{Text: "ACK"}}},
+			llm.UserText("What was the word?"),
+		}},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+
+	messages := captured.body["messages"].([]any)
+	assistant := messages[1].(map[string]any)
+	for _, field := range []string{"tool_calls", "reasoning_details"} {
+		if _, present := assistant[field]; present {
+			t.Fatalf("text-only assistant message contains absent field %q: %#v", field, assistant)
+		}
+	}
+}
+
 func TestOpenRouterRejectsInvalidImageURLsBeforeRequest(t *testing.T) {
 	var requests atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

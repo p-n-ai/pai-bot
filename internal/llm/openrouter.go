@@ -407,8 +407,8 @@ func validateOpenRouterImageURL(raw string) error {
 func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantMessage, bool, error) {
 	texts := make([]string, 0, len(msg.Content))
 	thoughts := make([]string, 0, len(msg.Content))
-	toolCalls := make([]components.ChatToolCall, 0, len(msg.Content))
-	reasoningDetails := make([]components.ReasoningDetailUnion, 0, len(msg.ReasoningDetails))
+	var toolCalls []components.ChatToolCall
+	var reasoningDetails []components.ReasoningDetailUnion
 	for i, raw := range msg.ReasoningDetails {
 		encoded, err := json.Marshal(raw)
 		if err != nil {
