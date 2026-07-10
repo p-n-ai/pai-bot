@@ -95,10 +95,8 @@ func TestOpenRouterLLMAdapterCompleteProjectsTeachingContractThroughNativeTransp
 		map[string]any{"role": "user", "content": "MODEL-GENERATED SUMMARY: The learner practiced balancing equations."},
 		map[string]any{"role": "user", "content": "How do I solve 2x + 3 = 11?"},
 		map[string]any{
-			"role":              "assistant",
-			"content":           "What could you subtract first?",
-			"reasoning_details": []any{},
-			"tool_calls":        []any{},
+			"role":    "assistant",
+			"content": "What could you subtract first?",
 		},
 		map[string]any{"role": "user", "content": "LEARNER-PROVIDED CONTEXT: I prefer visual explanations."},
 		map[string]any{"role": "system", "content": "Analyze the attached image directly."},

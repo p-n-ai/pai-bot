@@ -67,7 +67,7 @@ func TestOpenRouterLiveStreaming(t *testing.T) {
 	})
 }
 
-func TestOpenRouterLiveMultiTurn(t *testing.T) {
+func TestOpenRouterLiveTextOnlyAssistantHistory(t *testing.T) {
 	key := liveOpenRouterKey(t)
 	model := liveOpenRouterModel()
 	retryLive(t, func(ctx context.Context) error {
@@ -81,12 +81,15 @@ func TestOpenRouterLiveMultiTurn(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		textOnlyHistory := llm.AssistantMessage{
+			Content: []llm.AssistantContent{llm.TextContent{Text: joinedText(first)}},
+		}
 		second, err := llm.StreamOpenRouterChat(
 			ctx,
 			model,
 			llm.Context{Messages: []llm.Message{
 				firstUser,
-				first,
+				textOnlyHistory,
 				llm.UserText("What code word did I ask you to remember? Reply only with the code word."),
 			}},
 			&llm.StreamOptions{APIKey: key, MaxTokens: 32},
