@@ -14,7 +14,7 @@ Provider-neutral completion gateway, model routing, token budget enforcement, im
 | Token budgets | `budget.go`, `budget_test.go` |
 | Structured JSON | `complete_json.go`, `structured_output*.go`, related tests |
 | OpenAI/DeepSeek-compatible | `provider_openai.go` |
-| Anthropic/Gemini/Ollama/OpenRouter | `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter.go` |
+| Anthropic/Gemini/Ollama/OpenRouter | `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter_llm_adapter.go` |
 | Image inputs | `image_input.go` |
 
 ## CONVENTIONS

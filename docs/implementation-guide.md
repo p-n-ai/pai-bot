@@ -5010,7 +5010,7 @@ echo ""
 | `internal/platform/config` | Day 0 | `config.go` | Environment variable loading with `LEARN_` prefix |
 | `internal/platform/database` | Day 0 | `database.go` | PostgreSQL connection pool (pgx) |
 | `internal/platform/cache` | Day 0 | `cache.go` | Dragonfly/Redis client (go-redis) |
-| `internal/ai` | Day 0 | `gateway.go`, `router.go`, `mock.go`, `budget.go`, `provider_openai.go`, `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter.go` | AI Gateway with provider-agnostic routing, 6 providers, fallback chain, budget tracking |
+| `internal/ai` | Day 0 | `gateway.go`, `router.go`, `mock.go`, `budget.go`, `provider_openai.go`, `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter_llm_adapter.go` | AI Gateway with provider-agnostic routing, 6 providers, fallback chain, budget tracking |
 | `internal/chat` | Day 1 | `gateway.go`, `telegram.go` | Unified chat interface, Telegram adapter |
 | `internal/agent` | Day 1-11 | `engine.go`, `store.go`, `events.go`, `topics.go`, `session.go`, `users.go`, `quiz.go`, `scheduler.go`, `goals.go`, `challenge.go` | Conversation engine, quiz, challenges, scheduling |
 | `internal/curriculum` | Day 1 | `loader.go`, `types.go` | YAML curriculum loader |

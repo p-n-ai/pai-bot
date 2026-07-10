@@ -88,7 +88,7 @@
   <!-- OpenRouter -->
   <rect x="875" y="274" width="140" height="90" rx="8" fill="#faf5ff" stroke="#9333ea" stroke-width="1.4"/>
   <text x="945" y="293" text-anchor="middle" font-size="11" font-weight="700" fill="#6b21a8">OpenRouter</text>
-  <text x="945" y="306" text-anchor="middle" font-size="8" fill="#64748b">provider_openrouter.go</text>
+  <text x="945" y="306" text-anchor="middle" font-size="8" fill="#64748b">internal/llm adapter</text>
   <text x="945" y="324" text-anchor="middle" font-size="8.5" fill="#7c3aed">100+ models</text>
   <text x="945" y="337" text-anchor="middle" font-size="8.5" fill="#7c3aed">Qwen, Kimi, etc.</text>
   <text x="945" y="353" text-anchor="middle" font-size="7" fill="#94a3b8">Single API key</text>

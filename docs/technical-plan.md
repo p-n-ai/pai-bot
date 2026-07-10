@@ -213,7 +213,7 @@ pai-bot/
 │   │   ├── provider_anthropic.go    # Anthropic implementation
 │   │   ├── provider_google.go       # Google Gemini implementation
 │   │   ├── provider_ollama.go       # Self-hosted models (Llama, DeepSeek, Qwen, Mistral)
-│   │   └── provider_openrouter.go   # OpenRouter (100+ models: Qwen, Kimi, etc.)
+│   │   └── provider_openrouter_llm_adapter.go   # OpenRouter (100+ models: Qwen, Kimi, etc.)
 │   ├── agent/                       # Agent Engine (core domain)
 │   │   ├── engine.go                # Conversation state machine
 │   │   ├── scheduler.go             # Proactive nudges via NATS
