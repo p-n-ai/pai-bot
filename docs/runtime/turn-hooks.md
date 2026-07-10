@@ -43,6 +43,7 @@ Hooks run only inside the generic tutor model flow:
 
 ```text
 ProcessMessage
+  -> runTeachingTurn
   -> agentTurn
   -> loadContextPackets
   -> runTurnHooks

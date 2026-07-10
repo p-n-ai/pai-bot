@@ -26,6 +26,7 @@ The package-level API remains `Engine.ProcessMessage`.
 
 The turn harness is package-private on purpose:
 
+- `runTeachingTurn`
 - `agentTurn`
 - `contextPacket`
 - `loadContextPackets`
@@ -46,6 +47,7 @@ Non-goals for the current surface:
 
 ```text
 ProcessMessage
+  -> runTeachingTurn
   -> agentTurn
   -> loadContextPackets
   -> runTurnHooks (when PAI_FEATURES=turn_hooks)

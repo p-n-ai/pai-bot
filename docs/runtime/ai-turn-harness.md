@@ -13,6 +13,7 @@ The AI turn harness makes one normal tutoring message explicit:
 
 ```text
 ProcessMessage
+  -> runTeachingTurn
   -> agentTurn
   -> loadContextPackets
   -> runTurnHooks (when PAI_FEATURES=turn_hooks)
@@ -30,12 +31,13 @@ The current implementation lives in `internal/agent/`:
 
 | File | Role |
 |---|---|
+| `teaching_turn.go` | Owns the generic teaching-turn lifecycle: message persistence, context and hooks, model completion, response persistence, and post-turn effects. |
 | `turn.go` | Defines package-private `agentTurn`, `contextPacket`, trust/render/trace enums, prompt manifest, and model result metadata. |
 | `context_loader.go` | Reads current stores and creates trust-labeled packets for the turn. |
 | `context_packets.go` | Builds, defaults, validates, labels, and summarizes packets. |
 | `turn_hooks.go` | Defines the private Turn Hook runner, Hook Outcomes, Turn Hook Catalog, and `rate_convo_hook`. |
 | `prompt_builder.go` | Compiles packets and chat history into model-facing `[]ai.Message`. |
-| `engine.go` | Owns `ProcessMessage`, turn lifecycle, AI call, response persistence, and `agent_turn_completed`. |
+| `engine.go` | Owns `ProcessMessage`, intake, and route selection before delegating the generic teaching path. |
 | `tutor_personality.go` | Encodes the active SOUL-style tutor personality block used by the prompt harness. |
 | `cmd/conversation-harness` | Replays scored YAML conversations through the real engine and AI router for prompt/runtime quality checks. |
 | `prompt_builder_test.go` | Regression coverage for prompt ordering, image handling, untrusted data quoting, and invalid packet rejection. |
