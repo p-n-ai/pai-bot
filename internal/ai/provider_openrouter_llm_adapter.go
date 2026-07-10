@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	openRouterLLMDefaultBaseURL = "https://openrouter.ai/api/v1"
-	openRouterLLMDefaultModel   = "qwen/qwen3-max"
+	openRouterLLMDefaultBaseURL        = "https://openrouter.ai/api/v1"
+	openRouterLLMDefaultModel          = "qwen/qwen3-max"
+	openRouterLLMMinimalReasoningModel = "openai/gpt-5.4-mini"
 )
 
 var errOpenRouterLLMCompletion = errors.New("openrouter completion failed")
@@ -47,7 +48,7 @@ func (p *openRouterLLMAdapter) Complete(ctx context.Context, req CompletionReque
 	if err != nil {
 		return CompletionResponse{}, err
 	}
-	options := projectOpenRouterLLMOptions(p.apiKey, req)
+	options := projectOpenRouterLLMOptions(p.apiKey, modelID, req)
 	message, err := llm.StreamOpenRouterChat(ctx, llm.Model{
 		ID:       modelID,
 		API:      llm.APIOpenRouterChat,
@@ -137,10 +138,13 @@ func projectOpenRouterLLMImage(raw string) (llm.UserContent, error) {
 	}, nil
 }
 
-func projectOpenRouterLLMOptions(apiKey string, req CompletionRequest) llm.StreamOptions {
+func projectOpenRouterLLMOptions(apiKey, modelID string, req CompletionRequest) llm.StreamOptions {
 	options := llm.StreamOptions{
 		APIKey:    apiKey,
 		MaxTokens: req.MaxTokens,
+	}
+	if modelID == openRouterLLMMinimalReasoningModel {
+		options.ReasoningEffort = llm.ReasoningEffortMinimal
 	}
 	if req.Temperature > 0 {
 		temperature := req.Temperature

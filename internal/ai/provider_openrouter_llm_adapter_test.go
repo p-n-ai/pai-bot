@@ -164,6 +164,30 @@ func TestOpenRouterLLMAdapterCompleteProjectsStructuredOutputAndCallerModel(t *t
 	}
 }
 
+func TestOpenRouterLLMAdapterUsesMinimalReasoningForGPT54Mini(t *testing.T) {
+	captured := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		captured <- body
+		writeOpenRouterLLMStream(w, `{"id":"or-gpt","model":"openai/gpt-5.4-mini","choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`)
+	}))
+	t.Cleanup(server.Close)
+	var provider Provider = newOpenRouterLLMAdapter("test-key", server.URL)
+
+	_, err := provider.Complete(context.Background(), CompletionRequest{
+		Messages: []Message{{Role: "user", Content: "help"}},
+		Model:    "openai/gpt-5.4-mini",
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	body := <-captured
+	if body["reasoning_effort"] != "minimal" {
+		t.Fatalf("reasoning_effort = %#v, want minimal", body["reasoning_effort"])
+	}
+}
+
 func TestOpenRouterLLMAdapterCompleteOmitsZeroOptions(t *testing.T) {
 	captured := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +209,9 @@ func TestOpenRouterLLMAdapterCompleteOmitsZeroOptions(t *testing.T) {
 	}
 	if _, ok := body["temperature"]; ok {
 		t.Fatalf("zero temperature must be omitted: %#v", body)
+	}
+	if _, ok := body["reasoning_effort"]; ok {
+		t.Fatalf("reasoning effort must be omitted for other models: %#v", body)
 	}
 }
 

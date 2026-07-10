@@ -184,12 +184,17 @@ type StructuredOutputSpec struct {
 	Strict     bool
 }
 
+type ReasoningEffort string
+
+const ReasoningEffortMinimal ReasoningEffort = "minimal"
+
 type StreamOptions struct {
 	Temperature      *float64
 	MaxTokens        int
 	APIKey           string
 	SessionID        string
 	CacheRetention   CacheRetention
+	ReasoningEffort  ReasoningEffort
 	Headers          map[string]string
 	StructuredOutput *StructuredOutputSpec
 }
