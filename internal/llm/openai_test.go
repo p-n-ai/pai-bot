@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -435,6 +436,39 @@ func TestOpenAIMessageConversion(t *testing.T) {
 
 	if tools, ok := captured.body["tools"].([]any); !ok || len(tools) != 0 {
 		t.Fatalf("tools = %+v", captured.body["tools"])
+	}
+}
+
+func TestOpenAIRejectsRemoteImageURLBeforeRequest(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}))
+	t.Cleanup(srv.Close)
+
+	contexts := map[string]llm.Context{
+		"user message": {Messages: []llm.Message{llm.UserMessage{Content: []llm.UserContent{
+			llm.ImageURLContent{URL: "https://images.example/cat.png"},
+		}}}},
+		"tool result": {Messages: []llm.Message{llm.ToolResultMessage{ToolCallID: "call-1", Content: []llm.UserContent{
+			llm.ImageURLContent{URL: "https://images.example/result.png"},
+		}}}},
+	}
+	for name, testContext := range contexts {
+		t.Run(name, func(t *testing.T) {
+			msg, err := llm.StreamOpenAICompletions(
+				context.Background(),
+				openAIModel(srv.URL),
+				testContext,
+				&llm.StreamOptions{APIKey: "sk-test"},
+			).Result()
+			if err == nil || msg.ErrorMessage != "openai-completions: remote image URL content is unsupported" {
+				t.Fatalf("expected unsupported content error, got %+v err=%v", msg, err)
+			}
+		})
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("requests = %d, want 0", requests.Load())
 	}
 }
 

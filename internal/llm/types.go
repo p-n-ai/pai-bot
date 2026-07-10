@@ -43,6 +43,10 @@ type ImageContent struct {
 	MimeType string `json:"mimeType"`
 }
 
+type ImageURLContent struct {
+	URL string `json:"url"`
+}
+
 type ThinkingContent struct {
 	Thinking string `json:"thinking"`
 
@@ -107,6 +111,7 @@ type AssistantContent interface{ isAssistantContent() }
 
 func (TextContent) isUserContent()          {}
 func (ImageContent) isUserContent()         {}
+func (ImageURLContent) isUserContent()      {}
 func (TextContent) isAssistantContent()     {}
 func (ThinkingContent) isAssistantContent() {}
 func (ToolCall) isAssistantContent()        {}

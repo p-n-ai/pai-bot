@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -281,8 +282,12 @@ func convertOpenRouterMessages(model Model, c Context) ([]components.ChatMessage
 		case SystemMessage:
 			messages = append(messages, openRouterSystemMessage(model, msg.Content))
 		case UserMessage:
+			content, err := openRouterUserContent(msg.Content)
+			if err != nil {
+				return nil, err
+			}
 			messages = append(messages, components.CreateChatMessagesUser(components.ChatUserMessage{
-				Content: openRouterUserContent(msg.Content),
+				Content: content,
 			}))
 		case AssistantMessage:
 			assistant, ok, err := openRouterAssistantMessage(msg)
@@ -293,8 +298,12 @@ func convertOpenRouterMessages(model Model, c Context) ([]components.ChatMessage
 				messages = append(messages, components.CreateChatMessagesAssistant(assistant))
 			}
 		case ToolResultMessage:
+			content, err := openRouterToolContent(msg.Content)
+			if err != nil {
+				return nil, err
+			}
 			messages = append(messages, components.CreateChatMessagesTool(components.ChatToolMessage{
-				Content:    openRouterToolContent(msg.Content),
+				Content:    content,
 				ToolCallID: msg.ToolCallID,
 			}))
 		}
@@ -318,24 +327,32 @@ func openRouterUsesDeveloperRole(model Model) bool {
 	return model.Reasoning && (strings.HasPrefix(modelID, "openai/") || strings.HasPrefix(modelID, "anthropic/"))
 }
 
-func openRouterUserContent(content []UserContent) components.ChatUserMessageContent {
+func openRouterUserContent(content []UserContent) (components.ChatUserMessageContent, error) {
 	if text, ok := openRouterTextOnly(content); ok {
-		return components.CreateChatUserMessageContentStr(text)
+		return components.CreateChatUserMessageContentStr(text), nil
 	}
-	return components.CreateChatUserMessageContentArrayOfChatContentItems(openRouterContentItems(content))
+	items, err := openRouterContentItems(content)
+	if err != nil {
+		return components.ChatUserMessageContent{}, err
+	}
+	return components.CreateChatUserMessageContentArrayOfChatContentItems(items), nil
 }
 
-func openRouterToolContent(content []UserContent) components.ChatToolMessageContent {
+func openRouterToolContent(content []UserContent) (components.ChatToolMessageContent, error) {
 	if len(content) == 0 {
-		return components.CreateChatToolMessageContentStr("(no text result)")
+		return components.CreateChatToolMessageContentStr("(no text result)"), nil
 	}
 	if text, ok := openRouterTextOnly(content); ok {
 		if text == "" {
 			text = "(no text result)"
 		}
-		return components.CreateChatToolMessageContentStr(text)
+		return components.CreateChatToolMessageContentStr(text), nil
 	}
-	return components.CreateChatToolMessageContentArrayOfChatContentItems(openRouterContentItems(content))
+	items, err := openRouterContentItems(content)
+	if err != nil {
+		return components.ChatToolMessageContent{}, err
+	}
+	return components.CreateChatToolMessageContentArrayOfChatContentItems(items), nil
 }
 
 func openRouterTextOnly(content []UserContent) (string, bool) {
@@ -350,7 +367,7 @@ func openRouterTextOnly(content []UserContent) (string, bool) {
 	return strings.Join(texts, "\n"), true
 }
 
-func openRouterContentItems(content []UserContent) []components.ChatContentItems {
+func openRouterContentItems(content []UserContent) ([]components.ChatContentItems, error) {
 	items := make([]components.ChatContentItems, 0, len(content))
 	for _, item := range content {
 		switch block := item.(type) {
@@ -362,9 +379,25 @@ func openRouterContentItems(content []UserContent) []components.ChatContentItems
 					URL: "data:" + block.MimeType + ";base64," + block.Data,
 				},
 			}))
+		case ImageURLContent:
+			if err := validateOpenRouterImageURL(block.URL); err != nil {
+				return nil, err
+			}
+			items = append(items, components.CreateChatContentItemsImageURL(components.ChatContentImage{
+				ImageURL: components.ChatContentImageImageURL{URL: block.URL},
+			}))
 		}
 	}
-	return items
+	return items, nil
+}
+
+func validateOpenRouterImageURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || raw == "" || !parsed.IsAbs() || parsed.Hostname() == "" || parsed.User != nil ||
+		(!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
+		return fmt.Errorf("openrouter-chat: image URL must be an absolute HTTP(S) URL without credentials")
+	}
+	return nil
 }
 
 func openRouterAssistantMessage(msg AssistantMessage) (components.ChatAssistantMessage, bool, error) {

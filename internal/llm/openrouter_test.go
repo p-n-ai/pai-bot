@@ -560,11 +560,13 @@ func TestOpenRouterConvertsMessagesToolsAndImages(t *testing.T) {
 			llm.UserMessage{Content: []llm.UserContent{
 				llm.TextContent{Text: "look"},
 				llm.ImageContent{MimeType: "image/png", Data: "abcd"},
+				llm.ImageURLContent{URL: "HTTPS://images.example/cat.png?size=large#view"},
 			}},
 			prior,
 			llm.ToolResultMessage{ToolCallID: "call-1", ToolName: "inspect", Content: []llm.UserContent{
 				llm.TextContent{Text: "found"},
 				llm.ImageContent{MimeType: "image/jpeg", Data: "efgh"},
+				llm.ImageURLContent{URL: "http://images.example/result.jpg"},
 			}},
 		},
 		Tools: []llm.Tool{tool},
@@ -589,6 +591,10 @@ func TestOpenRouterConvertsMessagesToolsAndImages(t *testing.T) {
 	if !strings.HasPrefix(userImage["url"].(string), "data:image/png;base64,") {
 		t.Fatalf("user image = %+v", userImage)
 	}
+	userRemoteImage := userParts[2].(map[string]any)["image_url"].(map[string]any)
+	if userRemoteImage["url"] != "HTTPS://images.example/cat.png?size=large#view" {
+		t.Fatalf("remote user image = %+v", userRemoteImage)
+	}
 	assistant := messages[2].(map[string]any)
 	if assistant["content"] != "calling" || assistant["reasoning"] != "planning" {
 		t.Fatalf("assistant = %+v", assistant)
@@ -603,12 +609,55 @@ func TestOpenRouterConvertsMessagesToolsAndImages(t *testing.T) {
 	if !strings.HasPrefix(toolImage["url"].(string), "data:image/jpeg;base64,") {
 		t.Fatalf("tool image = %+v", toolImage)
 	}
+	toolRemoteImage := toolResultParts[2].(map[string]any)["image_url"].(map[string]any)
+	if toolRemoteImage["url"] != "http://images.example/result.jpg" {
+		t.Fatalf("remote tool image = %+v", toolRemoteImage)
+	}
 
 	tools := captured.body["tools"].([]any)
 	toolFunction := tools[0].(map[string]any)["function"].(map[string]any)
 	parameters := toolFunction["parameters"].(map[string]any)
 	if toolFunction["name"] != "inspect" || parameters["type"] != "object" {
 		t.Fatalf("tools = %+v", tools)
+	}
+}
+
+func TestOpenRouterRejectsInvalidImageURLsBeforeRequest(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}))
+	t.Cleanup(srv.Close)
+
+	invalid := []string{
+		"",
+		"images.example/cat.png",
+		"data:image/png;base64,abcd",
+		"ftp://images.example/cat.png",
+		"https://user:secret@images.example/cat.png",
+		"https://:443/cat.png",
+		"://malformed",
+	}
+	for _, imageURL := range invalid {
+		t.Run(imageURL, func(t *testing.T) {
+			msg, err := llm.StreamOpenRouterChat(
+				context.Background(),
+				openRouterModel(srv.URL),
+				llm.Context{Messages: []llm.Message{llm.UserMessage{Content: []llm.UserContent{
+					llm.ImageURLContent{URL: imageURL},
+				}}}},
+				&llm.StreamOptions{APIKey: "sk-or-test"},
+			).Result()
+			if err == nil || msg.ErrorMessage != "openrouter-chat: image URL must be an absolute HTTP(S) URL without credentials" {
+				t.Fatalf("expected safe image URL error, got %+v err=%v", msg, err)
+			}
+			if strings.Contains(msg.ErrorMessage, "secret") {
+				t.Fatalf("error leaks URL credentials: %q", msg.ErrorMessage)
+			}
+		})
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("requests = %d, want 0", requests.Load())
 	}
 }
 

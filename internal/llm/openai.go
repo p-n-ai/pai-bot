@@ -191,7 +191,11 @@ func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 		case SystemMessage:
 			return nil, fmt.Errorf("openai-completions: ordered system messages are unsupported")
 		case UserMessage:
-			params = append(params, convertOpenAIUserMessage(msg)...)
+			converted, err := convertOpenAIUserMessage(msg)
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, converted...)
 		case AssistantMessage:
 			var texts []string
 			var toolCalls []oaToolCall
@@ -226,6 +230,9 @@ func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 		case ToolResultMessage:
 			var texts []string
 			for _, b := range msg.Content {
+				if _, ok := b.(ImageURLContent); ok {
+					return nil, fmt.Errorf("openai-completions: remote image URL content is unsupported")
+				}
 				if t, ok := b.(TextContent); ok {
 					texts = append(texts, t.Text)
 				}
@@ -240,7 +247,7 @@ func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 	return params, nil
 }
 
-func convertOpenAIUserMessage(msg UserMessage) []oaMessage {
+func convertOpenAIUserMessage(msg UserMessage) ([]oaMessage, error) {
 	onlyText := true
 	for _, b := range msg.Content {
 		if _, ok := b.(TextContent); !ok {
@@ -253,7 +260,7 @@ func convertOpenAIUserMessage(msg UserMessage) []oaMessage {
 		for _, b := range msg.Content {
 			texts = append(texts, b.(TextContent).Text)
 		}
-		return []oaMessage{{Role: "user", Content: strings.Join(texts, "\n")}}
+		return []oaMessage{{Role: "user", Content: strings.Join(texts, "\n")}}, nil
 	}
 	var parts []any
 	for _, b := range msg.Content {
@@ -264,12 +271,14 @@ func convertOpenAIUserMessage(msg UserMessage) []oaMessage {
 			p := oaImagePart{Type: "image_url"}
 			p.ImageURL.URL = "data:" + block.MimeType + ";base64," + block.Data
 			parts = append(parts, p)
+		case ImageURLContent:
+			return nil, fmt.Errorf("openai-completions: remote image URL content is unsupported")
 		}
 	}
 	if len(parts) == 0 {
-		return nil
+		return nil, nil
 	}
-	return []oaMessage{{Role: "user", Content: parts}}
+	return []oaMessage{{Role: "user", Content: parts}}, nil
 }
 
 type oaChunk struct {
