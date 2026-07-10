@@ -105,6 +105,27 @@ func TestOpenAIStreamsTextAndUsage(t *testing.T) {
 	}
 }
 
+func TestOpenAIRejectsOrderedSystemMessagesBeforeRequest(t *testing.T) {
+	requested := false
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requested = true
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := llm.StreamOpenAICompletions(
+		context.Background(),
+		openAIModel(srv.URL),
+		llm.Context{Messages: []llm.Message{llm.SystemMessage{Content: "ordered"}}},
+		&llm.StreamOptions{APIKey: "sk-test"},
+	).Result()
+	if err == nil || !strings.Contains(err.Error(), "openai-completions: ordered system messages are unsupported") {
+		t.Fatalf("error = %v", err)
+	}
+	if requested {
+		t.Fatal("request was sent before rejecting ordered system message")
+	}
+}
+
 func TestOpenAIStreamsRefusalAsText(t *testing.T) {
 	srv, captured := sseServer(t, []string{
 		chunk(`{"id":"chatcmpl-refusal","choices":[{"delta":{"refusal":"I can"}}]}`),
