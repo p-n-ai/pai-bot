@@ -403,6 +403,8 @@ func userContentToText(content []UserContent) string {
 			parts = append(parts, b.Text)
 		case ImageContent:
 			parts = append(parts, fmt.Sprintf("[image:%s:%d]", b.MimeType, len(b.Data)))
+		case ImageURLContent:
+			parts = append(parts, "[image-url:"+b.URL+"]")
 		}
 	}
 	return strings.Join(parts, "\n")
