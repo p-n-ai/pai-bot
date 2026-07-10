@@ -5,12 +5,33 @@ package airouter
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
+
+func TestBuildProviderUsesOpenRouterLLMAdapter(t *testing.T) {
+	cfg := config.AIConfig{}
+	cfg.OpenRouter.APIKey = "test-openrouter-key"
+	cfg.OpenRouter.Model = "test-openrouter-model"
+
+	reg, ok := buildProvider("openrouter", cfg)
+	if !ok {
+		t.Fatal("buildProvider(openrouter) = not registered with key set")
+	}
+	if got, want := reflect.TypeOf(reg.Provider), reflect.TypeOf(ai.NewOpenRouterLLMAdapter("")); got != want {
+		t.Fatalf("OpenRouter provider type = %v, want %v", got, want)
+	}
+	if reg.Name != "openrouter" {
+		t.Fatalf("OpenRouter registration name = %q, want openrouter", reg.Name)
+	}
+	if reg.DefaultModel != cfg.OpenRouter.Model {
+		t.Fatalf("OpenRouter default model = %q, want %q", reg.DefaultModel, cfg.OpenRouter.Model)
+	}
+}
 
 func TestProviderOrderSkipsMockByDefault(t *testing.T) {
 	for _, provider := range providerOrder("") {

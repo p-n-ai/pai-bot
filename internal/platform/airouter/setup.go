@@ -87,7 +87,7 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 		if cfg.OpenRouter.APIKey == "" {
 			return ai.ProviderRegistration{}, false
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterProvider(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
 	}
 	return ai.ProviderRegistration{}, false
 }
