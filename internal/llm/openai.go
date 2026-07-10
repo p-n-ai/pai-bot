@@ -188,6 +188,8 @@ func convertOpenAIMessages(model Model, c Context) ([]oaMessage, error) {
 	}
 	for _, m := range c.Messages {
 		switch msg := m.(type) {
+		case SystemMessage:
+			return nil, fmt.Errorf("openai-completions: ordered system messages are unsupported")
 		case UserMessage:
 			params = append(params, convertOpenAIUserMessage(msg)...)
 		case AssistantMessage:

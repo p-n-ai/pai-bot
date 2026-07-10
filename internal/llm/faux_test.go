@@ -271,6 +271,7 @@ func TestFauxEstimatesTokensFromSerializedContext(t *testing.T) {
 					llm.ImageContent{MimeType: "image/png", Data: "abcd"},
 				},
 			},
+			llm.SystemMessage{Content: "ordered"},
 			prior,
 			llm.ToolResultMessage{
 				ToolCallID: "tool-1",
@@ -290,6 +291,7 @@ func TestFauxEstimatesTokensFromSerializedContext(t *testing.T) {
 	promptText := strings.Join([]string{
 		"system:sys",
 		"user:hello\n[image:image/png:4]",
+		"system:ordered",
 		"assistant:prior",
 		"toolResult:echo\ntool out",
 		"tools:" + string(toolsJSON),

@@ -149,6 +149,54 @@ func TestOpenRouterStreamsNativeTextReasoningUsageAndRequest(t *testing.T) {
 	}
 }
 
+func TestOpenRouterPreservesOrderedSystemMessages(t *testing.T) {
+	srv, captured := sseServer(t, []string{
+		openRouterChunk(`{"id":"or-ordered","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`),
+		"data: [DONE]",
+	})
+
+	_, err := llm.StreamOpenRouterChat(
+		context.Background(),
+		openRouterModel(srv.URL),
+		llm.Context{
+			SystemPrompt: "leading",
+			Messages: []llm.Message{
+				llm.SystemMessage{Content: "before"},
+				llm.UserText("question"),
+				llm.SystemMessage{Content: "between"},
+				llm.AssistantMessage{Content: []llm.AssistantContent{llm.TextContent{Text: "answer"}}},
+				llm.SystemMessage{Content: "after"},
+			},
+		},
+		&llm.StreamOptions{APIKey: "sk-or-test"},
+	).Result()
+	if err != nil {
+		t.Fatalf("Result: %v", err)
+	}
+
+	messages := captured.body["messages"].([]any)
+	want := []struct {
+		role    string
+		content string
+	}{
+		{role: "developer", content: "leading"},
+		{role: "developer", content: "before"},
+		{role: "user", content: "question"},
+		{role: "developer", content: "between"},
+		{role: "assistant", content: "answer"},
+		{role: "developer", content: "after"},
+	}
+	if len(messages) != len(want) {
+		t.Fatalf("messages = %#v, want %d entries", messages, len(want))
+	}
+	for i, expected := range want {
+		message := messages[i].(map[string]any)
+		if message["role"] != expected.role || message["content"] != expected.content {
+			t.Fatalf("message %d = %#v, want role %q content %q", i, message, expected.role, expected.content)
+		}
+	}
+}
+
 func TestOpenRouterSendsStructuredOutputResponseFormat(t *testing.T) {
 	srv, captured := sseServer(t, []string{
 		openRouterChunk(`{"id":"or-structured","model":"openai/gpt-test","object":"chat.completion.chunk","created":1,"choices":[{"index":0,"delta":{"content":"{\"answer\":\"ok\"}"},"finish_reason":"stop"}]}`),

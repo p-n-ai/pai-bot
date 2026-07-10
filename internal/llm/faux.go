@@ -429,6 +429,8 @@ func assistantContentToText(content []AssistantContent) (string, error) {
 
 func messageToText(m Message) (role, text string, err error) {
 	switch msg := m.(type) {
+	case SystemMessage:
+		return "system", msg.Content, nil
 	case UserMessage:
 		return "user", userContentToText(msg.Content), nil
 	case AssistantMessage:
