@@ -255,7 +255,7 @@ pai-bot/
 │   │   ├── provider_anthropic.go    # Anthropic Claude
 │   │   ├── provider_google.go       # Google Gemini
 │   │   ├── provider_ollama.go       # Self-hosted (Llama, Qwen, etc.)
-│   │   └── provider_openrouter.go   # 100+ models via OpenRouter
+│   │   └── provider_openrouter_llm_adapter.go   # 100+ models via OpenRouter
 │   ├── agent/                       # Agent Engine
 │   │   ├── engine.go                # Conversation state machine
 │   │   ├── scheduler.go             # Proactive nudge scheduler

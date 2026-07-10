@@ -14,7 +14,10 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
-const openRouterLLMDefaultModel = "qwen/qwen3-max"
+const (
+	openRouterLLMDefaultBaseURL = "https://openrouter.ai/api/v1"
+	openRouterLLMDefaultModel   = "qwen/qwen3-max"
+)
 
 var errOpenRouterLLMCompletion = errors.New("openrouter completion failed")
 
@@ -27,7 +30,7 @@ var _ Provider = (*openRouterLLMAdapter)(nil)
 
 // NewOpenRouterLLMAdapter adapts the native llm OpenRouter path to Provider.
 func NewOpenRouterLLMAdapter(apiKey string) Provider {
-	return newOpenRouterLLMAdapter(apiKey, defaultOpenRouterBaseURL)
+	return newOpenRouterLLMAdapter(apiKey, openRouterLLMDefaultBaseURL)
 }
 
 func newOpenRouterLLMAdapter(apiKey, baseURL string) *openRouterLLMAdapter {
