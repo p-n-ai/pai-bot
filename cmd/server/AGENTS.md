@@ -1,31 +1,30 @@
 # SERVER COMMAND
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
-Production Go HTTP server: health bootstrap, API routes, admin embedding, chat channels, auth, retrieval, and graceful shutdown.
+Production composition root: config and dependency wiring for the HTTP server and chat channels.
 
 ## WHERE TO LOOK
 
 | Task | Location |
 |------|----------|
 | Startup dependency graph | `main.go` |
-| Route registration | `main.go` handler setup sections |
-| Admin SPA embedding | `embed_admin.go`, `embed_admin_test.go` |
-| Security headers/origins | `security.go`, `security_test.go` |
-| Route/wiring regressions | `main_test.go` |
+| HTTP lifecycle and handler swap | `internal/server/run.go` |
+| Routes and admin SPA embedding | `internal/server/handler.go` |
+| Security headers/origins | `internal/server/security.go` |
+| Route/lifecycle regressions | `internal/server/handler_test.go`, `internal/server/run_test.go` |
 | API shape docs | `internal/apidocs` |
 
 ## CONVENTIONS
 
-- Health-only handler comes up before full mux; keep long init after early healthz.
+- `internal/server` owns the health-first handler swap, HTTP lifecycle, and mux adapters.
 - DB/config failures are fatal; cache failures degrade where existing code does.
-- Route handlers parse/auth/encode; service packages own product decisions.
-- Admin asset path behavior needs embed tests.
+- Keep this package focused on dependency construction and channel registration.
 
 ## ANTI-PATTERNS
 
-- No long startup task before healthz availability.
+- No duplicate HTTP lifecycle or handler ownership outside `internal/server`.
 - No direct provider-specific AI setup here; use `internal/platform/airouter`.
-- No duplicating admin API logic from `internal/adminapi` in route closures.
-- No security header/origin change without route or browser smoke coverage.
+- No reusable server behavior that forces imports from `cmd/`.
+- No channel startup detached from the lifecycle owner that observes its failure.

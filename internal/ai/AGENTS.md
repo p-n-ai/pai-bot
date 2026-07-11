@@ -1,7 +1,7 @@
 # AI GATEWAY
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 Provider-neutral completion gateway, model routing, token budget enforcement, image input, and structured output.
 
@@ -12,7 +12,7 @@ Provider-neutral completion gateway, model routing, token budget enforcement, im
 | Gateway contracts | `gateway.go`, `mock.go` |
 | Model routing/fallback | `router.go`, `router_test.go` |
 | Token budgets | `budget.go`, `budget_test.go` |
-| Structured JSON | `complete_json.go`, `structured_output*.go`, related tests |
+| Structured JSON | helpers in `gateway.go`, `complete_json_test.go`, `structured_output_test.go` |
 | OpenAI/DeepSeek-compatible | `provider_openai.go` |
 | Anthropic/Gemini/Ollama/OpenRouter | `provider_anthropic.go`, `provider_google.go`, `provider_ollama.go`, `provider_openrouter_llm_adapter.go` |
 | Image inputs | `image_input.go` |

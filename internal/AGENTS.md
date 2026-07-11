@@ -1,7 +1,7 @@
 # BACKEND INTERNAL PACKAGES
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 Runtime product code for the Go modular monolith. Commands wire these packages; packages own behavior.
 
@@ -11,6 +11,7 @@ Runtime product code for the Go modular monolith. Commands wire these packages; 
 internal/
 ├── agent/          # tutor engine, quizzes, nudges, challenges (AGENTS.md)
 ├── ai/             # provider gateway, router, budget, structured output (AGENTS.md)
+├── llm/            # provider protocol, registry, streaming adapters (AGENTS.md)
 ├── chat/           # Telegram/WhatsApp/WebSocket/embed adapters (AGENTS.md)
 ├── auth/           # JWT, cookies, Google OIDC, guest/password auth (AGENTS.md)
 ├── adminapi/       # admin service helpers (AGENTS.md)
@@ -19,6 +20,7 @@ internal/
 ├── retrieval/      # curriculum search/index facade (AGENTS.md)
 ├── tenant/         # tenant bootstrap
 ├── platform/       # config/db/cache/AI router/mailer/seed (AGENTS.md)
+├── server/         # HTTP lifecycle, mux, security, admin/chat mounts (AGENTS.md)
 └── terminal*/      # local CLI runtime helpers
 ```
 
@@ -28,8 +30,10 @@ internal/
 |------|----------|
 | Wire one learner turn | `agent/engine.go`, `agent/turn.go`, `chat/gateway.go` |
 | Add slash command | `chat/commands.go`, then `agent/*command*.go` |
-| Add AI provider/model | `ai/provider_*.go`, `ai/router.go`, `platform/config`, `platform/airouter` |
-| Add admin API behavior | `adminapi/service.go`, specific `adminapi/*.go`, then `cmd/server` route |
+| Add product AI provider/model | `ai/provider_*.go`, `ai/router.go`, `platform/config`, `platform/airouter` |
+| Change low-level OpenRouter/LLM protocol | `llm/` |
+| Add admin API behavior | `adminapi/service.go`, specific `adminapi/*.go`, then `server/handler.go` |
+| Change HTTP lifecycle/routes | `server/run.go`, `server/handler.go`, `server/security.go` |
 | Add persistence | nearest `*_postgres.go` plus integration test |
 | Add local/dev runtime behavior | `terminalchat/`, `terminalnudge/`, or `cmd/*` wrapper |
 | Add curriculum source behavior | `curriculum/`, `retrieval/`, `oss/` contract checks |

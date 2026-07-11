@@ -1,7 +1,7 @@
 # TUTOR AGENT ENGINE
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 Conversation state machine, pedagogy, quiz runtime, nudges, goals, group flows, and learner motivation.
 
@@ -9,7 +9,8 @@ Conversation state machine, pedagogy, quiz runtime, nudges, goals, group flows, 
 
 | Task | Location |
 |------|----------|
-| Main turn handling | `engine.go`, `turn.go`, `turn_hooks.go` |
+| Intake and route selection | `engine.go`, `turn.go` |
+| Generic teaching-turn lifecycle | `teaching_turn.go`, `turn_hooks.go` |
 | Prompt behavior | `prompt_builder.go`, `tutor_behavior.go`, `tutor_personality.go` |
 | Curriculum context | `context_loader.go`, `context_packets.go`, `context_resolver.go`, `curriculum_retriever.go` |
 | Quiz flow | `quiz.go`, `quiz_runtime.go`, `quiz_router.go`, `quiz_generate.go`, `quiz_progress.go` |
