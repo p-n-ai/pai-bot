@@ -1,7 +1,7 @@
 # ADMIN API SERVICE
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 Backend service helpers for admin app features: onboarding, classes, groups, users, and school setup.
 
@@ -12,12 +12,12 @@ Backend service helpers for admin app features: onboarding, classes, groups, use
 | Service construction | `service.go`, `service_test.go` |
 | Onboarding flow | `onboarding.go`, `onboarding_test.go` |
 | Classes/groups | `classes.go`, `groups.go` |
-| HTTP route wiring | `cmd/server/main.go` |
+| HTTP route wiring | `internal/server/handler.go` |
 | SPA shape mirror | `admin-spa/src/lib/admin-api.ts`, `admin-spa/src/lib/*-types.ts` |
 
 ## CONVENTIONS
 
-- HTTP parsing/encoding stays in `cmd/server`; product decisions live here.
+- HTTP parsing/encoding stays in `internal/server`; product decisions live here.
 - Return typed structs fit for API JSON responses.
 - Tenant-aware queries only; platform-admin/global behavior is explicit.
 - Class/group field changes inspect migrations, seed data, and SPA type guards.
