@@ -11,7 +11,7 @@ P&AI Bot works across multiple messaging platforms. Students get the same tutori
 
 The primary channel. Features include:
 - Long polling for reliable message delivery
-- Inline keyboard buttons for quizzes, language selection, and ratings
+- Inline keyboard buttons for quizzes, challenges, and language selection
 - Command autocomplete menu (synced on bot startup)
 - Markdown message formatting
 - Automatic message splitting for responses exceeding 4,096 characters

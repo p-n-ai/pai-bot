@@ -40,7 +40,7 @@ The useful idea is layered control: route, provenance, sanitization, determinist
 
 ## Guard layering
 
-1. Conversation state gates: onboarding, language selection, rating, goal, quiz.
+1. Conversation state gates: onboarding, language selection, goal, quiz.
 2. Tutor deterministic gates: hidden-prompt extraction and curriculum-scope redirect.
 3. Prompt compiler: trust-labeled context and tutor policy.
 4. Model output post-processing: instruction leak suppression, answer-dump suppression where detectable, short-reply label stripping.

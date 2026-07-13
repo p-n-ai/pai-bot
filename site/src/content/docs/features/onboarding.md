@@ -41,7 +41,3 @@ Language is determined in this order:
 ### Disabling Multi-Language
 
 Set `LEARN_DISABLE_MULTI_LANGUAGE=true` to skip the language selection step during onboarding. The bot will use English for all interactions.
-
-## In-Chat Rating
-
-After every few AI responses (configurable via `LEARN_RATING_PROMPT_EVERY_REPLIES`, default 5), the bot asks students to rate the response quality using inline star buttons. Ratings are logged for quality monitoring and are deduplicated per rated message.
