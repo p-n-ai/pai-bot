@@ -94,7 +94,6 @@ config:
   devMode: false
   # -- Feature flags
   disableMultiLanguage: false
-  ratingPromptEveryReplies: 5
   personalizedNudgesEnabled: true
 
 # -- Secrets (sensitive credentials)
