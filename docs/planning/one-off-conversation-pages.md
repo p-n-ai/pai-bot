@@ -192,5 +192,3 @@ Implemented seams:
 - `internal/ai/router.go`: native provider routing and fallback.
 - `internal/focusedpage`: persistence, capability lifecycle, and HTTP renderer.
 - `internal/chat/turn_render.go`: Telegram formatting and URL-button order.
-
-Interactive companion: `docs/planning/user-artifacts-design.html`.

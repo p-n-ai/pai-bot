@@ -154,7 +154,7 @@ The tool persists the page but never sends a chat message. Its native result con
 
 The native tool transcript is in-memory execution state in v1. Current stored conversations support textual `user`, `assistant`, and `system` rows, so the tutor persists the learner message and final assistant answer only.
 
-`internal/agent.ProcessAndDeliver` owns assembly and delivery sequencing through a narrow port. `internal/chat.RenderTurn` owns Telegram Markdown, keyboards, and the private URL button after any existing rows; `internal/chat/telegram.go` sends that ordered payload, splits long text, and retries plain text when Markdown parsing fails. The page remains active when delivery fails, and `DeliverTurn` can retry the unchanged result without another model or tool call until normal expiry.
+`internal/agent.ProcessAndDeliver` owns assembly and delivery sequencing through a narrow port. `internal/chat.RenderTurn` owns Telegram Markdown, keyboards, and the private URL button after any existing rows; `internal/chat/telegram.go` sends that ordered payload, splits long text, and retries plain text when Markdown parsing fails. Transient delivery failures receive two bounded in-process retries with the unchanged result, without another model or tool call. The page remains active until normal expiry if all attempts fail.
 
 Telegram dispatches inbound updates concurrently, so `internal/agent` serializes processing and normal delivery by trusted channel/user conversation key before enabling the side-effecting path. Ordering does not belong in the generic core.
 
@@ -199,7 +199,7 @@ V1 has no public intermediate-event stream and does not add payload logging. Exi
 
 - Native tool support for providers other than OpenRouter.
 - Terminal-chat focused-page delivery.
-- Durable channel delivery queueing beyond retrying the returned idempotent artifact.
+- Durable channel delivery queueing beyond the bounded in-process retries.
 - Expired-row cleanup; access already expires at request time and does not depend on cleanup.
 
 ## Appendix
@@ -210,5 +210,3 @@ V1 has no public intermediate-event stream and does not add payload logging. Exi
 - Model transport registry: `internal/llm/registry.go`.
 - Current native-to-text adapter: `internal/ai/provider_openrouter_llm_adapter.go`.
 - Telegram runtime: `docs/runtime/telegram.md` and `internal/chat/telegram.go`.
-- Interactive execution view: `docs/agent-core-design.html`.
-- Before/after sequence view: `docs/agent-core-sequence.html`.
