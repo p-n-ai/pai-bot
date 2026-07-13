@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/llm"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -198,6 +199,63 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 	}
 
 	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
+}
+
+// CompleteNative routes a native-message request through providers that support tool calls.
+// Provider selection, fallback, retry, and circuit-breaker ownership remain in the router.
+func (r *Router) CompleteNative(ctx context.Context, req NativeCompletionRequest) (llm.AssistantMessage, error) {
+	providers, order, gen := r.snapshotProviders()
+	if len(order) == 0 {
+		return llm.AssistantMessage{}, fmt.Errorf("all AI providers failed (no providers registered)")
+	}
+
+	var failures []string
+	for _, name := range order {
+		provider, ok := providers[name].(NativeProvider)
+		if !ok {
+			failures = append(failures, fmt.Sprintf("%s: native tool calls unsupported", name))
+			continue
+		}
+		if r.isCircuitOpen(name) {
+			failures = append(failures, fmt.Sprintf("%s: circuit open", name))
+			continue
+		}
+
+		providerReq := req
+		if providerReq.Model == "" {
+			providerReq.Model = r.defaultModelForProvider(name)
+		}
+		var reply llm.AssistantMessage
+		var err error
+		attempts := len(r.retryBackoff) + 1
+		for attempt := 0; attempt < attempts; attempt++ {
+			if attempt > 0 {
+				timer := time.NewTimer(r.retryBackoff[attempt-1])
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return llm.AssistantMessage{}, ctx.Err()
+				case <-timer.C:
+				}
+			}
+			reply, err = provider.CompleteNative(ctx, providerReq)
+			if err == nil {
+				break
+			}
+			if ctx.Err() != nil {
+				return llm.AssistantMessage{}, ctx.Err()
+			}
+		}
+		if err != nil {
+			r.markFailure(name, gen)
+			failures = append(failures, fmt.Sprintf("%s: %v", name, err))
+			continue
+		}
+		r.markSuccess(name, gen)
+		return reply, nil
+	}
+
+	return llm.AssistantMessage{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
 }
 
 // CompleteJSON requests structured JSON output and unmarshals it into out.

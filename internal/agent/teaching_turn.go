@@ -14,7 +14,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/i18n"
 )
 
-func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, responsePrefix string) (string, error) {
+func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, responsePrefix string, turnResult *TurnResult) (string, error) {
 	userContent := msg.Text
 	if msg.HasImage {
 		if userContent == "" {
@@ -127,12 +127,7 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 
 	// Call AI
 	modelStartedAt := time.Now()
-	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
-		Messages:  messages,
-		Model:     reqModel,
-		Task:      ai.TaskTeaching,
-		MaxTokens: 1024,
-	})
+	resp, artifact, err := e.completeTeachingTurn(ctx, turn, messages, reqModel)
 	turn.Model.LatencyMS = int(time.Since(modelStartedAt).Milliseconds())
 	if err != nil {
 		turn.Model.Error = err.Error()
@@ -143,6 +138,9 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	turn.Model.Model = resp.Model
 	turn.Model.InputTokens = resp.InputTokens
 	turn.Model.OutputTokens = resp.OutputTokens
+	if turnResult != nil {
+		turnResult.FocusedPage = artifact
+	}
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := postProcessTutorResponse(normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content)), msg.Text)

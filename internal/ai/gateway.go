@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 // TaskType defines the kind of AI task for routing purposes.
@@ -67,6 +69,20 @@ type CompletionResponse struct {
 	Model            string          `json:"model"`
 	InputTokens      int             `json:"input_tokens"`
 	OutputTokens     int             `json:"output_tokens"`
+}
+
+// NativeCompletionRequest preserves the provider-native conversation shape for agent tool loops.
+type NativeCompletionRequest struct {
+	Context     llm.Context
+	Model       string
+	MaxTokens   int
+	Temperature float64
+	Task        TaskType
+}
+
+// NativeProvider is implemented by providers that can preserve native tool calls and results.
+type NativeProvider interface {
+	CompleteNative(ctx context.Context, req NativeCompletionRequest) (llm.AssistantMessage, error)
 }
 
 // TotalTokens returns the sum of input and output tokens.

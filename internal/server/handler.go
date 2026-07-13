@@ -36,11 +36,15 @@ type AuthService = authService
 
 type TenantAdminDataSourceProvider = tenantAdminDataSourceProvider
 type GatewayNotifier = gatewayNotifier
+type GatewayTurnDeliverer = gatewayTurnDeliverer
 type RuntimeSettingsStore = runtimeSettingsStore
 
 func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw: gw} }
 func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
 	return gatewayNotifier{gw: gw, channels: channels}
+}
+func NewGatewayTurnDeliverer(gw *chat.Gateway, store agent.ConversationStore) GatewayTurnDeliverer {
+	return gatewayTurnDeliverer{gw: gw, store: store}
 }
 func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSource {
 	return weeklyParentReportSource{admin: admin}
@@ -59,15 +63,16 @@ func TelegramInlineKeyboardContext(store agent.ConversationStore, userID string)
 }
 
 type TopMuxOptions struct {
-	APIHandler       http.Handler
-	WSChannel        *chat.WSChannel
-	EmbedConfigStore chat.EmbedConfigStore
-	WACloudChannel   *chat.WhatsAppChannel
-	WAMeowChannel    *chat.WhatsAppMeowChannel
-	InboundHandler   func(chat.InboundMessage)
-	AuthService      AuthService
-	JWTSecret        string
-	AccessTokenTTL   time.Duration
+	APIHandler         http.Handler
+	WSChannel          *chat.WSChannel
+	EmbedConfigStore   chat.EmbedConfigStore
+	WACloudChannel     *chat.WhatsAppChannel
+	WAMeowChannel      *chat.WhatsAppMeowChannel
+	InboundHandler     func(chat.InboundMessage)
+	AuthService        AuthService
+	JWTSecret          string
+	AccessTokenTTL     time.Duration
+	FocusedPageHandler http.Handler
 }
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
@@ -77,6 +82,9 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 	}
 	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
 	topMux.Handle("GET /embed/chat", chat.HandleChatPage(opts.EmbedConfigStore))
+	if opts.FocusedPageHandler != nil {
+		topMux.Handle("/a/{publicID}", opts.FocusedPageHandler)
+	}
 	if opts.WACloudChannel != nil {
 		topMux.Handle("/webhook/whatsapp", opts.WACloudChannel.WebhookHandler(opts.InboundHandler))
 	}
@@ -264,6 +272,23 @@ func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
 type gatewayNotifier struct {
 	gw       *chat.Gateway
 	channels userChannelLookup
+}
+
+type gatewayTurnDeliverer struct {
+	gw    *chat.Gateway
+	store agent.ConversationStore
+}
+
+func (d gatewayTurnDeliverer) DeliverTurn(ctx context.Context, inbound chat.InboundMessage, result agent.TurnResult) error {
+	pageURL := ""
+	if result.FocusedPage != nil {
+		pageURL = result.FocusedPage.URL
+	}
+	out, ok := chat.RenderTurn(inbound, result.Text, pageURL, telegramInlineKeyboardContext(d.store, inbound.UserID))
+	if !ok {
+		return nil
+	}
+	return d.gw.Send(ctx, out)
 }
 
 func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {

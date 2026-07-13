@@ -20,6 +20,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -139,6 +140,21 @@ func main() {
 				slog.Error("failed to initialize conversation store", "error", err)
 				os.Exit(1)
 			}
+			var focusedPageService *focusedpage.Service
+			var focusedPageHandler http.Handler
+			if strings.TrimSpace(cfg.FocusedPage.BaseURL) != "" {
+				focusedPageService, err = focusedpage.NewService(
+					focusedpage.NewPostgresStore(db.Pool), cfg.FocusedPage.BaseURL, []byte(cfg.Auth.JWTSecret), time.Now,
+				)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize focused pages: %w", err)
+				}
+				pageHandler, err := focusedpage.NewHandler(focusedPageService, cfg.FocusedPage.TelegramCTAURL)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize focused page handler: %w", err)
+				}
+				focusedPageHandler = pageHandler
+			}
 
 			// Load curriculum (warn if unavailable, don't fail).
 			loader, err := curriculum.NewLoader(cfg.CurriculumPath)
@@ -175,6 +191,7 @@ func main() {
 				TenantID:             store.TenantID(),
 				DevMode:              cfg.Runtime.DevMode,
 				FeatureFlags:         flagsProvider,
+				FocusedPages:         focusedPageService,
 			})
 
 			gw := chat.NewGateway()
@@ -235,6 +252,7 @@ func main() {
 
 			// Wire challenge notifications through the gateway.
 			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
+			engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store))
 
 			// Start proactive scheduler (nudges for due reviews).
 			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -269,35 +287,9 @@ func main() {
 					slog.Warn("failed to send typing indicator", "error", err)
 				}
 
-				resp, err := engine.ProcessMessage(ctx, msg)
+				_, err := engine.ProcessAndDeliver(ctx, msg)
 				if err != nil {
-					slog.Error("ProcessMessage failed", "error", err, "user_id", msg.UserID)
-					return
-				}
-
-				// Strip review action codes from all channels (Telegram renders
-				// them as inline buttons; other channels should never show the raw tag).
-				cleanResp := chat.StripReviewActionCodes(resp)
-
-				out := chat.OutboundMessage{
-					Channel: msg.Channel,
-					UserID:  msg.UserID,
-					Text:    cleanResp,
-				}
-				if msg.Channel == "telegram" {
-					out.Text = chat.ConvertLaTeXToUnicode(resp)
-					out.Text = chat.NormalizeTelegramMarkdown(out.Text)
-					out.ParseMode = "Markdown"
-					out.ReplyKeyboard = chat.BuildTelegramReplyKeyboard(resp)
-					out.InlineKeyboard = chat.BuildTelegramInlineKeyboardWithContext(resp, server.TelegramInlineKeyboardContext(store, msg.UserID))
-					out.Text = chat.StripReviewActionCodes(out.Text)
-				}
-				if strings.TrimSpace(out.Text) == "" {
-					return
-				}
-
-				if err := gw.Send(ctx, out); err != nil {
-					slog.Error("failed to send response", "error", err, "user_id", msg.UserID)
+					slog.Error("process or deliver turn failed", "error", err, "user_id", msg.UserID)
 				}
 			}
 
@@ -365,15 +357,16 @@ func main() {
 			)
 
 			topMux := server.NewTopMux(server.TopMuxOptions{
-				APIHandler:       apiHandler,
-				WSChannel:        wsChannel,
-				EmbedConfigStore: embedConfigStore,
-				WACloudChannel:   waCloudChannel,
-				WAMeowChannel:    waMeowChannel,
-				InboundHandler:   handleInbound,
-				AuthService:      authService,
-				JWTSecret:        cfg.Auth.JWTSecret,
-				AccessTokenTTL:   defaultAccessTokenTTL,
+				APIHandler:         apiHandler,
+				WSChannel:          wsChannel,
+				EmbedConfigStore:   embedConfigStore,
+				WACloudChannel:     waCloudChannel,
+				WAMeowChannel:      waMeowChannel,
+				InboundHandler:     handleInbound,
+				AuthService:        authService,
+				JWTSecret:          cfg.Auth.JWTSecret,
+				AccessTokenTTL:     defaultAccessTokenTTL,
+				FocusedPageHandler: focusedPageHandler,
 			})
 
 			return http.Handler(topMux), func(ctx context.Context) error {

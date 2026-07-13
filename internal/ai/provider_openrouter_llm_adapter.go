@@ -28,6 +28,7 @@ type openRouterLLMAdapter struct {
 }
 
 var _ Provider = (*openRouterLLMAdapter)(nil)
+var _ NativeProvider = (*openRouterLLMAdapter)(nil)
 
 // NewOpenRouterLLMAdapter adapts the native llm OpenRouter path to Provider.
 func NewOpenRouterLLMAdapter(apiKey string) Provider {
@@ -72,6 +73,33 @@ func (p *openRouterLLMAdapter) Complete(ctx context.Context, req CompletionReque
 		InputTokens:  message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite,
 		OutputTokens: message.Usage.Output,
 	}, nil
+}
+
+func (p *openRouterLLMAdapter) CompleteNative(ctx context.Context, req NativeCompletionRequest) (llm.AssistantMessage, error) {
+	modelID := req.Model
+	if modelID == "" {
+		modelID = openRouterLLMDefaultModel
+	}
+	options := llm.StreamOptions{
+		APIKey:    p.apiKey,
+		MaxTokens: req.MaxTokens,
+	}
+	if req.Temperature != 0 {
+		options.Temperature = &req.Temperature
+	}
+	reply, err := llm.StreamOpenRouterChat(ctx, llm.Model{
+		ID:       modelID,
+		API:      llm.APIOpenRouterChat,
+		Provider: "openrouter",
+		BaseURL:  p.baseURL,
+	}, req.Context, &options).Result()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return llm.AssistantMessage{}, ctxErr
+		}
+		return llm.AssistantMessage{}, errOpenRouterLLMCompletion
+	}
+	return reply, nil
 }
 
 func projectOpenRouterLLMContext(messages []Message) (llm.Context, error) {

@@ -32,6 +32,7 @@ type Config struct {
 	Log            LogConfig
 	Runtime        RuntimeConfig
 	FeatureFlags   featureflags.Features
+	FocusedPage    FocusedPageConfig
 	CurriculumPath string
 }
 
@@ -47,6 +48,12 @@ type RuntimeConfig struct {
 type ServerConfig struct {
 	Port int
 	Host string
+}
+
+// FocusedPageConfig owns the server-selected public origin and fixed return action.
+type FocusedPageConfig struct {
+	BaseURL        string
+	TelegramCTAURL string
 }
 
 // DatabaseConfig holds PostgreSQL connection settings.
@@ -197,6 +204,10 @@ func Load() (*Config, error) {
 		Cache: CacheConfig{
 			URL: envStr("LEARN_CACHE_URL", "redis://localhost:6379"),
 		},
+		FocusedPage: FocusedPageConfig{
+			BaseURL:        envStr("LEARN_FOCUSED_PAGE_BASE_URL", ""),
+			TelegramCTAURL: envStr("LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL", ""),
+		},
 		AI: AIConfig{
 			DefaultProvider: envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
 			Mock: MockAIConfig{
@@ -305,6 +316,12 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(c.Email.FromAddress) == "" {
 			return fmt.Errorf("LEARN_EMAIL_FROM_ADDRESS is required when email delivery is configured")
 		}
+	}
+	if (strings.TrimSpace(c.FocusedPage.BaseURL) == "") != (strings.TrimSpace(c.FocusedPage.TelegramCTAURL) == "") {
+		return fmt.Errorf("LEARN_FOCUSED_PAGE_BASE_URL and LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL must be configured together")
+	}
+	if strings.TrimSpace(c.FocusedPage.BaseURL) != "" && c.Auth.JWTSecret == DefaultAuthSecret {
+		return fmt.Errorf("PAI_AUTH_SECRET must be set to a private secret when focused pages are enabled")
 	}
 
 	return nil
