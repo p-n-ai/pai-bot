@@ -128,7 +128,10 @@ for {
     }
 
     for _, call := range calls {
-        result := tools.Execute(ctx, call)
+        result, err := tools.Execute(ctx, call)
+        if err != nil {
+            result = toolErrorResult(call)
+        }
         transcript.Append(result)
     }
 }
@@ -157,11 +160,11 @@ A tool has inert metadata plus one cancellable action:
 ```go
 type Tool interface {
     Definition() llm.Tool
-    Execute(context.Context, llm.ToolCall) llm.ToolResultMessage
+    Execute(context.Context, llm.ToolCall) (llm.ToolResultMessage, error)
 }
 ```
 
-Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools and invalid arguments become error results, allowing the model to correct the request on the next pass.
+Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools, invalid arguments, and execution errors become payload-safe error results, allowing the model to correct the request on the next pass.
 
 The first proving tool is an illustrative curriculum lookup. Today curriculum context is resolved eagerly in `internal/agent/teaching_turn.go`; moving that lookup behind a model tool is a separate tutor-policy change, not part of creating the core.
 
