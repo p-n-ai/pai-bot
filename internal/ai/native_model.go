@@ -84,8 +84,27 @@ func (r *Router) completeNative(ctx context.Context, config NativeModelConfig, c
 			failures = append(failures, name+": native tool messages unsupported")
 			continue
 		}
+		traceRequest := projectNativeTraceRequest(config, modelID, c, opts)
+		trace := CompletionTrace{
+			Provider:    name,
+			Request:     traceRequest,
+			Error:       completionErrorString(err),
+			StartedAt:   startedAt,
+			CompletedAt: time.Now(),
+		}
+		if err == nil {
+			traceResponse := projectNativeCompletionResponse(response)
+			trace.Response = &traceResponse
+		}
+		r.emitTrace(trace)
 
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return llm.AssistantMessage{}, ctxErr
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return llm.AssistantMessage{}, err
+			}
 			r.markFailure(name, gen)
 			slog.Warn("native AI provider failed, trying next",
 				"provider", name,
@@ -108,6 +127,59 @@ func (r *Router) completeNative(ctx context.Context, config NativeModelConfig, c
 	}
 
 	return llm.AssistantMessage{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
+}
+
+func projectNativeTraceRequest(config NativeModelConfig, modelID string, c llm.Context, opts *llm.StreamOptions) CompletionRequest {
+	req := CompletionRequest{Task: config.Task, Model: modelID}
+	if c.SystemPrompt != "" {
+		req.Messages = append(req.Messages, Message{Role: "system", Content: c.SystemPrompt})
+	}
+	for _, message := range c.Messages {
+		switch typed := message.(type) {
+		case llm.UserMessage:
+			if projected, ok := projectNativeUserMessage(typed); ok {
+				req.Messages = append(req.Messages, projected)
+			}
+		case llm.AssistantMessage:
+			content := nativeAssistantText(typed)
+			if content == "" {
+				content = "[tool call omitted]"
+			}
+			req.Messages = append(req.Messages, Message{Role: "assistant", Content: content})
+		case llm.ToolResultMessage:
+			req.Messages = append(req.Messages, Message{Role: "user", Content: "[tool result omitted]"})
+		}
+	}
+	if opts != nil {
+		req.MaxTokens = opts.MaxTokens
+		if opts.Temperature != nil {
+			req.Temperature = *opts.Temperature
+		}
+	}
+	return req
+}
+
+func projectNativeCompletionResponse(response llm.AssistantMessage) CompletionResponse {
+	model := response.ResponseModel
+	if model == "" {
+		model = response.Model
+	}
+	return CompletionResponse{
+		Content:      nativeAssistantText(response),
+		Model:        model,
+		InputTokens:  response.Usage.Input + response.Usage.CacheRead + response.Usage.CacheWrite,
+		OutputTokens: response.Usage.Output,
+	}
+}
+
+func nativeAssistantText(message llm.AssistantMessage) string {
+	var text strings.Builder
+	for _, content := range message.Content {
+		if block, ok := content.(llm.TextContent); ok {
+			text.WriteString(block.Text)
+		}
+	}
+	return text.String()
 }
 
 func (r *Router) completeNativeWithRetry(ctx context.Context, provider NativeProvider, model string, c llm.Context, opts *llm.StreamOptions) (llm.AssistantMessage, error) {
@@ -148,15 +220,12 @@ func projectNativeCompletionRequest(config NativeModelConfig, c llm.Context, opt
 			}
 			req.Messages = append(req.Messages, projected)
 		case llm.AssistantMessage:
-			var text strings.Builder
 			for _, content := range typed.Content {
-				block, ok := content.(llm.TextContent)
-				if !ok {
+				if _, ok := content.(llm.TextContent); !ok {
 					return CompletionRequest{}, false
 				}
-				text.WriteString(block.Text)
 			}
-			req.Messages = append(req.Messages, Message{Role: "assistant", Content: text.String()})
+			req.Messages = append(req.Messages, Message{Role: "assistant", Content: nativeAssistantText(typed)})
 		default:
 			return CompletionRequest{}, false
 		}
