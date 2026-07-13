@@ -12,8 +12,6 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
-const ratingPromptInstruction = "At the end of your response, ask for a quick 1-5 rating in one short sentence and include the exact control token [[PAI_REVIEW]] once."
-
 // buildPromptMessagesFromTurn converts an agentTurn into the model-facing
 // message list. App-owned state is system context; only real chat remains
 // user/assistant history.
@@ -67,13 +65,6 @@ func (c promptCompiler) compile(turn *agentTurn) ([]ai.Message, promptManifest, 
 		current.ImageURLs = []string{turn.ImageDataURL}
 	}
 	messages = append(messages, current)
-
-	if ratingInstruction := buildControlInstructionBlock(turn.Packets, "rating"); ratingInstruction != "" {
-		messages = append(messages, ai.Message{
-			Role:    "system",
-			Content: ratingInstruction,
-		})
-	}
 
 	return messages, promptManifest{
 		MessageCount:    len(messages),

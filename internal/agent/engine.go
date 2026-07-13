@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"time"
 
@@ -26,12 +27,9 @@ const (
 	defaultCompactThreshold      = 20
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
-	defaultRatingPromptEvery     = 5
-	// ReviewActionCode is a control marker emitted by AI to trigger rating UI/actions.
-	ReviewActionCode = "[[PAI_REVIEW]]"
-	langPrefCodeEN   = "[[PAI_PREF_LANG:en]]"
-	langPrefCodeMS   = "[[PAI_PREF_LANG:ms]]"
-	langPrefCodeZH   = "[[PAI_PREF_LANG:zh]]"
+	langPrefCodeEN               = "[[PAI_PREF_LANG:en]]"
+	langPrefCodeMS               = "[[PAI_PREF_LANG:ms]]"
+	langPrefCodeZH               = "[[PAI_PREF_LANG:zh]]"
 )
 
 // EngineConfig holds dependencies for the agent engine.
@@ -57,7 +55,6 @@ type EngineConfig struct {
 	CompactTokenThreshold int // estimated tokens before compaction triggers (default 3000)
 	KeepRecent            int // recent messages to keep after compaction (default 6)
 	DisableMultiLanguage  bool
-	RatingPromptEvery     int // ask for rating every N tutoring replies (default 5)
 	Tracker               progress.Tracker
 	Streaks               progress.StreakTracker
 	XP                    progress.XPTracker
@@ -82,7 +79,6 @@ type Engine struct {
 	compactTokenThreshold int
 	keepRecent            int
 	disableMultiLanguage  bool
-	ratingPromptEvery     int
 	tracker               progress.Tracker
 	streaks               progress.StreakTracker
 	xp                    progress.XPTracker
@@ -98,6 +94,8 @@ type Engine struct {
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
 	milestones            *pendingMilestones
+	teachingTurnMu        sync.Mutex
+	teachingTurns         map[string]*conversationTurnLock
 }
 
 // NewEngine creates a new agent engine.
@@ -117,10 +115,6 @@ func NewEngine(cfg EngineConfig) *Engine {
 	keepRecent := cfg.KeepRecent
 	if keepRecent == 0 {
 		keepRecent = defaultKeepRecent
-	}
-	ratingEvery := cfg.RatingPromptEvery
-	if ratingEvery <= 0 {
-		ratingEvery = defaultRatingPromptEvery
 	}
 	eventLogger := cfg.EventLogger
 	if eventLogger == nil {
@@ -168,7 +162,6 @@ func NewEngine(cfg EngineConfig) *Engine {
 		compactTokenThreshold: tokenThreshold,
 		keepRecent:            keepRecent,
 		disableMultiLanguage:  cfg.DisableMultiLanguage,
-		ratingPromptEvery:     ratingEvery,
 		tracker:               cfg.Tracker,
 		streaks:               cfg.Streaks,
 		xp:                    cfg.XP,
@@ -184,6 +177,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
+		teachingTurns:         make(map[string]*conversationTurnLock),
 	}
 }
 
@@ -265,9 +259,6 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	}
 	if conv.State == "language_selection" {
 		return e.handleLanguageSelection(msg, conv), nil
-	}
-	if response, handled := e.maybeHandleRatingInput(msg, conv); handled {
-		return response, nil
 	}
 	if response, handled := e.maybeHandlePendingGoal(ctx, msg, conv); handled {
 		return response, nil
@@ -1192,196 +1183,7 @@ func languageChangedMessage(lang string) string {
 	return i18n.S(lang, i18n.MsgLanguageChanged)
 }
 
-var ratingPattern = regexp.MustCompile(`^\s*([1-5])\s*$`)
-var numericPattern = regexp.MustCompile(`^\s*([0-9]+)\s*$`)
 var reviewActionPattern = regexp.MustCompile(`\[\[PAI_REVIEW(?::([A-Za-z0-9-]+))?\]\]`)
-
-func (e *Engine) maybeHandleRatingInput(msg chat.InboundMessage, conv *Conversation) (string, bool) {
-	awaitingRating := isAwaitingRating(conv)
-	fromInlineCallback := msg.Channel == "telegram" && msg.CallbackQueryID != ""
-	if fromInlineCallback && !looksLikeRatingCallback(msg.Text) {
-		return "", false
-	}
-	if !awaitingRating && !fromInlineCallback {
-		return "", false
-	}
-
-	ratedMessageID, rating, valid, inputKind := parseRatingInput(msg.Text, fromInlineCallback, conv)
-	if !valid {
-		if fromInlineCallback {
-			// Ignore invalid callback payloads; do not fall through to tutoring AI.
-			return "", true
-		}
-		if !awaitingRating {
-			return "", false
-		}
-		e.logEventAsync(Event{
-			ConversationID: conv.ID,
-			UserID:         msg.UserID,
-			EventType:      "answer_rating_skipped",
-			Data: map[string]any{
-				"channel":           msg.Channel,
-				"rating_input_kind": inputKind,
-				"text_len":          len(msg.Text),
-			},
-		})
-		return "", false
-	}
-	if ratedMessageID != "" && e.ratingAlreadySubmitted(conv.ID, ratedMessageID) {
-		return "", true
-	}
-
-	e.logEventAsync(Event{
-		ConversationID: conv.ID,
-		UserID:         msg.UserID,
-		EventType:      "answer_rating_submitted",
-		Data: map[string]any{
-			"channel":          msg.Channel,
-			"rating":           rating,
-			"rated_message_id": ratedMessageID,
-			"source":           map[bool]string{true: "telegram_inline_button", false: "text"}[fromInlineCallback],
-			"delayed_submit":   !awaitingRating,
-		},
-	})
-	thanksText := e.ratingThanksTextForMessage(conv, msg)
-	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
-		Role:    "assistant",
-		Content: thanksText,
-	}); err != nil {
-		slog.Error("failed to store rating thanks response", "error", err)
-	}
-
-	return thanksText, true
-}
-
-func looksLikeRatingCallback(text string) bool {
-	if strings.HasPrefix(strings.TrimSpace(text), "rating:") {
-		return true
-	}
-	_, _, ok := parseRatingCallbackDataForEngine(text)
-	return ok
-}
-
-func isAwaitingRating(conv *Conversation) bool {
-	if conv == nil || len(conv.Messages) == 0 {
-		return false
-	}
-	last := conv.Messages[len(conv.Messages)-1]
-	if last.Role != "assistant" {
-		return false
-	}
-	trimmed := strings.TrimSpace(last.Content)
-	return reviewActionPattern.MatchString(trimmed)
-}
-
-func parseRatingResponse(text string) (int, bool, string) {
-	matches := ratingPattern.FindStringSubmatch(text)
-	if len(matches) == 2 {
-		return int(matches[1][0] - '0'), true, "valid_rating"
-	}
-	if numericPattern.MatchString(text) {
-		return 0, false, "numeric_out_of_range"
-	}
-	return 0, false, "non_rating_text"
-}
-
-func parseRatingCallbackDataForEngine(text string) (string, int, bool) {
-	trimmed := strings.TrimSpace(text)
-	if !strings.HasPrefix(trimmed, "rating:") {
-		return "", 0, false
-	}
-
-	parts := strings.Split(trimmed, ":")
-	if len(parts) != 3 {
-		return "", 0, false
-	}
-
-	ratedMessageID := strings.TrimSpace(parts[1])
-	rating, valid, _ := parseRatingResponse(parts[2])
-	if !valid {
-		return "", 0, false
-	}
-	return ratedMessageID, rating, true
-}
-
-func latestRatingPromptMessageID(conv *Conversation) (string, bool) {
-	if conv == nil {
-		return "", false
-	}
-	for i := len(conv.Messages) - 1; i >= 0; i-- {
-		msg := conv.Messages[i]
-		if msg.Role == "assistant" && reviewActionPattern.MatchString(strings.TrimSpace(msg.Content)) {
-			if msg.ID == "" {
-				return "", false
-			}
-			return msg.ID, true
-		}
-	}
-	return "", false
-}
-
-func parseRatingInput(text string, fromInlineCallback bool, conv *Conversation) (string, int, bool, string) {
-	if fromInlineCallback {
-		ratedMessageID, rating, ok := parseRatingCallbackDataForEngine(text)
-		if ok {
-			return ratedMessageID, rating, true, "valid_rating"
-		}
-
-		// Backward compatibility for legacy callback data values "1".."5".
-		rating, valid, _ := parseRatingResponse(text)
-		if !valid {
-			return "", 0, false, "invalid_callback_data"
-		}
-		ratedMessageID, _ = latestRatingPromptMessageID(conv)
-		return ratedMessageID, rating, true, "valid_rating"
-	}
-
-	rating, valid, inputKind := parseRatingResponse(text)
-	if !valid {
-		return "", 0, false, inputKind
-	}
-	ratedMessageID, _ := latestRatingPromptMessageID(conv)
-	return ratedMessageID, rating, true, inputKind
-}
-
-type ratingSubmissionChecker interface {
-	HasRatingSubmission(conversationID, ratedMessageID string) bool
-}
-
-func (e *Engine) ratingAlreadySubmitted(conversationID, ratedMessageID string) bool {
-	checker, ok := e.eventLogger.(ratingSubmissionChecker)
-	if !ok || ratedMessageID == "" {
-		return false
-	}
-	return checker.HasRatingSubmission(conversationID, ratedMessageID)
-}
-
-func (e *Engine) ratingThanksTextForMessage(conv *Conversation, msg chat.InboundMessage) string {
-	if lang, hasPref := e.preferredLanguageForConversation(conv); hasPref {
-		return i18n.S(lang, i18n.MsgRatingThanks)
-	}
-	if lang := i18n.NormalizeLocale(msg.Language); lang != "" {
-		return i18n.S(lang, i18n.MsgRatingThanks)
-	}
-	return i18n.S(i18n.DefaultLocale, i18n.MsgRatingThanks)
-}
-
-func countTutoringReplies(messages []StoredMessage) int {
-	count := 0
-	for _, msg := range messages {
-		if msg.Role == "assistant" && msg.Model != "" {
-			count++
-		}
-	}
-	return count
-}
-
-func shouldRequestRatingAfterReply(replyCount, every int) bool {
-	if every <= 0 {
-		every = defaultRatingPromptEvery
-	}
-	return replyCount > 0 && replyCount%every == 0
-}
 
 func (e *Engine) buildSystemPrompt(msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) string {
 	languageBlock := `LANGUAGE:
@@ -1451,7 +1253,7 @@ Voice:
 - Keep it tasteful: no forced memes, no fake hype, no roasting the student, no trying too hard.
 - If the student sounds bored, frustrated, or casual, make the first line warmer and lighter before the subject work.
 
-Keep responses concise and chat-friendly. Avoid long walls of text. Pause often with one small check question, and stop after the check question. Do not end with a menu of possible next topics. If the student asks "slowly", "not too long", or says they are confused/frustrated, give one tiny explanation plus one tiny check question, then stop. Use relatable Malaysian examples when helpful. Never be condescending. Do not ask for rating/feedback unless the system explicitly instructs you to include control token [[PAI_REVIEW]].
+Keep responses concise and chat-friendly. Avoid long walls of text. Pause often with one small check question, and stop after the check question. Do not end with a menu of possible next topics. If the student asks "slowly", "not too long", or says they are confused/frustrated, give one tiny explanation plus one tiny check question, then stop. Use relatable Malaysian examples when helpful. Never be condescending. Do not ask for ratings or feedback.
 
 Do not invent facts, formulas, or curriculum references. If context is missing, ask a clarifying question before solving. If uncertain, state what is uncertain and propose the next step.
 
@@ -1526,14 +1328,6 @@ func sanitizeControlContent(content string) string {
 	default:
 		return clean
 	}
-}
-
-func injectReviewTokenWithMessageID(content, messageID string) string {
-	token := fmt.Sprintf("[[PAI_REVIEW:%s]]", messageID)
-	if reviewActionPattern.MatchString(content) {
-		return reviewActionPattern.ReplaceAllString(content, token)
-	}
-	return strings.TrimSpace(content) + "\n\n" + token
 }
 
 func normalizeEquationFormatting(content string) string {

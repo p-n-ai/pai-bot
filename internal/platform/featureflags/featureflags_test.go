@@ -13,6 +13,9 @@ func TestParseEmptyFeatureSet(t *testing.T) {
 	if features.Enabled(TurnHooks) {
 		t.Fatal("turn_hooks should default to disabled")
 	}
+	if features.Enabled(AgentCore) {
+		t.Fatal("agent_core should default to disabled")
+	}
 	if features.Enabled(Feature("missing")) {
 		t.Fatal("missing feature should not be enabled")
 	}
@@ -39,6 +42,16 @@ func TestParseTurnHooksFeature(t *testing.T) {
 				t.Fatalf("turn_hooks enabled = %v, want %v", got, tt.enabled)
 			}
 		})
+	}
+}
+
+func TestParseAgentCoreFeature(t *testing.T) {
+	features, err := Parse("agent_core")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !features.Enabled(AgentCore) {
+		t.Fatal("agent_core should be enabled")
 	}
 }
 
@@ -94,5 +107,8 @@ func TestDefaults(t *testing.T) {
 	defaults := Defaults()
 	if enabled, ok := defaults["turn_hooks"]; !ok || enabled {
 		t.Fatalf("Defaults()[turn_hooks] = %v, %v; want false, present", enabled, ok)
+	}
+	if enabled, ok := defaults["agent_core"]; !ok || enabled {
+		t.Fatalf("Defaults()[agent_core] = %v, %v; want false, present", enabled, ok)
 	}
 }

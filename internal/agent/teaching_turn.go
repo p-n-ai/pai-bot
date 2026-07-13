@@ -6,15 +6,18 @@ package agent
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, responsePrefix string) (string, error) {
+	unlock := e.lockTeachingTurn(conv.ID)
+	defer unlock()
+
 	userContent := msg.Text
 	if msg.HasImage {
 		if userContent == "" {
@@ -91,9 +94,6 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 			conv.TopicID = matchedTopic.ID
 		}
 	}
-	replyCount := countTutoringReplies(conv.Messages) + 1
-	promptRequested := shouldRequestRatingAfterReply(replyCount, e.ratingPromptEvery)
-	turn.RatingPromptRequested = promptRequested
 	turn.Conversation = conv
 	turn.Topic = matchedTopic
 	turn.TeachingNotes = teachingNotes
@@ -114,8 +114,6 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 			}
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
 		}
-	} else if turn.RatingPromptRequested {
-		turn.Packets = appendRatingPromptPacket(turn.Packets)
 	}
 	messages := e.buildPromptMessagesFromTurn(turn)
 
@@ -125,14 +123,26 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 		reqModel = "gpt-4o"
 	}
 
-	// Call AI
+	// Call AI.
 	modelStartedAt := time.Now()
-	resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{
-		Messages:  messages,
-		Model:     reqModel,
-		Task:      ai.TaskTeaching,
-		MaxTokens: 1024,
-	})
+	var resp ai.CompletionResponse
+	if e.featureFlags().Enabled(featureflags.AgentCore) {
+		nativeResp, nativeErr := e.completeNativeTeachingTurn(ctx, turn, reqModel)
+		err = nativeErr
+		resp = ai.CompletionResponse{
+			Content:      nativeResp.Content,
+			Model:        nativeResp.Model,
+			InputTokens:  nativeResp.InputTokens,
+			OutputTokens: nativeResp.OutputTokens,
+		}
+	} else {
+		resp, err = e.aiRouter.Complete(ctx, ai.CompletionRequest{
+			Messages:  messages,
+			Model:     reqModel,
+			Task:      ai.TaskTeaching,
+			MaxTokens: 1024,
+		})
+	}
 	turn.Model.LatencyMS = int(time.Since(modelStartedAt).Milliseconds())
 	if err != nil {
 		turn.Model.Error = err.Error()
@@ -147,9 +157,6 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := postProcessTutorResponse(normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content)), msg.Text)
 	finalContent := plainContent
-	if promptRequested && !strings.Contains(finalContent, ReviewActionCode) {
-		finalContent = strings.TrimSpace(finalContent) + "\n\n" + ReviewActionCode
-	}
 
 	// Record assistant response with token metadata.
 	assistantMessageID, err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -180,22 +187,7 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	e.assessMasteryAsync(msg.UserID, matchedTopic, userContent, plainContent)
 	e.recordActivityAsync(msg.UserID)
 
-	if promptRequested {
-		e.logEventAsync(Event{
-			ConversationID: conv.ID,
-			UserID:         msg.UserID,
-			EventType:      "answer_rating_requested",
-			Data: map[string]any{
-				"channel":                msg.Channel,
-				"after_tutoring_replies": replyCount,
-				"rated_message_id":       assistantMessageID,
-			},
-		})
-	}
 	responseContent := finalContent
-	if promptRequested && assistantMessageID != "" {
-		responseContent = injectReviewTokenWithMessageID(finalContent, assistantMessageID)
-	}
 
 	if responsePrefix != "" {
 		responseContent = responsePrefix + "\n\n" + responseContent

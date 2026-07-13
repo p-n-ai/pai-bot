@@ -24,6 +24,8 @@ const (
 const (
 	// TurnHooks enables the internal Tutor Turn hook seam.
 	TurnHooks Feature = "turn_hooks"
+	// AgentCore enables native sequential tool continuation for teaching turns.
+	AgentCore Feature = "agent_core"
 )
 
 // Spec describes a known feature flag.
@@ -41,6 +43,11 @@ type Features struct {
 var registry = map[Feature]Spec{
 	TurnHooks: {
 		Feature:        TurnHooks,
+		Status:         UnderDevelopment,
+		DefaultEnabled: false,
+	},
+	AgentCore: {
+		Feature:        AgentCore,
 		Status:         UnderDevelopment,
 		DefaultEnabled: false,
 	},

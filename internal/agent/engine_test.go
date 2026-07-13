@@ -20,6 +20,16 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
+func countMessagesContaining(messages []ai.Message, role, content string) int {
+	count := 0
+	for _, message := range messages {
+		if message.Role == role && strings.Contains(message.Content, content) {
+			count++
+		}
+	}
+	return count
+}
+
 func TestEngine_ProcessMessage(t *testing.T) {
 	const (
 		userID   = "123"
@@ -1896,17 +1906,16 @@ func TestEngine_ProcessMessage_EventLoggingNonBlocking(t *testing.T) {
 	close(blockingLogger.release)
 }
 
-func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T) {
+func TestEngine_ProcessMessage_DoesNotPromptForRating(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI response")
 	tracker := &callTracker{provider: mockAI}
 	eventLogger := agent.NewMemoryEventLogger()
 	store := agent.NewMemoryStore()
 
 	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:          mockRouter(tracker),
-		EventLogger:       eventLogger,
-		Store:             store,
-		RatingPromptEvery: 1,
+		AIRouter:    mockRouter(tracker),
+		EventLogger: eventLogger,
+		Store:       store,
 	})
 
 	userID := "u-rating-prompt"
@@ -1918,8 +1927,8 @@ func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "[[PAI_REVIEW:") {
-		t.Fatalf("expected rating prompt on first tutoring reply, got: %q", resp)
+	if contains(resp, "[[PAI_REVIEW") {
+		t.Fatalf("did not expect a rating prompt, got: %q", resp)
 	}
 	if tracker.RequestCount() != 1 {
 		t.Fatalf("AI request count = %d, want 1", tracker.RequestCount())
@@ -1933,34 +1942,20 @@ func TestEngine_ProcessMessage_PromptsForRatingOnEveryTutoringReply(t *testing.T
 		t.Fatal("expected stored messages")
 	}
 	last := conv.Messages[len(conv.Messages)-1]
-	if last.Role != "assistant" || !contains(last.Content, agent.ReviewActionCode) {
-		t.Fatalf("expected final message to be rating prompt, got role=%q content=%q", last.Role, last.Content)
+	if last.Role != "assistant" || contains(last.Content, "[[PAI_REVIEW") {
+		t.Fatalf("expected a plain assistant message, got role=%q content=%q", last.Role, last.Content)
 	}
 	if last.Model == "" {
 		t.Fatalf("assistant tutoring reply should retain model metadata")
 	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var promptLogged bool
-	for time.Now().Before(deadline) {
-		events := eventLogger.Events()
-		for _, e := range events {
-			if e.EventType == "answer_rating_requested" {
-				promptLogged = true
-				break
-			}
+	for _, event := range eventLogger.Events() {
+		if strings.HasPrefix(event.EventType, "answer_rating_") {
+			t.Fatalf("unexpected rating event: %#v", event)
 		}
-		if promptLogged {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if !promptLogged {
-		t.Fatal("expected answer_rating_requested event")
 	}
 }
 
-func TestEngine_ProcessMessage_ConsumesValidRatingWithoutAICall(t *testing.T) {
+func TestEngine_ProcessMessage_NumericLearnerTextReachesTutor(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI response")
 	tracker := &callTracker{provider: mockAI}
 	eventLogger := agent.NewMemoryEventLogger()
@@ -1993,46 +1988,20 @@ func TestEngine_ProcessMessage_ConsumesValidRatingWithoutAICall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Terima kasih") {
-		t.Fatalf("expected thank-you response for rating, got: %q", resp)
+	if contains(resp, "Terima kasih atas rating") {
+		t.Fatalf("numeric learner text should reach tutoring, got: %q", resp)
 	}
-	if tracker.RequestCount() != beforeCalls {
-		t.Fatalf("AI should not be called for valid rating; calls = %d, want %d", tracker.RequestCount(), beforeCalls)
+	if tracker.RequestCount() != beforeCalls+1 {
+		t.Fatalf("AI calls = %d, want %d", tracker.RequestCount(), beforeCalls+1)
 	}
-
-	conv, found := store.GetActiveConversation(userID)
-	if !found {
-		t.Fatal("expected active conversation")
-	}
-	last := conv.Messages[len(conv.Messages)-1]
-	if last.Role != "assistant" || !contains(last.Content, "Terima kasih") {
-		t.Fatalf("expected assistant thank-you stored, got role=%q content=%q", last.Role, last.Content)
-	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var submitted *agent.Event
-	for time.Now().Before(deadline) {
-		for _, e := range eventLogger.Events() {
-			if e.EventType == "answer_rating_submitted" {
-				eventCopy := e
-				submitted = &eventCopy
-				break
-			}
+	for _, event := range eventLogger.Events() {
+		if strings.HasPrefix(event.EventType, "answer_rating_") {
+			t.Fatalf("unexpected rating event: %#v", event)
 		}
-		if submitted != nil {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if submitted == nil {
-		t.Fatal("expected answer_rating_submitted event")
-	}
-	if got, ok := submitted.Data["rating"].(int); !ok || got != 4 {
-		t.Fatalf("rating event payload = %#v, want rating=4", submitted.Data)
 	}
 }
 
-func TestEngine_ProcessMessage_InvalidNumericRating_FallsBackToTutoring(t *testing.T) {
+func TestEngine_ProcessMessage_NumericTextDoesNotEmitRatingEvents(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI response")
 	tracker := &callTracker{provider: mockAI}
 	eventLogger := agent.NewMemoryEventLogger()
@@ -2068,38 +2037,14 @@ func TestEngine_ProcessMessage_InvalidNumericRating_FallsBackToTutoring(t *testi
 	if tracker.RequestCount() != beforeCalls+1 {
 		t.Fatalf("AI should be called for invalid numeric rating fallback; calls = %d, want %d", tracker.RequestCount(), beforeCalls+1)
 	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var submitted bool
-	var skipped *agent.Event
-	for time.Now().Before(deadline) {
-		for _, e := range eventLogger.Events() {
-			if e.EventType == "answer_rating_submitted" {
-				submitted = true
-				break
-			}
-			if e.EventType == "answer_rating_skipped" {
-				eventCopy := e
-				skipped = &eventCopy
-			}
+	for _, event := range eventLogger.Events() {
+		if strings.HasPrefix(event.EventType, "answer_rating_") {
+			t.Fatalf("unexpected rating event: %#v", event)
 		}
-		if submitted || skipped != nil {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if submitted {
-		t.Fatal("did not expect answer_rating_submitted event for invalid numeric rating")
-	}
-	if skipped == nil {
-		t.Fatal("expected answer_rating_skipped event for invalid numeric rating")
-	}
-	if got, ok := skipped.Data["rating_input_kind"].(string); !ok || got != "numeric_out_of_range" {
-		t.Fatalf("rating skipped payload = %#v, want rating_input_kind=numeric_out_of_range", skipped.Data)
 	}
 }
 
-func TestEngine_ProcessMessage_NonRatingAfterPrompt_FallsBackToTutoring(t *testing.T) {
+func TestEngine_ProcessMessage_NormalTextDoesNotEmitRatingEvents(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI response")
 	tracker := &callTracker{provider: mockAI}
 	eventLogger := agent.NewMemoryEventLogger()
@@ -2135,38 +2080,14 @@ func TestEngine_ProcessMessage_NonRatingAfterPrompt_FallsBackToTutoring(t *testi
 	if tracker.RequestCount() != beforeCalls+1 {
 		t.Fatalf("AI should be called for non-rating text; calls = %d, want %d", tracker.RequestCount(), beforeCalls+1)
 	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var submitted bool
-	var skipped *agent.Event
-	for time.Now().Before(deadline) {
-		for _, e := range eventLogger.Events() {
-			if e.EventType == "answer_rating_submitted" {
-				submitted = true
-				break
-			}
-			if e.EventType == "answer_rating_skipped" {
-				eventCopy := e
-				skipped = &eventCopy
-			}
+	for _, event := range eventLogger.Events() {
+		if strings.HasPrefix(event.EventType, "answer_rating_") {
+			t.Fatalf("unexpected rating event: %#v", event)
 		}
-		if submitted || skipped != nil {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if submitted {
-		t.Fatal("did not expect answer_rating_submitted event for non-rating text")
-	}
-	if skipped == nil {
-		t.Fatal("expected answer_rating_skipped event for non-rating text")
-	}
-	if got, ok := skipped.Data["rating_input_kind"].(string); !ok || got != "non_rating_text" {
-		t.Fatalf("rating skipped payload = %#v, want rating_input_kind=non_rating_text", skipped.Data)
 	}
 }
 
-func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICall(t *testing.T) {
+func TestEngine_ProcessMessage_LegacyRatingCallbackReachesTutor(t *testing.T) {
 	mockAI := ai.NewMockProvider("AI response")
 	tracker := &callTracker{provider: mockAI}
 	eventLogger := agent.NewMemoryEventLogger()
@@ -2192,10 +2113,10 @@ func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICal
 	}
 	ratedMessageID := conv.Messages[len(conv.Messages)-1].ID
 	if ratedMessageID == "" {
-		t.Fatal("expected rating prompt message to have ID")
+		t.Fatal("expected assistant message to have ID")
 	}
 
-	// User continues chatting first; this should consume the rating prompt and call AI.
+	// A later legacy callback is ordinary learner input now that ratings are removed.
 	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",
 		UserID:  userID,
@@ -2215,38 +2136,16 @@ func TestEngine_ProcessMessage_DelayedTelegramCallbackRating_SubmitsWithoutAICal
 	if err != nil {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
-	if !contains(resp, "Terima kasih") {
-		t.Fatalf("expected thank-you response for delayed callback rating, got: %q", resp)
+	if contains(resp, "Terima kasih atas rating") {
+		t.Fatalf("rating callback should no longer be intercepted, got: %q", resp)
 	}
-	if tracker.RequestCount() != beforeCallbackCalls {
-		t.Fatalf("AI should not be called for delayed callback rating; calls = %d, want %d", tracker.RequestCount(), beforeCallbackCalls)
+	if tracker.RequestCount() != beforeCallbackCalls+1 {
+		t.Fatalf("AI calls = %d, want %d", tracker.RequestCount(), beforeCallbackCalls+1)
 	}
-
-	deadline := time.Now().Add(500 * time.Millisecond)
-	var submitted *agent.Event
-	for time.Now().Before(deadline) {
-		for _, e := range eventLogger.Events() {
-			if e.EventType == "answer_rating_submitted" {
-				eventCopy := e
-				submitted = &eventCopy
-			}
+	for _, event := range eventLogger.Events() {
+		if strings.HasPrefix(event.EventType, "answer_rating_") {
+			t.Fatalf("unexpected rating event: %#v", event)
 		}
-		if submitted != nil {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if submitted == nil {
-		t.Fatal("expected answer_rating_submitted event for delayed callback rating")
-	}
-	if got, ok := submitted.Data["source"].(string); !ok || got != "telegram_inline_button" {
-		t.Fatalf("submitted payload = %#v, want source=telegram_inline_button", submitted.Data)
-	}
-	if got, ok := submitted.Data["delayed_submit"].(bool); !ok || !got {
-		t.Fatalf("submitted payload = %#v, want delayed_submit=true", submitted.Data)
-	}
-	if got, ok := submitted.Data["rated_message_id"].(string); !ok || got != ratedMessageID {
-		t.Fatalf("submitted payload = %#v, want rated_message_id=%s", submitted.Data, ratedMessageID)
 	}
 }
 

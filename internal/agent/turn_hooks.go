@@ -10,8 +10,6 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
-const rateConversationHookName = "rate_convo_hook"
-
 type turnHookOutcome string
 
 const (
@@ -43,26 +41,8 @@ type turnHookRunResult struct {
 	BlockMessage string
 }
 
-type rateConversationTurnHook struct{}
-
-func (rateConversationTurnHook) Name() string {
-	return rateConversationHookName
-}
-
-func (rateConversationTurnHook) Run(_ context.Context, turn *agentTurn) (turnHookResult, error) {
-	if turn == nil || !turn.RatingPromptRequested {
-		return turnHookResult{Outcome: turnHookOutcomeContinue}, nil
-	}
-	return turnHookResult{
-		Outcome: turnHookOutcomeInject,
-		Packets: []contextPacket{ratingPromptPacket()},
-	}, nil
-}
-
 func defaultTurnHookCatalog() []turnHook {
-	return []turnHook{
-		rateConversationTurnHook{},
-	}
+	return nil
 }
 
 func (e *Engine) turnHooksEnabled() bool {
@@ -139,20 +119,5 @@ func (e *Engine) noticeTurnHookCall(name string, outcome turnHookOutcome) {
 	e.turnHookNotice(TurnHookCallNotice{
 		Name:    name,
 		Outcome: string(outcome),
-	})
-}
-
-func appendRatingPromptPacket(packets []contextPacket) []contextPacket {
-	return append(packets, ratingPromptPacket())
-}
-
-func ratingPromptPacket() contextPacket {
-	return newContextPacket(contextPacket{
-		ID:       "rating.prompt",
-		Kind:     contextKindControlInstruction,
-		Trust:    contextTrustSystemOwned,
-		Source:   "rating",
-		Data:     ratingPromptInstruction,
-		RenderAs: contextRenderSystemInstruction,
 	})
 }

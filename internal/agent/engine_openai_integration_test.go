@@ -27,9 +27,6 @@ import (
 const (
 	liveFixturePath       = "testdata/openai_live_conversations.yaml"
 	fallbackMessagePhrase = "masalah teknikal"
-	ratingPromptPhrase    = "rating 1-5"
-	ratingThanksPhrase    = "terima kasih atas rating anda"
-	ratingRetryPhrase     = "rating perlu 1 hingga 5"
 )
 
 // LiveConversationSpec describes a single scripted live conversation.
@@ -55,9 +52,6 @@ type BehaviorChecks struct {
 	RequireStructuredSolving    bool   `yaml:"require_structured_solving"`
 	RequireConceptConnection    bool   `yaml:"require_concept_connection"`
 	ExpectedLanguage            string `yaml:"expected_language"`
-	RequireRatingPrompt         bool   `yaml:"require_rating_prompt"`
-	RequireRatingThanks         bool   `yaml:"require_rating_thanks"`
-	RequireRatingRetry          bool   `yaml:"require_rating_retry"`
 }
 
 type liveFixture struct {
@@ -189,21 +183,6 @@ func TestOpenAILiveConversations(t *testing.T) {
 			}
 			if conv.Checks.RequireConceptConnection {
 				assertConceptConnection(t, responses)
-			}
-			if conv.Checks.RequireRatingPrompt {
-				assertAnyContainsFold(t, responses, ratingPromptPhrase, "expected rating prompt in one assistant reply")
-			}
-			if conv.Checks.RequireRatingThanks {
-				assertAnyContainsFold(t, responses, ratingThanksPhrase, "expected rating thank-you response")
-				if len(tracker.requests) != len(conv.Turns)-1 {
-					t.Fatalf("expected last turn to skip AI call after rating; provider calls=%d turns=%d", len(tracker.requests), len(conv.Turns))
-				}
-			}
-			if conv.Checks.RequireRatingRetry {
-				assertAnyContainsFold(t, responses, ratingRetryPhrase, "expected invalid rating retry guidance")
-				if len(tracker.requests) != len(conv.Turns)-1 {
-					t.Fatalf("expected last turn to skip AI call after invalid rating; provider calls=%d turns=%d", len(tracker.requests), len(conv.Turns))
-				}
 			}
 
 			t.Logf("conversation=%s turns=%d provider_calls=%d", conv.ID, len(conv.Turns), len(tracker.requests))

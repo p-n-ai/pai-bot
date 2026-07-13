@@ -267,48 +267,6 @@ conversations:
       require_concept_connection: true
       expected_language: bm_or_mixed
 
-  - id: C17
-    title: Rating flow with valid score
-    tags: [bm, rating, deterministic]
-    turns:
-      - user: "Ajar saya 2x + 1 = 9."
-      - user: "Kenapa tolak 1 dulu?"
-      - user: "Bagi contoh lain serupa."
-      - user: "Saya cuba 3x = 12, apa x?"
-      - user: "Boleh semak semua langkah sekali?"
-      - user: "4"
-    checks:
-      require_non_empty_replies: true
-      forbid_fallback_message: true
-      forbid_markdown_and_latex: true
-      require_continuity_on_followup: false
-      require_structured_solving: true
-      require_concept_connection: true
-      expected_language: bm_or_mixed
-      require_rating_prompt: true
-      require_rating_thanks: true
-
-  - id: C18
-    title: Rating flow with invalid score
-    tags: [bm, rating, deterministic]
-    turns:
-      - user: "Tolong ajar 4x - 3 = 13."
-      - user: "Kenapa tambah 3 dahulu?"
-      - user: "Bagi satu soalan latihan pendek."
-      - user: "Saya jawab x = 5, betul?"
-      - user: "Semak dan ringkaskan kaedah ni."
-      - user: "7"
-    checks:
-      require_non_empty_replies: true
-      forbid_fallback_message: true
-      forbid_markdown_and_latex: true
-      require_continuity_on_followup: false
-      require_structured_solving: true
-      require_concept_connection: true
-      expected_language: bm_or_mixed
-      require_rating_prompt: true
-      require_rating_retry: true
-
   - id: C19
     title: KSSM-style tutoring continuity
     tags: [bm, kssm]
