@@ -28,7 +28,7 @@ func TestServiceCreateIsIdempotentAndRedeemsUntilExactExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if first.URL != second.URL || first.PublicID != second.PublicID {
-		t.Fatalf("retry changed artifact: %#v %#v", first, second)
+		t.Fatal("retry changed focused page artifact")
 	}
 	parsed, _ := url.Parse(first.URL)
 	if parsed.Fragment == "" {
@@ -39,7 +39,7 @@ func TestServiceCreateIsIdempotentAndRedeemsUntilExactExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if page.Message != "Keep going." || page.RecipientName != "Aina" {
-		t.Fatalf("page = %#v", page)
+		t.Fatal("redeemed page content did not match the created page")
 	}
 	if string(page.TokenHash) == parsed.Fragment {
 		t.Fatal("store retained raw capability")
@@ -48,6 +48,27 @@ func TestServiceCreateIsIdempotentAndRedeemsUntilExactExpiry(t *testing.T) {
 	now = first.ExpiresAt
 	if _, err := service.Redeem(context.Background(), first.PublicID, parsed.Fragment); !errors.Is(err, ErrExpired) {
 		t.Fatalf("expiry error = %v", err)
+	}
+}
+
+func TestMemoryStoreRejectsIdempotencyCollisionAcrossOwnerOrConversation(t *testing.T) {
+	service, err := NewService(NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "turn-1", Message: "Report"}
+	if _, err := service.Create(context.Background(), base); err != nil {
+		t.Fatal(err)
+	}
+	wrongOwner := base
+	wrongOwner.OwnerUserID = "user-2"
+	if _, err := service.Create(context.Background(), wrongOwner); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("wrong owner error = %v", err)
+	}
+	wrongConversation := base
+	wrongConversation.ConversationID = "conv-2"
+	if _, err := service.Create(context.Background(), wrongConversation); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("wrong conversation error = %v", err)
 	}
 }
 

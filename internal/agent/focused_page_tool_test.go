@@ -49,10 +49,10 @@ func TestProcessTurnNativeToolThenFinalReplyPersistsOnlyConversationText(t *test
 
 	conv, ok := store.GetActiveConversation("learner-1")
 	if !ok || len(conv.Messages) != 2 {
-		t.Fatalf("conversation = %#v", conv)
+		t.Fatalf("conversation found = %t, messages = %d; want true and 2", ok, storedMessageCount(conv))
 	}
 	if conv.Messages[0].Role != "user" || conv.Messages[1].Role != "assistant" {
-		t.Fatalf("stored roles = %#v", conv.Messages)
+		t.Fatalf("stored roles = %q, %q; want user, assistant", conv.Messages[0].Role, conv.Messages[1].Role)
 	}
 	for _, message := range conv.Messages {
 		if strings.Contains(message.Content, parsed.Fragment) || strings.Contains(message.Content, result.FocusedPage.URL) {
@@ -93,7 +93,75 @@ func TestProcessTurnNativeDirectAnswerProducesNoArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.Text != "Plain tutor reply" || result.FocusedPage != nil {
-		t.Fatalf("result = %#v", result)
+		t.Fatalf("text = %q, focused page present = %t", result.Text, result.FocusedPage != nil)
+	}
+}
+
+func TestFocusedPageTurnDoesNotExposeCurriculumToolWhenAgentCoreIsDisabled(t *testing.T) {
+	store := NewMemoryStore()
+	if err := store.SetUserName("learner-1", "Aina"); err != nil {
+		t.Fatal(err)
+	}
+	pageService, err := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{{
+		Content:    []llm.AssistantContent{llm.TextContent{Text: "Plain tutor reply"}},
+		StopReason: llm.StopReasonStop,
+	}}}
+	router := ai.NewRouter()
+	router.Register("native", provider)
+	engine := NewEngine(EngineConfig{
+		AIRouter:         router,
+		Store:            store,
+		TenantID:         "tenant-1",
+		FocusedPages:     pageService,
+		CurriculumLoader: createChallengeRuntimeCurriculumLoader(t),
+	})
+
+	if _, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"}); err != nil {
+		t.Fatal(err)
+	}
+	toolCount := 0
+	if len(provider.contexts) > 0 {
+		toolCount = len(provider.contexts[0].Tools)
+	}
+	if len(provider.contexts) != 1 || toolCount != 1 {
+		t.Fatalf("native calls = %d, initial tools = %d; want 1 and 1", len(provider.contexts), toolCount)
+	}
+	if got := provider.contexts[0].Tools[0].Name; got != createFocusedPageToolName {
+		t.Fatalf("tool = %q, want %q", got, createFocusedPageToolName)
+	}
+}
+
+func TestFocusedPageTurnRepairsEmptyFinalTutorReply(t *testing.T) {
+	store := NewMemoryStore()
+	if err := store.SetUserName("learner-1", "Aina"); err != nil {
+		t.Fatal(err)
+	}
+	pageService, err := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "Goal report"}}}, StopReason: llm.StopReasonToolUse},
+		{StopReason: llm.StopReasonStop},
+	}}
+	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{0}})
+	router.Register("native", provider)
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
+
+	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Text != "Your focused page is ready." || result.FocusedPage == nil {
+		t.Fatalf("text = %q, focused page present = %t", result.Text, result.FocusedPage != nil)
+	}
+	conversation, ok := store.GetActiveConversation("learner-1")
+	if !ok || len(conversation.Messages) != 2 || conversation.Messages[1].Content != result.Text {
+		t.Fatalf("conversation found = %t, messages = %d, assistant text matches = %t", ok, storedMessageCount(conversation), ok && len(conversation.Messages) == 2 && conversation.Messages[1].Content == result.Text)
 	}
 }
 
@@ -111,7 +179,7 @@ func TestFocusedPagesFallBackToTextWhenNoNativeProviderIsConfigured(t *testing.T
 		t.Fatal(err)
 	}
 	if result.Text != "Serialized reply" || result.FocusedPage != nil {
-		t.Fatalf("result = %#v", result)
+		t.Fatalf("text = %q, focused page present = %t", result.Text, result.FocusedPage != nil)
 	}
 }
 
@@ -134,11 +202,11 @@ func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.FocusedPage == nil || len(deliverer.results) != 3 {
-		t.Fatalf("result = %#v, deliveries = %d", result, len(deliverer.results))
+		t.Fatalf("focused page present = %t, deliveries = %d; want true and 3", result.FocusedPage != nil, len(deliverer.results))
 	}
 	for _, delivered := range deliverer.results {
 		if delivered.FocusedPage == nil || delivered.FocusedPage.URL != result.FocusedPage.URL || delivered.Text != result.Text {
-			t.Fatalf("delivery changed assembled result: %#v", delivered)
+			t.Fatal("delivery changed the assembled tutor text or private page artifact")
 		}
 	}
 	if len(provider.contexts) != 2 {
@@ -256,12 +324,12 @@ func TestFocusedPageCreationFailureReturnsFinalTextWithoutArtifactOrLeak(t *test
 		t.Fatal(err)
 	}
 	if result.Text != "Your report is ready here in chat." || result.FocusedPage != nil {
-		t.Fatalf("result = %#v", result)
+		t.Fatalf("text = %q, focused page present = %t", result.Text, result.FocusedPage != nil)
 	}
 	secondContext := provider.contexts[1]
 	toolResult, ok := secondContext.Messages[len(secondContext.Messages)-1].(llm.ToolResultMessage)
 	if !ok || !toolResult.IsError {
-		t.Fatalf("tool result = %#v", secondContext.Messages[len(secondContext.Messages)-1])
+		t.Fatalf("tool result type valid = %t, error result = %t; want true and true", ok, ok && toolResult.IsError)
 	}
 	toolText := messageText(toolResult)
 	if toolText != "Focused page creation failed." || strings.Contains(toolText, "storage-secret") || strings.Contains(toolText, "http") {
@@ -269,8 +337,15 @@ func TestFocusedPageCreationFailureReturnsFinalTextWithoutArtifactOrLeak(t *test
 	}
 	conv, ok := store.GetActiveConversation("learner-1")
 	if !ok || len(conv.Messages) != 2 || conv.Messages[1].Content != result.Text {
-		t.Fatalf("conversation = %#v", conv)
+		t.Fatalf("conversation found = %t, messages = %d, assistant text matches = %t", ok, storedMessageCount(conv), ok && len(conv.Messages) == 2 && conv.Messages[1].Content == result.Text)
 	}
+}
+
+func storedMessageCount(conversation *Conversation) int {
+	if conversation == nil {
+		return 0
+	}
+	return len(conversation.Messages)
 }
 
 type nativeScriptProvider struct {

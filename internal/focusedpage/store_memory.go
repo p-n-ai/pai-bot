@@ -26,7 +26,11 @@ func (s *MemoryStore) CreateOrGet(_ context.Context, record CreateRecord) (Page,
 	defer s.mu.Unlock()
 	key := record.TenantID + "\x00" + record.TurnID + "\x00" + strconv.Itoa(record.PageIndex)
 	if publicID, ok := s.keys[key]; ok {
-		return clonePage(s.pages[publicID]), nil
+		page := s.pages[publicID]
+		if page.OwnerUserID != record.OwnerUserID || page.ConversationID != record.ConversationID {
+			return Page{}, ErrForbidden
+		}
+		return clonePage(page), nil
 	}
 	page := Page{
 		PublicID: record.PublicID, TenantID: record.TenantID, OwnerUserID: record.OwnerUserID,

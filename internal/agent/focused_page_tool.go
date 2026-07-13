@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agentcore"
@@ -21,12 +22,12 @@ const createFocusedPageToolName = "create_focused_page"
 func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, messages []ai.Message, model string) (teachingCompletion, *focusedpage.Artifact, error) {
 	focusedConfigured := e.focusedPages != nil && turn.Channel == "telegram"
 	if focusedConfigured && !e.aiRouter.HasNativeProvider() {
-		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
-		return teachingCompletion{Content: resp.Content, Model: resp.Model, InputTokens: resp.InputTokens, OutputTokens: resp.OutputTokens}, nil, err
+		completion, err := e.completeTextTeachingTurn(ctx, messages, model)
+		return completion, nil, err
 	}
 	if !focusedConfigured && !e.featureFlags().Enabled(featureflags.AgentCore) {
-		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
-		return teachingCompletion{Content: resp.Content, Model: resp.Model, InputTokens: resp.InputTokens, OutputTokens: resp.OutputTokens}, nil, err
+		completion, err := e.completeTextTeachingTurn(ctx, messages, model)
+		return completion, nil, err
 	}
 	if !focusedConfigured {
 		completion, err := e.completeNativeTeachingTurn(ctx, turn, model)
@@ -44,11 +45,26 @@ func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, mess
 			TurnID: turn.ID, RecipientName: recipientName,
 		},
 	}
-	completion, err := e.completeNativeTeachingTurnWithTools(ctx, turn, model, []agentcore.Tool{tool})
+	tools := []agentcore.Tool{tool}
+	if e.featureFlags().Enabled(featureflags.AgentCore) {
+		tools = append(e.teachingTools(), tools...)
+	}
+	completion, err := e.completeNativeTeachingTurnWithTools(ctx, turn, model, tools)
 	if err != nil {
 		return teachingCompletion{}, nil, err
 	}
+	if tool.artifact != nil && strings.TrimSpace(completion.Content) == "" {
+		completion.Content = "Your focused page is ready."
+	}
 	return completion, tool.artifact, nil
+}
+
+func (e *Engine) completeTextTeachingTurn(ctx context.Context, messages []ai.Message, model string) (teachingCompletion, error) {
+	response, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
+	return teachingCompletion{
+		Content: response.Content, Model: response.Model,
+		InputTokens: response.InputTokens, OutputTokens: response.OutputTokens,
+	}, err
 }
 
 type createFocusedPageTool struct {
