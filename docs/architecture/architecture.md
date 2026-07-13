@@ -11,6 +11,8 @@ read_when:
 
 P&AI Bot is a **modular monolith** — a single Go binary with clean domain boundaries. Each domain lives under `internal/` and communicates through well-defined Go interfaces, making it possible to split into microservices later if needed.
 
+Planned change: [P&AI Agent Core Design](agent-core.md) adds a native model → tool → model continuation loop without moving tutor policy, persistence, provider routing, or Telegram delivery into the core.
+
 ## High-Level Flow
 
 ```

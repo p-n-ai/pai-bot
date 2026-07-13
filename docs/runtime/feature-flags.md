@@ -24,11 +24,12 @@ PAI_FEATURES=turn_hooks=false
 
 `turn_hooks` is shorthand for `turn_hooks=true`. Unknown feature names, invalid boolean values, and duplicate overrides for the same feature fail config load.
 
-The current registry contains one internal rollout flag:
+The current registry contains two internal rollout flags:
 
 | Flag | Default | Status | Owner | Behavior |
 |---|---:|---|---|---|
-| `turn_hooks` | off | `under_development` | Tutor Turn runtime | Enables the internal **Turn Hook** runner and **Turn Hook Catalog**. The first catalog contains only `rate_convo_hook`. |
+| `turn_hooks` | off | `under_development` | Tutor Turn runtime | Enables the internal **Turn Hook** runner and currently empty **Turn Hook Catalog**. |
+| `agent_core` | off | `under_development` | Tutor Turn runtime | Enables the native model → sequential tool → model continuation loop for teaching turns. |
 
 Read [Turn Hooks](turn-hooks.md) before adding, removing, or reviewing hook behavior.
 

@@ -110,7 +110,6 @@ func TestOpenAILiveNudgeConversationDemo(t *testing.T) {
 		Store:                store,
 		EventLogger:          NewMemoryEventLogger(),
 		DisableMultiLanguage: false,
-		RatingPromptEvery:    5,
 		Tracker:              tracker,
 		Streaks:              streaks,
 		XP:                   xp,

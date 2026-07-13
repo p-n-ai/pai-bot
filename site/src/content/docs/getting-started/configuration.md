@@ -61,7 +61,6 @@ Set `LEARN_AI_DEFAULT_PROVIDER` to choose which provider handles requests by def
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disable language selection |
-| `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Ask for rating every N replies |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | `true` | Use AI for nudge personalization |
 | `LEARN_DEV_MODE` | `false` | Enable dev commands |
 | `LEARN_TENANT_MODE` | `single` | `single` or `multi` tenant mode |

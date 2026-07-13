@@ -49,9 +49,9 @@ When adding a new command, add it to `internal/chat/commands.go` so Telegram aut
 | Text and captions | Empty text falls back to photo/document caption when present. |
 | Images | Photos and image documents are fetched through Telegram `getFile`, downloaded, and attached as an image data URL for AI input. |
 | Reply context | Replies carry the replied text/caption; replies to prior media can reuse the image context. |
-| Inline callbacks | Callback data becomes inbound text, callback queries are acknowledged, and rating prompts are deduped per chat/message. |
+| Inline callbacks | Callback data becomes inbound text and callback queries are acknowledged. |
 | Reply keyboard | Runtime can attach persistent resized Telegram reply keyboards. |
-| Inline keyboard | Runtime can attach inline buttons, especially for rating/progress interactions. |
+| Inline keyboard | Runtime can attach inline buttons for language, quiz, and challenge interactions. |
 | Long replies | Replies are split into Bot API sized chunks before sending. |
 
 ## Admin And Proactive Nudge Notes

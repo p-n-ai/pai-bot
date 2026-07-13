@@ -23,22 +23,20 @@ type agentTurn struct {
 	Route          string
 	TaskType       ai.TaskType
 
-	InputText             string
-	UserContent           string
-	UserMessageID         string
-	AssistantMessageID    string
-	HasImage              bool
-	HasReply              bool
-	ReplyText             string
-	ImageDataURL          string
-	RatingPromptRequested bool
-
-	Conversation  *Conversation
-	Topic         *curriculum.Topic
-	TeachingNotes string
-	Packets       []contextPacket
-	Prompt        promptManifest
-	Model         modelResult
+	InputText          string
+	UserContent        string
+	UserMessageID      string
+	AssistantMessageID string
+	HasImage           bool
+	HasReply           bool
+	ReplyText          string
+	ImageDataURL       string
+	Conversation       *Conversation
+	Topic              *curriculum.Topic
+	TeachingNotes      string
+	Packets            []contextPacket
+	Prompt             promptManifest
+	Model              modelResult
 }
 
 // learnerProfile is the small educational profile that can be shown to the

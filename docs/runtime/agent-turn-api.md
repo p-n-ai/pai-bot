@@ -18,7 +18,7 @@ The goal is to make prompt construction reviewable:
 - untrusted text is quoted as data, not promoted into system instructions
 - traces record metadata only
 
-This only covers the normal tutor AI path. Early-return flows such as commands, onboarding, challenge runtime, quiz routing, and rating submissions stay outside this harness unless they reach the normal tutor model path.
+This only covers the normal tutor AI path. Early-return flows such as commands, onboarding, challenge runtime, and quiz routing stay outside this harness unless they reach the normal tutor model path.
 
 ## Public Surface
 
@@ -40,7 +40,7 @@ Non-goals for the current surface:
 
 - exporting turn construction for other packages
 - persisting full prompts or packet data
-- wrapping command, onboarding, goal, challenge, quiz, or rating-only flows in `agentTurn`
+- wrapping command, onboarding, goal, challenge, or quiz flows in `agentTurn`
 - adding a second `TurnContext` object between the loader and compiler
 
 ## Runtime flow
@@ -118,7 +118,7 @@ Validation rejects any non-system-owned packet that asks to render as system con
 
 `system_instruction`
 
-System-owned control text. Use for instructions that change model behavior, such as image analysis or rating prompt handling.
+System-owned control text. Use for instructions that change model behavior, such as image analysis.
 
 `system_data`
 
@@ -148,8 +148,6 @@ Current sources:
 - replied-to text
 - image instruction and attachment
 
-When `PAI_FEATURES=turn_hooks` is disabled, existing rating prompt behavior is appended after base context loading. When `PAI_FEATURES=turn_hooks` is enabled, the **Rate Conversation Turn Hook** (`rate_convo_hook`) injects the same `rating.prompt` packet only when `agentTurn.RatingPromptRequested` is already true.
-
 Keep the loader direct. Do not add a second `TurnContext` representation unless multiple callers need the same intermediate shape.
 
 ## Turn Hook contract
@@ -158,7 +156,7 @@ Keep the loader direct. Do not add a second `TurnContext` representation unless 
 
 Read [Turn Hooks](turn-hooks.md) for the full operating contract, add/remove workflow, privacy rules, and test checklist.
 
-The **Turn Hook Rollout Flag** is `PAI_FEATURES=turn_hooks`. When it is off, the hook runner does not run. When it is on, the private **Turn Hook Catalog** runs in order. The first catalog contains only `rate_convo_hook`.
+The **Turn Hook Rollout Flag** is `PAI_FEATURES=turn_hooks`. When it is off, the hook runner does not run. When it is on, the private **Turn Hook Catalog** runs in order. The current catalog is empty.
 
 A **Turn Hook** returns exactly one **Hook Outcome**:
 
@@ -182,7 +180,6 @@ The compiler renders messages in this order:
 6. learner-provided context as quoted user data
 7. system-owned image instruction
 8. current user message, with image URLs if present
-9. system-owned rating prompt instruction
 
 The current user message should appear once. Reply context should be separate quoted data, not mixed into current input.
 

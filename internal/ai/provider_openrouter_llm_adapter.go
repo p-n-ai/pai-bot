@@ -28,6 +28,7 @@ type openRouterLLMAdapter struct {
 }
 
 var _ Provider = (*openRouterLLMAdapter)(nil)
+var _ NativeProvider = (*openRouterLLMAdapter)(nil)
 
 // NewOpenRouterLLMAdapter adapts the native llm OpenRouter path to Provider.
 func NewOpenRouterLLMAdapter(apiKey string) Provider {
@@ -72,6 +73,45 @@ func (p *openRouterLLMAdapter) Complete(ctx context.Context, req CompletionReque
 		InputTokens:  message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite,
 		OutputTokens: message.Usage.Output,
 	}, nil
+}
+
+func (p *openRouterLLMAdapter) CompleteNative(ctx context.Context, modelID string, c llm.Context, opts *llm.StreamOptions) (llm.AssistantMessage, error) {
+	if modelID == "" {
+		modelID = openRouterLLMDefaultModel
+	}
+	options := llm.StreamOptions{APIKey: p.apiKey}
+	if opts != nil {
+		options = *opts
+		options.Headers = cloneStringMap(opts.Headers)
+	}
+	options.APIKey = p.apiKey
+	if modelID == openRouterLLMMinimalReasoningModel {
+		options.ReasoningEffort = llm.ReasoningEffortMinimal
+	}
+	message, err := llm.StreamOpenRouterChat(ctx, llm.Model{
+		ID:       modelID,
+		API:      llm.APIOpenRouterChat,
+		Provider: "openrouter",
+		BaseURL:  p.baseURL,
+	}, c, &options).Result()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return llm.AssistantMessage{}, ctxErr
+		}
+		return llm.AssistantMessage{}, errOpenRouterLLMCompletion
+	}
+	return message, nil
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func projectOpenRouterLLMContext(messages []Message) (llm.Context, error) {

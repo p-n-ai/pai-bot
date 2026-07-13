@@ -29,13 +29,7 @@ LEARN_DEV_MODE=true
 PAI_FEATURES=turn_hooks
 ```
 
-Terminal Chat prints one short line per hook call:
-
-```text
-turn hook called: rate_convo_hook outcome=continue
-```
-
-That notice is console-only. It is not sent to the model, saved in chat history, written to Terminal Chat dumps, emitted by the conversation harness, or persisted as telemetry.
+Terminal Chat prints one short line per configured hook call. The current catalog is empty, so enabling the flag alone produces no notices.
 
 ## Runtime Position
 
@@ -53,7 +47,7 @@ ProcessMessage
   -> agent_turn_completed
 ```
 
-Early-return flows such as commands, onboarding, quiz routing, challenge runtime, and rating-only submissions do not run Turn Hooks unless they later enter the normal tutor model path.
+Early-return flows such as commands, onboarding, quiz routing, and challenge runtime do not run Turn Hooks unless they later enter the normal tutor model path.
 
 ## Rollout Flag
 
@@ -61,20 +55,14 @@ Early-return flows such as commands, onboarding, quiz routing, challenge runtime
 
 | Flag state | Runtime behavior |
 |---|---|
-| off | The hook runner is skipped. Existing rating prompt behavior is appended through the legacy path. |
-| on | The private Turn Hook Catalog runs in order. `rate_convo_hook` injects the same rating prompt packet when rating is already due. |
+| off | The hook runner is skipped. |
+| on | The private Turn Hook Catalog runs in order. |
 
 Do not add per-hook feature flags. The rollout flag controls the hook seam. The Turn Hook Catalog controls which hooks run.
 
 ## Current Catalog
 
-The first catalog contains only:
-
-| Hook | Slug | Outcome behavior |
-|---|---|---|
-| Rate Conversation Turn Hook | `rate_convo_hook` | Returns `inject` with `rating.prompt` when `agentTurn.RatingPromptRequested` is true; otherwise returns `continue`. |
-
-`rate_convo_hook` does not decide when rating is due. It only turns the existing rating decision into hook-shaped context.
+The catalog is currently empty. Adding a hook requires a concrete teaching-path use case and focused tests.
 
 ## Hook Outcomes
 

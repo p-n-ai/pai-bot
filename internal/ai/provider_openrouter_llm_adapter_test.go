@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 type capturedOpenRouterLLMRequest struct {
@@ -53,7 +55,6 @@ func TestOpenRouterLLMAdapterCompleteProjectsTeachingContractThroughNativeTransp
 			{Role: "user", Content: "LEARNER-PROVIDED CONTEXT: I prefer visual explanations."},
 			{Role: "system", Content: "Analyze the attached image directly."},
 			{Role: "user", Content: "Is my working correct?", ImageURLs: []string{"data:image/png;base64,AAEC"}},
-			{Role: "system", Content: "Ask for a quick 1-5 rating and include [[PAI_REVIEW]] once."},
 		},
 		MaxTokens:   1024,
 		Temperature: 0.3,
@@ -104,7 +105,6 @@ func TestOpenRouterLLMAdapterCompleteProjectsTeachingContractThroughNativeTransp
 			map[string]any{"type": "text", "text": "Is my working correct?"},
 			map[string]any{"type": "image_url", "image_url": map[string]any{"url": "data:image/png;base64,AAEC"}},
 		}},
-		map[string]any{"role": "system", "content": "Ask for a quick 1-5 rating and include [[PAI_REVIEW]] once."},
 	}
 	if got := request.body["messages"]; !reflect.DeepEqual(got, wantMessages) {
 		t.Fatalf("messages = %#v, want %#v", got, wantMessages)
@@ -117,6 +117,35 @@ func TestOpenRouterLLMAdapterCompleteProjectsTeachingContractThroughNativeTransp
 	}
 	if response.InputTokens != 100 || response.OutputTokens != 10 {
 		t.Fatalf("usage = input:%d output:%d, want 100/10", response.InputTokens, response.OutputTokens)
+	}
+}
+
+func TestOpenRouterLLMAdapterCompleteNativePreservesToolCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeOpenRouterLLMStream(w,
+			`{"id":"or-tool","model":"openai/gpt-test","choices":[{"delta":{"content":"Checking.","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"lookup_curriculum_topic","arguments":"{\"topic_id\":\"F1-02\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		)
+	}))
+	t.Cleanup(server.Close)
+	provider := newOpenRouterLLMAdapter("test-key", server.URL)
+
+	message, err := provider.CompleteNative(context.Background(), "openai/gpt-test", llm.Context{
+		SystemPrompt: "Tutor policy",
+		Messages:     []llm.Message{llm.UserText("Help with equations")},
+		Tools: []llm.Tool{{
+			Name:       "lookup_curriculum_topic",
+			Parameters: []byte(`{"type":"object"}`),
+		}},
+	}, &llm.StreamOptions{MaxTokens: 128})
+	if err != nil {
+		t.Fatalf("CompleteNative() error = %v", err)
+	}
+	if len(message.Content) != 2 {
+		t.Fatalf("native content = %#v", message.Content)
+	}
+	call, ok := message.Content[1].(llm.ToolCall)
+	if !ok || call.ID != "call-1" || call.Name != "lookup_curriculum_topic" || call.Arguments["topic_id"] != "F1-02" {
+		t.Fatalf("native tool call = %#v", message.Content[1])
 	}
 }
 

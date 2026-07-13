@@ -604,14 +604,12 @@ Migration notes:
 - `just migrate` runs `goose up -allow-missing` so older timestamped migrations can still be applied after newer ones in out-of-order branch merges.
 - Existing databases from the pre-goose migration flow should be recreated in local dev or explicitly baselined before switching tools. Do not run both migration systems against the same database long-term.
 
-### Rating Analytics Contract
+### Historical Rating Analytics
 
-- Rating callbacks use internal assistant message IDs in callback data: `rating:{messages.id}:{score}`.
-- Submitted ratings are logged in `events` as `answer_rating_submitted` with:
+- The in-chat rating path is retired. Existing `answer_rating_submitted` events remain queryable for historical analytics with:
   - `data.rating` (1-5)
   - `data.rated_message_id` (assistant `messages.id` being rated)
   - `data.source`, `data.channel`, `data.delayed_submit`
-- Deduplication is enforced per rated assistant message (`rated_message_id`) to prevent duplicate submissions for the same prompt.
 
 ---
 

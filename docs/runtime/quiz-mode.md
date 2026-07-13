@@ -49,7 +49,6 @@ The engine resolves the active conversation, checks its persisted mode, and deci
 
 - onboarding
 - language selection
-- rating flow
 - quiz intensity selection
 - active quiz
 - normal teaching

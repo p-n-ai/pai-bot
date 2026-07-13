@@ -5,7 +5,6 @@ package chat
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -29,32 +28,6 @@ func BuildTelegramInlineKeyboard(text string) [][]InlineButton {
 // from the outgoing message text plus explicit runtime state when available.
 func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeyboardContext) [][]InlineButton {
 	lower := strings.ToLower(text)
-	hasLegacyPrompt := strings.Contains(lower, "nilai penerangan saya (1-5)")
-	hasGenericPrompt := strings.Contains(lower, "rating 1-5")
-
-	reviewMatch := reviewActionPattern.FindStringSubmatch(text)
-	hasReviewCode := len(reviewMatch) > 0
-	reviewMessageID := ""
-	if len(reviewMatch) > 1 {
-		reviewMessageID = strings.TrimSpace(reviewMatch[1])
-	}
-	if hasReviewCode || hasLegacyPrompt || hasGenericPrompt {
-		callbackData := func(score int) string {
-			if hasReviewCode && reviewMessageID != "" {
-				return "rating:" + reviewMessageID + ":" + strconv.Itoa(score)
-			}
-			return strconv.Itoa(score)
-		}
-		return [][]InlineButton{
-			{
-				{Text: "1⭐", CallbackData: callbackData(1)},
-				{Text: "2⭐", CallbackData: callbackData(2)},
-				{Text: "3⭐", CallbackData: callbackData(3)},
-				{Text: "4⭐", CallbackData: callbackData(4)},
-				{Text: "5⭐", CallbackData: callbackData(5)},
-			},
-		}
-	}
 
 	hasLangPrompt :=
 		strings.Contains(lower, "bahasa pilihan anda") ||
@@ -150,4 +123,3 @@ func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeybo
 func StripReviewActionCodes(text string) string {
 	return strings.TrimSpace(reviewActionPattern.ReplaceAllString(text, ""))
 }
-

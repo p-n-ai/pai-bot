@@ -56,16 +56,7 @@ func TestBuildPromptMessagesFromTurn_UsesQuotedSummaryAndExplicitCurrentUser(t *
 				RenderAs: contextRenderQuotedData,
 			}),
 		},
-		RatingPromptRequested: true,
 	}
-	turn.Packets = append(turn.Packets, newContextPacket(contextPacket{
-		ID:       "rating.prompt",
-		Kind:     contextKindControlInstruction,
-		Trust:    contextTrustSystemOwned,
-		Source:   "rating",
-		Data:     ratingPromptInstruction,
-		RenderAs: contextRenderSystemInstruction,
-	}))
 
 	messages := engine.buildPromptMessagesFromTurn(turn)
 
@@ -87,8 +78,8 @@ func TestBuildPromptMessagesFromTurn_UsesQuotedSummaryAndExplicitCurrentUser(t *
 	if countPromptMessages(messages, "user", "What about y?") != 1 {
 		t.Fatalf("current user message should appear exactly once, got %#v", messages)
 	}
-	if messages[len(messages)-1].Role != "system" || !strings.Contains(messages[len(messages)-1].Content, "[[PAI_REVIEW]]") {
-		t.Fatalf("rating prompt should be final system instruction, got %#v", messages[len(messages)-1])
+	if strings.Contains(messages[len(messages)-1].Content, "[[PAI_REVIEW") {
+		t.Fatalf("rating control token should not be injected, got %#v", messages[len(messages)-1])
 	}
 }
 
