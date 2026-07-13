@@ -136,7 +136,6 @@ func main() {
 		EventLogger:          state.EventLogger,
 		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
-		RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,

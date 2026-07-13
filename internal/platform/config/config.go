@@ -39,7 +39,6 @@ type Config struct {
 // RuntimeConfig holds runtime knobs. New product experiments use FeatureFlags.
 type RuntimeConfig struct {
 	DisableMultiLanguage        bool
-	RatingPromptEvery           int
 	AIPersonalizedNudgesEnabled bool
 	DevMode                     bool
 }
@@ -283,7 +282,6 @@ func Load() (*Config, error) {
 		Runtime: RuntimeConfig{
 			DevMode:                     envBool("LEARN_DEV_MODE", false),
 			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
-			RatingPromptEvery:           envInt("LEARN_RATING_PROMPT_EVERY_REPLIES", 5),
 			AIPersonalizedNudgesEnabled: envBool("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", true),
 		},
 		FeatureFlags:   parsedFeatureFlags,

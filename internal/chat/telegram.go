@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,9 +28,7 @@ type TelegramChannel struct {
 	offset  int
 	stop    chan struct{}
 
-	mu                    sync.Mutex
-	answeredRatingPrompts map[string]struct{}
-	devMode               bool
+	devMode bool
 }
 
 // NewTelegramChannel creates a Telegram channel adapter.
@@ -45,8 +42,7 @@ func NewTelegramChannel(token string) (*TelegramChannel, error) {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		stop:                  make(chan struct{}),
-		answeredRatingPrompts: make(map[string]struct{}),
+		stop: make(chan struct{}),
 	}, nil
 }
 
@@ -190,38 +186,12 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 					if err := t.answerCallbackQuery(ctx, msg.CallbackQueryID); err != nil {
 						slog.Warn("failed to answer callback query", "error", err)
 					}
-					if msg.CallbackMessageID > 0 {
-						if _, selected, ok := parseRatingCallbackData(msg.Text); ok {
-							promptKey := ratingPromptKey(msg.UserID, msg.CallbackMessageID)
-							if !t.markRatingPromptAnswered(promptKey) {
-								continue
-							}
-							if err := t.markSelectedRatingInlineKeyboard(ctx, msg.UserID, msg.CallbackMessageID, selected, msg.Text); err != nil {
-								slog.Warn("failed to mark selected rating inline keyboard", "error", err)
-							}
-						}
-					}
 				}
 
 				go handler(msg)
 			}
 		}
 	}
-}
-
-func ratingPromptKey(chatID string, messageID int) string {
-	return chatID + ":" + strconv.Itoa(messageID)
-}
-
-func (t *TelegramChannel) markRatingPromptAnswered(key string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if _, exists := t.answeredRatingPrompts[key]; exists {
-		return false
-	}
-	t.answeredRatingPrompts[key] = struct{}{}
-	return true
 }
 
 func (t *TelegramChannel) getUpdates(ctx context.Context) ([]tgUpdate, error) {
@@ -424,74 +394,6 @@ func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQuery
 		return fmt.Errorf("telegram answerCallbackQuery error %d", resp.StatusCode)
 	}
 	return nil
-}
-
-func (t *TelegramChannel) markSelectedRatingInlineKeyboard(ctx context.Context, chatID string, messageID, selected int, callbackData string) error {
-	type tgInlineButton struct {
-		Text         string `json:"text"`
-		CallbackData string `json:"callback_data"`
-	}
-	if callbackData == "" {
-		callbackData = strconv.Itoa(selected)
-	}
-	replyMarkup := map[string]any{
-		"inline_keyboard": [][]tgInlineButton{
-			{
-				{
-					Text:         fmt.Sprintf("%d⭐", selected),
-					CallbackData: callbackData,
-				},
-			},
-		},
-	}
-	b, err := json.Marshal(replyMarkup)
-	if err != nil {
-		return fmt.Errorf("marshal selected rating inline reply markup: %w", err)
-	}
-
-	params := url.Values{
-		"chat_id":      {chatID},
-		"message_id":   {strconv.Itoa(messageID)},
-		"reply_markup": {string(b)},
-	}
-	resp, err := t.client.PostForm(t.baseURL+"/editMessageReplyMarkup", params)
-	if err != nil {
-		return fmt.Errorf("mark selected rating inline keyboard: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyText := strings.ToLower(string(body))
-		// Harmless if keyboard was already in the selected single-star state.
-		if resp.StatusCode == http.StatusBadRequest && strings.Contains(bodyText, "message is not modified") {
-			return nil
-		}
-		return fmt.Errorf("telegram editMessageReplyMarkup error %d: %s", resp.StatusCode, string(body))
-	}
-	return nil
-}
-
-func parseRatingCallbackData(data string) (string, int, bool) {
-	trimmed := strings.TrimSpace(data)
-	if strings.HasPrefix(trimmed, "rating:") {
-		parts := strings.Split(trimmed, ":")
-		if len(parts) != 3 {
-			return "", 0, false
-		}
-		ratedMessageID := strings.TrimSpace(parts[1])
-		switch parts[2] {
-		case "1", "2", "3", "4", "5":
-			return ratedMessageID, int(parts[2][0] - '0'), true
-		default:
-			return "", 0, false
-		}
-	}
-	switch trimmed {
-	case "1", "2", "3", "4", "5":
-		return "", int(trimmed[0] - '0'), true
-	default:
-		return "", 0, false
-	}
 }
 
 func pickImageFileID(m *tgMessage) string {

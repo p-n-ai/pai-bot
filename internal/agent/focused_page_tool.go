@@ -7,28 +7,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agentcore"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/llm"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 const createFocusedPageToolName = "create_focused_page"
 
-type teachingCompletion struct {
-	Content      string
-	Model        string
-	InputTokens  int
-	OutputTokens int
-}
-
 func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, messages []ai.Message, model string) (teachingCompletion, *focusedpage.Artifact, error) {
-	if e.focusedPages == nil || turn.Channel != "telegram" || !e.aiRouter.HasNativeProvider() {
+	focusedConfigured := e.focusedPages != nil && turn.Channel == "telegram"
+	if focusedConfigured && !e.aiRouter.HasNativeProvider() {
 		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
 		return teachingCompletion{Content: resp.Content, Model: resp.Model, InputTokens: resp.InputTokens, OutputTokens: resp.OutputTokens}, nil, err
+	}
+	if !focusedConfigured && !e.featureFlags().Enabled(featureflags.AgentCore) {
+		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
+		return teachingCompletion{Content: resp.Content, Model: resp.Model, InputTokens: resp.InputTokens, OutputTokens: resp.OutputTokens}, nil, err
+	}
+	if !focusedConfigured {
+		completion, err := e.completeNativeTeachingTurn(ctx, turn, model)
+		return completion, nil, err
 	}
 	ownerUserID, err := e.store.ResolveUserUUID(turn.UserID)
 	if err != nil || ownerUserID == "" {
@@ -42,37 +44,11 @@ func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, mess
 			TurnID: turn.ID, RecipientName: recipientName,
 		},
 	}
-	coreModel := routerAgentModel{router: e.aiRouter, model: model}
-	core, err := agentcore.New(coreModel, []agentcore.Tool{tool}, agentcore.DefaultMaxModelCalls)
+	completion, err := e.completeNativeTeachingTurnWithTools(ctx, turn, model, []agentcore.Tool{tool})
 	if err != nil {
 		return teachingCompletion{}, nil, err
-	}
-	nativeContext, err := nativeTeachingContext(messages)
-	if err != nil {
-		return teachingCompletion{}, nil, err
-	}
-	result, err := core.Run(ctx, nativeContext)
-	if err != nil {
-		return teachingCompletion{}, nil, err
-	}
-	inputTokens, outputTokens := transcriptUsage(result.Transcript)
-	completion := teachingCompletion{
-		Content: agentcore.FinalText(result.Final), Model: result.Final.ResponseModel,
-		InputTokens: inputTokens, OutputTokens: outputTokens,
-	}
-	if completion.Model == "" {
-		completion.Model = result.Final.Model
 	}
 	return completion, tool.artifact, nil
-}
-
-type routerAgentModel struct {
-	router *ai.Router
-	model  string
-}
-
-func (m routerAgentModel) Complete(ctx context.Context, transcript llm.Context) (llm.AssistantMessage, error) {
-	return m.router.CompleteNative(ctx, ai.NativeCompletionRequest{Context: transcript, Model: m.model, Task: ai.TaskTeaching, MaxTokens: 1024})
 }
 
 type createFocusedPageTool struct {
@@ -90,67 +66,31 @@ func (t *createFocusedPageTool) Definition() llm.Tool {
 	}
 }
 
-func (t *createFocusedPageTool) Execute(ctx context.Context, call llm.ToolCall) llm.ToolResultMessage {
+func (t *createFocusedPageTool) Execute(ctx context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
 	message, ok := call.Arguments["message"].(string)
 	if !ok || len(call.Arguments) != 1 {
-		return focusedPageToolResult("Invalid arguments: message must be the only field.", true)
+		return focusedPageToolResult("Invalid arguments: message must be the only field.", true), nil
 	}
 	parsed, err := focusedpage.ParseMessage(message)
 	if err != nil {
-		return focusedPageToolResult("Invalid focused page message.", true)
+		return focusedPageToolResult("Invalid focused page message.", true), nil
 	}
 	if t.artifact != nil {
 		if parsed == t.firstMessage {
-			return focusedPageToolResult("Focused page already created for this turn.", false)
+			return focusedPageToolResult("Focused page already created for this turn.", false), nil
 		}
-		return focusedPageToolResult("Only one focused page may be created per turn.", true)
+		return focusedPageToolResult("Only one focused page may be created per turn.", true), nil
 	}
 	t.input.Message = parsed
 	artifact, err := t.service.Create(ctx, t.input)
 	if err != nil {
-		return focusedPageToolResult("Focused page creation failed.", true)
+		return focusedPageToolResult("Focused page creation failed.", true), nil
 	}
 	t.firstMessage = parsed
 	t.artifact = &artifact
-	return focusedPageToolResult("Focused page created.", false)
+	return focusedPageToolResult("Focused page created.", false), nil
 }
 
 func focusedPageToolResult(message string, isError bool) llm.ToolResultMessage {
 	return llm.ToolResultMessage{Content: []llm.UserContent{llm.TextContent{Text: message}}, IsError: isError, Timestamp: time.Now()}
-}
-
-func nativeTeachingContext(messages []ai.Message) (llm.Context, error) {
-	var system []string
-	context := llm.Context{}
-	for _, message := range messages {
-		switch message.Role {
-		case "system":
-			system = append(system, message.Content)
-		case "user":
-			content := []llm.UserContent{llm.TextContent{Text: message.Content}}
-			for _, imageURL := range message.ImageURLs {
-				if imageURL != "" {
-					content = append(content, llm.ImageURLContent{URL: imageURL})
-				}
-			}
-			context.Messages = append(context.Messages, llm.UserMessage{Content: content})
-		case "assistant":
-			context.Messages = append(context.Messages, llm.AssistantMessage{Content: []llm.AssistantContent{llm.TextContent{Text: message.Content}}})
-		default:
-			return llm.Context{}, fmt.Errorf("unsupported teaching message role %q", message.Role)
-		}
-	}
-	context.SystemPrompt = strings.Join(system, "\n\n")
-	return context, nil
-}
-
-func transcriptUsage(messages []llm.Message) (int, int) {
-	var input, output int
-	for _, message := range messages {
-		if assistant, ok := message.(llm.AssistantMessage); ok {
-			input += assistant.Usage.Input + assistant.Usage.CacheRead + assistant.Usage.CacheWrite
-			output += assistant.Usage.Output
-		}
-	}
-	return input, output
 }

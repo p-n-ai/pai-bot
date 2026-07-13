@@ -14,7 +14,6 @@ data:
   LEARN_CURRICULUM_PATH: {{ .Values.config.curriculumPath | quote }}
   LEARN_DEV_MODE: {{ .Values.config.devMode | quote }}
   LEARN_DISABLE_MULTI_LANGUAGE: {{ .Values.config.disableMultiLanguage | quote }}
-  LEARN_RATING_PROMPT_EVERY_REPLIES: {{ .Values.config.ratingPromptEveryReplies | quote }}
   LEARN_AI_PERSONALIZED_NUDGES_ENABLED: {{ .Values.config.personalizedNudgesEnabled | quote }}
   {{- if .Values.postgres.enabled }}
   LEARN_DATABASE_URL: {{ include "pai.databaseUrl" . | quote }}

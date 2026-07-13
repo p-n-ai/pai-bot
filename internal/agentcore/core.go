@@ -1,121 +1,202 @@
 // Copyright 2026 the P&AI authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package agentcore executes a provider-neutral model and tool continuation loop.
+// Package agentcore runs provider-neutral model and tool continuation turns.
 package agentcore
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/llm"
+	"github.com/xeipuuv/gojsonschema"
 )
 
-const DefaultMaxModelCalls = 3
+const DefaultMaxModelCalls = 8
+
+var ErrModelCallLimit = errors.New("agent core model call limit reached")
+
+type Termination string
+
+const (
+	TerminationCompleted      Termination = "completed"
+	TerminationCancelled      Termination = "cancelled"
+	TerminationModelCallLimit Termination = "model_call_limit"
+)
 
 type Model interface {
-	Complete(context.Context, llm.Context) (llm.AssistantMessage, error)
+	Complete(context.Context, llm.Context, *llm.StreamOptions) (llm.AssistantMessage, error)
 }
 
 type Tool interface {
 	Definition() llm.Tool
-	Execute(context.Context, llm.ToolCall) llm.ToolResultMessage
+	Execute(context.Context, llm.ToolCall) (llm.ToolResultMessage, error)
+}
+
+type Config struct {
+	MaxModelCalls  int
+	StreamOptions  *llm.StreamOptions
+	RunID          string
+	ConversationID string
 }
 
 type Result struct {
-	Final      llm.AssistantMessage
-	Transcript []llm.Message
-	ModelCalls int
-	ToolCalls  int
+	Final       llm.AssistantMessage
+	Messages    []llm.Message
+	Termination Termination
+	ModelCalls  int
 }
 
-type Core struct {
-	model         Model
-	tools         map[string]Tool
-	definitions   []llm.Tool
-	maxModelCalls int
-}
-
-func New(model Model, tools []Tool, maxModelCalls int) (*Core, error) {
+func Run(ctx context.Context, model Model, initial llm.Context, tools []Tool, cfg Config) (Result, error) {
 	if model == nil {
-		return nil, fmt.Errorf("agent core model is required")
+		return Result{}, errors.New("agent core model is required")
 	}
-	if maxModelCalls <= 0 {
-		maxModelCalls = DefaultMaxModelCalls
+	if initial.SystemPrompt == "" {
+		return Result{}, errors.New("agent core system prompt is required")
 	}
-	registered := make(map[string]Tool, len(tools))
-	definitions := make([]llm.Tool, 0, len(tools))
-	for _, tool := range tools {
-		if tool == nil || tool.Definition().Name == "" {
-			return nil, fmt.Errorf("agent core tool name is required")
-		}
-		name := tool.Definition().Name
-		if _, exists := registered[name]; exists {
-			return nil, fmt.Errorf("duplicate agent core tool %q", name)
-		}
-		registered[name] = tool
-		definitions = append(definitions, tool.Definition())
-	}
-	return &Core{model: model, tools: registered, definitions: definitions, maxModelCalls: maxModelCalls}, nil
-}
-
-func (c *Core) Run(ctx context.Context, initial llm.Context) (Result, error) {
 	for _, message := range initial.Messages {
 		if _, ok := message.(llm.SystemMessage); ok {
-			return Result{}, fmt.Errorf("agent core system instructions must use Context.SystemPrompt")
+			return Result{}, errors.New("system messages are not allowed; use Context.SystemPrompt")
 		}
+	}
+
+	registry, definitions, err := buildToolRegistry(tools)
+	if err != nil {
+		return Result{}, err
 	}
 	transcript := append([]llm.Message(nil), initial.Messages...)
+	modelContext := initial
+	modelContext.Messages = transcript
+	modelContext.Tools = definitions
+	maxCalls := cfg.MaxModelCalls
+	if maxCalls <= 0 {
+		maxCalls = DefaultMaxModelCalls
+	}
+	result := Result{Messages: transcript}
 
-	result := Result{}
-	for result.ModelCalls < c.maxModelCalls {
+	for result.ModelCalls < maxCalls {
 		if err := ctx.Err(); err != nil {
-			return Result{}, err
+			terminate(&result, cfg, TerminationCancelled)
+			return result, err
 		}
-		reply, err := c.model.Complete(ctx, llm.Context{
-			SystemPrompt: initial.SystemPrompt,
-			Messages:     append([]llm.Message(nil), transcript...),
-			Tools:        append([]llm.Tool(nil), c.definitions...),
-		})
-		if err != nil {
-			return Result{}, err
-		}
+
+		started := time.Now()
+		reply, err := model.Complete(ctx, modelContext, cfg.StreamOptions)
 		result.ModelCalls++
+		slog.Debug("agent core model call completed",
+			"run_id", cfg.RunID,
+			"conversation_id", cfg.ConversationID,
+			"model_call", result.ModelCalls,
+			"duration_ms", time.Since(started).Milliseconds(),
+			"error", err != nil,
+		)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				terminate(&result, cfg, TerminationCancelled)
+				return result, ctxErr
+			}
+			return result, err
+		}
+
 		transcript = append(transcript, reply)
+		result.Messages = append([]llm.Message(nil), transcript...)
+		result.Final = reply
 		calls := toolCalls(reply)
 		if len(calls) == 0 {
-			result.Final = reply
-			result.Transcript = transcript
+			terminate(&result, cfg, TerminationCompleted)
 			return result, nil
 		}
+
 		for _, call := range calls {
-			result.ToolCalls++
-			tool, ok := c.tools[call.Name]
-			if !ok {
-				transcript = append(transcript, toolError(call, "unknown tool"))
-				continue
-			}
-			toolResult := tool.Execute(ctx, call)
-			toolResult.ToolCallID = call.ID
-			toolResult.ToolName = call.Name
-			if toolResult.Timestamp.IsZero() {
-				toolResult.Timestamp = time.Now()
-			}
+			toolStarted := time.Now()
+			toolResult := executeTool(ctx, registry, call)
 			transcript = append(transcript, toolResult)
+			result.Messages = append([]llm.Message(nil), transcript...)
+			slog.Debug("agent core tool call completed",
+				"run_id", cfg.RunID,
+				"conversation_id", cfg.ConversationID,
+				"tool_name", call.Name,
+				"tool_call_id", call.ID,
+				"duration_ms", time.Since(toolStarted).Milliseconds(),
+				"error", toolResult.IsError,
+			)
+			if err := ctx.Err(); err != nil {
+				terminate(&result, cfg, TerminationCancelled)
+				return result, err
+			}
 		}
+		modelContext.Messages = transcript
 	}
-	return Result{}, fmt.Errorf("agent core exceeded %d model calls", c.maxModelCalls)
+
+	terminate(&result, cfg, TerminationModelCallLimit)
+	return result, ErrModelCallLimit
 }
 
-func toolCalls(message llm.AssistantMessage) []llm.ToolCall {
-	var calls []llm.ToolCall
-	for _, content := range message.Content {
-		if call, ok := content.(llm.ToolCall); ok {
-			calls = append(calls, call)
+func terminate(result *Result, cfg Config, termination Termination) {
+	result.Termination = termination
+	slog.Debug("agent core run terminated",
+		"run_id", cfg.RunID,
+		"conversation_id", cfg.ConversationID,
+		"termination", termination,
+		"model_calls", result.ModelCalls,
+	)
+}
+
+type registeredTool struct {
+	tool   Tool
+	schema *gojsonschema.Schema
+}
+
+func buildToolRegistry(tools []Tool) (map[string]registeredTool, []llm.Tool, error) {
+	registry := make(map[string]registeredTool, len(tools))
+	definitions := make([]llm.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool == nil {
+			return nil, nil, errors.New("agent core tool is nil")
 		}
+		definition := tool.Definition()
+		if definition.Name == "" {
+			return nil, nil, errors.New("agent core tool name is required")
+		}
+		if _, exists := registry[definition.Name]; exists {
+			return nil, nil, fmt.Errorf("duplicate agent core tool %q", definition.Name)
+		}
+		if len(definition.Parameters) == 0 {
+			definition.Parameters = json.RawMessage(`{"type":"object","additionalProperties":false}`)
+		}
+		schema, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(definition.Parameters))
+		if err != nil {
+			return nil, nil, fmt.Errorf("compile schema for tool %q: %w", definition.Name, err)
+		}
+		registry[definition.Name] = registeredTool{tool: tool, schema: schema}
+		definitions = append(definitions, definition)
 	}
-	return calls
+	return registry, definitions, nil
+}
+
+func executeTool(ctx context.Context, registry map[string]registeredTool, call llm.ToolCall) llm.ToolResultMessage {
+	if err := ctx.Err(); err != nil {
+		return toolError(call, "tool execution cancelled")
+	}
+	registered, ok := registry[call.Name]
+	if !ok {
+		return toolError(call, "unknown tool")
+	}
+	validation, err := registered.schema.Validate(gojsonschema.NewGoLoader(call.Arguments))
+	if err != nil || !validation.Valid() {
+		return toolError(call, "invalid tool arguments")
+	}
+	result, err := registered.tool.Execute(ctx, call)
+	if err != nil {
+		return toolError(call, "tool execution failed")
+	}
+	result.ToolCallID = call.ID
+	result.ToolName = call.Name
+	return result
 }
 
 func toolError(call llm.ToolCall, message string) llm.ToolResultMessage {
@@ -128,12 +209,12 @@ func toolError(call llm.ToolCall, message string) llm.ToolResultMessage {
 	}
 }
 
-func FinalText(message llm.AssistantMessage) string {
-	var text string
+func toolCalls(message llm.AssistantMessage) []llm.ToolCall {
+	var calls []llm.ToolCall
 	for _, content := range message.Content {
-		if part, ok := content.(llm.TextContent); ok {
-			text += part.Text
+		if call, ok := content.(llm.ToolCall); ok {
+			calls = append(calls, call)
 		}
 	}
-	return text
+	return calls
 }

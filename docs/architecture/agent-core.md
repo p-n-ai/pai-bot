@@ -4,7 +4,7 @@
 
 The default tutor path performs one text-only completion per teaching turn. The configured Telegram focused-page path now uses a native model → tool → model continuation loop, while other channels and installations without focused-page configuration keep the established text-only path.
 
-`internal/llm` represents native `ToolCall`, `ToolResultMessage`, `Tool`, and `Context` values. `internal/agentcore` now preserves those values through a small sequential continuation loop, and `internal/ai.Router.CompleteNative` retains provider routing, fallback, retry, and circuit-breaker ownership. The OpenRouter adapter is the first native-capable provider; text-only providers are skipped for native requests.
+`internal/llm` represents native `ToolCall`, `ToolResultMessage`, `Tool`, and `Context` values. `internal/agentcore` now preserves those values through a small sequential continuation loop, and `internal/ai.NativeModel` retains provider routing, fallback, retry, tracing, and circuit-breaker ownership. The OpenRouter adapter is the first native-capable provider; text-only providers remain available for tool-free native requests.
 
 ## Solution
 
@@ -123,11 +123,11 @@ The implementation checks cancellation and a fixed maximum model-call count. Unk
 
 ```go
 type Model interface {
-    Complete(context.Context, llm.Context) (llm.AssistantMessage, error)
+    Complete(context.Context, llm.Context, *llm.StreamOptions) (llm.AssistantMessage, error)
 }
 ```
 
-`internal/ai` implements this port so fallback, retries, circuit breakers, model choice, credentials, and provider selection remain in one place. The existing text-only `ai.Provider` path remains for callers not migrated. Existing `CompletionTrace` snapshots and the standalone budget types are not yet wired to native requests, so this document does not claim native tracing or budget enforcement.
+`internal/ai` implements this port so fallback, retries, circuit breakers, model choice, credentials, tracing, and provider selection remain in one place. The existing text-only `ai.Provider` path remains for callers not migrated. The standalone budget types are not yet wired to native requests, so this document does not claim native budget enforcement.
 
 The core boundary uses one system-instruction representation: populate `llm.Context.SystemPrompt` and reject system messages in `Context.Messages`. This prevents duplicate system instructions.
 
@@ -138,13 +138,13 @@ A tool has inert metadata plus one cancellable action:
 ```go
 type Tool interface {
     Definition() llm.Tool
-    Execute(context.Context, llm.ToolCall) llm.ToolResultMessage
+    Execute(context.Context, llm.ToolCall) (llm.ToolResultMessage, error)
 }
 ```
 
-Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools and invalid arguments become error results, allowing the model to correct the request on the next pass.
+Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools, invalid arguments, and execution failures become payload-safe error results, allowing the model to correct the request on the next pass.
 
-The first tool is `create_focused_page`. Its strict schema contains exactly one required string, `{message}`. The model cannot supply recipient, owner, tenant, conversation, turn, layout, CTA, lifetime, capability, URL, or delivery channel. `internal/agent` derives identity from the resolved store and creates at most one page artifact per turn. Duplicate execution with the same message reuses the artifact; a second different message returns a recoverable one-artifact-limit error.
+The generic agent-core flag registers the curriculum lookup tool. Configured Telegram focused-page turns additionally register `create_focused_page` as a normal tool without requiring that generic rollout flag. Its strict schema contains exactly one required string, `{message}`. The model cannot supply recipient, owner, tenant, conversation, turn, layout, CTA, lifetime, capability, URL, or delivery channel. `internal/agent` derives identity from the resolved store and creates at most one page artifact per turn. Duplicate execution with the same message reuses the artifact; a second different message returns a recoverable one-artifact-limit error.
 
 The tool persists the page but never sends a chat message. Its native result contains only a safe success or failure sentence. The private capability URL stays in the application-owned artifact and never enters model context, tool results, logs, errors, or stored conversation messages.
 
@@ -172,7 +172,7 @@ Unit tests cover direct answers, a native tool round trip, unknown-tool recovery
 
 #### Diagnostics
 
-V1 has no public intermediate-event stream and does not add payload logging. Existing turn events keep their metadata-only shape. Tool arguments, tool results, page messages, capabilities, and full private URLs are not logged. Tool-specific counts and timing are a planned diagnostic addition rather than implemented behavior.
+V1 has no public intermediate-event stream. Structured logs record run and conversation IDs, model-call counts, tool names and call IDs, durations, error status, and termination reasons. Tool arguments, tool results, page messages, capabilities, full private URLs, prompts, and learner text are not logged.
 
 ## Alternatives Considered
 

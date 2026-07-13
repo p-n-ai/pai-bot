@@ -1,7 +1,7 @@
 # P&AI BOT
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 K-12 proactive learning agent for Telegram, WhatsApp, WebSocket/embed chat, and admin dashboards. Go modular monolith with Vite/Next/Astro frontends; current primary scope is backend Go and `admin-spa/`.
 

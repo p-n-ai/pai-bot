@@ -76,10 +76,9 @@ read_when:
 | `LEARN_TENANT_MODE` | `single` | Must be `single` or `multi`. |
 | `LEARN_LOG_LEVEL` | `info` | Log level. |
 | `LEARN_LOG_FORMAT` | `json` | Log format. |
-| `PAI_FEATURES` | empty | Comma-separated feature overrides. Current known flag: `turn_hooks`. `flag` enables; `flag=true` enables; `flag=false` disables. Unknown names, invalid values, or duplicate feature names fail config load. |
+| `PAI_FEATURES` | empty | Comma-separated feature overrides. Current known flags: `turn_hooks`, `agent_core`. `flag` enables; `flag=true` enables; `flag=false` disables. Unknown names, invalid values, or duplicate feature names fail config load. |
 | `LEARN_DEV_MODE` | `false` | Relaxes provider/token requirements for local dev. |
 | `LEARN_DISABLE_MULTI_LANGUAGE` | `false` | Disables multilingual behavior. |
-| `LEARN_RATING_PROMPT_EVERY_REPLIES` | `5` | Rating prompt cadence. |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | `true` | Enables AI-personalized nudges. |
 | `LEARN_CURRICULUM_PATH` | `./oss` | Curriculum source path. |
 

@@ -30,9 +30,6 @@ import (
 const (
 	defaultFixturePath    = "internal/agent/testdata/ai_quality_conversations.yaml"
 	fallbackMessagePhrase = "masalah teknikal"
-	ratingPromptPhrase    = "rating 1-5"
-	ratingThanksPhrase    = "terima kasih atas rating anda"
-	ratingRetryPhrase     = "rating perlu 1 hingga 5"
 )
 
 type fixtureFile struct {
@@ -60,9 +57,6 @@ type behaviorChecks struct {
 	RequireStructuredSolving  bool     `yaml:"require_structured_solving"`
 	RequireConceptConnection  bool     `yaml:"require_concept_connection"`
 	ExpectedLanguage          string   `yaml:"expected_language"`
-	RequireRatingPrompt       bool     `yaml:"require_rating_prompt"`
-	RequireRatingThanks       bool     `yaml:"require_rating_thanks"`
-	RequireRatingRetry        bool     `yaml:"require_rating_retry"`
 	RequireResponsePhrases    []string `yaml:"require_response_phrases"`
 	ForbidResponsePhrases     []string `yaml:"forbid_response_phrases"`
 	ForbidFinalAnswerOnTurn   []int    `yaml:"forbid_final_answer_on_turn"`
@@ -326,7 +320,6 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 		EventLogger:          state.EventLogger,
 		CurriculumLoader:     loader,
 		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
-		RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
@@ -454,15 +447,6 @@ func checkConversation(checks behaviorChecks, responses []string) []string {
 	if checks.RequireConceptConnection &&
 		!containsAny(combined, []string{"konsep", "concept", "persamaan linear", "linear equation", "inverse operation", "operasi songsang", "bila guna", "when to use"}) {
 		failures = append(failures, "missing concept connection marker")
-	}
-	if checks.RequireRatingPrompt && !strings.Contains(combined, ratingPromptPhrase) {
-		failures = append(failures, "missing rating prompt")
-	}
-	if checks.RequireRatingThanks && !strings.Contains(combined, ratingThanksPhrase) {
-		failures = append(failures, "missing rating thank-you response")
-	}
-	if checks.RequireRatingRetry && !strings.Contains(combined, ratingRetryPhrase) {
-		failures = append(failures, "missing rating retry response")
 	}
 	return failures
 }

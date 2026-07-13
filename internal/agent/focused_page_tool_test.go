@@ -30,7 +30,7 @@ func TestProcessTurnNativeToolThenFinalReplyPersistsOnlyConversationText(t *test
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, RatingPromptEvery: 100})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Give me a report on my goal"})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestProcessTurnNativeDirectAnswerProducesNoArtifact(t *testing.T) {
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{{Content: []llm.AssistantContent{llm.TextContent{Text: "Plain tutor reply"}}}}}
 	router := ai.NewRouter()
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, RatingPromptEvery: 100})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"})
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestFocusedPagesFallBackToTextWhenNoNativeProviderIsConfigured(t *testing.T
 	provider := &orderedProvider{calls: make(chan int, 1)}
 	router := ai.NewRouter()
 	router.Register("text", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, FocusedPages: pageService, RatingPromptEvery: 100})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, FocusedPages: pageService})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
 	deliverer := &flakyTurnDeliverer{failures: 2}
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, RatingPromptEvery: 100, TurnDeliverer: deliverer})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, TurnDeliverer: deliverer})
 	engine.deliveryRetryBackoff = []time.Duration{0, 0}
 
 	result, err := engine.ProcessAndDeliver(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
@@ -149,10 +149,10 @@ func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
 func TestCreateFocusedPageToolIsIdempotentAndEnforcesOneArtifact(t *testing.T) {
 	service, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
 	tool := &createFocusedPageTool{service: service, input: focusedpage.CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "turn-1", RecipientName: "Aina"}}
-	first := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
+	first, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
 	artifact := tool.artifact
-	duplicate := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
-	second := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Different report"}})
+	duplicate, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
+	second, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Different report"}})
 	if first.IsError || duplicate.IsError {
 		t.Fatalf("idempotent results = %#v %#v", first, duplicate)
 	}
@@ -170,7 +170,7 @@ func TestProcessTurnSerializesActiveConversation(t *testing.T) {
 	provider := &concurrencyProbeProvider{entered: make(chan struct{}), release: make(chan struct{})}
 	router := ai.NewRouter()
 	router.Register("probe", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, RatingPromptEvery: 100})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store})
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -197,7 +197,7 @@ func TestProcessAndDeliverSerializesThroughChannelDelivery(t *testing.T) {
 	router := ai.NewRouter()
 	router.Register("ordered", provider)
 	deliverer := &blockingFirstDeliverer{entered: make(chan int, 2), releaseFirst: make(chan struct{})}
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, RatingPromptEvery: 100, TurnDeliverer: deliverer})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TurnDeliverer: deliverer})
 	message := chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"}
 
 	var wg sync.WaitGroup
@@ -249,7 +249,7 @@ func TestFocusedPageCreationFailureReturnsFinalTextWithoutArtifactOrLeak(t *test
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, RatingPromptEvery: 100})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
 	if err != nil {
@@ -379,8 +379,8 @@ func (*concurrencyProbeProvider) StreamComplete(context.Context, ai.CompletionRe
 func (*concurrencyProbeProvider) Models() []ai.ModelInfo            { return nil }
 func (*concurrencyProbeProvider) HealthCheck(context.Context) error { return nil }
 
-func (p *nativeScriptProvider) CompleteNative(_ context.Context, req ai.NativeCompletionRequest) (llm.AssistantMessage, error) {
-	p.contexts = append(p.contexts, req.Context)
+func (p *nativeScriptProvider) CompleteNative(_ context.Context, _ string, nativeContext llm.Context, _ *llm.StreamOptions) (llm.AssistantMessage, error) {
+	p.contexts = append(p.contexts, nativeContext)
 	if len(p.replies) == 0 {
 		return llm.AssistantMessage{}, errors.New("unexpected model call")
 	}

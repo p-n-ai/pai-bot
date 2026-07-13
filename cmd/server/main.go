@@ -181,7 +181,6 @@ func main() {
 				CurriculumLoader:     loader,
 				RetrievalService:     retrievalService,
 				DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
-				RatingPromptEvery:    cfg.Runtime.RatingPromptEvery,
 				Tracker:              tracker,
 				Streaks:              streakTracker,
 				XP:                   xpTracker,

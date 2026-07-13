@@ -127,25 +127,8 @@ func TestRunTurnHooks_ReturnsHookError(t *testing.T) {
 	}
 }
 
-func TestRateConversationTurnHook(t *testing.T) {
-	hook := rateConversationTurnHook{}
-
-	continued, err := hook.Run(context.Background(), &agentTurn{})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if continued.Outcome != turnHookOutcomeContinue || len(continued.Packets) != 0 {
-		t.Fatalf("non-rating result = %#v", continued)
-	}
-
-	injected, err := hook.Run(context.Background(), &agentTurn{RatingPromptRequested: true})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if injected.Outcome != turnHookOutcomeInject {
-		t.Fatalf("rating outcome = %q, want inject", injected.Outcome)
-	}
-	if len(injected.Packets) != 1 || injected.Packets[0].ID != "rating.prompt" {
-		t.Fatalf("rating packets = %#v", injected.Packets)
+func TestDefaultTurnHookCatalogHasNoRatingHook(t *testing.T) {
+	if hooks := defaultTurnHookCatalog(); len(hooks) != 0 {
+		t.Fatalf("default hooks = %#v, want no rating hook", hooks)
 	}
 }

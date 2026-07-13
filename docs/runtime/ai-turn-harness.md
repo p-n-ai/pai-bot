@@ -23,7 +23,7 @@ ProcessMessage
   -> agent_turn_completed
 ```
 
-This harness covers the generic tutor model path. Commands, onboarding, challenge runtime, quiz routing, and rating-only submissions can return before this flow.
+This harness covers the generic tutor model path. Commands, onboarding, challenge runtime, and quiz routing can return before this flow.
 
 ## Current Implementation
 
@@ -35,7 +35,7 @@ The current implementation lives in `internal/agent/`:
 | `turn.go` | Defines package-private `agentTurn`, `contextPacket`, trust/render/trace enums, prompt manifest, and model result metadata. |
 | `context_loader.go` | Reads current stores and creates trust-labeled packets for the turn. |
 | `context_packets.go` | Builds, defaults, validates, labels, and summarizes packets. |
-| `turn_hooks.go` | Defines the private Turn Hook runner, Hook Outcomes, Turn Hook Catalog, and `rate_convo_hook`. |
+| `turn_hooks.go` | Defines the private Turn Hook runner, Hook Outcomes, and Turn Hook Catalog. |
 | `prompt_builder.go` | Compiles packets and chat history into model-facing `[]ai.Message`. |
 | `engine.go` | Owns `ProcessMessage`, intake, and route selection before delegating the generic teaching path. |
 | `tutor_personality.go` | Encodes the active SOUL-style tutor personality block used by the prompt harness. |
@@ -51,7 +51,7 @@ Stored in pai-bot does not mean trusted as instruction.
 
 | Trust | Meaning | Render rule |
 |---|---|---|
-| `system_owned` | App-owned constrained state, such as form, language preference, topic ID, mastery, streak, XP, image/rating control instruction. | May render as system data or system instruction. |
+| `system_owned` | App-owned constrained state, such as form, language preference, topic ID, mastery, streak, XP, or image control instruction. | May render as system data or system instruction. |
 | `learner_provided` | Learner-authored text or profile text, such as first name, goal summary, replied-to text. | Quote as user data. Never system instruction. |
 | `model_generated` | Model-created data from prior turns, such as compacted summary. | Quote as data-only continuity context. |
 | `external` | Image attachment or future external/OCR content. | Attach or quote as untrusted external data. |
@@ -71,8 +71,6 @@ Validation rejects any non-system-owned packet that tries to render as system co
 - replied-to text
 - image instruction and image attachment
 
-When `PAI_FEATURES=turn_hooks` is off, existing rating prompt behavior is appended after base packet loading. When `PAI_FEATURES=turn_hooks` is on, `rate_convo_hook` injects the same `rating.prompt` packet only when the turn is already due for rating.
-
 Mixed-trust records must be split. Example: goal target mastery is system-owned metadata; goal summary is learner-provided text.
 
 ## Turn Hooks
@@ -87,7 +85,7 @@ The **Turn Hook Rollout Flag** is:
 PAI_FEATURES=turn_hooks
 ```
 
-When the flag is disabled, the hook runner does not run. When the flag is enabled, the private **Turn Hook Catalog** runs in order. The first catalog contains only **Rate Conversation Turn Hook** (`rate_convo_hook`).
+When the flag is disabled, the hook runner does not run. When the flag is enabled, the private **Turn Hook Catalog** runs in order. The current catalog is empty.
 
 Each **Turn Hook** returns one **Hook Outcome**:
 
@@ -96,8 +94,6 @@ Each **Turn Hook** returns one **Hook Outcome**:
 | `continue` | Leave the **Tutor Turn** unchanged. |
 | `inject` | Add trace-safe context packets, then validate them with the existing packet validation rules. |
 | `block` | Stop the model call with a runtime-owned block response. No production hook uses this yet. |
-
-`rate_convo_hook` is behavior-preserving. It does not decide when rating is due; it only turns the existing rating decision into hook-shaped context.
 
 Add or remove hooks through the **Turn Hook Catalog** only. Do not add per-hook feature flags, dynamic hook config, or public plugin behavior for this slice.
 
@@ -113,7 +109,6 @@ Add or remove hooks through the **Turn Hook Catalog** only. Do not add per-hook 
 6. learner-provided context as quoted user data
 7. system-owned image instruction
 8. current user message, with image URLs if present
-9. optional system-owned rating prompt instruction
 
 The current user message must appear once. Reply context is separate quoted data, not mixed into current input.
 
@@ -140,7 +135,7 @@ For local prompt debugging, `cmd/terminal-chat --dump-json <path>` can write an 
 When `LEARN_DEV_MODE=true` and `PAI_FEATURES=turn_hooks`, Terminal Chat may print one **Hook Call Notice** per hook call:
 
 ```text
-turn hook called: rate_convo_hook outcome=continue
+turn hook called: example_hook outcome=continue
 ```
 
 The notice contains only hook name and **Hook Outcome**. It is not sent to the model, saved to chat history, included in `--dump-json`, emitted by `cmd/conversation-harness`, or persisted as an event.

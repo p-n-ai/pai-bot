@@ -1,7 +1,7 @@
 # COMMAND ENTRYPOINTS
 
-**Generated:** 2026-06-04T16:28:07Z
-**Commit:** bb3a740
+**Generated:** 2026-07-11
+**Commit:** bdd0c16
 
 Thin binaries for server, seed, local chat, nudges, quality harnesses, and analytics export.
 
@@ -21,9 +21,9 @@ cmd/
 
 | Task | Location |
 |------|----------|
-| Server startup/routes | `server/main.go` |
-| Admin asset embed | `server/embed_admin.go` |
-| Security headers/origins | `server/security.go` |
+| Server dependency wiring | `server/main.go` |
+| HTTP routes/admin embedding | `internal/server/handler.go` |
+| Security headers/origins | `internal/server/security.go` |
 | Demo/auth/budget seed flags | `seed/main.go` |
 | Local tutor session | `terminal-chat/main.go`, `internal/terminalchat` |
 | Nudge debug CLI | `terminal-nudge/main.go`, `internal/terminalnudge` |
