@@ -29,6 +29,8 @@ const (
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
 	defaultRatingPromptEvery     = 5
+	defaultTurnDeliveryRetryOne  = 250 * time.Millisecond
+	defaultTurnDeliveryRetryTwo  = time.Second
 	// ReviewActionCode is a control marker emitted by AI to trigger rating UI/actions.
 	ReviewActionCode = "[[PAI_REVIEW]]"
 	langPrefCodeEN   = "[[PAI_PREF_LANG:en]]"
@@ -110,6 +112,7 @@ type Engine struct {
 	focusedPages          *focusedpage.Service
 	turnLocks             keyedTurnLocks
 	turnDeliverer         TurnDeliverer
+	deliveryRetryBackoff  []time.Duration
 }
 
 // NewEngine creates a new agent engine.
@@ -198,6 +201,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		milestones:            newPendingMilestones(),
 		focusedPages:          cfg.FocusedPages,
 		turnDeliverer:         cfg.TurnDeliverer,
+		deliveryRetryBackoff:  []time.Duration{defaultTurnDeliveryRetryOne, defaultTurnDeliveryRetryTwo},
 	}
 }
 
@@ -243,7 +247,29 @@ func (e *Engine) ProcessAndDeliver(ctx context.Context, msg chat.InboundMessage)
 	if err != nil {
 		return result, err
 	}
-	return result, e.DeliverTurn(ctx, msg, result)
+	return result, e.deliverTurnWithRetry(ctx, msg, result)
+}
+
+func (e *Engine) deliverTurnWithRetry(ctx context.Context, msg chat.InboundMessage, result TurnResult) error {
+	var err error
+	for attempt := 0; attempt <= len(e.deliveryRetryBackoff); attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(e.deliveryRetryBackoff[attempt-1])
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		if err = e.DeliverTurn(ctx, msg, result); err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return err
 }
 
 // DeliverTurn retries delivery without re-running the model or page tool.

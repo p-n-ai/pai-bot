@@ -26,7 +26,7 @@ type teachingCompletion struct {
 }
 
 func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, messages []ai.Message, model string) (teachingCompletion, *focusedpage.Artifact, error) {
-	if e.focusedPages == nil || turn.Channel != "telegram" {
+	if e.focusedPages == nil || turn.Channel != "telegram" || !e.aiRouter.HasNativeProvider() {
 		resp, err := e.aiRouter.Complete(ctx, ai.CompletionRequest{Messages: messages, Model: model, Task: ai.TaskTeaching, MaxTokens: 1024})
 		return teachingCompletion{Content: resp.Content, Model: resp.Model, InputTokens: resp.InputTokens, OutputTokens: resp.OutputTokens}, nil, err
 	}

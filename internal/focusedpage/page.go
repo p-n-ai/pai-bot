@@ -100,7 +100,7 @@ func NewService(store Store, baseURL string, secret []byte, now func() time.Time
 		return nil, fmt.Errorf("focused page store is required")
 	}
 	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, fmt.Errorf("focused page base URL must be an HTTPS origin without credentials, query, or fragment")
 	}
 	if len(secret) < 16 {
@@ -172,7 +172,7 @@ func (s *Service) Revoke(ctx context.Context, publicID, tenantID, ownerUserID st
 
 func (s *Service) capability(tenantID, turnID string, pageIndex int) string {
 	mac := hmac.New(sha256.New, s.secret)
-	fmt.Fprintf(mac, "focused-page:v1\x00%s\x00%s\x00%d", tenantID, turnID, pageIndex)
+	_, _ = fmt.Fprintf(mac, "focused-page:v1\x00%s\x00%s\x00%d", tenantID, turnID, pageIndex)
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 

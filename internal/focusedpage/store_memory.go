@@ -46,6 +46,9 @@ func (s *MemoryStore) Redeem(_ context.Context, publicID string, tokenHash []byt
 	if !ok {
 		return Page{}, ErrForbidden
 	}
+	if subtle.ConstantTimeCompare(page.TokenHash, tokenHash) != 1 {
+		return Page{}, ErrForbidden
+	}
 	if page.Status == StatusRevoked {
 		return Page{}, ErrRevoked
 	}
@@ -53,9 +56,6 @@ func (s *MemoryStore) Redeem(_ context.Context, publicID string, tokenHash []byt
 		page.Status = StatusExpired
 		s.pages[publicID] = page
 		return Page{}, ErrExpired
-	}
-	if subtle.ConstantTimeCompare(page.TokenHash, tokenHash) != 1 {
-		return Page{}, ErrForbidden
 	}
 	return clonePage(page), nil
 }

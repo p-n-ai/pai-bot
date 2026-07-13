@@ -354,6 +354,18 @@ func (r *Router) HasProvider() bool {
 	return len(r.providers) > 0
 }
 
+// HasNativeProvider reports whether any configured provider preserves native tool calls.
+func (r *Router) HasNativeProvider() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, provider := range r.providers {
+		if _, ok := provider.(NativeProvider); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Router) snapshotProviders() (map[string]Provider, []string, uint64) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
