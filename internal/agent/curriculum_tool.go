@@ -32,7 +32,7 @@ func (curriculumLookupTool) Definition() llm.Tool {
 	}
 }
 
-func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) llm.ToolResultMessage {
+func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
 	topicID, _ := call.Arguments["topic_id"].(string)
 	topic, ok := t.loader.GetTopic(topicID)
 	if !ok {
@@ -40,7 +40,7 @@ func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) llm.
 			Content:   []llm.UserContent{llm.TextContent{Text: "curriculum topic not found"}},
 			IsError:   true,
 			Timestamp: time.Now(),
-		}
+		}, nil
 	}
 	notes, _ := t.loader.GetTeachingNotes(topicID)
 	payload, err := json.Marshal(struct {
@@ -52,12 +52,12 @@ func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) llm.
 			Content:   []llm.UserContent{llm.TextContent{Text: "curriculum topic could not be encoded"}},
 			IsError:   true,
 			Timestamp: time.Now(),
-		}
+		}, nil
 	}
 	return llm.ToolResultMessage{
 		Content:   []llm.UserContent{llm.TextContent{Text: string(payload)}},
 		Timestamp: time.Now(),
-	}
+	}, nil
 }
 
 func (e *Engine) teachingTools() []agentcore.Tool {

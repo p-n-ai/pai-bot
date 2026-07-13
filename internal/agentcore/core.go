@@ -34,7 +34,7 @@ type Model interface {
 
 type Tool interface {
 	Definition() llm.Tool
-	Execute(context.Context, llm.ToolCall) llm.ToolResultMessage
+	Execute(context.Context, llm.ToolCall) (llm.ToolResultMessage, error)
 }
 
 type Config struct {
@@ -80,7 +80,7 @@ func Run(ctx context.Context, model Model, initial llm.Context, tools []Tool, cf
 
 	for result.ModelCalls < maxCalls {
 		if err := ctx.Err(); err != nil {
-			result.Termination = TerminationCancelled
+			terminate(&result, cfg, TerminationCancelled)
 			return result, err
 		}
 
@@ -96,7 +96,7 @@ func Run(ctx context.Context, model Model, initial llm.Context, tools []Tool, cf
 		)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				result.Termination = TerminationCancelled
+				terminate(&result, cfg, TerminationCancelled)
 				return result, ctxErr
 			}
 			return result, err
@@ -107,7 +107,7 @@ func Run(ctx context.Context, model Model, initial llm.Context, tools []Tool, cf
 		result.Final = reply
 		calls := toolCalls(reply)
 		if len(calls) == 0 {
-			result.Termination = TerminationCompleted
+			terminate(&result, cfg, TerminationCompleted)
 			return result, nil
 		}
 
@@ -125,15 +125,25 @@ func Run(ctx context.Context, model Model, initial llm.Context, tools []Tool, cf
 				"error", toolResult.IsError,
 			)
 			if err := ctx.Err(); err != nil {
-				result.Termination = TerminationCancelled
+				terminate(&result, cfg, TerminationCancelled)
 				return result, err
 			}
 		}
 		modelContext.Messages = transcript
 	}
 
-	result.Termination = TerminationModelCallLimit
+	terminate(&result, cfg, TerminationModelCallLimit)
 	return result, ErrModelCallLimit
+}
+
+func terminate(result *Result, cfg Config, termination Termination) {
+	result.Termination = termination
+	slog.Debug("agent core run terminated",
+		"run_id", cfg.RunID,
+		"conversation_id", cfg.ConversationID,
+		"termination", termination,
+		"model_calls", result.ModelCalls,
+	)
 }
 
 type registeredTool struct {
@@ -180,7 +190,10 @@ func executeTool(ctx context.Context, registry map[string]registeredTool, call l
 	if err != nil || !validation.Valid() {
 		return toolError(call, "invalid tool arguments")
 	}
-	result := registered.tool.Execute(ctx, call)
+	result, err := registered.tool.Execute(ctx, call)
+	if err != nil {
+		return toolError(call, "tool execution failed")
+	}
 	result.ToolCallID = call.ID
 	result.ToolName = call.Name
 	return result
