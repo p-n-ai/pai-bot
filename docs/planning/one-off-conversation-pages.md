@@ -140,7 +140,7 @@ The endpoint rejects expired or revoked pages before returning recipient or mess
 
 The agent tool creates the page before channel send. `internal/agent` assembles the final text and artifact, then `internal/chat` appends the private URL button after existing Telegram keyboard rows.
 
-If message generation or page creation fails, send the useful text response without a link. If channel delivery fails, retain the idempotent page for retry until normal expiry.
+If message generation or page creation fails, send the useful text response without a link. Before the first channel send, persist a delivery outbox row containing trusted identifiers and tutor text but no capability or URL. If delivery fails, reconstruct the deterministic capability only in memory and retry the unchanged turn until success, revocation, or normal expiry.
 
 The page CTA is application-owned and only returns to a trusted P&AI conversation. It does not mutate learner state.
 
@@ -173,15 +173,15 @@ Implemented in the focused Telegram slice:
 - Trusted tenant, owner, conversation, and turn derivation in `internal/agent`.
 - PostgreSQL and in-memory stores with one-hour expiry, revocation, idempotency, and hash-only capability storage.
 - Fixed read-only page shell and fragment redemption with no-store, restrictive CSP, no-referrer, and frame protections.
-- Final tutor text plus one Telegram URL button, with retry of the same assembled artifact after delivery failure.
-- Unit and migration-backed integration coverage for text-only turns, tool continuation, duplicate calls, one-artifact enforcement, wrong token, expiry, revocation, isolation, and Telegram order.
+- Final tutor text plus one Telegram URL button, with a persisted outbox retaining retry ownership through normal expiry.
+- Unit, migration-backed integration, and Chromium coverage; detailed evidence is maintained in the [agent-core verification harness](../architecture/agent-core.md#focused-verification-harness).
 
 Still planned:
 
 - Terminal-chat delivery.
 - Native provider support beyond OpenRouter.
-- Expired-row cleanup and durable queued channel retries.
-- Browser-level layout, keyboard, fragment-removal, and reduced-motion smoke coverage.
+- Expired-row cleanup.
+- Broader cross-device layout and accessibility smoke coverage.
 
 ## Appendix
 
