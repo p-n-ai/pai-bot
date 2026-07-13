@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 type capturedOpenRouterLLMRequest struct {
@@ -22,6 +24,40 @@ type capturedOpenRouterLLMRequest struct {
 	headers   http.Header
 	body      map[string]any
 	decodeErr error
+}
+
+func TestOpenRouterLLMAdapterCompleteNativePreservesToolCall(t *testing.T) {
+	captured := make(chan capturedOpenRouterLLMRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := capturedOpenRouterLLMRequest{method: r.Method, path: r.URL.Path, headers: r.Header.Clone()}
+		request.decodeErr = json.NewDecoder(r.Body).Decode(&request.body)
+		captured <- request
+		writeOpenRouterLLMStream(w, `{"id":"or-tool","model":"openai/gpt-test","choices":[{"delta":{"tool_calls":[{"index":0,"id":"page-1","type":"function","function":{"name":"create_focused_page","arguments":"{\"message\":\"Goal report\"}"}}]},"finish_reason":"tool_calls"}]}`)
+	}))
+	t.Cleanup(server.Close)
+	provider := newOpenRouterLLMAdapter("test-key", server.URL)
+	reply, err := provider.CompleteNative(context.Background(), NativeCompletionRequest{Context: llm.Context{
+		SystemPrompt: "Use the page tool for goal reports.",
+		Messages:     []llm.Message{llm.UserText("Show my report")},
+		Tools:        []llm.Tool{{Name: "create_focused_page", Description: "Create a focused page", Parameters: json.RawMessage(`{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}`)}},
+	}, MaxTokens: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := <-captured
+	if request.decodeErr != nil {
+		t.Fatal(request.decodeErr)
+	}
+	if tools, ok := request.body["tools"].([]any); !ok || len(tools) != 1 {
+		t.Fatalf("tools = %#v", request.body["tools"])
+	}
+	if len(reply.Content) != 1 {
+		t.Fatalf("reply content = %#v", reply.Content)
+	}
+	call, ok := reply.Content[0].(llm.ToolCall)
+	if !ok || call.Name != "create_focused_page" || call.Arguments["message"] != "Goal report" {
+		t.Fatalf("tool call = %#v", reply.Content[0])
+	}
 }
 
 func TestOpenRouterLLMAdapterCompleteProjectsTeachingContractThroughNativeTransport(t *testing.T) {
