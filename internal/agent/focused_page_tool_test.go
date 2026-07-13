@@ -97,6 +97,55 @@ func TestProcessTurnNativeDirectAnswerProducesNoArtifact(t *testing.T) {
 	}
 }
 
+func TestFocusedPagesFallBackToTextWhenNoNativeProviderIsConfigured(t *testing.T) {
+	store := NewMemoryStore()
+	_ = store.SetUserName("learner-1", "Aina")
+	pageService, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	provider := &orderedProvider{calls: make(chan int, 1)}
+	router := ai.NewRouter()
+	router.Register("text", provider)
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, FocusedPages: pageService, RatingPromptEvery: 100})
+
+	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Text != "Serialized reply" || result.FocusedPage != nil {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
+	store := NewMemoryStore()
+	_ = store.SetUserName("learner-1", "Aina")
+	pageService, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "Goal report"}}}},
+		{Content: []llm.AssistantContent{llm.TextContent{Text: "Your report is ready."}}},
+	}}
+	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
+	router.Register("native", provider)
+	deliverer := &flakyTurnDeliverer{failures: 2}
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, RatingPromptEvery: 100, TurnDeliverer: deliverer})
+	engine.deliveryRetryBackoff = []time.Duration{0, 0}
+
+	result, err := engine.ProcessAndDeliver(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FocusedPage == nil || len(deliverer.results) != 3 {
+		t.Fatalf("result = %#v, deliveries = %d", result, len(deliverer.results))
+	}
+	for _, delivered := range deliverer.results {
+		if delivered.FocusedPage == nil || delivered.FocusedPage.URL != result.FocusedPage.URL || delivered.Text != result.Text {
+			t.Fatalf("delivery changed assembled result: %#v", delivered)
+		}
+	}
+	if len(provider.contexts) != 2 {
+		t.Fatalf("model calls = %d, want 2", len(provider.contexts))
+	}
+}
+
 func TestCreateFocusedPageToolIsIdempotentAndEnforcesOneArtifact(t *testing.T) {
 	service, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
 	tool := &createFocusedPageTool{service: service, input: focusedpage.CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "turn-1", RecipientName: "Aina"}}
@@ -235,6 +284,19 @@ type retryDeliverer struct {
 
 func (d *retryDeliverer) DeliverTurn(context.Context, chat.InboundMessage, TurnResult) error {
 	return d.err
+}
+
+type flakyTurnDeliverer struct {
+	failures int
+	results  []TurnResult
+}
+
+func (d *flakyTurnDeliverer) DeliverTurn(_ context.Context, _ chat.InboundMessage, result TurnResult) error {
+	d.results = append(d.results, result)
+	if len(d.results) <= d.failures {
+		return errors.New("telegram unavailable")
+	}
+	return nil
 }
 
 type concurrencyProbeProvider struct {

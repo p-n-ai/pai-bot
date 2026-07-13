@@ -76,6 +76,33 @@ func TestServiceWrongTokenRevocationAndOwnerIsolation(t *testing.T) {
 	}
 }
 
+func TestServiceWrongTokenDoesNotRevealLifecycleState(t *testing.T) {
+	now := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
+	service, _ := NewService(NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), func() time.Time { return now })
+	expired, _ := service.Create(context.Background(), CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "expired", Message: "Expired report"})
+	revoked, _ := service.Create(context.Background(), CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "revoked", Message: "Revoked report"})
+	if err := service.Revoke(context.Background(), revoked.PublicID, "tenant-1", "user-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	now = expired.ExpiresAt
+	if _, err := service.Redeem(context.Background(), expired.PublicID, "wrong"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("wrong token for expired page = %v", err)
+	}
+	if _, err := service.Redeem(context.Background(), revoked.PublicID, "wrong"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("wrong token for revoked page = %v", err)
+	}
+
+	expiredURL, _ := url.Parse(expired.URL)
+	if _, err := service.Redeem(context.Background(), expired.PublicID, expiredURL.Fragment); !errors.Is(err, ErrExpired) {
+		t.Fatalf("correct token for expired page = %v", err)
+	}
+	revokedURL, _ := url.Parse(revoked.URL)
+	if _, err := service.Redeem(context.Background(), revoked.PublicID, revokedURL.Fragment); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("correct token for revoked page = %v", err)
+	}
+}
+
 func TestParseMessageRejectsEmptyAndOversizedContent(t *testing.T) {
 	if _, err := ParseMessage(" \n "); err == nil {
 		t.Fatal("empty message was accepted")
@@ -149,6 +176,7 @@ func TestFocusedPageConfigurationRejectsInsecureOriginsAndSecrets(t *testing.T) 
 	}{
 		{name: "HTTP origin", baseURL: "http://pages.example", secret: validSecret},
 		{name: "origin with credentials", baseURL: "https://user:pass@pages.example", secret: validSecret},
+		{name: "origin with path", baseURL: "https://pages.example/private", secret: validSecret},
 		{name: "origin with query", baseURL: "https://pages.example?token=value", secret: validSecret},
 		{name: "short secret", baseURL: "https://pages.example", secret: []byte("too-short")},
 	}

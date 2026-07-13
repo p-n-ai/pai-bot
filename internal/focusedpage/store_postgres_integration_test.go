@@ -29,10 +29,24 @@ func TestPostgresStoreIdempotencyIsolationAndLifecycle(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO users (tenant_id, role, name, external_id, channel) VALUES ($1, 'student', 'Other', 'other', 'telegram') RETURNING id::text`, tenantID).Scan(&otherOwnerID); err != nil {
 		t.Fatal(err)
 	}
+	var otherTenantID string
+	if err := pool.QueryRow(ctx, `INSERT INTO tenants (name, slug) VALUES ('Other tenant', 'other-tenant') RETURNING id::text`).Scan(&otherTenantID); err != nil {
+		t.Fatal(err)
+	}
+	var otherTenantOwnerID string
+	if err := pool.QueryRow(ctx, `INSERT INTO users (tenant_id, role, name, external_id, channel) VALUES ($1, 'student', 'Other tenant learner', 'other-tenant-learner', 'telegram') RETURNING id::text`, otherTenantID).Scan(&otherTenantOwnerID); err != nil {
+		t.Fatal(err)
+	}
 	var conversationID string
 	if err := pool.QueryRow(ctx, `INSERT INTO conversations (tenant_id, user_id, state) VALUES ($1, $2, 'teaching') RETURNING id::text`, tenantID, ownerID).Scan(&conversationID); err != nil {
 		t.Fatal(err)
 	}
+	var otherConversationID string
+	if err := pool.QueryRow(ctx, `INSERT INTO conversations (tenant_id, user_id, state) VALUES ($1, $2, 'teaching') RETURNING id::text`, otherTenantID, otherTenantOwnerID).Scan(&otherConversationID); err != nil {
+		t.Fatal(err)
+	}
+	assertFocusedPageInsertRejected(t, ctx, pool, "cross-tenant-owner", tenantID, otherTenantOwnerID, conversationID)
+	assertFocusedPageInsertRejected(t, ctx, pool, "cross-tenant-conversation", tenantID, ownerID, otherConversationID)
 
 	now := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
 	service, err := NewService(NewPostgresStore(pool), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), func() time.Time { return now })
@@ -91,7 +105,12 @@ func TestPostgresStoreIdempotencyIsolationAndLifecycle(t *testing.T) {
 
 func startFocusedPagePostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
-	container, err := tcpostgres.Run(ctx, "postgres:17-alpine", tcpostgres.WithDatabase("pai"), tcpostgres.WithUsername("pai"), tcpostgres.WithPassword("pai"))
+	container, err := tcpostgres.Run(ctx, "postgres:17-alpine",
+		tcpostgres.WithDatabase("pai"),
+		tcpostgres.WithUsername("pai"),
+		tcpostgres.WithPassword("pai"),
+		tcpostgres.BasicWaitStrategies(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +132,23 @@ func startFocusedPagePostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		time.Sleep(100 * time.Millisecond)
 	}
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100000_initial.sql"))
+	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
+	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260713100000_focused_pages.sql"))
 	return pool
+}
+
+func assertFocusedPageInsertRejected(t *testing.T, ctx context.Context, pool *pgxpool.Pool, publicID, tenantID, ownerID, conversationID string) {
+	t.Helper()
+	createdAt := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
+	_, err := pool.Exec(ctx, `INSERT INTO focused_pages (
+		public_id, tenant_id, owner_user_id, conversation_id, turn_id, recipient_name,
+		message, token_hash, status, created_at, expires_at
+	) VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $1, 'Learner', 'Report', $5, 'active', $6, $7)`,
+		publicID, tenantID, ownerID, conversationID, make([]byte, 32), createdAt, createdAt.Add(Lifetime))
+	if err == nil {
+		t.Fatalf("database accepted mismatched focused page %q", publicID)
+	}
 }
 
 func applyFocusedPageMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool, path string) {
