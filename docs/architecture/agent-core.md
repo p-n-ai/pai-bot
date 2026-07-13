@@ -241,8 +241,6 @@ V1 uses structured server logs, not a public intermediate-event stream. Logs rec
 - Model transport registry: `internal/llm/registry.go`.
 - Current native-to-text adapter: `internal/ai/provider_openrouter_llm_adapter.go`.
 - Telegram runtime: `docs/runtime/telegram.md` and `internal/chat/telegram.go`.
-- Interactive execution view: `docs/agent-core-design.html`.
-- Before/after sequence view: `docs/agent-core-sequence.html`.
 
 ---
 
