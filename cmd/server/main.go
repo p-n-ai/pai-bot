@@ -251,7 +251,15 @@ func main() {
 
 			// Wire challenge notifications through the gateway.
 			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
-			engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store))
+			var focusedPageDeliverer *server.FocusedPageTurnDeliverer
+			if focusedPageService != nil {
+				focusedPageDeliverer = server.NewFocusedPageTurnDeliverer(
+					gw, store, focusedpage.NewPostgresDeliveryStore(db.Pool), focusedPageService,
+				)
+				engine.SetTurnDeliverer(focusedPageDeliverer)
+			} else {
+				engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store))
+			}
 
 			// Start proactive scheduler (nudges for due reviews).
 			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -371,6 +379,9 @@ func main() {
 			return http.Handler(topMux), func(ctx context.Context) error {
 				if err := gw.StartAll(ctx, handleInbound); err != nil {
 					return err
+				}
+				if focusedPageDeliverer != nil {
+					go focusedPageDeliverer.Run(ctx)
 				}
 				slog.Info("P&AI Bot is running")
 				return nil
