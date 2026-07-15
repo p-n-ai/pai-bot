@@ -72,4 +72,3 @@ output/
 # Local agent working artifacts (never commit)
 .humanlayer/
 .agents/
-.issues/
