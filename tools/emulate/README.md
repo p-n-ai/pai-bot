@@ -14,7 +14,3 @@ Ports:
 
 - Vercel: `http://127.0.0.1:4000`
 - Google: `http://127.0.0.1:4002`
-
-Reference:
-
-- `docs/ops/local-auth-emulation.md`
