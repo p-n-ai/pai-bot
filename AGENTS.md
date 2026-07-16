@@ -51,7 +51,7 @@ pai-bot/
 ## COMMIT & PR CONVENTIONS
 
 - No internal plan/sequence labels ("PR1", "PR3", "step 2", "phase 4") in commit messages, PR titles, or PR bodies. GitHub's own number is the only PR number.
-- `.humanlayer/`, `.agents/`, `.issues/` are local working artifacts: never commit them, never link or mention them in commit messages or PR descriptions.
+- `.humanlayer/` and `.agents/` are local working artifacts: never commit them, never link or mention them in commit messages or PR descriptions.
 - PR descriptions describe the code diff only — no walkthrough/artifact generation into `.humanlayer/`, no cloud artifact links, no deviation-from-plan sections referencing local plan files. Skip those steps when a PR-description skill asks for them.
 - Branch, commit, and PR names say what the change does in plain words — no codenames or plan shorthand.
 - Comments stay sparse everywhere: only tricky or bug-prone logic. `internal/llm` is comment-free (attribution in `NOTICE`).
@@ -103,17 +103,16 @@ cd admin-spa && pnpm build
 
 - Local runtime should stay local: never run migrations with `GOOSE_DSN`/`LEARN_DATABASE_URL` aimed at remote DBs.
 - `just frontend` starts the Next admin plus Agentation MCP; keep Agentation wiring dev-only.
-- `docs/**` may describe plans; verify current behavior against code before relying on docs.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues are private local markdown files under `.issues/`. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues using the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Triage uses the default five `Status:` values. See `docs/agents/triage-labels.md`.
+Triage uses the default five GitHub labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

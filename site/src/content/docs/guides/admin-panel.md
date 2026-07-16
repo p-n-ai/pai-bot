@@ -44,8 +44,6 @@ The root route `/` now stays public as a landing page. Its primary CTA routes si
 
 ## Authentication & Authorization
 
-Detailed runtime reference: `docs/admin/admin-auth.md`.
-
 ### Flow
 
 1. **Enter** — User lands on `/` or `/login`
@@ -270,5 +268,3 @@ Public route exception:
 | 5 | 24 | Auth hardening (invite acceptance, email/password), data export endpoints |
 | 6 | 27 | School onboarding wizard |
 | 6 | 29 | Comprehensive analytics API |
-
-See `docs/development-timeline.md` for full task breakdown and dependencies.
