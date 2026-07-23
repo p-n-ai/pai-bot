@@ -12,7 +12,7 @@ The first slice needs one private temporary page containing one personalized mes
 
 Add focused conversation pages:
 
-- The model produces one `message` string through structured output.
+- The model supplies one `message` string through the normal `create_focused_page` agent-core tool.
 - The server injects the trusted learner name and conversation identity.
 - One fixed page template renders recipient, message, expiry, and a fixed “Continue with P&AI” action.
 - The server creates a private capability link and sends it with the same chat turn.
@@ -52,11 +52,11 @@ sequenceDiagram
 
     U->>C: Ask for a focused page
     C->>E: Process turn with resolved actor
-    E-->>C: Reply text + FocusedPageDraft{message}
-    C->>P: Create page for actor and turn
+    E->>P: Tool creates page for trusted actor and turn
     P->>P: Parse message and apply fixed template policy
-    P-->>C: Private temporary link
-    C-->>U: Reply text + link
+    P-->>E: Tool success only; link retained outside model context
+    E-->>C: TurnResult{reply text, private temporary link}
+    C-->>U: Reply text + URL button
     U->>W: Redeem private capability
     W-->>U: Recipient + message + fixed CTA, or expired state
 ```
@@ -71,14 +71,15 @@ type TurnResult struct {
     Page *FocusedPageDraft
 }
 
-type FocusedPageDraft struct {
-    Message string `json:"message"`
+type FocusedPageArtifact struct {
+    URL       string
+    ExpiresAt time.Time
 }
 ```
 
-The structured-output schema contains one required string. The boundary parser trims it, rejects empty or oversized content, and returns a refined message value.
+The strict tool schema contains exactly one required string and rejects additional fields. The boundary parser trims it, rejects empty or messages above 4,000 characters, and returns a refined message value.
 
-For the first slice, only an explicit user request creates a page. Normal tutoring turns remain text-only.
+For the first slice, the tool description limits use to goal and report flows. Normal tutoring turns may finish without a tool call and remain text-only.
 
 #### Fixed Page Template
 
@@ -101,12 +102,12 @@ Creation sequence:
 
 1. Parse the message.
 2. Resolve the learner display name from trusted application data.
-3. Generate a public ID and high-entropy capability secret.
+3. Generate a public ID and derive a high-entropy capability from the server secret and trusted idempotency key.
 4. Store only the capability hash.
 5. Persist the immutable message and expiry.
 6. Return the private link.
 
-Use `(tenant_id, turn_id, page_index)` as the idempotency key. The first version allows at most one page per turn, so `page_index` is always zero but keeps the persisted contract explicit.
+Use `(tenant_id, turn_id, page_index)` as the idempotency key. The first version allows at most one page per turn, so `page_index` is always zero. Deterministic HMAC derivation lets a retry recreate the same link while the database stores only its SHA-256 hash.
 
 #### Page Instance Data
 
@@ -137,11 +138,13 @@ The endpoint rejects expired or revoked pages before returning recipient or mess
 
 #### Conversation Delivery and Failure
 
-The server creates the page before channel send and appends the private link to `chat.OutboundMessage`.
+The agent tool creates the page before channel send. `internal/agent` assembles the final text and artifact, then `internal/chat` appends the private URL button after existing Telegram keyboard rows.
 
-If message generation or page creation fails, send the useful text response without a link. If channel delivery fails, retain the idempotent page for retry until normal expiry.
+If message generation or page creation fails, send the useful text response without a link. Delivery is attempted once. A delivery failure returns the unchanged turn result and error without rerunning the model or page tool; durable queued retries remain a follow-up.
 
 The page CTA is application-owned and only returns to a trusted P&AI conversation. It does not mutate learner state.
+
+The slice is enabled only when `LEARN_FOCUSED_PAGE_BASE_URL` and `LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL` are both set. The server refuses focused-page startup with the development-default `PAI_AUTH_SECRET`, because that secret derives capabilities with a focused-page-specific HMAC domain.
 
 ## Alternatives Considered
 
@@ -153,55 +156,41 @@ The page CTA is application-owned and only returns to a trusted P&AI conversatio
 | Model-generated HTML | Maximum flexibility | Unsafe and inconsistent | Invalid trust boundary |
 | Text-only chat | No new infrastructure | Message remains buried in conversation | Does not provide the focused surface requested |
 
-## Open Questions
+## Fixed First-Slice Decisions
 
-- [ ] What explicit user wording triggers page creation?
-- [ ] What server-owned lifetime should the first page use?
-- [ ] May the page be opened repeatedly until expiry?
-- [ ] Which channel proves the first end-to-end slice?
-- [ ] What message size limit preserves a focused page?
+- Product use cases: goal and report conversations.
+- Lifetime: exactly one hour, enforced by server and database policy.
+- Redemption: repeatable until expiry unless revoked.
+- First channel: Telegram; terminal chat is planned later.
+- Message limit: 4,000 Unicode characters.
+- Delivery: final tutor text plus at most one focused-page artifact; the tool never sends chat messages.
 
-## Implementation Plan
+## Implementation Status
 
-### Phase 1: Foundation
+Implemented in the focused Telegram slice:
 
-- Add resolved `Actor`, `TurnResult`, `FocusedPageDraft`, and refined message type.
-- Add focused-page persistence, tenant/owner constraints, idempotency, lifecycle states, and repository.
-- Add capability generation, hash verification, redemption, expiry, and revocation.
-- Build the single fixed renderer.
+- Normal agent-core tool execution with the strict `{message}` contract.
+- Trusted tenant, owner, conversation, and turn derivation in `internal/agent`.
+- PostgreSQL and in-memory stores with one-hour expiry, revocation, idempotency, and hash-only capability storage.
+- Fixed read-only page shell and fragment redemption with no-store, restrictive CSP, no-referrer, and frame protections.
+- Final tutor text plus one Telegram URL button, with one automatic delivery attempt.
+- Unit, migration-backed integration, and Chromium coverage; detailed evidence is maintained in the [agent-core verification harness](../architecture/agent-core.md#focused-verification-harness).
 
-### Phase 2: Core Implementation
+Still planned:
 
-- Add one explicit conversation path using `ai.CompleteJSON` with `{message}` only.
-- Create the page idempotently inside the inbound turn.
-- Send reply text plus the private link through one selected channel.
-- Serve active, expired, and revoked page states.
-- Fall back to text when page generation or creation fails.
-
-### Phase 3: Polish & Testing
-
-- Unit-test message parsing, capability hashing, lifecycle transitions, and idempotency.
-- Integration-test wrong-token, expired, revoked, cross-user, cross-tenant, oversized-message, and retry behavior.
-- Contract-test channel delivery of reply text plus private link.
-- Browser-test keyboard operation, narrow and wide layouts, fragment removal, expiry, reduced motion, and console state.
-- Add cleanup, no-store caching, CSP, referrer isolation, token-safe logging, and operational documentation.
-- Run one test-account smoke from explicit chat request through page expiry.
+- Terminal-chat delivery.
+- Native provider support beyond OpenRouter.
+- Expired-row cleanup.
+- Durable queued retries across process restarts.
+- Broader cross-device layout and accessibility smoke coverage.
 
 ## Appendix
 
-Relevant current seams:
+Implemented seams:
 
-- `internal/agent/engine.go`: string-only `ProcessMessage` boundary.
-- `internal/ai/router.go`: existing `CompleteJSON` path.
-- `internal/chat/gateway.go`: channel-neutral outbound message.
-- `cmd/server/main.go`: inbound turn and outbound send orchestration.
-
----
-
-Open questions to discuss:
-
-1. What explicit user request should create the first focused page?
-2. What lifetime should the server apply?
-3. Which channel should prove delivery first?
-
-Ready to refine any section or proceed to implementation?
+- `internal/agentcore/core.go`: native sequential continuation loop.
+- `internal/agent/focused_page_tool.go`: trusted tool policy and `TurnResult` assembly.
+- `internal/ai/router.go`: native provider routing and fallback.
+- `internal/focusedpage`: persistence and capability lifecycle.
+- `internal/server/focused_page_handler.go`: private HTTP shell, redemption adapter, and fixed renderer.
+- `internal/chat/turn_render.go`: Telegram formatting and URL-button order.

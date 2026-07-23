@@ -78,7 +78,8 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 		if i == len(parts)-1 && len(msg.InlineKeyboard) > 0 {
 			type tgInlineButton struct {
 				Text         string `json:"text"`
-				CallbackData string `json:"callback_data"`
+				CallbackData string `json:"callback_data,omitempty"`
+				URL          string `json:"url,omitempty"`
 			}
 			inlineKeyboard := make([][]tgInlineButton, 0, len(msg.InlineKeyboard))
 			for _, row := range msg.InlineKeyboard {

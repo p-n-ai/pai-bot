@@ -17,6 +17,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
@@ -37,6 +38,11 @@ const (
 // Implementations should be safe to call from any goroutine.
 type Notifier interface {
 	Notify(ctx context.Context, channel, userID, text string)
+}
+
+// TurnDeliverer sends an assembled semantic turn through a channel adapter.
+type TurnDeliverer interface {
+	DeliverTurn(context.Context, chat.InboundMessage, TurnResult) error
 }
 
 // NopNotifier discards all notifications.
@@ -66,6 +72,9 @@ type EngineConfig struct {
 	FeatureFlags          func() featureflags.Features // called per check so runtime overrides apply without restart
 	TurnHookNotice        func(TurnHookCallNotice)
 	Notifier              Notifier
+	FocusedPages          *focusedpage.Service
+	FocusedPageEnabled    func(chat.InboundMessage) bool
+	TurnDeliverer         TurnDeliverer
 }
 
 // Engine is the core conversation processor.
@@ -94,8 +103,10 @@ type Engine struct {
 	prereqGraph           *curriculum.PrereqGraph
 	unlocks               *pendingUnlocks
 	milestones            *pendingMilestones
-	teachingTurnMu        sync.Mutex
-	teachingTurns         map[string]*conversationTurnLock
+	focusedPages          *focusedpage.Service
+	focusedPageEnabled    func(chat.InboundMessage) bool
+	turnLocks             keyedTurnLocks
+	turnDeliverer         TurnDeliverer
 }
 
 // NewEngine creates a new agent engine.
@@ -152,6 +163,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if flags == nil {
 		flags = func() featureflags.Features { return featureflags.Features{} }
 	}
+	focusedPageEnabled := cfg.FocusedPageEnabled
+	if focusedPageEnabled == nil {
+		focusedPageEnabled = func(chat.InboundMessage) bool { return false }
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -177,7 +192,9 @@ func NewEngine(cfg EngineConfig) *Engine {
 		prereqGraph:           prereqGraph,
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
-		teachingTurns:         make(map[string]*conversationTurnLock),
+		focusedPages:          cfg.FocusedPages,
+		focusedPageEnabled:    focusedPageEnabled,
+		turnDeliverer:         cfg.TurnDeliverer,
 	}
 }
 
@@ -189,8 +206,52 @@ func (e *Engine) SetNotifier(n Notifier) {
 	}
 }
 
-// ProcessMessage handles an incoming message and returns a response.
+// SetTurnDeliverer installs the channel delivery port after chat infrastructure is ready.
+func (e *Engine) SetTurnDeliverer(deliverer TurnDeliverer) {
+	e.turnDeliverer = deliverer
+}
+
+// ProcessMessage handles an incoming message and returns its text response.
 func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (string, error) {
+	result, err := e.ProcessTurn(ctx, msg)
+	return result.Text, err
+}
+
+// ProcessTurn serializes one user's active conversation and returns all semantic outputs.
+func (e *Engine) ProcessTurn(ctx context.Context, msg chat.InboundMessage) (TurnResult, error) {
+	unlock := e.turnLocks.lock(msg.Channel + "\x00" + msg.UserID)
+	defer unlock()
+	return e.processTurnUnlocked(ctx, msg)
+}
+
+func (e *Engine) processTurnUnlocked(ctx context.Context, msg chat.InboundMessage) (TurnResult, error) {
+	result := TurnResult{}
+	text, err := e.processMessage(ctx, msg, &result)
+	result.Text = text
+	return result, err
+}
+
+// ProcessAndDeliver assembles one turn and asks the configured adapter to deliver it.
+// The result is returned even when delivery fails so the identical artifact can be retried.
+func (e *Engine) ProcessAndDeliver(ctx context.Context, msg chat.InboundMessage) (TurnResult, error) {
+	unlock := e.turnLocks.lock(msg.Channel + "\x00" + msg.UserID)
+	defer unlock()
+	result, err := e.processTurnUnlocked(ctx, msg)
+	if err != nil {
+		return result, err
+	}
+	return result, e.DeliverTurn(ctx, msg, result)
+}
+
+// DeliverTurn sends an already assembled result without re-running the model or page tool.
+func (e *Engine) DeliverTurn(ctx context.Context, msg chat.InboundMessage, result TurnResult) error {
+	if e.turnDeliverer == nil {
+		return fmt.Errorf("turn deliverer is not configured")
+	}
+	return e.turnDeliverer.DeliverTurn(ctx, msg, result)
+}
+
+func (e *Engine) processMessage(ctx context.Context, msg chat.InboundMessage, result *TurnResult) (string, error) {
 	slog.Info("processing message",
 		"channel", msg.Channel,
 		"user_id", msg.UserID,
@@ -275,7 +336,41 @@ func (e *Engine) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (s
 	if response, handled := e.maybeHandleOutOfScopeTutorRequest(msg, conv); handled {
 		return response, nil
 	}
-	return e.runTeachingTurn(ctx, msg, conv, milestonePrefix+unlockPrefix)
+	return e.runTeachingTurn(ctx, msg, conv, milestonePrefix+unlockPrefix, result)
+}
+
+type keyedTurnLocks struct {
+	mu    sync.Mutex
+	locks map[string]*keyedTurnLock
+}
+
+type keyedTurnLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+func (l *keyedTurnLocks) lock(key string) func() {
+	l.mu.Lock()
+	if l.locks == nil {
+		l.locks = make(map[string]*keyedTurnLock)
+	}
+	entry := l.locks[key]
+	if entry == nil {
+		entry = &keyedTurnLock{}
+		l.locks[key] = entry
+	}
+	entry.refs++
+	l.mu.Unlock()
+	entry.mu.Lock()
+	return func() {
+		entry.mu.Unlock()
+		l.mu.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(l.locks, key)
+		}
+		l.mu.Unlock()
+	}
 }
 
 // estimateTokens gives a rough token count for messages (1 token ≈ 4 chars).

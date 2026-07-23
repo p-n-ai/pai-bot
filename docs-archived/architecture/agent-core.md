@@ -2,15 +2,13 @@
 
 ## Problem Context
 
-The tutor currently performs one text-only completion per teaching turn. `internal/agent/teaching_turn.go` builds tutor context, calls `ai.Router.Complete` once, post-processes text, persists it, and delivers it. The model cannot request a tool and continue the same turn.
+The default tutor path performs one text-only completion per teaching turn. The configured Telegram focused-page path now uses a native model → tool → model continuation loop, while other channels and installations without focused-page configuration keep the established text-only path.
 
-`internal/llm` already represents native `ToolCall`, `ToolResultMessage`, `Tool`, and `Context` values. The missing layer is a small continuation loop between tutor policy and model transport. The current `internal/ai` adapter flattens native model output back to text, so it discards the structure that loop needs.
+`internal/llm` represents native `ToolCall`, `ToolResultMessage`, `Tool`, and `Context` values. `internal/agentcore` now preserves those values through a small sequential continuation loop, and `internal/ai.NativeModel` retains provider routing, fallback, retry, tracing, and circuit-breaker ownership. The OpenRouter adapter is the first native-capable provider; text-only providers remain available for tool-free native requests.
 
-Pi proves the useful core is small: call the model, append its assistant message, execute requested tools, append paired results, and call the model again. Pi also includes parallel tools, steering, event streams, extensions, and other features P&AI does not need in the first version.
+## Solution
 
-## Proposed Solution
-
-Add a provider-neutral `internal/agentcore` package with one job:
+The implemented provider-neutral `internal/agentcore` package has one job:
 
 - Accept a native model context and registered tools.
 - Call a model through a narrow interface owned by `internal/ai`.
@@ -24,10 +22,10 @@ Add a provider-neutral `internal/agentcore` package with one job:
 
 ### Goals
 
-- Goal 1: Give the tutor a real model → tool → model continuation loop while preserving native messages.
-- Goal 2: Keep the loop exemplary simple: one transcript, sequential tools, one termination rule.
-- Goal 3: Make cancellation, tool errors, and turn limits explicit and testable.
-- Goal 4: Keep the conversation harness deterministic, database-free, and outside the production runtime path.
+- Preserve native messages through a real model → tool → model continuation loop.
+- Keep one transcript, sequential tool execution, and one termination rule.
+- Make cancellation, tool errors, and turn limits explicit and testable.
+- Prove the loop with the normal `create_focused_page` tool while keeping persistence and delivery policy outside the core.
 
 ### Non-Goals
 
@@ -41,7 +39,7 @@ Add a provider-neutral `internal/agentcore` package with one job:
 
 The core operates only on native messages. `internal/agent` builds the initial context and tools. `internal/ai` supplies a native-message model implementation while retaining model routing and fallback. `internal/chat` renders the final answer for Telegram or another channel after the core returns.
 
-#### Current sequence: before
+#### Current default sequence: text-only path
 
 ```mermaid
 sequenceDiagram
@@ -66,7 +64,7 @@ sequenceDiagram
     Telegram-->>Learner: Render final answer
 ```
 
-#### Proposed sequence: after
+#### Implemented sequence: focused Telegram turn
 
 ```mermaid
 sequenceDiagram
@@ -77,6 +75,7 @@ sequenceDiagram
     participant AI as internal/ai
     participant LLM as internal/llm
     participant Tool
+    participant Page as Focused page store
     participant Store
 
     Learner->>Telegram: Send message
@@ -94,8 +93,10 @@ sequenceDiagram
         Core->>Core: Append assistant message
 
         alt Tool calls exist
-            Core->>Tool: Validate and execute sequentially
-            Tool-->>Core: ToolResultMessage
+            Core->>Tool: create_focused_page({message})
+            Tool->>Page: Create or reuse trusted turn page
+            Page-->>Tool: Internal artifact
+            Tool-->>Core: Success/failure only, never URL
             Core->>Core: Append tool result
         else No tool calls
             Core-->>Tutor: Completed turn
@@ -104,40 +105,17 @@ sequenceDiagram
 
     Tutor->>Tutor: Clean tutor response
     Tutor->>Store: Persist final text only
-    Tutor-->>Telegram: OutboundMessage
-    Telegram-->>Learner: Render final answer
+    Tutor-->>Telegram: TurnResult{text, focused page}
+    Telegram-->>Learner: Render text, then private URL button
 ```
 
 ### Key Components
 
 #### Core loop
 
-The loop mirrors the load-bearing part of Pi's `packages/agent/src/agent-loop.ts`, without its extension surface or parallel execution.
+The loop constructs an `llm.Context` from the system prompt, current transcript, and registered definitions, then calls the model and appends its native assistant message. If that message has no tool calls, the core returns it as the final response. Otherwise, the core resolves and executes each tool sequentially, appends a paired `ToolResultMessage`, and calls the model again. Exhausting the configured model-call limit returns an error.
 
-```go
-for {
-    reply, err := model.Complete(ctx, transcript.Context())
-    if err != nil {
-        return Result{}, err
-    }
-
-    transcript.Append(reply)
-    calls := reply.ToolCalls()
-    if len(calls) == 0 {
-        return Result{Final: reply, Messages: transcript.Messages()}, nil
-    }
-
-    for _, call := range calls {
-        result, err := tools.Execute(ctx, call)
-        if err != nil {
-            result = toolErrorResult(call)
-        }
-        transcript.Append(result)
-    }
-}
-```
-
-The implementation also checks cancellation and a fixed maximum model-call count. Tool lookup, argument validation, thrown errors, and cancellation return `llm.ToolResultMessage{IsError: true}` when the model can still recover. A broken core invariant returns a Go error.
+The implementation checks cancellation and a fixed maximum model-call count. Unknown tools and tool-boundary validation or execution failures return `llm.ToolResultMessage{IsError: true}` when the model can still recover. Context cancellation, model failure, an invalid core contract, or exhausting the call limit returns a Go error.
 
 #### Native model port
 
@@ -149,7 +127,7 @@ type Model interface {
 }
 ```
 
-`internal/ai` implements this port so existing fallback, retries, circuit breakers, model choice, credentials, budgets, and tracing remain in one place. The existing text-only `ai.Provider` path can remain for callers not yet migrated.
+`internal/ai` implements this port so fallback, retries, circuit breakers, model choice, credentials, tracing, and provider selection remain in one place. The existing text-only `ai.Provider` path remains for callers not migrated. The standalone budget types are not yet wired to native requests, so this document does not claim native budget enforcement.
 
 The core boundary uses one system-instruction representation: populate `llm.Context.SystemPrompt` and reject system messages in `Context.Messages`. This prevents duplicate system instructions.
 
@@ -164,37 +142,37 @@ type Tool interface {
 }
 ```
 
-Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools, invalid arguments, and execution errors become payload-safe error results, allowing the model to correct the request on the next pass.
+Calls execute sequentially. Every result preserves `ToolCallID` and `ToolName`. Unknown tools, invalid arguments, and execution failures become payload-safe error results, allowing the model to correct the request on the next pass.
 
-The first proving tool is an illustrative curriculum lookup. Today curriculum context is resolved eagerly in `internal/agent/teaching_turn.go`; moving that lookup behind a model tool is a separate tutor-policy change, not part of creating the core.
+The generic agent-core flag registers the curriculum lookup tool. Configured Telegram focused-page turns additionally register `create_focused_page` as a normal tool without requiring that generic rollout flag. Its strict schema contains exactly one required string, `{message}`. The model cannot supply recipient, owner, tenant, conversation, turn, layout, CTA, lifetime, capability, URL, or delivery channel. `internal/agent` derives identity from the resolved store and creates at most one page artifact per turn. Duplicate execution with the same message reuses the artifact; a second different message returns a recoverable one-artifact-limit error.
+
+The tool persists the page but never sends a chat message. Its native result contains only a safe success or failure sentence. The private capability URL stays in the application-owned artifact and never enters model context, tool results, logs, errors, or stored conversation messages.
 
 #### Tutor and Telegram ownership
 
-`internal/agent` builds the teaching prompt, loads history, decides which tools exist, persists the completed turn, post-processes tutor prose, and updates mastery. It calls the core once per teaching turn.
+`internal/agent` builds the teaching prompt, loads history, decides which tools exist, persists the completed turn, post-processes tutor prose, and updates mastery. A turn may return two semantic outputs: final tutor text and one focused-page artifact. Conversation history stores the learner message and final assistant text; the native assistant/tool transcript remains in memory.
 
-The native tool transcript is in-memory execution state in v1. Current stored conversations support textual `user`, `assistant`, and `system` rows, so the tutor persists the learner message and final assistant answer only. Structured execution logs may record tool names, call IDs, timing, and outcomes without storing tool payloads or creating a second conversation history.
+The native tool transcript is in-memory execution state in v1. Current stored conversations support textual `user`, `assistant`, and `system` rows, so the tutor persists the learner message and final assistant answer only.
 
-Telegram remains a delivery adapter. `cmd/server/main.go` normalizes Telegram Markdown and keyboards; `internal/chat/telegram.go` splits messages at the Bot API limit and retries plain text when Markdown parsing fails. The core returns semantic assistant content and never formats Telegram output.
+`internal/agent.ProcessAndDeliver` owns assembly and delivery sequencing through a narrow port. `internal/chat.RenderTurn` owns Telegram Markdown, keyboards, and the private URL button after any existing rows; `internal/chat/telegram.go` sends that ordered payload, splits long text, and retries plain text when Markdown parsing fails. A failed focused-page delivery returns the unchanged turn result and error without automatically sending the user-visible turn again.
 
-Telegram currently dispatches inbound updates concurrently. A multi-model-call turn widens the chance that two messages for one conversation overlap. The teaching layer must serialize active turns per conversation before enabling the new loop; ordering does not belong in the generic core.
+Telegram dispatches inbound updates concurrently, so `internal/agent` serializes processing and normal delivery by trusted channel/user conversation key before enabling the side-effecting path. Ordering does not belong in the generic core.
 
-Ratings are removed from the teaching path separately. That cleanup includes rating packet injection, callback state, keyboard inference, events, and tests; it is not an agent-core responsibility.
-
-#### Hard-simple conversation harness
+#### Focused verification harness
 
 The harness is test code around the public core interface:
 
 1. Provide an in-memory transcript.
 2. Provide a scripted fake model with two responses: tool call, then final answer.
-3. Provide one in-memory fake tool.
+3. Provide the real focused-page tool with an in-memory page store.
 4. Run the real core loop.
 5. Assert the exact native transcript and termination reason.
 
-No production database, network, Telegram bot, prompt evaluator, classifier, golden-score framework, or deployment gate. A small table test covers direct answer, one tool round trip, tool error recovery, cancellation, and model-call limit. Optional production conversation samples must be sanitized fixtures checked into testdata before use.
+Unit tests cover direct answers, a native tool round trip, exact tool registration, empty-final repair, unknown-tool recovery, duplicate execution, one-artifact enforcement, conversation serialization, single-attempt delivery, capability lifecycle, and Telegram payload order. Migration-backed PostgreSQL integration covers page idempotency, wrong-token rejection, tenant/owner/conversation isolation, exact expiry, and revocation. A Chromium test exercises fragment removal, CSP-compatible same-origin redemption, private rendering, and safe wrong-token, expired, revoked, and missing-capability states through the real Go handler.
 
 #### Diagnostics
 
-V1 uses structured server logs, not a public intermediate-event stream. Logs record run ID, conversation ID, model call count, tool name, tool call ID, duration, error status, and termination reason. They never record tool arguments, tool results, prompts, credentials, or learner text by default.
+V1 has no public intermediate-event stream. Structured logs record run and conversation IDs, model-call counts, tool names and call IDs, durations, error status, and termination reasons. Tool arguments, tool results, page messages, capabilities, full private URLs, prompts, and learner text are not logged.
 
 ## Alternatives Considered
 
@@ -202,49 +180,34 @@ V1 uses structured server logs, not a public intermediate-event stream. Logs rec
 |-------------|------|------|----------------|
 | Keep single-shot `ai.Router.Complete` | No new package | Cannot preserve or continue tool calls | Does not create an agent core |
 | Put loop in `internal/agent` | Fewer packages initially | Mixes generic continuation with tutor policy and persistence | Makes reuse and deterministic testing harder |
-| Call `internal/llm` directly from core | Smallest call path | Bypasses AI routing, fallback, budgets, and tracing | Breaks existing ownership |
+| Call `internal/llm` directly from core | Smallest call path | Bypasses AI routing, fallback, retry, circuit breakers, and provider selection | Breaks existing ownership |
 | Port Pi agent core wholesale | Mature features | Imports parallel tools, steering, events, and extension complexity | Far beyond P&AI's first concrete use |
 | Add learner/tutor move routing | Explicit behavior labels | Adds a classifier and second control system | Conversation quality should emerge from context, tools, and the loop |
 
-## Open Questions
+## Implementation Status
 
-- None. V1 scope and ownership decisions are fixed in this document.
+### Implemented
 
-## Implementation Plan
+- Sequential `internal/agentcore` continuation with native transcript pairing and a fixed model-call limit.
+- Native routing through `internal/ai`, with OpenRouter as the first tool-capable adapter.
+- Trusted conversation serialization plus `TurnResult{text, focused page}` assembly and delivery sequencing in `internal/agent`.
+- Normal `create_focused_page({message})` registration for configured Telegram teaching turns.
+- One-hour, hash-only, idempotent focused-page persistence; active/revoked/expired redemption; fixed read-only renderer; no-store, restrictive CSP, and no-referrer headers.
+- Telegram text plus URL-button rendering; no channel send from the tool.
+- Chromium verification of the browser capability and lifecycle flow through the production handler.
 
-### Phase 1: Foundation
+### Planned follow-ups
 
-- Add `internal/agentcore` transcript, model port, tool registry, result, and termination types.
-- Add deterministic tests for direct answer, one tool call, unknown tool, invalid arguments, cancellation, and maximum model calls.
-- Add a native-message adapter in `internal/ai` that preserves current routing and fallback behavior.
-- Add conversation-scoped turn serialization in the teaching layer.
-
-### Phase 2: Core Implementation
-
-- Implement the sequential continuation loop and native tool-result pairing.
-- Integrate one teaching-turn path behind a runtime flag; keep current single-shot path available for rollback.
-- Register one curriculum lookup tool without moving tutor policy into the core.
-- Remove rating injection and Telegram rating callbacks from the tutor path as a separate, reviewable change.
-
-### Phase 3: Polish & Testing
-
-- Run focused `internal/agentcore`, `internal/ai`, `internal/agent`, and Telegram channel tests.
-- Add an integration test proving user input → tool call → tool result → final Telegram-ready answer.
-- Verify cancellation, tool timeout, repeated tool failure, model-call limit, and direct-answer behavior.
-- Document the package contract and update runtime architecture docs after the flag is enabled.
+- Native tool support for providers other than OpenRouter.
+- Terminal-chat focused-page delivery.
+- Expired-row cleanup; access already expires at request time and does not depend on cleanup.
+- Durable queued retries across process restarts.
 
 ## Appendix
 
-- Pi reference: `/Users/thor/work/pi/packages/agent/src/agent-loop.ts` at local commit `dc7b547f6284`.
+- Agent loop: `internal/agentcore/core.go`.
 - Current tutor turn: `internal/agent/teaching_turn.go`.
 - Native message types: `internal/llm/types.go`.
 - Model transport registry: `internal/llm/registry.go`.
 - Current native-to-text adapter: `internal/ai/provider_openrouter_llm_adapter.go`.
 - Telegram runtime: `docs/runtime/telegram.md` and `internal/chat/telegram.go`.
-
----
-
-Open questions to discuss:
-1. None. V1 scope is finalized.
-
-Ready to proceed to implementation.

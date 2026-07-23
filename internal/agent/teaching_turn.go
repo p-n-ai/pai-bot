@@ -11,13 +11,9 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
-	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
-func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, responsePrefix string) (string, error) {
-	unlock := e.lockTeachingTurn(conv.ID)
-	defer unlock()
-
+func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, conv *Conversation, responsePrefix string, turnResult *TurnResult) (string, error) {
 	userContent := msg.Text
 	if msg.HasImage {
 		if userContent == "" {
@@ -125,24 +121,7 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 
 	// Call AI.
 	modelStartedAt := time.Now()
-	var resp ai.CompletionResponse
-	if e.featureFlags().Enabled(featureflags.AgentCore) {
-		nativeResp, nativeErr := e.completeNativeTeachingTurn(ctx, turn, reqModel)
-		err = nativeErr
-		resp = ai.CompletionResponse{
-			Content:      nativeResp.Content,
-			Model:        nativeResp.Model,
-			InputTokens:  nativeResp.InputTokens,
-			OutputTokens: nativeResp.OutputTokens,
-		}
-	} else {
-		resp, err = e.aiRouter.Complete(ctx, ai.CompletionRequest{
-			Messages:  messages,
-			Model:     reqModel,
-			Task:      ai.TaskTeaching,
-			MaxTokens: 1024,
-		})
-	}
+	resp, artifact, err := e.completeTeachingTurn(ctx, turn, messages, reqModel)
 	turn.Model.LatencyMS = int(time.Since(modelStartedAt).Milliseconds())
 	if err != nil {
 		turn.Model.Error = err.Error()
@@ -153,6 +132,9 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	turn.Model.Model = resp.Model
 	turn.Model.InputTokens = resp.InputTokens
 	turn.Model.OutputTokens = resp.OutputTokens
+	if turnResult != nil {
+		turnResult.FocusedPage = artifact
+	}
 
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := postProcessTutorResponse(normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content)), msg.Text)

@@ -5,6 +5,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
@@ -21,6 +22,8 @@ func clearEnv(t *testing.T) {
 		"LEARN_DATABASE_MIN_CONNS",
 		"LEARN_CACHE_URL",
 		"LEARN_TELEGRAM_BOT_TOKEN",
+		"LEARN_FOCUSED_PAGE_BASE_URL",
+		"LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL",
 		"LEARN_EMAIL_SMTP_ADDR",
 		"LEARN_EMAIL_SMTP_USERNAME",
 		"LEARN_EMAIL_SMTP_PASSWORD",
@@ -389,6 +392,25 @@ func TestValidate_EmailDeliveryRequiresSMTPAndFromAddress(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error when email delivery is partially configured")
+	}
+}
+
+func TestValidateFocusedPageConfigurationIsPairedAndUsesPrivateSecret(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.FocusedPage.BaseURL = "https://pages.example"
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "configured together") {
+		t.Fatalf("one-sided focused page config error = %v", err)
+	}
+
+	base.FocusedPage.TelegramCTAURL = "https://t.me/pandai_bot"
+	base.Auth.JWTSecret = DefaultAuthSecret
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "PAI_AUTH_SECRET") {
+		t.Fatalf("default focused page secret error = %v", err)
+	}
+
+	base.Auth.JWTSecret = "private-test-secret-value"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid focused page config error = %v", err)
 	}
 }
 

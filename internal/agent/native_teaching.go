@@ -21,12 +21,16 @@ type teachingCompletion struct {
 }
 
 func (e *Engine) completeNativeTeachingTurn(ctx context.Context, turn *agentTurn, modelID string) (teachingCompletion, error) {
+	return e.completeNativeTeachingTurnWithTools(ctx, turn, modelID, e.teachingTools())
+}
+
+func (e *Engine) completeNativeTeachingTurnWithTools(ctx context.Context, turn *agentTurn, modelID string, tools []agentcore.Tool) (teachingCompletion, error) {
 	nativeContext, err := e.buildNativeContextFromTurn(turn)
 	if err != nil {
 		return teachingCompletion{}, err
 	}
 	model := ai.NewNativeModel(e.aiRouter, ai.NativeModelConfig{Task: ai.TaskTeaching, Model: modelID})
-	result, err := agentcore.Run(ctx, model, nativeContext, e.teachingTools(), agentcore.Config{
+	result, err := agentcore.Run(ctx, model, nativeContext, tools, agentcore.Config{
 		MaxModelCalls:  agentcore.DefaultMaxModelCalls,
 		StreamOptions:  &llm.StreamOptions{MaxTokens: 1024},
 		RunID:          turn.ID,

@@ -35,6 +35,7 @@ type InboundMessage struct {
 type InlineButton struct {
 	Text         string
 	CallbackData string
+	URL          string
 }
 
 // OutboundMessage is a message to send via any channel.

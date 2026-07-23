@@ -6,11 +6,18 @@ package agent
 import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 )
 
 const (
 	agentTurnRouteTeaching = "teaching"
 )
+
+// TurnResult is the semantic output of one learner turn.
+type TurnResult struct {
+	Text        string
+	FocusedPage *focusedpage.Artifact
+}
 
 // agentTurn is the runtime boundary for one inbound message that reaches the
 // generic tutor model path.

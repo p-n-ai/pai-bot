@@ -24,6 +24,14 @@ func BuildTelegramInlineKeyboard(text string) [][]InlineButton {
 	return BuildTelegramInlineKeyboardWithContext(text, TelegramInlineKeyboardContext{})
 }
 
+// AppendFocusedPageButton keeps channel-specific focused-page rendering in the Telegram adapter layer.
+func AppendFocusedPageButton(rows [][]InlineButton, pageURL string) [][]InlineButton {
+	if strings.TrimSpace(pageURL) == "" {
+		return rows
+	}
+	return append(rows, []InlineButton{{Text: "Open focused page", URL: pageURL}})
+}
+
 // BuildTelegramInlineKeyboardWithContext returns inline keyboard rows inferred
 // from the outgoing message text plus explicit runtime state when available.
 func BuildTelegramInlineKeyboardWithContext(text string, ctx TelegramInlineKeyboardContext) [][]InlineButton {
