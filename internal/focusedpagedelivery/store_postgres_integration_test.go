@@ -209,6 +209,7 @@ func startDeliveryPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		"20260318100400_auth_identity_tenant_consistency.sql",
 		"20260713100000_focused_pages.sql",
 		"20260723163958_focused_page_deliveries.sql",
+		"20260723170429_focused_page_delivery_cleanup_cascade.sql",
 	} {
 		applyDeliveryMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", name))
 	}

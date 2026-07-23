@@ -22,7 +22,7 @@ CREATE TABLE focused_page_deliveries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     FOREIGN KEY (tenant_id) REFERENCES tenants(id),
     FOREIGN KEY (tenant_id, focused_page_public_id, turn_id)
-        REFERENCES focused_pages(tenant_id, public_id, turn_id) ON DELETE CASCADE,
+        REFERENCES focused_pages(tenant_id, public_id, turn_id),
     UNIQUE (tenant_id, turn_id, channel),
     CHECK (
         (status = 'pending' AND lease_token IS NULL AND lease_expires_at IS NULL AND delivered_at IS NULL)
