@@ -1083,6 +1083,27 @@ func TestAuthLogoutEndpointRejectsGET(t *testing.T) {
 	}
 }
 
+func TestAuthCapabilitiesReflectConfiguredProviders(t *testing.T) {
+	authSvc := &stubAuthService{
+		capabilities: auth.Capabilities{GoogleLogin: true},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/capabilities", nil)
+	rec := httptest.NewRecorder()
+
+	newHandlerWithServices(stubAdminAPI{}, &chatGatewayStub{}, authSvc, "change-me-in-production", time.Hour).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload auth.Capabilities
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if !payload.GoogleLogin {
+		t.Fatal("google_login = false, want true")
+	}
+}
+
 func TestAuthGoogleStartEndpointRedirectsToProvider(t *testing.T) {
 	authSvc := &stubAuthService{
 		googleStartURL: "https://accounts.google.com/o/oauth2/v2/auth?state=abc",
@@ -1930,6 +1951,7 @@ func (c *chatGatewayStub) Send(_ context.Context, msg outboundMessage) error {
 }
 
 type stubAuthService struct {
+	capabilities      auth.Capabilities
 	loginReq          auth.LoginRequest
 	loginResp         auth.Session
 	loginErr          error
@@ -1968,6 +1990,10 @@ type stubAuthService struct {
 	identitiesErr     error
 	logoutToken       string
 	logoutErr         error
+}
+
+func (s *stubAuthService) Capabilities() auth.Capabilities {
+	return s.capabilities
 }
 
 func (s *stubAuthService) Login(_ context.Context, req auth.LoginRequest) (auth.Session, error) {

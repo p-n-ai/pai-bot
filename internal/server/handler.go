@@ -227,6 +227,7 @@ func (p tenantAdminDataSourceProvider) ForRequest(r *http.Request) (adminDataSou
 }
 
 type authService interface {
+	Capabilities() auth.Capabilities
 	Login(ctx context.Context, req auth.LoginRequest) (auth.Session, error)
 	AcceptInvite(ctx context.Context, req auth.AcceptInviteRequest) (auth.Session, error)
 	IssueInvite(ctx context.Context, req auth.IssueInviteRequest) (auth.InviteRecord, error)
@@ -387,6 +388,7 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 		authenticated,
 		auth.RequireRoles(auth.RoleAdmin),
 	)
+	mux.Handle("GET /api/auth/capabilities", handleAuthCapabilities(authSvc))
 	mux.Handle("POST /api/auth/login", handleAuthLogin(authSvc, canManageAISettings))
 	mux.Handle("GET /api/auth/google/start", handleAuthGoogleStart(authSvc))
 	mux.Handle("GET /api/auth/google/callback", handleAuthGoogleCallback(authSvc))
@@ -1587,6 +1589,12 @@ func handleAuthLogin(authSvc authService, canManageAISettings func(auth.Role) bo
 		}
 
 		writeAuthSessionResponse(w, r, http.StatusOK, resp, canManageAISettings)
+	}
+}
+
+func handleAuthCapabilities(authSvc authService) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, authSvc.Capabilities())
 	}
 }
 

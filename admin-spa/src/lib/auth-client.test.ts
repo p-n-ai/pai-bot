@@ -5,8 +5,39 @@ import {
   buildGoogleLoginURL,
   loginWithPassword,
   logout,
+  readAuthCapabilities,
   readAuthSession,
 } from './auth-client'
+
+describe('readAuthCapabilities', () => {
+  it('reads server-owned Google login availability', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ google_login: true }), { status: 200 }),
+      )
+
+    await expect(readAuthCapabilities(fetcher)).resolves.toEqual({
+      google_login: true,
+    })
+    expect(fetcher).toHaveBeenCalledWith('/api/auth/capabilities', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+  })
+
+  it('rejects malformed capability responses', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ google_login: 'yes' }), { status: 200 }),
+      )
+
+    await expect(readAuthCapabilities(fetcher)).rejects.toMatchObject({
+      name: 'AuthContractError',
+    })
+  })
+})
 
 describe('readAuthSession', () => {
   it('reads the cookie-backed admin session', async () => {

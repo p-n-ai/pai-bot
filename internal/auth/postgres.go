@@ -55,6 +55,13 @@ func (s *PostgresService) ConfigureGoogleOAuth(cfg GoogleOAuthProviderConfig) {
 	s.google = NewGoogleOAuthProvider(cfg, s.httpClient, s.now)
 }
 
+// Capabilities reports auth flows backed by complete runtime configuration.
+func (s *PostgresService) Capabilities() Capabilities {
+	return Capabilities{
+		GoogleLogin: s.google != nil && s.google.Configured(),
+	}
+}
+
 func (s *PostgresService) ConfigureInviteEmail(sender mailer.Sender) {
 	s.inviteMailSender = sender
 }
