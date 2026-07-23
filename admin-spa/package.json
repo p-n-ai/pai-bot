@@ -14,7 +14,7 @@
     "lint:ox:fix": "pnpm run lint:ox -- --fix",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "test": "vitest run",
+    "test": "vitest run src",
     "preview": "vite preview",
     "intent:list": "intent list",
     "intent:router": "intent load @tanstack/router-core#router-core",
@@ -47,6 +47,7 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@playwright/test": "1.51.1",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/eslint-config": "^0.4.0",
     "@tanstack/intent": "^0.0.41",

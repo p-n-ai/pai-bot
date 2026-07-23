@@ -38,7 +38,6 @@ loadEnvFileIfExists(resolve(process.cwd(), "..", ".env"));
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 const backendEnabled = process.env.E2E_BACKEND_ENABLED === "true";
-const useSystemChrome = process.env.PLAYWRIGHT_USE_SYSTEM_CHROME === "true";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -65,7 +64,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], ...(useSystemChrome ? { channel: "chrome" as const } : {}) },
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
 });

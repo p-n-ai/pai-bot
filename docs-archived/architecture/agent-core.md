@@ -154,7 +154,7 @@ The tool persists the page but never sends a chat message. Its native result con
 
 The native tool transcript is in-memory execution state in v1. Current stored conversations support textual `user`, `assistant`, and `system` rows, so the tutor persists the learner message and final assistant answer only.
 
-`internal/agent.ProcessAndDeliver` owns assembly and delivery sequencing through a narrow port. `internal/chat.RenderTurn` owns Telegram Markdown, keyboards, and the private URL button after any existing rows; `internal/chat/telegram.go` sends that ordered payload, splits long text, and retries plain text when Markdown parsing fails. Before the first focused-page send, the server adapter persists an outbox row containing the tutor text and trusted delivery identifiers but no capability or URL. Transient failures receive two bounded in-process retries, then the outbox worker reconstructs the deterministic capability in memory and retries the unchanged result until delivery succeeds, the page is revoked, or its one-hour expiry is reached.
+`internal/agent.ProcessAndDeliver` owns assembly and delivery sequencing through a narrow port. `internal/chat.RenderTurn` owns Telegram Markdown, keyboards, and the private URL button after any existing rows; `internal/chat/telegram.go` sends that ordered payload, splits long text, and retries plain text when Markdown parsing fails. A failed focused-page delivery returns the unchanged turn result and error without automatically sending the user-visible turn again.
 
 Telegram dispatches inbound updates concurrently, so `internal/agent` serializes processing and normal delivery by trusted channel/user conversation key before enabling the side-effecting path. Ordering does not belong in the generic core.
 
@@ -168,7 +168,7 @@ The harness is test code around the public core interface:
 4. Run the real core loop.
 5. Assert the exact native transcript and termination reason.
 
-Unit tests cover direct answers, a native tool round trip, exact tool registration, empty-final repair, unknown-tool recovery, duplicate execution, one-artifact enforcement, conversation serialization, capability lifecycle, durable delivery retry, and Telegram payload order. Migration-backed PostgreSQL integration covers page and outbox idempotency, wrong-token rejection, tenant/owner/conversation isolation, exact expiry, revocation, and capability reconstruction. A Chromium test exercises fragment removal, CSP-compatible same-origin redemption, private rendering, and safe wrong-token, expired, revoked, and missing-capability states through the real Go handler.
+Unit tests cover direct answers, a native tool round trip, exact tool registration, empty-final repair, unknown-tool recovery, duplicate execution, one-artifact enforcement, conversation serialization, single-attempt delivery, capability lifecycle, and Telegram payload order. Migration-backed PostgreSQL integration covers page idempotency, wrong-token rejection, tenant/owner/conversation isolation, exact expiry, and revocation. A Chromium test exercises fragment removal, CSP-compatible same-origin redemption, private rendering, and safe wrong-token, expired, revoked, and missing-capability states through the real Go handler.
 
 #### Diagnostics
 
@@ -194,7 +194,6 @@ V1 has no public intermediate-event stream. Structured logs record run and conve
 - Normal `create_focused_page({message})` registration for configured Telegram teaching turns.
 - One-hour, hash-only, idempotent focused-page persistence; active/revoked/expired redemption; fixed read-only renderer; no-store, restrictive CSP, and no-referrer headers.
 - Telegram text plus URL-button rendering; no channel send from the tool.
-- Persisted focused-page delivery outbox with hash-only capability reconstruction and retry ownership through expiry.
 - Chromium verification of the browser capability and lifecycle flow through the production handler.
 
 ### Planned follow-ups
@@ -202,6 +201,7 @@ V1 has no public intermediate-event stream. Structured logs record run and conve
 - Native tool support for providers other than OpenRouter.
 - Terminal-chat focused-page delivery.
 - Expired-row cleanup; access already expires at request time and does not depend on cleanup.
+- Durable queued retries across process restarts.
 
 ## Appendix
 

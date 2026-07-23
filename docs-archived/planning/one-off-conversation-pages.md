@@ -140,7 +140,7 @@ The endpoint rejects expired or revoked pages before returning recipient or mess
 
 The agent tool creates the page before channel send. `internal/agent` assembles the final text and artifact, then `internal/chat` appends the private URL button after existing Telegram keyboard rows.
 
-If message generation or page creation fails, send the useful text response without a link. Before the first channel send, persist a delivery outbox row containing trusted identifiers and tutor text but no capability or URL. If delivery fails, reconstruct the deterministic capability only in memory and retry the unchanged turn until success, revocation, or normal expiry.
+If message generation or page creation fails, send the useful text response without a link. Delivery is attempted once. A delivery failure returns the unchanged turn result and error without rerunning the model or page tool; durable queued retries remain a follow-up.
 
 The page CTA is application-owned and only returns to a trusted P&AI conversation. It does not mutate learner state.
 
@@ -173,7 +173,7 @@ Implemented in the focused Telegram slice:
 - Trusted tenant, owner, conversation, and turn derivation in `internal/agent`.
 - PostgreSQL and in-memory stores with one-hour expiry, revocation, idempotency, and hash-only capability storage.
 - Fixed read-only page shell and fragment redemption with no-store, restrictive CSP, no-referrer, and frame protections.
-- Final tutor text plus one Telegram URL button, with a persisted outbox retaining retry ownership through normal expiry.
+- Final tutor text plus one Telegram URL button, with one automatic delivery attempt.
 - Unit, migration-backed integration, and Chromium coverage; detailed evidence is maintained in the [agent-core verification harness](../architecture/agent-core.md#focused-verification-harness).
 
 Still planned:
@@ -181,6 +181,7 @@ Still planned:
 - Terminal-chat delivery.
 - Native provider support beyond OpenRouter.
 - Expired-row cleanup.
+- Durable queued retries across process restarts.
 - Broader cross-device layout and accessibility smoke coverage.
 
 ## Appendix
@@ -190,5 +191,6 @@ Implemented seams:
 - `internal/agentcore/core.go`: native sequential continuation loop.
 - `internal/agent/focused_page_tool.go`: trusted tool policy and `TurnResult` assembly.
 - `internal/ai/router.go`: native provider routing and fallback.
-- `internal/focusedpage`: persistence, capability lifecycle, and HTTP renderer.
+- `internal/focusedpage`: persistence and capability lifecycle.
+- `internal/server/focused_page_handler.go`: private HTTP shell, redemption adapter, and fixed renderer.
 - `internal/chat/turn_render.go`: Telegram formatting and URL-button order.

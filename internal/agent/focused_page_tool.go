@@ -12,6 +12,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/agentcore"
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/llm"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
@@ -20,7 +21,10 @@ import (
 const createFocusedPageToolName = "create_focused_page"
 
 func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, messages []ai.Message, model string) (teachingCompletion, *focusedpage.Artifact, error) {
-	focusedConfigured := e.focusedPages != nil && turn.Channel == "telegram"
+	focusedConfigured := e.focusedPages != nil && e.focusedPageEnabled(chat.InboundMessage{
+		Channel: turn.Channel,
+		UserID:  turn.UserID,
+	})
 	if focusedConfigured && !e.aiRouter.HasNativeProvider() {
 		completion, err := e.completeTextTeachingTurn(ctx, messages, model)
 		return completion, nil, err

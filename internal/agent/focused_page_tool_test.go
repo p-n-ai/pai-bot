@@ -13,6 +13,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/llm"
+	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
 func TestProcessTurnNativeToolThenFinalReplyPersistsOnlyConversationText(t *testing.T) {
@@ -30,7 +31,7 @@ func TestProcessTurnNativeToolThenFinalReplyPersistsOnlyConversationText(t *test
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Give me a report on my goal"})
 	if err != nil {
@@ -87,13 +88,45 @@ func TestProcessTurnNativeDirectAnswerProducesNoArtifact(t *testing.T) {
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{{Content: []llm.AssistantContent{llm.TextContent{Text: "Plain tutor reply"}}}}}
 	router := ai.NewRouter()
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled})
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Text != "Plain tutor reply" || result.FocusedPage != nil {
 		t.Fatalf("text = %q, focused page present = %t", result.Text, result.FocusedPage != nil)
+	}
+}
+
+func TestFocusedPagePolicyKeepsToolOffIneligibleChannel(t *testing.T) {
+	store := NewMemoryStore()
+	pageService, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	features, err := featureflags.Parse("agent_core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{{
+		Content: []llm.AssistantContent{llm.TextContent{Text: "Plain tutor reply"}},
+	}}}
+	router := ai.NewRouter()
+	router.Register("native", provider)
+	engine := NewEngine(EngineConfig{
+		AIRouter:           router,
+		Store:              store,
+		FocusedPages:       pageService,
+		FocusedPageEnabled: telegramFocusedPageEnabled,
+		FeatureFlags:       func() featureflags.Features { return features },
+	})
+
+	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "whatsapp", UserID: "learner-1", Text: "Explain algebra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FocusedPage != nil {
+		t.Fatal("ineligible channel produced a focused page")
+	}
+	if len(provider.contexts) != 1 || len(provider.contexts[0].Tools) != 0 {
+		t.Fatalf("native calls = %d, tools = %d; want 1 and 0", len(provider.contexts), len(provider.contexts[0].Tools))
 	}
 }
 
@@ -113,11 +146,12 @@ func TestFocusedPageTurnDoesNotExposeCurriculumToolWhenAgentCoreIsDisabled(t *te
 	router := ai.NewRouter()
 	router.Register("native", provider)
 	engine := NewEngine(EngineConfig{
-		AIRouter:         router,
-		Store:            store,
-		TenantID:         "tenant-1",
-		FocusedPages:     pageService,
-		CurriculumLoader: createChallengeRuntimeCurriculumLoader(t),
+		AIRouter:           router,
+		Store:              store,
+		TenantID:           "tenant-1",
+		FocusedPages:       pageService,
+		FocusedPageEnabled: telegramFocusedPageEnabled,
+		CurriculumLoader:   createChallengeRuntimeCurriculumLoader(t),
 	})
 
 	if _, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"}); err != nil {
@@ -150,7 +184,7 @@ func TestFocusedPageTurnRepairsEmptyFinalTutorReply(t *testing.T) {
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{0}})
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
 	if err != nil {
@@ -172,7 +206,7 @@ func TestFocusedPagesFallBackToTextWhenNoNativeProviderIsConfigured(t *testing.T
 	provider := &orderedProvider{calls: make(chan int, 1)}
 	router := ai.NewRouter()
 	router.Register("text", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, FocusedPages: pageService})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Explain algebra"})
 	if err != nil {
@@ -183,7 +217,7 @@ func TestFocusedPagesFallBackToTextWhenNoNativeProviderIsConfigured(t *testing.T
 	}
 }
 
-func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
+func TestProcessAndDeliverReturnsFailedDeliveryWithoutAutomaticRetry(t *testing.T) {
 	store := NewMemoryStore()
 	_ = store.SetUserName("learner-1", "Aina")
 	pageService, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
@@ -193,21 +227,19 @@ func TestProcessAndDeliverRetriesTheSameFocusedPageArtifact(t *testing.T) {
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
-	deliverer := &flakyTurnDeliverer{failures: 2}
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, TurnDeliverer: deliverer})
-	engine.deliveryRetryBackoff = []time.Duration{0, 0}
+	deliverer := &flakyTurnDeliverer{failures: 1}
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled, TurnDeliverer: deliverer})
 
 	result, err := engine.ProcessAndDeliver(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("delivery unexpectedly succeeded")
 	}
-	if result.FocusedPage == nil || len(deliverer.results) != 3 {
-		t.Fatalf("focused page present = %t, deliveries = %d; want true and 3", result.FocusedPage != nil, len(deliverer.results))
+	if result.FocusedPage == nil || len(deliverer.results) != 1 {
+		t.Fatalf("focused page present = %t, deliveries = %d; want true and 1", result.FocusedPage != nil, len(deliverer.results))
 	}
-	for _, delivered := range deliverer.results {
-		if delivered.FocusedPage == nil || delivered.FocusedPage.URL != result.FocusedPage.URL || delivered.Text != result.Text {
-			t.Fatal("delivery changed the assembled tutor text or private page artifact")
-		}
+	delivered := deliverer.results[0]
+	if delivered.FocusedPage == nil || delivered.FocusedPage.URL != result.FocusedPage.URL || delivered.Text != result.Text {
+		t.Fatal("failed delivery did not return the assembled tutor text and private page artifact")
 	}
 	if len(provider.contexts) != 2 {
 		t.Fatalf("model calls = %d, want 2", len(provider.contexts))
@@ -317,7 +349,7 @@ func TestFocusedPageCreationFailureReturnsFinalTextWithoutArtifactOrLeak(t *test
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
 	router.Register("native", provider)
-	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService})
+	engine := NewEngine(EngineConfig{AIRouter: router, Store: store, TenantID: "tenant-1", FocusedPages: pageService, FocusedPageEnabled: telegramFocusedPageEnabled})
 
 	result, err := engine.ProcessTurn(context.Background(), chat.InboundMessage{Channel: "telegram", UserID: "learner-1", Text: "Show my goal report"})
 	if err != nil {
@@ -355,6 +387,10 @@ type nativeScriptProvider struct {
 
 type retryDeliverer struct {
 	err error
+}
+
+func telegramFocusedPageEnabled(message chat.InboundMessage) bool {
+	return message.Channel == "telegram"
 }
 
 func (d *retryDeliverer) DeliverTurn(context.Context, chat.InboundMessage, TurnResult) error {

@@ -161,23 +161,6 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Artifact, erro
 	return Artifact{PublicID: page.PublicID, URL: link.String(), ExpiresAt: page.ExpiresAt, TenantID: page.TenantID, TurnID: page.TurnID}, nil
 }
 
-// ArtifactForDelivery reconstructs an application-owned capability for a claimed delivery.
-func (s *Service) ArtifactForDelivery(delivery Delivery) (Artifact, error) {
-	if delivery.PublicID == "" || delivery.TenantID == "" || delivery.TurnID == "" || delivery.ExpiresAt.IsZero() {
-		return Artifact{}, fmt.Errorf("focused page delivery identity is incomplete")
-	}
-	link := *s.baseURL
-	link.Path = strings.TrimRight(link.Path, "/") + "/a/" + url.PathEscape(delivery.PublicID)
-	link.Fragment = s.capability(delivery.TenantID, delivery.TurnID, PageIndex)
-	return Artifact{
-		PublicID:  delivery.PublicID,
-		URL:       link.String(),
-		ExpiresAt: delivery.ExpiresAt,
-		TenantID:  delivery.TenantID,
-		TurnID:    delivery.TurnID,
-	}, nil
-}
-
 func (s *Service) Redeem(ctx context.Context, publicID, token string) (Page, error) {
 	if strings.TrimSpace(token) == "" {
 		return Page{}, ErrForbidden

@@ -65,40 +65,6 @@ func TestPostgresStoreIdempotencyIsolationAndLifecycle(t *testing.T) {
 	if first.URL != second.URL {
 		t.Fatal("idempotent creation changed the private URL")
 	}
-	deliveryStore := NewPostgresDeliveryStore(pool)
-	delivery := Delivery{
-		TenantID: first.TenantID, PublicID: first.PublicID, TurnID: first.TurnID, Channel: "telegram",
-		RecipientID: "aina", TutorText: "Your report is ready.", NextAttempt: now, ExpiresAt: first.ExpiresAt,
-	}
-	if err := deliveryStore.Enqueue(ctx, delivery); err != nil {
-		t.Fatal(err)
-	}
-	if err := deliveryStore.Enqueue(ctx, delivery); err != nil {
-		t.Fatalf("idempotent delivery enqueue: %v", err)
-	}
-	conflictingDelivery := delivery
-	conflictingDelivery.RecipientID = "other"
-	if err := deliveryStore.Enqueue(ctx, conflictingDelivery); !errors.Is(err, ErrDeliveryConflict) {
-		t.Fatalf("conflicting delivery enqueue: %v", err)
-	}
-	claimed, err := deliveryStore.ClaimDue(ctx, now, time.Minute, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(claimed) != 1 {
-		t.Fatalf("claimed deliveries = %d, want 1", len(claimed))
-	}
-	restored, err := service.ArtifactForDelivery(claimed[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if restored.URL != first.URL {
-		t.Fatal("restored delivery changed the private URL")
-	}
-	if err := deliveryStore.MarkSent(ctx, delivery.TenantID, delivery.PublicID, now); err != nil {
-		t.Fatal(err)
-	}
-
 	wrongOwner := input
 	wrongOwner.OwnerUserID = otherOwnerID
 	wrongOwner.TurnID = "turn-2"
@@ -124,13 +90,6 @@ func TestPostgresStoreIdempotencyIsolationAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revokedDelivery := Delivery{
-		TenantID: revokedArtifact.TenantID, PublicID: revokedArtifact.PublicID, TurnID: revokedArtifact.TurnID,
-		Channel: "telegram", RecipientID: "aina", TutorText: "Revocable report", NextAttempt: now, ExpiresAt: revokedArtifact.ExpiresAt,
-	}
-	if err := deliveryStore.Enqueue(ctx, revokedDelivery); err != nil {
-		t.Fatal(err)
-	}
 	if err := service.Revoke(ctx, revokedArtifact.PublicID, tenantID, otherOwnerID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("wrong owner revoke error = %v", err)
 	}
@@ -141,32 +100,6 @@ func TestPostgresStoreIdempotencyIsolationAndLifecycle(t *testing.T) {
 	if _, err := service.Redeem(ctx, revokedArtifact.PublicID, revokedToken); !errors.Is(err, ErrRevoked) {
 		t.Fatalf("revoked redeem error = %v", err)
 	}
-	if claimed, err := deliveryStore.ClaimDue(ctx, now, time.Minute, 10); err != nil {
-		t.Fatal(err)
-	} else if len(claimed) != 0 {
-		t.Fatalf("revoked deliveries claimed = %d, want 0", len(claimed))
-	}
-	assertDeliveryStatus(t, ctx, pool, tenantID, revokedArtifact.PublicID, DeliveryCancelled)
-
-	expiring := input
-	expiring.TurnID = "turn-4"
-	expiringArtifact, err := service.Create(ctx, expiring)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := deliveryStore.Enqueue(ctx, Delivery{
-		TenantID: expiringArtifact.TenantID, PublicID: expiringArtifact.PublicID, TurnID: expiringArtifact.TurnID,
-		Channel: "telegram", RecipientID: "aina", TutorText: "Expiring report",
-		NextAttempt: expiringArtifact.ExpiresAt, ExpiresAt: expiringArtifact.ExpiresAt,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if claimed, err := deliveryStore.ClaimDue(ctx, expiringArtifact.ExpiresAt, time.Minute, 10); err != nil {
-		t.Fatal(err)
-	} else if len(claimed) != 0 {
-		t.Fatalf("expired deliveries claimed = %d, want 0", len(claimed))
-	}
-	assertDeliveryStatus(t, ctx, pool, tenantID, expiringArtifact.PublicID, DeliveryExpired)
 }
 
 func startFocusedPagePostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
@@ -201,7 +134,6 @@ func startFocusedPagePostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260713100000_focused_pages.sql"))
-	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260713110000_focused_page_delivery.sql"))
 	return pool
 }
 
@@ -215,17 +147,6 @@ func assertFocusedPageInsertRejected(t *testing.T, ctx context.Context, pool *pg
 		publicID, tenantID, ownerID, conversationID, make([]byte, 32), createdAt, createdAt.Add(Lifetime))
 	if err == nil {
 		t.Fatalf("database accepted mismatched focused page %q", publicID)
-	}
-}
-
-func assertDeliveryStatus(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID, publicID string, want DeliveryStatus) {
-	t.Helper()
-	var status DeliveryStatus
-	if err := pool.QueryRow(ctx, `SELECT status FROM focused_page_deliveries WHERE tenant_id = $1::uuid AND page_public_id = $2`, tenantID, publicID).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != want {
-		t.Fatalf("delivery status = %q, want %q", status, want)
 	}
 }
 

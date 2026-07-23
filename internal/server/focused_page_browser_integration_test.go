@@ -1,6 +1,6 @@
 //go:build integration && browser
 
-package focusedpage
+package server
 
 import (
 	"context"
@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 )
 
 func TestFocusedPageCapabilityFlowInChromium(t *testing.T) {
 	now := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
-	service, err := NewService(NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), func() time.Time { return now })
+	service, err := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,29 +30,29 @@ func TestFocusedPageCapabilityFlowInChromium(t *testing.T) {
 	if err := service.Revoke(context.Background(), revoked.PublicID, "tenant-1", "user-1"); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler(service, "https://t.me/pandai_bot")
+	handler, err := NewFocusedPageHandler(service, "https://t.me/pandai_bot")
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/a/{publicID}", handler)
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+	testServer := httptest.NewServer(mux)
+	t.Cleanup(testServer.Close)
 
-	adminDir, err := filepath.Abs(filepath.Join("..", "..", "admin"))
+	adminSPADir, err := filepath.Abs(filepath.Join("..", "..", "admin-spa"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	commandCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	command := exec.CommandContext(commandCtx, "pnpm", "exec", "playwright", "test", "e2e/focused-page.spec.ts", "--project=chromium", "--reporter=line")
-	command.Dir = adminDir
+	command := exec.CommandContext(commandCtx, "pnpm", "exec", "playwright", "test", "e2e/focused-page.spec.ts", "--config=playwright.focused-page.config.ts", "--project=chromium", "--reporter=line")
+	command.Dir = adminSPADir
 	command.Env = append(os.Environ(),
-		"PLAYWRIGHT_BASE_URL="+server.URL,
-		"FOCUSED_PAGE_VALID_URL="+browserURL(t, server.URL, valid, ""),
-		"FOCUSED_PAGE_WRONG_TOKEN_URL="+browserURL(t, server.URL, valid, "wrong-token"),
-		"FOCUSED_PAGE_EXPIRED_URL="+browserURL(t, server.URL, expired, ""),
-		"FOCUSED_PAGE_REVOKED_URL="+browserURL(t, server.URL, revoked, ""),
+		"PLAYWRIGHT_BASE_URL="+testServer.URL,
+		"FOCUSED_PAGE_VALID_URL="+browserURL(t, testServer.URL, valid, ""),
+		"FOCUSED_PAGE_WRONG_TOKEN_URL="+browserURL(t, testServer.URL, valid, "wrong-token"),
+		"FOCUSED_PAGE_EXPIRED_URL="+browserURL(t, testServer.URL, expired, ""),
+		"FOCUSED_PAGE_REVOKED_URL="+browserURL(t, testServer.URL, revoked, ""),
 	)
 	if _, err := os.Stat("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"); err == nil {
 		command.Env = append(command.Env, "PLAYWRIGHT_USE_SYSTEM_CHROME=true")
@@ -61,9 +63,9 @@ func TestFocusedPageCapabilityFlowInChromium(t *testing.T) {
 	}
 }
 
-func createBrowserTestPage(t *testing.T, service *Service, turnID, message string) Artifact {
+func createBrowserTestPage(t *testing.T, service *focusedpage.Service, turnID, message string) focusedpage.Artifact {
 	t.Helper()
-	artifact, err := service.Create(context.Background(), CreateInput{
+	artifact, err := service.Create(context.Background(), focusedpage.CreateInput{
 		TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conversation-1",
 		TurnID: turnID, RecipientName: "Aina", Message: message,
 	})
@@ -73,7 +75,7 @@ func createBrowserTestPage(t *testing.T, service *Service, turnID, message strin
 	return artifact
 }
 
-func browserURL(t *testing.T, origin string, artifact Artifact, tokenOverride string) string {
+func browserURL(t *testing.T, origin string, artifact focusedpage.Artifact, tokenOverride string) string {
 	t.Helper()
 	capabilityURL, err := url.Parse(artifact.URL)
 	if err != nil {

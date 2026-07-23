@@ -28,8 +28,6 @@ const (
 	defaultCompactThreshold      = 20
 	defaultCompactTokenThreshold = 20000 // ~20k tokens triggers compaction
 	defaultKeepRecent            = 6
-	defaultTurnDeliveryRetryOne  = 250 * time.Millisecond
-	defaultTurnDeliveryRetryTwo  = time.Second
 	langPrefCodeEN               = "[[PAI_PREF_LANG:en]]"
 	langPrefCodeMS               = "[[PAI_PREF_LANG:ms]]"
 	langPrefCodeZH               = "[[PAI_PREF_LANG:zh]]"
@@ -75,6 +73,7 @@ type EngineConfig struct {
 	TurnHookNotice        func(TurnHookCallNotice)
 	Notifier              Notifier
 	FocusedPages          *focusedpage.Service
+	FocusedPageEnabled    func(chat.InboundMessage) bool
 	TurnDeliverer         TurnDeliverer
 }
 
@@ -105,9 +104,9 @@ type Engine struct {
 	unlocks               *pendingUnlocks
 	milestones            *pendingMilestones
 	focusedPages          *focusedpage.Service
+	focusedPageEnabled    func(chat.InboundMessage) bool
 	turnLocks             keyedTurnLocks
 	turnDeliverer         TurnDeliverer
-	deliveryRetryBackoff  []time.Duration
 }
 
 // NewEngine creates a new agent engine.
@@ -164,6 +163,10 @@ func NewEngine(cfg EngineConfig) *Engine {
 	if flags == nil {
 		flags = func() featureflags.Features { return featureflags.Features{} }
 	}
+	focusedPageEnabled := cfg.FocusedPageEnabled
+	if focusedPageEnabled == nil {
+		focusedPageEnabled = func(chat.InboundMessage) bool { return false }
+	}
 	return &Engine{
 		aiRouter:              cfg.AIRouter,
 		store:                 store,
@@ -190,8 +193,8 @@ func NewEngine(cfg EngineConfig) *Engine {
 		unlocks:               newPendingUnlocks(),
 		milestones:            newPendingMilestones(),
 		focusedPages:          cfg.FocusedPages,
+		focusedPageEnabled:    focusedPageEnabled,
 		turnDeliverer:         cfg.TurnDeliverer,
-		deliveryRetryBackoff:  []time.Duration{defaultTurnDeliveryRetryOne, defaultTurnDeliveryRetryTwo},
 	}
 }
 
@@ -237,32 +240,10 @@ func (e *Engine) ProcessAndDeliver(ctx context.Context, msg chat.InboundMessage)
 	if err != nil {
 		return result, err
 	}
-	return result, e.deliverTurnWithRetry(ctx, msg, result)
+	return result, e.DeliverTurn(ctx, msg, result)
 }
 
-func (e *Engine) deliverTurnWithRetry(ctx context.Context, msg chat.InboundMessage, result TurnResult) error {
-	var err error
-	for attempt := 0; attempt <= len(e.deliveryRetryBackoff); attempt++ {
-		if attempt > 0 {
-			timer := time.NewTimer(e.deliveryRetryBackoff[attempt-1])
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return ctx.Err()
-			case <-timer.C:
-			}
-		}
-		if err = e.DeliverTurn(ctx, msg, result); err == nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-	}
-	return err
-}
-
-// DeliverTurn retries delivery without re-running the model or page tool.
+// DeliverTurn sends an already assembled result without re-running the model or page tool.
 func (e *Engine) DeliverTurn(ctx context.Context, msg chat.InboundMessage, result TurnResult) error {
 	if e.turnDeliverer == nil {
 		return fmt.Errorf("turn deliverer is not configured")
