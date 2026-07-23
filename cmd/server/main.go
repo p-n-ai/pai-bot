@@ -35,6 +35,10 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/tenant"
 )
 
+func focusedPageChannelEnabled(devMode bool, msg chat.InboundMessage) bool {
+	return msg.Channel == "telegram" || (devMode && msg.Channel == "websocket")
+}
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -141,11 +145,16 @@ func main() {
 				slog.Error("failed to initialize conversation store", "error", err)
 				os.Exit(1)
 			}
+			focusedPageStore := focusedpage.NewPostgresStore(db.Pool)
+			focusedPageCleanup, err := server.NewFocusedPageCleanupWorker(focusedPageStore, nil)
+			if err != nil {
+				return nil, nil, fmt.Errorf("initialize focused page cleanup: %w", err)
+			}
 			var focusedPageService *focusedpage.Service
 			var focusedPageHandler http.Handler
 			if strings.TrimSpace(cfg.FocusedPage.BaseURL) != "" {
 				focusedPageService, err = focusedpage.NewService(
-					focusedpage.NewPostgresStore(db.Pool), cfg.FocusedPage.BaseURL, []byte(cfg.Auth.JWTSecret), time.Now,
+					focusedPageStore, cfg.FocusedPage.BaseURL, []byte(cfg.Auth.JWTSecret), time.Now,
 				)
 				if err != nil {
 					return nil, nil, fmt.Errorf("initialize focused pages: %w", err)
@@ -193,7 +202,7 @@ func main() {
 				FeatureFlags:         flagsProvider,
 				FocusedPages:         focusedPageService,
 				FocusedPageEnabled: func(msg chat.InboundMessage) bool {
-					return msg.Channel == "telegram"
+					return focusedPageChannelEnabled(cfg.Runtime.DevMode, msg)
 				},
 			})
 
@@ -400,6 +409,12 @@ func main() {
 						<-workerDone
 					})
 				}
+				focusedPageCleanupDone := make(chan struct{})
+				go func() {
+					defer close(focusedPageCleanupDone)
+					focusedPageCleanup.Run(ctx)
+				}()
+				cleanup = append(cleanup, func() { <-focusedPageCleanupDone })
 				slog.Info("P&AI Bot is running")
 				return nil
 			}, nil

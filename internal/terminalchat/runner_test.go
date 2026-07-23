@@ -9,22 +9,24 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 )
 
 type stubProcessor struct {
-	responses []string
+	responses []agent.TurnResult
 	err       error
 	messages  []chat.InboundMessage
 }
 
-func (s *stubProcessor) ProcessMessage(_ context.Context, msg chat.InboundMessage) (string, error) {
+func (s *stubProcessor) ProcessTurn(_ context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
 	s.messages = append(s.messages, msg)
 	if s.err != nil {
-		return "", s.err
+		return agent.TurnResult{}, s.err
 	}
 	if len(s.responses) == 0 {
-		return "", nil
+		return agent.TurnResult{}, nil
 	}
 	resp := s.responses[0]
 	s.responses = s.responses[1:]
@@ -35,9 +37,9 @@ func TestRun_ForwardsConversationAndPrintsReplies(t *testing.T) {
 	var output strings.Builder
 	input := strings.NewReader("hello bot\nhow are you?\n/exit\n")
 	processor := &stubProcessor{
-		responses: []string{
-			"Hi there",
-			"I'm ready to help",
+		responses: []agent.TurnResult{
+			{Text: "Hi there"},
+			{Text: "I'm ready to help"},
 		},
 	}
 
@@ -74,6 +76,24 @@ func TestRun_ForwardsConversationAndPrintsReplies(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "Session ended.") {
 		t.Fatalf("output = %q, want session end text", rendered)
+	}
+}
+
+func TestRun_PrintsFocusedPageAfterTutorText(t *testing.T) {
+	var output strings.Builder
+	processor := &stubProcessor{responses: []agent.TurnResult{{
+		Text:        "Your report is ready.",
+		FocusedPage: &focusedpage.Artifact{URL: "https://pages.example/a/page-1#private-capability"},
+	}}}
+
+	err := Run(context.Background(), strings.NewReader("make my report\n/exit\n"), &output, processor, Config{})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	rendered := output.String()
+	if !strings.Contains(rendered, "P&AI> Your report is ready.\nFocused page> https://pages.example/a/page-1#private-capability\n") {
+		t.Fatalf("output = %q, want tutor text followed by focused-page URL", rendered)
 	}
 }
 

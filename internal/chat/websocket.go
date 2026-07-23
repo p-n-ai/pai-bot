@@ -27,8 +27,13 @@ type wsInboundMsg struct {
 
 // wsOutboundMsg is the JSON envelope the server sends over the WebSocket.
 type wsOutboundMsg struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type        string         `json:"type"`
+	Text        string         `json:"text,omitempty"`
+	FocusedPage *wsFocusedPage `json:"focused_page,omitempty"`
+}
+
+type wsFocusedPage struct {
+	URL string `json:"url"`
 }
 
 // WSChannel implements the Channel interface for WebSocket connections.
@@ -334,10 +339,14 @@ func (ws *WSChannel) SendMessage(ctx context.Context, userID string, msg Outboun
 		return fmt.Errorf("websocket: user %q not connected", userID)
 	}
 
-	return ws.writeJSON(ctx, conn, wsOutboundMsg{
+	response := wsOutboundMsg{
 		Type: "response",
 		Text: msg.Text,
-	})
+	}
+	if pageURL := strings.TrimSpace(msg.FocusedPageURL); pageURL != "" {
+		response.FocusedPage = &wsFocusedPage{URL: pageURL}
+	}
+	return ws.writeJSON(ctx, conn, response)
 }
 
 // SendTyping sends a typing indicator to the connected user.

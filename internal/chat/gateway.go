@@ -40,10 +40,11 @@ type InlineButton struct {
 
 // OutboundMessage is a message to send via any channel.
 type OutboundMessage struct {
-	Channel   string
-	UserID    string
-	Text      string
-	ParseMode string // "Markdown", "HTML", or ""
+	Channel        string
+	UserID         string
+	Text           string
+	FocusedPageURL string
+	ParseMode      string // "Markdown", "HTML", or ""
 	// ReplyKeyboard is Telegram-style keyboard rows. Other channels may ignore it.
 	ReplyKeyboard [][]string
 	// InlineKeyboard is Telegram inline keyboard rows. Other channels may ignore it.

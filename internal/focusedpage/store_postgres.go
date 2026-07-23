@@ -17,6 +17,38 @@ type PostgresStore struct{ pool *pgxpool.Pool }
 
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
 
+func (s *PostgresStore) CleanupExpired(ctx context.Context, now time.Time) (int64, error) {
+	if s.pool == nil {
+		return 0, fmt.Errorf("focused page pool is nil")
+	}
+	var deleted int64
+	err := s.pool.QueryRow(ctx, `
+		WITH cleanup_lock AS MATERIALIZED (
+			SELECT pg_try_advisory_xact_lock($3) AS acquired
+		),
+		eligible AS (
+			SELECT page.id
+			FROM focused_pages AS page
+			JOIN cleanup_lock ON cleanup_lock.acquired
+			WHERE page.expires_at <= $1
+			ORDER BY page.expires_at, page.id
+			LIMIT $2
+			FOR UPDATE OF page SKIP LOCKED
+		),
+		deleted AS (
+			DELETE FROM focused_pages AS page
+			USING eligible
+			WHERE page.id = eligible.id
+			RETURNING page.id
+		)
+		SELECT count(*) FROM deleted`,
+		now, CleanupBatchSize, focusedPageCleanupLockID).Scan(&deleted)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup focused pages: %w", err)
+	}
+	return deleted, nil
+}
+
 func (s *PostgresStore) CreateOrGet(ctx context.Context, record CreateRecord) (Page, error) {
 	if s.pool == nil {
 		return Page{}, fmt.Errorf("focused page pool is nil")

@@ -26,6 +26,8 @@ func Run(ctx context.Context, opts Options) error {
 	if ctx == nil {
 		return errors.New("context is required")
 	}
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 	if opts.BuildHandler == nil {
 		return errors.New("build handler is required")
 	}
@@ -57,7 +59,7 @@ func Run(ctx context.Context, opts Options) error {
 		serveErr <- nil
 	}()
 
-	fullHandler, startAfterSwap, err := opts.BuildHandler(ctx)
+	fullHandler, startAfterSwap, err := opts.BuildHandler(runCtx)
 	if err != nil {
 		return shutdownAfterStartupError(srv, opts.ShutdownTimeout, fmt.Errorf("build handler: %w", err))
 	}
@@ -69,7 +71,7 @@ func Run(ctx context.Context, opts Options) error {
 	slog.Info("full handler active")
 
 	if startAfterSwap != nil {
-		if err := startAfterSwap(ctx); err != nil {
+		if err := startAfterSwap(runCtx); err != nil {
 			return shutdownAfterStartupError(srv, opts.ShutdownTimeout, fmt.Errorf("start after swap: %w", err))
 		}
 	}

@@ -10,12 +10,13 @@ import (
 	"io"
 	"strings"
 
+	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
 // Processor handles inbound messages and returns assistant responses.
 type Processor interface {
-	ProcessMessage(ctx context.Context, msg chat.InboundMessage) (string, error)
+	ProcessTurn(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error)
 }
 
 // Config controls the terminal chat session.
@@ -67,7 +68,7 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, processor Processor, 
 			return nil
 		}
 
-		resp, err := processor.ProcessMessage(ctx, chat.InboundMessage{
+		result, err := processor.ProcessTurn(ctx, chat.InboundMessage{
 			Channel: channel,
 			UserID:  userID,
 			Text:    text,
@@ -79,8 +80,19 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, processor Processor, 
 			continue
 		}
 
-		if _, err := fmt.Fprintf(out, "P&AI> %s\n", strings.TrimSpace(resp)); err != nil {
+		if err := writeTurn(out, "", result); err != nil {
 			return err
 		}
 	}
+}
+
+func writeTurn(out io.Writer, prefix string, result agent.TurnResult) error {
+	if _, err := fmt.Fprintf(out, "%sP&AI> %s\n", prefix, strings.TrimSpace(result.Text)); err != nil {
+		return err
+	}
+	if result.FocusedPage == nil || strings.TrimSpace(result.FocusedPage.URL) == "" {
+		return nil
+	}
+	_, err := fmt.Fprintf(out, "%sFocused page> %s\n", prefix, strings.TrimSpace(result.FocusedPage.URL))
+	return err
 }
