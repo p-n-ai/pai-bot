@@ -12,7 +12,29 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestPostgresServiceCapabilitiesRequireCompleteGoogleConfig(t *testing.T) {
+	svc := newPostgresService(nil, time.Hour, nil)
+
+	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
+		ClientID:     "google-client",
+		DiscoveryURL: "https://accounts.google.com/.well-known/openid-configuration",
+	})
+	if svc.Capabilities().GoogleLogin {
+		t.Fatal("GoogleLogin = true without client secret")
+	}
+
+	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
+		ClientID:     "google-client",
+		ClientSecret: "google-secret",
+		DiscoveryURL: "https://accounts.google.com/.well-known/openid-configuration",
+	})
+	if !svc.Capabilities().GoogleLogin {
+		t.Fatal("GoogleLogin = false with complete provider config")
+	}
+}
 
 func TestRewriteLocalOIDCTransportEndpoints(t *testing.T) {
 	doc := googleDiscoveryDocument{

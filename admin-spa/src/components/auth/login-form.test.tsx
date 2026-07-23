@@ -15,13 +15,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LoginForm } from './login-form'
 import type { AuthSession } from '@/lib/auth-types'
 import type * as AuthClient from '@/lib/auth-client'
-import type * as LoginSettings from '@/lib/login-settings'
 
 const loginWithPassword = vi.hoisted(() => vi.fn())
+const readAuthCapabilities = vi.hoisted(() => vi.fn())
 const buildGoogleLoginURL = vi.hoisted(() =>
   vi.fn(() => '/api/auth/google/start?next=%2Fdashboard'),
 )
-const isGoogleLoginEnabled = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('@/lib/auth-client', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthClient>()
@@ -30,15 +29,7 @@ vi.mock('@/lib/auth-client', async (importOriginal) => {
     ...actual,
     buildGoogleLoginURL,
     loginWithPassword,
-  }
-})
-
-vi.mock('@/lib/login-settings', async (importOriginal) => {
-  const actual = await importOriginal<typeof LoginSettings>()
-
-  return {
-    ...actual,
-    isGoogleLoginEnabled,
+    readAuthCapabilities,
   }
 })
 
@@ -52,7 +43,8 @@ const adminSession: AuthSession = {
 
 describe('LoginForm', () => {
   beforeEach(() => {
-    isGoogleLoginEnabled.mockReturnValue(false)
+    readAuthCapabilities.mockReset()
+    readAuthCapabilities.mockResolvedValue({ google_login: false })
     loginWithPassword.mockReset()
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
   })
@@ -98,27 +90,41 @@ describe('LoginForm', () => {
     )
   })
 
-  it('shows the source-admin email divider when Google sign-in is enabled', () => {
-    isGoogleLoginEnabled.mockReturnValue(true)
+  it('shows the source-admin email divider when the server enables Google sign-in', async () => {
+    readAuthCapabilities.mockResolvedValue({ google_login: true })
 
     render(<LoginForm onAuthenticated={vi.fn()} />)
 
     expect(
-      screen.getByRole('button', { name: 'Continue with Google' }),
+      await screen.findByRole('button', { name: 'Continue with Google' }),
     ).toBeInTheDocument()
     expect(screen.getByText('G')).toHaveAttribute('aria-hidden', 'true')
     expect(screen.getByText('or use email')).toBeInTheDocument()
   })
 
-  it('shows Google redirect progress and disables email submit while redirecting', () => {
-    isGoogleLoginEnabled.mockReturnValue(true)
+  it('keeps password sign-in available when capabilities cannot be loaded', async () => {
+    readAuthCapabilities.mockRejectedValue(new Error('network unavailable'))
+
+    render(<LoginForm onAuthenticated={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(readAuthCapabilities).toHaveBeenCalledOnce()
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Google' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+  })
+
+  it('shows Google redirect progress and disables email submit while redirecting', async () => {
+    readAuthCapabilities.mockResolvedValue({ google_login: true })
     const assign = vi.fn()
     vi.stubGlobal('location', { assign })
 
     render(<LoginForm onAuthenticated={vi.fn()} nextPath='/dashboard' />)
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Continue with Google' }),
+      await screen.findByRole('button', { name: 'Continue with Google' }),
     )
 
     expect(buildGoogleLoginURL).toHaveBeenCalledWith('/dashboard')

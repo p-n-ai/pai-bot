@@ -29,6 +29,10 @@ func TestTenantRequiredErrorWrapsSentinel(t *testing.T) {
 func TestNoopServiceReturnsNotImplemented(t *testing.T) {
 	svc := NewNoopService()
 
+	if capabilities := svc.Capabilities(); capabilities.GoogleLogin {
+		t.Fatal("Capabilities().GoogleLogin = true, want false")
+	}
+
 	_, err := svc.Login(context.Background(), LoginRequest{})
 	if !errors.Is(err, ErrNotImplemented) {
 		t.Fatalf("Login() error = %v, want ErrNotImplemented", err)
