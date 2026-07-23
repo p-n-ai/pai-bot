@@ -24,6 +24,7 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 	pool := startDeliveryPostgres(t, ctx)
 	tenant1, page1 := seedDeliveryIdentity(t, ctx, pool, "tenant-one", "turn-1", "page-one")
 	tenant2, page2 := seedDeliveryIdentity(t, ctx, pool, "tenant-two", "turn-1", "page-two")
+	tenant3, page3 := seedDeliveryIdentity(t, ctx, pool, "tenant-three", "turn-1", "page-three")
 	store := NewPostgresStore(pool)
 	now := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
 
@@ -55,6 +56,17 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 	}
 	if otherTenant.ID == first.ID {
 		t.Fatal("delivery identity collided across tenants")
+	}
+	leased, err := store.Enqueue(ctx, EnqueueInput{
+		TenantID: tenant3, TurnID: "turn-1", Channel: "telegram", RecipientID: "learner-three",
+		FinalText: "Leased tenant text", FocusedPagePublicID: page3,
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leased, ok, err := store.Claim(ctx, leased.ID, "cleanup-lease", now, now.Add(time.Minute))
+	if err != nil || !ok {
+		t.Fatalf("cleanup lease claim ok = %t, err = %v", ok, err)
 	}
 	if _, err := store.Enqueue(ctx, EnqueueInput{
 		TenantID: tenant1, TurnID: "turn-1", Channel: "whatsapp", RecipientID: "learner-one",
@@ -118,6 +130,48 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 	}
 	if _, ok, err := restarted.Claim(ctx, first.ID, "after-delivery", now.Add(4*time.Minute), now.Add(5*time.Minute)); err != nil || ok {
 		t.Fatalf("delivered row claim ok = %t, err = %v", ok, err)
+	}
+
+	t.Run("parent deletion cascades pending leased and delivered rows", func(t *testing.T) {
+		assertDeliveryStatus(t, ctx, pool, otherTenant.ID, StatusPending)
+		assertDeliveryStatus(t, ctx, pool, leased.ID, StatusLeased)
+		assertDeliveryStatus(t, ctx, pool, first.ID, StatusDelivered)
+		tag, err := pool.Exec(ctx, `
+			DELETE FROM focused_pages
+			WHERE public_id = ANY($1::text[])`,
+			[]string{page1, page2, page3})
+		if err != nil {
+			t.Fatalf("delete expired parent pages: %v", err)
+		}
+		if tag.RowsAffected() != 3 {
+			t.Fatalf("deleted parent pages = %d, want 3", tag.RowsAffected())
+		}
+		var remaining int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*)
+			FROM focused_page_deliveries
+			WHERE id = ANY($1::uuid[])`,
+			[]string{first.ID, otherTenant.ID, leased.ID}).Scan(&remaining); err != nil {
+			t.Fatal(err)
+		}
+		if remaining != 0 {
+			t.Fatalf("orphaned delivery rows = %d, want 0", remaining)
+		}
+	})
+}
+
+func assertDeliveryStatus(t *testing.T, ctx context.Context, pool *pgxpool.Pool, deliveryID string, want Status) {
+	t.Helper()
+	var got Status
+	if err := pool.QueryRow(ctx, `
+		SELECT status
+		FROM focused_page_deliveries
+		WHERE id = $1::uuid`,
+		deliveryID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("delivery %s status = %q, want %q", deliveryID, got, want)
 	}
 }
 
