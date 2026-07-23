@@ -94,6 +94,17 @@ const progressWithMissingScore: ClassProgress = {
   topic_ids: ['algebra', 'geometry'],
 }
 
+const progressWithoutScores: ClassProgress = {
+  students: [
+    {
+      id: 'student_1',
+      name: 'Alya',
+      topics: {},
+    },
+  ],
+  topic_ids: ['algebra'],
+}
+
 const progressWithLongTopic: ClassProgress = {
   students: [
     {
@@ -291,6 +302,11 @@ describe('DashboardReady', () => {
         'Progress appears after students start topics.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Learner activity will shape the next recommended review.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('keeps long source-admin topic headers bounded with full-label access', () => {
@@ -324,8 +340,28 @@ describe('DashboardReady', () => {
 
     const heatmap = screen.getByLabelText('Mastery heatmap')
 
-    expect(within(heatmap).getByText('80%')).toBeInTheDocument()
+    expect(within(heatmap).getAllByText('80%')).toHaveLength(2)
     expect(within(heatmap).getByText('--')).toBeInTheDocument()
+  })
+
+  it('keeps an unmeasured student average distinct from zero mastery', () => {
+    render(
+      <DashboardReady
+        nudgeMessage=''
+        onNudge={vi.fn()}
+        progress={progressWithoutScores}
+        sendingStudentID=''
+      />,
+    )
+
+    const heatmap = screen.getByLabelText('Mastery heatmap')
+
+    expect(
+      within(heatmap).getByLabelText('No average mastery data'),
+    ).toHaveTextContent('--')
+    expect(
+      within(heatmap).getByRole('img', { name: 'No mastery data' }),
+    ).toBeInTheDocument()
   })
 
   it('shows source-admin dashboard summary signals', () => {

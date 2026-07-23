@@ -303,6 +303,7 @@ func main() {
 				ClientID:              cfg.Auth.Google.ClientID,
 				ClientSecret:          cfg.Auth.Google.ClientSecret,
 				DiscoveryURL:          cfg.Auth.Google.DiscoveryURL,
+				AdminBaseURL:          cfg.Auth.Google.AdminBaseURL,
 				Policy:                googleOAuthPolicy(cfg),
 				EmulatorSigningSecret: cfg.Auth.Google.EmulatorSigningSecret,
 			})

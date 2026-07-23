@@ -60,6 +60,7 @@ read_when:
 | `PAI_AUTH_GOOGLE_ALLOWED_DOMAIN` | empty | Optional Google hosted-domain allowlist. |
 | `PAI_AUTH_GOOGLE_DISCOVERY_URL` | Google discovery URL | OIDC discovery document. |
 | `PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET` | empty | Local Google auth emulator signing secret. |
+| `PAI_AUTH_GOOGLE_ADMIN_BASE_URL` | empty | Optional admin frontend origin for post-OAuth redirects. |
 | `PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL` | `platform-admin@example.com` | Bootstrap platform admin email. |
 | `PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD` | `demo-password` | Bootstrap platform admin password. |
 

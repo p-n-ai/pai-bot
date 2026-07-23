@@ -50,6 +50,7 @@ func clearEnv(t *testing.T) {
 		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
 		"PAI_AUTH_GOOGLE_DISCOVERY_URL",
 		"PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET",
+		"PAI_AUTH_GOOGLE_ADMIN_BASE_URL",
 		"PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL",
 		"PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD",
 		"LEARN_TENANT_MODE",
@@ -149,6 +150,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", "pandai.org")
 	t.Setenv("PAI_AUTH_GOOGLE_DISCOVERY_URL", "http://127.0.0.1:4002/.well-known/openid-configuration")
 	t.Setenv("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", "emu-secret")
+	t.Setenv("PAI_AUTH_GOOGLE_ADMIN_BASE_URL", "http://127.0.0.1:4178")
 	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "root@example.com")
 	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "secret-bootstrap")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
@@ -223,6 +225,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.Google.EmulatorSigningSecret != "emu-secret" {
 		t.Errorf("Auth.Google.EmulatorSigningSecret = %q, want emu-secret", cfg.Auth.Google.EmulatorSigningSecret)
+	}
+	if cfg.Auth.Google.AdminBaseURL != "http://127.0.0.1:4178" {
+		t.Errorf("Auth.Google.AdminBaseURL = %q, want http://127.0.0.1:4178", cfg.Auth.Google.AdminBaseURL)
 	}
 	if cfg.Auth.BootstrapAdmin.Email != "root@example.com" {
 		t.Errorf("Auth.BootstrapAdmin.Email = %q, want root@example.com", cfg.Auth.BootstrapAdmin.Email)
@@ -392,6 +397,21 @@ func TestValidate_EmailDeliveryRequiresSMTPAndFromAddress(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error when email delivery is partially configured")
+	}
+}
+
+func TestValidate_GoogleAdminBaseURLDoesNotConfigureEmailDelivery(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_DEV_MODE", "true")
+	t.Setenv("PAI_AUTH_GOOGLE_ADMIN_BASE_URL", "http://127.0.0.1:4178")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v; Google admin redirects must not require SMTP", err)
 	}
 }
 
