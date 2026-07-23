@@ -21,6 +21,7 @@ const (
 	Lifetime         = time.Hour
 	MaxMessageLength = 4000
 	PageIndex        = 0
+	CleanupBatchSize = 100
 )
 
 var (

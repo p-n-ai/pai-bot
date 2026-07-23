@@ -80,6 +80,48 @@ func TestRunServesHealthBeforeSwapAndBuiltHandlerAfterSwap(t *testing.T) {
 	}
 }
 
+func TestRunCancelsPostSwapWorkWhenServerExits(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	worker, err := NewFocusedPageCleanupWorker(&blockingFocusedPageCleaner{started: make(chan struct{}, 1)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerDone := make(chan struct{})
+	started := make(chan struct{})
+	runErr := Run(context.Background(), Options{
+		Addr:            listener.Addr().String(),
+		ShutdownTimeout: time.Second,
+		BuildHandler: func(context.Context) (http.Handler, func(context.Context) error, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), func(ctx context.Context) error {
+				close(started)
+				go func() {
+					worker.run(ctx, make(chan time.Time))
+					close(workerDone)
+				}()
+				return nil
+			}, nil
+		},
+	})
+	if runErr == nil {
+		t.Fatal("Run succeeded despite an unavailable listen address")
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("post-swap work was not started")
+	}
+	select {
+	case <-workerDone:
+	case <-time.After(time.Second):
+		t.Fatal("post-swap worker outlived the server")
+	}
+}
+
 func freeLocalAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

@@ -134,6 +134,7 @@ func startFocusedPagePostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100300_auth_tables.sql"))
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260318100400_auth_identity_tenant_consistency.sql"))
 	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260713100000_focused_pages.sql"))
+	applyFocusedPageMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260723170000_focused_page_cleanup.sql"))
 	return pool
 }
 
