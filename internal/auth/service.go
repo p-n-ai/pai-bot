@@ -142,8 +142,14 @@ type GoogleCallbackResult struct {
 	Session      *Session
 }
 
+// Capabilities describes auth flows currently configured by the server.
+type Capabilities struct {
+	GoogleLogin bool `json:"google_login"`
+}
+
 // Service defines the auth flows needed by the HTTP layer.
 type Service interface {
+	Capabilities() Capabilities
 	Login(ctx context.Context, req LoginRequest) (Session, error)
 	AcceptInvite(ctx context.Context, req AcceptInviteRequest) (Session, error)
 	IssueInvite(ctx context.Context, req IssueInviteRequest) (InviteRecord, error)
@@ -163,6 +169,10 @@ type noopService struct{}
 // NewNoopService returns a placeholder auth service until the DB-backed auth flow lands.
 func NewNoopService() Service {
 	return noopService{}
+}
+
+func (noopService) Capabilities() Capabilities {
+	return Capabilities{}
 }
 
 func (noopService) Login(_ context.Context, _ LoginRequest) (Session, error) {

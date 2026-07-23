@@ -40,6 +40,33 @@ export type LoginResult =
     }
   | TenantRequiredResult
 
+/** Auth methods that the running backend is ready to serve. */
+export interface AuthCapabilities {
+  google_login: boolean
+}
+
+/** Reads runtime auth availability without exposing provider credentials. */
+export async function readAuthCapabilities(
+  fetcher: typeof fetch = fetch,
+): Promise<AuthCapabilities> {
+  const response = await fetcher('/api/auth/capabilities', {
+    credentials: 'include',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Auth capabilities request failed: ${response.status}`)
+  }
+
+  const payload: unknown = await response.json()
+
+  if (!isAuthCapabilities(payload)) {
+    throw new AuthContractError('Invalid auth capabilities response')
+  }
+
+  return payload
+}
+
 export async function readAuthSession(
   fetcher: typeof fetch = fetch,
 ): Promise<AuthSession | null> {
@@ -224,4 +251,8 @@ function readPayloadError(payload: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isAuthCapabilities(value: unknown): value is AuthCapabilities {
+  return isRecord(value) && typeof value.google_login === 'boolean'
 }

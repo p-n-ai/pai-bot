@@ -56,6 +56,10 @@ Set `LEARN_AI_DEFAULT_PROVIDER` to choose which provider handles requests by def
 | `PAI_AUTH_GOOGLE_CLIENT_ID` | Google OAuth client ID (admin panel) |
 | `PAI_AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
+The admin SPA shows Google sign-in automatically when both Google credentials
+are configured. Register `/api/auth/google/callback` on the public admin origin
+as an authorized redirect URI in Google Cloud.
+
 ## Feature Flags
 
 | Variable | Default | Description |

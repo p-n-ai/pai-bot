@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { Building2Icon, LockKeyholeIcon } from 'lucide-react'
 import type { FormEvent } from 'react'
 
@@ -17,9 +17,12 @@ import {
 import { readAuthDisplayError } from '@/lib/auth-errors'
 import { useInputValue } from '@/hooks/use-input-value'
 import { useSubmitStatus } from '@/hooks/use-submit-status'
-import { buildGoogleLoginURL, loginWithPassword } from '@/lib/auth-client'
+import {
+  buildGoogleLoginURL,
+  loginWithPassword,
+  readAuthCapabilities,
+} from '@/lib/auth-client'
 import { getAuthErrorMessage } from '@/lib/auth-feedback'
-import { isGoogleLoginEnabled } from '@/lib/login-settings'
 
 interface LoginFormProps {
   authError?: string
@@ -38,8 +41,29 @@ export function LoginForm({
   const [tenantID, setTenantID] = useState('')
   const [tenantChoices, setTenantChoices] = useState<Array<SchoolChoice>>([])
   const [isGooglePending, setGooglePending] = useState(false)
+  const [showGoogleLogin, setShowGoogleLogin] = useState(false)
   const { beginSubmit, error, finishSubmit, isPending, setError } =
     useSubmitStatus(getAuthErrorMessage(authError))
+
+  useEffect(() => {
+    let active = true
+
+    readAuthCapabilities()
+      .then((capabilities) => {
+        if (active) {
+          setShowGoogleLogin(capabilities.google_login)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setShowGoogleLogin(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const submit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -92,8 +116,6 @@ export function LoginForm({
     setGooglePending(true)
     window.location.assign(buildGoogleLoginURL(nextPath))
   }, [isGooglePending, isPending, nextPath])
-
-  const showGoogleLogin = isGoogleLoginEnabled()
 
   return (
     <form

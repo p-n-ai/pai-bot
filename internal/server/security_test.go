@@ -70,6 +70,40 @@ func TestWithAPIRateLimit_AuthEndpointReturns429(t *testing.T) {
 	}
 }
 
+func TestWithAPIRateLimit_CapabilitiesDoNotConsumeAuthBudget(t *testing.T) {
+	apiLimiter := newFixedWindowLimiter(100, time.Minute)
+	authLimiter := newFixedWindowLimiter(1, time.Minute)
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+
+	handler := withAPIRateLimit(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), func() time.Time { return now }, apiLimiter, authLimiter)
+
+	capabilitiesReq := httptest.NewRequest(http.MethodGet, "/api/auth/capabilities", nil)
+	capabilitiesReq.RemoteAddr = "203.0.113.10:43123"
+	capabilitiesRec := httptest.NewRecorder()
+	handler.ServeHTTP(capabilitiesRec, capabilitiesReq)
+	if capabilitiesRec.Code != http.StatusOK {
+		t.Fatalf("capabilities status = %d, want %d", capabilitiesRec.Code, http.StatusOK)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	loginReq.RemoteAddr = "203.0.113.10:43123"
+	loginRec := httptest.NewRecorder()
+	handler.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("first login status = %d, want %d", loginRec.Code, http.StatusOK)
+	}
+
+	secondLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	secondLoginReq.RemoteAddr = "203.0.113.10:43123"
+	secondLoginRec := httptest.NewRecorder()
+	handler.ServeHTTP(secondLoginRec, secondLoginReq)
+	if secondLoginRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second login status = %d, want %d", secondLoginRec.Code, http.StatusTooManyRequests)
+	}
+}
+
 func TestWithSecurityHeaders(t *testing.T) {
 	handler := withSecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
