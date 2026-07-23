@@ -13,6 +13,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
+	"github.com/p-n-ai/pai-bot/internal/server"
 )
 
 type turnProcessorStub struct {
@@ -107,20 +108,22 @@ func TestWriteWSResponseWithoutFocusedPagePreservesPlainText(t *testing.T) {
 
 func TestWSClientOnceRendersTurnWithAndWithoutFocusedPage(t *testing.T) {
 	tests := []struct {
-		name     string
-		response chat.OutboundMessage
-		want     string
+		name   string
+		result agent.TurnResult
+		want   string
 	}{
 		{
-			name:     "plain text",
-			response: chat.OutboundMessage{Text: "Plain tutor reply"},
-			want:     "Plain tutor reply\n",
+			name:   "plain text",
+			result: agent.TurnResult{Text: "Plain tutor reply"},
+			want:   "Plain tutor reply\n",
 		},
 		{
 			name: "focused page",
-			response: chat.OutboundMessage{
-				Text:           "Your report is ready.",
-				FocusedPageURL: "https://pages.example/a/page-1#private-capability",
+			result: agent.TurnResult{
+				Text: "Your report is ready.",
+				FocusedPage: &focusedpage.Artifact{
+					URL: "https://pages.example/a/page-1#private-capability",
+				},
 			},
 			want: "Your report is ready.\nFocused page: https://pages.example/a/page-1#private-capability\n",
 		},
@@ -129,8 +132,11 @@ func TestWSClientOnceRendersTurnWithAndWithoutFocusedPage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			channel := chat.NewWSChannel()
+			gateway := chat.NewGateway()
+			gateway.Register("websocket", channel)
+			deliverer := server.NewGatewayTurnDeliverer(gateway, agent.NewMemoryStore())
 			if err := channel.Start(context.Background(), func(msg chat.InboundMessage) {
-				_ = channel.SendMessage(context.Background(), msg.UserID, tt.response)
+				_ = deliverer.DeliverTurn(context.Background(), msg, tt.result)
 			}); err != nil {
 				t.Fatalf("Start() error = %v", err)
 			}
