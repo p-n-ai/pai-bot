@@ -85,7 +85,11 @@ func TestRunCancelsPostSwapWorkWhenServerExits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() {
+		if err := listener.Close(); err != nil {
+			t.Errorf("close reserved listener: %v", err)
+		}
+	})
 
 	worker, err := NewFocusedPageCleanupWorker(&blockingFocusedPageCleaner{started: make(chan struct{}, 1)}, nil)
 	if err != nil {
