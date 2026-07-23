@@ -23,13 +23,17 @@ func (s *PostgresStore) CleanupExpired(ctx context.Context, now time.Time) (int6
 	}
 	var deleted int64
 	err := s.pool.QueryRow(ctx, `
-		WITH eligible AS (
-			SELECT id
-			FROM focused_pages
-			WHERE expires_at <= $1
-			ORDER BY expires_at, id
+		WITH cleanup_lock AS MATERIALIZED (
+			SELECT pg_try_advisory_xact_lock($3) AS acquired
+		),
+		eligible AS (
+			SELECT page.id
+			FROM focused_pages AS page
+			JOIN cleanup_lock ON cleanup_lock.acquired
+			WHERE page.expires_at <= $1
+			ORDER BY page.expires_at, page.id
 			LIMIT $2
-			FOR UPDATE SKIP LOCKED
+			FOR UPDATE OF page SKIP LOCKED
 		),
 		deleted AS (
 			DELETE FROM focused_pages AS page
@@ -38,7 +42,7 @@ func (s *PostgresStore) CleanupExpired(ctx context.Context, now time.Time) (int6
 			RETURNING page.id
 		)
 		SELECT count(*) FROM deleted`,
-		now, CleanupBatchSize).Scan(&deleted)
+		now, CleanupBatchSize, focusedPageCleanupLockID).Scan(&deleted)
 	if err != nil {
 		return 0, fmt.Errorf("cleanup focused pages: %w", err)
 	}

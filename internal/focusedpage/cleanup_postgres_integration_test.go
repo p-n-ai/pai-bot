@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ func TestPostgresStoreCleanupExpiredBatchPolicy(t *testing.T) {
 	owners := seedCleanupOwners(t, ctx, pool)
 	store := NewPostgresStore(pool)
 	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	assertFocusedPageCleanupIndex(t, ctx, pool)
 
 	t.Run("zero rows", func(t *testing.T) {
 		truncateFocusedPages(t, ctx, pool)
@@ -120,6 +122,45 @@ func TestPostgresStoreCleanupExpiredBatchPolicy(t *testing.T) {
 			t.Fatalf("cleanup error = %v, want context cancellation", err)
 		}
 		assertFocusedPageCount(t, ctx, pool, 1)
+	})
+
+	t.Run("only one replica cleans at a time", func(t *testing.T) {
+		truncateFocusedPages(t, ctx, pool)
+		seedCleanupPage(t, ctx, pool, owners[0], 1, StatusActive, now)
+
+		lockHolder, err := pool.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := lockHolder.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, focusedPageCleanupLockID); err != nil {
+				t.Errorf("release cleanup lock: %v", err)
+			}
+			lockHolder.Release()
+		}()
+		if _, err := lockHolder.Exec(ctx, `SELECT pg_advisory_lock($1)`, focusedPageCleanupLockID); err != nil {
+			t.Fatal(err)
+		}
+
+		deleted, err := store.CleanupExpired(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deleted != 0 {
+			t.Fatalf("deleted rows while another replica held the cleanup lock = %d, want 0", deleted)
+		}
+		assertFocusedPageCount(t, ctx, pool, 1)
+
+		if _, err := lockHolder.Exec(ctx, `SELECT pg_advisory_unlock($1)`, focusedPageCleanupLockID); err != nil {
+			t.Fatal(err)
+		}
+		deleted, err = store.CleanupExpired(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deleted != 1 {
+			t.Fatalf("deleted rows after cleanup lock release = %d, want 1", deleted)
+		}
 	})
 }
 
@@ -256,4 +297,30 @@ func truncateFocusedPages(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 
 func cleanupPageID(index int) string {
 	return fmt.Sprintf("00000000-0000-0000-0000-%012d", index)
+}
+
+func assertFocusedPageCleanupIndex(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	var definition string
+	if err := pool.QueryRow(ctx, `
+		SELECT indexdef
+		FROM pg_indexes
+		WHERE schemaname = current_schema() AND indexname = 'focused_pages_cleanup_idx'`,
+	).Scan(&definition); err != nil {
+		t.Fatalf("focused-page cleanup index: %v", err)
+	}
+	if !strings.Contains(definition, "(expires_at, id)") {
+		t.Fatalf("focused-page cleanup index definition = %q", definition)
+	}
+	var legacyIndexCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM pg_indexes
+		WHERE schemaname = current_schema() AND indexname = 'focused_pages_expiry_idx'`,
+	).Scan(&legacyIndexCount); err != nil {
+		t.Fatal(err)
+	}
+	if legacyIndexCount != 0 {
+		t.Fatalf("legacy focused-page expiry indexes = %d, want 0", legacyIndexCount)
+	}
 }

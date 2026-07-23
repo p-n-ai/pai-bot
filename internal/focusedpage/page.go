@@ -22,6 +22,9 @@ const (
 	MaxMessageLength = 4000
 	PageIndex        = 0
 	CleanupBatchSize = 100
+
+	// This stable database-wide key keeps cleanup singleton-safe across server replicas.
+	focusedPageCleanupLockID int64 = 0x7061696670636c6e
 )
 
 var (

@@ -163,7 +163,20 @@ func applyFocusedPageMigration(t *testing.T, ctx context.Context, pool *pgxpool.
 	if up < 0 || down < 0 || down <= up {
 		t.Fatalf("invalid goose migration %s", path)
 	}
-	if _, err := pool.Exec(ctx, text[up+len("-- +goose Up"):down]); err != nil {
-		t.Fatalf("apply %s: %v", path, err)
+	upSQL := text[up+len("-- +goose Up") : down]
+	if !strings.Contains(text, "-- +goose NO TRANSACTION") {
+		if _, err := pool.Exec(ctx, upSQL); err != nil {
+			t.Fatalf("apply %s: %v", path, err)
+		}
+		return
+	}
+	for statement := range strings.SplitSeq(upSQL, ";") {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		if _, err := pool.Exec(ctx, statement); err != nil {
+			t.Fatalf("apply %s: %v", path, err)
+		}
 	}
 }
