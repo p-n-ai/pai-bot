@@ -176,6 +176,17 @@ func (s *Service) Revoke(ctx context.Context, publicID, tenantID, ownerUserID st
 	return s.store.Revoke(ctx, publicID, tenantID, ownerUserID, s.now().UTC())
 }
 
+// URLFor reconstructs an artifact capability from trusted persisted identity.
+func (s *Service) URLFor(tenantID, turnID, publicID string) (string, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(turnID) == "" || strings.TrimSpace(publicID) == "" {
+		return "", fmt.Errorf("trusted focused page identity is incomplete")
+	}
+	link := *s.baseURL
+	link.Path = strings.TrimRight(link.Path, "/") + "/a/" + url.PathEscape(publicID)
+	link.Fragment = s.capability(tenantID, turnID, PageIndex)
+	return link.String(), nil
+}
+
 func (s *Service) capability(tenantID, turnID string, pageIndex int) string {
 	mac := hmac.New(sha256.New, s.secret)
 	_, _ = fmt.Fprintf(mac, "focused-page:v1\x00%s\x00%s\x00%d", tenantID, turnID, pageIndex)

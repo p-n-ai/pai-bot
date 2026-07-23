@@ -9,10 +9,12 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
+	"github.com/p-n-ai/pai-bot/internal/focusedpagedelivery"
 	"github.com/p-n-ai/pai-bot/internal/server"
 )
 
@@ -134,9 +136,41 @@ func TestWSClientOnceRendersTurnWithAndWithoutFocusedPage(t *testing.T) {
 			channel := chat.NewWSChannel()
 			gateway := chat.NewGateway()
 			gateway.Register("websocket", channel)
-			deliverer := server.NewGatewayTurnDeliverer(gateway, agent.NewMemoryStore())
+			conversations := agent.NewMemoryStore()
+			result := tt.result
+			want := tt.want
+			var deliveries *focusedpagedelivery.Processor
+			if result.FocusedPage != nil {
+				pages, err := focusedpage.NewService(
+					focusedpage.NewMemoryStore(),
+					"https://pages.example",
+					[]byte("0123456789abcdef0123456789abcdef"),
+					time.Now,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				artifact, err := pages.Create(context.Background(), focusedpage.CreateInput{
+					TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conversation-1",
+					TurnID: "turn-1", RecipientName: "Aina", Message: "Private goal report",
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				result.FocusedPage = &artifact
+				want = result.Text + "\nFocused page: " + artifact.URL + "\n"
+				deliveries, err = focusedpagedelivery.NewProcessor(
+					focusedpagedelivery.NewMemoryStore(),
+					server.NewGatewayFocusedPageSender(gateway, conversations, pages),
+					focusedpagedelivery.DefaultConfig(),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			deliverer := server.NewGatewayTurnDeliverer(gateway, conversations, deliveries)
 			if err := channel.Start(context.Background(), func(msg chat.InboundMessage) {
-				_ = deliverer.DeliverTurn(context.Background(), msg, tt.result)
+				_ = deliverer.DeliverTurn(context.Background(), msg, result)
 			}); err != nil {
 				t.Fatalf("Start() error = %v", err)
 			}
@@ -151,8 +185,8 @@ func TestWSClientOnceRendersTurnWithAndWithoutFocusedPage(t *testing.T) {
 			if err := runWSClientOnceTo(serverURL, "terminal-user", "make my report", &output); err != nil {
 				t.Fatalf("runWSClientOnceTo() error = %v", err)
 			}
-			if got := output.String(); got != tt.want {
-				t.Fatalf("output = %q, want %q", got, tt.want)
+			if got := output.String(); got != want {
+				t.Fatalf("output = %q, want %q", got, want)
 			}
 		})
 	}
