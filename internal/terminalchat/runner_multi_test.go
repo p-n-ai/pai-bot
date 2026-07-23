@@ -7,13 +7,16 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 )
 
 func TestRunMulti_RoutesMessagesToDifferentUsers(t *testing.T) {
 	var output strings.Builder
 	input := strings.NewReader("1:hello from user 1\n2:hello from user 2\n/exit\n")
 	processor := &stubProcessor{
-		responses: []string{"reply to 1", "reply to 2"},
+		responses: []agent.TurnResult{{Text: "reply to 1"}, {Text: "reply to 2"}},
 	}
 
 	err := RunMulti(context.Background(), input, &output, processor, MultiConfig{
@@ -53,9 +56,7 @@ func TestRunMulti_RoutesMessagesToDifferentUsers(t *testing.T) {
 func TestRunMulti_DefaultsToUser1WhenNoPrefix(t *testing.T) {
 	var output strings.Builder
 	input := strings.NewReader("no prefix message\n/exit\n")
-	processor := &stubProcessor{
-		responses: []string{"ok"},
-	}
+	processor := &stubProcessor{responses: []agent.TurnResult{{Text: "ok"}}}
 
 	err := RunMulti(context.Background(), input, &output, processor, MultiConfig{UserCount: 2})
 	if err != nil {
@@ -76,9 +77,7 @@ func TestRunMulti_DefaultsToUser1WhenNoPrefix(t *testing.T) {
 func TestRunMulti_InvalidPrefixDefaultsToUser1(t *testing.T) {
 	var output strings.Builder
 	input := strings.NewReader("9:out of range\n/exit\n")
-	processor := &stubProcessor{
-		responses: []string{"ok"},
-	}
+	processor := &stubProcessor{responses: []agent.TurnResult{{Text: "ok"}}}
 
 	err := RunMulti(context.Background(), input, &output, processor, MultiConfig{UserCount: 2})
 	if err != nil {
@@ -119,7 +118,7 @@ func TestRunMulti_ShowsWelcomeWithUserList(t *testing.T) {
 func TestRunMulti_EOFEndsSession(t *testing.T) {
 	var output strings.Builder
 	input := strings.NewReader("1:hello\n")
-	processor := &stubProcessor{responses: []string{"hi"}}
+	processor := &stubProcessor{responses: []agent.TurnResult{{Text: "hi"}}}
 
 	err := RunMulti(context.Background(), input, &output, processor, MultiConfig{UserCount: 2})
 	if err != nil {
@@ -128,6 +127,26 @@ func TestRunMulti_EOFEndsSession(t *testing.T) {
 
 	if !strings.Contains(output.String(), "Session ended.") {
 		t.Errorf("output missing 'Session ended.', got: %s", output.String())
+	}
+}
+
+func TestRunMulti_PrintsFocusedPageForTheCorrectUser(t *testing.T) {
+	var output strings.Builder
+	processor := &stubProcessor{responses: []agent.TurnResult{{
+		Text:        "Your report is ready.",
+		FocusedPage: &focusedpage.Artifact{URL: "https://pages.example/a/page-2#private-capability"},
+	}}}
+
+	err := RunMulti(context.Background(), strings.NewReader("2:make my report\n/exit\n"), &output, processor, MultiConfig{
+		UserCount: 2,
+	})
+	if err != nil {
+		t.Fatalf("RunMulti() error = %v", err)
+	}
+
+	rendered := output.String()
+	if !strings.Contains(rendered, "[terminal-user-2] P&AI> Your report is ready.\n[terminal-user-2] Focused page> https://pages.example/a/page-2#private-capability\n") {
+		t.Fatalf("output = %q, want user-scoped tutor text and focused-page URL", rendered)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
@@ -45,7 +47,7 @@ func main() {
 
 	flag.StringVar(&userID, "user-id", "terminal-user", "stable user id for the terminal session")
 	flag.StringVar(&language, "lang", "", "preferred language override (en, ms, zh)")
-	flag.StringVar(&channel, "channel", "terminal", "channel name for store scoping (use 'telegram' to share state with the live bot)")
+	flag.StringVar(&channel, "channel", "terminal", "channel name for store scoping (use 'telegram' to share live bot state and focused-page behavior)")
 	flag.BoolVar(&memory, "memory", false, "use in-memory session state instead of PostgreSQL")
 	flag.BoolVar(&multi, "multi", false, "multi-user mode: prefix lines with N: to switch users (e.g., 1:hello, 2:/challenge ABC)")
 	flag.IntVar(&userCount, "users", 2, "number of simulated users in multi-user mode")
@@ -114,6 +116,17 @@ func main() {
 	}
 	defer cleanup()
 
+	var focusedPageService *focusedpage.Service
+	if strings.TrimSpace(cfg.FocusedPage.BaseURL) != "" && state.DB != nil {
+		focusedPageService, err = focusedpage.NewService(
+			focusedpage.NewPostgresStore(state.DB.Pool), cfg.FocusedPage.BaseURL, []byte(cfg.Auth.JWTSecret), time.Now,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "initialize focused pages: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	if lang := strings.TrimSpace(language); lang != "" {
 		if err := state.Store.SetUserPreferredLanguage(userID, lang); err != nil {
 			fmt.Fprintf(os.Stderr, "set preferred language: %v\n", err)
@@ -138,8 +151,13 @@ func main() {
 		DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
 		Goals:                goalStore,
 		Challenges:           challengeStore,
+		TenantID:             state.TenantID,
 		DevMode:              cfg.Runtime.DevMode,
 		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
+		FocusedPages:         focusedPageService,
+		FocusedPageEnabled: func(msg chat.InboundMessage) bool {
+			return msg.Channel == "telegram"
+		},
 	}
 	if cfg.Runtime.DevMode {
 		engineCfg.TurnHookNotice = func(notice agent.TurnHookCallNotice) {
@@ -255,15 +273,15 @@ func newConversationHistory(userID, channel string) *conversationHistory {
 	}
 }
 
-func (p *historyProcessor) ProcessMessage(ctx context.Context, msg chat.InboundMessage) (string, error) {
+func (p *historyProcessor) ProcessTurn(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
 	p.append(msg.UserID, msg.Channel, "student", msg.Text)
-	resp, err := p.inner.ProcessMessage(ctx, msg)
+	result, err := p.inner.ProcessTurn(ctx, msg)
 	if err != nil {
 		p.append(msg.UserID, msg.Channel, "error", err.Error())
-		return resp, err
+		return result, err
 	}
-	p.append(msg.UserID, msg.Channel, "assistant", strings.TrimSpace(resp))
-	return resp, nil
+	p.append(msg.UserID, msg.Channel, "assistant", strings.TrimSpace(result.Text))
+	return result, nil
 }
 
 func (p *historyProcessor) append(userID, channel, role, text string) {
@@ -365,8 +383,13 @@ type wsInboundMsg struct {
 
 // wsOutboundMsg mirrors the WebSocket protocol envelope for incoming server messages.
 type wsOutboundMsg struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type        string         `json:"type"`
+	Text        string         `json:"text,omitempty"`
+	FocusedPage *wsFocusedPage `json:"focused_page,omitempty"`
+}
+
+type wsFocusedPage struct {
+	URL string `json:"url"`
 }
 
 // runWSClient connects to a pai-bot WebSocket server and runs an interactive
@@ -424,7 +447,13 @@ func runWSClient(serverURL, userID string) error {
 
 			switch msg.Type {
 			case "response":
-				fmt.Printf("\nBot: %s\n\nYou: ", msg.Text)
+				fmt.Println()
+				if err := writeWSResponse(os.Stdout, "Bot: ", msg); err != nil {
+					fmt.Fprintf(os.Stderr, "\nwrite response: %v\n", err)
+					cancel()
+					return
+				}
+				fmt.Print("\nYou: ")
 			case "notification":
 				fmt.Printf("\n[notification] %s\n\nYou: ", msg.Text)
 			case "typing":
@@ -455,6 +484,10 @@ func runWSClient(serverURL, userID string) error {
 }
 
 func runWSClientOnce(serverURL, userID, text string) error {
+	return runWSClientOnceTo(serverURL, userID, text, os.Stdout)
+}
+
+func runWSClientOnceTo(serverURL, userID, text string, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -489,9 +522,19 @@ func runWSClientOnce(serverURL, userID, text string) error {
 		if resp.Type == "typing" {
 			continue
 		}
-		fmt.Printf("%s\n", resp.Text)
+		return writeWSResponse(out, "", resp)
+	}
+}
+
+func writeWSResponse(out io.Writer, prefix string, response wsOutboundMsg) error {
+	if _, err := fmt.Fprintf(out, "%s%s\n", prefix, response.Text); err != nil {
+		return err
+	}
+	if response.FocusedPage == nil || strings.TrimSpace(response.FocusedPage.URL) == "" {
 		return nil
 	}
+	_, err := fmt.Fprintf(out, "Focused page: %s\n", strings.TrimSpace(response.FocusedPage.URL))
+	return err
 }
 
 func readExpectedWSMessage(ctx context.Context, conn *websocket.Conn, want string) error {

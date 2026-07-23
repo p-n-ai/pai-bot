@@ -34,6 +34,10 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/tenant"
 )
 
+func focusedPageChannelEnabled(devMode bool, msg chat.InboundMessage) bool {
+	return msg.Channel == "telegram" || (devMode && msg.Channel == "websocket")
+}
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -192,7 +196,7 @@ func main() {
 				FeatureFlags:         flagsProvider,
 				FocusedPages:         focusedPageService,
 				FocusedPageEnabled: func(msg chat.InboundMessage) bool {
-					return msg.Channel == "telegram"
+					return focusedPageChannelEnabled(cfg.Runtime.DevMode, msg)
 				},
 			})
 
