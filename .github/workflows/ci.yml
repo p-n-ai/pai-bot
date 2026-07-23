@@ -94,6 +94,8 @@ jobs:
             command: go vet ./...
           - check: test
             command: go test ./... -count=1
+          - check: focused-page integration
+            command: go test -tags=integration ./internal/focusedpage -count=1
 
     steps:
       - uses: actions/checkout@v4
