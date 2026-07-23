@@ -7,7 +7,12 @@ import "strings"
 
 // RenderTurn projects semantic tutor text and an optional artifact into channel-owned formatting.
 func RenderTurn(in InboundMessage, text, focusedPageURL string, telegramContext TelegramInlineKeyboardContext) (OutboundMessage, bool) {
-	out := OutboundMessage{Channel: in.Channel, UserID: in.UserID, Text: StripReviewActionCodes(text)}
+	out := OutboundMessage{
+		Channel:        in.Channel,
+		UserID:         in.UserID,
+		Text:           StripReviewActionCodes(text),
+		FocusedPageURL: strings.TrimSpace(focusedPageURL),
+	}
 	if in.Channel == "telegram" {
 		out.Text = ConvertLaTeXToUnicode(text)
 		out.Text = NormalizeTelegramMarkdown(out.Text)

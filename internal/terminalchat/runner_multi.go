@@ -99,7 +99,7 @@ func RunMulti(ctx context.Context, in io.Reader, out io.Writer, processor Proces
 		userIdx, text := parseMultiInput(raw, userCount)
 		userID := userIDs[userIdx]
 
-		resp, err := processor.ProcessMessage(ctx, chat.InboundMessage{
+		result, err := processor.ProcessTurn(ctx, chat.InboundMessage{
 			Channel: channel,
 			UserID:  userID,
 			Text:    text,
@@ -111,7 +111,7 @@ func RunMulti(ctx context.Context, in io.Reader, out io.Writer, processor Proces
 			continue
 		}
 
-		if _, err := fmt.Fprintf(out, "[%s] P&AI> %s\n", userID, strings.TrimSpace(resp)); err != nil {
+		if err := writeTurn(out, "["+userID+"] ", result); err != nil {
 			return err
 		}
 	}

@@ -81,7 +81,7 @@ type createFocusedPageTool struct {
 func (t *createFocusedPageTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name:        createFocusedPageToolName,
-		Description: "Create one private, read-only focused message page for a goal or report. Use at most once in a turn. The server owns its recipient, layout, action, lifetime, capability, URL, and Telegram delivery.",
+		Description: "Create one private, read-only focused message page for a goal or report. Use at most once in a turn. The server owns its recipient, layout, action, lifetime, capability, URL, and channel delivery.",
 		Parameters:  json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"message":{"type":"string","minLength":1,"maxLength":4000}},"required":["message"]}`),
 	}
 }

@@ -110,7 +110,8 @@ func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 
 	// Send a message to user-a.
 	ctx := context.Background()
-	err := ws.SendMessage(ctx, "user-a", OutboundMessage{Text: "for user-a"})
+	pageURL := "https://pages.example/a/page-1#private-capability"
+	err := ws.SendMessage(ctx, "user-a", OutboundMessage{Text: "for user-a", FocusedPageURL: pageURL})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -133,6 +134,32 @@ func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 	}
 	if resp.Text != "for user-a" {
 		t.Errorf("expected text 'for user-a', got %q", resp.Text)
+	}
+	if resp.FocusedPage == nil || resp.FocusedPage.URL != pageURL {
+		t.Fatalf("focused page = %#v, want URL %q", resp.FocusedPage, pageURL)
+	}
+}
+
+func TestWSChannel_PlainTextResponseOmitsFocusedPage(t *testing.T) {
+	ws := NewWSChannel()
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+	conn := dialAndAuth(t, "ws"+strings.TrimPrefix(srv.URL, "http"), "plain-user")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+
+	if err := ws.SendMessage(context.Background(), "plain-user", OutboundMessage{Text: "plain reply"}); err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, data, err := conn.Read(readCtx)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if strings.Contains(string(data), "focused_page") {
+		t.Fatalf("plain response exposed focused_page field: %s", data)
 	}
 }
 
@@ -636,4 +663,3 @@ func TestWSChannel_EmbedRejectsUnlistedOrigin(t *testing.T) {
 		t.Fatal("expected dial error for unlisted origin, got nil")
 	}
 }
-
