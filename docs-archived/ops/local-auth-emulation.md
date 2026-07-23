@@ -88,13 +88,15 @@ Advanced/local-emulate overrides:
 
 - `PAI_AUTH_GOOGLE_DISCOVERY_URL`
 - `PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET`
+- `PAI_AUTH_GOOGLE_ADMIN_BASE_URL`
 
 For local `emulate`:
 
 - discovery endpoint: `http://127.0.0.1:4002/.well-known/openid-configuration`
 - emulator signing secret: `emulate-google-jwt-secret`
+- admin SPA base URL: `http://127.0.0.1:4178`
 - recommended local dev toggle: `LEARN_DEV_MODE=true`
 
-The callback URL is derived from the incoming request host/scheme, not a dedicated Google redirect env. Token exchange, userinfo, and JWKS still derive from discovery. The emulator signing secret is only for local HS256 ID-token verification; real Google still uses discovery issuer + JWKS.
+When the Vite SPA proxies `/api` to the Go backend, Google returns to the backend callback on `:8080`, then `PAI_AUTH_GOOGLE_ADMIN_BASE_URL` sends the completed flow back to the SPA on `:4178`. Token exchange, userinfo, and JWKS still derive from discovery. The emulator signing secret is only for local HS256 ID-token verification; real Google still uses discovery issuer + JWKS.
 
 Do not bake emulator-specific assumptions into the core auth model. Keep the provider transport switchable.

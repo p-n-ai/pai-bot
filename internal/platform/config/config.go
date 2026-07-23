@@ -162,6 +162,7 @@ type GoogleOAuthConfig struct {
 	AllowedDomain         string
 	DiscoveryURL          string
 	EmulatorSigningSecret string
+	AdminBaseURL          string
 }
 
 // BootstrapAdminConfig holds startup bootstrap credentials for the first platform admin.
@@ -266,6 +267,7 @@ func Load() (*Config, error) {
 				AllowedDomain:         envStr("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", ""),
 				DiscoveryURL:          envStr("PAI_AUTH_GOOGLE_DISCOVERY_URL", "https://accounts.google.com/.well-known/openid-configuration"),
 				EmulatorSigningSecret: envStr("PAI_AUTH_GOOGLE_EMULATOR_SIGNING_SECRET", ""),
+				AdminBaseURL:          envStr("PAI_AUTH_GOOGLE_ADMIN_BASE_URL", ""),
 			},
 			BootstrapAdmin: BootstrapAdminConfig{
 				Email:    envStr("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "platform-admin@example.com"),
