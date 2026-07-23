@@ -11,8 +11,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  admin:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      admin: ${{ steps.filter.outputs.admin }}
+      backend: ${{ steps.filter.outputs.backend }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            admin:
+              - 'admin/**'
+              - '.github/workflows/ci.yml'
+            backend:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.golangci.yml'
+              - 'migrations/**'
+              - 'oss/**'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'migrations/**'
+              - 'oss/**'
+              - 'deploy/docker/Dockerfile'
+              - '.dockerignore'
+              - '.github/workflows/ci.yml'
+
+  admin:
+    name: Admin ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: lint
+            command: lint
+          - check: test
+            command: test
 
     steps:
       - uses: actions/checkout@v4
@@ -31,16 +77,23 @@ jobs:
         working-directory: admin
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Admin lint
+      - name: Run ${{ matrix.check }}
         working-directory: admin
-        run: pnpm lint
-
-      - name: Admin test
-        working-directory: admin
-        run: pnpm test
+        run: pnpm ${{ matrix.command }}
 
   go:
+    name: Go ${{ matrix.check }}
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: vet
+            command: go vet ./...
+          - check: test
+            command: go test ./... -count=1
 
     steps:
       - uses: actions/checkout@v4
@@ -52,11 +105,20 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Vet
-        run: go vet ./...
+      - name: Run ${{ matrix.check }}
+        run: ${{ matrix.command }}
 
-      - name: Test
-        run: go test ./... -count=1
+  go-lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
 
       - name: Lint
         uses: golangci/golangci-lint-action@v7
@@ -65,7 +127,11 @@ jobs:
 
   e2e-backend:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    needs: changes
+    if: >-
+      github.event_name != 'pull_request' &&
+      (needs.changes.outputs.admin == 'true' ||
+      needs.changes.outputs.backend == 'true')
 
     services:
       postgres:
@@ -184,7 +250,10 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.docker == 'true'
 
     steps:
       - uses: actions/checkout@v4
