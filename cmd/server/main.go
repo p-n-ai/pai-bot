@@ -21,6 +21,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
+	"github.com/p-n-ai/pai-bot/internal/focusedpagedelivery"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -254,7 +255,18 @@ func main() {
 
 			// Wire challenge notifications through the gateway.
 			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
-			engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store))
+			var focusedPageDeliveries *focusedpagedelivery.Processor
+			if focusedPageService != nil {
+				focusedPageDeliveries, err = focusedpagedelivery.NewProcessor(
+					focusedpagedelivery.NewPostgresStore(db.Pool),
+					server.NewGatewayFocusedPageSender(gw, store, focusedPageService),
+					focusedpagedelivery.DefaultConfig(),
+				)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize focused-page deliveries: %w", err)
+				}
+			}
+			engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store, focusedPageDeliveries))
 
 			// Start proactive scheduler (nudges for due reviews).
 			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -375,6 +387,18 @@ func main() {
 			return http.Handler(topMux), func(ctx context.Context) error {
 				if err := gw.StartAll(ctx, handleInbound); err != nil {
 					return err
+				}
+				if focusedPageDeliveries != nil {
+					workerCtx, cancelWorker := context.WithCancel(ctx)
+					workerDone := make(chan struct{})
+					go func() {
+						defer close(workerDone)
+						focusedPageDeliveries.Run(workerCtx)
+					}()
+					cleanup = append(cleanup, func() {
+						cancelWorker()
+						<-workerDone
+					})
 				}
 				slog.Info("P&AI Bot is running")
 				return nil

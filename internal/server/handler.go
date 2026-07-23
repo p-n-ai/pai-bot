@@ -23,6 +23,8 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/focusedpage"
+	"github.com/p-n-ai/pai-bot/internal/focusedpagedelivery"
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
@@ -43,8 +45,11 @@ func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw:
 func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
 	return gatewayNotifier{gw: gw, channels: channels}
 }
-func NewGatewayTurnDeliverer(gw *chat.Gateway, store agent.ConversationStore) GatewayTurnDeliverer {
-	return gatewayTurnDeliverer{gw: gw, store: store}
+func NewGatewayTurnDeliverer(gw *chat.Gateway, store agent.ConversationStore, deliveries *focusedpagedelivery.Processor) GatewayTurnDeliverer {
+	return gatewayTurnDeliverer{gw: gw, store: store, deliveries: deliveries}
+}
+func NewGatewayFocusedPageSender(gw *chat.Gateway, store agent.ConversationStore, pages *focusedpage.Service) focusedpagedelivery.Sender {
+	return gatewayFocusedPageSender{gw: gw, store: store, pages: pages}
 }
 func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSource {
 	return weeklyParentReportSource{admin: admin}
@@ -276,20 +281,52 @@ type gatewayNotifier struct {
 }
 
 type gatewayTurnDeliverer struct {
-	gw    *chat.Gateway
-	store agent.ConversationStore
+	gw         *chat.Gateway
+	store      agent.ConversationStore
+	deliveries *focusedpagedelivery.Processor
 }
 
 func (d gatewayTurnDeliverer) DeliverTurn(ctx context.Context, inbound chat.InboundMessage, result agent.TurnResult) error {
-	pageURL := ""
 	if result.FocusedPage != nil {
-		pageURL = result.FocusedPage.URL
+		if d.deliveries == nil {
+			return fmt.Errorf("focused-page delivery processor is not configured")
+		}
+		return d.deliveries.EnqueueAndDeliver(ctx, focusedpagedelivery.EnqueueInput{
+			TenantID:            result.FocusedPage.TenantID,
+			TurnID:              result.FocusedPage.TurnID,
+			Channel:             inbound.Channel,
+			RecipientID:         inbound.UserID,
+			FinalText:           result.Text,
+			FocusedPagePublicID: result.FocusedPage.PublicID,
+		})
 	}
-	out, ok := chat.RenderTurn(inbound, result.Text, pageURL, telegramInlineKeyboardContext(d.store, inbound.UserID))
+	out, ok := chat.RenderTurn(inbound, result.Text, "", telegramInlineKeyboardContext(d.store, inbound.UserID))
 	if !ok {
 		return nil
 	}
 	return d.gw.Send(ctx, out)
+}
+
+type gatewayFocusedPageSender struct {
+	gw    *chat.Gateway
+	store agent.ConversationStore
+	pages *focusedpage.Service
+}
+
+func (s gatewayFocusedPageSender) SendFocusedPage(ctx context.Context, delivery focusedpagedelivery.Delivery) error {
+	if s.pages == nil {
+		return fmt.Errorf("focused-page service is not configured")
+	}
+	pageURL, err := s.pages.URLFor(delivery.TenantID, delivery.TurnID, delivery.FocusedPagePublicID)
+	if err != nil {
+		return fmt.Errorf("reconstruct focused-page URL: %w", err)
+	}
+	inbound := chat.InboundMessage{Channel: delivery.Channel, UserID: delivery.RecipientID}
+	out, ok := chat.RenderTurn(inbound, delivery.FinalText, pageURL, telegramInlineKeyboardContext(s.store, delivery.RecipientID))
+	if !ok {
+		return nil
+	}
+	return s.gw.Send(ctx, out)
 }
 
 func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {

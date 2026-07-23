@@ -160,6 +160,30 @@ func FuzzParseMessageNormalizationProperties(f *testing.F) {
 	})
 }
 
+func TestURLForReconstructsTheOriginalCapabilityFromPersistedIdentity(t *testing.T) {
+	service, err := NewService(NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := service.Create(context.Background(), CreateInput{
+		TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conversation-1",
+		TurnID: "turn-1", RecipientName: "Aina", Message: "Goal report",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconstructed, err := service.URLFor(artifact.TenantID, artifact.TurnID, artifact.PublicID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reconstructed != artifact.URL {
+		t.Fatalf("reconstructed URL = %q, want %q", reconstructed, artifact.URL)
+	}
+	if _, err := service.URLFor("", artifact.TurnID, artifact.PublicID); err == nil {
+		t.Fatal("incomplete persisted identity was accepted")
+	}
+}
+
 func TestFocusedPageConfigurationRejectsInsecureOriginsAndSecrets(t *testing.T) {
 	store := NewMemoryStore()
 	validSecret := []byte("0123456789abcdef0123456789abcdef")
