@@ -6,13 +6,72 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err = channel.SendMessage(ctx, "123", OutboundMessage{Text: "hello"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("requests = %d, want 0 after caller cancellation", got)
+	}
+}
+
+func TestTelegramChannelSendMessageRetryHonorsCanceledContext(t *testing.T) {
+	var requests atomic.Int32
+	ctx, cancel := context.WithCancel(t.Context())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			cancel()
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	err = channel.SendMessage(ctx, "123", OutboundMessage{
+		Text:      "hello",
+		ParseMode: "Markdown",
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("requests = %d, want no retry after caller cancellation", got)
+	}
+}
 
 func TestTelegramChannelSendMessageUsesTopicRoute(t *testing.T) {
 	var values url.Values

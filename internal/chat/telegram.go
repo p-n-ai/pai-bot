@@ -134,7 +134,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			params.Set("reply_markup", string(b))
 		}
 
-		resp, err := t.client.PostForm(t.baseURL+"/sendMessage", params)
+		resp, err := t.postForm(ctx, "/sendMessage", params)
 		if err != nil {
 			return fmt.Errorf("sending Telegram message: %w", err)
 		}
@@ -145,7 +145,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			if msg.ParseMode != "" && resp.StatusCode == http.StatusBadRequest {
 				slog.Warn("Telegram markdown parse failed, retrying plain")
 				params.Del("parse_mode")
-				retryResp, retryErr := t.client.PostForm(t.baseURL+"/sendMessage", params)
+				retryResp, retryErr := t.postForm(ctx, "/sendMessage", params)
 				if retryErr != nil {
 					return fmt.Errorf("sending Telegram message (retry): %w", retryErr)
 				}
@@ -189,7 +189,13 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 			updates, err := t.getUpdates(ctx)
 			if err != nil {
 				slog.Error("Telegram getUpdates error", "error", err)
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.stop:
+					return
+				case <-time.After(5 * time.Second):
+				}
 				continue
 			}
 
@@ -434,7 +440,7 @@ func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQuery
 	params := url.Values{
 		"callback_query_id": {callbackQueryID},
 	}
-	resp, err := t.client.PostForm(t.baseURL+"/answerCallbackQuery", params)
+	resp, err := t.postForm(ctx, "/answerCallbackQuery", params)
 	if err != nil {
 		return fmt.Errorf("answer callback query: %w", err)
 	}
@@ -443,6 +449,20 @@ func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQuery
 		return fmt.Errorf("telegram answerCallbackQuery error %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (t *TelegramChannel) postForm(ctx context.Context, endpoint string, params url.Values) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		t.baseURL+endpoint,
+		strings.NewReader(params.Encode()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return t.client.Do(request)
 }
 
 func pickImageFileID(m *tgMessage) string {
