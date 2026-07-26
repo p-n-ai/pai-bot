@@ -123,19 +123,11 @@ func TestTeamsChannelOutboundRejectsUntrustedContinuationServiceURL(t *testing.T
 }
 
 func TestTeamsChannelOutboundRequiresTokenProvider(t *testing.T) {
-	channel, err := NewTeamsChannel(TeamsConfig{
+	_, err := NewTeamsChannel(TeamsConfig{
 		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error { return nil }),
 	})
-	if err != nil {
-		t.Fatalf("NewTeamsChannel() error = %v", err)
-	}
-
-	err = channel.SendTyping(
-		context.Background(),
-		teamsTestThreadID("conversation-1", "https://smba.trafficmanager.net/teams/"),
-	)
 	if err == nil || !strings.Contains(err.Error(), "token provider") {
-		t.Fatalf("SendTyping() error = %v, want token provider error", err)
+		t.Fatalf("NewTeamsChannel() error = %v, want token provider error", err)
 	}
 }
 

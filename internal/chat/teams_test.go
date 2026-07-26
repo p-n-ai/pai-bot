@@ -29,6 +29,9 @@ func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T)
 			}
 			return nil
 		}),
+		TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {
+			return "connector-token", nil
+		}),
 	})
 	if err != nil {
 		t.Fatalf("NewTeamsChannel() error = %v", err)
@@ -77,6 +80,9 @@ func TestTeamsChannelWebhookRejectsUnauthenticatedActivity(t *testing.T) {
 	channel, err := NewTeamsChannel(TeamsConfig{
 		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error {
 			return errors.New("invalid token")
+		}),
+		TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {
+			return "connector-token", nil
 		}),
 	})
 	if err != nil {

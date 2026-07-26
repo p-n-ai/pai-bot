@@ -50,6 +50,9 @@ func NewTeamsChannel(config TeamsConfig) (*TeamsChannel, error) {
 	if config.TokenValidator == nil {
 		return nil, fmt.Errorf("Teams token validator is required")
 	}
+	if config.TokenProvider == nil {
+		return nil, fmt.Errorf("Teams token provider is required")
+	}
 	return &TeamsChannel{
 		tokenValidator: config.TokenValidator,
 		tokenProvider:  config.TokenProvider,
@@ -89,10 +92,6 @@ func (t *TeamsChannel) sendActivity(
 	if err != nil {
 		return err
 	}
-	if t.tokenProvider == nil {
-		return fmt.Errorf("Teams token provider is required for outbound delivery")
-	}
-
 	token, err := t.tokenProvider.Token(ctx)
 	if err != nil {
 		return fmt.Errorf("get Teams Connector token: %w", err)
