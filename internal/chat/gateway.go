@@ -1,7 +1,7 @@
 // Copyright 2026 the P&AI authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package chat provides a unified interface for messaging channels (Telegram, WhatsApp, WebSocket).
+// Package chat provides channel-neutral messaging contracts and adapters.
 package chat
 
 import (
@@ -68,8 +68,8 @@ type OutboundMessage struct {
 
 // Channel is the interface each messaging platform must implement.
 type Channel interface {
-	SendMessage(ctx context.Context, userID string, msg OutboundMessage) error
-	SendTyping(ctx context.Context, userID string) error
+	SendMessage(ctx context.Context, destination string, msg OutboundMessage) error
+	SendTyping(ctx context.Context, destination string) error
 	Start(ctx context.Context, handler func(InboundMessage)) error
 	Stop() error
 }
@@ -96,8 +96,9 @@ func NewGateway() *Gateway {
 // Register adds a channel to the gateway.
 func (g *Gateway) Register(name string, ch Channel) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	g.channels[name] = ch
+	g.mu.Unlock()
+
 	slog.Info("chat channel registered", "channel", name)
 }
 
@@ -118,11 +119,12 @@ func (g *Gateway) Channel(name string) (Channel, bool) {
 // ChannelNames returns the names of all registered channels.
 func (g *Gateway) ChannelNames() []string {
 	g.mu.RLock()
-	defer g.mu.RUnlock()
 	names := make([]string, 0, len(g.channels))
 	for name := range g.channels {
 		names = append(names, name)
 	}
+	g.mu.RUnlock()
+
 	sort.Strings(names)
 	return names
 }
@@ -141,14 +143,14 @@ func (g *Gateway) Send(ctx context.Context, msg OutboundMessage) error {
 	return ch.SendMessage(ctx, destination, msg)
 }
 
-// SendTyping sends a typing indicator to the user on the given channel.
-func (g *Gateway) SendTyping(ctx context.Context, channel, userID string) error {
+// SendTyping sends a typing indicator to a channel-owned destination.
+func (g *Gateway) SendTyping(ctx context.Context, channel, destination string) error {
 	ch, ok := g.Channel(channel)
 	if !ok {
 		return fmt.Errorf("unknown channel: %s", channel)
 	}
 
-	return ch.SendTyping(ctx, userID)
+	return ch.SendTyping(ctx, destination)
 }
 
 // Webhook returns the inbound HTTP handler for a registered webhook channel.
@@ -216,12 +218,12 @@ type channelEntry struct {
 
 func (g *Gateway) channelEntries() []channelEntry {
 	g.mu.RLock()
-	defer g.mu.RUnlock()
-
 	entries := make([]channelEntry, 0, len(g.channels))
 	for name, channel := range g.channels {
 		entries = append(entries, channelEntry{name: name, channel: channel})
 	}
+	g.mu.RUnlock()
+
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].name < entries[j].name
 	})

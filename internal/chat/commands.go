@@ -9,10 +9,10 @@ type BotCommand struct {
 	Description string `json:"description"`
 }
 
-// RegisteredCommands is the single source of truth for all bot commands
-// shown in Telegram's command menu (and any future chat channel).
+// registeredCommands is the single source of truth for all bot commands
+// shown in chat channel command menus.
 // Add new commands here — they auto-sync to Telegram on bot startup.
-var RegisteredCommands = []BotCommand{
+var registeredCommands = []BotCommand{
 	{Command: "help", Description: "Senarai semua arahan"},
 	{Command: "start", Description: "Mulakan sesi pembelajaran"},
 	{Command: "clear", Description: "Reset perbualan semasa"},
@@ -26,20 +26,22 @@ var RegisteredCommands = []BotCommand{
 	{Command: "challenge", Description: "Cabaran kuiz dengan rakan atau AI"},
 }
 
-// DevCommands are only shown when dev mode is enabled.
-var DevCommands = []BotCommand{
+var devCommands = []BotCommand{
 	{Command: "dev_reset", Description: "[DEV] Full reset: mastery, XP, streaks, goals"},
 	{Command: "dev_boost", Description: "[DEV] Boost current topic mastery (default 85%)"},
 	{Command: "dev_close_group", Description: "[DEV] Toggle group open/closed"},
 }
 
-// AllCommands returns RegisteredCommands + DevCommands when devMode is true.
+// AllCommands returns a caller-owned snapshot of the configured bot commands.
 func AllCommands(devMode bool) []BotCommand {
-	if !devMode {
-		return RegisteredCommands
+	count := len(registeredCommands)
+	if devMode {
+		count += len(devCommands)
 	}
-	all := make([]BotCommand, 0, len(RegisteredCommands)+len(DevCommands))
-	all = append(all, RegisteredCommands...)
-	all = append(all, DevCommands...)
+	all := make([]BotCommand, 0, count)
+	all = append(all, registeredCommands...)
+	if devMode {
+		all = append(all, devCommands...)
+	}
 	return all
 }

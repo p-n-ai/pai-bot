@@ -117,7 +117,7 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 	if header.Alg != "RS256" || header.KeyID == "" {
 		return fmt.Errorf("unsupported teams token signature")
 	}
-	keys, issuer, err := a.verificationKeys(ctx, header.KeyID)
+	keys, issuer, err := a.verificationKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,10 +143,7 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 	return nil
 }
 
-func (a *TeamsAuthenticator) verificationKeys(
-	ctx context.Context,
-	requiredKeyID string,
-) (map[string]*rsa.PublicKey, string, error) {
+func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]*rsa.PublicKey, string, error) {
 	a.keysMu.Lock()
 	defer a.keysMu.Unlock()
 
