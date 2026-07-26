@@ -14,6 +14,71 @@ import (
 	"testing"
 )
 
+func TestTelegramChannelSendMessageUsesChatSDKTopicRoute(t *testing.T) {
+	var values url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatalf("ParseQuery() error = %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":101}}`))
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	if err := channel.SendMessage(t.Context(), "telegram:-100123:42", OutboundMessage{Text: "topic reply"}); err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if got := values.Get("chat_id"); got != "-100123" {
+		t.Fatalf("chat_id = %q, want -100123", got)
+	}
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+}
+
+func TestTelegramChannelSendTypingUsesChatSDKTopicRoute(t *testing.T) {
+	var values url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatalf("ParseQuery() error = %v", err)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	if err := channel.SendTyping(t.Context(), "telegram:-100123:42"); err != nil {
+		t.Fatalf("SendTyping() error = %v", err)
+	}
+	if got := values.Get("chat_id"); got != "-100123" {
+		t.Fatalf("chat_id = %q, want -100123", got)
+	}
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+}
+
 func TestTelegramChannel_SendMessage_QuizInlineKeyboardPayload(t *testing.T) {
 	type requestCapture struct {
 		path   string

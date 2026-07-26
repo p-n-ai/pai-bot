@@ -138,6 +138,9 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 					Channel:    "whatsapp",
 					UserID:     msg.From,
 					ExternalID: msg.ID,
+					ThreadID:   msg.From,
+					MessageID:  msg.ID,
+					DeliveryID: msg.ID,
 					Text:       msg.Text.Body,
 				}
 				if contact, ok := contacts[msg.From]; ok {
@@ -215,11 +218,11 @@ type waProfile struct {
 }
 
 type waMessage struct {
-	From      string    `json:"from"`
-	ID        string    `json:"id"`
-	Timestamp string    `json:"timestamp"`
-	Type      string    `json:"type"`
-	Text      waText    `json:"text"`
+	From      string `json:"from"`
+	ID        string `json:"id"`
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Text      waText `json:"text"`
 }
 
 type waText struct {

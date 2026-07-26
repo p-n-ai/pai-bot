@@ -22,6 +22,17 @@ func clearEnv(t *testing.T) {
 		"LEARN_DATABASE_MIN_CONNS",
 		"LEARN_CACHE_URL",
 		"LEARN_TELEGRAM_BOT_TOKEN",
+		"LEARN_SLACK_ENABLED",
+		"LEARN_SLACK_BOT_TOKEN",
+		"LEARN_SLACK_SIGNING_SECRET",
+		"LEARN_DISCORD_ENABLED",
+		"LEARN_DISCORD_BOT_TOKEN",
+		"LEARN_DISCORD_PUBLIC_KEY",
+		"LEARN_DISCORD_APPLICATION_ID",
+		"LEARN_TEAMS_ENABLED",
+		"LEARN_TEAMS_APP_ID",
+		"LEARN_TEAMS_APP_PASSWORD",
+		"LEARN_TEAMS_APP_TENANT_ID",
 		"LEARN_FOCUSED_PAGE_BASE_URL",
 		"LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL",
 		"LEARN_EMAIL_SMTP_ADDR",
@@ -132,6 +143,17 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_SERVER_PORT", "9090")
 	t.Setenv("LEARN_DATABASE_URL", "postgres://test:test@localhost/testdb")
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token-123")
+	t.Setenv("LEARN_SLACK_ENABLED", "true")
+	t.Setenv("LEARN_SLACK_BOT_TOKEN", "xoxb-test-token")
+	t.Setenv("LEARN_SLACK_SIGNING_SECRET", "slack-signing-secret")
+	t.Setenv("LEARN_DISCORD_ENABLED", "true")
+	t.Setenv("LEARN_DISCORD_BOT_TOKEN", "discord-test-token")
+	t.Setenv("LEARN_DISCORD_PUBLIC_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("LEARN_DISCORD_APPLICATION_ID", "discord-application-id")
+	t.Setenv("LEARN_TEAMS_ENABLED", "true")
+	t.Setenv("LEARN_TEAMS_APP_ID", "teams-app-id")
+	t.Setenv("LEARN_TEAMS_APP_PASSWORD", "teams-app-password")
+	t.Setenv("LEARN_TEAMS_APP_TENANT_ID", "teams-tenant-id")
 	t.Setenv("LEARN_EMAIL_SMTP_ADDR", "smtp.example.com:587")
 	t.Setenv("LEARN_EMAIL_SMTP_USERNAME", "mailer")
 	t.Setenv("LEARN_EMAIL_SMTP_PASSWORD", "mailer-secret")
@@ -171,6 +193,24 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Telegram.BotToken != "test-token-123" {
 		t.Errorf("Telegram.BotToken = %q, want test-token-123", cfg.Telegram.BotToken)
+	}
+	if !cfg.Slack.Enabled {
+		t.Error("Slack.Enabled should be true")
+	}
+	if cfg.Slack.BotToken != "xoxb-test-token" || cfg.Slack.SigningSecret != "slack-signing-secret" {
+		t.Error("Slack credentials were not loaded")
+	}
+	if !cfg.Discord.Enabled ||
+		cfg.Discord.BotToken != "discord-test-token" ||
+		cfg.Discord.PublicKey != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" ||
+		cfg.Discord.ApplicationID != "discord-application-id" {
+		t.Error("Discord configuration was not loaded")
+	}
+	if !cfg.Teams.Enabled ||
+		cfg.Teams.AppID != "teams-app-id" ||
+		cfg.Teams.AppPassword != "teams-app-password" ||
+		cfg.Teams.AppTenantID != "teams-tenant-id" {
+		t.Error("Teams configuration was not loaded")
 	}
 	if cfg.Email.SMTPAddr != "smtp.example.com:587" {
 		t.Errorf("Email.SMTPAddr = %q, want smtp.example.com:587", cfg.Email.SMTPAddr)
@@ -365,6 +405,111 @@ func TestValidate_DevModeAllowsMissingTelegramAndAI(t *testing.T) {
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v; should pass in dev mode", err)
+	}
+}
+
+func TestLoad_ChatAdaptersAreDisabledByDefault(t *testing.T) {
+	clearEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Slack.Enabled || cfg.Discord.Enabled || cfg.Teams.Enabled {
+		t.Fatalf("chat adapters should default to disabled: Slack=%t Discord=%t Teams=%t",
+			cfg.Slack.Enabled, cfg.Discord.Enabled, cfg.Teams.Enabled)
+	}
+}
+
+func TestValidate_ChatAdapterCredentialsAreAtomic(t *testing.T) {
+	tests := []struct {
+		name       string
+		configure  func(*Config)
+		wantFields []string
+		secrets    []string
+	}{
+		{
+			name: "Slack",
+			configure: func(cfg *Config) {
+				cfg.Slack.BotToken = "xoxb-secret-value"
+			},
+			wantFields: []string{"LEARN_SLACK_BOT_TOKEN", "LEARN_SLACK_SIGNING_SECRET"},
+			secrets:    []string{"xoxb-secret-value"},
+		},
+		{
+			name: "Discord",
+			configure: func(cfg *Config) {
+				cfg.Discord.Enabled = true
+				cfg.Discord.PublicKey = "discord-public-key-value"
+			},
+			wantFields: []string{
+				"LEARN_DISCORD_BOT_TOKEN",
+				"LEARN_DISCORD_PUBLIC_KEY",
+				"LEARN_DISCORD_APPLICATION_ID",
+			},
+			secrets: []string{"discord-public-key-value"},
+		},
+		{
+			name: "Teams",
+			configure: func(cfg *Config) {
+				cfg.Teams.AppPassword = "teams-secret-value"
+			},
+			wantFields: []string{"LEARN_TEAMS_APP_ID", "LEARN_TEAMS_APP_PASSWORD"},
+			secrets:    []string{"teams-secret-value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Runtime: RuntimeConfig{DevMode: true},
+				Tenant:  TenantConfig{Mode: "single"},
+			}
+			tt.configure(cfg)
+
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatal("Validate() should reject a partial adapter credential set")
+			}
+			for _, field := range tt.wantFields {
+				if !strings.Contains(err.Error(), field) {
+					t.Errorf("Validate() error = %q, want field %s", err, field)
+				}
+			}
+			for _, secret := range tt.secrets {
+				if strings.Contains(err.Error(), secret) {
+					t.Errorf("Validate() error exposed credential %q", secret)
+				}
+			}
+		})
+	}
+}
+
+func TestValidate_ChatAdapterCredentialSets(t *testing.T) {
+	cfg := &Config{
+		Runtime: RuntimeConfig{DevMode: true},
+		Tenant:  TenantConfig{Mode: "single"},
+		Slack: SlackConfig{
+			Enabled:       true,
+			BotToken:      "xoxb-test-token",
+			SigningSecret: "slack-signing-secret",
+		},
+		Discord: DiscordConfig{
+			Enabled:       true,
+			BotToken:      "discord-test-token",
+			PublicKey:     "discord-public-key",
+			ApplicationID: "discord-application-id",
+		},
+		Teams: TeamsConfig{
+			Enabled:     true,
+			AppID:       "teams-app-id",
+			AppPassword: "teams-app-password",
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 

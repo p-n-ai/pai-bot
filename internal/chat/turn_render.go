@@ -10,6 +10,7 @@ func RenderTurn(in InboundMessage, text, focusedPageURL string, telegramContext 
 	out := OutboundMessage{
 		Channel:        in.Channel,
 		UserID:         in.UserID,
+		ThreadID:       in.ThreadID,
 		Text:           StripReviewActionCodes(text),
 		FocusedPageURL: strings.TrimSpace(focusedPageURL),
 	}

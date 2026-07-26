@@ -274,6 +274,9 @@ func (w *WhatsAppMeowChannel) handleMessage(msg *events.Message) {
 		Channel:    "whatsapp",
 		UserID:     msg.Info.Sender.ToNonAD().String(),
 		ExternalID: msg.Info.ID,
+		ThreadID:   msg.Info.Sender.ToNonAD().String(),
+		MessageID:  msg.Info.ID,
+		DeliveryID: msg.Info.ID,
 		Text:       text,
 		FirstName:  msg.Info.PushName,
 	}
