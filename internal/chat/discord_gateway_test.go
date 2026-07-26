@@ -225,7 +225,7 @@ func TestDiscordChannelGatewayStartTimesOutWaitingForHello(t *testing.T) {
 	defer server.Close()
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
-	channel.gatewayHandshakeTimeout = 20 * time.Millisecond
+	channel.gatewayHandshakeTimeout = 250 * time.Millisecond
 
 	startedAt := time.Now()
 	err := channel.Start(t.Context(), func(InboundMessage) {})
