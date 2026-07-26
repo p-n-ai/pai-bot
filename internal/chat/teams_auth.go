@@ -49,7 +49,7 @@ func NewTeamsAuthenticator(appID, appPassword, tenantID string) (*TeamsAuthentic
 	appID = strings.TrimSpace(appID)
 	appPassword = strings.TrimSpace(appPassword)
 	if appID == "" || appPassword == "" {
-		return nil, fmt.Errorf("Teams app ID and password are required")
+		return nil, fmt.Errorf("teams app ID and password are required")
 	}
 	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
@@ -90,9 +90,9 @@ func (a *TeamsAuthenticator) Token(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("request Teams token: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Teams token endpoint returned status %d", response.StatusCode)
+		return "", fmt.Errorf("teams token endpoint returned status %d", response.StatusCode)
 	}
 	var payload struct {
 		AccessToken string `json:"access_token"`
@@ -102,7 +102,7 @@ func (a *TeamsAuthenticator) Token(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("decode Teams token response: %w", err)
 	}
 	if strings.TrimSpace(payload.AccessToken) == "" || payload.ExpiresIn <= 0 {
-		return "", fmt.Errorf("Teams token response is incomplete")
+		return "", fmt.Errorf("teams token response is incomplete")
 	}
 	a.outboundToken = payload.AccessToken
 	a.tokenExpiresAt = now.Add(time.Duration(payload.ExpiresIn) * time.Second)
@@ -115,7 +115,7 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 		return err
 	}
 	if header.Alg != "RS256" || header.KeyID == "" {
-		return fmt.Errorf("unsupported Teams token signature")
+		return fmt.Errorf("unsupported teams token signature")
 	}
 	keys, issuer, err := a.verificationKeys(ctx, header.KeyID)
 	if err != nil {
@@ -123,22 +123,22 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 	}
 	key := keys[header.KeyID]
 	if key == nil {
-		return fmt.Errorf("Teams signing key is unavailable")
+		return fmt.Errorf("teams signing key is unavailable")
 	}
 	digest := sha256.Sum256(signed)
 	if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, digest[:], signature); err != nil {
-		return fmt.Errorf("invalid Teams token signature")
+		return fmt.Errorf("invalid teams token signature")
 	}
 
 	now := a.now().Unix()
 	if claims.ExpiresAt <= now || (claims.NotBefore != 0 && claims.NotBefore > now+60) {
-		return fmt.Errorf("Teams token is expired or not active")
+		return fmt.Errorf("teams token is expired or not active")
 	}
 	if claims.Issuer != issuer || !claims.Audience.Contains(a.appID) {
-		return fmt.Errorf("Teams token issuer or audience is invalid")
+		return fmt.Errorf("teams token issuer or audience is invalid")
 	}
 	if claims.ServiceURL == "" || claims.ServiceURL != serviceURL {
-		return fmt.Errorf("Teams token service URL does not match activity")
+		return fmt.Errorf("teams token service URL does not match activity")
 	}
 	return nil
 }
@@ -162,10 +162,10 @@ func (a *TeamsAuthenticator) verificationKeys(
 		return nil, "", fmt.Errorf("load Teams OpenID metadata: %w", err)
 	}
 	if metadata.Issuer == "" || metadata.JWKSURL == "" {
-		return nil, "", fmt.Errorf("Teams OpenID metadata is incomplete")
+		return nil, "", fmt.Errorf("teams OpenID metadata is incomplete")
 	}
 	if a.metadataURL == teamsOpenIDMetadataURL && !trustedTeamsJWKSURL(metadata.JWKSURL) {
-		return nil, "", fmt.Errorf("Teams OpenID metadata returned an untrusted JWKS URL")
+		return nil, "", fmt.Errorf("teams OpenID metadata returned an untrusted JWKS URL")
 	}
 	var set struct {
 		Keys []teamsJWK `json:"keys"`
@@ -180,7 +180,7 @@ func (a *TeamsAuthenticator) verificationKeys(
 		}
 	}
 	if len(keys) == 0 {
-		return nil, "", fmt.Errorf("Teams signing key set is empty")
+		return nil, "", fmt.Errorf("teams signing key set is empty")
 	}
 	a.keys = keys
 	a.issuer = metadata.Issuer
@@ -206,7 +206,7 @@ func (a *TeamsAuthenticator) getJSON(ctx context.Context, endpoint string, targe
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", response.StatusCode)
 	}

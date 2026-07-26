@@ -10,8 +10,8 @@ import (
 
 // EmbedRateLimiter provides rate limiting for embed WebSocket connections.
 type EmbedRateLimiter struct {
-	handshakeLimit int           // max handshakes per IP per window
-	messageLimit   int           // max messages per user per window
+	handshakeLimit int // max handshakes per IP per window
+	messageLimit   int // max messages per user per window
 	window         time.Duration
 
 	mu         sync.Mutex

@@ -48,10 +48,10 @@ type TeamsChannel struct {
 // NewTeamsChannel creates a Microsoft Teams channel adapter.
 func NewTeamsChannel(config TeamsConfig) (*TeamsChannel, error) {
 	if config.TokenValidator == nil {
-		return nil, fmt.Errorf("Teams token validator is required")
+		return nil, fmt.Errorf("teams token validator is required")
 	}
 	if config.TokenProvider == nil {
-		return nil, fmt.Errorf("Teams token provider is required")
+		return nil, fmt.Errorf("teams token provider is required")
 	}
 	return &TeamsChannel{
 		tokenValidator: config.TokenValidator,
@@ -98,7 +98,7 @@ func (t *TeamsChannel) sendActivity(
 	}
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return fmt.Errorf("Teams token provider returned an empty token")
+		return fmt.Errorf("teams token provider returned an empty token")
 	}
 
 	body, err := json.Marshal(activity)
@@ -117,9 +117,9 @@ func (t *TeamsChannel) sendActivity(
 	if err != nil {
 		return fmt.Errorf("post Teams activity: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("Teams Connector returned status %d", response.StatusCode)
+		return fmt.Errorf("teams connector returned status %d", response.StatusCode)
 	}
 	return nil
 }

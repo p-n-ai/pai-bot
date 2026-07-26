@@ -110,9 +110,9 @@ func (d *DiscordChannel) doREST(ctx context.Context, method, path string, body [
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 4<<10))
 		if text := strings.TrimSpace(string(detail)); text != "" {
-			return fmt.Errorf("Discord API returned %s: %s", response.Status, text)
+			return fmt.Errorf("discord API returned %s: %s", response.Status, text)
 		}
-		return fmt.Errorf("Discord API returned %s", response.Status)
+		return fmt.Errorf("discord API returned %s", response.Status)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func truncateDiscordContent(content string) string {
 func discordChannelID(destination string) (string, error) {
 	destination = strings.TrimSpace(destination)
 	if destination == "" {
-		return "", fmt.Errorf("Discord destination is required")
+		return "", fmt.Errorf("discord destination is required")
 	}
 	if !strings.HasPrefix(destination, "discord:") {
 		if strings.Contains(destination, ":") {

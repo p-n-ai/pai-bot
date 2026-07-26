@@ -108,7 +108,7 @@ func (d *DiscordChannel) connectGateway(
 		return nil, 0, fmt.Errorf("connect Discord Gateway: %w", err)
 	}
 	closeOnError := func(err error) (*websocket.Conn, time.Duration, error) {
-		connection.CloseNow()
+		_ = connection.CloseNow()
 		return nil, 0, err
 	}
 
@@ -117,7 +117,7 @@ func (d *DiscordChannel) connectGateway(
 		return closeOnError(fmt.Errorf("read Discord Gateway HELLO: %w", err))
 	}
 	if payload.Op != 10 {
-		return closeOnError(fmt.Errorf("Discord Gateway sent opcode %d before HELLO", payload.Op))
+		return closeOnError(fmt.Errorf("discord gateway sent opcode %d before HELLO", payload.Op))
 	}
 	var hello struct {
 		HeartbeatInterval int64 `json:"heartbeat_interval"`
@@ -126,7 +126,7 @@ func (d *DiscordChannel) connectGateway(
 		return closeOnError(fmt.Errorf("decode Discord Gateway HELLO: %w", err))
 	}
 	if hello.HeartbeatInterval <= 0 {
-		return closeOnError(fmt.Errorf("Discord Gateway sent invalid heartbeat interval %d", hello.HeartbeatInterval))
+		return closeOnError(fmt.Errorf("discord gateway sent invalid heartbeat interval %d", hello.HeartbeatInterval))
 	}
 	if session.resumable() {
 		if err := writeDiscordGatewayPayload(handshakeCtx, connection, struct {
@@ -182,7 +182,7 @@ func (d *DiscordChannel) runGateway(
 			session,
 			handler,
 		)
-		currentConnection.CloseNow()
+		_ = currentConnection.CloseNow()
 		gatewayRuntime.setConnection(nil)
 
 		if ctx.Err() != nil {
@@ -268,7 +268,7 @@ func (d *DiscordChannel) consumeGateway(
 	}()
 	defer func() {
 		cancelRead()
-		connection.CloseNow()
+		_ = connection.CloseNow()
 		<-readerDone
 	}()
 
@@ -282,7 +282,7 @@ func (d *DiscordChannel) consumeGateway(
 			return discordGatewayDirective{}, ctx.Err()
 		case <-heartbeat.C:
 			if !heartbeatAcknowledged {
-				return discordGatewayDirective{}, fmt.Errorf("Discord Gateway did not acknowledge heartbeat")
+				return discordGatewayDirective{}, fmt.Errorf("discord gateway did not acknowledge heartbeat")
 			}
 			if err := sendDiscordHeartbeat(ctx, connection, session.sequence); err != nil {
 				return discordGatewayDirective{}, err
@@ -304,7 +304,7 @@ func (d *DiscordChannel) consumeGateway(
 						return discordGatewayDirective{}, fmt.Errorf("decode Discord Gateway READY: %w", err)
 					}
 					if ready.SessionID == "" || ready.ResumeGatewayURL == "" {
-						return discordGatewayDirective{}, fmt.Errorf("Discord Gateway READY omitted session information")
+						return discordGatewayDirective{}, fmt.Errorf("discord gateway READY omitted session information")
 					}
 					session.id = ready.SessionID
 					session.resumeURL = ready.ResumeGatewayURL
@@ -384,7 +384,7 @@ func (r *discordGatewayRuntime) closeConnection() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.connection != nil {
-		r.connection.CloseNow()
+		_ = r.connection.CloseNow()
 	}
 }
 

@@ -85,7 +85,7 @@ func (s *SlackChannel) SendMessage(ctx context.Context, destinationID string, ms
 		return fmt.Errorf("decode Slack message response: %w", err)
 	}
 	if response.StatusCode >= http.StatusBadRequest || !result.OK {
-		return fmt.Errorf("Slack chat.postMessage failed: %s", result.Error)
+		return fmt.Errorf("slack chat.postMessage failed: %s", result.Error)
 	}
 	return nil
 }

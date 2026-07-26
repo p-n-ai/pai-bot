@@ -23,8 +23,7 @@ import (
 func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) {
 	identify := make(chan discordGatewayPayload, 1)
 	heartbeat := make(chan discordGatewayPayload, 1)
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		connection, err := websocket.Accept(response, request, nil)
 		if err != nil {
 			t.Errorf("accept Gateway connection: %v", err)
@@ -166,8 +165,7 @@ func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) 
 
 func TestDiscordChannelGatewayStopsOnContextCancellation(t *testing.T) {
 	connected := make(chan struct{})
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		connection, err := websocket.Accept(response, request, nil)
 		if err != nil {
 			t.Errorf("accept Gateway connection: %v", err)
