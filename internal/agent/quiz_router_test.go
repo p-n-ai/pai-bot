@@ -282,7 +282,11 @@ func TestEngine_ProcessMessage_QuizAnswerAdvancesWithoutAICall(t *testing.T) {
 	if totalXP != progress.XPQuizCorrect {
 		t.Fatalf("quiz XP total = %d, want %d", totalXP, progress.XPQuizCorrect)
 	}
-	mastery, err := progressTracker.GetMastery("quiz-user-2", "kssm-f1", "F1-02")
+	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "quiz-user-2"))
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
+	}
+	mastery, err := progressTracker.GetMastery(learnerID, "kssm-f1", "F1-02")
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}
@@ -353,7 +357,11 @@ func TestEngine_ProcessMessage_QuizWrongAnswerReturnsHint(t *testing.T) {
 	if totalXP != 0 {
 		t.Fatalf("quiz XP total = %d, want 0", totalXP)
 	}
-	mastery, err := progressTracker.GetMastery("quiz-user-3", "kssm-f1", "F1-02")
+	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "quiz-user-3"))
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
+	}
+	mastery, err := progressTracker.GetMastery(learnerID, "kssm-f1", "F1-02")
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}

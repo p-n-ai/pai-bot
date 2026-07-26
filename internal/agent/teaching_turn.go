@@ -166,8 +166,11 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 		},
 	})
 	e.logAgentTurnCompleted(turn, "completed")
-	e.assessMasteryAsync(msg.UserID, matchedTopic, userContent, plainContent)
-	e.recordActivityAsync(msg.UserID)
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr == nil {
+		e.assessMasteryAsync(identity, matchedTopic, userContent, plainContent)
+		e.recordActivityAsync(identity)
+	}
 
 	responseContent := finalContent
 

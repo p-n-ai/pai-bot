@@ -314,7 +314,7 @@ func (e *Engine) handleGoalCommand(ctx context.Context, msg chat.InboundMessage,
 		return "Goal tracking is not enabled.", nil
 	}
 
-	conv, err := e.getOrCreateConversation(msg.UserID)
+	conv, err := e.getOrCreateConversation(msg)
 	if err != nil {
 		slog.Error("failed to init user for /goal", "user_id", msg.UserID, "error", err)
 		return "I hit a technical issue while setting up your goal.", nil

@@ -84,17 +84,25 @@ func TestFormatStreakRecordCelebration(t *testing.T) {
 
 func TestPendingMilestones(t *testing.T) {
 	pm := newPendingMilestones()
-	pm.add("user1", "🏆 You mastered topic X!")
-	pm.add("user1", "🌟 You reached 500 XP!")
-	msgs := pm.drain("user1")
+	identity, err := NewLearnerIdentity("telegram", "user1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nobody, err := NewLearnerIdentity("telegram", "nobody")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pm.add(identity, "🏆 You mastered topic X!")
+	pm.add(identity, "🌟 You reached 500 XP!")
+	msgs := pm.drain(identity)
 	if len(msgs) != 2 {
 		t.Fatalf("drain() = %d messages, want 2", len(msgs))
 	}
-	msgs = pm.drain("user1")
+	msgs = pm.drain(identity)
 	if len(msgs) != 0 {
 		t.Fatalf("second drain() = %d messages, want 0", len(msgs))
 	}
-	msgs = pm.drain("nobody")
+	msgs = pm.drain(nobody)
 	if len(msgs) != 0 {
 		t.Fatalf("drain(nobody) = %d messages, want 0", len(msgs))
 	}

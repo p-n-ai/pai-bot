@@ -42,8 +42,8 @@ type GatewayTurnDeliverer = gatewayTurnDeliverer
 type RuntimeSettingsStore = runtimeSettingsStore
 
 func NewGatewaySender(gw *chat.Gateway) messageSender { return gatewaySender{gw: gw} }
-func NewGatewayNotifier(gw *chat.Gateway, channels userChannelLookup) GatewayNotifier {
-	return gatewayNotifier{gw: gw, channels: channels}
+func NewGatewayNotifier(gw *chat.Gateway, routes proactiveRouteLookup) GatewayNotifier {
+	return gatewayNotifier{gw: gw, routes: routes}
 }
 func NewGatewayTurnDeliverer(gw *chat.Gateway, store agent.ConversationStore, deliveries *focusedpagedelivery.Processor) GatewayTurnDeliverer {
 	return gatewayTurnDeliverer{gw: gw, store: store, deliveries: deliveries}
@@ -78,6 +78,7 @@ type TopMuxOptions struct {
 	JWTSecret          string
 	AccessTokenTTL     time.Duration
 	FocusedPageHandler http.Handler
+	ChatWebhooks       map[string]http.Handler
 }
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
@@ -90,7 +91,13 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 	if opts.FocusedPageHandler != nil {
 		topMux.Handle("/a/{publicID}", opts.FocusedPageHandler)
 	}
-	if opts.WACloudChannel != nil {
+	for name, handler := range opts.ChatWebhooks {
+		if handler == nil || !validChatWebhookName(name) {
+			continue
+		}
+		topMux.Handle("/webhook/"+name, handler)
+	}
+	if opts.WACloudChannel != nil && opts.ChatWebhooks["whatsapp"] == nil {
 		topMux.Handle("/webhook/whatsapp", opts.WACloudChannel.WebhookHandler(opts.InboundHandler))
 	}
 	manager := auth.NewTokenManager(opts.JWTSecret, opts.AccessTokenTTL)
@@ -112,6 +119,18 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 	}
 	topMux.Handle("/", opts.APIHandler)
 	return topMux
+}
+
+func validChatWebhookName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, char := range name {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func handleWhatsAppDisabledStatus() http.Handler {
@@ -257,8 +276,8 @@ type messageSender interface {
 	Send(ctx context.Context, msg outboundMessage) error
 }
 
-type userChannelLookup interface {
-	UserChannel(externalID string) (string, bool)
+type proactiveRouteLookup interface {
+	GetLatestActiveConversationFor(identity agent.LearnerIdentity) (*agent.Conversation, bool)
 }
 
 type gatewaySender struct {
@@ -276,8 +295,8 @@ func (g gatewaySender) Send(ctx context.Context, msg outboundMessage) error {
 // gatewayNotifier implements agent.Notifier by looking up the user's channel
 // from the database and sending to the correct one.
 type gatewayNotifier struct {
-	gw       *chat.Gateway
-	channels userChannelLookup
+	gw     *chat.Gateway
+	routes proactiveRouteLookup
 }
 
 type gatewayTurnDeliverer struct {
@@ -296,6 +315,7 @@ func (d gatewayTurnDeliverer) DeliverTurn(ctx context.Context, inbound chat.Inbo
 			TurnID:              result.FocusedPage.TurnID,
 			Channel:             inbound.Channel,
 			RecipientID:         inbound.UserID,
+			ThreadID:            inbound.ThreadID,
 			FinalText:           result.Text,
 			FocusedPagePublicID: result.FocusedPage.PublicID,
 		})
@@ -321,7 +341,11 @@ func (s gatewayFocusedPageSender) SendFocusedPage(ctx context.Context, delivery 
 	if err != nil {
 		return fmt.Errorf("reconstruct focused-page URL: %w", err)
 	}
-	inbound := chat.InboundMessage{Channel: delivery.Channel, UserID: delivery.RecipientID}
+	inbound := chat.InboundMessage{
+		Channel:  delivery.Channel,
+		UserID:   delivery.RecipientID,
+		ThreadID: delivery.ThreadID,
+	}
 	out, ok := chat.RenderTurn(inbound, delivery.FinalText, pageURL, telegramInlineKeyboardContext(s.store, delivery.RecipientID))
 	if !ok {
 		return nil
@@ -329,19 +353,40 @@ func (s gatewayFocusedPageSender) SendFocusedPage(ctx context.Context, delivery 
 	return s.gw.Send(ctx, out)
 }
 
-func (g gatewayNotifier) Notify(ctx context.Context, _, userID, text string) {
-	channel, ok := g.channels.UserChannel(userID)
-	if !ok {
-		// User not found — try all channels as fallback.
-		slog.Warn("notifier: user channel lookup failed, trying all channels", "user_id", userID)
-		for _, ch := range g.gw.ChannelNames() {
-			_ = g.gw.Send(ctx, chat.OutboundMessage{Channel: ch, UserID: userID, Text: text})
-		}
+func (g gatewayNotifier) Notify(ctx context.Context, channel, userID, text string) {
+	identity, err := agent.NewLearnerIdentity(channel, userID)
+	if err != nil {
+		slog.Warn("notifier: invalid learner identity", "channel", channel, "error", err)
 		return
 	}
 
-	if err := g.gw.Send(ctx, chat.OutboundMessage{Channel: channel, UserID: userID, Text: text}); err != nil {
-		slog.Warn("notifier: failed to send", "channel", channel, "user_id", userID, "error", err)
+	conversation, found := g.routes.GetLatestActiveConversationFor(identity)
+	if !found {
+		slog.Warn("notifier: saved route not found", "channel", channel)
+		return
+	}
+	threadID := strings.TrimSpace(conversation.ThreadID)
+	if threadID == "" && channelNeedsThreadRoute(channel) {
+		slog.Warn("notifier: saved thread route not found", "channel", channel)
+		return
+	}
+
+	if err := g.gw.Send(ctx, chat.OutboundMessage{
+		Channel:  channel,
+		UserID:   userID,
+		ThreadID: threadID,
+		Text:     text,
+	}); err != nil {
+		slog.Warn("notifier: failed to send", "channel", channel, "error", err)
+	}
+}
+
+func channelNeedsThreadRoute(channel string) bool {
+	switch channel {
+	case "telegram", "whatsapp", "websocket":
+		return false
+	default:
+		return true
 	}
 }
 

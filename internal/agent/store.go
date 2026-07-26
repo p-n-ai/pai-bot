@@ -5,11 +5,16 @@ package agent
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 )
+
+// ErrActiveConversationExists reports that a learner already has an active
+// conversation in the requested provider thread.
+var ErrActiveConversationExists = errors.New("active conversation already exists")
 
 // StoredMessage represents a single message in a conversation.
 type StoredMessage struct {
@@ -67,6 +72,8 @@ type PendingGoalDraft struct {
 type Conversation struct {
 	ID                 string                      `json:"id"`
 	UserID             string                      `json:"user_id"`
+	Channel            string                      `json:"channel,omitempty"`
+	ThreadID           string                      `json:"thread_id,omitempty"`
 	TopicID            string                      `json:"topic_id,omitempty"`
 	State              string                      `json:"state"`
 	Messages           []StoredMessage             `json:"messages"`
@@ -78,6 +85,41 @@ type Conversation struct {
 	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
 	StartedAt          time.Time                   `json:"started_at"`
 	EndedAt            *time.Time                  `json:"ended_at,omitempty"`
+}
+
+// LearnerIdentity identifies one learner within one chat provider.
+type LearnerIdentity struct {
+	channel    string
+	externalID string
+}
+
+// NewLearnerIdentity creates a channel-qualified external learner identity.
+func NewLearnerIdentity(channel, externalID string) (LearnerIdentity, error) {
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		return LearnerIdentity{}, fmt.Errorf("channel is required")
+	}
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" {
+		return LearnerIdentity{}, fmt.Errorf("external_id is required")
+	}
+	return LearnerIdentity{channel: channel, externalID: externalID}, nil
+}
+
+// Channel returns the chat provider name.
+func (i LearnerIdentity) Channel() string { return i.channel }
+
+// ExternalID returns the provider-owned learner ID.
+func (i LearnerIdentity) ExternalID() string { return i.externalID }
+
+func (i LearnerIdentity) validate() error {
+	if i.channel == "" {
+		return fmt.Errorf("channel is required")
+	}
+	if i.externalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+	return nil
 }
 
 // ConversationStore persists conversation state and message history.
@@ -114,14 +156,37 @@ type ConversationStore interface {
 	ResolveUserUUID(externalID string) (string, error)
 }
 
+// IdentityConversationStore exposes user-keyed persistence without losing the
+// provider namespace. Conversation-ID methods remain on ConversationStore.
+type IdentityConversationStore interface {
+	UserExistsFor(identity LearnerIdentity) bool
+	GetUserNameFor(identity LearnerIdentity) (string, bool)
+	SetUserNameFor(identity LearnerIdentity, name string) error
+	GetUserFormFor(identity LearnerIdentity) (string, bool)
+	SetUserFormFor(identity LearnerIdentity, form string) error
+	GetUserPreferredLanguageFor(identity LearnerIdentity) (string, bool)
+	SetUserPreferredLanguageFor(identity LearnerIdentity, lang string) error
+	GetUserPreferredQuizIntensityFor(identity LearnerIdentity) (string, bool)
+	SetUserPreferredQuizIntensityFor(identity LearnerIdentity, intensity string) error
+	GetUserABGroupFor(identity LearnerIdentity) (string, bool)
+	SetUserABGroupFor(identity LearnerIdentity, group string) error
+	CreateConversationFor(identity LearnerIdentity, conv Conversation) (string, error)
+	GetActiveConversationFor(identity LearnerIdentity) (*Conversation, bool)
+	CreateConversationForThread(identity LearnerIdentity, threadID string, conv Conversation) (string, error)
+	GetActiveConversationForThread(identity LearnerIdentity, threadID string) (*Conversation, bool)
+	GetLatestActiveConversationFor(identity LearnerIdentity) (*Conversation, bool)
+	ResolveUserUUIDFor(identity LearnerIdentity) (string, error)
+}
+
 // MemoryStore is an in-memory implementation of ConversationStore.
 type MemoryStore struct {
 	conversations map[string]*Conversation
-	userName      map[string]string
-	userForm      map[string]string
-	userLang      map[string]string
-	userQuizLevel map[string]string
-	userABGroup   map[string]string
+	userUUID      map[LearnerIdentity]string
+	userName      map[LearnerIdentity]string
+	userForm      map[LearnerIdentity]string
+	userLang      map[LearnerIdentity]string
+	userQuizLevel map[LearnerIdentity]string
+	userABGroup   map[LearnerIdentity]string
 	mu            sync.RWMutex
 }
 
@@ -129,48 +194,90 @@ type MemoryStore struct {
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		conversations: make(map[string]*Conversation),
-		userName:      make(map[string]string),
-		userForm:      make(map[string]string),
-		userLang:      make(map[string]string),
-		userQuizLevel: make(map[string]string),
-		userABGroup:   make(map[string]string),
+		userUUID:      make(map[LearnerIdentity]string),
+		userName:      make(map[LearnerIdentity]string),
+		userForm:      make(map[LearnerIdentity]string),
+		userLang:      make(map[LearnerIdentity]string),
+		userQuizLevel: make(map[LearnerIdentity]string),
+		userABGroup:   make(map[LearnerIdentity]string),
 	}
 }
 
 func (s *MemoryStore) CreateConversation(conv Conversation) (string, error) {
+	channel := strings.TrimSpace(conv.Channel)
+	if channel == "" {
+		channel = defaultChannel
+	}
+	identity, err := NewLearnerIdentity(channel, conv.UserID)
+	if err != nil {
+		return "", err
+	}
+	return s.CreateConversationForThread(identity, conv.ThreadID, conv)
+}
+
+func (s *MemoryStore) CreateConversationFor(identity LearnerIdentity, conv Conversation) (string, error) {
+	return s.CreateConversationForThread(identity, "", conv)
+}
+
+func (s *MemoryStore) CreateConversationForThread(identity LearnerIdentity, threadID string, conv Conversation) (string, error) {
+	if err := identity.validate(); err != nil {
+		return "", err
+	}
+	if conv.UserID != "" && conv.UserID != identity.externalID {
+		return "", fmt.Errorf("conversation user_id does not match learner identity")
+	}
+	if conv.Channel != "" && conv.Channel != identity.channel {
+		return "", fmt.Errorf("conversation channel does not match learner identity")
+	}
+	if conv.ThreadID != "" && conv.ThreadID != threadID {
+		return "", fmt.Errorf("conversation thread_id does not match requested thread")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	for _, active := range s.conversations {
+		if active.UserID == identity.externalID &&
+			active.Channel == identity.channel &&
+			active.ThreadID == threadID &&
+			active.EndedAt == nil {
+			return "", fmt.Errorf("%w: %s", ErrActiveConversationExists, active.ID)
+		}
+	}
+
 	id := generateID()
 	conv.ID = id
+	conv.UserID = identity.externalID
+	conv.Channel = identity.channel
+	conv.ThreadID = threadID
 	conv.StartedAt = time.Now()
 	if conv.Messages == nil {
 		conv.Messages = []StoredMessage{}
 	}
+	s.ensureUserLocked(identity)
 	s.conversations[id] = &conv
 	return id, nil
 }
 
 func (s *MemoryStore) UserExists(userID string) bool {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return false
+	}
+	return s.UserExistsFor(identity)
+}
+
+func (s *MemoryStore) UserExistsFor(identity LearnerIdentity) bool {
+	if identity.validate() != nil {
+		return false
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if _, ok := s.userName[userID]; ok {
-		return true
-	}
-	if _, ok := s.userForm[userID]; ok {
-		return true
-	}
-	if _, ok := s.userLang[userID]; ok {
-		return true
-	}
-	if _, ok := s.userQuizLevel[userID]; ok {
-		return true
-	}
-	if _, ok := s.userABGroup[userID]; ok {
+	if _, ok := s.userUUID[identity]; ok {
 		return true
 	}
 	for _, conv := range s.conversations {
-		if conv.UserID == userID {
+		if conv.UserID == identity.externalID && conv.Channel == identity.channel {
 			return true
 		}
 	}
@@ -178,117 +285,226 @@ func (s *MemoryStore) UserExists(userID string) bool {
 }
 
 func (s *MemoryStore) GetUserName(userID string) (string, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return "", false
+	}
+	return s.GetUserNameFor(identity)
+}
+
+func (s *MemoryStore) GetUserNameFor(identity LearnerIdentity) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	name, ok := s.userName[userID]
+	name, ok := s.userName[identity]
 	return name, ok
 }
 
 func (s *MemoryStore) SetUserName(userID, name string) error {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return err
+	}
+	return s.SetUserNameFor(identity, name)
+}
+
+func (s *MemoryStore) SetUserNameFor(identity LearnerIdentity, name string) error {
+	if err := identity.validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if userID == "" {
-		return fmt.Errorf("user_id is required")
-	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		delete(s.userName, userID)
+		delete(s.userName, identity)
 		return nil
 	}
-	s.userName[userID] = name
+	s.ensureUserLocked(identity)
+	s.userName[identity] = name
 	return nil
 }
 
 func (s *MemoryStore) GetUserForm(userID string) (string, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return "", false
+	}
+	return s.GetUserFormFor(identity)
+}
+
+func (s *MemoryStore) GetUserFormFor(identity LearnerIdentity) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	form, ok := s.userForm[userID]
+	form, ok := s.userForm[identity]
 	return form, ok
 }
 
 func (s *MemoryStore) SetUserForm(userID, form string) error {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return err
+	}
+	return s.SetUserFormFor(identity, form)
+}
+
+func (s *MemoryStore) SetUserFormFor(identity LearnerIdentity, form string) error {
+	if err := identity.validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if userID == "" {
-		return fmt.Errorf("user_id is required")
-	}
 	form = strings.TrimSpace(form)
 	if form == "" {
-		delete(s.userForm, userID)
+		delete(s.userForm, identity)
 		return nil
 	}
-	s.userForm[userID] = form
+	s.ensureUserLocked(identity)
+	s.userForm[identity] = form
 	return nil
 }
 
 func (s *MemoryStore) GetUserPreferredLanguage(userID string) (string, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return "", false
+	}
+	return s.GetUserPreferredLanguageFor(identity)
+}
+
+func (s *MemoryStore) GetUserPreferredLanguageFor(identity LearnerIdentity) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	lang, ok := s.userLang[userID]
+	lang, ok := s.userLang[identity]
 	return lang, ok
 }
 
 func (s *MemoryStore) SetUserPreferredLanguage(userID, lang string) error {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return err
+	}
+	return s.SetUserPreferredLanguageFor(identity, lang)
+}
+
+func (s *MemoryStore) SetUserPreferredLanguageFor(identity LearnerIdentity, lang string) error {
+	if err := identity.validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if userID == "" {
-		return fmt.Errorf("user_id is required")
-	}
 	if lang == "" {
-		delete(s.userLang, userID)
+		delete(s.userLang, identity)
 		return nil
 	}
-	s.userLang[userID] = lang
+	s.ensureUserLocked(identity)
+	s.userLang[identity] = lang
 	return nil
 }
 
 func (s *MemoryStore) GetUserPreferredQuizIntensity(userID string) (string, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return "", false
+	}
+	return s.GetUserPreferredQuizIntensityFor(identity)
+}
+
+func (s *MemoryStore) GetUserPreferredQuizIntensityFor(identity LearnerIdentity) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	intensity, ok := s.userQuizLevel[userID]
+	intensity, ok := s.userQuizLevel[identity]
 	return intensity, ok
 }
 
 func (s *MemoryStore) SetUserPreferredQuizIntensity(userID, intensity string) error {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return err
+	}
+	return s.SetUserPreferredQuizIntensityFor(identity, intensity)
+}
+
+func (s *MemoryStore) SetUserPreferredQuizIntensityFor(identity LearnerIdentity, intensity string) error {
+	if err := identity.validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if userID == "" {
-		return fmt.Errorf("user_id is required")
-	}
 	if intensity == "" {
-		delete(s.userQuizLevel, userID)
+		delete(s.userQuizLevel, identity)
 		return nil
 	}
-	s.userQuizLevel[userID] = intensity
+	s.ensureUserLocked(identity)
+	s.userQuizLevel[identity] = intensity
 	return nil
 }
 
 func (s *MemoryStore) GetUserABGroup(userID string) (string, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return "", false
+	}
+	return s.GetUserABGroupFor(identity)
+}
+
+func (s *MemoryStore) GetUserABGroupFor(identity LearnerIdentity) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	group, ok := s.userABGroup[userID]
+	group, ok := s.userABGroup[identity]
 	return group, ok
 }
 
 func (s *MemoryStore) SetUserABGroup(userID, group string) error {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return err
+	}
+	return s.SetUserABGroupFor(identity, group)
+}
+
+func (s *MemoryStore) SetUserABGroupFor(identity LearnerIdentity, group string) error {
+	if err := identity.validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if userID == "" {
-		return fmt.Errorf("user_id is required")
-	}
 	if group == "" {
-		delete(s.userABGroup, userID)
+		delete(s.userABGroup, identity)
 		return nil
 	}
-	s.userABGroup[userID] = group
+	s.ensureUserLocked(identity)
+	s.userABGroup[identity] = group
 	return nil
 }
 
 func (s *MemoryStore) UserChannel(externalID string) (string, bool) {
-	if s.UserExists(externalID) {
-		return defaultChannel, true
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" {
+		return "", false
 	}
-	return "", false
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	channel := ""
+	for identity := range s.userUUID {
+		if identity.externalID != externalID {
+			continue
+		}
+		if channel != "" && channel != identity.channel {
+			return "", false
+		}
+		channel = identity.channel
+	}
+	for _, conv := range s.conversations {
+		if conv.UserID != externalID {
+			continue
+		}
+		if channel != "" && channel != conv.Channel {
+			return "", false
+		}
+		channel = conv.Channel
+	}
+	return channel, channel != ""
 }
 
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
@@ -303,15 +519,54 @@ func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
 }
 
 func (s *MemoryStore) GetActiveConversation(userID string) (*Conversation, bool) {
+	identity, err := NewLearnerIdentity(defaultChannel, userID)
+	if err != nil {
+		return nil, false
+	}
+	return s.GetActiveConversationFor(identity)
+}
+
+func (s *MemoryStore) GetActiveConversationFor(identity LearnerIdentity) (*Conversation, bool) {
+	return s.GetActiveConversationForThread(identity, "")
+}
+
+func (s *MemoryStore) GetActiveConversationForThread(identity LearnerIdentity, threadID string) (*Conversation, bool) {
+	if identity.validate() != nil {
+		return nil, false
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, conv := range s.conversations {
-		if conv.UserID == userID && conv.EndedAt == nil {
+		if conv.UserID == identity.externalID &&
+			conv.Channel == identity.channel &&
+			conv.ThreadID == threadID &&
+			conv.EndedAt == nil {
 			return conv, true
 		}
 	}
 	return nil, false
+}
+
+func (s *MemoryStore) GetLatestActiveConversationFor(identity LearnerIdentity) (*Conversation, bool) {
+	if identity.validate() != nil {
+		return nil, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var latest *Conversation
+	for _, conv := range s.conversations {
+		if conv.UserID != identity.externalID ||
+			conv.Channel != identity.channel ||
+			conv.EndedAt != nil {
+			continue
+		}
+		if latest == nil || conv.StartedAt.After(latest.StartedAt) {
+			latest = conv
+		}
+	}
+	return latest, latest != nil
 }
 
 func (s *MemoryStore) AddMessage(conversationID string, msg StoredMessage) (string, error) {
@@ -485,8 +740,20 @@ func (s *MemoryStore) ClearConversationChallengeState(conversationID, state stri
 }
 
 func (s *MemoryStore) ResolveUserUUID(externalID string) (string, error) {
-	// In memory store, external ID = internal ID.
+	if strings.TrimSpace(externalID) == "" {
+		return "", fmt.Errorf("external_id is required")
+	}
+	// Preserve the legacy in-memory store contract for current group-store callers.
 	return externalID, nil
+}
+
+func (s *MemoryStore) ResolveUserUUIDFor(identity LearnerIdentity) (string, error) {
+	if err := identity.validate(); err != nil {
+		return "", err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.userUUID[identity], nil
 }
 
 func (s *MemoryStore) EndConversation(id string) error {
@@ -506,4 +773,10 @@ func generateID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%x", b)
+}
+
+func (s *MemoryStore) ensureUserLocked(identity LearnerIdentity) {
+	if _, ok := s.userUUID[identity]; !ok {
+		s.userUUID[identity] = generateID()
+	}
 }

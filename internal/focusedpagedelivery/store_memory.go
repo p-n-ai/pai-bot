@@ -38,7 +38,7 @@ func (s *MemoryStore) Enqueue(ctx context.Context, input EnqueueInput, now time.
 	id := fmt.Sprintf("delivery-%d", s.nextID)
 	delivery := Delivery{
 		ID: id, TenantID: input.TenantID, TurnID: input.TurnID, Channel: input.Channel,
-		RecipientID: input.RecipientID, FinalText: input.FinalText,
+		RecipientID: input.RecipientID, ThreadID: input.ThreadID, FinalText: input.FinalText,
 		FocusedPagePublicID: input.FocusedPagePublicID, Status: StatusPending,
 		NextAttemptAt: now, CreatedAt: now, UpdatedAt: now,
 	}

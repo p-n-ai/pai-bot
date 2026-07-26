@@ -50,7 +50,7 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 	}
 
 	// Get or create conversation and set topic.
-	conv, err := e.getOrCreateConversation(msg.UserID)
+	conv, err := e.getOrCreateConversation(msg)
 	if err != nil {
 		slog.Error("failed to get conversation for /learn", "user_id", msg.UserID, "error", err)
 		return i18n.S(locale, i18n.MsgTechnicalIssue), nil

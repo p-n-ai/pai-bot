@@ -218,6 +218,42 @@ func main() {
 			} else {
 				slog.Warn("telegram channel disabled; LEARN_TELEGRAM_BOT_TOKEN is not set")
 			}
+			if cfg.Slack.Enabled {
+				slack, err := chat.NewSlackChannel(cfg.Slack.BotToken, cfg.Slack.SigningSecret)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize Slack channel: %w", err)
+				}
+				gw.Register("slack", slack)
+			}
+			if cfg.Discord.Enabled {
+				discord, err := chat.NewDiscordChannel(chat.DiscordConfig{
+					BotToken:      cfg.Discord.BotToken,
+					PublicKey:     cfg.Discord.PublicKey,
+					ApplicationID: cfg.Discord.ApplicationID,
+				})
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize Discord channel: %w", err)
+				}
+				gw.Register("discord", discord)
+			}
+			if cfg.Teams.Enabled {
+				authenticator, err := chat.NewTeamsAuthenticator(
+					cfg.Teams.AppID,
+					cfg.Teams.AppPassword,
+					cfg.Teams.AppTenantID,
+				)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize Teams authentication: %w", err)
+				}
+				teams, err := chat.NewTeamsChannel(chat.TeamsConfig{
+					TokenValidator: authenticator,
+					TokenProvider:  authenticator,
+				})
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize Teams channel: %w", err)
+				}
+				gw.Register("teams", teams)
+			}
 
 			// WhatsApp channel (behind feature flag).
 			var waCloudChannel *chat.WhatsAppChannel
@@ -304,17 +340,28 @@ func main() {
 
 			// Start long-polling with message handler.
 			// Shared inbound message handler for all channels.
-			handleInbound := func(msg chat.InboundMessage) {
+			processInbound := func(processCtx context.Context, msg chat.InboundMessage) {
 				// Show typing indicator while processing.
-				if err := gw.SendTyping(ctx, msg.Channel, msg.UserID); err != nil {
+				if err := gw.SendTyping(processCtx, msg.Channel, msg.DestinationID()); err != nil {
 					slog.Warn("failed to send typing indicator", "error", err)
 				}
 
-				_, err := engine.ProcessAndDeliver(ctx, msg)
+				_, err := engine.ProcessAndDeliver(processCtx, msg)
 				if err != nil {
 					slog.Error("process or deliver turn failed", "error", err, "user_id", msg.UserID)
 				}
 			}
+			chatIngress, err := server.NewChatIngress(256, processInbound)
+			if err != nil {
+				return nil, nil, fmt.Errorf("initialize chat ingress: %w", err)
+			}
+			handleInbound := func(msg chat.InboundMessage) {
+				if err := chatIngress.Enqueue(ctx, msg); err != nil && ctx.Err() == nil {
+					slog.Warn("failed to enqueue inbound chat message", "channel", msg.Channel, "error", err)
+				}
+			}
+
+			chatWebhooks := gw.Webhooks(handleInbound)
 
 			authService := auth.NewPostgresService(
 				db.Pool,
@@ -386,6 +433,7 @@ func main() {
 				EmbedConfigStore:   embedConfigStore,
 				WACloudChannel:     waCloudChannel,
 				WAMeowChannel:      waMeowChannel,
+				ChatWebhooks:       chatWebhooks,
 				InboundHandler:     handleInbound,
 				AuthService:        authService,
 				JWTSecret:          cfg.Auth.JWTSecret,
@@ -394,9 +442,24 @@ func main() {
 			})
 
 			return http.Handler(topMux), func(ctx context.Context) error {
+				ingressCtx, cancelIngress := context.WithCancel(ctx)
+				ingressDone := make(chan struct{})
+				go func() {
+					defer close(ingressDone)
+					chatIngress.Run(ingressCtx)
+				}()
 				if err := gw.StartAll(ctx, handleInbound); err != nil {
+					cancelIngress()
+					<-ingressDone
 					return err
 				}
+				cleanup = append(cleanup, func() {
+					if err := gw.StopAll(); err != nil {
+						slog.Warn("failed to stop chat channels cleanly", "error", err)
+					}
+					cancelIngress()
+					<-ingressDone
+				})
 				if focusedPageDeliveries != nil {
 					workerCtx, cancelWorker := context.WithCancel(ctx)
 					workerDone := make(chan struct{})

@@ -37,11 +37,15 @@ func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, mess
 		completion, err := e.completeNativeTeachingTurn(ctx, turn, model)
 		return completion, nil, err
 	}
-	ownerUserID, err := e.store.ResolveUserUUID(turn.UserID)
+	identity, err := NewLearnerIdentity(turn.Channel, turn.UserID)
+	if err != nil {
+		return teachingCompletion{}, nil, fmt.Errorf("resolve focused page learner identity")
+	}
+	ownerUserID, err := e.resolveUserUUID(identity)
 	if err != nil || ownerUserID == "" {
 		return teachingCompletion{}, nil, fmt.Errorf("resolve focused page owner")
 	}
-	recipientName, _ := e.store.GetUserName(turn.UserID)
+	recipientName, _ := e.getUserName(identity)
 	tool := &createFocusedPageTool{
 		service: e.focusedPages,
 		input: focusedpage.CreateInput{

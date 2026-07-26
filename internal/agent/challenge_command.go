@@ -20,7 +20,7 @@ func (e *Engine) handleChallengeCommand(_ context.Context, msg chat.InboundMessa
 		return "Challenge mode is not enabled yet.", nil
 	}
 
-	conv, err := e.getOrCreateConversation(msg.UserID)
+	conv, err := e.getOrCreateConversation(msg)
 	if err != nil {
 		return "I hit a technical issue while opening challenge mode.", nil
 	}
@@ -103,7 +103,7 @@ func (e *Engine) handleChallengeSearch(msg chat.InboundMessage, conv *Conversati
 		if otherUserID == msg.UserID {
 			otherUserID = result.Challenge.OpponentID
 		}
-		opponentName, ok := e.store.GetUserName(otherUserID)
+		opponentName, ok := e.getUserNameForChannel(msg.Channel, otherUserID)
 		if !ok || strings.TrimSpace(opponentName) == "" {
 			opponentName = "Another student"
 		}
@@ -193,7 +193,7 @@ func (e *Engine) handleChallengeAccept(msg chat.InboundMessage, conv *Conversati
 	if otherUserID == msg.UserID {
 		otherUserID = challenge.OpponentID
 	}
-	opponentName, ok := e.store.GetUserName(otherUserID)
+	opponentName, ok := e.getUserNameForChannel(msg.Channel, otherUserID)
 	if !ok || strings.TrimSpace(opponentName) == "" {
 		opponentName = "Another student"
 	}
@@ -209,7 +209,7 @@ func (e *Engine) handleChallengeAccept(msg chat.InboundMessage, conv *Conversati
 	})
 	if challenge.State == ChallengeStateReady {
 		// Notify the other player that the challenge is ready.
-		myName, ok := e.store.GetUserName(msg.UserID)
+		myName, ok := e.getUserNameForChannel(msg.Channel, msg.UserID)
 		if !ok || strings.TrimSpace(myName) == "" {
 			myName = "Your opponent"
 		}
@@ -267,7 +267,7 @@ func (e *Engine) handleChallengeJoin(msg chat.InboundMessage, conv *Conversation
 		}
 	}
 
-	creatorName, ok := e.store.GetUserName(challenge.CreatorID)
+	creatorName, ok := e.getUserNameForChannel(msg.Channel, challenge.CreatorID)
 	if !ok || strings.TrimSpace(creatorName) == "" {
 		creatorName = "Another student"
 	}
@@ -284,7 +284,7 @@ func (e *Engine) handleChallengeJoin(msg chat.InboundMessage, conv *Conversation
 
 	// Notify the creator that someone joined and the challenge is ready.
 	if challenge.State == ChallengeStateReady {
-		joinerName, ok := e.store.GetUserName(msg.UserID)
+		joinerName, ok := e.getUserNameForChannel(msg.Channel, msg.UserID)
 		if !ok || strings.TrimSpace(joinerName) == "" {
 			joinerName = "Someone"
 		}

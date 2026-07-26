@@ -30,7 +30,7 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 
 	firstInput := EnqueueInput{
 		TenantID: tenant1, TurnID: "turn-1", Channel: "telegram", RecipientID: "learner-one",
-		FinalText: "Original text", FocusedPagePublicID: page1,
+		ThreadID: "telegram:-100123:42", FinalText: "Original text", FocusedPagePublicID: page1,
 	}
 	first, err := store.Enqueue(ctx, firstInput, now)
 	if err != nil {
@@ -38,13 +38,15 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 	}
 	changed := firstInput
 	changed.RecipientID = "changed"
+	changed.ThreadID = "telegram:-100999:88"
 	changed.FinalText = "Changed text"
 	duplicate, err := store.Enqueue(ctx, changed, now.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if duplicate.ID != first.ID || duplicate.RecipientID != firstInput.RecipientID ||
-		duplicate.FinalText != firstInput.FinalText || duplicate.FocusedPagePublicID != page1 {
+		duplicate.ThreadID != firstInput.ThreadID || duplicate.FinalText != firstInput.FinalText ||
+		duplicate.FocusedPagePublicID != page1 {
 		t.Fatalf("idempotent enqueue changed row: %#v", duplicate)
 	}
 	otherTenant, err := store.Enqueue(ctx, EnqueueInput{
@@ -109,7 +111,8 @@ func TestPostgresStoreDurableLeasingAndTenantIsolation(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("restart reclaim ok = %t, err = %v", ok, err)
 	}
-	if reclaimed.FinalText != claimed.FinalText || reclaimed.FocusedPagePublicID != claimed.FocusedPagePublicID {
+	if reclaimed.FinalText != claimed.FinalText || reclaimed.FocusedPagePublicID != claimed.FocusedPagePublicID ||
+		reclaimed.ThreadID != claimed.ThreadID {
 		t.Fatal("restart reclaim changed payload")
 	}
 	if err := restarted.ScheduleRetry(ctx, reclaimed.ID, reclaimed.LeaseToken, now.Add(2*time.Minute), now.Add(time.Minute)); err != nil {
@@ -210,6 +213,7 @@ func startDeliveryPostgres(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		"20260713100000_focused_pages.sql",
 		"20260723163958_focused_page_deliveries.sql",
 		"20260723170429_focused_page_delivery_cleanup_cascade.sql",
+		"20260726130000_focused_page_delivery_thread_route.sql",
 	} {
 		applyDeliveryMigration(t, ctx, pool, filepath.Join("..", "..", "migrations", name))
 	}

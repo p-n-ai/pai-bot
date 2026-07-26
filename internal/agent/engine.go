@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -260,9 +261,15 @@ func (e *Engine) processMessage(ctx context.Context, msg chat.InboundMessage, re
 
 	e.maybePersistUserProfile(msg)
 
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr != nil {
+		slog.Error("invalid learner identity", "channel", msg.Channel, "user_id", msg.UserID, "error", identityErr)
+		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+
 	// Drain any pending topic unlock notifications from previous mastery updates.
-	unlockPrefix := e.drainUnlockNotification(msg.UserID, e.messageLocale(msg, nil))
-	milestonePrefix := e.drainMilestoneNotification(msg.UserID)
+	unlockPrefix := e.drainUnlockNotification(identity, e.messageLocale(msg, nil))
+	milestonePrefix := e.drainMilestoneNotification(identity)
 
 	// Handle commands
 	if strings.HasPrefix(msg.Text, "/") {
@@ -297,7 +304,7 @@ func (e *Engine) processMessage(ctx context.Context, msg chat.InboundMessage, re
 		}
 	}
 	// Auto-trigger onboarding for first-time users who send a normal message.
-	if e.supportsAutoStartLookup() && !e.store.UserExists(msg.UserID) {
+	if e.supportsAutoStartLookup() && !e.userExists(identity) {
 		e.logEventAsync(Event{
 			UserID:    msg.UserID,
 			EventType: "auto_start_triggered",
@@ -306,11 +313,11 @@ func (e *Engine) processMessage(ctx context.Context, msg chat.InboundMessage, re
 				"source":  "chat_flow",
 			},
 		})
-		return e.handleStart(msg.UserID, msg)
+		return e.handleStart(msg)
 	}
 
 	// Get or create active conversation.
-	conv, err := e.getOrCreateConversation(msg.UserID)
+	conv, err := e.getOrCreateConversation(msg)
 	if err != nil {
 		slog.Error("failed to get conversation", "error", err)
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
@@ -451,19 +458,40 @@ Keep the summary under 150 words. Write in the same language used in the convers
 	)
 }
 
-func (e *Engine) getOrCreateConversation(userID string) (*Conversation, error) {
-	conv, found := e.store.GetActiveConversation(userID)
+func (e *Engine) getOrCreateConversation(msg chat.InboundMessage) (*Conversation, error) {
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return nil, err
+	}
+	conv, found := e.getActiveConversationForThread(identity, msg.ThreadID)
 	if found {
 		return conv, nil
 	}
-	return e.createConversation(userID, "teaching")
+	conv, err = e.createConversation(identity, msg.ThreadID, "teaching")
+	if errors.Is(err, ErrActiveConversationExists) {
+		if active, ok := e.getActiveConversationForThread(identity, msg.ThreadID); ok {
+			return active, nil
+		}
+	}
+	return conv, err
 }
 
-func (e *Engine) createConversation(userID, state string) (*Conversation, error) {
-	id, err := e.store.CreateConversation(Conversation{
-		UserID: userID,
-		State:  state,
-	})
+func (e *Engine) createConversation(identity LearnerIdentity, threadID, state string) (*Conversation, error) {
+	conversation := Conversation{
+		UserID:   identity.ExternalID(),
+		Channel:  identity.Channel(),
+		ThreadID: threadID,
+		State:    state,
+	}
+	var (
+		id  string
+		err error
+	)
+	if store, ok := e.store.(IdentityConversationStore); ok {
+		id, err = store.CreateConversationForThread(identity, threadID, conversation)
+	} else {
+		id, err = e.store.CreateConversation(conversation)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -473,23 +501,45 @@ func (e *Engine) createConversation(userID, state string) (*Conversation, error)
 	}
 	e.logEventAsync(Event{
 		ConversationID: conv.ID,
-		UserID:         userID,
+		UserID:         identity.ExternalID(),
 		EventType:      "session_started",
 		Data: map[string]any{
-			"state": conv.State,
+			"channel": identity.Channel(),
+			"state":   conv.State,
 		},
 	})
 	return conv, nil
 }
 
+func (e *Engine) getActiveConversation(identity LearnerIdentity) (*Conversation, bool) {
+	return e.getActiveConversationForThread(identity, "")
+}
+
+func (e *Engine) getActiveConversationForThread(identity LearnerIdentity, threadID string) (*Conversation, bool) {
+	if store, ok := e.store.(IdentityConversationStore); ok {
+		return store.GetActiveConversationForThread(identity, threadID)
+	}
+	return e.store.GetActiveConversation(identity.ExternalID())
+}
+
+func learnerIdentityForMessage(msg chat.InboundMessage) (LearnerIdentity, error) {
+	channel := msg.Channel
+	if strings.TrimSpace(channel) == "" {
+		channel = defaultChannel
+	}
+	return NewLearnerIdentity(channel, msg.UserID)
+}
+
 func (e *Engine) logEventAsync(event Event) {
 	// Inject AB group into event data.
 	if event.UserID != "" {
-		if group, ok := e.store.GetUserABGroup(event.UserID); ok && group != "" {
-			if event.Data == nil {
-				event.Data = map[string]any{}
+		if identity, ok := e.identityForEvent(event); ok {
+			if group, found := e.getUserABGroup(identity); found && group != "" {
+				if event.Data == nil {
+					event.Data = map[string]any{}
+				}
+				event.Data["ab_group"] = group
 			}
-			event.Data["ab_group"] = group
 		}
 	}
 
@@ -503,6 +553,20 @@ func (e *Engine) logEventAsync(event Event) {
 			)
 		}
 	}()
+}
+
+func (e *Engine) identityForEvent(event Event) (LearnerIdentity, bool) {
+	if event.ConversationID != "" {
+		if conversation, err := e.store.GetConversation(event.ConversationID); err == nil {
+			identity, identityErr := NewLearnerIdentity(conversation.Channel, event.UserID)
+			return identity, identityErr == nil
+		}
+	}
+	if channel, ok := event.Data["channel"].(string); ok {
+		identity, err := NewLearnerIdentity(channel, event.UserID)
+		return identity, err == nil
+	}
+	return LearnerIdentity{}, false
 }
 
 func (e *Engine) logAgentTurnCompleted(turn *agentTurn, status string) {
@@ -556,10 +620,11 @@ func includedContextSourceNames(sources []contextSource) []string {
 	return names
 }
 
-func (e *Engine) assessMasteryAsync(userID string, topic *curriculum.Topic, userMessage, aiResponse string) {
+func (e *Engine) assessMasteryAsync(identity LearnerIdentity, topic *curriculum.Topic, userMessage, aiResponse string) {
 	if e.tracker == nil || topic == nil {
 		return
 	}
+	userID := identity.ExternalID()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -591,25 +656,26 @@ func (e *Engine) assessMasteryAsync(userID string, topic *curriculum.Topic, user
 		if syllabusID == "" {
 			syllabusID = "default"
 		}
-		masteryBefore, _ := e.tracker.GetMastery(userID, syllabusID, topic.ID)
-		if err := e.tracker.UpdateMastery(userID, syllabusID, topic.ID, delta); err != nil {
+		masteryBefore, _ := e.getMastery(identity, syllabusID, topic.ID)
+		if err := e.updateMastery(identity, syllabusID, topic.ID, delta); err != nil {
 			slog.Warn("mastery update failed", "user_id", userID, "topic", topic.ID, "error", err)
 			return
 		}
 		e.syncGoalProgress(userID, syllabusID, topic.ID)
-		e.checkTopicUnlocks(userID, syllabusID, topic)
-		if e.milestones != nil && e.userABGroup(userID) == ABGroupA {
-			masteryAfter, mErr := e.tracker.GetMastery(userID, syllabusID, topic.ID)
+		e.checkTopicUnlocks(identity, syllabusID, topic)
+		if e.milestones != nil && e.userABGroup(identity) == ABGroupA {
+			masteryAfter, mErr := e.getMastery(identity, syllabusID, topic.ID)
 			if mErr == nil && !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
-				locale := e.resolveUserLocale(userID)
-				e.milestones.add(userID, FormatTopicMasteredCelebration(locale, topic.Name, progress.XPMasteryUp))
+				locale := e.resolveUserLocale(identity)
+				e.milestones.add(identity, FormatTopicMasteredCelebration(locale, topic.Name, progress.XPMasteryUp))
 			}
 		}
 	}()
 }
 
 // recordActivityAsync records streak activity and awards session XP in a goroutine.
-func (e *Engine) recordActivityAsync(userID string) {
+func (e *Engine) recordActivityAsync(identity LearnerIdentity) {
+	userID := identity.ExternalID()
 	go func() {
 		now := time.Now()
 
@@ -644,19 +710,19 @@ func (e *Engine) recordActivityAsync(userID string) {
 		}
 
 		// Check XP milestone crossing.
-		if e.xp != nil && e.milestones != nil && e.userABGroup(userID) == ABGroupA {
+		if e.xp != nil && e.milestones != nil && e.userABGroup(identity) == ABGroupA {
 			xpAfter, _ := e.xp.GetTotal(userID)
 			if hit, at := CheckXPMilestone(xpBefore, xpAfter); hit {
-				locale := e.resolveUserLocale(userID)
-				e.milestones.add(userID, FormatXPMilestoneCelebration(locale, at))
+				locale := e.resolveUserLocale(identity)
+				e.milestones.add(identity, FormatXPMilestoneCelebration(locale, at))
 			}
 		}
 		// Check streak record.
-		if e.streaks != nil && e.milestones != nil && e.userABGroup(userID) == ABGroupA {
+		if e.streaks != nil && e.milestones != nil && e.userABGroup(identity) == ABGroupA {
 			streakAfter, _ := e.streaks.GetStreak(userID)
 			if streakAfter.LongestStreak > streakBefore.LongestStreak {
-				locale := e.resolveUserLocale(userID)
-				e.milestones.add(userID, FormatStreakRecordCelebration(locale, streakAfter.LongestStreak))
+				locale := e.resolveUserLocale(identity)
+				e.milestones.add(identity, FormatStreakRecordCelebration(locale, streakAfter.LongestStreak))
 			}
 		}
 	}()
@@ -666,19 +732,23 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 	fields := strings.Fields(msg.Text)
 	cmd := fields[0]
 	locale := e.messageLocale(msg, nil)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
+	}
 
 	switch cmd {
 	case "/help":
 		return e.handleHelpCommand(locale), nil
 	case "/start":
-		e.endActiveConversation(msg.UserID)
-		return e.handleStart(msg.UserID, msg)
+		e.endActiveConversation(identity, msg.ThreadID)
+		return e.handleStart(msg)
 	case "/clear":
-		e.clearUserRuntimeState(msg.UserID)
+		e.clearUserRuntimeState(identity, msg.ThreadID)
 		return i18n.S(locale, i18n.MsgHistoryCleared), nil
 	case "/reset-profile":
-		e.resetLearnerProfile(msg.UserID)
-		onboarding, err := e.handleStart(msg.UserID, msg)
+		e.resetLearnerProfile(identity, msg.ThreadID)
+		onboarding, err := e.handleStart(msg)
 		if err != nil {
 			return "", err
 		}
@@ -734,7 +804,11 @@ func (e *Engine) handleLanguageCommand(msg chat.InboundMessage, args []string) (
 	if e.disableMultiLanguage {
 		return i18n.S(locale, i18n.MsgMultilingualDisabled), nil
 	}
-	conv, err := e.getOrCreateConversation(msg.UserID)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
+	}
+	conv, err := e.getOrCreateConversation(msg)
 	if err != nil {
 		slog.Error("failed to get conversation for /language", "user_id", msg.UserID, "error", err)
 		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
@@ -764,7 +838,7 @@ func (e *Engine) handleLanguageCommand(msg chat.InboundMessage, args []string) (
 	}); err != nil {
 		slog.Error("failed to store language preference marker", "conversation_id", conv.ID, "error", err)
 	}
-	if err := e.store.SetUserPreferredLanguage(msg.UserID, lang); err != nil {
+	if err := e.setUserPreferredLanguage(identity, lang); err != nil {
 		slog.Error("failed to persist user preferred language", "user_id", msg.UserID, "error", err)
 	}
 	onboardingFlow := strings.HasPrefix(conv.State, "onboarding")
@@ -804,7 +878,11 @@ func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) 
 		return "Progress tracking is not enabled.", nil
 	}
 
-	items, err := e.tracker.GetAllProgress(msg.UserID)
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr != nil {
+		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+	items, err := e.getAllProgress(identity)
 	if err != nil {
 		slog.Error("failed to get progress", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
@@ -822,31 +900,31 @@ func (e *Engine) handleProgressCommand(msg chat.InboundMessage) (string, error) 
 	return e.appendGoalToProgressReport(msg.UserID, progress.FormatProgressReport(items, totalXP, streak)), nil
 }
 
-func (e *Engine) endActiveConversation(userID string) {
-	if conv, found := e.store.GetActiveConversation(userID); found {
+func (e *Engine) endActiveConversation(identity LearnerIdentity, threadID string) {
+	if conv, found := e.getActiveConversationForThread(identity, threadID); found {
 		if err := e.store.EndConversation(conv.ID); err != nil {
 			slog.Error("failed to end conversation", "error", err)
 		}
 	}
 }
 
-func (e *Engine) clearUserRuntimeState(userID string) {
-	e.endActiveConversation(userID)
-	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
-		slog.Error("failed to clear quiz intensity preference", "user_id", userID, "error", err)
+func (e *Engine) clearUserRuntimeState(identity LearnerIdentity, threadID string) {
+	e.endActiveConversation(identity, threadID)
+	if err := e.setUserPreferredQuizIntensity(identity, ""); err != nil {
+		slog.Error("failed to clear quiz intensity preference", "user_id", identity.ExternalID(), "error", err)
 	}
 }
 
-func (e *Engine) resetLearnerProfile(userID string) {
-	e.endActiveConversation(userID)
-	if err := e.store.SetUserForm(userID, ""); err != nil {
-		slog.Error("failed to clear learner form", "user_id", userID, "error", err)
+func (e *Engine) resetLearnerProfile(identity LearnerIdentity, threadID string) {
+	e.endActiveConversation(identity, threadID)
+	if err := e.setUserForm(identity, ""); err != nil {
+		slog.Error("failed to clear learner form", "user_id", identity.ExternalID(), "error", err)
 	}
-	if err := e.store.SetUserPreferredLanguage(userID, ""); err != nil {
-		slog.Error("failed to clear learner language", "user_id", userID, "error", err)
+	if err := e.setUserPreferredLanguage(identity, ""); err != nil {
+		slog.Error("failed to clear learner language", "user_id", identity.ExternalID(), "error", err)
 	}
-	if err := e.store.SetUserPreferredQuizIntensity(userID, ""); err != nil {
-		slog.Error("failed to clear learner quiz intensity", "user_id", userID, "error", err)
+	if err := e.setUserPreferredQuizIntensity(identity, ""); err != nil {
+		slog.Error("failed to clear learner quiz intensity", "user_id", identity.ExternalID(), "error", err)
 	}
 }
 
@@ -867,7 +945,7 @@ func (e *Engine) handleHelpCommand(locale string) string {
 	return b.String()
 }
 
-func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, error) {
+func (e *Engine) handleStart(msg chat.InboundMessage) (string, error) {
 	// Explicitly create an onboarding conversation on /start. In Postgres-backed
 	// deployments this also guarantees the user record exists before first question.
 
@@ -882,27 +960,32 @@ func (e *Engine) handleStart(userID string, msg chat.InboundMessage) (string, er
 	if e.disableMultiLanguage || autoDetectedLocale != "" {
 		initialState = "onboarding_form"
 	}
-	if _, err := e.createConversation(userID, initialState); err != nil {
-		slog.Error("failed to create onboarding conversation", "user_id", userID, "error", err)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		slog.Error("invalid learner identity", "channel", msg.Channel, "user_id", msg.UserID, "error", err)
+		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
+	}
+	if _, err := e.createConversation(identity, msg.ThreadID, initialState); err != nil {
+		slog.Error("failed to create onboarding conversation", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, nil), i18n.MsgTechnicalIssue), nil
 	}
 
 	// Persist auto-detected language so future messages use it.
 	if autoDetectedLocale != "" {
-		if err := e.store.SetUserPreferredLanguage(userID, autoDetectedLocale); err != nil {
-			slog.Error("failed to persist auto-detected language", "user_id", userID, "error", err)
+		if err := e.setUserPreferredLanguage(identity, autoDetectedLocale); err != nil {
+			slog.Error("failed to persist auto-detected language", "user_id", msg.UserID, "error", err)
 		} else {
-			slog.Info("language auto-detected from Telegram", "user_id", userID, "locale", autoDetectedLocale)
+			slog.Info("language auto-detected from chat profile", "channel", msg.Channel, "user_id", msg.UserID, "locale", autoDetectedLocale)
 		}
 	}
 
 	// Assign AB group for new users.
-	if _, ok := e.store.GetUserABGroup(userID); !ok {
+	if _, ok := e.getUserABGroup(identity); !ok {
 		group := AssignABGroup()
-		if err := e.store.SetUserABGroup(userID, group); err != nil {
-			slog.Warn("failed to assign AB group", "user_id", userID, "error", err)
+		if err := e.setUserABGroup(identity, group); err != nil {
+			slog.Warn("failed to assign AB group", "user_id", msg.UserID, "error", err)
 		} else {
-			slog.Info("AB group assigned", "user_id", userID, "group", group)
+			slog.Info("AB group assigned", "user_id", msg.UserID, "group", group)
 		}
 	}
 
@@ -932,9 +1015,14 @@ func (e *Engine) maybePersistUserProfile(msg chat.InboundMessage) {
 	if msg.UserID == "" {
 		return
 	}
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		slog.Error("invalid learner identity", "channel", msg.Channel, "user_id", msg.UserID, "error", err)
+		return
+	}
 	name := preferredIncomingName(msg)
 	if name != "" {
-		if err := e.store.SetUserName(msg.UserID, name); err != nil {
+		if err := e.setUserName(identity, name); err != nil {
 			slog.Error("failed to persist user name", "user_id", msg.UserID, "error", err)
 		}
 	}
@@ -949,6 +1037,10 @@ func preferredIncomingName(msg chat.InboundMessage) string {
 }
 
 func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.InboundMessage, conv *Conversation) string {
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr != nil {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
 		Content: msg.Text,
@@ -975,7 +1067,7 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		}); err != nil {
 			slog.Error("failed to store language preference marker", "error", err)
 		}
-		if err := e.store.SetUserPreferredLanguage(msg.UserID, lang); err != nil {
+		if err := e.setUserPreferredLanguage(identity, lang); err != nil {
 			slog.Error("failed to persist user preferred language", "user_id", msg.UserID, "error", err)
 		}
 		if err := e.store.UpdateConversationState(conv.ID, "onboarding_form"); err != nil {
@@ -1013,7 +1105,7 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		slog.Error("failed to update conversation state", "conversation_id", conv.ID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
-	if err := e.store.SetUserForm(msg.UserID, strconv.Itoa(form)); err != nil {
+	if err := e.setUserForm(identity, strconv.Itoa(form)); err != nil {
 		slog.Error("failed to persist user form", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
@@ -1042,6 +1134,10 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 }
 
 func (e *Engine) handleLanguageSelection(msg chat.InboundMessage, conv *Conversation) string {
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr != nil {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
 		Content: msg.Text,
@@ -1067,7 +1163,7 @@ func (e *Engine) handleLanguageSelection(msg chat.InboundMessage, conv *Conversa
 	}); err != nil {
 		slog.Error("failed to store language preference marker", "error", err)
 	}
-	if err := e.store.SetUserPreferredLanguage(msg.UserID, lang); err != nil {
+	if err := e.setUserPreferredLanguage(identity, lang); err != nil {
 		slog.Error("failed to persist user preferred language", "user_id", msg.UserID, "error", err)
 	}
 	if err := e.store.UpdateConversationState(conv.ID, "teaching"); err != nil {
@@ -1238,8 +1334,10 @@ func (e *Engine) preferredLanguageForConversation(conv *Conversation) (string, b
 		return "ms", true
 	}
 	if conv != nil {
-		if lang, ok := e.store.GetUserPreferredLanguage(conv.UserID); ok && lang != "" {
-			return lang, true
+		if identity, err := NewLearnerIdentity(conv.Channel, conv.UserID); err == nil {
+			if lang, ok := e.getUserPreferredLanguage(identity); ok && lang != "" {
+				return lang, true
+			}
 		}
 		lang := preferredLanguageFromMessages(conv.Messages)
 		if lang != "" {
@@ -1256,8 +1354,10 @@ func (e *Engine) messageLocale(msg chat.InboundMessage, conv *Conversation) stri
 		}
 	}
 	if !e.disableMultiLanguage {
-		if lang, ok := e.store.GetUserPreferredLanguage(msg.UserID); ok && lang != "" {
-			return lang
+		if identity, err := learnerIdentityForMessage(msg); err == nil {
+			if lang, ok := e.getUserPreferredLanguage(identity); ok && lang != "" {
+				return lang
+			}
 		}
 	}
 	if lang := i18n.NormalizeLocale(msg.Language); lang != "" {

@@ -26,20 +26,22 @@ func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat
 	var packets []contextPacket
 
 	profile := learnerProfile{}
-	if name, ok := e.store.GetUserName(msg.UserID); ok && name != "" {
-		profile.Name = name
-	}
-	if form, ok := e.store.GetUserForm(msg.UserID); ok && form != "" {
-		profile.Form = form
-	}
-	if lang, ok := e.store.GetUserPreferredLanguage(msg.UserID); ok && lang != "" {
-		profile.Language = lang
-	}
-	if intensity, ok := e.store.GetUserPreferredQuizIntensity(msg.UserID); ok && intensity != "" {
-		profile.QuizIntensity = intensity
-	}
-	if group, ok := e.store.GetUserABGroup(msg.UserID); ok && group != "" {
-		profile.ABGroup = group
+	if identity, err := learnerIdentityForMessage(msg); err == nil {
+		if name, ok := e.getUserName(identity); ok && name != "" {
+			profile.Name = name
+		}
+		if form, ok := e.getUserForm(identity); ok && form != "" {
+			profile.Form = form
+		}
+		if lang, ok := e.getUserPreferredLanguage(identity); ok && lang != "" {
+			profile.Language = lang
+		}
+		if intensity, ok := e.getUserPreferredQuizIntensity(identity); ok && intensity != "" {
+			profile.QuizIntensity = intensity
+		}
+		if group, ok := e.getUserABGroup(identity); ok && group != "" {
+			profile.ABGroup = group
+		}
 	}
 	packets = appendProfilePackets(packets, profile)
 
@@ -85,8 +87,9 @@ func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat
 		}))
 	}
 
-	if e.tracker != nil {
-		if items, err := e.tracker.GetAllProgress(msg.UserID); err == nil {
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if e.tracker != nil && identityErr == nil {
+		if items, err := e.getAllProgress(identity); err == nil {
 			selected := selectTurnProgress(items, topic, maxTurnProgressItems)
 			if len(selected) > 0 {
 				packets = append(packets, newContextPacket(contextPacket{
@@ -99,7 +102,7 @@ func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat
 				}))
 			}
 		}
-		if due, err := e.tracker.GetDueReviews(msg.UserID); err == nil {
+		if due, err := e.getDueReviews(identity); err == nil {
 			selected := capProgressItems(sortDueReviews(due), maxTurnDueReviews)
 			if len(selected) > 0 {
 				packets = append(packets, newContextPacket(contextPacket{

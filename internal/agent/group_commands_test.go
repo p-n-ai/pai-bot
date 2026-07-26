@@ -182,7 +182,12 @@ func TestEngine_LeaderboardCommand_EmptyLeaderboard(t *testing.T) {
 	})
 
 	g, _ := groupStore.CreateGroup("test-tenant", "LB Test", "study_group", "", "", "", "", "")
-	_ = groupStore.JoinGroup(g.ID, "user-lb-2", "test-tenant", "member")
+	identity := mustLearnerIdentity(t, "telegram", "user-lb-2")
+	userUUID, err := store.ResolveUserUUIDFor(identity)
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
+	}
+	_ = groupStore.JoinGroup(g.ID, userUUID, "test-tenant", "member")
 
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",

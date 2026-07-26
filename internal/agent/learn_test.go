@@ -113,7 +113,11 @@ func TestLearnCommand_SetsConversationTopicID(t *testing.T) {
 	}
 
 	// Verify the conversation's topic was set.
-	conv, found := store.GetActiveConversation("user1")
+	identity, err := agent.NewLearnerIdentity("terminal", "user1")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity: %v", err)
+	}
+	conv, found := store.GetActiveConversationFor(identity)
 	if !found {
 		t.Fatal("expected active conversation")
 	}
@@ -134,7 +138,7 @@ func (p *echoProvider) Complete(_ context.Context, req ai.CompletionRequest) (ai
 func (p *echoProvider) StreamComplete(context.Context, ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
 	return nil, nil
 }
-func (p *echoProvider) Models() []ai.ModelInfo          { return nil }
+func (p *echoProvider) Models() []ai.ModelInfo            { return nil }
 func (p *echoProvider) HealthCheck(context.Context) error { return nil }
 
 func createLearnTestLoader(t *testing.T) *curriculum.Loader {

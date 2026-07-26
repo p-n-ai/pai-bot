@@ -357,17 +357,16 @@ func (s *PostgresStore) UserChannel(externalID string) (string, bool) {
 	defer cancel()
 
 	var channel string
+	var channelCount int
 	err := s.pool.QueryRow(ctx,
-		`SELECT channel
+		`SELECT COALESCE(MIN(channel), ''), COUNT(DISTINCT channel)
 		 FROM users
 		 WHERE tenant_id = $1::uuid
-		   AND external_id = $2
-		 ORDER BY created_at ASC
-		 LIMIT 1`,
+		   AND external_id = $2`,
 		s.tenantID,
 		externalID,
-	).Scan(&channel)
-	if err != nil || strings.TrimSpace(channel) == "" {
+	).Scan(&channel, &channelCount)
+	if err != nil || strings.TrimSpace(channel) == "" || channelCount != 1 {
 		return "", false
 	}
 	return channel, true
@@ -455,6 +454,152 @@ func NewPostgresStoreForChannel(ctx context.Context, pool *pgxpool.Pool, channel
 // TenantID returns the resolved tenant UUID for this store.
 func (s *PostgresStore) TenantID() string { return s.tenantID }
 
+func (s *PostgresStore) UserExistsFor(identity LearnerIdentity) bool {
+	scoped, err := s.forIdentity(identity)
+	return err == nil && scoped.UserExists(identity.externalID)
+}
+
+func (s *PostgresStore) GetUserNameFor(identity LearnerIdentity) (string, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", false
+	}
+	return scoped.GetUserName(identity.externalID)
+}
+
+func (s *PostgresStore) SetUserNameFor(identity LearnerIdentity, name string) error {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return err
+	}
+	return scoped.SetUserName(identity.externalID, name)
+}
+
+func (s *PostgresStore) GetUserFormFor(identity LearnerIdentity) (string, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", false
+	}
+	return scoped.GetUserForm(identity.externalID)
+}
+
+func (s *PostgresStore) SetUserFormFor(identity LearnerIdentity, form string) error {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return err
+	}
+	return scoped.SetUserForm(identity.externalID, form)
+}
+
+func (s *PostgresStore) GetUserPreferredLanguageFor(identity LearnerIdentity) (string, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", false
+	}
+	return scoped.GetUserPreferredLanguage(identity.externalID)
+}
+
+func (s *PostgresStore) SetUserPreferredLanguageFor(identity LearnerIdentity, lang string) error {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return err
+	}
+	return scoped.SetUserPreferredLanguage(identity.externalID, lang)
+}
+
+func (s *PostgresStore) GetUserPreferredQuizIntensityFor(identity LearnerIdentity) (string, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", false
+	}
+	return scoped.GetUserPreferredQuizIntensity(identity.externalID)
+}
+
+func (s *PostgresStore) SetUserPreferredQuizIntensityFor(identity LearnerIdentity, intensity string) error {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return err
+	}
+	return scoped.SetUserPreferredQuizIntensity(identity.externalID, intensity)
+}
+
+func (s *PostgresStore) GetUserABGroupFor(identity LearnerIdentity) (string, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", false
+	}
+	return scoped.GetUserABGroup(identity.externalID)
+}
+
+func (s *PostgresStore) SetUserABGroupFor(identity LearnerIdentity, group string) error {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return err
+	}
+	return scoped.SetUserABGroup(identity.externalID, group)
+}
+
+func (s *PostgresStore) CreateConversationFor(identity LearnerIdentity, conv Conversation) (string, error) {
+	return s.CreateConversationForThread(identity, "", conv)
+}
+
+func (s *PostgresStore) CreateConversationForThread(identity LearnerIdentity, threadID string, conv Conversation) (string, error) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", err
+	}
+	if conv.UserID != "" && conv.UserID != identity.externalID {
+		return "", fmt.Errorf("conversation user_id does not match learner identity")
+	}
+	if conv.Channel != "" && conv.Channel != identity.channel {
+		return "", fmt.Errorf("conversation channel does not match learner identity")
+	}
+	if conv.ThreadID != "" && conv.ThreadID != threadID {
+		return "", fmt.Errorf("conversation thread_id does not match requested thread")
+	}
+	conv.UserID = identity.externalID
+	conv.Channel = identity.channel
+	conv.ThreadID = threadID
+	return scoped.CreateConversation(conv)
+}
+
+func (s *PostgresStore) GetActiveConversationFor(identity LearnerIdentity) (*Conversation, bool) {
+	return s.GetActiveConversationForThread(identity, "")
+}
+
+func (s *PostgresStore) GetActiveConversationForThread(identity LearnerIdentity, threadID string) (*Conversation, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return nil, false
+	}
+	return scoped.getActiveConversation(identity.externalID, threadID)
+}
+
+func (s *PostgresStore) GetLatestActiveConversationFor(identity LearnerIdentity) (*Conversation, bool) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return nil, false
+	}
+	return scoped.getLatestActiveConversation(identity.externalID)
+}
+
+func (s *PostgresStore) ResolveUserUUIDFor(identity LearnerIdentity) (string, error) {
+	scoped, err := s.forIdentity(identity)
+	if err != nil {
+		return "", err
+	}
+	return scoped.ResolveUserUUID(identity.externalID)
+}
+
+func (s *PostgresStore) forIdentity(identity LearnerIdentity) (*PostgresStore, error) {
+	if err := identity.validate(); err != nil {
+		return nil, err
+	}
+	scoped := *s
+	scoped.channel = identity.channel
+	return &scoped, nil
+}
+
 func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -481,16 +626,23 @@ func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	var id string
 	var dbStartedAt time.Time
 	err = s.pool.QueryRow(ctx,
-		`INSERT INTO conversations (user_id, tenant_id, topic_id, state, started_at)
-		 VALUES ($1::uuid, $2::uuid, $3, $4, $5)
+		`INSERT INTO conversations (user_id, tenant_id, thread_id, topic_id, state, started_at)
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
 		 RETURNING id::text, started_at`,
 		userID,
 		s.tenantID,
+		conv.ThreadID,
 		nullIfEmpty(conv.TopicID),
 		state,
 		startedAt,
 	).Scan(&id, &dbStartedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) &&
+			pgErr.Code == "23505" &&
+			pgErr.ConstraintName == "uniq_conversations_active_thread" {
+			return "", fmt.Errorf("%w for channel %q and thread %q", ErrActiveConversationExists, s.channel, conv.ThreadID)
+		}
 		return "", fmt.Errorf("create conversation: %w", err)
 	}
 
@@ -509,7 +661,7 @@ func (s *PostgresStore) GetConversation(id string) (*Conversation, error) {
 	defer cancel()
 
 	conv, err := s.getConversationByQuery(ctx,
-		`SELECT c.id::text, u.external_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
+		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
 		 FROM conversations c
 		 JOIN users u ON u.id = c.user_id
 		 WHERE c.id = $1::uuid
@@ -567,27 +719,62 @@ func (s *PostgresStore) GetConversation(id string) (*Conversation, error) {
 }
 
 func (s *PostgresStore) GetActiveConversation(userID string) (*Conversation, bool) {
+	return s.getActiveConversation(userID, "")
+}
+
+func (s *PostgresStore) getActiveConversation(userID, threadID string) (*Conversation, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	conv, err := s.getConversationByQuery(ctx,
-		`SELECT c.id::text, u.external_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
+		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
 		 FROM conversations c
 		 JOIN users u ON u.id = c.user_id
 		 WHERE u.external_id = $1
 		   AND u.channel = $2
 		   AND c.tenant_id = $3::uuid
+		   AND c.thread_id = $4
 		   AND c.ended_at IS NULL
 		 ORDER BY c.started_at DESC
 		 LIMIT 1`,
 		userID,
 		s.channel,
 		s.tenantID,
+		threadID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false
 		}
+		return nil, false
+	}
+
+	full, err := s.GetConversation(conv.ID)
+	if err != nil {
+		return nil, false
+	}
+	return full, true
+}
+
+func (s *PostgresStore) getLatestActiveConversation(userID string) (*Conversation, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	conv, err := s.getConversationByQuery(ctx,
+		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
+		 FROM conversations c
+		 JOIN users u ON u.id = c.user_id
+		 WHERE u.external_id = $1
+		   AND u.channel = $2
+		   AND c.tenant_id = $3::uuid
+		   AND c.ended_at IS NULL
+		 ORDER BY c.started_at DESC, c.id DESC
+		 LIMIT 1`,
+		userID,
+		s.channel,
+		s.tenantID,
+	)
+	if err != nil {
 		return nil, false
 	}
 
@@ -971,6 +1158,9 @@ func (s *PostgresStore) resolveOrCreateUser(ctx context.Context, externalID stri
 	err = s.pool.QueryRow(ctx,
 		`INSERT INTO users (tenant_id, role, name, external_id, channel)
 		 VALUES ($1::uuid, 'student', $2, $3, $4)
+		 ON CONFLICT (tenant_id, channel, external_id)
+		   WHERE external_id IS NOT NULL
+		 DO UPDATE SET external_id = EXCLUDED.external_id
 		 RETURNING id::text`,
 		s.tenantID,
 		name,
@@ -993,6 +1183,8 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	err := s.pool.QueryRow(ctx, query, args...).Scan(
 		&conv.ID,
 		&conv.UserID,
+		&conv.Channel,
+		&conv.ThreadID,
 		&topicID,
 		&conv.State,
 		&conv.StartedAt,

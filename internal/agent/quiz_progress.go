@@ -9,10 +9,11 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
-func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, question QuizQuestion, correct bool) {
+func (e *Engine) recordQuizOutcomeAsync(identity LearnerIdentity, topicID, transport string, question QuizQuestion, correct bool) {
 	if e.tracker == nil && e.xp == nil {
 		return
 	}
+	userID := identity.ExternalID()
 
 	go func() {
 		syllabusID := "default"
@@ -23,18 +24,18 @@ func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, quest
 		}
 
 		if e.tracker != nil {
-			masteryBefore, err := e.tracker.GetMastery(userID, syllabusID, topicID)
+			masteryBefore, err := e.getMastery(identity, syllabusID, topicID)
 			if err != nil {
 				slog.Warn("failed to read quiz mastery before update", "user_id", userID, "topic_id", topicID, "error", err)
 				masteryBefore = 0
 			}
 
-			if err := e.tracker.UpdateMastery(userID, syllabusID, topicID, quizMasterySignal(question, correct)); err != nil {
+			if err := e.updateMastery(identity, syllabusID, topicID, quizMasterySignal(question, correct)); err != nil {
 				slog.Warn("failed to update quiz mastery", "user_id", userID, "topic_id", topicID, "error", err)
 			} else {
 				e.syncGoalProgress(userID, syllabusID, topicID)
 				if e.xp != nil {
-					masteryAfter, err := e.tracker.GetMastery(userID, syllabusID, topicID)
+					masteryAfter, err := e.getMastery(identity, syllabusID, topicID)
 					if err != nil {
 						slog.Warn("failed to read quiz mastery after update", "user_id", userID, "topic_id", topicID, "error", err)
 					} else if !progress.IsMastered(masteryBefore) && progress.IsMastered(masteryAfter) {
@@ -48,15 +49,15 @@ func (e *Engine) recordQuizOutcomeAsync(userID, topicID, transport string, quest
 						}); err != nil {
 							slog.Warn("failed to award mastery xp from quiz", "user_id", userID, "topic_id", topicID, "error", err)
 						}
-						if e.milestones != nil && e.userABGroup(userID) == ABGroupA {
+						if e.milestones != nil && e.userABGroup(identity) == ABGroupA {
 							topicName := topicID
 							if e.curriculumLoader != nil {
 								if t, ok := e.curriculumLoader.GetTopic(topicID); ok {
 									topicName = t.Name
 								}
 							}
-							locale := e.resolveUserLocale(userID)
-							e.milestones.add(userID, FormatTopicMasteredCelebration(locale, topicName, progress.XPMasteryUp))
+							locale := e.resolveUserLocale(identity)
+							e.milestones.add(identity, FormatTopicMasteredCelebration(locale, topicName, progress.XPMasteryUp))
 						}
 					}
 				}

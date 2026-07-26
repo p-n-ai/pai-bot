@@ -27,7 +27,11 @@ func (e *Engine) handleCreateGroupCommand(_ context.Context, msg chat.InboundMes
 		name = name[:100]
 	}
 
-	userUUID, err := e.store.ResolveUserUUID(msg.UserID)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "", fmt.Errorf("resolve learner identity for create_group: %w", err)
+	}
+	userUUID, err := e.resolveUserUUID(identity)
 	if err != nil {
 		return "", fmt.Errorf("resolve user for create_group: %w", err)
 	}
@@ -66,7 +70,11 @@ func (e *Engine) handleJoinGroupCommand(_ context.Context, msg chat.InboundMessa
 		return i18n.S(locale, i18n.MsgGroupNotFound, code), nil
 	}
 
-	userUUID, err := e.store.ResolveUserUUID(msg.UserID)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "", fmt.Errorf("resolve learner identity for join: %w", err)
+	}
+	userUUID, err := e.resolveUserUUID(identity)
 	if err != nil {
 		return "", fmt.Errorf("resolve user for join: %w", err)
 	}
@@ -89,7 +97,11 @@ func (e *Engine) handleJoinGroupCommand(_ context.Context, msg chat.InboundMessa
 func (e *Engine) handleLeaderboardCommand(_ context.Context, msg chat.InboundMessage, args []string) (string, error) {
 	locale := e.messageLocale(msg, nil)
 
-	userUUID, err := e.store.ResolveUserUUID(msg.UserID)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "", fmt.Errorf("resolve learner identity for leaderboard: %w", err)
+	}
+	userUUID, err := e.resolveUserUUID(identity)
 	if err != nil {
 		return "", fmt.Errorf("resolve user for leaderboard: %w", err)
 	}

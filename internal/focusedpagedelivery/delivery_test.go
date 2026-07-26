@@ -19,12 +19,14 @@ func TestMemoryStoreEnqueueIsIdempotentAndTenantScoped(t *testing.T) {
 	store := NewMemoryStore()
 	now := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
 	firstInput := deliveryInput("tenant-1", "turn-1")
+	firstInput.ThreadID = "slack:C123:1725000000.000100"
 	first, err := store.Enqueue(context.Background(), firstInput, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	changed := firstInput
 	changed.RecipientID = "attacker"
+	changed.ThreadID = "slack:C999:changed"
 	changed.FinalText = "changed payload"
 	changed.FocusedPagePublicID = "changed-page"
 	duplicate, err := store.Enqueue(context.Background(), changed, now.Add(time.Hour))
@@ -33,6 +35,9 @@ func TestMemoryStoreEnqueueIsIdempotentAndTenantScoped(t *testing.T) {
 	}
 	if duplicate != first {
 		t.Fatalf("duplicate enqueue changed delivery: got %#v want %#v", duplicate, first)
+	}
+	if duplicate.ThreadID != "slack:C123:1725000000.000100" {
+		t.Fatalf("durable thread route = %q, want original opaque route", duplicate.ThreadID)
 	}
 	otherTenant, err := store.Enqueue(context.Background(), deliveryInput("tenant-2", "turn-1"), now)
 	if err != nil {
@@ -74,6 +79,7 @@ func TestProcessorRecoversPendingAndExpiredLeasesWithoutChangingPayload(t *testi
 	now := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
 	current := now
 	input := deliveryInput("tenant-1", "turn-1")
+	input.ThreadID = "teams:Y29udmVyc2F0aW9u:aHR0cHM6Ly9zbS5iYS5za3lwZS5jb20"
 	pending, err := store.Enqueue(context.Background(), input, now)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +90,8 @@ func TestProcessorRecoversPendingAndExpiredLeasesWithoutChangingPayload(t *testi
 		t.Fatal(err)
 	}
 	if len(sender.deliveries) != 1 || sender.deliveries[0].FinalText != input.FinalText ||
-		sender.deliveries[0].FocusedPagePublicID != input.FocusedPagePublicID {
+		sender.deliveries[0].FocusedPagePublicID != input.FocusedPagePublicID ||
+		sender.deliveries[0].ThreadID != input.ThreadID {
 		t.Fatalf("recovered deliveries = %#v", sender.deliveries)
 	}
 	delivered, _ := store.Get(pending.ID)
