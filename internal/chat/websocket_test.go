@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -140,6 +141,43 @@ func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 	}
 }
 
+func TestWSChannel_NewConnectionReplacesExistingUserConnection(t *testing.T) {
+	ws := NewWSChannel()
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	original := dialAndAuth(t, wsURL, "same-user")
+	defer func() { _ = original.CloseNow() }()
+	replacement := dialAndAuth(t, wsURL, "same-user")
+	defer func() { _ = replacement.CloseNow() }()
+
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, err := original.Read(readCtx)
+	if status := websocket.CloseStatus(err); status != websocket.StatusNormalClosure {
+		t.Fatalf("original connection close status = %v, want %v (error: %v)", status, websocket.StatusNormalClosure, err)
+	}
+
+	if err := ws.SendMessage(context.Background(), "same-user", OutboundMessage{Text: "replacement is live"}); err != nil {
+		t.Fatalf("SendMessage() after replacement error = %v", err)
+	}
+
+	_, data, err := replacement.Read(readCtx)
+	if err != nil {
+		t.Fatalf("replacement Read() error = %v", err)
+	}
+	var response wsOutboundMsg
+	if err := json.Unmarshal(data, &response); err != nil {
+		t.Fatalf("unmarshal replacement response: %v", err)
+	}
+	if response.Type != "response" || response.Text != "replacement is live" {
+		t.Fatalf("replacement response = %#v", response)
+	}
+}
+
 func TestWSChannel_PlainTextResponseOmitsFocusedPage(t *testing.T) {
 	ws := NewWSChannel()
 	_ = ws.Start(context.Background(), func(InboundMessage) {})
@@ -268,6 +306,26 @@ func TestWSChannel_MultipleConcurrentConnections(t *testing.T) {
 	}
 }
 
+func TestWSChannel_ConnectedUsersAreSorted(t *testing.T) {
+	ws := NewWSChannel()
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	userIDs := []string{"zulu", "bravo", "hotel", "alpha", "yankee", "delta", "mike", "charlie"}
+	for _, userID := range userIDs {
+		conn := dialAndAuth(t, wsURL, userID)
+		defer func() { _ = conn.CloseNow() }()
+	}
+
+	want := []string{"alpha", "bravo", "charlie", "delta", "hotel", "mike", "yankee", "zulu"}
+	if got := ws.ConnectedUsers(); !slices.Equal(got, want) {
+		t.Fatalf("ConnectedUsers() = %v, want %v", got, want)
+	}
+}
+
 func TestWSChannel_SendTyping(t *testing.T) {
 	ws := NewWSChannel()
 	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
@@ -393,6 +451,10 @@ func TestWSChannel_Stop(t *testing.T) {
 	// No connected users.
 	if len(ws.ConnectedUsers()) != 0 {
 		t.Error("expected 0 connected users after Stop")
+	}
+
+	if err := ws.Stop(); err != nil {
+		t.Fatalf("second Stop: %v", err)
 	}
 }
 
