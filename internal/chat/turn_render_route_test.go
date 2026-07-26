@@ -5,7 +5,7 @@ package chat
 
 import "testing"
 
-func TestRenderTurnPreservesChatSDKThreadRoute(t *testing.T) {
+func TestRenderTurnPreservesThreadRoute(t *testing.T) {
 	out, ok := RenderTurn(InboundMessage{
 		Channel:  "slack",
 		UserID:   "U123",

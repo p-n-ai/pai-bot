@@ -5,7 +5,7 @@ package chat
 
 import "testing"
 
-func TestMapTelegramInboundPreservesChatSDKIdentityAndTopicRoute(t *testing.T) {
+func TestMapTelegramInboundPreservesIdentityAndTopicRoute(t *testing.T) {
 	msg, ok := mapTelegramInbound(tgUpdate{
 		UpdateID: 101,
 		Message: &tgMessage{

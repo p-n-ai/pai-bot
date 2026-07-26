@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func TestTelegramChannelSendMessageUsesChatSDKTopicRoute(t *testing.T) {
+func TestTelegramChannelSendMessageUsesTopicRoute(t *testing.T) {
 	var values url.Values
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -47,7 +47,7 @@ func TestTelegramChannelSendMessageUsesChatSDKTopicRoute(t *testing.T) {
 	}
 }
 
-func TestTelegramChannelSendTypingUsesChatSDKTopicRoute(t *testing.T) {
+func TestTelegramChannelSendTypingUsesTopicRoute(t *testing.T) {
 	var values url.Values
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)

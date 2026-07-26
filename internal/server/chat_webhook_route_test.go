@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestTopMuxRoutesEachChatSDKWebhookToItsAdapter(t *testing.T) {
+func TestTopMuxRoutesEachChatWebhookToItsAdapter(t *testing.T) {
 	called := make(map[string]int)
 	webhooks := make(map[string]http.Handler)
 	for _, name := range []string{"slack", "discord", "teams"} {

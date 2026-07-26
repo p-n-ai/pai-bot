@@ -110,7 +110,7 @@ func TestGateway_SendTyping(t *testing.T) {
 	}
 }
 
-func TestGateway_SendUsesChatSDKThreadRoute(t *testing.T) {
+func TestGateway_SendUsesThreadRoute(t *testing.T) {
 	gw := chat.NewGateway()
 	channel := &recordingChannel{}
 	gw.Register("slack", channel)
