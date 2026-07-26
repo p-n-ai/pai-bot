@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -82,6 +83,53 @@ func TestWhatsAppChannel_SendMessage_APIError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "401") {
 		t.Fatalf("error should mention status code, got: %v", err)
+	}
+}
+
+func TestWhatsAppChannel_SendMessagePreservesCallerContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ch := &WhatsAppChannel{
+		accessToken: "test-token",
+		phoneID:     "phone-123",
+		baseURL:     server.URL,
+		client:      http.DefaultClient,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := ch.SendMessage(ctx, "123", OutboundMessage{Text: "hi"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage() error = %v, want context canceled", err)
+	}
+}
+
+func TestWhatsAppChannel_SendMessageBoundsAPIErrorBody(t *testing.T) {
+	const responseBodySize = 32 << 10
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(strings.Repeat("x", responseBodySize)))
+	}))
+	defer server.Close()
+
+	ch := &WhatsAppChannel{
+		accessToken: "test-token",
+		phoneID:     "phone-123",
+		baseURL:     server.URL,
+		client:      http.DefaultClient,
+	}
+
+	err := ch.SendMessage(context.Background(), "123", OutboundMessage{Text: "hi"})
+	if err == nil {
+		t.Fatal("SendMessage() error = nil, want API error")
+	}
+	if len(err.Error()) >= responseBodySize {
+		t.Fatalf("SendMessage() error length = %d, want bounded response body", len(err.Error()))
 	}
 }
 
@@ -203,6 +251,53 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 	}
 	if got.ExternalID != "wamid.abc" {
 		t.Fatalf("ExternalID = %q, want wamid.abc", got.ExternalID)
+	}
+}
+
+func TestWhatsAppWebhookRejectsOversizedPayload(t *testing.T) {
+	ch := &WhatsAppChannel{phoneID: "phone-123"}
+	handler := ch.WebhookHandler(func(InboundMessage) {})
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(strings.Repeat(" ", (1<<20)+1)))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestWhatsAppWebhookAllowsNilHandler(t *testing.T) {
+	ch := &WhatsAppChannel{phoneID: "phone-123"}
+	handler := ch.WebhookHandler(nil)
+	payload := `{
+		"entry": [{
+			"changes": [{
+				"value": {
+					"metadata": {"phone_number_id": "phone-123"},
+					"messages": [{
+						"from": "60123456789",
+						"id": "wamid.abc",
+						"type": "text",
+						"text": {"body": "hello"}
+					}]
+				}
+			}]
+		}]
+	}`
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("WebhookHandler(nil) panicked: %v", recovered)
+		}
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
 
