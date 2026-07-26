@@ -17,7 +17,7 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
     <a href="https://goreportcard.com/report/github.com/p-n-ai/pai-bot"><img src="https://goreportcard.com/badge/github.com/p-n-ai/pai-bot" alt="Go Report Card"></a>
     <img src="https://img.shields.io/badge/go-%3E%3D1.22-00ADD8.svg" alt="Go Version">
-    <img src="https://img.shields.io/badge/platform-Telegram%20%7C%20WhatsApp%20%7C%20Web-green.svg" alt="Platforms">
+    <img src="https://img.shields.io/badge/platform-Telegram%20%7C%20WhatsApp%20%7C%20Slack%20%7C%20Discord%20%7C%20Teams%20%7C%20Web-green.svg" alt="Platforms">
   </p>
 </p>
 
@@ -59,7 +59,7 @@ Get P&AI running in under 5 minutes.
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
-- A Telegram bot token (get one from [@BotFather](https://t.me/BotFather))
+- Credentials for at least one external chat adapter, such as a Telegram bot token from [@BotFather](https://t.me/BotFather)
 - At least one AI provider API key (OpenAI, Anthropic, or use free self-hosted Ollama)
 
 ### 1. Clone and configure
@@ -74,7 +74,7 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```env
-# Required
+# Optional external chat adapter
 LEARN_TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
 # AI Providers (at least one required)
@@ -178,10 +178,8 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Chat Channels                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐             │
-│  │ Telegram │ │ WhatsApp │ │ WebSocket│             │
-│  └────┬─────┘ └─────┬────┘ └────┬─────┘             │
-│       └─────────────┼───────────┘                   │
+│  Telegram · WhatsApp · Slack · Discord · Teams · Web │
+│                     │                               │
 │                     ▼                               │
 │              Chat Gateway                           │
 │                     │                               │
@@ -225,7 +223,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Database** | PostgreSQL 17 | Standard, portable. Every cloud has managed Postgres. |
 | **Cache** | Dragonfly | Redis-compatible, multi-threaded, 80% less memory. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
-| **Chat** | Telegram Bot API, WhatsApp Cloud API, WebSocket | Works on $50 phones, 2G connections, zero data cost in many countries. |
+| **Chat** | Telegram, WhatsApp, Slack, Discord, Microsoft Teams, WebSocket | One gateway preserves provider identity, thread routes, delivery IDs, and adapter lifecycle. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose or Helm | Single server ($20/mo) to national deployment (millions of students). |
@@ -422,7 +420,18 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `LEARN_TELEGRAM_BOT_TOKEN` | Yes | — | Telegram bot token from @BotFather |
+| `LEARN_TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token from @BotFather |
+| `LEARN_SLACK_ENABLED` | No | `false` | Enable the signed Slack Events API webhook at `/webhook/slack` |
+| `LEARN_SLACK_BOT_TOKEN` | With Slack | — | Slack bot token used for replies |
+| `LEARN_SLACK_SIGNING_SECRET` | With Slack | — | Slack request-signing secret |
+| `LEARN_DISCORD_ENABLED` | No | `false` | Enable Discord Gateway ingress, signed interactions at `/webhook/discord`, and REST replies |
+| `LEARN_DISCORD_BOT_TOKEN` | With Discord | — | Discord bot token; enable the privileged Message Content intent in the Developer Portal |
+| `LEARN_DISCORD_PUBLIC_KEY` | With Discord | — | Discord application's Ed25519 interaction public key |
+| `LEARN_DISCORD_APPLICATION_ID` | With Discord | — | Discord application ID |
+| `LEARN_TEAMS_ENABLED` | No | `false` | Enable authenticated Bot Framework activities at `/webhook/teams` and Connector API replies |
+| `LEARN_TEAMS_APP_ID` | With Teams | — | Microsoft Bot Framework application ID |
+| `LEARN_TEAMS_APP_PASSWORD` | With Teams | — | Microsoft Bot Framework client secret |
+| `LEARN_TEAMS_APP_TENANT_ID` | No | `botframework.com` | Tenant used for Teams client-credential tokens |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
 | `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
