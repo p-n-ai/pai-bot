@@ -43,6 +43,7 @@ jobs:
               - '.golangci.yml'
               - 'migrations/**'
               - 'oss/**'
+              - 'deploy/docker/Dockerfile.postgres'
               - '.github/workflows/ci.yml'
             docker:
               - 'cmd/**'
@@ -182,20 +183,6 @@ jobs:
       needs.changes.outputs.backend == 'true')
 
     services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: pai
-          POSTGRES_PASSWORD: pai
-          POSTGRES_DB: pai
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U pai"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-
       dragonfly:
         image: docker.dragonflydb.io/dragonflydb/dragonfly
         ports:
@@ -210,6 +197,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Start PostgreSQL with required extensions
+        run: docker compose up --build --detach --wait postgres
 
       - uses: pnpm/action-setup@v4
         with:
