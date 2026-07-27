@@ -11,7 +11,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
-var defaultProviderOrder = []string{"openai", "anthropic", "deepseek", "google", "ollama", "openrouter"}
+var defaultProviderOrder = []string{"openai", "codex", "anthropic", "deepseek", "google", "ollama", "openrouter"}
 
 // ProviderNames returns every provider name Apply can register.
 func ProviderNames() []string {
@@ -58,6 +58,20 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 			return ai.ProviderRegistration{}, false
 		}
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true
+	case "codex":
+		if cfg.Codex.AccessToken == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		provider, err := ai.NewCodexProvider(
+			cfg.Codex.AccessToken,
+			ai.WithCodexRefreshToken(cfg.Codex.RefreshToken),
+			ai.WithCodexAccountID(cfg.Codex.AccountID),
+		)
+		if err != nil {
+			slog.Warn("failed to create Codex provider", "error", err)
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true
 	case "anthropic":
 		if cfg.Anthropic.APIKey == "" {
 			return ai.ProviderRegistration{}, false
