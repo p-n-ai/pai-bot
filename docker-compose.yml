@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pai && psql -U pai -d pai -Atqc \"SELECT bool_and(ok) FROM (SELECT default_version = '1.0.0' AS ok FROM pg_available_extensions WHERE name = 'graph' UNION ALL SELECT default_version = '0.8.5' FROM pg_available_extensions WHERE name = 'vector') checks\" | grep -qx t"]
+      test: ["CMD-SHELL", "pg_isready -U pai && psql -U pai -d pai -Atqc \"SELECT count(*) = 2 AND bool_and((name = 'graph' AND default_version = '1.0.0') OR (name = 'vector' AND default_version = '0.8.5')) FROM pg_available_extensions WHERE name IN ('graph', 'vector')\" | grep -qx t"]
       interval: 5s
       timeout: 3s
       retries: 5

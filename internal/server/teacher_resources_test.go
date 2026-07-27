@@ -18,6 +18,15 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
+const (
+	teacherTestTenantID   = "00000000-0000-4000-8000-000000000001"
+	teacherTestUploaderID = "00000000-0000-4000-8000-000000000002"
+	teacherTestClassOneID = "00000000-0000-4000-8000-000000000011"
+	teacherTestClassTwoID = "00000000-0000-4000-8000-000000000012"
+	teacherTestResourceID = "00000000-0000-4000-8000-000000000021"
+	teacherTestChunkID    = "00000000-0000-4000-8000-000000000031"
+)
+
 type teacherResourceServiceStub struct {
 	uploadInput retrieval.TeacherUploadInput
 	uploadItem  retrieval.TeacherResource
@@ -65,11 +74,11 @@ func (s *teacherResourceServiceStub) Search(_ context.Context, input retrieval.T
 
 func TestTeacherResourceAuthenticatedMultipartUpload(t *testing.T) {
 	service := &teacherResourceServiceStub{uploadItem: retrieval.TeacherResource{
-		ID: "resource-1", Filename: "lesson.docx", ChunkCount: 2, ClassIDs: []string{"class-1"},
+		ID: teacherTestResourceID, Filename: "lesson.docx", ChunkCount: 2, ClassIDs: []string{teacherTestClassOneID},
 	}}
 	handler := teacherResourceTestHandler(service)
-	body, contentType := teacherMultipartBody(t, "lesson.docx", []byte("document"), []string{"class-1"})
-	req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, "tenant-1", "teacher-1")
+	body, contentType := teacherMultipartBody(t, "lesson.docx", []byte("document"), []string{teacherTestClassOneID})
+	req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, teacherTestTenantID, teacherTestUploaderID)
 	req.Header.Set("Content-Type", contentType)
 	recorder := httptest.NewRecorder()
 
@@ -78,7 +87,7 @@ func TestTeacherResourceAuthenticatedMultipartUpload(t *testing.T) {
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if service.uploadInput.TenantID != "tenant-1" || service.uploadInput.UploaderID != "teacher-1" {
+	if service.uploadInput.TenantID != teacherTestTenantID || service.uploadInput.UploaderID != teacherTestUploaderID {
 		t.Fatalf("auth-derived upload input = %#v", service.uploadInput)
 	}
 	if service.uploadInput.Filename != "lesson.docx" || len(service.uploadInput.ClassIDs) != 1 {
@@ -97,12 +106,14 @@ func TestTeacherResourceUploadRequiresTenantAndUploader(t *testing.T) {
 	for _, test := range []struct {
 		name, tenantID, uploaderID string
 	}{
-		{name: "missing tenant", uploaderID: "teacher-1"},
-		{name: "missing uploader", tenantID: "tenant-1"},
+		{name: "missing tenant", uploaderID: teacherTestUploaderID},
+		{name: "missing uploader", tenantID: teacherTestTenantID},
+		{name: "malformed tenant", tenantID: "not-a-uuid", uploaderID: teacherTestUploaderID},
+		{name: "malformed uploader", tenantID: teacherTestTenantID, uploaderID: "not-a-uuid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			handler := teacherResourceTestHandler(&teacherResourceServiceStub{})
-			body, contentType := teacherMultipartBody(t, "lesson.docx", []byte("document"), []string{"class-1"})
+			body, contentType := teacherMultipartBody(t, "lesson.docx", []byte("document"), []string{teacherTestClassOneID})
 			req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, test.tenantID, test.uploaderID)
 			req.Header.Set("Content-Type", contentType)
 			recorder := httptest.NewRecorder()
@@ -118,8 +129,8 @@ func TestTeacherResourceUploadErrors(t *testing.T) {
 	t.Run("oversize", func(t *testing.T) {
 		service := &teacherResourceServiceStub{}
 		handler := teacherResourceTestHandler(service)
-		body, contentType := teacherMultipartBody(t, "large.pdf", make([]byte, retrieval.MaxTeacherResourceBytes+1), []string{"class-1"})
-		req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, "tenant-1", "teacher-1")
+		body, contentType := teacherMultipartBody(t, "large.pdf", make([]byte, retrieval.MaxTeacherResourceBytes+1), []string{teacherTestClassOneID})
+		req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, teacherTestTenantID, teacherTestUploaderID)
 		req.Header.Set("Content-Type", contentType)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, req)
@@ -138,8 +149,8 @@ func TestTeacherResourceUploadErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			service := &teacherResourceServiceStub{uploadErr: test.err}
 			handler := teacherResourceTestHandler(service)
-			body, contentType := teacherMultipartBody(t, "lesson.txt", []byte("text"), []string{"class-1"})
-			req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, "tenant-1", "teacher-1")
+			body, contentType := teacherMultipartBody(t, "lesson.txt", []byte("text"), []string{teacherTestClassOneID})
+			req := teacherRequest(http.MethodPost, "/api/admin/teacher-resources", body, teacherTestTenantID, teacherTestUploaderID)
 			req.Header.Set("Content-Type", contentType)
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, req)
@@ -152,42 +163,88 @@ func TestTeacherResourceUploadErrors(t *testing.T) {
 
 func TestTeacherResourceListDeactivateDeleteAndSearch(t *testing.T) {
 	service := &teacherResourceServiceStub{
-		listItems:   []retrieval.TeacherResource{{ID: "resource-1", ChunkCount: 3}},
-		searchItems: []retrieval.TeacherEvidence{{ID: "chunk-2", Excerpt: "neighbor"}},
+		listItems:   []retrieval.TeacherResource{{ID: teacherTestResourceID, ChunkCount: 3}},
+		searchItems: []retrieval.TeacherEvidence{{ID: teacherTestChunkID, Excerpt: "neighbor"}},
 	}
 	handler := teacherResourceTestHandler(service)
 
-	listReq := teacherRequest(http.MethodGet, "/api/admin/teacher-resources?class_ids=class-1,class-2", nil, "tenant-1", "teacher-1")
+	listReq := teacherRequest(http.MethodGet, "/api/admin/teacher-resources?class_ids="+teacherTestClassOneID+","+teacherTestClassTwoID, nil, teacherTestTenantID, teacherTestUploaderID)
 	listRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(listRecorder, listReq)
-	if listRecorder.Code != http.StatusOK || service.listTenant != "tenant-1" || len(service.listClasses) != 2 {
+	if listRecorder.Code != http.StatusOK || service.listTenant != teacherTestTenantID || len(service.listClasses) != 2 {
 		t.Fatalf("list status/input = %d, %q, %#v", listRecorder.Code, service.listTenant, service.listClasses)
 	}
 	if !strings.Contains(listRecorder.Body.String(), `"chunk_count":3`) {
 		t.Fatalf("list response = %s", listRecorder.Body.String())
 	}
 
-	deactivateReq := teacherRequest(http.MethodPost, "/api/admin/teacher-resources/resource-1/deactivate?class_id=class-1", nil, "tenant-1", "teacher-1")
+	deactivateReq := teacherRequest(http.MethodPost, "/api/admin/teacher-resources/"+teacherTestResourceID+"/deactivate?class_id="+teacherTestClassOneID, nil, teacherTestTenantID, teacherTestUploaderID)
 	deactivateRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(deactivateRecorder, deactivateReq)
-	if deactivateRecorder.Code != http.StatusNoContent || service.activeID != "resource-1" || service.activeValue {
+	if deactivateRecorder.Code != http.StatusNoContent || service.activeID != teacherTestResourceID || service.activeValue {
 		t.Fatalf("deactivate status/input = %d, %q, %t", deactivateRecorder.Code, service.activeID, service.activeValue)
 	}
 
-	deleteReq := teacherRequest(http.MethodDelete, "/api/admin/teacher-resources/resource-1?class_id=class-1", nil, "tenant-1", "teacher-1")
+	deleteReq := teacherRequest(http.MethodDelete, "/api/admin/teacher-resources/"+teacherTestResourceID+"?class_id="+teacherTestClassOneID, nil, teacherTestTenantID, teacherTestUploaderID)
 	deleteRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(deleteRecorder, deleteReq)
-	if deleteRecorder.Code != http.StatusNoContent || service.deleteID != "resource-1" {
+	if deleteRecorder.Code != http.StatusNoContent || service.deleteID != teacherTestResourceID {
 		t.Fatalf("delete status/input = %d, %q", deleteRecorder.Code, service.deleteID)
 	}
 
 	searchReq := teacherRequest(http.MethodPost, "/api/admin/teacher-resources/search",
-		strings.NewReader(`{"query":"pecahan","class_ids":["class-1"],"limit":4}`), "tenant-1", "teacher-1")
+		strings.NewReader(`{"query":"pecahan","class_ids":["`+teacherTestClassOneID+`"],"limit":4}`), teacherTestTenantID, teacherTestUploaderID)
 	searchRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(searchRecorder, searchReq)
 	if searchRecorder.Code != http.StatusOK || service.searchInput.Query != "pecahan" ||
-		service.searchInput.TenantID != "tenant-1" || len(service.searchInput.ClassIDs) != 1 {
+		service.searchInput.TenantID != teacherTestTenantID || len(service.searchInput.ClassIDs) != 1 {
 		t.Fatalf("search status/input = %d, %#v", searchRecorder.Code, service.searchInput)
+	}
+}
+
+func TestTeacherResourceHandlersRejectMalformedUUIDsBeforeService(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		target string
+		body   io.Reader
+		setup  func(*http.Request)
+	}{
+		{
+			name: "upload class", method: http.MethodPost, target: "/api/admin/teacher-resources",
+			setup: func(req *http.Request) {
+				body, contentType := teacherMultipartBody(t, "lesson.docx", []byte("document"), []string{"not-a-uuid"})
+				req.Body = io.NopCloser(body)
+				req.Header.Set("Content-Type", contentType)
+			},
+		},
+		{name: "list class", method: http.MethodGet, target: "/api/admin/teacher-resources?class_id=not-a-uuid"},
+		{name: "deactivate resource", method: http.MethodPost, target: "/api/admin/teacher-resources/not-a-uuid/deactivate?class_id=" + teacherTestClassOneID},
+		{name: "deactivate class", method: http.MethodPost, target: "/api/admin/teacher-resources/" + teacherTestResourceID + "/deactivate?class_id=not-a-uuid"},
+		{name: "delete resource", method: http.MethodDelete, target: "/api/admin/teacher-resources/not-a-uuid?class_id=" + teacherTestClassOneID},
+		{
+			name: "search class", method: http.MethodPost, target: "/api/admin/teacher-resources/search",
+			body: strings.NewReader(`{"query":"pecahan","class_ids":["not-a-uuid"]}`),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := &teacherResourceServiceStub{}
+			handler := teacherResourceTestHandler(service)
+			req := teacherRequest(test.method, test.target, test.body, teacherTestTenantID, teacherTestUploaderID)
+			if test.setup != nil {
+				test.setup(req)
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			if recorder.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if service.uploadInput.TenantID != "" || service.listTenant != "" ||
+				service.activeID != "" || service.deleteID != "" || service.searchInput.TenantID != "" {
+				t.Fatalf("service was called: %#v", service)
+			}
+		})
 	}
 }
 

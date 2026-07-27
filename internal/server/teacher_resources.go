@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
@@ -37,9 +38,8 @@ func registerTeacherResourceRoutes(mux *http.ServeMux, service teacherResourceSe
 
 func handleTeacherResourceUpload(service teacherResourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := auth.ClaimsFromContext(r.Context())
-		if !ok || strings.TrimSpace(claims.TenantID) == "" || strings.TrimSpace(claims.Subject) == "" {
-			http.Error(w, "authenticated tenant scope is required", http.StatusForbidden)
+		claims, ok := teacherResourceClaims(w, r)
+		if !ok {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, maxTeacherMultipartBytes)
@@ -64,6 +64,10 @@ func handleTeacherResourceUpload(service teacherResourceService) http.HandlerFun
 				writeTeacherResourceError(w, err)
 				return
 			}
+		}
+		if err := validateTeacherUUIDs("class ID", input.ClassIDs); err != nil {
+			writeTeacherResourceError(w, err)
+			return
 		}
 		resource, err := service.Upload(r.Context(), input)
 		if err != nil {
@@ -115,8 +119,16 @@ func consumeTeacherPart(part *multipart.Part, input *retrieval.TeacherUploadInpu
 
 func handleTeacherResourceList(service teacherResourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := auth.ClaimsFromContext(r.Context())
-		resources, err := service.List(r.Context(), claims.TenantID, teacherClassIDs(r), r.URL.Query().Get("include_inactive") == "true")
+		claims, ok := teacherResourceClaims(w, r)
+		if !ok {
+			return
+		}
+		classIDs := teacherClassIDs(r)
+		if err := validateTeacherUUIDs("class ID", classIDs); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
+		resources, err := service.List(r.Context(), claims.TenantID, classIDs, r.URL.Query().Get("include_inactive") == "true")
 		if err != nil {
 			writeTeacherResourceError(w, err)
 			return
@@ -127,8 +139,21 @@ func handleTeacherResourceList(service teacherResourceService) http.HandlerFunc 
 
 func handleTeacherResourceDeactivate(service teacherResourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := auth.ClaimsFromContext(r.Context())
-		if err := service.SetActive(r.Context(), claims.TenantID, r.PathValue("id"), teacherClassIDs(r), false); err != nil {
+		claims, ok := teacherResourceClaims(w, r)
+		if !ok {
+			return
+		}
+		resourceID := r.PathValue("id")
+		classIDs := teacherClassIDs(r)
+		if err := validateTeacherUUID("resource ID", resourceID); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
+		if err := validateTeacherUUIDs("class ID", classIDs); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
+		if err := service.SetActive(r.Context(), claims.TenantID, resourceID, classIDs, false); err != nil {
 			writeTeacherResourceError(w, err)
 			return
 		}
@@ -138,8 +163,21 @@ func handleTeacherResourceDeactivate(service teacherResourceService) http.Handle
 
 func handleTeacherResourceDelete(service teacherResourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := auth.ClaimsFromContext(r.Context())
-		if err := service.Delete(r.Context(), claims.TenantID, r.PathValue("id"), teacherClassIDs(r)); err != nil {
+		claims, ok := teacherResourceClaims(w, r)
+		if !ok {
+			return
+		}
+		resourceID := r.PathValue("id")
+		classIDs := teacherClassIDs(r)
+		if err := validateTeacherUUID("resource ID", resourceID); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
+		if err := validateTeacherUUIDs("class ID", classIDs); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
+		if err := service.Delete(r.Context(), claims.TenantID, resourceID, classIDs); err != nil {
 			writeTeacherResourceError(w, err)
 			return
 		}
@@ -149,6 +187,10 @@ func handleTeacherResourceDelete(service teacherResourceService) http.HandlerFun
 
 func handleTeacherResourceSearch(service teacherResourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := teacherResourceClaims(w, r)
+		if !ok {
+			return
+		}
 		var body struct {
 			Query    string   `json:"query"`
 			ClassIDs []string `json:"class_ids"`
@@ -158,7 +200,10 @@ func handleTeacherResourceSearch(service teacherResourceService) http.HandlerFun
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
-		claims, _ := auth.ClaimsFromContext(r.Context())
+		if err := validateTeacherUUIDs("class ID", body.ClassIDs); err != nil {
+			writeTeacherResourceError(w, err)
+			return
+		}
 		evidence, err := service.Search(r.Context(), retrieval.TeacherEvidenceRequest{
 			TenantID: claims.TenantID, ClassIDs: body.ClassIDs, Query: body.Query, Limit: body.Limit,
 		})
@@ -168,6 +213,33 @@ func handleTeacherResourceSearch(service teacherResourceService) http.HandlerFun
 		}
 		writeJSON(w, http.StatusOK, evidence)
 	}
+}
+
+func teacherResourceClaims(w http.ResponseWriter, r *http.Request) (auth.TokenClaims, bool) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok ||
+		validateTeacherUUID("authenticated tenant", claims.TenantID) != nil ||
+		validateTeacherUUID("authenticated uploader", claims.Subject) != nil {
+		http.Error(w, "authenticated tenant scope is required", http.StatusForbidden)
+		return auth.TokenClaims{}, false
+	}
+	return claims, true
+}
+
+func validateTeacherUUID(label, value string) error {
+	if _, err := uuid.Parse(strings.TrimSpace(value)); err != nil {
+		return fmt.Errorf("%w: %s must be a UUID", retrieval.ErrInvalidArgument, label)
+	}
+	return nil
+}
+
+func validateTeacherUUIDs(label string, values []string) error {
+	for _, value := range values {
+		if err := validateTeacherUUID(label, value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func teacherClassIDs(r *http.Request) []string {

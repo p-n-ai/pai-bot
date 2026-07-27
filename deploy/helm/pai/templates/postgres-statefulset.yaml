@@ -63,10 +63,10 @@ spec:
                 - >-
                   pg_isready -U {{ .Values.postgres.auth.username | quote }} -d {{ .Values.postgres.auth.database | quote }} &&
                   test "$(psql -U {{ .Values.postgres.auth.username | quote }} -d {{ .Values.postgres.auth.database | quote }} -Atqc
-                  "SELECT bool_and(ok) FROM
-                  (SELECT default_version = '1.0.0' AS ok FROM pg_available_extensions WHERE name = 'graph'
-                  UNION ALL
-                  SELECT default_version = '0.8.5' FROM pg_available_extensions WHERE name = 'vector') checks")" = t
+                  "SELECT count(*) = 2 AND
+                  bool_and((name = 'graph' AND default_version = '1.0.0') OR
+                  (name = 'vector' AND default_version = '0.8.5'))
+                  FROM pg_available_extensions WHERE name IN ('graph', 'vector')")" = t
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
