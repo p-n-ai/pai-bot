@@ -376,7 +376,58 @@ func TestValidate_MissingBotToken(t *testing.T) {
 	}
 
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("Validate() should return error when bot token is missing")
+		t.Fatal("Validate() should return error when no external chat adapter is configured")
+	}
+}
+
+func TestValidate_AllowsProductionWithoutTelegram(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+	}{
+		{
+			name: "Slack",
+			env: map[string]string{
+				"LEARN_SLACK_ENABLED":        "true",
+				"LEARN_SLACK_BOT_TOKEN":      "xoxb-test",
+				"LEARN_SLACK_SIGNING_SECRET": "signing-secret",
+			},
+		},
+		{
+			name: "Discord",
+			env: map[string]string{
+				"LEARN_DISCORD_ENABLED":        "true",
+				"LEARN_DISCORD_BOT_TOKEN":      "discord-token",
+				"LEARN_DISCORD_PUBLIC_KEY":     strings.Repeat("01", 32),
+				"LEARN_DISCORD_APPLICATION_ID": "application-id",
+			},
+		},
+		{
+			name: "Teams",
+			env: map[string]string{
+				"LEARN_TEAMS_ENABLED":      "true",
+				"LEARN_TEAMS_APP_ID":       "app-id",
+				"LEARN_TEAMS_APP_PASSWORD": "app-password",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnv(t)
+			t.Setenv("LEARN_AI_OLLAMA_ENABLED", "true")
+			for name, value := range tt.env {
+				t.Setenv(name, value)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+		})
 	}
 }
 

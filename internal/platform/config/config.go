@@ -338,8 +338,8 @@ func Load() (*Config, error) {
 
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
-	if c.Telegram.BotToken == "" && !c.Runtime.DevMode {
-		return fmt.Errorf("LEARN_TELEGRAM_BOT_TOKEN is required")
+	if !c.Runtime.DevMode && !c.hasExternalChatAdapter() {
+		return fmt.Errorf("at least one external chat adapter must be configured")
 	}
 
 	if !c.HasAIProvider() && !c.Runtime.DevMode {
@@ -371,6 +371,14 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (c *Config) hasExternalChatAdapter() bool {
+	return strings.TrimSpace(c.Telegram.BotToken) != "" ||
+		c.Slack.Enabled ||
+		c.Discord.Enabled ||
+		c.Teams.Enabled ||
+		c.WhatsApp.Enabled
 }
 
 func (c *Config) validateChatAdapterCredentials() error {
