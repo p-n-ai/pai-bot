@@ -33,6 +33,54 @@ func TestBuildProviderUsesOpenRouterLLMAdapter(t *testing.T) {
 	}
 }
 
+func TestBuildProviderUsesCodexCredentialsAndModel(t *testing.T) {
+	cfg := config.AIConfig{
+		Codex: config.CodexConfig{
+			AccessToken:  "test-codex-access-token",
+			RefreshToken: "test-codex-refresh-token",
+			AccountID:    "test-codex-account-id",
+			Model:        "test-codex-model",
+		},
+	}
+
+	reg, ok := buildProvider("codex", cfg)
+	if !ok {
+		t.Fatal("buildProvider(codex) = not registered with access token set")
+	}
+	if _, ok := reg.Provider.(*ai.CodexProvider); !ok {
+		t.Fatalf("Codex provider type = %T, want *ai.CodexProvider", reg.Provider)
+	}
+	if reg.Name != "codex" {
+		t.Fatalf("Codex registration name = %q, want codex", reg.Name)
+	}
+	if reg.DefaultModel != cfg.Codex.Model {
+		t.Fatalf("Codex default model = %q, want %q", reg.DefaultModel, cfg.Codex.Model)
+	}
+}
+
+func TestBuildProviderRejectsUnusableCodexCredentials(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		config config.CodexConfig
+	}{
+		{name: "blank access token", config: config.CodexConfig{AccessToken: "   ", AccountID: "account-id"}},
+		{name: "opaque token without account ID", config: config.CodexConfig{AccessToken: "opaque-token"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, ok := buildProvider("codex", config.AIConfig{Codex: test.config}); ok {
+				t.Fatal("buildProvider(codex) registered unusable credentials")
+			}
+		})
+	}
+}
+
+func TestProviderNamesIncludesCodexInDefaultOrder(t *testing.T) {
+	names := ProviderNames()
+	if len(names) < 2 || names[0] != "openai" || names[1] != "codex" {
+		t.Fatalf("ProviderNames() = %v, want openai then codex", names)
+	}
+}
+
 func TestProviderOrderSkipsMockByDefault(t *testing.T) {
 	for _, provider := range providerOrder("") {
 		if provider == "mock" {

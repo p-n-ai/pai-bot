@@ -91,6 +91,7 @@ type AIConfig struct {
 	DefaultProvider string
 	Mock            MockAIConfig
 	OpenAI          OpenAIConfig
+	Codex           CodexConfig
 	Anthropic       AnthropicConfig
 	DeepSeek        DeepSeekConfig
 	Google          GoogleConfig
@@ -107,6 +108,14 @@ type MockAIConfig struct {
 type OpenAIConfig struct {
 	APIKey string
 	Model  string
+}
+
+// CodexConfig holds Codex provider settings.
+type CodexConfig struct {
+	AccessToken  string
+	RefreshToken string
+	AccountID    string
+	Model        string
 }
 
 // AnthropicConfig holds Anthropic provider settings.
@@ -269,6 +278,12 @@ func Load() (*Config, error) {
 			OpenAI: OpenAIConfig{
 				APIKey: envStr("LEARN_AI_OPENAI_API_KEY", ""),
 				Model:  envStr("LEARN_AI_OPENAI_MODEL", ""),
+			},
+			Codex: CodexConfig{
+				AccessToken:  envStr("LEARN_AI_CODEX_ACCESS_TOKEN", ""),
+				RefreshToken: envStr("LEARN_AI_CODEX_REFRESH_TOKEN", ""),
+				AccountID:    envStr("LEARN_AI_CODEX_ACCOUNT_ID", ""),
+				Model:        envStr("LEARN_AI_CODEX_MODEL", ""),
 			},
 			Anthropic: AnthropicConfig{
 				APIKey: envStr("LEARN_AI_ANTHROPIC_API_KEY", ""),
@@ -460,6 +475,7 @@ func (c *Config) validateChatAdapterCredentials() error {
 func (c *Config) HasAIProvider() bool {
 	return c.mockAIProviderEnabled() ||
 		c.AI.OpenAI.APIKey != "" ||
+		strings.TrimSpace(c.AI.Codex.AccessToken) != "" ||
 		c.AI.Anthropic.APIKey != "" ||
 		c.AI.DeepSeek.APIKey != "" ||
 		c.AI.Google.APIKey != "" ||
@@ -474,7 +490,7 @@ func (c *Config) mockAIProviderEnabled() bool {
 
 func isKnownAIProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "mock", "openai", "anthropic", "deepseek", "google", "ollama", "openrouter":
+	case "mock", "openai", "codex", "anthropic", "deepseek", "google", "ollama", "openrouter":
 		return true
 	default:
 		return false

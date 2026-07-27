@@ -209,6 +209,45 @@ func TestRouter_CompleteJSON_UsesAnthropicStructuredDefaults(t *testing.T) {
 	}
 }
 
+func TestRouter_CompleteJSON_UsesCodexStructuredCapabilitiesAndDefault(t *testing.T) {
+	router := newTestRouter()
+	codex := ai.NewMockProvider(`{"final_answer":"codex"}`)
+	router.Register("codex", codex)
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{
+			{Role: "system", Content: "Follow the grading rubric exactly."},
+			{
+				Role:      "user",
+				Content:   "grade this image",
+				ImageURLs: []string{"data:image/png;base64,AAEC"},
+			},
+		},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}, &out)
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+	if codex.LastRequest == nil {
+		t.Fatal("expected Codex provider to receive request")
+	}
+	if codex.LastRequest.Model != "gpt-5.4" {
+		t.Fatalf("default structured model = %q, want gpt-5.4", codex.LastRequest.Model)
+	}
+	if len(codex.LastRequest.Messages) != 2 ||
+		codex.LastRequest.Messages[0].Role != "system" ||
+		len(codex.LastRequest.Messages[1].ImageURLs) != 1 {
+		t.Fatalf("Codex structured request = %#v", codex.LastRequest)
+	}
+	if out.FinalAnswer != "codex" {
+		t.Fatalf("parsed output = %#v, want codex", out)
+	}
+}
+
 func TestRouter_CompleteJSON_UsesConfiguredStructuredModelForProvider(t *testing.T) {
 	router := newTestRouter()
 	mock := ai.NewMockProvider(`{"final_answer":"ok"}`)

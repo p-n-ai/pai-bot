@@ -44,6 +44,10 @@ func clearEnv(t *testing.T) {
 		"LEARN_EMAIL_BASE_URL",
 		"LEARN_AI_OPENAI_API_KEY",
 		"LEARN_AI_OPENAI_MODEL",
+		"LEARN_AI_CODEX_ACCESS_TOKEN",
+		"LEARN_AI_CODEX_REFRESH_TOKEN",
+		"LEARN_AI_CODEX_ACCOUNT_ID",
+		"LEARN_AI_CODEX_MODEL",
 		"LEARN_AI_ANTHROPIC_API_KEY",
 		"LEARN_AI_ANTHROPIC_MODEL",
 		"LEARN_AI_DEEPSEEK_API_KEY",
@@ -341,10 +345,36 @@ func TestLoad_AIProviders(t *testing.T) {
 	}
 }
 
+func TestLoad_CodexProvider(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_AI_CODEX_ACCESS_TOKEN", "codex-access-token")
+	t.Setenv("LEARN_AI_CODEX_REFRESH_TOKEN", "codex-refresh-token")
+	t.Setenv("LEARN_AI_CODEX_ACCOUNT_ID", "codex-account-id")
+	t.Setenv("LEARN_AI_CODEX_MODEL", "gpt-codex-test")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.AI.Codex.AccessToken != "codex-access-token" {
+		t.Error("AI.Codex.AccessToken was not loaded")
+	}
+	if cfg.AI.Codex.RefreshToken != "codex-refresh-token" {
+		t.Error("AI.Codex.RefreshToken was not loaded")
+	}
+	if cfg.AI.Codex.AccountID != "codex-account-id" {
+		t.Errorf("AI.Codex.AccountID = %q, want codex-account-id", cfg.AI.Codex.AccountID)
+	}
+	if cfg.AI.Codex.Model != "gpt-codex-test" {
+		t.Errorf("AI.Codex.Model = %q, want gpt-codex-test", cfg.AI.Codex.Model)
+	}
+}
+
 func TestValidate_DefaultProvider(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("LEARN_DEV_MODE", "true")
-	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "google")
+	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "codex")
 
 	cfg, err := Load()
 	if err != nil {
@@ -671,6 +701,8 @@ func TestHasAIProvider(t *testing.T) {
 	}{
 		{"none", "", "", false},
 		{"OpenAI", "LEARN_AI_OPENAI_API_KEY", "sk-test", true},
+		{"Codex", "LEARN_AI_CODEX_ACCESS_TOKEN", "codex-test", true},
+		{"Codex whitespace", "LEARN_AI_CODEX_ACCESS_TOKEN", "   ", false},
 		{"Anthropic", "LEARN_AI_ANTHROPIC_API_KEY", "sk-ant-test", true},
 		{"DeepSeek", "LEARN_AI_DEEPSEEK_API_KEY", "sk-ds-test", true},
 		{"Google", "LEARN_AI_GOOGLE_API_KEY", "AIza-test", true},

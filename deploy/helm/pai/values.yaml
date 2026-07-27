@@ -112,6 +112,9 @@ secrets:
   # -- AI provider keys (at least one required unless devMode)
   ai:
     openaiApiKey: ""
+    codexAccessToken: ""
+    codexRefreshToken: ""
+    codexAccountID: ""
     anthropicApiKey: ""
     deepseekApiKey: ""
     googleApiKey: ""
@@ -124,6 +127,7 @@ secrets:
   # -- AI model overrides (optional)
   aiModels:
     openai: ""
+    codex: ""
     anthropic: ""
     deepseek: ""
     google: ""
