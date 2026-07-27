@@ -69,7 +69,7 @@ afterEach(() => {
 
 describe('dashboard child routes', () => {
   it.each([
-    ['/dashboard/classes', 'Class management'],
+    ['/dashboard/classes', 'Classes'],
     ['/dashboard/metrics', 'AI usage'],
     ['/dashboard/ai-usage', 'AI usage'],
   ])('mounts the child page for %s', async (path, heading) => {
