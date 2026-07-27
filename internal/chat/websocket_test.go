@@ -19,8 +19,9 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/auth"
 )
 
-// dialAndAuth connects to the test server and sends the auth handshake.
-func dialAndAuth(t *testing.T, url, userID string) *websocket.Conn {
+// dialAndAuth connects to the test server and waits until the server has
+// finished registering the authenticated connection.
+func dialAndAuth(t *testing.T, ws *WSChannel, url, userID string) *websocket.Conn {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -48,6 +49,14 @@ func dialAndAuth(t *testing.T, url, userID string) *websocket.Conn {
 		t.Fatalf("expected auth_ok, got %q", resp.Type)
 	}
 
+	deadline := time.Now().Add(5 * time.Second)
+	for !slices.Contains(ws.ConnectedUsers(), userID) {
+		if time.Now().After(deadline) {
+			t.Fatalf("user %q was not registered after auth_ok", userID)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	return conn
 }
 
@@ -66,7 +75,7 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn := dialAndAuth(t, wsURL, "test-user-1")
+	conn := dialAndAuth(t, ws, wsURL, "test-user-1")
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 
 	// Send a message.
@@ -104,10 +113,10 @@ func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 
-	conn1 := dialAndAuth(t, wsURL, "user-a")
+	conn1 := dialAndAuth(t, ws, wsURL, "user-a")
 	defer func() { _ = conn1.Close(websocket.StatusNormalClosure, "") }()
 
-	conn2 := dialAndAuth(t, wsURL, "user-b")
+	conn2 := dialAndAuth(t, ws, wsURL, "user-b")
 	defer func() { _ = conn2.Close(websocket.StatusNormalClosure, "") }()
 
 	// Send a message to user-a.
@@ -150,9 +159,9 @@ func TestWSChannel_NewConnectionReplacesExistingUserConnection(t *testing.T) {
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 
-	original := dialAndAuth(t, wsURL, "same-user")
+	original := dialAndAuth(t, ws, wsURL, "same-user")
 	defer func() { _ = original.CloseNow() }()
-	replacement := dialAndAuth(t, wsURL, "same-user")
+	replacement := dialAndAuth(t, ws, wsURL, "same-user")
 	defer func() { _ = replacement.CloseNow() }()
 
 	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -185,7 +194,7 @@ func TestWSChannel_PlainTextResponseOmitsFocusedPage(t *testing.T) {
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
-	conn := dialAndAuth(t, "ws"+strings.TrimPrefix(srv.URL, "http"), "plain-user")
+	conn := dialAndAuth(t, ws, "ws"+strings.TrimPrefix(srv.URL, "http"), "plain-user")
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 
 	if err := ws.SendMessage(context.Background(), "plain-user", OutboundMessage{Text: "plain reply"}); err != nil {
@@ -223,7 +232,7 @@ func TestWSChannel_DisconnectRemovesUser(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn := dialAndAuth(t, wsURL, "ephemeral-user")
+	conn := dialAndAuth(t, ws, wsURL, "ephemeral-user")
 
 	// Verify user is connected.
 	users := ws.ConnectedUsers()
@@ -272,7 +281,7 @@ func TestWSChannel_MultipleConcurrentConnections(t *testing.T) {
 	conns := make([]*websocket.Conn, numClients)
 	for i := 0; i < numClients; i++ {
 		userID := "concurrent-user-" + strings.Repeat("x", i+1) // unique IDs
-		conns[i] = dialAndAuth(t, wsURL, userID)
+		conns[i] = dialAndAuth(t, ws, wsURL, userID)
 		defer func(c *websocket.Conn) { _ = c.Close(websocket.StatusNormalClosure, "") }(conns[i])
 	}
 
@@ -317,7 +326,7 @@ func TestWSChannel_ConnectedUsersAreSorted(t *testing.T) {
 
 	userIDs := []string{"zulu", "bravo", "hotel", "alpha", "yankee", "delta", "mike", "charlie"}
 	for _, userID := range userIDs {
-		conn := dialAndAuth(t, wsURL, userID)
+		conn := dialAndAuth(t, ws, wsURL, userID)
 		defer func() { _ = conn.CloseNow() }()
 	}
 
@@ -335,7 +344,7 @@ func TestWSChannel_SendTyping(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn := dialAndAuth(t, wsURL, "typing-user")
+	conn := dialAndAuth(t, ws, wsURL, "typing-user")
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 
 	ctx := context.Background()
@@ -368,7 +377,7 @@ func TestWSChannel_SendNotification(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn := dialAndAuth(t, wsURL, "notif-user")
+	conn := dialAndAuth(t, ws, wsURL, "notif-user")
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 
 	ctx := context.Background()
@@ -435,7 +444,7 @@ func TestWSChannel_Stop(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	conn := dialAndAuth(t, wsURL, "stop-user")
+	conn := dialAndAuth(t, ws, wsURL, "stop-user")
 
 	// Stop the channel.
 	if err := ws.Stop(); err != nil {
