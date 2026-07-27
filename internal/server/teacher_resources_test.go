@@ -185,6 +185,13 @@ func TestTeacherResourceListDeactivateDeleteAndSearch(t *testing.T) {
 		t.Fatalf("deactivate status/input = %d, %q, %t", deactivateRecorder.Code, service.activeID, service.activeValue)
 	}
 
+	activateReq := teacherRequest(http.MethodPost, "/api/admin/teacher-resources/"+teacherTestResourceID+"/activate?class_id="+teacherTestClassOneID, nil, teacherTestTenantID, teacherTestUploaderID)
+	activateRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(activateRecorder, activateReq)
+	if activateRecorder.Code != http.StatusNoContent || service.activeID != teacherTestResourceID || !service.activeValue {
+		t.Fatalf("activate status/input = %d, %q, %t", activateRecorder.Code, service.activeID, service.activeValue)
+	}
+
 	deleteReq := teacherRequest(http.MethodDelete, "/api/admin/teacher-resources/"+teacherTestResourceID+"?class_id="+teacherTestClassOneID, nil, teacherTestTenantID, teacherTestUploaderID)
 	deleteRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(deleteRecorder, deleteReq)
@@ -221,7 +228,10 @@ func TestTeacherResourceHandlersRejectMalformedUUIDsBeforeService(t *testing.T) 
 		{name: "list class", method: http.MethodGet, target: "/api/admin/teacher-resources?class_id=not-a-uuid"},
 		{name: "deactivate resource", method: http.MethodPost, target: "/api/admin/teacher-resources/not-a-uuid/deactivate?class_id=" + teacherTestClassOneID},
 		{name: "deactivate class", method: http.MethodPost, target: "/api/admin/teacher-resources/" + teacherTestResourceID + "/deactivate?class_id=not-a-uuid"},
+		{name: "activate resource", method: http.MethodPost, target: "/api/admin/teacher-resources/not-a-uuid/activate?class_id=" + teacherTestClassOneID},
+		{name: "activate class", method: http.MethodPost, target: "/api/admin/teacher-resources/" + teacherTestResourceID + "/activate?class_id=not-a-uuid"},
 		{name: "delete resource", method: http.MethodDelete, target: "/api/admin/teacher-resources/not-a-uuid?class_id=" + teacherTestClassOneID},
+		{name: "delete class", method: http.MethodDelete, target: "/api/admin/teacher-resources/" + teacherTestResourceID + "?class_id=not-a-uuid"},
 		{
 			name: "search class", method: http.MethodPost, target: "/api/admin/teacher-resources/search",
 			body: strings.NewReader(`{"query":"pecahan","class_ids":["not-a-uuid"]}`),

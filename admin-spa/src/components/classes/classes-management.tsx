@@ -4,6 +4,7 @@ import type { GroupDetail, GroupRecord } from '@/lib/group-types'
 import { AssignedTopicsPanel } from '@/components/classes/assigned-topics-panel'
 import { ClassCreateForm } from '@/components/classes/class-create-form'
 import { ClassInvitePanel } from '@/components/classes/class-invite-panel'
+import { ClassResourcesPanel } from '@/components/classes/class-resources-panel'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -95,7 +96,7 @@ export function ClassesContent({
         onSelectClass={onSelectClass}
         selectedClassID={selectedClassID}
       />
-      <SelectedClassPanel group={selectedGroup} />
+      <SelectedClassPanel group={selectedGroup} groups={state.groups} />
     </div>
   )
 }
@@ -196,7 +197,13 @@ function ClassListButton({
   )
 }
 
-function SelectedClassPanel({ group }: { group: GroupRecord | null }) {
+function SelectedClassPanel({
+  group,
+  groups,
+}: {
+  group: GroupRecord | null
+  groups: Array<GroupRecord>
+}) {
   const detail = useSelectedClassDetail(group)
 
   if (!group) {
@@ -206,6 +213,7 @@ function SelectedClassPanel({ group }: { group: GroupRecord | null }) {
   return (
     <div className='mt-6 flex flex-col gap-5'>
       <SelectedClassSummary group={group} />
+      <ClassResourcesPanel groups={groups} selectedClass={group} />
       <RosterTable detail={detail.record} error={detail.error} />
       <AssignedTopicsPanel />
     </div>

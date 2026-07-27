@@ -46,7 +46,7 @@ function ClassesRoute() {
 
   return (
     <AdminPageSection
-      description='Create and manage classes, join codes, member rosters, and topic assignments.'
+      description='Manage classes, resources, join codes, member rosters, and topic assignments.'
       eyebrow='Teaching operations'
       title='Class management'
     >

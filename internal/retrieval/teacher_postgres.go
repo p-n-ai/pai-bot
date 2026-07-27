@@ -36,6 +36,7 @@ type TeacherResource struct {
 	ChunkCount int       `json:"chunk_count"`
 	Active     bool      `json:"active"`
 	ClassIDs   []string  `json:"class_ids"`
+	UploaderID string    `json:"uploader_id"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -188,6 +189,7 @@ func (s *TeacherResourceService) Upload(ctx context.Context, input TeacherUpload
 	}
 	resource.ClassIDs = input.ClassIDs
 	resource.ChunkCount = len(chunks)
+	resource.UploaderID = input.UploaderID
 	for _, classID := range input.ClassIDs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO teacher_resource_classes (resource_id, tenant_id, class_id)
@@ -255,7 +257,7 @@ func (s *TeacherResourceService) List(ctx context.Context, tenantID string, clas
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.id::text, r.filename, r.title, r.source_type, r.media_type, r.byte_size,
-		       r.active, r.created_at, r.updated_at,
+		       r.active, r.uploader_id::text, r.created_at, r.updated_at,
 		       array_agg(DISTINCT all_rc.class_id::text ORDER BY all_rc.class_id::text),
 		       count(DISTINCT c.id)
 		FROM teacher_resources r
@@ -277,7 +279,7 @@ func (s *TeacherResourceService) List(ctx context.Context, tenantID string, clas
 	for rows.Next() {
 		var item TeacherResource
 		if err := rows.Scan(&item.ID, &item.Filename, &item.Title, &item.SourceType,
-			&item.MediaType, &item.ByteSize, &item.Active, &item.CreatedAt,
+			&item.MediaType, &item.ByteSize, &item.Active, &item.UploaderID, &item.CreatedAt,
 			&item.UpdatedAt, &item.ClassIDs, &item.ChunkCount); err != nil {
 			return nil, err
 		}

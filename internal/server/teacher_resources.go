@@ -32,6 +32,7 @@ func registerTeacherResourceRoutes(mux *http.ServeMux, service teacherResourceSe
 	mux.Handle("POST /api/admin/teacher-resources", teacherOrAbove(handleTeacherResourceUpload(service)))
 	mux.Handle("GET /api/admin/teacher-resources", teacherOrAbove(handleTeacherResourceList(service)))
 	mux.Handle("POST /api/admin/teacher-resources/{id}/deactivate", teacherOrAbove(handleTeacherResourceDeactivate(service)))
+	mux.Handle("POST /api/admin/teacher-resources/{id}/activate", teacherOrAbove(handleTeacherResourceActivate(service)))
 	mux.Handle("DELETE /api/admin/teacher-resources/{id}", teacherOrAbove(handleTeacherResourceDelete(service)))
 	mux.Handle("POST /api/admin/teacher-resources/search", teacherOrAbove(handleTeacherResourceSearch(service)))
 }
@@ -138,6 +139,14 @@ func handleTeacherResourceList(service teacherResourceService) http.HandlerFunc 
 }
 
 func handleTeacherResourceDeactivate(service teacherResourceService) http.HandlerFunc {
+	return handleTeacherResourceSetActive(service, false)
+}
+
+func handleTeacherResourceActivate(service teacherResourceService) http.HandlerFunc {
+	return handleTeacherResourceSetActive(service, true)
+}
+
+func handleTeacherResourceSetActive(service teacherResourceService, active bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := teacherResourceClaims(w, r)
 		if !ok {
@@ -153,7 +162,7 @@ func handleTeacherResourceDeactivate(service teacherResourceService) http.Handle
 			writeTeacherResourceError(w, err)
 			return
 		}
-		if err := service.SetActive(r.Context(), claims.TenantID, resourceID, classIDs, false); err != nil {
+		if err := service.SetActive(r.Context(), claims.TenantID, resourceID, classIDs, active); err != nil {
 			writeTeacherResourceError(w, err)
 			return
 		}

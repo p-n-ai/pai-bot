@@ -9,6 +9,7 @@ import { isParentSummary } from './parent-summary-types'
 import { isStudentConversations, isStudentDetail } from './student-detail-types'
 import { isWhatsAppStatus } from './whatsapp-types'
 import { readEmbedConfig } from './embed-config-types'
+import { isTeacherResource } from './teacher-resource-types'
 import type { ClassProgress } from './dashboard-types'
 import type { AISettings, UpdateAISettingsInput } from './ai-settings-types'
 import type { EmbedConfig, UpdateEmbedConfigInput } from './embed-config-types'
@@ -31,6 +32,10 @@ import type {
   UserManagementView,
 } from './user-management-types'
 import type { WhatsAppStatus } from './whatsapp-types'
+import type {
+  TeacherResource,
+  UploadTeacherResourceInput,
+} from './teacher-resource-types'
 
 class APIContractError extends Error {
   constructor(message: string) {
@@ -366,6 +371,81 @@ export async function reissueInvite(
   return payload
 }
 
+export async function listTeacherResources(
+  classID: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Array<TeacherResource>> {
+  const payload = await fetchJSON(
+    `/api/admin/teacher-resources?class_id=${encodeURIComponent(classID)}&include_inactive=true`,
+    fetcher,
+  )
+
+  if (
+    !Array.isArray(payload) ||
+    !payload.every(isTeacherResource) ||
+    !payload.every((resource) => resource.class_ids.includes(classID))
+  ) {
+    throw new APIContractError('Invalid class resources response')
+  }
+
+  return payload
+}
+
+export async function uploadTeacherResource(
+  input: UploadTeacherResourceInput,
+  fetcher: typeof fetch = fetch,
+): Promise<TeacherResource> {
+  const formData = new FormData()
+  formData.append('file', input.file)
+  if (input.title.trim()) {
+    formData.append('title', input.title.trim())
+  }
+  for (const classID of input.classIDs) {
+    formData.append('class_id', classID)
+  }
+
+  const payload = await fetchMultipart(
+    '/api/admin/teacher-resources',
+    formData,
+    fetcher,
+  )
+
+  if (
+    !isTeacherResource(payload) ||
+    !input.classIDs.every((classID) => payload.class_ids.includes(classID))
+  ) {
+    throw new APIContractError('Invalid class resource upload response')
+  }
+
+  return payload
+}
+
+export async function setTeacherResourceActive(
+  resourceID: string,
+  classID: string,
+  active: boolean,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const action = active ? 'activate' : 'deactivate'
+  await fetchEmpty(
+    `/api/admin/teacher-resources/${encodeURIComponent(resourceID)}/${action}?class_id=${encodeURIComponent(classID)}`,
+    fetcher,
+    { method: 'POST' },
+  )
+}
+
+export async function deleteTeacherResource(
+  resourceID: string,
+  classID: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await fetchEmpty(
+    `/api/admin/teacher-resources/${encodeURIComponent(resourceID)}?class_id=${encodeURIComponent(classID)}`,
+    fetcher,
+    { method: 'DELETE' },
+  )
+}
+
 export async function getJoinClass(
   slug: string,
   fetcher: typeof fetch = fetch,
@@ -375,7 +455,7 @@ export async function getJoinClass(
   })
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response))
+    throw new AdminAPIError(await readErrorMessage(response), response.status)
   }
 
   const payload: unknown = await response.json()
@@ -404,10 +484,57 @@ async function fetchJSON(
   })
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response))
+    throw new AdminAPIError(await readErrorMessage(response), response.status)
   }
 
-  return response.json() as Promise<unknown>
+  const payload: unknown = await response.json()
+  return payload
+}
+
+async function fetchMultipart(
+  path: string,
+  body: FormData,
+  fetcher: typeof fetch,
+): Promise<unknown> {
+  const response = await fetcher(path, {
+    body,
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new AdminAPIError(await readErrorMessage(response), response.status)
+  }
+
+  const payload: unknown = await response.json()
+  return payload
+}
+
+async function fetchEmpty(
+  path: string,
+  fetcher: typeof fetch,
+  init: RequestInit,
+): Promise<void> {
+  const response = await fetcher(path, {
+    ...init,
+    credentials: 'include',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new AdminAPIError(await readErrorMessage(response), response.status)
+  }
+}
+
+export class AdminAPIError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'AdminAPIError'
+    this.status = status
+  }
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
