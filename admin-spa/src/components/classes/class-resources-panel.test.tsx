@@ -240,8 +240,10 @@ const teacherResourceFixture = {
   uploader_name: 'Ms Lim',
 }
 
+const panelGroups = [...groups]
+
 function renderPanel() {
   return render(
-    <ClassResourcesPanel groups={[...groups]} selectedClass={groups[0]} />,
+    <ClassResourcesPanel groups={panelGroups} selectedClass={groups[0]} />,
   )
 }

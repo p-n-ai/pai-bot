@@ -115,6 +115,10 @@ export function ClassResourcesPanel({
     dispatch({ type: 'fileSelected', error: '' })
   }, [])
 
+  const changeTitle = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    dispatch({ type: 'titleChanged', title: event.target.value })
+  }, [])
+
   const toggleClass = useCallback(
     (classID: string, checked: boolean) => {
       if (classID === selectedClass.id) {
@@ -226,9 +230,7 @@ export function ClassResourcesPanel({
           <Label htmlFor='resource-title'>Display title (optional)</Label>
           <Input
             id='resource-title'
-            onChange={(event) =>
-              dispatch({ type: 'titleChanged', title: event.target.value })
-            }
+            onChange={changeTitle}
             placeholder='e.g. Week 3 revision'
             value={state.title}
           />
@@ -243,22 +245,13 @@ export function ClassResourcesPanel({
             {groups.map((group) => {
               const required = group.id === selectedClass.id
               return (
-                <div className='flex items-center gap-2' key={group.id}>
-                  <input
-                    className='size-4 rounded border-input accent-primary'
-                    checked={selectedClassIDs.has(group.id)}
-                    disabled={required}
-                    id={`resource-class-${group.id}`}
-                    onChange={(event) =>
-                      toggleClass(group.id, event.target.checked)
-                    }
-                    type='checkbox'
-                  />
-                  <Label htmlFor={`resource-class-${group.id}`}>
-                    {group.name}
-                    {required ? ' (required)' : ''}
-                  </Label>
-                </div>
+                <ClassResourceGroupOption
+                  checked={selectedClassIDs.has(group.id)}
+                  group={group}
+                  key={group.id}
+                  onToggle={toggleClass}
+                  required={required}
+                />
               )
             })}
           </div>
@@ -283,6 +276,42 @@ export function ClassResourcesPanel({
         />
       </div>
     </SurfaceSection>
+  )
+}
+
+function ClassResourceGroupOption({
+  checked,
+  group,
+  onToggle,
+  required,
+}: {
+  checked: boolean
+  group: GroupRecord
+  onToggle: (classID: string, checked: boolean) => void
+  required: boolean
+}) {
+  const toggle = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onToggle(group.id, event.target.checked)
+    },
+    [group.id, onToggle],
+  )
+
+  return (
+    <div className='flex items-center gap-2'>
+      <input
+        className='size-4 rounded border-input accent-primary'
+        checked={checked}
+        disabled={required}
+        id={`resource-class-${group.id}`}
+        onChange={toggle}
+        type='checkbox'
+      />
+      <Label htmlFor={`resource-class-${group.id}`}>
+        {group.name}
+        {required ? ' (required)' : ''}
+      </Label>
+    </div>
   )
 }
 
@@ -373,6 +402,12 @@ function ResourceItem({
   const displayTitle = resource.title.trim() || resource.filename
   const uploader =
     resource.uploader_name?.trim() || resource.uploader_id?.trim()
+  const changeActive = useCallback(() => {
+    ignorePromise(onChangeActive(resource))
+  }, [onChangeActive, resource])
+  const remove = useCallback(() => {
+    ignorePromise(onDelete(resource))
+  }, [onDelete, resource])
 
   return (
     <li className='grid gap-3 rounded-lg border border-border p-4'>
@@ -424,11 +459,7 @@ function ResourceItem({
         <p className='text-sm text-muted-foreground'>Extraction: Indexed</p>
       )}
       <div className='flex flex-wrap gap-2'>
-        <Button
-          onClick={() => ignorePromise(onChangeActive(resource))}
-          type='button'
-          variant='outline'
-        >
+        <Button onClick={changeActive} type='button' variant='outline'>
           {resource.active ? 'Deactivate' : 'Reactivate'}
         </Button>
         <AlertDialog>
@@ -447,10 +478,7 @@ function ResourceItem({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => ignorePromise(onDelete(resource))}
-                variant='destructive'
-              >
+              <AlertDialogAction onClick={remove} variant='destructive'>
                 Delete resource
               </AlertDialogAction>
             </AlertDialogFooter>
