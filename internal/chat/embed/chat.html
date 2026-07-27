@@ -151,6 +151,8 @@
   var rawColor = params.get('color') || '#6366f1';
   var color = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#6366f1';
   var lang = params.get('lang') || '';
+  var parentOrigin = '';
+  var started = false;
 
   document.documentElement.style.setProperty('--pai-primary', color);
 
@@ -285,21 +287,15 @@
     loginSubmitEl.textContent = 'Logging in...';
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/auth/login');
+    xhr.open('POST', '/api/embed/auth/login');
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function() {
       if (xhr.status === 200) {
         var resp = JSON.parse(xhr.responseText);
-        // The login endpoint returns a session — extract token from cookie or response.
-        // For embed, we need a JWT. Use the session to get user info.
-        if (resp.token) {
-          token = resp.token;
-        } else if (resp.session && resp.session.token) {
-          token = resp.session.token;
-        }
+        token = resp.token;
         isUpgraded = true;
-        userId = (resp.user && resp.user.user_id) || (resp.session && resp.session.user && resp.session.user.user_id) || userId;
-        var userName = (resp.user && resp.user.name) || (resp.session && resp.session.user && resp.session.user.name) || email.split('@')[0];
+        userId = resp.user_id;
+        var userName = resp.name || email.split('@')[0];
         saveSession(token, userId, userName, 'student');
         showProfile(userName);
         upgradeOverlayEl.classList.remove('active');
@@ -320,7 +316,7 @@
       loginSubmitEl.disabled = false;
       loginSubmitEl.textContent = 'Log In';
     };
-    xhr.send(JSON.stringify({ email: email, password: pw }));
+    xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, email: email, password: pw }));
   });
 
   var guestLabelEl = document.getElementById('guestLabel');
@@ -446,7 +442,7 @@
   var sessionKey = 'pai-session-' + tenant;
 
   function saveSession(t, uid, name, role) {
-    try { localStorage.setItem(sessionKey, JSON.stringify({token: t, userId: uid, name: name || '', role: role || 'guest'})); } catch(e) {}
+    try { localStorage.setItem(sessionKey, JSON.stringify({token: t, userId: uid, name: name || '', role: role || 'guest', parentOrigin: parentOrigin})); } catch(e) {}
   }
   function loadSession() {
     try {
@@ -459,16 +455,7 @@
     try { localStorage.removeItem(sessionKey); } catch(e) {}
   }
 
-  // Restore previous session.
   var savedSession = loadSession();
-  if (savedSession && savedSession.token) {
-    token = savedSession.token;
-    userId = savedSession.userId;
-    if (savedSession.role === 'student' && savedSession.name) {
-      isUpgraded = true;
-      showProfile(savedSession.name);
-    }
-  }
   var reconnectDelay = 1000;
   var maxReconnectDelay = 30000;
   var queue = [];
@@ -598,7 +585,7 @@
     xhr.onerror = function() {
       addMessage('Unable to connect. Please try again later.', 'system');
     };
-    xhr.send(JSON.stringify({ tenant: tenant, fingerprint: fingerprint }));
+    xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, fingerprint: fingerprint }));
   }
 
   function connect() {
@@ -692,8 +679,28 @@
     setTimeout(hideCmdPalette, 150);
   });
 
-  loadHistory();
-  connect();
+  window.addEventListener('message', function(event) {
+    var data = event.data || {};
+    if (started || event.source !== window.parent || data.type !== 'pai-parent-origin') return;
+    try {
+      var normalized = new URL(data.parent_origin).origin;
+      if (event.origin !== normalized || (normalized.indexOf('http://') !== 0 && normalized.indexOf('https://') !== 0)) return;
+      parentOrigin = normalized;
+      if (savedSession && savedSession.token && savedSession.parentOrigin === parentOrigin) {
+        token = savedSession.token;
+        userId = savedSession.userId;
+        if (savedSession.role === 'student' && savedSession.name) {
+          isUpgraded = true;
+          showProfile(savedSession.name);
+        }
+      } else if (savedSession) {
+        clearSession();
+      }
+      started = true;
+      loadHistory();
+      connect();
+    } catch (e) {}
+  });
 })();
 </script>
 </body>

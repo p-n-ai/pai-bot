@@ -108,8 +108,19 @@ func (ws *WSChannel) Handler() http.Handler {
 				return
 			}
 
-			// Validate origin against the tenant's allowlist.
-			allowed, err := ws.embedConfigStore.IsOriginAllowed(r.Context(), claims.TenantID, origin)
+			parentOrigin := strings.TrimSpace(claims.ParentOrigin)
+			if parentOrigin == "" {
+				http.Error(w, "missing parent origin", http.StatusForbidden)
+				return
+			}
+			if origin != parentOrigin && origin != requestServerOrigin(r) {
+				http.Error(w, "origin does not match parent origin", http.StatusForbidden)
+				return
+			}
+
+			// The iframe's WebSocket Origin is the backend. Authorization is
+			// bound to the parent origin minted into the token.
+			allowed, err := ws.embedConfigStore.IsOriginAllowed(r.Context(), claims.TenantID, parentOrigin)
 			if err != nil {
 				slog.Error("websocket origin check failed", "error", err)
 				http.Error(w, "internal error", http.StatusInternalServerError)
@@ -152,6 +163,21 @@ func (ws *WSChannel) Handler() http.Handler {
 
 		ws.handleConn(r.Context(), conn, jwtToken)
 	})
+}
+
+func requestServerOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "http" || proto == "https" {
+		scheme = proto
+	}
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = r.Host
+	}
+	return scheme + "://" + host
 }
 
 // extractClientIP extracts the client IP from the request, checking
@@ -326,8 +352,12 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 		ws.mu.RUnlock()
 
 		if handler != nil {
+			channel := "websocket"
+			if ws.embedConfigStore != nil {
+				channel = "embed"
+			}
 			handler(InboundMessage{
-				Channel: "websocket",
+				Channel: channel,
 				UserID:  userID,
 				Text:    msg.Text,
 			})

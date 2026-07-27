@@ -1,0 +1,276 @@
+// Copyright 2026 the P&AI authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/auth"
+	"github.com/p-n-ai/pai-bot/internal/chat"
+)
+
+type embedConfigStoreStub struct {
+	configs        map[string]chat.EmbedConfig
+	tenantByOrigin map[string]string
+	lastTenantID   string
+	lastOrigin     string
+}
+
+func (s *embedConfigStoreStub) GetByTenantID(_ context.Context, tenantID string) (chat.EmbedConfig, error) {
+	s.lastTenantID = tenantID
+	return s.configs[tenantID], nil
+}
+
+func (s *embedConfigStoreStub) GetByTenantSlug(_ context.Context, slug string) (chat.EmbedConfig, error) {
+	return chat.EmbedConfig{}, nil
+}
+
+func (s *embedConfigStoreStub) Upsert(_ context.Context, config chat.EmbedConfig) (chat.EmbedConfig, error) {
+	s.lastTenantID = config.TenantID
+	s.configs[config.TenantID] = config
+	return config, nil
+}
+
+func (s *embedConfigStoreStub) AddOrigin(_ context.Context, tenantID, origin string) error {
+	s.lastTenantID, s.lastOrigin = tenantID, origin
+	config := s.configs[tenantID]
+	config.TenantID = tenantID
+	config.AllowedOrigins = append(config.AllowedOrigins, origin)
+	s.configs[tenantID] = config
+	return nil
+}
+
+func (s *embedConfigStoreStub) RemoveOrigin(_ context.Context, tenantID, origin string) error {
+	s.lastTenantID, s.lastOrigin = tenantID, origin
+	return nil
+}
+
+func (s *embedConfigStoreStub) IsOriginAllowed(_ context.Context, tenantID, origin string) (bool, error) {
+	return s.tenantByOrigin[origin] == tenantID, nil
+}
+
+func (s *embedConfigStoreStub) FindTenantBySlugAndOrigin(_ context.Context, slug, origin string) (string, error) {
+	tenantID := s.tenantByOrigin[slug+"|"+origin]
+	if tenantID == "" {
+		return "", chat.ErrEmbedNotConfigured
+	}
+	return tenantID, nil
+}
+
+type embedGuestsStub struct {
+	parentOrigin string
+}
+
+func (s *embedGuestsStub) IssueGuestToken(_ context.Context, tenantID, origin, fingerprint string) (string, string, error) {
+	s.parentOrigin = origin
+	return "guest-token", "guest-user", nil
+}
+
+func (s *embedGuestsStub) UpgradeGuest(_ context.Context, userID, tenantID, parentOrigin, name, email, password string) (string, error) {
+	s.parentOrigin = parentOrigin
+	return "student-token", nil
+}
+
+type embedMessagesStub struct {
+	tenantID string
+	userID   string
+}
+
+func (s *embedMessagesStub) ListEmbedMessages(_ context.Context, tenantID, userID, before string, limit int) ([]EmbedMessage, bool, error) {
+	s.tenantID, s.userID = tenantID, userID
+	return []EmbedMessage{{ID: "message-1", Role: "assistant", Content: "Hello"}}, false, nil
+}
+
+func TestAdminEmbedRoutesAuthorizationAndTenantIsolation(t *testing.T) {
+	const secret = "embed-admin-test-secret"
+	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{
+		"tenant-a": {TenantID: "tenant-a", Enabled: true},
+	}}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore: store,
+		JWTSecret:        secret,
+		AccessTokenTTL:   time.Hour,
+	})
+
+	for _, test := range []struct {
+		name   string
+		token  string
+		status int
+	}{
+		{name: "unauthorized", status: http.StatusUnauthorized},
+		{name: "student role rejected", token: issueEmbedTestToken(t, secret, auth.RoleStudent, "tenant-a", ""), status: http.StatusForbidden},
+		{name: "admin allowed", token: issueEmbedTestToken(t, secret, auth.RoleAdmin, "tenant-a", ""), status: http.StatusOK},
+		{name: "platform admin with tenant allowed", token: issueEmbedTestToken(t, secret, auth.RolePlatformAdmin, "tenant-a", ""), status: http.StatusOK},
+		{name: "platform admin without tenant rejected", token: issueEmbedTestToken(t, secret, auth.RolePlatformAdmin, "", ""), status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/admin/embed/config", nil)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d: %s", response.Code, test.status, response.Body.String())
+			}
+			if test.status == http.StatusOK {
+				var payload map[string]any
+				if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+					t.Fatal(err)
+				}
+				for _, key := range []string{"tenant_id", "enabled", "allowed_origins", "theme_config"} {
+					if _, ok := payload[key]; !ok {
+						t.Errorf("response missing snake_case field %q: %s", key, response.Body.String())
+					}
+				}
+				if store.lastTenantID != "tenant-a" {
+					t.Fatalf("store tenant = %q, want tenant-a", store.lastTenantID)
+				}
+			}
+		})
+	}
+}
+
+func TestAdminEmbedOriginNormalizationAndValidation(t *testing.T) {
+	const secret = "embed-origin-test-secret"
+	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{}}
+	handler := NewTopMux(TopMuxOptions{EmbedConfigStore: store, JWTSecret: secret, AccessTokenTTL: time.Hour})
+	token := issueEmbedTestToken(t, secret, auth.RoleAdmin, "tenant-a", "")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/embed/origins", strings.NewReader(`{"origin":"HTTPS://School.Example/"}`))
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", response.Code, response.Body.String())
+	}
+	if store.lastTenantID != "tenant-a" || store.lastOrigin != "https://school.example" {
+		t.Fatalf("stored tenant/origin = %q/%q", store.lastTenantID, store.lastOrigin)
+	}
+
+	for _, origin := range []string{"javascript:alert(1)", "https://school.example/path", "https://user@school.example", "school.example"} {
+		request = httptest.NewRequest(http.MethodDelete, "/api/admin/embed/origins", strings.NewReader(`{"origin":`+strconvQuote(origin)+`}`))
+		request.Header.Set("Authorization", "Bearer "+token)
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("origin %q status = %d, want 400", origin, response.Code)
+		}
+	}
+}
+
+func TestAdminEmbedConfigUpdatePreservesTenantScope(t *testing.T) {
+	const secret = "embed-update-test-secret"
+	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{
+		"tenant-a": {
+			TenantID:       "tenant-a",
+			AllowedOrigins: []string{"https://school.example"},
+		},
+	}}
+	handler := NewTopMux(TopMuxOptions{EmbedConfigStore: store, JWTSecret: secret, AccessTokenTTL: time.Hour})
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/embed/config", strings.NewReader(
+		`{"enabled":true,"theme_config":{"color":"#123456","language":"ms","position":"bottom-left"}}`,
+	))
+	request.Header.Set("Authorization", "Bearer "+issueEmbedTestToken(t, secret, auth.RoleAdmin, "tenant-a", ""))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	updated := store.configs["tenant-a"]
+	if !updated.Enabled || updated.ThemeConfig["language"] != "ms" {
+		t.Fatalf("updated config = %#v", updated)
+	}
+	if len(updated.AllowedOrigins) != 1 {
+		t.Fatalf("allowed origins were not preserved: %#v", updated.AllowedOrigins)
+	}
+}
+
+func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
+	store := &embedConfigStoreStub{
+		configs: map[string]chat.EmbedConfig{},
+		tenantByOrigin: map[string]string{
+			"school|https://school.example": "tenant-a",
+		},
+	}
+	guests := &embedGuestsStub{}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore:  store,
+		EmbedGuestService: guests,
+		JWTSecret:         "guest-secret",
+		AccessTokenTTL:    time.Hour,
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
+		`{"tenant":"school","parent_origin":"https://school.example","fingerprint":"abc"}`,
+	))
+	request.Header.Set("Origin", "https://api.example")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	if guests.parentOrigin != "https://school.example" {
+		t.Fatalf("bound origin = %q", guests.parentOrigin)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
+		`{"tenant":"school","parent_origin":"https://school.example"}`,
+	))
+	request.Header.Set("Origin", "https://evil.example")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("spoofed parent status = %d, want 403", response.Code)
+	}
+}
+
+func TestEmbedMessagesUsesTokenTenantAndUser(t *testing.T) {
+	const secret = "embed-message-secret"
+	messages := &embedMessagesStub{}
+	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{}}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore:  store,
+		EmbedMessageStore: messages,
+		JWTSecret:         secret,
+		AccessTokenTTL:    time.Hour,
+	})
+	token := issueEmbedTestToken(t, secret, auth.RoleGuest, "tenant-a", "https://school.example")
+	request := httptest.NewRequest(http.MethodGet, "/api/embed/messages", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+	}
+	if messages.tenantID != "tenant-a" || messages.userID != "user-a" {
+		t.Fatalf("history scope = %q/%q", messages.tenantID, messages.userID)
+	}
+}
+
+func issueEmbedTestToken(t *testing.T, secret string, role auth.Role, tenantID, parentOrigin string) string {
+	t.Helper()
+	token, err := auth.NewTokenManager(secret, time.Hour).Issue(auth.TokenClaims{
+		Subject: "user-a", TenantID: tenantID, Role: role, ParentOrigin: parentOrigin,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
+func strconvQuote(value string) string {
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		panic(errors.New("quote string"))
+	}
+	return string(bytes)
+}

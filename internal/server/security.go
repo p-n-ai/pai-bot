@@ -86,7 +86,8 @@ func withAPIRateLimit(next http.Handler, now func() time.Time, apiLimiter, authL
 
 		limiter := apiLimiter
 		keyPrefix := "api"
-		authRequest := strings.HasPrefix(r.URL.Path, "/api/auth/")
+		authRequest := strings.HasPrefix(r.URL.Path, "/api/auth/") ||
+			strings.HasPrefix(r.URL.Path, "/api/embed/auth/")
 		capabilitiesRead := r.Method == http.MethodGet && r.URL.Path == "/api/auth/capabilities"
 		if authRequest && !capabilitiesRead {
 			limiter = authLimiter

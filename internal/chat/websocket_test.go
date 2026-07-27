@@ -6,6 +6,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -467,9 +468,10 @@ func newTestTokenManager() *auth.TokenManager {
 func issueGuestToken(t *testing.T, tm *auth.TokenManager, userID, tenantID string) string {
 	t.Helper()
 	token, err := tm.Issue(auth.TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     auth.RoleGuest,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         auth.RoleGuest,
+		ParentOrigin: "https://example.com",
 	}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -543,6 +545,9 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	if received[0].UserID != "guest-user-1" {
 		t.Errorf("expected user guest-user-1, got %q", received[0].UserID)
 	}
+	if received[0].Channel != "embed" {
+		t.Errorf("expected embed channel, got %q", received[0].Channel)
+	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)
 	}
@@ -575,6 +580,45 @@ func TestWSChannel_EmbedSubprotocolAuth_InvalidToken(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected dial error for invalid token, got nil")
+	}
+}
+
+func TestWSChannel_EmbedOriginUsesTokenBoundParent(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+	ws := NewEmbedWSChannel(store, tm)
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	token := issueGuestToken(t, tm, "origin-user", "tenant-1")
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {srv.URL}},
+	})
+	if err != nil {
+		t.Fatalf("backend-origin iframe handshake: %v", err)
+	}
+	_ = conn.Close(websocket.StatusNormalClosure, "")
+
+	_, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {"https://evil.example"}},
+	})
+	if err == nil {
+		t.Fatal("expected spoofed parent origin to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("spoofed origin status = %v, want 403", response)
 	}
 }
 

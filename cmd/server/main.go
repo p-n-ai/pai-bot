@@ -322,6 +322,8 @@ func main() {
 			// Dev mode keeps first-message auth for terminal-chat; production embed mode
 			// requires origin checking and subprotocol JWT auth.
 			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
+			embedGuestService := auth.NewGuestService(db.Pool, embedTokenManager)
+			embedMessageStore := server.NewPostgresEmbedMessageStore(db.Pool)
 			var wsChannel *chat.WSChannel
 			if cfg.Runtime.DevMode {
 				wsChannel = chat.NewWSChannel()
@@ -329,6 +331,9 @@ func main() {
 				wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
 			}
 			gw.Register("websocket", wsChannel)
+			if !cfg.Runtime.DevMode {
+				gw.Register("embed", wsChannel)
+			}
 
 			// Wire challenge notifications through the gateway.
 			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
@@ -464,6 +469,8 @@ func main() {
 				APIHandler:         apiHandler,
 				WSChannel:          wsChannel,
 				EmbedConfigStore:   embedConfigStore,
+				EmbedGuestService:  embedGuestService,
+				EmbedMessageStore:  embedMessageStore,
 				WACloudChannel:     waCloudChannel,
 				WAMeowChannel:      waMeowChannel,
 				ChatWebhooks:       chatWebhooks,

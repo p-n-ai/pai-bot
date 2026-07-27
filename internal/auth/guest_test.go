@@ -93,7 +93,7 @@ func TestGuestService_FingerprintReuse(t *testing.T) {
 	tm := NewTokenManager("test-secret", 0)
 	gs := NewGuestService(nil, tm)
 
-	userID, err := gs.findGuestByFingerprint(t.Context(), "tenant-abc", "")
+	userID, err := gs.findGuestByFingerprint(t.Context(), "tenant-abc", "https://school.example", "")
 	if err != nil {
 		t.Fatalf("findGuestByFingerprint() with empty fingerprint returned error: %v", err)
 	}
