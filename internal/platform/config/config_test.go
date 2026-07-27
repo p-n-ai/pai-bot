@@ -685,6 +685,7 @@ func TestHasAIProvider(t *testing.T) {
 		{"none", "", "", false},
 		{"OpenAI", "LEARN_AI_OPENAI_API_KEY", "sk-test", true},
 		{"Codex", "LEARN_AI_CODEX_ACCESS_TOKEN", "codex-test", true},
+		{"Codex whitespace", "LEARN_AI_CODEX_ACCESS_TOKEN", "   ", false},
 		{"Anthropic", "LEARN_AI_ANTHROPIC_API_KEY", "sk-ant-test", true},
 		{"DeepSeek", "LEARN_AI_DEEPSEEK_API_KEY", "sk-ds-test", true},
 		{"Google", "LEARN_AI_GOOGLE_API_KEY", "AIza-test", true},

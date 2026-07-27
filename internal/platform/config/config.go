@@ -459,7 +459,7 @@ func (c *Config) validateChatAdapterCredentials() error {
 func (c *Config) HasAIProvider() bool {
 	return c.mockAIProviderEnabled() ||
 		c.AI.OpenAI.APIKey != "" ||
-		c.AI.Codex.AccessToken != "" ||
+		strings.TrimSpace(c.AI.Codex.AccessToken) != "" ||
 		c.AI.Anthropic.APIKey != "" ||
 		c.AI.DeepSeek.APIKey != "" ||
 		c.AI.Google.APIKey != "" ||

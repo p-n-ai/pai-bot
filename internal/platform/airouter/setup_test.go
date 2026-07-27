@@ -58,6 +58,22 @@ func TestBuildProviderUsesCodexCredentialsAndModel(t *testing.T) {
 	}
 }
 
+func TestBuildProviderRejectsUnusableCodexCredentials(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		config config.CodexConfig
+	}{
+		{name: "blank access token", config: config.CodexConfig{AccessToken: "   ", AccountID: "account-id"}},
+		{name: "opaque token without account ID", config: config.CodexConfig{AccessToken: "opaque-token"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, ok := buildProvider("codex", config.AIConfig{Codex: test.config}); ok {
+				t.Fatal("buildProvider(codex) registered unusable credentials")
+			}
+		})
+	}
+}
+
 func TestProviderNamesIncludesCodexInDefaultOrder(t *testing.T) {
 	names := ProviderNames()
 	if len(names) < 2 || names[0] != "openai" || names[1] != "codex" {

@@ -495,7 +495,7 @@ type providerStructuredCapabilities struct {
 
 func structuredProviderCapabilities(providerName string) (providerStructuredCapabilities, bool) {
 	switch providerName {
-	case "openai", "deepseek", "openrouter", "google", "anthropic":
+	case "openai", "codex", "deepseek", "openrouter", "google", "anthropic":
 		return providerStructuredCapabilities{
 			StructuredOutput: true,
 			SystemMessages:   true,
@@ -528,6 +528,8 @@ func hardcodedStructuredModelForProvider(providerName string) string {
 	switch providerName {
 	case "openai":
 		return "gpt-5.4-mini"
+	case "codex":
+		return "gpt-5.4"
 	case "deepseek":
 		return "deepseek-chat"
 	case "openrouter":

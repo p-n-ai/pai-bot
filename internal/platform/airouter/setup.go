@@ -59,7 +59,7 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 		}
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true
 	case "codex":
-		if cfg.Codex.AccessToken == "" {
+		if strings.TrimSpace(cfg.Codex.AccessToken) == "" {
 			return ai.ProviderRegistration{}, false
 		}
 		provider, err := ai.NewCodexProvider(
