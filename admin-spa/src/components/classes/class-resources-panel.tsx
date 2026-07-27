@@ -214,6 +214,7 @@ export function ClassResourcesPanel({
               state.fileError ? 'resource-file-error' : undefined
             }
             aria-invalid={Boolean(state.fileError)}
+            className='min-h-11 sm:min-h-8'
             id='resource-file'
             name='resource-file'
             onChange={selectFile}
@@ -229,7 +230,10 @@ export function ClassResourcesPanel({
         <div className='grid gap-2'>
           <Label htmlFor='resource-title'>Display title (optional)</Label>
           <Input
+            autoComplete='off'
+            className='min-h-11 sm:min-h-8'
             id='resource-title'
+            name='resource-title'
             onChange={changeTitle}
             placeholder='e.g. Week 3 revision'
             value={state.title}
@@ -257,7 +261,11 @@ export function ClassResourcesPanel({
           </div>
         </fieldset>
         <div>
-          <Button disabled={state.uploadStatus === 'uploading'} type='submit'>
+          <Button
+            className='min-h-11 sm:min-h-8'
+            disabled={state.uploadStatus === 'uploading'}
+            type='submit'
+          >
             {state.uploadStatus === 'uploading'
               ? 'Uploading resource…'
               : 'Upload resource'}
@@ -298,7 +306,7 @@ function ClassResourceGroupOption({
   )
 
   return (
-    <div className='flex items-center gap-2'>
+    <div className='flex min-h-11 items-center gap-2 sm:min-h-8'>
       <input
         className='size-4 rounded border-input accent-primary'
         checked={checked}
@@ -307,7 +315,10 @@ function ClassResourceGroupOption({
         onChange={toggle}
         type='checkbox'
       />
-      <Label htmlFor={`resource-class-${group.id}`}>
+      <Label
+        className='flex min-h-11 flex-1 items-center sm:min-h-8'
+        htmlFor={`resource-class-${group.id}`}
+      >
         {group.name}
         {required ? ' (required)' : ''}
       </Label>
@@ -459,12 +470,21 @@ function ResourceItem({
         <p className='text-sm text-muted-foreground'>Extraction: Indexed</p>
       )}
       <div className='flex flex-wrap gap-2'>
-        <Button onClick={changeActive} type='button' variant='outline'>
+        <Button
+          className='min-h-11 sm:min-h-8'
+          onClick={changeActive}
+          type='button'
+          variant='outline'
+        >
           {resource.active ? 'Deactivate' : 'Reactivate'}
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button type='button' variant='destructive'>
+            <Button
+              className='min-h-11 sm:min-h-8'
+              type='button'
+              variant='destructive'
+            >
               Delete
             </Button>
           </AlertDialogTrigger>

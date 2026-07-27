@@ -1,3 +1,10 @@
+import {
+  CheckIcon,
+  CopyIcon,
+  MailPlusIcon,
+  PlusIcon,
+  UsersIcon,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { GroupDetail, GroupRecord } from '@/lib/group-types'
@@ -5,6 +12,7 @@ import { AssignedTopicsPanel } from '@/components/classes/assigned-topics-panel'
 import { ClassCreateForm } from '@/components/classes/class-create-form'
 import { ClassInvitePanel } from '@/components/classes/class-invite-panel'
 import { ClassResourcesPanel } from '@/components/classes/class-resources-panel'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -42,8 +50,6 @@ function findSelectedGroup(
 }
 
 function getClassSummary(groups: Array<GroupRecord>): {
-  activeStudents: number
-  averageMastery: string
   classCount: number
   totalMembers: number
 } {
@@ -53,51 +59,200 @@ function getClassSummary(groups: Array<GroupRecord>): {
   )
 
   return {
-    activeStudents: totalMembers,
-    averageMastery: '--',
     classCount: groups.length,
     totalMembers,
   }
 }
 
 export function ClassesContent({
+  canInviteAdults,
   onCreated,
+  onRetry,
   onSelectClass,
   selectedClassID,
   state,
 }: {
+  canInviteAdults: boolean
   onCreated: () => void
+  onRetry: () => void
   onSelectClass: (value: string) => void
   selectedClassID: string
   state: ClassesState
 }) {
+  const [openAction, setOpenAction] = useState<'create' | 'invite' | null>(null)
+  const handleCreated = useCallback(() => {
+    setOpenAction(null)
+    onCreated()
+  }, [onCreated])
+
   if (isInitialClassLoad(state)) {
-    return <LoadingStatus>Loading classes...</LoadingStatus>
+    return <LoadingStatus>Loading classes…</LoadingStatus>
   }
 
-  if (state.status === 'error') {
+  if (state.status === 'error' && state.groups.length === 0) {
     return (
       <StatePanel role='alert' title='Classes unavailable'>
-        {state.error}
+        <div className='grid gap-4'>
+          <p>{state.error} Check your connection and try again.</p>
+          <Button className='min-h-11 w-fit' onClick={onRetry} type='button'>
+            Try again
+          </Button>
+        </div>
       </StatePanel>
     )
   }
 
   const selectedGroup = findSelectedGroup(state.groups, selectedClassID)
   const summary = getClassSummary(state.groups)
+  const openAvailableAction =
+    openAction === 'create' && state.groups.length === 0
+      ? null
+      : openAction === 'invite' && !canInviteAdults
+        ? null
+        : openAction
 
   return (
     <div className='mt-6 flex flex-col gap-5'>
-      <ClassCreateForm onCreated={onCreated} />
-      <ClassInvitePanel />
+      {state.status === 'error' ? (
+        <div
+          className='flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between'
+          role='alert'
+        >
+          <p className='text-sm'>
+            Could not refresh classes. Showing the last loaded list.
+          </p>
+          <Button
+            className='min-h-11 w-full sm:w-auto'
+            onClick={onRetry}
+            type='button'
+            variant='outline'
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {state.groups.length > 0 || canInviteAdults ? (
+        <ClassActions
+          canCreateClass={state.groups.length > 0}
+          canInviteAdults={canInviteAdults}
+          onCreated={handleCreated}
+          onOpenAction={setOpenAction}
+          openAction={openAvailableAction}
+        />
+      ) : null}
       <ClassSummaryStats summary={summary} />
-      <ClassPicker
-        groups={state.groups}
-        onSelectClass={onSelectClass}
-        selectedClassID={selectedClassID}
-      />
-      <SelectedClassPanel group={selectedGroup} groups={state.groups} />
+      {state.groups.length === 0 ? (
+        <EmptyClasses onCreated={handleCreated} />
+      ) : (
+        <div className='grid items-start gap-5 lg:grid-cols-[minmax(220px,0.34fr)_minmax(0,1fr)]'>
+          <ClassPicker
+            groups={state.groups}
+            onSelectClass={onSelectClass}
+            selectedClassID={selectedGroup?.id ?? ''}
+          />
+          <SelectedClassPanel group={selectedGroup} groups={state.groups} />
+        </div>
+      )}
     </div>
+  )
+}
+
+function ClassActions({
+  canCreateClass,
+  canInviteAdults,
+  onCreated,
+  onOpenAction,
+  openAction,
+}: {
+  canCreateClass: boolean
+  canInviteAdults: boolean
+  onCreated: () => void
+  onOpenAction: (action: 'create' | 'invite' | null) => void
+  openAction: 'create' | 'invite' | null
+}) {
+  const handleCreateAction = useCallback(() => {
+    onOpenAction(openAction === 'create' ? null : 'create')
+  }, [onOpenAction, openAction])
+  const handleInviteAction = useCallback(() => {
+    onOpenAction(openAction === 'invite' ? null : 'invite')
+  }, [onOpenAction, openAction])
+
+  return (
+    <section className='grid gap-4' aria-label='Class actions'>
+      <div className='flex flex-col gap-3 sm:flex-row'>
+        {canCreateClass ? (
+          <Button
+            aria-controls='class-action-panel'
+            aria-expanded={openAction === 'create'}
+            className='min-h-11 w-full sm:w-auto'
+            onClick={handleCreateAction}
+            type='button'
+          >
+            <PlusIcon data-icon='inline-start' />
+            Create class
+          </Button>
+        ) : null}
+        {canInviteAdults ? (
+          <Button
+            aria-controls='class-action-panel'
+            aria-expanded={openAction === 'invite'}
+            className='min-h-11 w-full sm:w-auto'
+            onClick={handleInviteAction}
+            type='button'
+            variant='outline'
+          >
+            <MailPlusIcon data-icon='inline-start' />
+            Invite an adult
+          </Button>
+        ) : null}
+      </div>
+      {openAction ? (
+        <div
+          aria-labelledby='class-action-title'
+          className='rounded-xl border border-border bg-card p-4 sm:p-6'
+          id='class-action-panel'
+        >
+          <div className='mb-5'>
+            <h2
+              className='text-xl leading-tight font-semibold text-balance'
+              id='class-action-title'
+            >
+              {openAction === 'create' ? 'Create a class' : 'Invite an adult'}
+            </h2>
+            <p className='mt-1 text-sm leading-6 text-muted-foreground'>
+              {openAction === 'create'
+                ? 'Add the class now. You can share its join code with students next.'
+                : 'Invite a teacher, parent, or administrator. Students join with the class code.'}
+            </p>
+          </div>
+          {openAction === 'create' ? (
+            <ClassCreateForm onCreated={onCreated} />
+          ) : (
+            <ClassInvitePanel />
+          )}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function EmptyClasses({ onCreated }: { onCreated: () => void }) {
+  return (
+    <section className='rounded-xl border border-dashed border-border bg-card p-5 sm:p-8'>
+      <div className='mx-auto grid max-w-2xl gap-6'>
+        <div>
+          <UsersIcon className='mb-3 size-6 text-muted-foreground' />
+          <h2 className='text-xl leading-tight font-semibold text-balance'>
+            Create your first class
+          </h2>
+          <p className='mt-2 text-sm leading-6 text-muted-foreground'>
+            Add a class to get a student join code and start building your
+            roster.
+          </p>
+        </div>
+        <ClassCreateForm onCreated={onCreated} />
+      </div>
+    </section>
   )
 }
 
@@ -112,12 +267,7 @@ function ClassSummaryStats({
       aria-label='Class summary'
     >
       <StatItem label='Classes' value={String(summary.classCount)} />
-      <StatItem label='Members' value={String(summary.totalMembers)} />
-      <StatItem
-        label='Active learners'
-        value={String(summary.activeStudents)}
-      />
-      <StatItem label='Avg mastery' value={summary.averageMastery} />
+      <StatItem label='Students' value={String(summary.totalMembers)} />
     </section>
   )
 }
@@ -131,54 +281,58 @@ function ClassPicker({
   onSelectClass: (value: string) => void
   selectedClassID: string
 }) {
-  if (groups.length === 0) {
-    return (
-      <StatePanel title='No classes yet'>
-        Create a class to generate a join code.
-      </StatePanel>
-    )
-  }
-
   return (
-    <SurfaceSection
-      description='Select a class to view its roster and join code.'
-      title='Classes'
+    <section
+      className='grid gap-4 rounded-xl border border-border bg-card p-4 lg:sticky lg:top-4'
+      aria-labelledby='class-list-title'
     >
-      <div className='grid gap-3'>
-        <div className='flex flex-col gap-2'>
-          <Label>Class</Label>
-          <Select onValueChange={onSelectClass} value={selectedClassID}>
-            <SelectTrigger>
-              <SelectValue placeholder='Select a class' />
-            </SelectTrigger>
-            <SelectContent>
-              {groups.map((group) => (
-                <SelectItem key={group.id} value={group.id}>
-                  {group.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className='grid gap-3'>
-          {groups.map((group) => (
-            <ClassListButton
-              group={group}
-              key={group.id}
-              onSelectClass={onSelectClass}
-            />
-          ))}
-        </div>
+      <div>
+        <h2
+          className='text-lg leading-tight font-semibold text-balance'
+          id='class-list-title'
+        >
+          School classes
+        </h2>
+        <p className='mt-1 text-sm text-muted-foreground'>
+          Choose a class to manage its roster.
+        </p>
       </div>
-    </SurfaceSection>
+      <div className='flex flex-col gap-2 lg:hidden'>
+        <Label htmlFor='class-picker'>Class</Label>
+        <Select onValueChange={onSelectClass} value={selectedClassID}>
+          <SelectTrigger className='min-h-11 w-full' id='class-picker'>
+            <SelectValue placeholder='Select a class' />
+          </SelectTrigger>
+          <SelectContent>
+            {groups.map((group) => (
+              <SelectItem key={group.id} value={group.id}>
+                {group.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className='hidden gap-2 lg:grid'>
+        {groups.map((group) => (
+          <ClassListButton
+            group={group}
+            isSelected={group.id === selectedClassID}
+            key={group.id}
+            onSelectClass={onSelectClass}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
 
 function ClassListButton({
   group,
+  isSelected,
   onSelectClass,
 }: {
   group: GroupRecord
+  isSelected: boolean
   onSelectClass: (value: string) => void
 }) {
   const selectClass = useCallback(() => {
@@ -187,12 +341,23 @@ function ClassListButton({
 
   return (
     <button
-      className='flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card p-3.5 text-left text-inherit'
+      aria-current={isSelected ? 'true' : undefined}
+      className='flex min-h-14 w-full flex-col gap-1.5 rounded-lg border border-transparent p-3.5 text-left text-inherit transition-[background-color,border-color,color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none aria-current:border-primary/30 aria-current:bg-primary/5'
       onClick={selectClass}
       type='button'
     >
-      <strong>{group.name}</strong>
-      <span className='text-muted-foreground'>{readGroupSummary(group)}</span>
+      <span className='flex w-full min-w-0 items-center justify-between gap-2'>
+        <strong className='truncate'>{group.name}</strong>
+        {isSelected ? (
+          <CheckIcon
+            className='size-4 shrink-0 text-primary'
+            aria-hidden='true'
+          />
+        ) : null}
+      </span>
+      <span className='text-sm text-muted-foreground tabular-nums'>
+        {readGroupSummary(group)}
+      </span>
     </button>
   )
 }
@@ -211,35 +376,107 @@ function SelectedClassPanel({
   }
 
   return (
-    <div className='mt-6 flex flex-col gap-5'>
-      <SelectedClassSummary group={group} />
+    <div className='flex min-w-0 flex-col gap-5'>
+      <SelectedClassSummary
+        group={group}
+        key={`${group.id}:${group.join_code}`}
+      />
+      <RosterTable
+        detail={detail.record}
+        error={detail.error}
+        onRetry={detail.handleReload}
+      />
       <ClassResourcesPanel
         groups={groups}
         key={group.id}
         selectedClass={group}
       />
-      <RosterTable detail={detail.record} error={detail.error} />
       <AssignedTopicsPanel />
     </div>
   )
 }
 
 function SelectedClassSummary({ group }: { group: GroupRecord }) {
+  const [copyStatus, setCopyStatus] = useState('')
+  const copyJoinCode = useCallback(() => {
+    setCopyStatus('')
+    copyTextToClipboard(group.join_code)
+      .then(() => setCopyStatus('Join code copied'))
+      .catch(() => setCopyStatus('Could not copy the join code'))
+  }, [group.join_code])
+
   return (
-    <div className='mt-6 rounded-lg border border-border bg-card p-4'>
-      <p className='mb-2 text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase'>
-        Selected class
-      </p>
-      <h2 className='text-xl leading-tight font-semibold'>{group.name}</h2>
-      <p>{getGroupDescription(group)}</p>
-      <ClassMetadataTags group={group} />
-      <strong>Join code: {group.join_code}</strong>
-      <p className='text-muted-foreground'>
-        Share this code with students. They join via /join {group.join_code} in
-        the bot.
-      </p>
-    </div>
+    <section
+      className='grid gap-5 rounded-xl border border-border bg-card p-4 sm:p-6'
+      aria-labelledby='selected-class-title'
+    >
+      <div className='min-w-0'>
+        <p className='mb-2 text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase'>
+          Current class
+        </p>
+        <h2
+          className='truncate text-xl leading-tight font-semibold text-balance sm:text-2xl'
+          id='selected-class-title'
+          title={group.name}
+        >
+          {group.name}
+        </h2>
+        <p className='mt-2 text-sm leading-6 text-muted-foreground'>
+          {getGroupDescription(group)}
+        </p>
+        <ClassMetadataTags group={group} />
+      </div>
+      <div className='flex flex-col gap-4 rounded-lg bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-between'>
+        <div>
+          <p className='text-sm font-medium text-muted-foreground'>
+            Student join code
+          </p>
+          <p
+            className='mt-1 font-mono text-2xl font-semibold tracking-wider tabular-nums'
+            translate='no'
+          >
+            {group.join_code}
+          </p>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            Students send{' '}
+            <span className='font-mono' translate='no'>
+              /join {group.join_code}
+            </span>{' '}
+            to the bot.
+          </p>
+        </div>
+        <div className='flex flex-col items-stretch gap-2 sm:items-end'>
+          <Button
+            className='min-h-11 w-full sm:w-auto'
+            onClick={copyJoinCode}
+            type='button'
+            variant='outline'
+          >
+            <CopyIcon data-icon='inline-start' />
+            Copy join code
+          </Button>
+          {copyStatus ? (
+            <span
+              className='text-sm text-muted-foreground'
+              role={copyStatus.startsWith('Could not') ? 'alert' : 'status'}
+            >
+              {copyStatus}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </section>
   )
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  const clipboard = Reflect.get(navigator, 'clipboard') as Clipboard | undefined
+
+  if (!clipboard) {
+    throw new Error('Clipboard API unavailable')
+  }
+
+  await clipboard.writeText(value)
 }
 
 function ClassMetadataTags({ group }: { group: GroupRecord }) {
@@ -255,7 +492,7 @@ function ClassMetadataTags({ group }: { group: GroupRecord }) {
     <div className='flex flex-wrap gap-2'>
       {tags.map((tag) => (
         <span
-          className='min-h-7 rounded-full bg-muted px-2.5 py-1 text-muted-foreground'
+          className='inline-flex h-5 items-center rounded-full bg-secondary px-2 text-xs font-medium text-secondary-foreground'
           key={tag}
         >
           {tag}
@@ -278,9 +515,14 @@ function readGroupSummary(group: GroupRecord): string {
 function useSelectedClassDetail(group: GroupRecord | null): {
   record: GroupDetail | null
   error: string
+  handleReload: () => void
 } {
   const [record, setRecord] = useState<GroupDetail | null>(null)
   const [error, setError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
+  const handleReload = useCallback(() => {
+    setReloadCount((count) => count + 1)
+  }, [])
 
   useEffect(() => {
     if (!group) {
@@ -288,15 +530,27 @@ function useSelectedClassDetail(group: GroupRecord | null): {
       return
     }
 
+    let cancelled = false
+    setRecord(null)
     setError('')
     getGroupDetail(group.id)
-      .then(setRecord)
-      .catch((caught: unknown) => {
-        setError(readClassDetailError(caught))
+      .then((detail) => {
+        if (!cancelled) {
+          setRecord(detail)
+        }
       })
-  }, [group])
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setError(readClassDetailError(caught))
+        }
+      })
 
-  return { record, error }
+    return () => {
+      cancelled = true
+    }
+  }, [group, reloadCount])
+
+  return { record, error, handleReload }
 }
 
 function readClassDetailError(caught: unknown): string {
@@ -306,9 +560,11 @@ function readClassDetailError(caught: unknown): string {
 function RosterTable({
   detail,
   error,
+  onRetry,
 }: {
   detail: GroupDetail | null
   error: string
+  onRetry: () => void
 }) {
   const rows = useMemo(
     () =>
@@ -326,10 +582,10 @@ function RosterTable({
 
   return (
     <SurfaceSection
-      description='Class membership and mastery overview.'
-      title='Member roster'
+      description='Students who joined this class and their current mastery.'
+      title='Student roster'
     >
-      {renderRoster({ detail, error, rows })}
+      {renderRoster({ detail, error, onRetry, rows })}
     </SurfaceSection>
   )
 }
@@ -337,18 +593,20 @@ function RosterTable({
 function renderRoster({
   detail,
   error,
+  onRetry,
   rows,
 }: {
   detail: GroupDetail | null
   error: string
+  onRetry: () => void
   rows: Array<{ id: string; cells: Array<{ key: string; value: string }> }>
 }) {
   if (error) {
-    return <RosterError error={error} />
+    return <RosterError error={error} onRetry={onRetry} />
   }
 
   if (!detail) {
-    return <LoadingStatus>Loading roster...</LoadingStatus>
+    return <LoadingStatus>Loading roster…</LoadingStatus>
   }
 
   return <RosterReady detail={detail} rows={rows} />
@@ -365,13 +623,35 @@ function RosterReady({
     return <EmptyRoster />
   }
 
-  return <DataTable columns={rosterColumns} rows={rows} />
+  return (
+    <DataTable
+      className='[&_td:last-child]:tabular-nums'
+      columns={rosterColumns}
+      rows={rows}
+    />
+  )
 }
 
-function RosterError({ error }: { error: string }) {
+function RosterError({
+  error,
+  onRetry,
+}: {
+  error: string
+  onRetry: () => void
+}) {
   return (
     <StatePanel role='alert' title='Roster unavailable'>
-      {error}
+      <div className='grid gap-4'>
+        <p>{error} Check your connection and try again.</p>
+        <Button
+          className='min-h-11 w-fit'
+          onClick={onRetry}
+          type='button'
+          variant='outline'
+        >
+          Reload roster
+        </Button>
+      </div>
     </StatePanel>
   )
 }
@@ -379,7 +659,7 @@ function RosterError({ error }: { error: string }) {
 function EmptyRoster() {
   return (
     <StatePanel title='No members yet'>
-      Share the join code to get started.
+      Share the join code above. Students will appear here after they join.
     </StatePanel>
   )
 }

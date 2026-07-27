@@ -45,14 +45,20 @@ export function ClassCreateForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <form
-      className='grid grid-cols-[minmax(180px,1fr)_minmax(150px,0.7fr)_minmax(150px,0.7fr)_auto] items-end gap-3'
+      className='grid gap-4 lg:grid-cols-[minmax(180px,1fr)_minmax(150px,0.7fr)_minmax(150px,0.7fr)_auto] lg:items-end'
       onSubmit={form.handleSubmit}
     >
       <ClassCreateFields form={form} />
       {form.error ? (
-        <p className='text-muted-foreground'>{form.error}</p>
+        <p className='text-sm text-destructive lg:col-span-3' role='alert'>
+          {form.error} Try again.
+        </p>
       ) : null}
-      <Button disabled={submitDisabled} type='submit'>
+      <Button
+        className='min-h-11 w-full lg:w-auto'
+        disabled={submitDisabled}
+        type='submit'
+      >
         <PlusIcon data-icon='inline-start' />
         {getCreateClassLabel(form)}
       </Button>
@@ -65,7 +71,7 @@ function isCreateClassDisabled(form: ClassCreateFormState): boolean {
 }
 
 function getCreateClassLabel(form: ClassCreateFormState): string {
-  return form.isPending ? 'Creating...' : 'Create class'
+  return form.isPending ? 'Creating…' : 'Create class'
 }
 
 function useClassCreateForm(onCreated: () => void): ClassCreateFormState {
@@ -127,9 +133,12 @@ function ClassNameField({ form }: { form: ClassCreateFormState }) {
     <div className='flex flex-col gap-2'>
       <Label htmlFor='class-name'>Class name</Label>
       <Input
+        autoComplete='off'
+        className='min-h-11'
         id='class-name'
+        name='class-name'
         onChange={form.handleNameChange}
-        placeholder='Form 1 Algebra A'
+        placeholder='e.g. Form 1 Algebra A'
         required
         value={form.name}
       />
@@ -140,9 +149,9 @@ function ClassNameField({ form }: { form: ClassCreateFormState }) {
 function SyllabusField({ form }: { form: ClassCreateFormState }) {
   return (
     <div className='flex flex-col gap-2'>
-      <Label>Syllabus</Label>
+      <Label htmlFor='class-syllabus'>Syllabus</Label>
       <Select onValueChange={form.handleSyllabusChange} value={form.syllabus}>
-        <SelectTrigger>
+        <SelectTrigger className='min-h-11 w-full' id='class-syllabus'>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -158,11 +167,14 @@ function SyllabusField({ form }: { form: ClassCreateFormState }) {
 function CadenceField({ form }: { form: ClassCreateFormState }) {
   return (
     <div className='flex flex-col gap-2'>
-      <Label htmlFor='class-cadence'>Cadence</Label>
+      <Label htmlFor='class-cadence'>Schedule (optional)</Label>
       <Input
+        autoComplete='off'
+        className='min-h-11'
         id='class-cadence'
+        name='class-cadence'
         onChange={form.handleCadenceChange}
-        placeholder='Mon, Wed, Fri'
+        placeholder='e.g. Mon, Wed, Fri'
         value={form.cadence}
       />
     </div>
