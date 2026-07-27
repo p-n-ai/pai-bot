@@ -20,6 +20,10 @@ PREV_ADMIN=$(docker inspect --format='{{.Config.Image}}' "$(docker compose -f do
 echo "Previous app: ${PREV_APP:-none}"
 echo "Previous admin: ${PREV_ADMIN:-none}"
 
+echo "--- Reclaiming unused Docker storage ---"
+docker image prune -af
+docker builder prune -af
+
 echo "--- Pulling images ---"
 docker pull "$REGISTRY/pai-bot/app:$TAG"
 docker pull "$REGISTRY/pai-bot/admin:$TAG"
