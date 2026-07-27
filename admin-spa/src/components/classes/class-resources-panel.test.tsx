@@ -168,6 +168,44 @@ describe('ClassResourcesPanel', () => {
       expect(screen.queryByText('Algebra revision')).not.toBeInTheDocument(),
     )
   })
+
+  it('shows lifecycle failures instead of stale upload success', async () => {
+    apiMocks.setTeacherResourceActive.mockRejectedValue(
+      new Error('Could not deactivate resource'),
+    )
+    apiMocks.deleteTeacherResource.mockRejectedValue(
+      new Error('Could not delete resource'),
+    )
+    renderPanel()
+    await screen.findByText('Algebra revision')
+
+    fireEvent.change(screen.getByLabelText('Resource file'), {
+      target: { files: [new File(['ppt'], 'revision.pptx')] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Upload resource' }))
+    expect(
+      await screen.findByText('Resource extracted and indexed.'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Deactivate' })[0])
+    expect(
+      await screen.findByText('Could not deactivate resource'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Resource extracted and indexed.'),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete resource' }),
+    )
+    expect(
+      await screen.findByText('Could not delete resource'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Resource extracted and indexed.'),
+    ).not.toBeInTheDocument()
+  })
 })
 
 const groups = [

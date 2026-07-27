@@ -273,9 +273,6 @@ function UploadFeedback({
   error: string
   status: 'idle' | 'uploading' | 'complete' | 'error'
 }) {
-  if (status === 'complete') {
-    return <p role='status'>Resource extracted and indexed.</p>
-  }
   if (status === 'error') {
     return (
       <p className='text-sm text-destructive' role='alert'>
@@ -283,15 +280,18 @@ function UploadFeedback({
       </p>
     )
   }
-  if (status === 'uploading') {
-    return <p role='status'>Extracting pages or slides and indexing chunks.</p>
-  }
   if (error) {
     return (
       <p className='text-sm text-destructive' role='alert'>
         {error}
       </p>
     )
+  }
+  if (status === 'complete') {
+    return <p role='status'>Resource extracted and indexed.</p>
+  }
+  if (status === 'uploading') {
+    return <p role='status'>Extracting pages or slides and indexing chunks.</p>
   }
   return null
 }
