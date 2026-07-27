@@ -266,10 +266,6 @@ func timeUntilNext(hour, minute int) time.Duration {
 	return next.Sub(now)
 }
 
-func (s *Scheduler) checkAndNudge(ctx context.Context, userIDs []string) {
-	s.checkRecipientsAndNudge(ctx, telegramRecipients(userIDs))
-}
-
 func (s *Scheduler) checkRecipientsAndNudge(ctx context.Context, recipients []ScheduledRecipient) {
 	now := time.Now()
 

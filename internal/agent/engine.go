@@ -511,10 +511,6 @@ func (e *Engine) createConversation(identity LearnerIdentity, threadID, state st
 	return conv, nil
 }
 
-func (e *Engine) getActiveConversation(identity LearnerIdentity) (*Conversation, bool) {
-	return e.getActiveConversationForThread(identity, "")
-}
-
 func (e *Engine) getActiveConversationForThread(identity LearnerIdentity, threadID string) (*Conversation, bool) {
 	if store, ok := e.store.(IdentityConversationStore); ok {
 		return store.GetActiveConversationForThread(identity, threadID)
