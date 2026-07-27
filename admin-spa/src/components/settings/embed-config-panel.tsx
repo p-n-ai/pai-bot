@@ -10,6 +10,10 @@ import type {
 } from '@/lib/embed-widget'
 import { useAuth } from '@/auth-provider'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
+import {
+  AdminSurface,
+  AdminSurfaceHeader,
+} from '@/components/shared/admin-surface'
 import { LoadState } from '@/components/shared/load-state'
 import { StatePanel } from '@/components/shared/state-panel'
 import { Button } from '@/components/ui/button'
@@ -26,7 +30,9 @@ import {
 import {
   buildEmbedSnippet,
   defaultEmbedTheme,
+  getEmbedCopy,
   readEmbedTheme,
+  readableForeground,
 } from '@/lib/embed-widget'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
@@ -43,6 +49,8 @@ export function EmbedConfigPanel() {
   const [saving, setSaving] = useState(false)
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState('')
 
   const load = useCallback(async () => {
     setStatus('loading')
@@ -66,6 +74,7 @@ export function EmbedConfigPanel() {
   const save = useCallback(async () => {
     setSaving(true)
     setError('')
+    setSaveSuccess('')
     try {
       const next = await updateEmbedConfig({
         enabled,
@@ -74,6 +83,7 @@ export function EmbedConfigPanel() {
       setConfig(next)
       setEnabled(next.enabled)
       setTheme(readEmbedTheme(next.theme_config))
+      setSaveSuccess('Configuration saved.')
     } catch (caught) {
       setError(errorMessage(caught, 'Embed settings could not be saved.'))
     } finally {
@@ -121,32 +131,51 @@ export function EmbedConfigPanel() {
   const snippet = useMemo(
     () =>
       buildEmbedSnippet({
-        apiBase: window.location.origin,
+        apiBase: config?.public_embed_base_url ?? '',
         tenantSlug,
         theme,
       }),
-    [tenantSlug, theme],
+    [config?.public_embed_base_url, tenantSlug, theme],
   )
 
   const copySnippet = useCallback(async () => {
-    await navigator.clipboard.writeText(snippet)
-    setCopied(true)
+    setCopyError('')
+    try {
+      await navigator.clipboard.writeText(snippet)
+      setCopied(true)
+    } catch (caught) {
+      setCopied(false)
+      setCopyError(
+        errorMessage(caught, 'Could not copy the snippet. Try again.'),
+      )
+    }
   }, [snippet])
+  useEffect(() => {
+    setCopied(false)
+    setCopyError('')
+  }, [snippet])
+  const handleEnabledChange = useCallback((value: boolean) => {
+    setEnabled(value)
+    setSaveSuccess('')
+  }, [])
   const handleColorChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       setThemeField(setTheme, 'color', event.target.value)
+      setSaveSuccess('')
     },
     [],
   )
   const handleLanguageChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       setThemeField(setTheme, 'language', event.target.value as EmbedLanguage)
+      setSaveSuccess('')
     },
     [],
   )
   const handlePositionChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       setThemeField(setTheme, 'position', event.target.value as EmbedPosition)
+      setSaveSuccess('')
     },
     [],
   )
@@ -171,6 +200,7 @@ export function EmbedConfigPanel() {
 
   return (
     <div className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]'>
+      <EmbedSetupGuide />
       <div className='grid gap-5'>
         <section
           aria-labelledby='embed-configuration-title'
@@ -199,7 +229,7 @@ export function EmbedConfigPanel() {
               checked={enabled}
               disabled={saving}
               id='embed-enabled'
-              onCheckedChange={setEnabled}
+              onCheckedChange={handleEnabledChange}
             />
           </div>
 
@@ -249,6 +279,11 @@ export function EmbedConfigPanel() {
             {saving ? 'Saving…' : 'Save configuration'}
           </Button>
           <AuthErrorAlert message={error} title='Update failed.' />
+          {saveSuccess && (
+            <p className='text-sm font-medium text-emerald-700' role='status'>
+              {saveSuccess}
+            </p>
+          )}
         </section>
 
         <OriginsSection
@@ -294,6 +329,7 @@ export function EmbedConfigPanel() {
                 )}
                 {copied ? 'Copied' : 'Copy snippet'}
               </Button>
+              <AuthErrorAlert message={copyError} title='Copy failed.' />
             </>
           )}
         </section>
@@ -301,6 +337,95 @@ export function EmbedConfigPanel() {
 
       <WidgetPreview enabled={enabled} theme={theme} />
     </div>
+  )
+}
+
+function EmbedSetupGuide() {
+  return (
+    <AdminSurface
+      className='xl:col-span-2'
+      contentClassName='grid gap-5 p-5 sm:p-6'
+    >
+      <AdminSurfaceHeader
+        description='Follow these steps in order to publish the chat on your site.'
+        title='Setup guide'
+      />
+      <ol
+        aria-label='Embed setup steps'
+        className='grid list-none gap-3 p-0 sm:grid-cols-2 xl:grid-cols-5'
+      >
+        {[
+          [
+            'Add host origin',
+            'Enter the exact HTTP or HTTPS origin of your site.',
+          ],
+          [
+            'Configure appearance',
+            'Choose the widget color, language, and corner position.',
+          ],
+          [
+            'Enable the widget',
+            'Turn on the widget, then save the configuration.',
+          ],
+          [
+            'Install the snippet',
+            'Copy the snippet and paste it before your site’s closing body tag.',
+          ],
+          [
+            'Verify chat',
+            'Reload your site, open the chat, and send a test message.',
+          ],
+        ].map(([title, description], index) => (
+          <li
+            className='flex gap-3 rounded-lg border bg-muted/35 p-4'
+            key={title}
+          >
+            <span
+              aria-hidden='true'
+              className='flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground'
+            >
+              {index + 1}
+            </span>
+            <div className='min-w-0'>
+              <h3 className='text-sm font-semibold'>
+                <span className='sr-only'>Step {index + 1}: </span>
+                {title}
+              </h3>
+              <p className='mt-1 text-sm text-muted-foreground'>
+                {description}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div
+        aria-labelledby='embed-troubleshooting-title'
+        className='grid gap-3 border-t pt-5 sm:grid-cols-2'
+      >
+        <h3
+          className='text-base font-semibold sm:col-span-2'
+          id='embed-troubleshooting-title'
+        >
+          Troubleshooting
+        </h3>
+        <div className='rounded-lg border p-4'>
+          <h4 className='text-sm font-semibold'>Origin mismatch</h4>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            Check that the allowed origin exactly matches your site’s protocol,
+            host, and port. Remove any path, save it again, then reload your
+            site.
+          </p>
+        </div>
+        <div className='rounded-lg border p-4'>
+          <h4 className='text-sm font-semibold'>Widget stays disabled</h4>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            Confirm the host origin is listed, turn on Enable widget, and save
+            the configuration. Refresh the host page after installing the
+            snippet.
+          </p>
+        </div>
+      </div>
+    </AdminSurface>
   )
 }
 
@@ -408,9 +533,11 @@ function WidgetPreview({
 }) {
   const [open, setOpen] = useState(true)
   const left = theme.position === 'bottom-left'
+  const copy = getEmbedCopy(theme.language)
+  const foreground = readableForeground(theme.color)
   const themeStyle = useMemo(
-    () => ({ backgroundColor: theme.color }),
-    [theme.color],
+    () => ({ backgroundColor: theme.color, color: foreground }),
+    [foreground, theme.color],
   )
   const toggleOpen = useCallback(() => {
     setOpen((value) => !value)
@@ -430,26 +557,24 @@ function WidgetPreview({
       {open && (
         <div
           aria-label='Chat preview'
+          lang={theme.language}
           className={`absolute bottom-20 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-xl border bg-background shadow-xl ${left ? 'left-4' : 'right-4'}`}
         >
-          <div
-            className='p-4 text-sm font-semibold text-white'
-            style={themeStyle}
-          >
+          <div className='p-4 text-sm font-semibold' style={themeStyle}>
             P&amp;AI Tutor
           </div>
           <div className='grid min-h-64 content-end gap-3 p-4'>
             <div className='max-w-[85%] rounded-xl border bg-card p-3 text-sm'>
-              Hi! What would you like to learn today?
+              {copy.greeting}
             </div>
             <div className='flex gap-2 border-t pt-3'>
               <Input
                 aria-label='Preview message'
                 disabled
-                placeholder='Ask a question…'
+                placeholder={copy.placeholder}
               />
               <Button disabled size='sm' type='button'>
-                Send
+                {copy.send}
               </Button>
             </div>
           </div>
@@ -458,7 +583,7 @@ function WidgetPreview({
       <Button
         aria-expanded={open}
         aria-label={open ? 'Close chat preview' : 'Open chat preview'}
-        className={`absolute bottom-4 size-12 rounded-xl text-white ${left ? 'left-4' : 'right-4'}`}
+        className={`absolute bottom-4 size-12 rounded-xl ${left ? 'left-4' : 'right-4'}`}
         disabled={!enabled}
         onClick={toggleOpen}
         size='icon'

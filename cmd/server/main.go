@@ -502,6 +502,7 @@ func main() {
 				EmbedGuestService:     embedGuestService,
 				EmbedMessageStore:     embedMessageStore,
 				EmbedIdentityResolver: embedMessageStore,
+				EmbedBaseURL:          cfg.Embed.BaseURL,
 				WACloudChannel:        waCloudChannel,
 				WAMeowChannel:         waMeowChannel,
 				ChatWebhooks:          chatWebhooks,

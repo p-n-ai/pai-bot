@@ -150,17 +150,68 @@
   var tenant = params.get('tenant') || '';
   var rawColor = params.get('color') || '#6366f1';
   var color = /^#[0-9a-fA-F]{3,8}$/.test(rawColor) ? rawColor : '#6366f1';
-  var lang = params.get('lang') || '';
+  var requestedLang = params.get('lang') || 'en';
+  var lang = requestedLang === 'ms' || requestedLang === 'zh' ? requestedLang : 'en';
+  var copy = {
+    en: {
+      tutor: 'P&AI Tutor', guest: 'Guest', signUp: 'Sign Up', logIn: 'Log In', account: 'Account',
+      saveProgress: 'Save your progress', saveDescription: 'Create a free account to keep your learning history and continue on any device.',
+      name: 'Name', email: 'Email', password: 'Password', yourName: 'Your name', passwordHint: 'At least 8 characters',
+      createAccount: 'Create Account', welcome: 'Welcome back', loginDescription: 'Log in to continue your learning journey.',
+      yourPassword: 'Your password', reconnecting: 'Reconnecting...', ask: 'Ask a question... (type / for commands)', send: 'Send',
+      logout: 'Log out', loggingIn: 'Logging in...', creating: 'Creating...', validEmail: 'Valid email is required',
+      passwordRequired: 'Password is required', nameRequired: 'Name is required', passwordLength: 'Password must be at least 8 characters',
+      invalidLogin: 'Invalid email or password', networkError: 'Network error. Please try again.', connectError: 'Unable to connect. Please try again later.',
+      accountCreated: 'Account created!', progressSaved: 'Your progress is now saved. You can log in anytime with your email and password.', genericError: 'Something went wrong'
+    },
+    ms: {
+      tutor: 'Tutor P&AI', guest: 'Tetamu', signUp: 'Daftar', logIn: 'Log Masuk', account: 'Akaun',
+      saveProgress: 'Simpan kemajuan anda', saveDescription: 'Cipta akaun percuma untuk menyimpan sejarah pembelajaran dan meneruskan pada mana-mana peranti.',
+      name: 'Nama', email: 'E-mel', password: 'Kata laluan', yourName: 'Nama anda', passwordHint: 'Sekurang-kurangnya 8 aksara',
+      createAccount: 'Cipta Akaun', welcome: 'Selamat kembali', loginDescription: 'Log masuk untuk meneruskan pembelajaran anda.',
+      yourPassword: 'Kata laluan anda', reconnecting: 'Menyambung semula...', ask: 'Tanya soalan... (taip / untuk arahan)', send: 'Hantar',
+      logout: 'Log keluar', loggingIn: 'Sedang log masuk...', creating: 'Sedang mencipta...', validEmail: 'E-mel yang sah diperlukan',
+      passwordRequired: 'Kata laluan diperlukan', nameRequired: 'Nama diperlukan', passwordLength: 'Kata laluan mesti sekurang-kurangnya 8 aksara',
+      invalidLogin: 'E-mel atau kata laluan tidak sah', networkError: 'Ralat rangkaian. Sila cuba lagi.', connectError: 'Tidak dapat menyambung. Sila cuba lagi kemudian.',
+      accountCreated: 'Akaun berjaya dicipta!', progressSaved: 'Kemajuan anda kini disimpan. Anda boleh log masuk pada bila-bila masa dengan e-mel dan kata laluan.', genericError: 'Sesuatu telah berlaku'
+    },
+    zh: {
+      tutor: 'P&AI 导师', guest: '访客', signUp: '注册', logIn: '登录', account: '账户',
+      saveProgress: '保存学习进度', saveDescription: '创建免费账户，以保存学习记录并在任何设备上继续学习。',
+      name: '姓名', email: '电子邮箱', password: '密码', yourName: '你的姓名', passwordHint: '至少 8 个字符',
+      createAccount: '创建账户', welcome: '欢迎回来', loginDescription: '登录以继续你的学习旅程。',
+      yourPassword: '你的密码', reconnecting: '正在重新连接...', ask: '输入问题...（输入 / 查看指令）', send: '发送',
+      logout: '退出登录', loggingIn: '正在登录...', creating: '正在创建...', validEmail: '请输入有效的电子邮箱',
+      passwordRequired: '请输入密码', nameRequired: '请输入姓名', passwordLength: '密码必须至少包含 8 个字符',
+      invalidLogin: '电子邮箱或密码无效', networkError: '网络错误，请重试。', connectError: '无法连接，请稍后重试。',
+      accountCreated: '账户已创建！', progressSaved: '你的学习进度已保存。你可以随时使用电子邮箱和密码登录。', genericError: '出现错误'
+    }
+  }[lang];
   var parentOrigin = '';
   var started = false;
 
   document.documentElement.style.setProperty('--pai-primary', color);
+  document.documentElement.style.setProperty('--pai-primary-fg', readableForeground(color));
+  document.documentElement.lang = lang;
+  document.title = copy.tutor;
 
   var messagesEl = document.getElementById('messages');
   var typingEl = document.getElementById('typing');
   var inputEl = document.getElementById('input');
   var sendBtn = document.getElementById('send');
   var offlineEl = document.getElementById('offline');
+
+  function readableForeground(value) {
+    var normalized = /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#6366f1';
+    var channels = [1, 3, 5].map(function(offset) {
+      var channel = parseInt(normalized.slice(offset, offset + 2), 16) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+    });
+    var luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    var darkLuminance = 0.0097;
+    var darkContrast = (Math.max(luminance, darkLuminance) + 0.05) / (Math.min(luminance, darkLuminance) + 0.05);
+    return darkContrast >= 1.05 / (luminance + 0.05) ? '#111827' : '#ffffff';
+  }
 
   var cmdPaletteEl = document.getElementById('cmdPalette');
   var commands = [
@@ -264,6 +315,37 @@
   var loginErrorEl = document.getElementById('loginError');
   var loginSubmitEl = document.getElementById('loginSubmit');
 
+  function applyLocalization() {
+    var headerLeft = document.querySelector('.header-left');
+    headerLeft.childNodes[headerLeft.childNodes.length - 1].nodeValue = ' ' + copy.tutor;
+    document.getElementById('guestLabel').lastChild.nodeValue = ' ' + copy.guest;
+    upgradeBtnEl.textContent = copy.signUp;
+    document.getElementById('logoutBtn').title = copy.logout;
+    document.getElementById('authTitle').textContent = copy.account;
+    tabSignupEl.textContent = copy.signUp;
+    tabLoginEl.textContent = copy.logIn;
+    panelSignupEl.querySelector('h2').textContent = copy.saveProgress;
+    panelSignupEl.querySelector('p').textContent = copy.saveDescription;
+    var signupLabels = panelSignupEl.querySelectorAll('label');
+    signupLabels[0].textContent = copy.name;
+    signupLabels[1].textContent = copy.email;
+    signupLabels[2].textContent = copy.password;
+    upgradeNameEl.placeholder = copy.yourName;
+    upgradePasswordEl.placeholder = copy.passwordHint;
+    upgradeSubmitEl.textContent = copy.createAccount;
+    panelLoginEl.querySelector('h2').textContent = copy.welcome;
+    panelLoginEl.querySelector('p').textContent = copy.loginDescription;
+    var loginLabels = panelLoginEl.querySelectorAll('label');
+    loginLabels[0].textContent = copy.email;
+    loginLabels[1].textContent = copy.password;
+    loginPasswordEl.placeholder = copy.yourPassword;
+    loginSubmitEl.textContent = copy.logIn;
+    offlineEl.textContent = copy.reconnecting;
+    inputEl.placeholder = copy.ask;
+    sendBtn.textContent = copy.send;
+  }
+  applyLocalization();
+
   function switchTab(tab) {
     var isSignup = tab === 'signup';
     tabSignupEl.classList.toggle('active', isSignup);
@@ -280,11 +362,11 @@
     var pw = loginPasswordEl.value;
     loginErrorEl.textContent = '';
 
-    if (!email || email.indexOf('@') === -1) { loginErrorEl.textContent = 'Valid email is required'; return; }
-    if (!pw) { loginErrorEl.textContent = 'Password is required'; return; }
+    if (!email || email.indexOf('@') === -1) { loginErrorEl.textContent = copy.validEmail; return; }
+    if (!pw) { loginErrorEl.textContent = copy.passwordRequired; return; }
 
     loginSubmitEl.disabled = true;
-    loginSubmitEl.textContent = 'Logging in...';
+    loginSubmitEl.textContent = copy.loggingIn;
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/embed/auth/login');
@@ -304,17 +386,17 @@
         historyLoaded = false;
         if (ws) { ws.close(); }
       } else {
-        var errText = 'Invalid email or password';
+        var errText = copy.invalidLogin;
         try { errText = xhr.responseText || errText; } catch(e) {}
         loginErrorEl.textContent = errText;
         loginSubmitEl.disabled = false;
-        loginSubmitEl.textContent = 'Log In';
+        loginSubmitEl.textContent = copy.logIn;
       }
     };
     xhr.onerror = function() {
-      loginErrorEl.textContent = 'Network error. Please try again.';
+      loginErrorEl.textContent = copy.networkError;
       loginSubmitEl.disabled = false;
-      loginSubmitEl.textContent = 'Log In';
+      loginSubmitEl.textContent = copy.logIn;
     };
     xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, email: email, password: pw }));
   });
@@ -356,13 +438,13 @@
     // Reset upgrade form.
     upgradeOverlayEl.classList.remove('active');
     document.getElementById('upgradeForm').innerHTML =
-      '<h2>Save your progress</h2>' +
-      '<p>Create a free account to keep your learning history, track your progress, and continue on any device.</p>' +
-      '<div class="upgrade-field"><label>Name</label><input type="text" id="upgradeName" placeholder="Your name"></div>' +
-      '<div class="upgrade-field"><label>Email</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>' +
-      '<div class="upgrade-field"><label>Password</label><input type="password" id="upgradePassword" placeholder="At least 8 characters"></div>' +
+      '<h2>' + copy.saveProgress + '</h2>' +
+      '<p>' + copy.saveDescription + '</p>' +
+      '<div class="upgrade-field"><label>' + copy.name + '</label><input type="text" id="upgradeName" placeholder="' + copy.yourName + '"></div>' +
+      '<div class="upgrade-field"><label>' + copy.email + '</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>' +
+      '<div class="upgrade-field"><label>' + copy.password + '</label><input type="password" id="upgradePassword" placeholder="' + copy.passwordHint + '"></div>' +
       '<p class="upgrade-error" id="upgradeError"></p>' +
-      '<button class="upgrade-submit" id="upgradeSubmit">Create Account</button>';
+      '<button class="upgrade-submit" id="upgradeSubmit">' + copy.createAccount + '</button>';
     // Re-bind upgrade form elements.
     upgradeNameEl = document.getElementById('upgradeName');
     upgradeEmailEl = document.getElementById('upgradeEmail');
@@ -393,12 +475,12 @@
       var pw = upgradePasswordEl.value;
       upgradeErrorEl.textContent = '';
 
-      if (!name) { upgradeErrorEl.textContent = 'Name is required'; return; }
-      if (!email || email.indexOf('@') === -1) { upgradeErrorEl.textContent = 'Valid email is required'; return; }
-      if (pw.length < 8) { upgradeErrorEl.textContent = 'Password must be at least 8 characters'; return; }
+      if (!name) { upgradeErrorEl.textContent = copy.nameRequired; return; }
+      if (!email || email.indexOf('@') === -1) { upgradeErrorEl.textContent = copy.validEmail; return; }
+      if (pw.length < 8) { upgradeErrorEl.textContent = copy.passwordLength; return; }
 
       upgradeSubmitEl.disabled = true;
-      upgradeSubmitEl.textContent = 'Creating...';
+      upgradeSubmitEl.textContent = copy.creating;
 
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/embed/auth/upgrade');
@@ -412,23 +494,23 @@
           saveSession(token, userId, name, 'student');
           // Show success + profile
           document.getElementById('upgradeForm').innerHTML =
-            '<div class="upgrade-success"><h2>Account created!</h2>' +
-            '<p>Your progress is now saved. You can log in anytime with your email and password.</p></div>';
+            '<div class="upgrade-success"><h2>' + copy.accountCreated + '</h2>' +
+            '<p>' + copy.progressSaved + '</p></div>';
           showProfile(name);
           // Close overlay after a moment
           setTimeout(function() { upgradeOverlayEl.classList.remove('active'); }, 2000);
           // Reconnect with new student token
           if (ws) { ws.close(); }
         } else {
-          upgradeErrorEl.textContent = xhr.responseText || 'Something went wrong';
+          upgradeErrorEl.textContent = xhr.responseText || copy.genericError;
           upgradeSubmitEl.disabled = false;
-          upgradeSubmitEl.textContent = 'Create Account';
+          upgradeSubmitEl.textContent = copy.createAccount;
         }
       };
       xhr.onerror = function() {
-        upgradeErrorEl.textContent = 'Network error. Please try again.';
+        upgradeErrorEl.textContent = copy.networkError;
         upgradeSubmitEl.disabled = false;
-        upgradeSubmitEl.textContent = 'Create Account';
+        upgradeSubmitEl.textContent = copy.createAccount;
       };
       xhr.send(JSON.stringify({ name: name, email: email, password: pw }));
     });
@@ -563,11 +645,11 @@
         saveSession(token, userId, '', 'guest');
         cb();
       } else {
-        addMessage('Unable to connect. Please try again later.', 'system');
+        addMessage(copy.connectError, 'system');
       }
     };
     xhr.onerror = function() {
-      addMessage('Unable to connect. Please try again later.', 'system');
+      addMessage(copy.connectError, 'system');
     };
     xhr.send(JSON.stringify({ tenant: tenant, parent_origin: parentOrigin, fingerprint: fingerprint }));
   }

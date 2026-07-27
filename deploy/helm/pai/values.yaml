@@ -97,6 +97,8 @@ config:
   # -- Feature flags
   disableMultiLanguage: false
   personalizedNudgesEnabled: true
+  # -- Optional public origin for widget assets. Defaults to the ingress/request origin.
+  embedBaseUrl: ""
 
 # -- Secrets (sensitive credentials)
 secrets:

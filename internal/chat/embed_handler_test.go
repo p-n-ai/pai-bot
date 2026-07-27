@@ -41,8 +41,13 @@ func TestHandleWidgetJS_AccessibleIdempotentAndParentOriginBound(t *testing.T) {
 		"aria-expanded",
 		"document.getElementById('pai-chat-toggle')",
 		"max-width:calc(100vw - 40px)",
-		"parent_origin: window.location.origin",
+		"parent_origin: parentOrigin",
 		"}, baseOrigin)",
+		"fetch(configURL",
+		"config.enabled !== true",
+		"Buka sembang P&AI",
+		"打开 P&AI 聊天",
+		"readableForeground(color)",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("widget script missing %q", expected)
@@ -72,6 +77,10 @@ func TestHandleChatPage_ValidTenant(t *testing.T) {
 		"tokenHasEmbedIdentity(savedSession.token)",
 		"'/ws/embed'",
 		"if (!historyLoaded)",
+		"document.documentElement.lang = lang",
+		"Simpan kemajuan anda",
+		"保存学习进度",
+		"readableForeground(color)",
 	} {
 		if !strings.Contains(rec.Body.String(), expected) {
 			t.Errorf("chat page missing %q", expected)

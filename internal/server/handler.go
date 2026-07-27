@@ -78,6 +78,7 @@ type TopMuxOptions struct {
 	EmbedGuestService     EmbedGuestService
 	EmbedMessageStore     EmbedMessageStore
 	EmbedIdentityResolver EmbedIdentityResolver
+	EmbedBaseURL          string
 	WACloudChannel        *chat.WhatsAppChannel
 	WAMeowChannel         *chat.WhatsAppMeowChannel
 	InboundHandler        func(chat.InboundMessage)
@@ -122,8 +123,8 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 	)
 	if opts.EmbedConfigStore != nil {
 		embedAdminMux := http.NewServeMux()
-		embedAdminMux.Handle("GET /api/admin/embed/config", waAuth(handleAdminGetEmbedConfig(opts.EmbedConfigStore)))
-		embedAdminMux.Handle("PUT /api/admin/embed/config", waAuth(handleAdminUpdateEmbedConfig(opts.EmbedConfigStore)))
+		embedAdminMux.Handle("GET /api/admin/embed/config", waAuth(handleAdminGetEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
+		embedAdminMux.Handle("PUT /api/admin/embed/config", waAuth(handleAdminUpdateEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
 		embedAdminMux.Handle("POST /api/admin/embed/origins", waAuth(handleAdminAddEmbedOrigin(opts.EmbedConfigStore)))
 		embedAdminMux.Handle("DELETE /api/admin/embed/origins", waAuth(handleAdminDeleteEmbedOrigin(opts.EmbedConfigStore)))
 		adminEmbedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)

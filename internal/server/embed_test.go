@@ -30,6 +30,11 @@ func (s *embedConfigStoreStub) GetByTenantID(_ context.Context, tenantID string)
 }
 
 func (s *embedConfigStoreStub) GetByTenantSlug(_ context.Context, slug string) (chat.EmbedConfig, error) {
+	for key, tenantID := range s.tenantByOrigin {
+		if strings.HasPrefix(key, slug+"|") {
+			return s.configs[tenantID], nil
+		}
+	}
 	return chat.EmbedConfig{}, nil
 }
 
@@ -134,7 +139,7 @@ func TestAdminEmbedRoutesAuthorizationAndTenantIsolation(t *testing.T) {
 				if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 					t.Fatal(err)
 				}
-				for _, key := range []string{"tenant_id", "enabled", "allowed_origins", "theme_config"} {
+				for _, key := range []string{"tenant_id", "enabled", "allowed_origins", "theme_config", "public_embed_base_url"} {
 					if _, ok := payload[key]; !ok {
 						t.Errorf("response missing snake_case field %q: %s", key, response.Body.String())
 					}
@@ -238,6 +243,92 @@ func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("spoofed parent status = %d, want 403", response.Code)
+	}
+}
+
+func TestPublicEmbedConfigOnlyReturnsEnabledAllowedTenant(t *testing.T) {
+	store := &embedConfigStoreStub{
+		configs: map[string]chat.EmbedConfig{
+			"tenant-a": {
+				TenantID: "tenant-a",
+				Enabled:  true,
+				ThemeConfig: map[string]any{
+					"color": "#123456", "language": "ms",
+				},
+			},
+		},
+		tenantByOrigin: map[string]string{
+			"school|https://school.example": "tenant-a",
+		},
+	}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore: store,
+		JWTSecret:        "config-secret",
+		AccessTokenTTL:   time.Hour,
+	})
+	request := httptest.NewRequest(http.MethodGet,
+		"https://api.example/api/embed/config?tenant=school&parent_origin=https%3A%2F%2Fschool.example", nil)
+	request.Header.Set("Origin", "https://school.example")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Enabled bool           `json:"enabled"`
+		Theme   map[string]any `json:"theme_config"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload.Enabled || payload.Theme["language"] != "ms" {
+		t.Fatalf("payload = %#v", payload)
+	}
+
+	store.configs["tenant-a"] = chat.EmbedConfig{TenantID: "tenant-a", Enabled: false}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("disabled status = %d, want 403", response.Code)
+	}
+}
+
+func TestAdminEmbedConfigUsesConfiguredOrForwardedPublicBaseURL(t *testing.T) {
+	const secret = "embed-base-test"
+	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{"tenant-a": {TenantID: "tenant-a"}}}
+	token := issueEmbedTestToken(t, secret, auth.RoleAdmin, "tenant-a", "")
+	for _, test := range []struct {
+		name       string
+		configured string
+		forwarded  string
+		want       string
+	}{
+		{name: "configured", configured: "https://chat.example/", forwarded: "admin.example", want: "https://chat.example"},
+		{name: "forwarded request", forwarded: "admin.example", want: "https://admin.example"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := NewTopMux(TopMuxOptions{
+				EmbedConfigStore: store,
+				EmbedBaseURL:     test.configured,
+				JWTSecret:        secret,
+				AccessTokenTTL:   time.Hour,
+			})
+			request := httptest.NewRequest(http.MethodGet, "http://internal/api/admin/embed/config", nil)
+			request.Header.Set("Authorization", "Bearer "+token)
+			request.Header.Set("X-Forwarded-Host", test.forwarded)
+			request.Header.Set("X-Forwarded-Proto", "https")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			var payload struct {
+				PublicEmbedBaseURL string `json:"public_embed_base_url"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.PublicEmbedBaseURL != test.want {
+				t.Fatalf("public base URL = %q, want %q", payload.PublicEmbedBaseURL, test.want)
+			}
+		})
 	}
 }
 

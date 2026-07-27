@@ -15,6 +15,7 @@ data:
   LEARN_DEV_MODE: {{ .Values.config.devMode | quote }}
   LEARN_DISABLE_MULTI_LANGUAGE: {{ .Values.config.disableMultiLanguage | quote }}
   LEARN_AI_PERSONALIZED_NUDGES_ENABLED: {{ .Values.config.personalizedNudgesEnabled | quote }}
+  LEARN_EMBED_BASE_URL: {{ .Values.config.embedBaseUrl | quote }}
   {{- if .Values.postgres.enabled }}
   LEARN_DATABASE_URL: {{ include "pai.databaseUrl" . | quote }}
   {{- end }}

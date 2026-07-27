@@ -121,11 +121,42 @@ func registerEmbedRoutes(mux *http.ServeMux, opts TopMuxOptions, manager *auth.T
 		mux.Handle("POST /api/embed/auth/guest", handleEmbedGuestAuth(opts.EmbedConfigStore, opts.EmbedGuestService))
 		mux.Handle("POST /api/embed/auth/upgrade", handleEmbedUpgradeGuest(opts.EmbedGuestService, manager))
 	}
+	mux.Handle("GET /api/embed/config", handlePublicEmbedConfig(opts.EmbedConfigStore))
 	if opts.AuthService != nil {
 		mux.Handle("POST /api/embed/auth/login", handleEmbedLogin(opts.EmbedConfigStore, opts.AuthService, opts.EmbedIdentityResolver, manager))
 	}
 	if opts.EmbedMessageStore != nil {
 		mux.Handle("GET /api/embed/messages", handleEmbedMessages(opts.EmbedMessageStore, manager))
+	}
+}
+
+func handlePublicEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenant := strings.TrimSpace(r.URL.Query().Get("tenant"))
+		if tenant == "" {
+			http.Error(w, "missing tenant", http.StatusBadRequest)
+			return
+		}
+		parentOrigin, err := validatedEmbedParentOrigin(r, r.URL.Query().Get("parent_origin"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		tenantID, err := store.FindTenantBySlugAndOrigin(r.Context(), tenant, parentOrigin)
+		if err != nil {
+			http.Error(w, "embed unavailable", http.StatusForbidden)
+			return
+		}
+		config, err := store.GetByTenantSlug(r.Context(), tenant)
+		if err != nil || !config.Enabled || config.TenantID != tenantID {
+			http.Error(w, "embed unavailable", http.StatusForbidden)
+			return
+		}
+		normalizeEmbedConfig(&config, tenantID)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"enabled":      true,
+			"theme_config": config.ThemeConfig,
+		})
 	}
 }
 
@@ -311,7 +342,7 @@ func handleEmbedMessages(store EmbedMessageStore, manager *auth.TokenManager) ht
 	}
 }
 
-func handleAdminGetEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
+func handleAdminGetEmbedConfig(store chat.EmbedConfigStore, publicBaseURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tenantID, ok := embedTenantFromClaims(w, r)
 		if !ok {
@@ -323,11 +354,11 @@ func handleAdminGetEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
 			return
 		}
 		normalizeEmbedConfig(&config, tenantID)
-		writeJSON(w, http.StatusOK, config)
+		writeJSON(w, http.StatusOK, newEmbedConfigResponse(config, publicEmbedBaseURL(r, publicBaseURL)))
 	}
 }
 
-func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
+func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore, publicBaseURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tenantID, ok := embedTenantFromClaims(w, r)
 		if !ok {
@@ -359,8 +390,24 @@ func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc 
 			return
 		}
 		normalizeEmbedConfig(&config, tenantID)
-		writeJSON(w, http.StatusOK, config)
+		writeJSON(w, http.StatusOK, newEmbedConfigResponse(config, publicEmbedBaseURL(r, publicBaseURL)))
 	}
+}
+
+type embedConfigResponse struct {
+	chat.EmbedConfig
+	PublicEmbedBaseURL string `json:"public_embed_base_url"`
+}
+
+func newEmbedConfigResponse(config chat.EmbedConfig, publicBaseURL string) embedConfigResponse {
+	return embedConfigResponse{EmbedConfig: config, PublicEmbedBaseURL: publicBaseURL}
+}
+
+func publicEmbedBaseURL(r *http.Request, configured string) string {
+	if normalized, err := normalizeWebOrigin(configured); err == nil {
+		return normalized
+	}
+	return requestBaseURL(r)
 }
 
 func handleAdminAddEmbedOrigin(store chat.EmbedConfigStore) http.HandlerFunc {

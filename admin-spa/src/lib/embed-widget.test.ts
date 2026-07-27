@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildEmbedSnippet,
   defaultEmbedTheme,
+  getEmbedCopy,
   readEmbedTheme,
+  readableForeground,
 } from './embed-widget'
 
 describe('embed widget helpers', () => {
@@ -41,5 +43,16 @@ describe('embed widget helpers', () => {
         theme: defaultEmbedTheme,
       }),
     ).toContain('data-tenant="&quot; onload=&quot;bad"')
+  })
+
+  it('provides localized widget copy', () => {
+    expect(getEmbedCopy('en').send).toBe('Send')
+    expect(getEmbedCopy('ms').greeting).toContain('pelajari')
+    expect(getEmbedCopy('zh').placeholder).toBe('输入问题…')
+  })
+
+  it('chooses readable foreground colors', () => {
+    expect(readableForeground('#ffffff')).toBe('#111827')
+    expect(readableForeground('#000000')).toBe('#ffffff')
   })
 })
