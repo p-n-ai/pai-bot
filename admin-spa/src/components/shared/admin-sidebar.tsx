@@ -8,7 +8,6 @@ import {
   GaugeIcon,
   LogOutIcon,
   MessageCircleMoreIcon,
-  SearchCodeIcon,
   Settings2Icon,
   SparklesIcon,
   UsersIcon,
@@ -60,11 +59,6 @@ const navigationGroups = [
         Icon: BotIcon,
         href: '/dashboard/ai-usage',
         label: 'AI usage',
-      },
-      {
-        Icon: SearchCodeIcon,
-        href: '/dashboard/retrieval-lab',
-        label: 'Retrieval lab',
       },
     ],
   },
@@ -174,7 +168,7 @@ export function AdminSidebar() {
       </SidebarContent>
 
       <SidebarFooter className='mt-auto border-t border-[#eef0f3] px-4 py-4'>
-        <div className='flex items-center gap-3 rounded-xl bg-[#f8fafc] p-2.5'>
+        <div className='flex items-center gap-3 rounded-2xl bg-[#f8fafc] p-2.5'>
           <span className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#eaf2ff] text-xs font-semibold text-[#175cd3]'>
             {getAdminUserInitials(user)}
           </span>
@@ -216,7 +210,7 @@ function AdminNavigationLink({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-10 gap-3 rounded-lg px-3 text-[#667085] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f4f7fb] hover:text-[#101828] active:scale-[0.98] data-active:bg-[#eaf2ff] data-active:font-semibold data-active:text-[#175cd3]'
+        className='relative h-10 gap-3 rounded-lg px-3 text-[#667085] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f4f7fb] hover:text-[#101828] active:scale-[0.96] data-active:bg-[#eaf2ff] data-active:font-semibold data-active:text-[#175cd3]'
         isActive={isActive}
       >
         <Link to={href}>
@@ -227,6 +221,7 @@ function AdminNavigationLink({
           <Icon
             aria-hidden='true'
             className='text-[#98a2b3] group-data-[active=true]/menu-button:text-[#2f80ed]'
+            strokeWidth={1.5}
           />
           <span>{label}</span>
         </Link>

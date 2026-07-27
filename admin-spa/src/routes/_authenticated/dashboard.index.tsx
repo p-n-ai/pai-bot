@@ -8,7 +8,7 @@ import { sendStudentNudge } from '@/lib/admin-api'
 import { getNudgeSuccessMessage } from '@/lib/dashboard-nudge-copy'
 import { fetchDashboardProgress } from '@/lib/dashboard-progress'
 
-export const Route = createFileRoute('/_authenticated/dashboard')({
+export const Route = createFileRoute('/_authenticated/dashboard/')({
   validateSearch: parseDashboardSearch,
   component: DashboardRoute,
 })

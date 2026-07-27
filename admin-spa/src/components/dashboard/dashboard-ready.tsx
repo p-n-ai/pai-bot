@@ -612,7 +612,7 @@ function StudentDetailButton({
 
   return (
     <button
-      className='inline-flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent p-0 text-left font-[inherit] text-[#101828] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#175cd3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] active:scale-[0.99]'
+      className='inline-flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent p-0 text-left font-[inherit] text-[#101828] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#175cd3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] active:scale-[0.96]'
       onClick={selectStudent}
       type='button'
     >
