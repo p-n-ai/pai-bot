@@ -202,6 +202,10 @@ func main() {
 			if err := teacherResources.VerifyGraph(ctx); err != nil {
 				return nil, nil, fmt.Errorf("verify teacher retrieval graph: %w", err)
 			}
+			tutorEvidence, err := retrieval.NewTutorEvidenceService(db.Pool, retrievalService, teacherResources)
+			if err != nil {
+				return nil, nil, fmt.Errorf("initialize tutor evidence retrieval: %w", err)
+			}
 
 			// Create agent engine with streaks and XP tracking.
 			eventLogger := agent.NewPostgresEventLogger(db.Pool)
@@ -217,6 +221,7 @@ func main() {
 				EventLogger:          eventLogger,
 				CurriculumLoader:     loader,
 				RetrievalService:     retrievalService,
+				EvidenceRetriever:    tutorEvidence,
 				DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
 				Tracker:              tracker,
 				Streaks:              streakTracker,

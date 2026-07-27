@@ -132,6 +132,12 @@ func contextSources(packets []contextPacket) []contextSource {
 			Name:     packet.Source,
 			Included: true,
 		})
+		if evidence, ok := packet.Data.(groundedEvidence); ok {
+			sources[len(sources)-1].EvidenceID = evidence.EvidenceID
+			sources[len(sources)-1].Title = evidence.SourceTitle
+			sources[len(sources)-1].Filename = evidence.Filename
+			sources[len(sources)-1].Locator = evidenceLocator(evidence)
+		}
 	}
 	return sources
 }

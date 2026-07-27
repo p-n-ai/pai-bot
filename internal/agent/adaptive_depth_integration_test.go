@@ -168,7 +168,7 @@ func TestAdaptiveDepth_ProgressContextInPrompt(t *testing.T) {
 	}
 }
 
-func TestAdaptiveDepth_NoTrackerNoBlock(t *testing.T) {
+func TestAdaptiveDepth_NoTrackerIsUnknown(t *testing.T) {
 	provider := &capturingProvider{}
 	router := ai.NewRouter()
 	router.Register("mock", provider)
@@ -192,8 +192,11 @@ func TestAdaptiveDepth_NoTrackerNoBlock(t *testing.T) {
 	}
 
 	systemPrompt := requests[0].Messages[0].Content
-	if strings.Contains(strings.ToLower(systemPrompt), "adaptive explanation depth") {
-		t.Error("expected NO adaptive depth block when tracker is nil")
+	if !strings.Contains(systemPrompt, "Student mastery level: UNKNOWN") {
+		t.Error("expected unknown mastery when tracker is nil")
+	}
+	if strings.Contains(systemPrompt, "Student mastery level: BEGINNER") {
+		t.Error("missing mastery must not be treated as beginner")
 	}
 }
 

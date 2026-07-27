@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +25,11 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
 )
+
+var evidenceCitationCheckPattern = regexp.MustCompile(`\[S[0-9]+\]`)
 
 const (
 	defaultFixturePath    = "internal/agent/testdata/ai_quality_conversations.yaml"
@@ -39,15 +43,28 @@ type fixtureFile struct {
 }
 
 type conversationSpec struct {
-	ID     string         `yaml:"id"`
-	Title  string         `yaml:"title"`
-	Tags   []string       `yaml:"tags"`
-	Turns  []turnSpec     `yaml:"turns"`
-	Checks behaviorChecks `yaml:"checks"`
+	ID       string         `yaml:"id"`
+	Title    string         `yaml:"title"`
+	Tags     []string       `yaml:"tags"`
+	Evidence []evidenceSpec `yaml:"evidence"`
+	Turns    []turnSpec     `yaml:"turns"`
+	Checks   behaviorChecks `yaml:"checks"`
 }
 
 type turnSpec struct {
 	User string `yaml:"user"`
+}
+
+type evidenceSpec struct {
+	ID           string `yaml:"id"`
+	Origin       string `yaml:"origin"`
+	Title        string `yaml:"title"`
+	Filename     string `yaml:"filename"`
+	LocatorType  string `yaml:"locator_type"`
+	LocatorStart int    `yaml:"locator_start"`
+	LocatorEnd   int    `yaml:"locator_end"`
+	Locator      string `yaml:"locator"`
+	Excerpt      string `yaml:"excerpt"`
 }
 
 type behaviorChecks struct {
@@ -63,6 +80,7 @@ type behaviorChecks struct {
 	ForbidSectionLabelsOnTurn []int    `yaml:"forbid_section_labels_on_turn"`
 	MaxResponseLines          int      `yaml:"max_response_lines"`
 	MaxResponseChars          int      `yaml:"max_response_chars"`
+	RequireEvidenceCitation   bool     `yaml:"require_evidence_citation"`
 }
 
 type caseResult struct {
@@ -163,7 +181,7 @@ func main() {
 		}()
 	}
 
-	engine, cleanup, err := buildEngine(memory, mockResponse, progressSideEffects, traceFuncForDumper(dumper))
+	engine, cleanup, err := buildEngine(memory, mockResponse, progressSideEffects, traceFuncForDumper(dumper), newHarnessEvidenceRetriever(conversations))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build harness: %v\n", err)
 		os.Exit(1)
@@ -271,7 +289,7 @@ func loadFixture(path string) (fixtureFile, error) {
 	return fixture, nil
 }
 
-func buildEngine(memory bool, mockResponse string, progressSideEffects bool, traceFunc func(ai.CompletionTrace)) (*agent.Engine, func(), error) {
+func buildEngine(memory bool, mockResponse string, progressSideEffects bool, traceFunc func(ai.CompletionTrace), evidenceRetriever retrieval.TutorEvidenceRetriever) (*agent.Engine, func(), error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, nil, fmt.Errorf("load config: %w", err)
@@ -324,12 +342,52 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 		Challenges:           challengeStore,
 		DevMode:              cfg.Runtime.DevMode,
 		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
+		EvidenceRetriever:    evidenceRetriever,
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
 	}
 	engine := agent.NewEngine(engineCfg)
 	return engine, cleanup, nil
+}
+
+type harnessEvidenceRetriever struct {
+	byQuery map[string][]retrieval.TutorEvidence
+}
+
+func newHarnessEvidenceRetriever(conversations []conversationSpec) retrieval.TutorEvidenceRetriever {
+	byQuery := make(map[string][]retrieval.TutorEvidence)
+	for _, conversation := range conversations {
+		var items []retrieval.TutorEvidence
+		for _, item := range conversation.Evidence {
+			items = append(items, retrieval.TutorEvidence{
+				ID: item.ID, Origin: item.Origin, SourceTitle: item.Title, Filename: item.Filename,
+				LocatorType: item.LocatorType, LocatorStart: item.LocatorStart,
+				LocatorEnd: item.LocatorEnd, Locator: item.Locator, Excerpt: item.Excerpt,
+			})
+		}
+		for _, turn := range conversation.Turns {
+			if len(items) > 0 {
+				byQuery[strings.TrimSpace(turn.User)] = items
+			}
+		}
+	}
+	if len(byQuery) == 0 {
+		return nil
+	}
+	return &harnessEvidenceRetriever{byQuery: byQuery}
+}
+
+func (r *harnessEvidenceRetriever) Retrieve(_ context.Context, request retrieval.TutorEvidenceRequest) ([]retrieval.TutorEvidence, error) {
+	if items := r.byQuery[strings.TrimSpace(request.Query)]; len(items) > 0 {
+		return append([]retrieval.TutorEvidence(nil), items...), nil
+	}
+	for query, items := range r.byQuery {
+		if strings.Contains(request.Query, query) {
+			return append([]retrieval.TutorEvidence(nil), items...), nil
+		}
+	}
+	return nil, nil
 }
 
 func selectConversations(conversations []conversationSpec, caseID, tag string, maxCases int) []conversationSpec {
@@ -394,6 +452,9 @@ func checkTurn(turn int, resp string, checks behaviorChecks) []string {
 	var failures []string
 	if checks.RequireNonEmptyReplies && strings.TrimSpace(resp) == "" {
 		failures = append(failures, fmt.Sprintf("turn %d: empty response", turn))
+	}
+	if checks.RequireEvidenceCitation && !evidenceCitationCheckPattern.MatchString(resp) {
+		failures = append(failures, fmt.Sprintf("turn %d: response has no supplied evidence citation label", turn))
 	}
 	if checks.ForbidFallbackMessage && containsFold(resp, fallbackMessagePhrase) {
 		failures = append(failures, fmt.Sprintf("turn %d: fallback phrase %q", turn, fallbackMessagePhrase))

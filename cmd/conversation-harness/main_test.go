@@ -13,7 +13,7 @@ import (
 )
 
 func TestBuildEngineLeavesProgressOffByDefault(t *testing.T) {
-	engine, cleanup, err := buildEngine(true, "mock tutor response", false, nil)
+	engine, cleanup, err := buildEngine(true, "mock tutor response", false, nil, nil)
 	if err != nil {
 		t.Fatalf("buildEngine() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestBuildEngineLeavesProgressOffByDefault(t *testing.T) {
 }
 
 func TestBuildEngineCanEnableProgress(t *testing.T) {
-	engine, cleanup, err := buildEngine(true, "mock tutor response", true, nil)
+	engine, cleanup, err := buildEngine(true, "mock tutor response", true, nil, nil)
 	if err != nil {
 		t.Fatalf("buildEngine() error = %v", err)
 	}

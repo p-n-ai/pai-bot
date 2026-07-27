@@ -5,12 +5,16 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/progress"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 const (
@@ -22,7 +26,7 @@ const (
 // loadContextPackets gathers selected learner/runtime state for one tutor turn.
 // It returns trust-labeled packets directly, so prompt rendering and tracing do
 // not need a second context representation.
-func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) []contextPacket {
+func (e *Engine) loadContextPackets(ctx context.Context, turn *agentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) []contextPacket {
 	var packets []contextPacket
 
 	profile := learnerProfile{}
@@ -166,8 +170,69 @@ func (e *Engine) loadContextPackets(_ context.Context, turn *agentTurn, msg chat
 	if turn.ImageDataURL != "" {
 		packets = appendImagePackets(packets, turn.ImageDataURL)
 	}
+	if e.evidenceRetriever != nil {
+		learnerID, err := e.store.ResolveUserUUID(msg.UserID)
+		if err != nil {
+			slog.Warn("resolve learner for grounded retrieval", "error", err)
+		} else {
+			evidence, retrieveErr := e.evidenceRetriever.Retrieve(ctx, retrieval.TutorEvidenceRequest{
+				TenantID: e.tenantID, LearnerID: learnerID,
+				Query: groundedRetrievalQuery(turn, conv), Limit: 8,
+			})
+			if retrieveErr != nil {
+				slog.Warn("retrieve grounded evidence", "error", retrieveErr)
+			} else {
+				for i, item := range evidence {
+					packets = append(packets, evidenceContextPacket(i+1, item))
+				}
+			}
+		}
+	}
 
 	return packets
+}
+
+type groundedEvidence struct {
+	Label        string
+	EvidenceID   string
+	Origin       string
+	SourceTitle  string
+	Filename     string
+	LocatorType  string
+	LocatorStart int
+	LocatorEnd   int
+	Locator      string
+	Excerpt      string
+}
+
+func evidenceContextPacket(index int, item retrieval.TutorEvidence) contextPacket {
+	return newContextPacket(contextPacket{
+		ID: "evidence." + item.Origin + "." + item.ID, Kind: contextKindEvidence,
+		Trust: contextTrustExternal, Source: item.Origin, RenderAs: contextRenderQuotedData,
+		Data: groundedEvidence{
+			Label: fmt.Sprintf("S%d", index), EvidenceID: item.ID, Origin: item.Origin,
+			SourceTitle: item.SourceTitle, Filename: item.Filename,
+			LocatorType: item.LocatorType, LocatorStart: item.LocatorStart,
+			LocatorEnd: item.LocatorEnd, Locator: item.Locator, Excerpt: item.Excerpt,
+		},
+	})
+}
+
+func groundedRetrievalQuery(turn *agentTurn, conv *Conversation) string {
+	query := strings.TrimSpace(turn.InputText)
+	if !isVagueContinuation(query) || conv == nil {
+		return query
+	}
+	for i := len(conv.Messages) - 1; i >= 0; i-- {
+		message := conv.Messages[i]
+		if message.Role == "user" && message.ID != turn.UserMessageID && !isVagueContinuation(message.Content) {
+			return strings.TrimSpace(message.Content + " " + query)
+		}
+	}
+	if turn.Topic != nil {
+		return strings.TrimSpace(turn.Topic.Name + " " + query)
+	}
+	return query
 }
 
 func selectTurnProgress(items []progress.ProgressItem, topic *curriculum.Topic, limit int) []progress.ProgressItem {

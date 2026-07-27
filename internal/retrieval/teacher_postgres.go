@@ -71,6 +71,155 @@ type TeacherEvidence struct {
 	ClassIDs     []string `json:"class_ids"`
 }
 
+type TutorEvidenceRequest struct {
+	TenantID  string
+	LearnerID string
+	Query     string
+	Limit     int
+}
+
+type TutorEvidence struct {
+	ID           string
+	Origin       string
+	SourceTitle  string
+	Filename     string
+	LocatorType  string
+	LocatorStart int
+	LocatorEnd   int
+	Locator      string
+	Excerpt      string
+}
+
+type TutorEvidenceRetriever interface {
+	Retrieve(context.Context, TutorEvidenceRequest) ([]TutorEvidence, error)
+}
+
+type teacherEvidenceSearcher interface {
+	Search(context.Context, TeacherEvidenceRequest) ([]TeacherEvidence, error)
+}
+
+type classMembershipResolver interface {
+	ActiveClassIDs(context.Context, string, string) ([]string, error)
+}
+
+type TutorEvidenceService struct {
+	oss         *Service
+	teacher     teacherEvidenceSearcher
+	memberships classMembershipResolver
+}
+
+func NewTutorEvidenceService(pool *pgxpool.Pool, oss *Service, teacher teacherEvidenceSearcher) (*TutorEvidenceService, error) {
+	if pool == nil {
+		return nil, errors.New("tutor evidence database is required")
+	}
+	return newTutorEvidenceService(oss, teacher, postgresClassMembershipResolver{pool: pool}), nil
+}
+
+func newTutorEvidenceService(oss *Service, teacher teacherEvidenceSearcher, memberships classMembershipResolver) *TutorEvidenceService {
+	return &TutorEvidenceService{oss: oss, teacher: teacher, memberships: memberships}
+}
+
+type postgresClassMembershipResolver struct {
+	pool *pgxpool.Pool
+}
+
+func (r postgresClassMembershipResolver) ActiveClassIDs(ctx context.Context, tenantID, learnerID string) ([]string, error) {
+	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(learnerID) == "" {
+		return nil, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT g.id::text
+		FROM group_members gm
+		JOIN groups g ON g.id = gm.group_id AND g.tenant_id = gm.tenant_id
+		JOIN users u ON u.id = gm.user_id AND u.tenant_id = gm.tenant_id
+		WHERE gm.tenant_id = $1::uuid
+		  AND gm.user_id = $2::uuid
+		  AND g.type = 'class'
+		ORDER BY g.id`, tenantID, learnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var classIDs []string
+	for rows.Next() {
+		var classID string
+		if err := rows.Scan(&classID); err != nil {
+			return nil, err
+		}
+		classIDs = append(classIDs, classID)
+	}
+	return classIDs, rows.Err()
+}
+
+func (s *TutorEvidenceService) Retrieve(ctx context.Context, req TutorEvidenceRequest) ([]TutorEvidence, error) {
+	req.Query = strings.TrimSpace(req.Query)
+	if req.Query == "" {
+		return nil, nil
+	}
+	if req.Limit <= 0 || req.Limit > 12 {
+		req.Limit = 8
+	}
+	ossLimit := max(1, req.Limit/2)
+	out := make([]TutorEvidence, 0, req.Limit)
+	if s.oss != nil {
+		hits, err := s.oss.Search(SearchRequest{Query: req.Query, Limit: ossLimit, SourceTypes: []string{"curriculum"}})
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range hits {
+			out = append(out, TutorEvidence{
+				ID: hit.Document.ID, Origin: "oss", SourceTitle: hit.Document.Title,
+				Filename: hit.Document.Source, LocatorType: "section",
+				Locator: hit.Document.Title, Excerpt: hit.Excerpt,
+			})
+		}
+	}
+	if s.teacher == nil || s.memberships == nil || req.LearnerID == "" || req.TenantID == "" {
+		return dedupeTutorEvidence(out, req.Limit), nil
+	}
+	classIDs, err := s.memberships.ActiveClassIDs(ctx, req.TenantID, req.LearnerID)
+	if err != nil {
+		return nil, err
+	}
+	if len(classIDs) == 0 {
+		return dedupeTutorEvidence(out, req.Limit), nil
+	}
+	items, err := s.teacher.Search(ctx, TeacherEvidenceRequest{
+		TenantID: req.TenantID, ClassIDs: classIDs, Query: req.Query, Limit: req.Limit - len(out),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		out = append(out, TutorEvidence{
+			ID: item.ID, Origin: "teacher", SourceTitle: item.SourceTitle,
+			Filename: item.Filename, LocatorType: item.LocatorType,
+			LocatorStart: item.LocatorStart, LocatorEnd: item.LocatorEnd, Excerpt: item.Excerpt,
+		})
+	}
+	return dedupeTutorEvidence(out, req.Limit), nil
+}
+
+func dedupeTutorEvidence(items []TutorEvidence, limit int) []TutorEvidence {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]TutorEvidence, 0, min(len(items), limit))
+	for _, item := range items {
+		if item.ID == "" {
+			continue
+		}
+		key := item.Origin + "\x00" + item.ID
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, item)
+		if len(out) == limit {
+			break
+		}
+	}
+	return out
+}
+
 type TeacherResourceService struct {
 	pool               *pgxpool.Pool
 	embedder           Embedder

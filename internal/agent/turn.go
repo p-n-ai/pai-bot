@@ -70,6 +70,7 @@ const (
 	contextKindCurrentInput        contextKind = "current_input"
 	contextKindImage               contextKind = "image"
 	contextKindControlInstruction  contextKind = "control_instruction"
+	contextKindEvidence            contextKind = "evidence"
 )
 
 type contextTrust string
@@ -109,8 +110,12 @@ type contextPacket struct {
 
 // contextSource is trace metadata. It should not contain raw private data.
 type contextSource struct {
-	Name     string
-	Included bool
+	Name       string
+	Included   bool
+	EvidenceID string
+	Title      string
+	Filename   string
+	Locator    string
 }
 
 // promptManifest records the shape of the model input without storing the full
