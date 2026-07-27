@@ -93,6 +93,14 @@ type embedIdentityResolverStub struct {
 	identity EmbedIdentity
 }
 
+type embedAuthenticatorStub struct {
+	user auth.UserSession
+}
+
+func (s embedAuthenticatorStub) AuthenticatePassword(context.Context, auth.LoginRequest) (auth.UserSession, error) {
+	return s.user, nil
+}
+
 func (s embedIdentityResolverStub) ResolveEmbedIdentity(context.Context, string, string) (EmbedIdentity, error) {
 	return s.identity, nil
 }
@@ -219,7 +227,8 @@ func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
 		EmbedConfigStore:  store,
 		EmbedGuestService: guests,
 		JWTSecret:         "guest-secret",
-		AccessTokenTTL:    time.Hour,
+		AccessTokenTTL:    15 * time.Minute,
+		EmbedTokenTTL:     2 * time.Hour,
 	})
 
 	request := httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
@@ -234,6 +243,15 @@ func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
 	if guests.parentOrigin != "https://school.example" {
 		t.Fatalf("bound origin = %q", guests.parentOrigin)
 	}
+	var guestPayload struct {
+		ExpiresIn int `json:"expires_in"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &guestPayload); err != nil {
+		t.Fatal(err)
+	}
+	if guestPayload.ExpiresIn != 7200 {
+		t.Fatalf("guest expires_in = %d, want 7200", guestPayload.ExpiresIn)
+	}
 
 	request = httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
 		`{"tenant":"school","parent_origin":"https://school.example"}`,
@@ -243,6 +261,26 @@ func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("spoofed parent status = %d, want 403", response.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
+		`{"tenant":"school","parent_origin":"https://school.example","fingerprint":"`+strings.Repeat("x", 129)+`"}`,
+	))
+	request.Header.Set("Origin", "https://api.example")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("long fingerprint status = %d, want 400", response.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/guest", strings.NewReader(
+		`{"tenant":"school","parent_origin":"https://school.example","fingerprint":"`+strings.Repeat("x", maxEmbedRequestBytes)+`"}`,
+	))
+	request.Header.Set("Origin", "https://api.example")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body status = %d, want 413", response.Code)
 	}
 }
 
@@ -335,7 +373,12 @@ func TestAdminEmbedConfigUsesConfiguredOrForwardedPublicBaseURL(t *testing.T) {
 func TestEmbedMessagesUsesTokenTenantAndUser(t *testing.T) {
 	const secret = "embed-message-secret"
 	messages := &embedMessagesStub{}
-	store := &embedConfigStoreStub{configs: map[string]chat.EmbedConfig{}}
+	store := &embedConfigStoreStub{
+		configs: map[string]chat.EmbedConfig{},
+		tenantByOrigin: map[string]string{
+			"https://school.example": "tenant-a",
+		},
+	}
 	handler := NewTopMux(TopMuxOptions{
 		EmbedConfigStore:  store,
 		EmbedMessageStore: messages,
@@ -343,8 +386,9 @@ func TestEmbedMessagesUsesTokenTenantAndUser(t *testing.T) {
 		AccessTokenTTL:    time.Hour,
 	})
 	token := issueEmbedTestToken(t, secret, auth.RoleGuest, "tenant-a", "https://school.example")
-	request := httptest.NewRequest(http.MethodGet, "/api/embed/messages", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://api.example/api/embed/messages", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Origin", "https://api.example")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -352,6 +396,45 @@ func TestEmbedMessagesUsesTokenTenantAndUser(t *testing.T) {
 	}
 	if messages.tenantID != "tenant-a" || messages.userID != "user-a" {
 		t.Fatalf("history scope = %q/%q", messages.tenantID, messages.userID)
+	}
+
+	for _, test := range []struct {
+		name    string
+		origin  string
+		referer string
+		status  int
+		revoke  bool
+	}{
+		{name: "same-origin browser GET without origin", status: http.StatusOK},
+		{
+			name:    "browser referer with embed path",
+			referer: "https://api.example/embed/chat?tenant=school",
+			status:  http.StatusOK,
+		},
+		{name: "mismatched request origin", origin: "https://evil.example", status: http.StatusForbidden},
+		{name: "revoked parent origin", origin: "https://api.example", status: http.StatusForbidden, revoke: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.revoke {
+				delete(store.tenantByOrigin, "https://school.example")
+				defer func() {
+					store.tenantByOrigin["https://school.example"] = "tenant-a"
+				}()
+			}
+			request := httptest.NewRequest(http.MethodGet, "https://api.example/api/embed/messages", nil)
+			request.Header.Set("Authorization", "Bearer "+token)
+			if test.origin != "" {
+				request.Header.Set("Origin", test.origin)
+			}
+			if test.referer != "" {
+				request.Header.Set("Referer", test.referer)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d: %s", response.Code, test.status, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -363,17 +446,18 @@ func TestEmbedStudentLoginTokenCarriesInternalAndChannelIdentity(t *testing.T) {
 			"school|https://school.example": "tenant-a",
 		},
 	}
-	authSvc := &stubAuthService{loginResp: auth.Session{User: auth.UserSession{
+	authSvc := embedAuthenticatorStub{user: auth.UserSession{
 		UserID: "internal-student-id", TenantID: "tenant-a", Role: auth.RoleStudent, Name: "Student",
-	}}}
+	}}
 	handler := NewTopMux(TopMuxOptions{
-		EmbedConfigStore: store,
-		AuthService:      authSvc,
+		EmbedConfigStore:   store,
+		EmbedAuthenticator: authSvc,
 		EmbedIdentityResolver: embedIdentityResolverStub{identity: EmbedIdentity{
 			Channel: "telegram", ExternalID: "telegram-student-id",
 		}},
 		JWTSecret:      secret,
-		AccessTokenTTL: time.Hour,
+		AccessTokenTTL: 15 * time.Minute,
+		EmbedTokenTTL:  2 * time.Hour,
 	})
 	request := httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/login", strings.NewReader(
 		`{"tenant":"school","parent_origin":"https://school.example","email":"student@example.com","password":"password"}`,
@@ -385,7 +469,8 @@ func TestEmbedStudentLoginTokenCarriesInternalAndChannelIdentity(t *testing.T) {
 		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
 	}
 	var payload struct {
-		Token string `json:"token"`
+		Token     string `json:"token"`
+		ExpiresIn int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
@@ -399,6 +484,12 @@ func TestEmbedStudentLoginTokenCarriesInternalAndChannelIdentity(t *testing.T) {
 	}
 	if claims.Channel != "telegram" || claims.ExternalID != "telegram-student-id" {
 		t.Fatalf("channel identity = %q/%q", claims.Channel, claims.ExternalID)
+	}
+	if payload.ExpiresIn != 7200 {
+		t.Fatalf("login expires_in = %d, want 7200", payload.ExpiresIn)
+	}
+	if got := claims.ExpiresAt.Sub(claims.IssuedAt); got != 2*time.Hour {
+		t.Fatalf("login token lifetime = %s, want 2h", got)
 	}
 }
 

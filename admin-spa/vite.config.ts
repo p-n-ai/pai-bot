@@ -20,6 +20,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/embed': {
+        target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
+        changeOrigin: false,
+        xfwd: true,
+      },
       '/api': {
         target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
         changeOrigin: true,
@@ -27,12 +32,12 @@ export default defineConfig({
       },
       '/embed': {
         target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
-        changeOrigin: true,
+        changeOrigin: false,
         xfwd: true,
       },
       '/ws': {
         target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
-        changeOrigin: true,
+        changeOrigin: false,
         xfwd: true,
         ws: true,
       },

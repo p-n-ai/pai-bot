@@ -19,6 +19,8 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
+const maxEmbedRequestBytes = 64 << 10
+
 type EmbedGuestService interface {
 	IssueGuestToken(ctx context.Context, tenantID, origin, fingerprint string) (string, string, error)
 	UpgradeGuest(ctx context.Context, userID, tenantID, parentOrigin, name, email, password string) (string, error)
@@ -42,6 +44,10 @@ type EmbedIdentity struct {
 
 type EmbedIdentityResolver interface {
 	ResolveEmbedIdentity(ctx context.Context, tenantID, userID string) (EmbedIdentity, error)
+}
+
+type EmbedPasswordAuthenticator interface {
+	AuthenticatePassword(ctx context.Context, req auth.LoginRequest) (auth.UserSession, error)
 }
 
 type PostgresEmbedMessageStore struct {
@@ -71,18 +77,18 @@ func (s *PostgresEmbedMessageStore) ListEmbedMessages(ctx context.Context, tenan
 		SELECT m.id::text, m.role, m.content, m.created_at
 		FROM messages m
 		JOIN conversations c ON c.id = m.conversation_id
-		JOIN users u ON u.id = c.user_id
 		WHERE c.user_id = $1::uuid
 		  AND c.tenant_id = $2::uuid
-		  AND u.channel = 'embed'
+		  AND m.tenant_id = $2::uuid
 		  AND m.role IN ('user', 'assistant')
-		  AND ($3 = '' OR m.created_at < (
-		    SELECT cursor_message.created_at
+		  AND ($3 = '' OR (m.created_at, m.id) < (
+		    SELECT cursor_message.created_at, cursor_message.id
 		    FROM messages cursor_message
 		    JOIN conversations cursor_conversation ON cursor_conversation.id = cursor_message.conversation_id
 		    WHERE cursor_message.id = $3::uuid
 		      AND cursor_conversation.user_id = $1::uuid
 		      AND cursor_conversation.tenant_id = $2::uuid
+		      AND cursor_message.tenant_id = $2::uuid
 		  ))
 		ORDER BY m.created_at DESC, m.id DESC
 		LIMIT $4`, userID, tenantID, before, limit+1)
@@ -112,21 +118,22 @@ func (s *PostgresEmbedMessageStore) ListEmbedMessages(ctx context.Context, tenan
 	return messages, hasMore, nil
 }
 
-func registerEmbedRoutes(mux *http.ServeMux, opts TopMuxOptions, manager *auth.TokenManager) {
+func registerEmbedRoutes(mux *http.ServeMux, opts TopMuxOptions, manager *auth.TokenManager, tokenTTL time.Duration) {
 	if opts.EmbedConfigStore == nil {
 		return
 	}
+	expiresIn := max(int(tokenTTL.Seconds()), 0)
 
 	if opts.EmbedGuestService != nil {
-		mux.Handle("POST /api/embed/auth/guest", handleEmbedGuestAuth(opts.EmbedConfigStore, opts.EmbedGuestService))
-		mux.Handle("POST /api/embed/auth/upgrade", handleEmbedUpgradeGuest(opts.EmbedGuestService, manager))
+		mux.Handle("POST /api/embed/auth/guest", handleEmbedGuestAuth(opts.EmbedConfigStore, opts.EmbedGuestService, expiresIn))
+		mux.Handle("POST /api/embed/auth/upgrade", handleEmbedUpgradeGuest(opts.EmbedConfigStore, opts.EmbedGuestService, manager))
 	}
 	mux.Handle("GET /api/embed/config", handlePublicEmbedConfig(opts.EmbedConfigStore))
-	if opts.AuthService != nil {
-		mux.Handle("POST /api/embed/auth/login", handleEmbedLogin(opts.EmbedConfigStore, opts.AuthService, opts.EmbedIdentityResolver, manager))
+	if opts.EmbedAuthenticator != nil {
+		mux.Handle("POST /api/embed/auth/login", handleEmbedLogin(opts.EmbedConfigStore, opts.EmbedAuthenticator, opts.EmbedIdentityResolver, manager, expiresIn))
 	}
 	if opts.EmbedMessageStore != nil {
-		mux.Handle("GET /api/embed/messages", handleEmbedMessages(opts.EmbedMessageStore, manager))
+		mux.Handle("GET /api/embed/messages", handleEmbedMessages(opts.EmbedConfigStore, opts.EmbedMessageStore, manager))
 	}
 }
 
@@ -160,19 +167,23 @@ func handlePublicEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
 	}
 }
 
-func handleEmbedGuestAuth(store chat.EmbedConfigStore, guests EmbedGuestService) http.HandlerFunc {
+func handleEmbedGuestAuth(store chat.EmbedConfigStore, guests EmbedGuestService, expiresIn int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Tenant       string `json:"tenant"`
 			ParentOrigin string `json:"parent_origin"`
 			Fingerprint  string `json:"fingerprint"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
 		if strings.TrimSpace(request.Tenant) == "" {
 			http.Error(w, "missing tenant", http.StatusBadRequest)
+			return
+		}
+		request.Fingerprint = strings.TrimSpace(request.Fingerprint)
+		if len(request.Fingerprint) > 128 {
+			http.Error(w, "fingerprint is too long", http.StatusBadRequest)
 			return
 		}
 		parentOrigin, err := validatedEmbedParentOrigin(r, request.ParentOrigin)
@@ -197,14 +208,14 @@ func handleEmbedGuestAuth(store chat.EmbedConfigStore, guests EmbedGuestService)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"token": token, "user_id": userID, "expires_in": 3600,
+			"token": token, "user_id": userID, "expires_in": expiresIn,
 		})
 	}
 }
 
-func handleEmbedUpgradeGuest(guests EmbedGuestService, manager *auth.TokenManager) http.HandlerFunc {
+func handleEmbedUpgradeGuest(store chat.EmbedConfigStore, guests EmbedGuestService, manager *auth.TokenManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := parseEmbedBearer(w, r, manager)
+		claims, ok := parseAuthorizedEmbedBearer(w, r, store, manager)
 		if !ok {
 			return
 		}
@@ -221,8 +232,7 @@ func handleEmbedUpgradeGuest(guests EmbedGuestService, manager *auth.TokenManage
 			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
 		if strings.TrimSpace(request.Name) == "" || !strings.Contains(request.Email, "@") || len(strings.TrimSpace(request.Password)) < 8 {
@@ -246,7 +256,7 @@ func handleEmbedUpgradeGuest(guests EmbedGuestService, manager *auth.TokenManage
 	}
 }
 
-func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identities EmbedIdentityResolver, manager *auth.TokenManager) http.HandlerFunc {
+func handleEmbedLogin(store chat.EmbedConfigStore, authSvc EmbedPasswordAuthenticator, identities EmbedIdentityResolver, manager *auth.TokenManager, expiresIn int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Tenant       string `json:"tenant"`
@@ -254,8 +264,7 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identiti
 			Email        string `json:"email"`
 			Password     string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
 		if strings.TrimSpace(request.Tenant) == "" || strings.TrimSpace(request.Email) == "" || strings.TrimSpace(request.Password) == "" {
@@ -276,12 +285,16 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identiti
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		session, err := authSvc.Login(r.Context(), auth.LoginRequest{TenantID: tenantID, Email: request.Email, Password: request.Password})
+		user, err := authSvc.AuthenticatePassword(r.Context(), auth.LoginRequest{
+			TenantID: tenantID,
+			Email:    request.Email,
+			Password: request.Password,
+		})
 		if err != nil {
 			writeAuthError(w, err)
 			return
 		}
-		if session.User.Role != auth.RoleStudent {
+		if user.Role != auth.RoleStudent {
 			http.Error(w, "embed login requires a student account", http.StatusForbidden)
 			return
 		}
@@ -289,14 +302,14 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identiti
 			http.Error(w, "embed identity resolution unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		identity, err := identities.ResolveEmbedIdentity(r.Context(), session.User.TenantID, session.User.UserID)
+		identity, err := identities.ResolveEmbedIdentity(r.Context(), user.TenantID, user.UserID)
 		if err != nil || strings.TrimSpace(identity.Channel) == "" || strings.TrimSpace(identity.ExternalID) == "" {
 			slog.Error("embed login identity resolution failed", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		token, err := manager.Issue(auth.TokenClaims{
-			Subject: session.User.UserID, TenantID: session.User.TenantID, Role: session.User.Role, ParentOrigin: parentOrigin,
+			Subject: user.UserID, TenantID: user.TenantID, Role: user.Role, ParentOrigin: parentOrigin,
 			Channel: identity.Channel, ExternalID: identity.ExternalID,
 		}, time.Now().UTC())
 		if err != nil {
@@ -304,14 +317,14 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identiti
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"token": token, "user_id": session.User.UserID, "role": session.User.Role, "name": session.User.Name, "expires_in": 3600,
+			"token": token, "user_id": user.UserID, "role": user.Role, "name": user.Name, "expires_in": expiresIn,
 		})
 	}
 }
 
-func handleEmbedMessages(store EmbedMessageStore, manager *auth.TokenManager) http.HandlerFunc {
+func handleEmbedMessages(configStore chat.EmbedConfigStore, store EmbedMessageStore, manager *auth.TokenManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := parseEmbedBearer(w, r, manager)
+		claims, ok := parseAuthorizedEmbedBearer(w, r, configStore, manager)
 		if !ok {
 			return
 		}
@@ -368,8 +381,7 @@ func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore, publicBaseURL str
 			Enabled     *bool          `json:"enabled"`
 			ThemeConfig map[string]any `json:"theme_config"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
 		config, err := store.GetByTenantID(r.Context(), tenantID)
@@ -427,8 +439,7 @@ func handleAdminEmbedOrigin(store chat.EmbedConfigStore, add bool) http.HandlerF
 		var request struct {
 			Origin string `json:"origin"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
 		origin, err := normalizeWebOrigin(request.Origin)
@@ -467,6 +478,58 @@ func parseEmbedBearer(w http.ResponseWriter, r *http.Request, manager *auth.Toke
 	return claims, true
 }
 
+func decodeEmbedJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxEmbedRequestBytes)
+	if err := json.NewDecoder(r.Body).Decode(destination); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return false
+		}
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func parseAuthorizedEmbedBearer(
+	w http.ResponseWriter,
+	r *http.Request,
+	store chat.EmbedConfigStore,
+	manager *auth.TokenManager,
+) (auth.TokenClaims, bool) {
+	claims, ok := parseEmbedBearer(w, r, manager)
+	if !ok {
+		return auth.TokenClaims{}, false
+	}
+	if strings.TrimSpace(claims.ParentOrigin) == "" {
+		http.Error(w, "token is not bound to a parent origin", http.StatusForbidden)
+		return auth.TokenClaims{}, false
+	}
+	requestOrigin, err := normalizeOptionalRequestOrigin(r)
+	if err != nil {
+		http.Error(w, "valid origin or referer required", http.StatusForbidden)
+		return auth.TokenClaims{}, false
+	}
+	// Same-origin browser GETs may omit both headers. A supplied browser origin
+	// still has to match either the parent bound into the token or this server.
+	if requestOrigin != "" && requestOrigin != claims.ParentOrigin && requestOrigin != embedServerOrigin(r) {
+		http.Error(w, "origin does not match parent origin", http.StatusForbidden)
+		return auth.TokenClaims{}, false
+	}
+	allowed, err := store.IsOriginAllowed(r.Context(), claims.TenantID, claims.ParentOrigin)
+	if err != nil {
+		slog.Error("embed bearer origin check failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return auth.TokenClaims{}, false
+	}
+	if !allowed {
+		http.Error(w, "embed unavailable", http.StatusForbidden)
+		return auth.TokenClaims{}, false
+	}
+	return claims, true
+}
+
 func validatedEmbedParentOrigin(r *http.Request, rawParentOrigin string) (string, error) {
 	parentOrigin, err := normalizeWebOrigin(rawParentOrigin)
 	if err != nil {
@@ -490,11 +553,7 @@ func embedServerOrigin(r *http.Request) string {
 	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "http" || proto == "https" {
 		scheme = proto
 	}
-	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
-	if host == "" {
-		host = r.Host
-	}
-	return scheme + "://" + host
+	return scheme + "://" + strings.ToLower(strings.TrimSpace(r.Host))
 }
 
 func normalizeOptionalRequestOrigin(r *http.Request) (string, error) {
@@ -502,7 +561,15 @@ func normalizeOptionalRequestOrigin(r *http.Request) (string, error) {
 		return normalizeWebOrigin(origin)
 	}
 	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
-		return normalizeWebOrigin(referer)
+		parsed, err := url.Parse(referer)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil {
+			return "", errors.New("invalid referer")
+		}
+		scheme := strings.ToLower(parsed.Scheme)
+		if scheme != "http" && scheme != "https" {
+			return "", errors.New("invalid referer")
+		}
+		return scheme + "://" + strings.ToLower(parsed.Host), nil
 	}
 	return "", nil
 }

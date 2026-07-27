@@ -14,21 +14,21 @@ func TestEmbedRateLimiter_Handshake(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name    string
-		ip      string
-		allowed bool
+		name     string
+		identity string
+		allowed  bool
 	}{
-		{"first", "1.2.3.4", true},
-		{"second", "1.2.3.4", true},
-		{"third", "1.2.3.4", true},
-		{"fourth_blocked", "1.2.3.4", false},
-		{"different_ip", "5.6.7.8", true},
+		{"first", "tenant-a\x00user-a", true},
+		{"second", "tenant-a\x00user-a", true},
+		{"third", "tenant-a\x00user-a", true},
+		{"fourth_blocked", "tenant-a\x00user-a", false},
+		{"different_identity", "tenant-a\x00user-b", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := rl.AllowHandshake(tt.ip, now); got != tt.allowed {
-				t.Errorf("AllowHandshake(%q) = %v, want %v", tt.ip, got, tt.allowed)
+			if got := rl.AllowHandshake(tt.identity, now); got != tt.allowed {
+				t.Errorf("AllowHandshake(%q) = %v, want %v", tt.identity, got, tt.allowed)
 			}
 		})
 	}

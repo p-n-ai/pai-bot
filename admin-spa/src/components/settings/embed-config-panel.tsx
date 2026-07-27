@@ -36,6 +36,7 @@ import {
 } from '@/lib/embed-widget'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
+type ErrorScope = 'configuration' | 'origins' | ''
 
 export function EmbedConfigPanel() {
   const { auth } = useAuth()
@@ -46,6 +47,7 @@ export function EmbedConfigPanel() {
   const [enabled, setEnabled] = useState(false)
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [error, setError] = useState('')
+  const [errorScope, setErrorScope] = useState<ErrorScope>('')
   const [saving, setSaving] = useState(false)
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
@@ -60,9 +62,11 @@ export function EmbedConfigPanel() {
       setEnabled(next.enabled)
       setTheme(readEmbedTheme(next.theme_config))
       setError('')
+      setErrorScope('')
       setStatus('ready')
     } catch (caught) {
       setError(errorMessage(caught, 'Embed config could not be loaded.'))
+      setErrorScope('configuration')
       setStatus('error')
     }
   }, [])
@@ -74,6 +78,7 @@ export function EmbedConfigPanel() {
   const save = useCallback(async () => {
     setSaving(true)
     setError('')
+    setErrorScope('configuration')
     setSaveSuccess('')
     try {
       const next = await updateEmbedConfig({
@@ -86,6 +91,7 @@ export function EmbedConfigPanel() {
       setSaveSuccess('Configuration saved.')
     } catch (caught) {
       setError(errorMessage(caught, 'Embed settings could not be saved.'))
+      setErrorScope('configuration')
     } finally {
       setSaving(false)
     }
@@ -96,15 +102,18 @@ export function EmbedConfigPanel() {
       event.preventDefault()
       if (!origin.trim()) {
         setError('Origin is required.')
+        setErrorScope('origins')
         return
       }
       setSaving(true)
       setError('')
+      setErrorScope('origins')
       try {
-        await addEmbedOrigin(origin)
+        await addEmbedOrigin(origin.trim())
         setOrigin('')
         const next = await getEmbedConfig()
         setConfig(next)
+        setError('')
       } catch (caught) {
         setError(errorMessage(caught, 'Origin could not be added.'))
       } finally {
@@ -117,10 +126,12 @@ export function EmbedConfigPanel() {
   const removeOrigin = useCallback(async (target: string) => {
     setSaving(true)
     setError('')
+    setErrorScope('origins')
     try {
       await removeEmbedOrigin(target)
       const next = await getEmbedConfig()
       setConfig(next)
+      setError('')
     } catch (caught) {
       setError(errorMessage(caught, 'Origin could not be removed.'))
     } finally {
@@ -141,7 +152,15 @@ export function EmbedConfigPanel() {
   const copySnippet = useCallback(async () => {
     setCopyError('')
     try {
-      await navigator.clipboard.writeText(snippet)
+      const clipboard = Reflect.get(navigator, 'clipboard') as
+        | Clipboard
+        | undefined
+      if (!clipboard) {
+        throw new Error(
+          'Clipboard access is unavailable. Copy the snippet manually.',
+        )
+      }
+      await clipboard.writeText(snippet)
       setCopied(true)
     } catch (caught) {
       setCopied(false)
@@ -278,7 +297,10 @@ export function EmbedConfigPanel() {
           <Button disabled={saving} onClick={save} type='button'>
             {saving ? 'Saving…' : 'Save configuration'}
           </Button>
-          <AuthErrorAlert message={error} title='Update failed.' />
+          <AuthErrorAlert
+            message={errorScope === 'configuration' ? error : ''}
+            title='Update failed.'
+          />
           {saveSuccess && (
             <p className='text-sm font-medium text-emerald-700' role='status'>
               {saveSuccess}
@@ -289,6 +311,7 @@ export function EmbedConfigPanel() {
         <OriginsSection
           config={config}
           disabled={saving}
+          error={errorScope === 'origins' ? error : ''}
           onAdd={addOrigin}
           onChange={setOrigin}
           onRemove={removeOrigin}
@@ -432,6 +455,7 @@ function EmbedSetupGuide() {
 function OriginsSection({
   config,
   disabled,
+  error,
   onAdd,
   onChange,
   onRemove,
@@ -439,6 +463,7 @@ function OriginsSection({
 }: {
   config: EmbedConfig
   disabled: boolean
+  error: string
   onAdd: (event: FormEvent<HTMLFormElement>) => void
   onChange: (origin: string) => void
   onRemove: (origin: string) => void
@@ -476,6 +501,7 @@ function OriginsSection({
           Add origin
         </Button>
       </form>
+      <AuthErrorAlert message={error} title='Origin update failed.' />
       {config.allowed_origins.length === 0 ? (
         <StatePanel title='No origins yet'>
           Add an origin before enabling the widget.

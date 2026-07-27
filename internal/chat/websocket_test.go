@@ -630,13 +630,56 @@ func TestWSChannel_EmbedOriginUsesTokenBoundParent(t *testing.T) {
 	}
 }
 
-func TestExtractClientIPDoesNotTrustForwardedHeaders(t *testing.T) {
+func TestRequestServerOriginDoesNotTrustForwardedHost(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://example.test/ws/embed", nil)
-	request.RemoteAddr = "192.0.2.10:4321"
-	request.Header.Set("X-Forwarded-For", "198.51.100.20")
-	request.Header.Set("X-Real-IP", "203.0.113.30")
-	if got := extractClientIP(request); got != "192.0.2.10" {
-		t.Fatalf("client IP = %q, want direct peer IP", got)
+	request.Header.Set("X-Forwarded-Host", "evil.example")
+	request.Header.Set("X-Forwarded-Proto", "https")
+	if got := requestServerOrigin(request); got != "https://example.test" {
+		t.Fatalf("server origin = %q, want request host", got)
+	}
+}
+
+func TestWSChannel_EmbedHandshakeLimitIsPerAuthenticatedIdentity(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+	ws := NewEmbedWSChannel(store, tm)
+	ws.rateLimiter = NewEmbedRateLimiter(1, 30, time.Minute)
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	dial := func(userID string) (*websocket.Conn, *http.Response, error) {
+		return websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+			Subprotocols: []string{"pai-auth." + issueGuestToken(t, tm, userID, "tenant-1")},
+			HTTPHeader:   map[string][]string{"Origin": {"https://example.com"}},
+		})
+	}
+
+	first, _, err := dial("user-a")
+	if err != nil {
+		t.Fatalf("first identity dial: %v", err)
+	}
+	defer func() { _ = first.CloseNow() }()
+	second, _, err := dial("user-b")
+	if err != nil {
+		t.Fatalf("second identity behind same peer was globally limited: %v", err)
+	}
+	defer func() { _ = second.CloseNow() }()
+
+	_, response, err := dial("user-a")
+	if err == nil {
+		t.Fatal("repeated identity handshake should be rate limited")
+	}
+	if response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("repeated identity status = %v, want 429", response)
 	}
 }
 

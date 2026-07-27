@@ -78,7 +78,9 @@ type TopMuxOptions struct {
 	EmbedGuestService     EmbedGuestService
 	EmbedMessageStore     EmbedMessageStore
 	EmbedIdentityResolver EmbedIdentityResolver
+	EmbedAuthenticator    EmbedPasswordAuthenticator
 	EmbedBaseURL          string
+	EmbedTokenTTL         time.Duration
 	WACloudChannel        *chat.WhatsAppChannel
 	WAMeowChannel         *chat.WhatsAppMeowChannel
 	InboundHandler        func(chat.InboundMessage)
@@ -112,8 +114,13 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 		topMux.Handle("/webhook/whatsapp", opts.WACloudChannel.WebhookHandler(opts.InboundHandler))
 	}
 	manager := auth.NewTokenManager(opts.JWTSecret, opts.AccessTokenTTL)
+	embedTokenTTL := opts.EmbedTokenTTL
+	if embedTokenTTL <= 0 {
+		embedTokenTTL = time.Hour
+	}
+	embedManager := auth.NewTokenManager(opts.JWTSecret, embedTokenTTL)
 	embedMux := http.NewServeMux()
-	registerEmbedRoutes(embedMux, opts, manager)
+	registerEmbedRoutes(embedMux, opts, embedManager, embedTokenTTL)
 	embedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
 	embedAuthLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
 	topMux.Handle("/api/embed/", withSecurityHeaders(withCORS(withAPIRateLimit(embedMux, time.Now, embedLimiter, embedAuthLimiter))))

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -136,10 +135,12 @@ func (ws *WSChannel) Handler() http.Handler {
 				return
 			}
 
-			// IP-based handshake rate limiting.
+			// Limit reconnect churn per authenticated embed identity. Keying on
+			// the direct peer would collapse every client behind an ingress into
+			// one global bucket.
 			if ws.rateLimiter != nil {
-				ip := extractClientIP(r)
-				if !ws.rateLimiter.AllowHandshake(ip, time.Now()) {
+				handshakeKey := claims.TenantID + "\x00" + claims.Subject
+				if !ws.rateLimiter.AllowHandshake(handshakeKey, time.Now()) {
 					http.Error(w, "too many connections", http.StatusTooManyRequests)
 					return
 				}
@@ -178,20 +179,7 @@ func requestServerOrigin(r *http.Request) string {
 	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "http" || proto == "https" {
 		scheme = proto
 	}
-	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
-	if host == "" {
-		host = r.Host
-	}
-	return scheme + "://" + host
-}
-
-// extractClientIP uses the direct peer because no trusted-proxy policy is configured.
-func extractClientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
+	return scheme + "://" + strings.ToLower(strings.TrimSpace(r.Host))
 }
 
 // handleConn manages a single WebSocket connection lifecycle.

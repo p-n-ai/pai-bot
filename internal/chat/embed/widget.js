@@ -32,8 +32,10 @@
     var rawColor = theme.color || script.getAttribute('data-color') || '#b45a1a';
     var color = /^#[0-9a-fA-F]{6}$/.test(rawColor) ? rawColor : '#b45a1a';
     var foreground = readableForeground(color);
-    var position = theme.position === 'bottom-left' ? 'bottom-left' : 'bottom-right';
-    var lang = theme.language === 'ms' || theme.language === 'zh' ? theme.language : 'en';
+    var rawPosition = theme.position || script.getAttribute('data-position');
+    var position = rawPosition === 'bottom-left' ? 'bottom-left' : 'bottom-right';
+    var rawLanguage = theme.language || script.getAttribute('data-language');
+    var lang = rawLanguage === 'ms' || rawLanguage === 'zh' ? rawLanguage : 'en';
     var copy = {
       en: { open: 'Open P&AI chat', close: 'Close P&AI chat', title: 'P&AI Chat' },
       ms: { open: 'Buka sembang P&AI', close: 'Tutup sembang P&AI', title: 'Sembang P&AI' },

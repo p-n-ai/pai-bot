@@ -48,6 +48,8 @@ func TestHandleWidgetJS_AccessibleIdempotentAndParentOriginBound(t *testing.T) {
 		"Buka sembang P&AI",
 		"打开 P&AI 聊天",
 		"readableForeground(color)",
+		"theme.language || script.getAttribute('data-language')",
+		"theme.position || script.getAttribute('data-position')",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("widget script missing %q", expected)
@@ -81,12 +83,23 @@ func TestHandleChatPage_ValidTenant(t *testing.T) {
 		"Simpan kemajuan anda",
 		"保存学习进度",
 		"readableForeground(color)",
+		`role="dialog"`,
+		`aria-modal="true"`,
+		`label for="upgradeEmail"`,
+		"panelSignupEl.innerHTML",
+		"window.crypto.getRandomValues(bytes)",
 	} {
 		if !strings.Contains(rec.Body.String(), expected) {
 			t.Errorf("chat page missing %q", expected)
 		}
 	}
-	for _, forbidden := range []string{"var storageKey = 'pai-chat-'", "function loadHistory()", "function saveHistory()"} {
+	for _, forbidden := range []string{
+		"var storageKey = 'pai-chat-'",
+		"function loadHistory()",
+		"function saveHistory()",
+		"getElementById('upgradeForm')",
+		"navigator.userAgent",
+	} {
 		if strings.Contains(rec.Body.String(), forbidden) {
 			t.Errorf("chat page retains duplicate-prone local history code %q", forbidden)
 		}

@@ -20,6 +20,7 @@ import (
 const (
 	defaultAPIRateLimitPerMinute  = 240
 	defaultAuthRateLimitPerMinute = 20
+	defaultRateLimitMaxBuckets    = 10000
 )
 
 type fixedWindowLimiter struct {
@@ -28,6 +29,7 @@ type fixedWindowLimiter struct {
 
 	mu      sync.Mutex
 	buckets map[string]fixedWindowState
+	maxKeys int
 }
 
 type fixedWindowState struct {
@@ -40,6 +42,7 @@ func newFixedWindowLimiter(limit int, window time.Duration) *fixedWindowLimiter 
 		limit:   limit,
 		window:  window,
 		buckets: make(map[string]fixedWindowState),
+		maxKeys: defaultRateLimitMaxBuckets,
 	}
 }
 
@@ -56,6 +59,7 @@ func (l *fixedWindowLimiter) Allow(key string, now time.Time) (bool, time.Durati
 
 	state, ok := l.buckets[key]
 	if !ok || now.Sub(state.windowStart) >= l.window {
+		l.ensureBucketCapacity(key, now)
 		l.buckets[key] = fixedWindowState{windowStart: now, count: 1}
 		return true, 0
 	}
@@ -71,6 +75,29 @@ func (l *fixedWindowLimiter) Allow(key string, now time.Time) (bool, time.Durati
 		retryAfter = 0
 	}
 	return false, retryAfter
+}
+
+func (l *fixedWindowLimiter) ensureBucketCapacity(key string, now time.Time) {
+	if _, exists := l.buckets[key]; exists || l.maxKeys <= 0 || len(l.buckets) < l.maxKeys {
+		return
+	}
+	for bucketKey, state := range l.buckets {
+		if !state.windowStart.Add(l.window).After(now) {
+			delete(l.buckets, bucketKey)
+		}
+	}
+	if len(l.buckets) < l.maxKeys {
+		return
+	}
+	var oldestKey string
+	var oldestStart time.Time
+	for bucketKey, state := range l.buckets {
+		if oldestKey == "" || state.windowStart.Before(oldestStart) {
+			oldestKey = bucketKey
+			oldestStart = state.windowStart
+		}
+	}
+	delete(l.buckets, oldestKey)
 }
 
 func withAPIRateLimit(next http.Handler, now func() time.Time, apiLimiter, authLimiter *fixedWindowLimiter) http.Handler {
@@ -94,7 +121,10 @@ func withAPIRateLimit(next http.Handler, now func() time.Time, apiLimiter, authL
 			keyPrefix = "auth"
 		}
 
-		key := keyPrefix + ":" + rateLimitClientKey(r)
+		// Login-style endpoints must not accept caller-selected bearer/session
+		// values as a limiter key because those credentials are not authenticated
+		// until after this middleware runs.
+		key := keyPrefix + ":" + rateLimitClientKey(r, !authRequest)
 		allowed, retryAfter := limiter.Allow(key, now().UTC())
 		if !allowed {
 			seconds := int(math.Ceil(retryAfter.Seconds()))
@@ -120,23 +150,26 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func rateLimitClientKey(r *http.Request) string {
-	sessionToken := readCookieValue(r, auth.SessionCookieName)
-	if sessionToken != "" {
-		return "session:" + shortTokenHash(sessionToken)
-	}
-	if token, err := bearerToken(r.Header.Get("Authorization")); err == nil {
-		return "bearer:" + shortTokenHash(token)
+func rateLimitClientKey(r *http.Request, allowCredentialKey bool) string {
+	if allowCredentialKey {
+		sessionToken := readCookieValue(r, auth.SessionCookieName)
+		if sessionToken != "" {
+			return "session:" + shortTokenHash(sessionToken)
+		}
+		if token, err := bearerToken(r.Header.Get("Authorization")); err == nil {
+			return "bearer:" + shortTokenHash(token)
+		}
 	}
 
-	ip := strings.TrimSpace(firstForwardedFor(r.Header.Get("X-Forwarded-For")))
-	if ip == "" {
-		ip = strings.TrimSpace(r.Header.Get("X-Real-IP"))
-	}
-	if ip == "" {
-		host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-		if err == nil {
-			ip = host
+	ip := directPeerIP(r.RemoteAddr)
+	// Same-host proxies are the only forwarding boundary trusted by default.
+	// They append their observed peer to X-Forwarded-For, so the rightmost
+	// valid address cannot be selected by the public client.
+	if parsed := net.ParseIP(ip); parsed != nil && parsed.IsLoopback() {
+		if forwarded := lastForwardedIP(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+			ip = forwarded
+		} else if realIP := normalizedIP(r.Header.Get("X-Real-IP")); realIP != "" {
+			ip = realIP
 		}
 	}
 	if ip == "" {
@@ -146,15 +179,31 @@ func rateLimitClientKey(r *http.Request) string {
 	return "ip:" + ip
 }
 
-func firstForwardedFor(v string) string {
-	if strings.TrimSpace(v) == "" {
+func directPeerIP(remoteAddr string) string {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
+		return normalizedIP(host)
+	}
+	return normalizedIP(remoteAddr)
+}
+
+func lastForwardedIP(value string) string {
+	parts := strings.Split(value, ",")
+	for index := len(parts) - 1; index >= 0; index-- {
+		if ip := normalizedIP(parts[index]); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+func normalizedIP(value string) string {
+	ip := net.ParseIP(strings.TrimSpace(value))
+	if ip == nil {
 		return ""
 	}
-	parts := strings.Split(v, ",")
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(parts[0])
+	return ip.String()
 }
 
 func shortTokenHash(v string) string {

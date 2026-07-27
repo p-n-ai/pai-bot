@@ -36,10 +36,10 @@
   .typing span:nth-child(3) { animation-delay: 0.32s; }
   @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-4px); opacity: 1; } }
   .input-area { display: flex; padding: 10px 12px; background: var(--pai-card); border-top: 1px solid var(--pai-border); gap: 8px; }
-  .input-area input { flex: 1; padding: 9px 14px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.8); font-size: 14px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); transition: border-color 0.15s ease; }
+  .input-area input { flex: 1; min-width: 0; min-height: 44px; padding: 9px 14px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.8); font-size: 16px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); transition: border-color 0.15s ease; }
   .input-area input::placeholder { color: var(--pai-muted-fg); }
   .input-area input:focus { border-color: var(--pai-primary); box-shadow: 0 0 0 2px oklch(0.553 0.195 38.402 / 0.15); }
-  .input-area button { padding: 9px 18px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); transition: opacity 0.15s ease; }
+  .input-area button { min-height: 44px; padding: 9px 18px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); transition: opacity 0.15s ease; }
   .input-area button:hover:not(:disabled) { opacity: 0.9; }
   .input-area button:disabled { opacity: 0.45; cursor: not-allowed; }
   .offline-banner { background: oklch(0.577 0.245 27.325 / 0.1); color: var(--pai-destructive); text-align: center; padding: 6px; font-size: 12px; font-weight: 500; display: none; }
@@ -53,20 +53,20 @@
   .input-wrap { position: relative; }
   .header { justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 8px; }
-  .upgrade-btn { background: var(--pai-primary-fg); color: var(--pai-primary); border: none; border-radius: calc(var(--pai-radius) * 0.6); padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--pai-font); transition: opacity 0.15s ease; }
+  .upgrade-btn { min-height: 44px; background: var(--pai-primary-fg); color: var(--pai-primary); border: none; border-radius: calc(var(--pai-radius) * 0.6); padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--pai-font); transition: opacity 0.15s ease; }
   .upgrade-btn:hover { opacity: 0.85; }
   .upgrade-overlay { position: absolute; inset: 0; background: var(--pai-bg); z-index: 10; display: none; flex-direction: column; }
   .upgrade-overlay.active { display: flex; }
   .upgrade-header { background: var(--pai-primary); color: var(--pai-primary-fg); padding: 14px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between; }
-  .upgrade-close { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 18px; padding: 0 4px; }
+  .upgrade-close { width: 44px; height: 44px; background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 18px; }
   .upgrade-form { flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
   .upgrade-form h2 { font-size: 18px; font-weight: 700; color: var(--pai-fg); margin: 0; }
   .upgrade-form p { font-size: 13px; color: var(--pai-muted-fg); margin: 0; line-height: 1.5; }
   .upgrade-field { display: flex; flex-direction: column; gap: 4px; }
   .upgrade-field label { font-size: 12px; font-weight: 600; color: var(--pai-fg); }
-  .upgrade-field input { padding: 9px 12px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.6); font-size: 14px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); }
+  .upgrade-field input { padding: 9px 12px; border: 1px solid var(--pai-input); border-radius: calc(var(--pai-radius) * 0.6); font-size: 16px; font-family: var(--pai-font); outline: none; background: var(--pai-bg); color: var(--pai-fg); }
   .upgrade-field input:focus { border-color: var(--pai-primary); box-shadow: 0 0 0 2px oklch(0.553 0.195 38.402 / 0.15); }
-  .upgrade-submit { padding: 10px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); margin-top: 4px; }
+  .upgrade-submit { min-height: 44px; padding: 10px; background: var(--pai-primary); color: var(--pai-primary-fg); border: none; border-radius: calc(var(--pai-radius) * 0.8); cursor: pointer; font-size: 14px; font-weight: 600; font-family: var(--pai-font); margin-top: 4px; }
   .upgrade-submit:disabled { opacity: 0.45; cursor: not-allowed; }
   .upgrade-error { font-size: 12px; color: var(--pai-destructive); margin: 0; min-height: 16px; }
   .upgrade-success { text-align: center; padding: 40px 20px; }
@@ -77,18 +77,25 @@
   .profile-pill.active { display: flex; }
   .profile-pill .avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--pai-primary-fg); color: var(--pai-primary); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
   .profile-pill .name { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .logout-btn { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 13px; padding: 2px 4px; opacity: 0.7; transition: opacity 0.15s; }
+  .logout-btn { width: 44px; height: 44px; background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 13px; opacity: 0.7; transition: opacity 0.15s; }
   .logout-btn:hover { opacity: 1; }
   .guest-label { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: 0.7; }
   .guest-label .dot { width: 6px; height: 6px; border-radius: 50%; background: oklch(0.8 0.15 145); }
   .auth-tabs { display: flex; border-bottom: 1px solid var(--pai-border); }
-  .auth-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--pai-muted-fg); font-family: var(--pai-font); transition: color 0.15s, border-color 0.15s; }
+  .auth-tab { flex: 1; min-height: 44px; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--pai-muted-fg); font-family: var(--pai-font); transition: color 0.15s, border-color 0.15s; }
   .auth-tab.active { color: var(--pai-primary); border-bottom-color: var(--pai-primary); }
   .auth-tab:hover:not(.active) { color: var(--pai-fg); }
   .auth-panel { display: none; }
   .auth-panel.active { display: flex; flex-direction: column; gap: 14px; }
   .login-btn { background: none; border: none; color: var(--pai-primary-fg); cursor: pointer; font-size: 11px; font-weight: 500; font-family: var(--pai-font); padding: 3px 8px; opacity: 0.8; background: oklch(1 0 0 / 0.15); border-radius: calc(var(--pai-radius) * 0.6); }
   .login-btn:hover { opacity: 1; }
+  @media (min-width: 640px) {
+    .input-area input, .upgrade-field input { font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .typing span { animation: none; }
+    .input-area input, .input-area button, .upgrade-btn, .logout-btn, .auth-tab, .login-btn { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -97,39 +104,39 @@
   <div class="header-actions">
     <span class="guest-label" id="guestLabel"><span class="dot"></span> Guest</span>
     <span class="profile-pill" id="profilePill"><span class="avatar" id="profileAvatar"></span><span class="name" id="profileName"></span></span>
-    <button class="upgrade-btn" id="upgradeBtn">Sign Up</button>
-    <button class="logout-btn" id="logoutBtn" style="display:none" title="Log out">
+    <button class="upgrade-btn" id="upgradeBtn" type="button">Sign Up</button>
+    <button aria-label="Log out" class="logout-btn" id="logoutBtn" style="display:none" title="Log out" type="button">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </button>
   </div>
 </div>
-<div class="upgrade-overlay" id="upgradeOverlay">
+<div aria-labelledby="authTitle" aria-modal="true" class="upgrade-overlay" id="upgradeOverlay" role="dialog" tabindex="-1">
   <div class="upgrade-header">
     <span id="authTitle">Account</span>
-    <button class="upgrade-close" id="upgradeClose">&times;</button>
+    <button aria-label="Close account dialog" class="upgrade-close" id="upgradeClose" type="button">&times;</button>
   </div>
-  <div class="auth-tabs">
-    <button class="auth-tab active" id="tabSignup">Sign Up</button>
-    <button class="auth-tab" id="tabLogin">Log In</button>
+  <div aria-label="Account options" class="auth-tabs" role="tablist">
+    <button aria-controls="panelSignup" aria-selected="true" class="auth-tab active" id="tabSignup" role="tab" type="button">Sign Up</button>
+    <button aria-controls="panelLogin" aria-selected="false" class="auth-tab" id="tabLogin" role="tab" tabindex="-1" type="button">Log In</button>
   </div>
   <div class="upgrade-form">
-    <div class="auth-panel active" id="panelSignup">
+    <form aria-labelledby="tabSignup" class="auth-panel active" id="panelSignup" role="tabpanel">
       <h2>Save your progress</h2>
       <p>Create a free account to keep your learning history and continue on any device.</p>
-      <div class="upgrade-field"><label>Name</label><input type="text" id="upgradeName" placeholder="Your name"></div>
-      <div class="upgrade-field"><label>Email</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>
-      <div class="upgrade-field"><label>Password</label><input type="password" id="upgradePassword" placeholder="At least 8 characters"></div>
-      <p class="upgrade-error" id="upgradeError"></p>
-      <button class="upgrade-submit" id="upgradeSubmit">Create Account</button>
-    </div>
-    <div class="auth-panel" id="panelLogin">
+      <div class="upgrade-field"><label for="upgradeName">Name</label><input autocomplete="name" type="text" id="upgradeName" name="name" placeholder="Your name"></div>
+      <div class="upgrade-field"><label for="upgradeEmail">Email</label><input autocomplete="email" type="email" id="upgradeEmail" name="email" placeholder="you@example.com"></div>
+      <div class="upgrade-field"><label for="upgradePassword">Password</label><input autocomplete="new-password" type="password" id="upgradePassword" name="password" placeholder="At least 8 characters"></div>
+      <p aria-live="polite" class="upgrade-error" id="upgradeError"></p>
+      <button class="upgrade-submit" id="upgradeSubmit" type="submit">Create Account</button>
+    </form>
+    <form aria-labelledby="tabLogin" class="auth-panel" id="panelLogin" role="tabpanel">
       <h2>Welcome back</h2>
       <p>Log in to continue your learning journey.</p>
-      <div class="upgrade-field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@example.com"></div>
-      <div class="upgrade-field"><label>Password</label><input type="password" id="loginPassword" placeholder="Your password"></div>
-      <p class="upgrade-error" id="loginError"></p>
-      <button class="upgrade-submit" id="loginSubmit">Log In</button>
-    </div>
+      <div class="upgrade-field"><label for="loginEmail">Email</label><input autocomplete="email" type="email" id="loginEmail" name="email" placeholder="you@example.com"></div>
+      <div class="upgrade-field"><label for="loginPassword">Password</label><input autocomplete="current-password" type="password" id="loginPassword" name="password" placeholder="Your password"></div>
+      <p aria-live="polite" class="upgrade-error" id="loginError"></p>
+      <button class="upgrade-submit" id="loginSubmit" type="submit">Log In</button>
+    </form>
   </div>
 </div>
 <div class="offline-banner" id="offline">Reconnecting...</div>
@@ -138,8 +145,9 @@
 <div class="input-wrap">
   <div class="cmd-palette" id="cmdPalette"></div>
   <div class="input-area">
-    <input type="text" id="input" placeholder="Ask a question... (type / for commands)" autocomplete="off">
-    <button id="send" disabled>Send</button>
+    <label for="input" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Message</label>
+    <input type="text" id="input" name="message" placeholder="Ask a question... (type / for commands)" autocomplete="off">
+    <button id="send" disabled type="button">Send</button>
   </div>
 </div>
 <script>
@@ -159,7 +167,7 @@
       name: 'Name', email: 'Email', password: 'Password', yourName: 'Your name', passwordHint: 'At least 8 characters',
       createAccount: 'Create Account', welcome: 'Welcome back', loginDescription: 'Log in to continue your learning journey.',
       yourPassword: 'Your password', reconnecting: 'Reconnecting...', ask: 'Ask a question... (type / for commands)', send: 'Send',
-      logout: 'Log out', loggingIn: 'Logging in...', creating: 'Creating...', validEmail: 'Valid email is required',
+      logout: 'Log out', closeAccount: 'Close account dialog', loggingIn: 'Logging in...', creating: 'Creating...', validEmail: 'Valid email is required',
       passwordRequired: 'Password is required', nameRequired: 'Name is required', passwordLength: 'Password must be at least 8 characters',
       invalidLogin: 'Invalid email or password', networkError: 'Network error. Please try again.', connectError: 'Unable to connect. Please try again later.',
       accountCreated: 'Account created!', progressSaved: 'Your progress is now saved. You can log in anytime with your email and password.', genericError: 'Something went wrong'
@@ -170,7 +178,7 @@
       name: 'Nama', email: 'E-mel', password: 'Kata laluan', yourName: 'Nama anda', passwordHint: 'Sekurang-kurangnya 8 aksara',
       createAccount: 'Cipta Akaun', welcome: 'Selamat kembali', loginDescription: 'Log masuk untuk meneruskan pembelajaran anda.',
       yourPassword: 'Kata laluan anda', reconnecting: 'Menyambung semula...', ask: 'Tanya soalan... (taip / untuk arahan)', send: 'Hantar',
-      logout: 'Log keluar', loggingIn: 'Sedang log masuk...', creating: 'Sedang mencipta...', validEmail: 'E-mel yang sah diperlukan',
+      logout: 'Log keluar', closeAccount: 'Tutup dialog akaun', loggingIn: 'Sedang log masuk...', creating: 'Sedang mencipta...', validEmail: 'E-mel yang sah diperlukan',
       passwordRequired: 'Kata laluan diperlukan', nameRequired: 'Nama diperlukan', passwordLength: 'Kata laluan mesti sekurang-kurangnya 8 aksara',
       invalidLogin: 'E-mel atau kata laluan tidak sah', networkError: 'Ralat rangkaian. Sila cuba lagi.', connectError: 'Tidak dapat menyambung. Sila cuba lagi kemudian.',
       accountCreated: 'Akaun berjaya dicipta!', progressSaved: 'Kemajuan anda kini disimpan. Anda boleh log masuk pada bila-bila masa dengan e-mel dan kata laluan.', genericError: 'Sesuatu telah berlaku'
@@ -181,7 +189,7 @@
       name: '姓名', email: '电子邮箱', password: '密码', yourName: '你的姓名', passwordHint: '至少 8 个字符',
       createAccount: '创建账户', welcome: '欢迎回来', loginDescription: '登录以继续你的学习旅程。',
       yourPassword: '你的密码', reconnecting: '正在重新连接...', ask: '输入问题...（输入 / 查看指令）', send: '发送',
-      logout: '退出登录', loggingIn: '正在登录...', creating: '正在创建...', validEmail: '请输入有效的电子邮箱',
+      logout: '退出登录', closeAccount: '关闭账户对话框', loggingIn: '正在登录...', creating: '正在创建...', validEmail: '请输入有效的电子邮箱',
       passwordRequired: '请输入密码', nameRequired: '请输入姓名', passwordLength: '密码必须至少包含 8 个字符',
       invalidLogin: '电子邮箱或密码无效', networkError: '网络错误，请重试。', connectError: '无法连接，请稍后重试。',
       accountCreated: '账户已创建！', progressSaved: '你的学习进度已保存。你可以随时使用电子邮箱和密码登录。', genericError: '出现错误'
@@ -273,25 +281,25 @@
     return true;
   }
 
-  // --- Fingerprinting ---
+  // --- Stable guest identity ---
   var fpKey = 'pai-guest-fp-' + tenant;
   function generateFingerprint() {
-    var stored = localStorage.getItem(fpKey);
-    if (stored) return stored;
-    var raw = [
-      navigator.userAgent,
-      screen.width + 'x' + screen.height,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-      navigator.language
-    ].join('|');
-    // Simple hash (djb2)
-    var hash = 5381;
-    for (var i = 0; i < raw.length; i++) {
-      hash = ((hash << 5) + hash) + raw.charCodeAt(i);
-      hash = hash & hash; // Convert to 32-bit integer
+    try {
+      var stored = localStorage.getItem(fpKey);
+      if (stored) return stored;
+    } catch(e) {}
+    var bytes = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = Math.floor(Math.random() * 256);
+      }
     }
-    var fp = 'fp-' + Math.abs(hash).toString(36);
-    localStorage.setItem(fpKey, fp);
+    var fp = 'fp-' + Array.prototype.map.call(bytes, function(value) {
+      return value.toString(16).padStart(2, '0');
+    }).join('');
+    try { localStorage.setItem(fpKey, fp); } catch(e) {}
     return fp;
   }
   var fingerprint = generateFingerprint();
@@ -314,6 +322,7 @@
   var loginPasswordEl = document.getElementById('loginPassword');
   var loginErrorEl = document.getElementById('loginError');
   var loginSubmitEl = document.getElementById('loginSubmit');
+  var dialogReturnFocus = null;
 
   function applyLocalization() {
     var headerLeft = document.querySelector('.header-left');
@@ -321,6 +330,8 @@
     document.getElementById('guestLabel').lastChild.nodeValue = ' ' + copy.guest;
     upgradeBtnEl.textContent = copy.signUp;
     document.getElementById('logoutBtn').title = copy.logout;
+    document.getElementById('logoutBtn').setAttribute('aria-label', copy.logout);
+    upgradeCloseEl.setAttribute('aria-label', copy.closeAccount);
     document.getElementById('authTitle').textContent = copy.account;
     tabSignupEl.textContent = copy.signUp;
     tabLoginEl.textContent = copy.logIn;
@@ -350,14 +361,64 @@
     var isSignup = tab === 'signup';
     tabSignupEl.classList.toggle('active', isSignup);
     tabLoginEl.classList.toggle('active', !isSignup);
+    tabSignupEl.setAttribute('aria-selected', isSignup ? 'true' : 'false');
+    tabLoginEl.setAttribute('aria-selected', isSignup ? 'false' : 'true');
+    tabSignupEl.tabIndex = isSignup ? 0 : -1;
+    tabLoginEl.tabIndex = isSignup ? -1 : 0;
     panelSignupEl.classList.toggle('active', isSignup);
     panelLoginEl.classList.toggle('active', !isSignup);
   }
 
   tabSignupEl.addEventListener('click', function() { switchTab('signup'); });
   tabLoginEl.addEventListener('click', function() { switchTab('login'); });
+  document.querySelector('.auth-tabs').addEventListener('keydown', function(event) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    var showSignup = document.activeElement === tabLoginEl;
+    switchTab(showSignup ? 'signup' : 'login');
+    (showSignup ? tabSignupEl : tabLoginEl).focus();
+  });
 
-  loginSubmitEl.addEventListener('click', function() {
+  function closeAccountDialog() {
+    upgradeOverlayEl.classList.remove('active');
+    upgradeErrorEl.textContent = '';
+    loginErrorEl.textContent = '';
+    var target = dialogReturnFocus;
+    dialogReturnFocus = null;
+    if (target && typeof target.focus === 'function' && !target.disabled) {
+      target.focus();
+    }
+  }
+
+  upgradeOverlayEl.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAccountDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusable = Array.prototype.filter.call(
+      upgradeOverlayEl.querySelectorAll('button:not([disabled]), input:not([disabled])'),
+      function(element) { return element.offsetParent !== null; }
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      upgradeOverlayEl.focus();
+      return;
+    }
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+
+  panelLoginEl.addEventListener('submit', function(event) {
+    event.preventDefault();
     var email = loginEmailEl.value.trim();
     var pw = loginPasswordEl.value;
     loginErrorEl.textContent = '';
@@ -380,7 +441,10 @@
         var userName = resp.name || email.split('@')[0];
         saveSession(token, userId, userName, 'student');
         showProfile(userName);
-        upgradeOverlayEl.classList.remove('active');
+        loginSubmitEl.disabled = false;
+        loginSubmitEl.textContent = copy.logIn;
+        dialogReturnFocus = inputEl;
+        closeAccountDialog();
         // Clear messages and reconnect with student token
         messagesEl.innerHTML = '';
         historyLoaded = false;
@@ -431,45 +495,42 @@
     isUpgraded = false;
     historyLoaded = false;
     clearSession();
-    localStorage.removeItem(fpKey);
+    try { localStorage.removeItem(fpKey); } catch(e) {}
     fingerprint = generateFingerprint();
     // Clear messages from UI.
     messagesEl.innerHTML = '';
     // Reset upgrade form.
     upgradeOverlayEl.classList.remove('active');
-    document.getElementById('upgradeForm').innerHTML =
+    panelSignupEl.innerHTML =
       '<h2>' + copy.saveProgress + '</h2>' +
       '<p>' + copy.saveDescription + '</p>' +
-      '<div class="upgrade-field"><label>' + copy.name + '</label><input type="text" id="upgradeName" placeholder="' + copy.yourName + '"></div>' +
-      '<div class="upgrade-field"><label>' + copy.email + '</label><input type="email" id="upgradeEmail" placeholder="you@example.com"></div>' +
-      '<div class="upgrade-field"><label>' + copy.password + '</label><input type="password" id="upgradePassword" placeholder="' + copy.passwordHint + '"></div>' +
-      '<p class="upgrade-error" id="upgradeError"></p>' +
-      '<button class="upgrade-submit" id="upgradeSubmit">' + copy.createAccount + '</button>';
+      '<div class="upgrade-field"><label for="upgradeName">' + copy.name + '</label><input autocomplete="name" type="text" id="upgradeName" name="name" placeholder="' + copy.yourName + '"></div>' +
+      '<div class="upgrade-field"><label for="upgradeEmail">' + copy.email + '</label><input autocomplete="email" type="email" id="upgradeEmail" name="email" placeholder="you@example.com"></div>' +
+      '<div class="upgrade-field"><label for="upgradePassword">' + copy.password + '</label><input autocomplete="new-password" type="password" id="upgradePassword" name="password" placeholder="' + copy.passwordHint + '"></div>' +
+      '<p aria-live="polite" class="upgrade-error" id="upgradeError"></p>' +
+      '<button class="upgrade-submit" id="upgradeSubmit" type="submit">' + copy.createAccount + '</button>';
     // Re-bind upgrade form elements.
     upgradeNameEl = document.getElementById('upgradeName');
     upgradeEmailEl = document.getElementById('upgradeEmail');
     upgradePasswordEl = document.getElementById('upgradePassword');
     upgradeErrorEl = document.getElementById('upgradeError');
     upgradeSubmitEl = document.getElementById('upgradeSubmit');
-    bindUpgradeSubmit();
     showGuest();
     // Disconnect and reconnect as new guest.
     if (ws) ws.close();
-    setTimeout(connect, 500);
+    else connect();
   });
 
   upgradeBtnEl.addEventListener('click', function() {
+    dialogReturnFocus = document.activeElement;
     upgradeOverlayEl.classList.add('active');
     switchTab('signup');
     upgradeNameEl.focus();
   });
-  upgradeCloseEl.addEventListener('click', function() {
-    upgradeOverlayEl.classList.remove('active');
-    upgradeErrorEl.textContent = '';
-  });
+  upgradeCloseEl.addEventListener('click', closeAccountDialog);
 
-  function bindUpgradeSubmit() {
-    upgradeSubmitEl.addEventListener('click', function() {
+  panelSignupEl.addEventListener('submit', function(event) {
+      event.preventDefault();
       var name = upgradeNameEl.value.trim();
       var email = upgradeEmailEl.value.trim();
       var pw = upgradePasswordEl.value;
@@ -493,12 +554,14 @@
           isUpgraded = true;
           saveSession(token, userId, name, 'student');
           // Show success + profile
-          document.getElementById('upgradeForm').innerHTML =
+          panelSignupEl.innerHTML =
             '<div class="upgrade-success"><h2>' + copy.accountCreated + '</h2>' +
             '<p>' + copy.progressSaved + '</p></div>';
           showProfile(name);
           // Close overlay after a moment
-          setTimeout(function() { upgradeOverlayEl.classList.remove('active'); }, 2000);
+          dialogReturnFocus = inputEl;
+          upgradeOverlayEl.focus();
+          setTimeout(closeAccountDialog, 2000);
           // Reconnect with new student token
           if (ws) { ws.close(); }
         } else {
@@ -514,8 +577,6 @@
       };
       xhr.send(JSON.stringify({ name: name, email: email, password: pw }));
     });
-  }
-  bindUpgradeSubmit();
 
   var ws = null;
   var token = null;
@@ -659,9 +720,11 @@
       var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       var wsURL = proto + '//' + window.location.host + '/ws/embed';
 
-      ws = new WebSocket(wsURL, ['pai-auth.' + token]);
+      var socket = new WebSocket(wsURL, ['pai-auth.' + token]);
+      ws = socket;
 
-      ws.onopen = function() {
+      socket.onopen = function() {
+        if (ws !== socket) return;
         connected = true;
         reconnectDelay = 1000;
         sendBtn.disabled = false;
@@ -669,7 +732,8 @@
         flushQueue();
       };
 
-      ws.onmessage = function(e) {
+      socket.onmessage = function(e) {
+        if (ws !== socket) return;
         try {
           var msg = JSON.parse(e.data);
           switch(msg.type) {
@@ -696,7 +760,8 @@
         } catch(err) {}
       };
 
-      ws.onclose = function() {
+      socket.onclose = function() {
+        if (ws !== socket) return;
         connected = false;
         sendBtn.disabled = true;
         offlineEl.classList.add('active');
@@ -706,7 +771,7 @@
         }, reconnectDelay);
       };
 
-      ws.onerror = function() {};
+      socket.onerror = function() {};
     });
   }
 

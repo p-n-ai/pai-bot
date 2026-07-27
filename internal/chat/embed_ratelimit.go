@@ -37,12 +37,12 @@ func NewEmbedRateLimiter(handshakeLimit, messageLimit int, window time.Duration)
 	}
 }
 
-// AllowHandshake checks if a WebSocket handshake from the given IP is allowed.
-func (rl *EmbedRateLimiter) AllowHandshake(ip string, now time.Time) bool {
+// AllowHandshake checks if a WebSocket handshake for the authenticated identity is allowed.
+func (rl *EmbedRateLimiter) AllowHandshake(identityKey string, now time.Time) bool {
 	if rl == nil {
 		return true
 	}
-	return rl.allow(rl.handshakes, ip, rl.handshakeLimit, now)
+	return rl.allow(rl.handshakes, identityKey, rl.handshakeLimit, now)
 }
 
 // AllowMessage checks if a message from the given user is allowed.

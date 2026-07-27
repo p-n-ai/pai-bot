@@ -162,7 +162,7 @@ describe('EmbedConfigPanel', () => {
     await screen.findByText('Allowed origins')
 
     fireEvent.change(screen.getByLabelText('Allowed origin'), {
-      target: { value: 'https://new.example' },
+      target: { value: '  https://new.example  ' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
     await waitFor(() =>
@@ -176,6 +176,39 @@ describe('EmbedConfigPanel', () => {
     )
     await waitFor(() =>
       expect(removeEmbedOrigin).toHaveBeenCalledWith('https://school.example'),
+    )
+  })
+
+  it('places origin failures beside the origin controls and clears them after recovery', async () => {
+    getEmbedConfig.mockResolvedValue(config)
+    addEmbedOrigin
+      .mockRejectedValueOnce(new Error('Origin rejected'))
+      .mockResolvedValueOnce(undefined)
+    render(<EmbedConfigPanel />)
+    const originsTitle = await screen.findByText('Allowed origins')
+    const originsSection = originsTitle.closest('section')
+    if (!originsSection) {
+      throw new Error('allowed origins section not found')
+    }
+
+    fireEvent.change(screen.getByLabelText('Allowed origin'), {
+      target: { value: 'https://new.example' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
+
+    expect(
+      await within(originsSection).findByText('Origin update failed.'),
+    ).toBeInTheDocument()
+    expect(
+      within(originsSection).getByText('Origin rejected'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Update failed.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
+    await waitFor(() =>
+      expect(
+        within(originsSection).queryByText('Origin rejected'),
+      ).not.toBeInTheDocument(),
     )
   })
 
@@ -209,6 +242,24 @@ describe('EmbedConfigPanel', () => {
 
     expect(await screen.findByText('Copy failed.')).toBeInTheDocument()
     expect(screen.getByText('Clipboard permission denied')).toBeInTheDocument()
+  })
+
+  it('offers manual recovery when clipboard access is unavailable', async () => {
+    getEmbedConfig.mockResolvedValue(config)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    })
+    render(<EmbedConfigPanel />)
+    await screen.findByText('Install snippet')
+    fireEvent.click(screen.getByRole('button', { name: 'Copy snippet' }))
+
+    expect(await screen.findByText('Copy failed.')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Clipboard access is unavailable. Copy the snippet manually.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('updates the static preview without creating guest auth', async () => {

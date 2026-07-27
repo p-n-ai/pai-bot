@@ -319,7 +319,7 @@ func main() {
 			embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
 
 			// Keep legacy terminal chat isolated from the JWT-authenticated embed socket.
-			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
+			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultEmbedTokenTTL)
 			embedGuestService := auth.NewGuestService(db.Pool, embedTokenManager)
 			embedMessageStore := server.NewPostgresEmbedMessageStore(db.Pool)
 			var wsChannel *chat.WSChannel
@@ -502,7 +502,9 @@ func main() {
 				EmbedGuestService:     embedGuestService,
 				EmbedMessageStore:     embedMessageStore,
 				EmbedIdentityResolver: embedMessageStore,
+				EmbedAuthenticator:    authService,
 				EmbedBaseURL:          cfg.Embed.BaseURL,
+				EmbedTokenTTL:         defaultEmbedTokenTTL,
 				WACloudChannel:        waCloudChannel,
 				WAMeowChannel:         waMeowChannel,
 				ChatWebhooks:          chatWebhooks,
@@ -562,6 +564,7 @@ func main() {
 
 const (
 	defaultAccessTokenTTL = 15 * time.Minute
+	defaultEmbedTokenTTL  = time.Hour
 	defaultSessionTTL     = 7 * 24 * time.Hour
 )
 

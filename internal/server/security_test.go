@@ -38,6 +38,27 @@ func TestFixedWindowLimiter(t *testing.T) {
 	}
 }
 
+func TestFixedWindowLimiterBoundsAndPrunesBuckets(t *testing.T) {
+	limiter := newFixedWindowLimiter(2, time.Minute)
+	limiter.maxKeys = 2
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+
+	limiter.Allow("first", now)
+	limiter.Allow("second", now.Add(time.Second))
+	limiter.Allow("third", now.Add(2*time.Second))
+	if len(limiter.buckets) != 2 {
+		t.Fatalf("bucket count = %d, want 2", len(limiter.buckets))
+	}
+	if _, exists := limiter.buckets["first"]; exists {
+		t.Fatal("oldest bucket was not evicted at capacity")
+	}
+
+	limiter.Allow("fourth", now.Add(2*time.Minute))
+	if len(limiter.buckets) != 1 {
+		t.Fatalf("expired bucket count = %d, want 1", len(limiter.buckets))
+	}
+}
+
 func TestWithAPIRateLimit_AuthEndpointReturns429(t *testing.T) {
 	apiLimiter := newFixedWindowLimiter(100, time.Minute)
 	authLimiter := newFixedWindowLimiter(2, time.Minute)
@@ -67,6 +88,51 @@ func TestWithAPIRateLimit_AuthEndpointReturns429(t *testing.T) {
 	}
 	if rec.Header().Get("Retry-After") == "" {
 		t.Fatal("expected Retry-After header")
+	}
+}
+
+func TestWithAPIRateLimit_AuthEndpointIgnoresCallerSelectedKeys(t *testing.T) {
+	apiLimiter := newFixedWindowLimiter(100, time.Minute)
+	authLimiter := newFixedWindowLimiter(1, time.Minute)
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+	handler := withAPIRateLimit(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), func() time.Time { return now }, apiLimiter, authLimiter)
+
+	first := httptest.NewRequest(http.MethodPost, "/api/embed/auth/login", nil)
+	first.RemoteAddr = "203.0.113.10:43123"
+	first.Header.Set("Authorization", "Bearer attacker-selected-one")
+	first.Header.Set("X-Forwarded-For", "198.51.100.1")
+	firstResponse := httptest.NewRecorder()
+	handler.ServeHTTP(firstResponse, first)
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want 200", firstResponse.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodPost, "/api/embed/auth/login", nil)
+	second.RemoteAddr = "203.0.113.10:43123"
+	second.Header.Set("Authorization", "Bearer attacker-selected-two")
+	second.Header.Set("X-Forwarded-For", "198.51.100.2")
+	secondResponse := httptest.NewRecorder()
+	handler.ServeHTTP(secondResponse, second)
+	if secondResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", secondResponse.Code)
+	}
+}
+
+func TestRateLimitClientKeyTrustsOnlySameHostProxy(t *testing.T) {
+	direct := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	direct.RemoteAddr = "203.0.113.10:43123"
+	direct.Header.Set("X-Forwarded-For", "198.51.100.20")
+	if got := rateLimitClientKey(direct, false); got != "ip:203.0.113.10" {
+		t.Fatalf("direct client key = %q", got)
+	}
+
+	proxied := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	proxied.RemoteAddr = "127.0.0.1:43123"
+	proxied.Header.Set("X-Forwarded-For", "198.51.100.30, 203.0.113.30")
+	if got := rateLimitClientKey(proxied, false); got != "ip:203.0.113.30" {
+		t.Fatalf("same-host proxy client key = %q", got)
 	}
 }
 
