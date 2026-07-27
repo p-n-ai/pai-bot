@@ -314,7 +314,7 @@ func (s *PostgresGroupStore) GetGroupMembersWithChannel(groupID string) ([]Group
 	defer cancel()
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.external_id, u.channel, COALESCE(route.thread_id, ''), u.name
+		SELECT u.id::text, u.external_id, u.channel, COALESCE(route.thread_id, ''), u.name
 		FROM group_members gm
 		JOIN users u ON u.id = gm.user_id
 		LEFT JOIN LATERAL (
@@ -339,7 +339,7 @@ func (s *PostgresGroupStore) GetGroupMembersWithChannel(groupID string) ([]Group
 	var members []GroupMemberDelivery
 	for rows.Next() {
 		var m GroupMemberDelivery
-		if err := rows.Scan(&m.ExternalID, &m.Channel, &m.ThreadID, &m.UserName); err != nil {
+		if err := rows.Scan(&m.LearnerID, &m.ExternalID, &m.Channel, &m.ThreadID, &m.UserName); err != nil {
 			return nil, fmt.Errorf("scan group member delivery: %w", err)
 		}
 		members = append(members, m)

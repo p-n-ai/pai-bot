@@ -25,20 +25,58 @@ type DailySummary struct {
 
 // ComputeDailySummary builds a cumulative progress snapshot for the given user.
 func ComputeDailySummary(userID string, tracker progress.Tracker, streaks progress.StreakTracker, xp progress.XPTracker) DailySummary {
-	summary := DailySummary{UserID: userID}
+	var items []progress.ProgressItem
 	if tracker != nil {
-		items, err := tracker.GetAllProgress(userID)
-		if err == nil {
-			summary.TopicsStudied = len(items)
-			for _, item := range items {
-				if progress.IsMastered(item.MasteryScore) {
-					summary.MasteredTopics++
-				}
-				if item.MasteryScore > summary.BestMastery {
-					summary.BestMastery = item.MasteryScore
-					summary.BestTopic = item.TopicID
-				}
-			}
+		var err error
+		items, err = tracker.GetAllProgress(userID)
+		if err != nil {
+			items = nil
+		}
+	}
+	return computeDailySummary(userID, items, streaks, xp)
+}
+
+func computeDailySummaryForLearner(
+	learnerID progress.LearnerID,
+	metricUserID string,
+	tracker progress.Tracker,
+	streaks progress.StreakTracker,
+	xp progress.XPTracker,
+) DailySummary {
+	var items []progress.ProgressItem
+	if typedTracker, ok := tracker.(progress.LearnerTracker); ok {
+		var err error
+		items, err = typedTracker.GetAllProgressForLearner(learnerID)
+		if err != nil {
+			items = nil
+		}
+	} else if tracker != nil {
+		var err error
+		items, err = tracker.GetAllProgress(learnerID.String())
+		if err != nil {
+			items = nil
+		}
+	}
+	return computeDailySummary(metricUserID, items, streaks, xp)
+}
+
+func computeDailySummary(
+	userID string,
+	items []progress.ProgressItem,
+	streaks progress.StreakTracker,
+	xp progress.XPTracker,
+) DailySummary {
+	summary := DailySummary{
+		UserID:        userID,
+		TopicsStudied: len(items),
+	}
+	for _, item := range items {
+		if progress.IsMastered(item.MasteryScore) {
+			summary.MasteredTopics++
+		}
+		if item.MasteryScore > summary.BestMastery {
+			summary.BestMastery = item.MasteryScore
+			summary.BestTopic = item.TopicID
 		}
 	}
 	if streaks != nil {

@@ -190,6 +190,7 @@ func (s weeklyParentReportSource) ListWeeklyParentReportSummaries(ctx context.Co
 		out = append(out, agent.WeeklyParentReportSummary{
 			ParentExternalID:   item.ParentExternalID,
 			ParentChannel:      item.ParentChannel,
+			ParentThreadID:     item.ParentThreadID,
 			ParentName:         item.ParentName,
 			ChildName:          item.ChildName,
 			ChildForm:          item.ChildForm,

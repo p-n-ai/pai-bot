@@ -5,6 +5,7 @@ package progress
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,6 +19,7 @@ const targetUserCTE = `WITH target_user AS (
 	FROM users
 	WHERE external_id = $1
 	  AND tenant_id = $2::uuid
+	  AND channel = $3
 	ORDER BY created_at ASC
 	LIMIT 1
 )`
@@ -26,12 +28,23 @@ const targetUserCTE = `WITH target_user AS (
 type PostgresTracker struct {
 	pool     *pgxpool.Pool
 	tenantID string
+	channel  string
 }
 
 // NewPostgresTracker creates a new PostgreSQL-backed tracker.
 // tenantID is the UUID of the tenant for row-level isolation.
 func NewPostgresTracker(pool *pgxpool.Pool, tenantID string) *PostgresTracker {
-	return &PostgresTracker{pool: pool, tenantID: tenantID}
+	return NewPostgresTrackerForChannel(pool, tenantID, "telegram")
+}
+
+// NewPostgresTrackerForChannel creates a legacy external-ID adapter scoped to
+// one provider; LearnerTracker methods use internal IDs directly.
+func NewPostgresTrackerForChannel(pool *pgxpool.Pool, tenantID, channel string) *PostgresTracker {
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = "telegram"
+	}
+	return &PostgresTracker{pool: pool, tenantID: tenantID, channel: channel}
 }
 
 func (p *PostgresTracker) UpdateMastery(userID, syllabusID, topicID string, delta float64) error {
@@ -241,6 +254,7 @@ func (p *PostgresTracker) resolveLegacyLearnerID(externalID string) (LearnerID, 
 		targetUserCTE+` SELECT id::text FROM target_user`,
 		externalID,
 		p.tenantID,
+		p.channel,
 	).Scan(&userID)
 	if err != nil {
 		return LearnerID{}, err

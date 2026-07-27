@@ -34,6 +34,42 @@ func (t dueReviewTracker) GetDueReviews(string) ([]progress.ProgressItem, error)
 	return []progress.ProgressItem{t.item}, nil
 }
 
+type learnerDueReviewTracker struct {
+	due map[string][]progress.ProgressItem
+}
+
+func (t learnerDueReviewTracker) UpdateMastery(string, string, string, float64) error {
+	return nil
+}
+
+func (t learnerDueReviewTracker) GetMastery(string, string, string) (float64, error) {
+	return 0, nil
+}
+
+func (t learnerDueReviewTracker) GetAllProgress(string) ([]progress.ProgressItem, error) {
+	return nil, nil
+}
+
+func (t learnerDueReviewTracker) GetDueReviews(string) ([]progress.ProgressItem, error) {
+	return nil, nil
+}
+
+func (t learnerDueReviewTracker) UpdateMasteryForLearner(progress.LearnerID, string, string, float64) error {
+	return nil
+}
+
+func (t learnerDueReviewTracker) GetMasteryForLearner(progress.LearnerID, string, string) (float64, error) {
+	return 0, nil
+}
+
+func (t learnerDueReviewTracker) GetAllProgressForLearner(learnerID progress.LearnerID) ([]progress.ProgressItem, error) {
+	return t.due[learnerID.String()], nil
+}
+
+func (t learnerDueReviewTracker) GetDueReviewsForLearner(learnerID progress.LearnerID) ([]progress.ProgressItem, error) {
+	return t.due[learnerID.String()], nil
+}
+
 func TestIsQuietHours(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Kuala_Lumpur")
 
@@ -243,5 +279,80 @@ func TestScheduler_NudgeUsesExplicitChatDestination(t *testing.T) {
 	}
 	if got := mockCh.SentMessages[0]; got.Channel != "discord" || got.UserID != "discord-user" || got.ThreadID != "discord:guild-1:channel-2" {
 		t.Fatalf("destination = %#v, want explicit Discord recipient and thread", got)
+	}
+}
+
+func TestScheduler_NudgeDataUsesProviderQualifiedLearner(t *testing.T) {
+	now := time.Date(2026, 3, 9, 10, 0, 0, 0, time.UTC)
+	store := agent.NewMemoryStore()
+	slackIdentity, err := agent.NewLearnerIdentity("slack", "shared-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	discordIdentity, err := agent.NewLearnerIdentity("discord", "shared-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetUserNameFor(slackIdentity, "Slack learner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetUserNameFor(discordIdentity, "Discord learner"); err != nil {
+		t.Fatal(err)
+	}
+	slackUserID, err := store.ResolveUserUUIDFor(slackIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discordUserID, err := store.ResolveUserUUIDFor(discordIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slackUserID == discordUserID {
+		t.Fatal("provider-qualified learners resolved to the same internal user")
+	}
+
+	mockCh := &chat.MockChannel{}
+	gw := chat.NewGateway()
+	gw.Register("slack", mockCh)
+	gw.Register("discord", mockCh)
+	scheduler := agent.NewScheduler(
+		agent.SchedulerConfig{CheckInterval: time.Second, MaxNudgesPerDay: 3},
+		learnerDueReviewTracker{due: map[string][]progress.ProgressItem{
+			discordUserID: {{
+				UserID:       discordUserID,
+				TopicID:      "discord-only-topic",
+				MasteryScore: 0.5,
+				NextReviewAt: now.Add(-time.Hour),
+			}},
+		}},
+		nil,
+		nil,
+		nil,
+		agent.NewMemoryNudgeTracker(),
+		gw,
+		nil,
+		store,
+	)
+
+	if err := scheduler.CheckRecipientForNudge(context.Background(), agent.ScheduledRecipient{
+		Channel:  "slack",
+		UserID:   "shared-user",
+		ThreadID: "slack:C1:T1",
+	}, now); err != nil {
+		t.Fatalf("Slack check error = %v", err)
+	}
+	if err := scheduler.CheckRecipientForNudge(context.Background(), agent.ScheduledRecipient{
+		Channel:  "discord",
+		UserID:   "shared-user",
+		ThreadID: "discord:G1:C1",
+	}, now); err != nil {
+		t.Fatalf("Discord check error = %v", err)
+	}
+
+	if len(mockCh.SentMessages) != 1 {
+		t.Fatalf("sent messages = %d, want only Discord learner nudge", len(mockCh.SentMessages))
+	}
+	if got := mockCh.SentMessages[0]; got.Channel != "discord" || !strings.Contains(got.Text, "discord-only-topic") {
+		t.Fatalf("message = %#v, want Discord learner's due topic", got)
 	}
 }

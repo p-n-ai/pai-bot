@@ -34,9 +34,10 @@ type SchedulerConfig struct {
 // ScheduledRecipient identifies both the learner and the adapter-owned route
 // where proactive messages should be delivered.
 type ScheduledRecipient struct {
-	Channel  string
-	UserID   string
-	ThreadID string
+	Channel   string
+	UserID    string
+	ThreadID  string
+	LearnerID progress.LearnerID
 }
 
 func (r ScheduledRecipient) outbound(text, parseMode string) (chat.OutboundMessage, bool) {
@@ -120,6 +121,11 @@ type NudgeTracker interface {
 	RecordNudge(userID, nudgeType, topicID string) error
 }
 
+type learnerNudgeTracker interface {
+	NudgeCountTodayForLearner(progress.LearnerID) (int, error)
+	RecordNudgeForLearner(progress.LearnerID, string, string) error
+}
+
 // MemoryNudgeTracker is an in-memory implementation for testing.
 type MemoryNudgeTracker struct {
 	nudges map[string][]time.Time // userID → list of nudge times
@@ -151,6 +157,14 @@ func (t *MemoryNudgeTracker) NudgeCountToday(userID string) (int, error) {
 func (t *MemoryNudgeTracker) RecordNudge(userID, nudgeType, topicID string) error {
 	t.nudges[userID] = append(t.nudges[userID], time.Now())
 	return nil
+}
+
+func (t *MemoryNudgeTracker) NudgeCountTodayForLearner(learnerID progress.LearnerID) (int, error) {
+	return t.NudgeCountToday(learnerID.String())
+}
+
+func (t *MemoryNudgeTracker) RecordNudgeForLearner(learnerID progress.LearnerID, nudgeType, topicID string) error {
+	return t.RecordNudge(learnerID.String(), nudgeType, topicID)
 }
 
 // Scheduler runs periodic checks for due reviews and sends nudges.
@@ -289,8 +303,20 @@ func (s *Scheduler) SendDailySummaries(ctx context.Context, userIDs []string, no
 // SendDailySummariesTo sends daily progress summaries to explicit chat destinations.
 func (s *Scheduler) SendDailySummariesTo(ctx context.Context, recipients []ScheduledRecipient, now time.Time) {
 	for _, recipient := range recipients {
-		summary := ComputeDailySummary(recipient.UserID, s.tracker, s.streaks, s.xp)
-		locale := s.userLocale(recipient.UserID)
+		learnerID, err := s.resolveRecipientLearnerID(recipient)
+		if err != nil {
+			s.logger.Error("daily summary learner resolution failed",
+				"user_id", recipient.UserID, "channel", recipient.Channel, "error", err)
+			continue
+		}
+		summary := computeDailySummaryForLearner(
+			learnerID,
+			recipient.UserID,
+			s.tracker,
+			s.streaks,
+			s.xp,
+		)
+		locale := s.recipientLocale(recipient)
 		msg := FormatDailySummary(summary, locale)
 		if msg == "" {
 			continue
@@ -377,10 +403,12 @@ func (s *Scheduler) sendWeeklyLeaderboards(ctx context.Context) {
 }
 
 func groupMemberRecipient(member GroupMemberDelivery) ScheduledRecipient {
+	learnerID, _ := progress.NewLearnerID(member.LearnerID)
 	return ScheduledRecipient{
-		Channel:  member.Channel,
-		UserID:   member.ExternalID,
-		ThreadID: member.ThreadID,
+		Channel:   member.Channel,
+		UserID:    member.ExternalID,
+		ThreadID:  member.ThreadID,
+		LearnerID: learnerID,
 	}
 }
 
@@ -390,7 +418,11 @@ func (s *Scheduler) checkUser(ctx context.Context, userID string, now time.Time)
 
 func (s *Scheduler) checkRecipient(ctx context.Context, recipient ScheduledRecipient, now time.Time) error {
 	userID := recipient.UserID
-	count, err := s.nudges.NudgeCountToday(userID)
+	learnerID, err := s.resolveRecipientLearnerID(recipient)
+	if err != nil {
+		return fmt.Errorf("resolve scheduled learner: %w", err)
+	}
+	count, err := s.nudgeCountToday(learnerID, userID)
 	if err != nil {
 		return fmt.Errorf("get nudge count: %w", err)
 	}
@@ -400,13 +432,13 @@ func (s *Scheduler) checkRecipient(ctx context.Context, recipient ScheduledRecip
 
 	// Skip nudges for AB group B.
 	if s.store != nil {
-		if group, ok := s.store.GetUserABGroup(userID); ok && group == ABGroupB {
+		if group, ok := s.recipientABGroup(recipient); ok && group == ABGroupB {
 			return nil
 		}
 	}
 
 	// Check for due reviews.
-	dueItems, err := s.tracker.GetDueReviews(userID)
+	dueItems, err := s.dueReviews(learnerID, userID)
 	if err != nil {
 		return fmt.Errorf("get due reviews: %w", err)
 	}
@@ -423,7 +455,7 @@ func (s *Scheduler) checkRecipient(ctx context.Context, recipient ScheduledRecip
 	}
 
 	// Build nudge message.
-	msg := s.buildNudgeMessage(ctx, userID, item, now)
+	msg := s.buildNudgeMessage(ctx, recipient, learnerID, item, now)
 
 	out, ok := recipient.outbound(msg, "")
 	if !ok {
@@ -434,7 +466,7 @@ func (s *Scheduler) checkRecipient(ctx context.Context, recipient ScheduledRecip
 	}
 
 	// Record the nudge.
-	if err := s.nudges.RecordNudge(userID, "review_due", item.TopicID); err != nil {
+	if err := s.recordNudge(learnerID, userID, "review_due", item.TopicID); err != nil {
 		s.logger.Error("failed to record nudge", "user_id", userID, "error", err)
 	}
 
@@ -445,6 +477,89 @@ func (s *Scheduler) checkRecipient(ctx context.Context, recipient ScheduledRecip
 	)
 
 	return nil
+}
+
+func (s *Scheduler) resolveRecipientLearnerID(recipient ScheduledRecipient) (progress.LearnerID, error) {
+	if recipient.LearnerID.String() != "" {
+		return recipient.LearnerID, nil
+	}
+	identity, err := NewLearnerIdentity(recipient.Channel, recipient.UserID)
+	if err != nil {
+		return progress.LearnerID{}, err
+	}
+	if store, ok := s.store.(IdentityConversationStore); ok {
+		userID, err := store.ResolveUserUUIDFor(identity)
+		if err != nil {
+			return progress.LearnerID{}, err
+		}
+		if userID == "" {
+			return progress.LearnerID{}, errLearnerNotFound
+		}
+		return progress.NewLearnerID(userID)
+	}
+	return progress.NewLearnerID(recipient.UserID)
+}
+
+func (s *Scheduler) nudgeCountToday(learnerID progress.LearnerID, legacyUserID string) (int, error) {
+	if tracker, ok := s.nudges.(learnerNudgeTracker); ok {
+		return tracker.NudgeCountTodayForLearner(learnerID)
+	}
+	return s.nudges.NudgeCountToday(legacyUserID)
+}
+
+func (s *Scheduler) recordNudge(
+	learnerID progress.LearnerID,
+	legacyUserID string,
+	nudgeType string,
+	topicID string,
+) error {
+	if tracker, ok := s.nudges.(learnerNudgeTracker); ok {
+		return tracker.RecordNudgeForLearner(learnerID, nudgeType, topicID)
+	}
+	return s.nudges.RecordNudge(legacyUserID, nudgeType, topicID)
+}
+
+func (s *Scheduler) dueReviews(
+	learnerID progress.LearnerID,
+	legacyUserID string,
+) ([]progress.ProgressItem, error) {
+	if tracker, ok := s.tracker.(progress.LearnerTracker); ok {
+		return tracker.GetDueReviewsForLearner(learnerID)
+	}
+	return s.tracker.GetDueReviews(legacyUserID)
+}
+
+func (s *Scheduler) allProgress(
+	learnerID progress.LearnerID,
+	legacyUserID string,
+) ([]progress.ProgressItem, error) {
+	if tracker, ok := s.tracker.(progress.LearnerTracker); ok {
+		return tracker.GetAllProgressForLearner(learnerID)
+	}
+	return s.tracker.GetAllProgress(legacyUserID)
+}
+
+func (s *Scheduler) recipientABGroup(recipient ScheduledRecipient) (string, bool) {
+	identity, err := NewLearnerIdentity(recipient.Channel, recipient.UserID)
+	if err == nil {
+		if store, ok := s.store.(IdentityConversationStore); ok {
+			return store.GetUserABGroupFor(identity)
+		}
+	}
+	return s.store.GetUserABGroup(recipient.UserID)
+}
+
+func (s *Scheduler) recipientLocale(recipient ScheduledRecipient) string {
+	identity, err := NewLearnerIdentity(recipient.Channel, recipient.UserID)
+	if err == nil {
+		if store, ok := s.store.(IdentityConversationStore); ok {
+			if locale, found := store.GetUserPreferredLanguageFor(identity); found && locale != "" {
+				return locale
+			}
+			return i18n.DefaultLocale
+		}
+	}
+	return s.userLocale(recipient.UserID)
 }
 
 // CheckUserForNudge triggers a single due-review nudge check for the user at the given time.
@@ -458,20 +573,33 @@ func (s *Scheduler) CheckRecipientForNudge(ctx context.Context, recipient Schedu
 	return s.checkRecipient(ctx, recipient, now)
 }
 
-func (s *Scheduler) buildNudgeMessage(ctx context.Context, userID string, item progress.ProgressItem, now time.Time) string {
-	locale := s.userLocale(userID)
+func (s *Scheduler) buildNudgeMessage(
+	ctx context.Context,
+	recipient ScheduledRecipient,
+	learnerID progress.LearnerID,
+	item progress.ProgressItem,
+	now time.Time,
+) string {
+	locale := s.recipientLocale(recipient)
 	if s.config.AIPersonalizedNudgesEnabled && s.aiRouter != nil && s.aiRouter.HasProvider() {
-		if msg, ok := s.generateAINudge(ctx, userID, item, now, locale); ok {
+		if msg, ok := s.generateAINudge(ctx, recipient, learnerID, item, now, locale); ok {
 			return msg
 		}
 	}
 	return buildDefaultNudgeMessage(item, now, locale)
 }
 
-func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item progress.ProgressItem, now time.Time, locale string) (string, bool) {
+func (s *Scheduler) generateAINudge(
+	ctx context.Context,
+	recipient ScheduledRecipient,
+	learnerID progress.LearnerID,
+	item progress.ProgressItem,
+	now time.Time,
+	locale string,
+) (string, bool) {
 	streakDays := 0
 	if s.streaks != nil {
-		streak, err := s.streaks.GetStreak(userID)
+		streak, err := s.streaks.GetStreak(recipient.UserID)
 		if err == nil {
 			streakDays = streak.CurrentStreak
 		}
@@ -479,7 +607,7 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 
 	totalXP := 0
 	if s.xp != nil {
-		xp, err := s.xp.GetTotal(userID)
+		xp, err := s.xp.GetTotal(recipient.UserID)
 		if err == nil {
 			totalXP = xp
 		}
@@ -487,7 +615,7 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 
 	activeGoal := ""
 	if s.goals != nil {
-		goals, err := s.goals.ListActiveGoals(userID)
+		goals, err := s.activeGoals(recipient)
 		if err == nil && len(goals) > 0 && goals[0] != nil {
 			activeGoal = goals[0].Summary
 		}
@@ -495,7 +623,7 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 
 	struggleArea := ""
 	if s.tracker != nil {
-		allProgress, err := s.tracker.GetAllProgress(userID)
+		allProgress, err := s.allProgress(learnerID, recipient.UserID)
 		if err == nil {
 			struggleArea = weakestTopicID(allProgress)
 		}
@@ -537,7 +665,7 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 		},
 	})
 	if err != nil {
-		s.logger.Warn("ai nudge generation failed", "user_id", userID, "error", err)
+		s.logger.Warn("ai nudge generation failed", "user_id", recipient.UserID, "error", err)
 		return "", false
 	}
 
@@ -546,6 +674,16 @@ func (s *Scheduler) generateAINudge(ctx context.Context, userID string, item pro
 		return "", false
 	}
 	return formatAINudgeMessage(msg), true
+}
+
+func (s *Scheduler) activeGoals(recipient ScheduledRecipient) ([]*Goal, error) {
+	identity, err := NewLearnerIdentity(recipient.Channel, recipient.UserID)
+	if err == nil {
+		if store, ok := s.goals.(identityGoalStore); ok {
+			return store.ListActiveGoalsFor(identity)
+		}
+	}
+	return s.goals.ListActiveGoals(recipient.UserID)
 }
 
 func formatAINudgeMessage(msg string) string {

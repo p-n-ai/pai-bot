@@ -41,6 +41,7 @@ type GroupMember struct {
 
 // GroupMemberDelivery contains the fields needed to send a chat message to a group member.
 type GroupMemberDelivery struct {
+	LearnerID  string
 	ExternalID string // external chat ID for gateway.Send
 	Channel    string
 	ThreadID   string

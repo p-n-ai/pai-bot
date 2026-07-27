@@ -76,6 +76,10 @@ type GoalStore interface {
 	SyncGoalProgress(userID, syllabusID, topicID string, mastery float64) ([]*Goal, error)
 }
 
+type identityGoalStore interface {
+	ListActiveGoalsFor(LearnerIdentity) ([]*Goal, error)
+}
+
 // MemoryGoalStore is an in-memory GoalStore.
 type MemoryGoalStore struct {
 	mu    sync.RWMutex
@@ -161,6 +165,15 @@ func NewPostgresGoalStoreForChannel(pool *pgxpool.Pool, tenantID, channel string
 		tenantID: tenantID,
 		channel:  channel,
 	}
+}
+
+func (s *PostgresGoalStore) ListActiveGoalsFor(identity LearnerIdentity) ([]*Goal, error) {
+	if err := identity.validate(); err != nil {
+		return nil, err
+	}
+	scoped := *s
+	scoped.channel = identity.Channel()
+	return scoped.ListActiveGoals(identity.ExternalID())
 }
 
 func (s *PostgresGoalStore) AddGoal(externalID string, input GoalInput) (*Goal, error) {
