@@ -34,7 +34,12 @@ export function AssignedTopicsPanel() {
           <TopicProgressItem key={topic.id} topic={topic} />
         ))}
       </div>
-      <Button disabled type='button' variant='outline'>
+      <Button
+        className='min-h-11 sm:min-h-8'
+        disabled
+        type='button'
+        variant='outline'
+      >
         Assign topics to class (coming soon)
       </Button>
     </section>
@@ -52,7 +57,7 @@ function TopicProgressItem({
         <strong>{topic.title}</strong>
         <span>{topic.status}</span>
       </div>
-      <span>{Math.round(topic.progress * 100)}%</span>
+      <span className='tabular-nums'>{Math.round(topic.progress * 100)}%</span>
     </div>
   )
 }
