@@ -17,7 +17,6 @@ components/
 ├── onboarding/   # setup wizard
 ├── classes/      # class management
 ├── users/        # user management
-├── retrieval/    # retrieval lab
 ├── settings/     # embed/WhatsApp settings
 └── export/       # export panel
 ```
@@ -33,7 +32,6 @@ components/
 | AI usage charts/tables     | `ai-usage/`          |
 | Onboarding wizard          | `onboarding/`        |
 | Classes/users management   | `classes/`, `users/` |
-| Retrieval lab UI           | `retrieval/`         |
 | Embed/AI/WhatsApp settings | `settings/`          |
 | Export workflows           | `export/`            |
 

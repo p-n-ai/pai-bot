@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { Route as MetricsRoute } from './metrics'
+import { Route as RetrievalLabRoute } from './retrieval-lab'
 
 describe('legacy dashboard redirects', () => {
   it('keeps /dashboard/metrics pointed at AI usage', () => {
@@ -8,6 +9,10 @@ describe('legacy dashboard redirects', () => {
       MetricsRoute.options.beforeLoad,
       '/dashboard/ai-usage',
     )
+  })
+
+  it('returns retired retrieval lab links to the dashboard', () => {
+    expectBeforeLoadRedirect(RetrievalLabRoute.options.beforeLoad, '/dashboard')
   })
 })
 

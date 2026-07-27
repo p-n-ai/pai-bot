@@ -25,7 +25,9 @@ export function PageHero({
     <header
       className={cn(
         'grid gap-4 text-card-foreground',
-        surface === 'card' ? 'rounded-xl border bg-card p-6 shadow-xs' : 'p-0',
+        surface === 'card'
+          ? 'rounded-xl bg-card p-6 shadow-xs ring-1 ring-foreground/10'
+          : 'p-0',
         aside ? 'lg:grid-cols-[1.3fr_0.7fr]' : undefined,
         className,
       )}

@@ -151,7 +151,13 @@ function StudentDetailReady({
         </PageHero>
       ) : null}
 
-      <section className='grid gap-4 xl:grid-cols-[0.75fr_1fr_0.9fr]'>
+      <section
+        className={
+          variant === 'sheet'
+            ? 'grid gap-4'
+            : 'grid gap-4 xl:grid-cols-[0.75fr_1fr_0.9fr]'
+        }
+      >
         <StudentProfileCard detail={detail} />
         <StudentMasteryRadar view={view} />
         <StudentStruggleAreas detail={detail} view={view} />

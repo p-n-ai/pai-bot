@@ -14,7 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinSlugRouteImport } from './routes/join.$slug'
 import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedStudentsIdRouteImport } from './routes/_authenticated/students/$id'
 import { Route as AuthenticatedSetupOnboardRouteImport } from './routes/_authenticated/setup/onboard'
 import { Route as AuthenticatedSettingsWhatsappRouteImport } from './routes/_authenticated/settings/whatsapp'
@@ -52,11 +52,12 @@ const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
   path: '/export',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedDashboardIndexRoute =
+  AuthenticatedDashboardIndexRouteImport.update({
+    id: '/dashboard/',
+    path: '/dashboard/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedStudentsIdRoute = AuthenticatedStudentsIdRouteImport.update({
   id: '/students/$id',
   path: '/students/$id',
@@ -104,33 +105,32 @@ const AuthenticatedParentsIdRoute = AuthenticatedParentsIdRouteImport.update({
 } as any)
 const AuthenticatedDashboardRetrievalLabRoute =
   AuthenticatedDashboardRetrievalLabRouteImport.update({
-    id: '/retrieval-lab',
-    path: '/retrieval-lab',
-    getParentRoute: () => AuthenticatedDashboardRoute,
+    id: '/dashboard/retrieval-lab',
+    path: '/dashboard/retrieval-lab',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedDashboardMetricsRoute =
   AuthenticatedDashboardMetricsRouteImport.update({
-    id: '/metrics',
-    path: '/metrics',
-    getParentRoute: () => AuthenticatedDashboardRoute,
+    id: '/dashboard/metrics',
+    path: '/dashboard/metrics',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedDashboardClassesRoute =
   AuthenticatedDashboardClassesRouteImport.update({
-    id: '/classes',
-    path: '/classes',
-    getParentRoute: () => AuthenticatedDashboardRoute,
+    id: '/dashboard/classes',
+    path: '/dashboard/classes',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedDashboardAiUsageRoute =
   AuthenticatedDashboardAiUsageRouteImport.update({
-    id: '/ai-usage',
-    path: '/ai-usage',
-    getParentRoute: () => AuthenticatedDashboardRoute,
+    id: '/dashboard/ai-usage',
+    path: '/dashboard/ai-usage',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
-  '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -145,11 +145,11 @@ export interface FileRoutesByFullPath {
   '/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
+  '/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
-  '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -164,13 +164,13 @@ export interface FileRoutesByTo {
   '/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
+  '/dashboard': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/activate': typeof ActivateRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/_authenticated/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -185,13 +185,13 @@ export interface FileRoutesById {
   '/_authenticated/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/_authenticated/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/_authenticated/students/$id': typeof AuthenticatedStudentsIdRoute
+  '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/activate'
-    | '/dashboard'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -206,11 +206,11 @@ export interface FileRouteTypes {
     | '/settings/whatsapp'
     | '/setup/onboard'
     | '/students/$id'
+    | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/activate'
-    | '/dashboard'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -225,12 +225,12 @@ export interface FileRouteTypes {
     | '/settings/whatsapp'
     | '/setup/onboard'
     | '/students/$id'
+    | '/dashboard'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/activate'
-    | '/_authenticated/dashboard'
     | '/_authenticated/export'
     | '/join/$slug'
     | '/_authenticated/dashboard/ai-usage'
@@ -245,6 +245,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/whatsapp'
     | '/_authenticated/setup/onboard'
     | '/_authenticated/students/$id'
+    | '/_authenticated/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -291,11 +292,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExportRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
+    '/_authenticated/dashboard/': {
+      id: '/_authenticated/dashboard/'
       path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/students/$id': {
@@ -356,59 +357,41 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/dashboard/retrieval-lab': {
       id: '/_authenticated/dashboard/retrieval-lab'
-      path: '/retrieval-lab'
+      path: '/dashboard/retrieval-lab'
       fullPath: '/dashboard/retrieval-lab'
       preLoaderRoute: typeof AuthenticatedDashboardRetrievalLabRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard/metrics': {
       id: '/_authenticated/dashboard/metrics'
-      path: '/metrics'
+      path: '/dashboard/metrics'
       fullPath: '/dashboard/metrics'
       preLoaderRoute: typeof AuthenticatedDashboardMetricsRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard/classes': {
       id: '/_authenticated/dashboard/classes'
-      path: '/classes'
+      path: '/dashboard/classes'
       fullPath: '/dashboard/classes'
       preLoaderRoute: typeof AuthenticatedDashboardClassesRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard/ai-usage': {
       id: '/_authenticated/dashboard/ai-usage'
-      path: '/ai-usage'
+      path: '/dashboard/ai-usage'
       fullPath: '/dashboard/ai-usage'
       preLoaderRoute: typeof AuthenticatedDashboardAiUsageRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
-interface AuthenticatedDashboardRouteChildren {
+interface AuthenticatedRouteChildren {
+  AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedDashboardAiUsageRoute: typeof AuthenticatedDashboardAiUsageRoute
   AuthenticatedDashboardClassesRoute: typeof AuthenticatedDashboardClassesRoute
   AuthenticatedDashboardMetricsRoute: typeof AuthenticatedDashboardMetricsRoute
   AuthenticatedDashboardRetrievalLabRoute: typeof AuthenticatedDashboardRetrievalLabRoute
-}
-
-const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
-  {
-    AuthenticatedDashboardAiUsageRoute: AuthenticatedDashboardAiUsageRoute,
-    AuthenticatedDashboardClassesRoute: AuthenticatedDashboardClassesRoute,
-    AuthenticatedDashboardMetricsRoute: AuthenticatedDashboardMetricsRoute,
-    AuthenticatedDashboardRetrievalLabRoute:
-      AuthenticatedDashboardRetrievalLabRoute,
-  }
-
-const AuthenticatedDashboardRouteWithChildren =
-  AuthenticatedDashboardRoute._addFileChildren(
-    AuthenticatedDashboardRouteChildren,
-  )
-
-interface AuthenticatedRouteChildren {
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRouteWithChildren
-  AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedParentsIdRoute: typeof AuthenticatedParentsIdRoute
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsBudgetRoute: typeof AuthenticatedSettingsBudgetRoute
@@ -417,11 +400,16 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsWhatsappRoute: typeof AuthenticatedSettingsWhatsappRoute
   AuthenticatedSetupOnboardRoute: typeof AuthenticatedSetupOnboardRoute
   AuthenticatedStudentsIdRoute: typeof AuthenticatedStudentsIdRoute
+  AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRouteWithChildren,
   AuthenticatedExportRoute: AuthenticatedExportRoute,
+  AuthenticatedDashboardAiUsageRoute: AuthenticatedDashboardAiUsageRoute,
+  AuthenticatedDashboardClassesRoute: AuthenticatedDashboardClassesRoute,
+  AuthenticatedDashboardMetricsRoute: AuthenticatedDashboardMetricsRoute,
+  AuthenticatedDashboardRetrievalLabRoute:
+    AuthenticatedDashboardRetrievalLabRoute,
   AuthenticatedParentsIdRoute: AuthenticatedParentsIdRoute,
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsBudgetRoute: AuthenticatedSettingsBudgetRoute,
@@ -430,6 +418,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsWhatsappRoute: AuthenticatedSettingsWhatsappRoute,
   AuthenticatedSetupOnboardRoute: AuthenticatedSetupOnboardRoute,
   AuthenticatedStudentsIdRoute: AuthenticatedStudentsIdRoute,
+  AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

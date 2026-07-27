@@ -21,7 +21,7 @@ export function StatCard({
   headerClassName?: string
 }) {
   return (
-    <Card className={cn('rounded-xl border bg-card shadow-xs', className)}>
+    <Card className={cn('rounded-xl bg-card shadow-xs', className)}>
       <CardHeader
         className={cn(Icon ? 'space-y-3' : undefined, headerClassName)}
       >

@@ -13,7 +13,7 @@ export function AdminSurface({
   contentClassName?: string
 }) {
   return (
-    <Card className={cn('rounded-xl border bg-card shadow-xs', className)}>
+    <Card className={cn('rounded-xl bg-card shadow-xs', className)}>
       <CardContent className={cn('p-6', contentClassName)}>
         {children}
       </CardContent>
