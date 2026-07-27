@@ -31,6 +31,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 	platformtenant "github.com/p-n-ai/pai-bot/internal/platform/tenant"
 	"github.com/p-n-ai/pai-bot/internal/progress"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 	"github.com/p-n-ai/pai-bot/internal/server"
 	"github.com/p-n-ai/pai-bot/internal/tenant"
 )
@@ -175,6 +176,32 @@ func main() {
 				slog.Info("curriculum ready", "topics", len(topics))
 			}
 			retrievalService := server.NewBootstrapRetrievalService(loader)
+			var retrievalEmbedder retrieval.Embedder
+			if strings.TrimSpace(cfg.Retrieval.EmbeddingBaseURL) != "" {
+				retrievalEmbedder, err = retrieval.NewOpenAICompatibleEmbedder(
+					cfg.Retrieval.EmbeddingBaseURL,
+					cfg.Retrieval.EmbeddingAPIKey,
+					cfg.Retrieval.EmbeddingModel,
+					cfg.Retrieval.EmbeddingDimensions,
+					nil,
+				)
+				if err != nil {
+					return nil, nil, fmt.Errorf("initialize retrieval embeddings: %w", err)
+				}
+			}
+			teacherResources, err := retrieval.NewTeacherResourceService(db.Pool, retrieval.TeacherResourceOptions{
+				Embedder:           retrievalEmbedder,
+				EmbeddingModel:     cfg.Retrieval.EmbeddingModel,
+				AllowGraphFallback: cfg.Runtime.DevMode,
+				GraphDepth:         cfg.Retrieval.GraphDepth,
+				GraphFrontier:      cfg.Retrieval.GraphFrontier,
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("initialize teacher retrieval: %w", err)
+			}
+			if err := teacherResources.VerifyGraph(ctx); err != nil {
+				return nil, nil, fmt.Errorf("verify teacher retrieval graph: %w", err)
+			}
 
 			// Create agent engine with streaks and XP tracking.
 			eventLogger := agent.NewPostgresEventLogger(db.Pool)
@@ -403,7 +430,7 @@ func main() {
 			}
 
 			// HTTP endpoints.
-			apiHandler := server.NewHandlerWithAdminProvider(
+			apiHandler := server.NewHandlerWithAdminProviderAndTeacherResources(
 				server.NewTenantAdminDataSourceProvider(
 					func(tenantID string) server.AdminDataSource {
 						return adminapi.New(db.Pool, tenantID)
@@ -418,6 +445,7 @@ func main() {
 				adminapi.NewPublic(db.Pool),
 				server.NewGatewaySender(gw),
 				retrievalService,
+				teacherResources,
 				authService,
 				cfg.Auth.JWTSecret,
 				defaultAccessTokenTTL,

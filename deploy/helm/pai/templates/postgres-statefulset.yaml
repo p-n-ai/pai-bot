@@ -23,6 +23,12 @@ spec:
       containers:
         - name: postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          args:
+            - postgres
+            - -c
+            - shared_preload_libraries=pg_cron,graph
+            - -c
+            - cron.database_name={{ .Values.postgres.auth.database }}
           ports:
             - name: postgres
               containerPort: 5432
@@ -52,9 +58,15 @@ spec:
           readinessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - {{ .Values.postgres.auth.username | quote }}
+                - /bin/sh
+                - -ec
+                - >-
+                  pg_isready -U {{ .Values.postgres.auth.username | quote }} -d {{ .Values.postgres.auth.database | quote }} &&
+                  test "$(psql -U {{ .Values.postgres.auth.username | quote }} -d {{ .Values.postgres.auth.database | quote }} -Atqc
+                  "SELECT bool_and(ok) FROM
+                  (SELECT default_version = '1.0.0' AS ok FROM pg_available_extensions WHERE name = 'graph'
+                  UNION ALL
+                  SELECT default_version = '0.8.5' FROM pg_available_extensions WHERE name = 'vector') checks")" = t
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3

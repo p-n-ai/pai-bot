@@ -36,6 +36,7 @@ type Config struct {
 	Runtime        RuntimeConfig
 	FeatureFlags   featureflags.Features
 	FocusedPage    FocusedPageConfig
+	Retrieval      RetrievalConfig
 	CurriculumPath string
 }
 
@@ -56,6 +57,15 @@ type ServerConfig struct {
 type FocusedPageConfig struct {
 	BaseURL        string
 	TelegramCTAURL string
+}
+
+type RetrievalConfig struct {
+	EmbeddingBaseURL    string
+	EmbeddingAPIKey     string
+	EmbeddingModel      string
+	EmbeddingDimensions int
+	GraphDepth          int
+	GraphFrontier       int
 }
 
 // DatabaseConfig holds PostgreSQL connection settings.
@@ -234,6 +244,14 @@ func Load() (*Config, error) {
 			BaseURL:        envStr("LEARN_FOCUSED_PAGE_BASE_URL", ""),
 			TelegramCTAURL: envStr("LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL", ""),
 		},
+		Retrieval: RetrievalConfig{
+			EmbeddingBaseURL:    envStr("LEARN_RETRIEVAL_EMBEDDING_BASE_URL", ""),
+			EmbeddingAPIKey:     envStr("LEARN_RETRIEVAL_EMBEDDING_API_KEY", ""),
+			EmbeddingModel:      envStr("LEARN_RETRIEVAL_EMBEDDING_MODEL", "text-embedding-3-small"),
+			EmbeddingDimensions: envInt("LEARN_RETRIEVAL_EMBEDDING_DIMENSIONS", 1536),
+			GraphDepth:          envInt("LEARN_RETRIEVAL_GRAPH_DEPTH", 1),
+			GraphFrontier:       envInt("LEARN_RETRIEVAL_GRAPH_FRONTIER", 40),
+		},
 		AI: AIConfig{
 			DefaultProvider: envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
 			Mock: MockAIConfig{
@@ -365,6 +383,15 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.FocusedPage.BaseURL) != "" && c.Auth.JWTSecret == DefaultAuthSecret {
 		return fmt.Errorf("PAI_AUTH_SECRET must be set to a private secret when focused pages are enabled")
+	}
+	if c.Retrieval.EmbeddingDimensions != 0 && c.Retrieval.EmbeddingDimensions != 1536 {
+		return fmt.Errorf("LEARN_RETRIEVAL_EMBEDDING_DIMENSIONS must be 1536")
+	}
+	if c.Retrieval.GraphDepth != 0 && (c.Retrieval.GraphDepth < 1 || c.Retrieval.GraphDepth > 3) {
+		return fmt.Errorf("LEARN_RETRIEVAL_GRAPH_DEPTH must be between 1 and 3")
+	}
+	if c.Retrieval.GraphFrontier != 0 && (c.Retrieval.GraphFrontier < 1 || c.Retrieval.GraphFrontier > 200) {
+		return fmt.Errorf("LEARN_RETRIEVAL_GRAPH_FRONTIER must be between 1 and 200")
 	}
 	if err := c.validateChatAdapterCredentials(); err != nil {
 		return err

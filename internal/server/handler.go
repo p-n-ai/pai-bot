@@ -60,6 +60,9 @@ func NewBootstrapRetrievalService(loader *curriculum.Loader) *retrieval.Service 
 func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
 	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
 }
+func NewHandlerWithAdminProviderAndTeacherResources(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
+	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, teacherResources, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
+}
 func NewTenantAdminDataSourceProvider(newForTenant func(string) AdminDataSource, newForPlatform func() AdminDataSource, defaultTenantID func(context.Context) (string, error)) TenantAdminDataSourceProvider {
 	return tenantAdminDataSourceProvider{newForTenant: newForTenant, newForPlatform: newForPlatform, defaultTenantID: defaultTenantID}
 }
@@ -447,6 +450,10 @@ func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender,
 // unregistered (tests, unwired deployments). multiTenant restricts those
 // routes to platform admins: the settings row is platform-global.
 func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
+	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, nil, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
+}
+
+func newHandlerWithAdminProviderAndTeacherResources(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -522,6 +529,9 @@ func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSour
 	mux.Handle("DELETE /api/admin/groups/{id}/members/{uid}", adminOrAbove(handleAdminRemoveGroupMember(adminProvider)))
 	mux.Handle("GET /api/admin/groups/{id}/leaderboard", teacherOrAbove(handleAdminGroupLeaderboard(adminProvider)))
 	registerRetrievalRoutes(mux, retrievalService, teacherOrAbove, adminOrAbove)
+	if teacherResources != nil {
+		registerTeacherResourceRoutes(mux, teacherResources, teacherOrAbove)
+	}
 
 	apiLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
 	authLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)

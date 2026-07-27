@@ -3,6 +3,7 @@ module github.com/p-n-ai/pai-bot
 go 1.25.0
 
 require (
+	github.com/Detective-XH/gopdf v0.8.7
 	github.com/OpenRouterTeam/go-sdk v0.5.9
 	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.8.0
@@ -13,7 +14,7 @@ require (
 	github.com/xuri/excelize/v2 v2.10.0
 	go.mau.fi/whatsmeow v0.0.0-20260414172242-d4ffc1df2442
 	golang.org/x/crypto v0.48.0
-	golang.org/x/text v0.34.0
+	golang.org/x/text v0.37.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.48.2
@@ -102,7 +103,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	modernc.org/libc v1.70.0 // indirect

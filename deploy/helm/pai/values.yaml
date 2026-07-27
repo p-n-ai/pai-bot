@@ -45,8 +45,10 @@ postgres:
   # -- Use built-in StatefulSet. Set to false to use an external database.
   enabled: true
   image:
-    repository: postgres
-    tag: "17-alpine"
+    # Build and publish deploy/docker/Dockerfile.postgres at this reference.
+    # The image must contain graph 1.0.0 and vector 0.8.5 for migrations to succeed.
+    repository: ghcr.io/p-n-ai/pai-postgres
+    tag: "pggraph-1.0.0-pgvector-0.8.5"
   storage:
     size: 10Gi
     storageClassName: ""
