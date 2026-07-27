@@ -30,57 +30,36 @@ test.describe("admin authenticated routes @backend", () => {
     "Set E2E_AUTH_ENABLED=true, E2E_ADMIN_EMAIL, and E2E_ADMIN_PASSWORD to run authenticated E2E tests.",
   );
 
-  test("redirects authenticated users away from /login", async ({ page }) => {
+  test("renders authenticated routes", async ({ page }) => {
     await loginAsAdmin(page);
-    await page.goto("/login");
-    await expect(page).toHaveURL(/\/setup\/onboard$/);
-  });
 
-  test("renders /dashboard", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/dashboard$/);
-  });
+    await test.step("redirects authenticated users away from /login", async () => {
+      await page.goto("/login");
+      await expect(page).toHaveURL(/\/setup\/onboard$/);
+    });
 
-  test("renders /dashboard/ai-usage", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/dashboard/ai-usage");
-    await expect(page).toHaveURL(/\/dashboard\/ai-usage$/);
-  });
+    const routes = [
+      { path: "/dashboard", expected: /\/dashboard$/ },
+      { path: "/dashboard/ai-usage", expected: /\/dashboard\/ai-usage$/ },
+      { path: "/dashboard/metrics", expected: /\/dashboard\/ai-usage$/ },
+      { path: "/dashboard/classes", expected: /\/dashboard\/classes$/ },
+      {
+        path: "/students/test-student-id",
+        expected: /\/students\/test-student-id$/,
+      },
+      {
+        path: "/parents/test-parent-id",
+        expected: /\/parents\/test-parent-id$/,
+      },
+      { path: "/settings/users", expected: /\/settings\/users$/ },
+      { path: "/export", expected: /\/export$/ },
+    ] as const;
 
-  test("redirects /dashboard/metrics to /dashboard/ai-usage", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/dashboard/metrics");
-    await expect(page).toHaveURL(/\/dashboard\/ai-usage$/);
-  });
-
-  test("renders /dashboard/classes", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/dashboard/classes");
-    await expect(page).toHaveURL(/\/dashboard\/classes$/);
-  });
-
-  test("renders /students/:id route shell", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/students/test-student-id");
-    await expect(page).toHaveURL(/\/students\/test-student-id$/);
-  });
-
-  test("renders /parents/:id route shell", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/parents/test-parent-id");
-    await expect(page).toHaveURL(/\/parents\/test-parent-id$/);
-  });
-
-  test("renders /settings/users for admin-level roles", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/settings/users");
-    await expect(page).toHaveURL(/\/settings\/users$/);
-  });
-
-  test("renders /export for admin-level roles", async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto("/export");
-    await expect(page).toHaveURL(/\/export$/);
+    for (const route of routes) {
+      await test.step(`renders ${route.path}`, async () => {
+        await page.goto(route.path);
+        await expect(page).toHaveURL(route.expected);
+      });
+    }
   });
 });
