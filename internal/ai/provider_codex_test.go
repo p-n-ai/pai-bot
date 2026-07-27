@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -92,6 +93,84 @@ func TestCodexProviderCompleteUsesCodexResponsesProtocol(t *testing.T) {
 		content[1].(map[string]any)["type"] != "input_image" ||
 		content[1].(map[string]any)["image_url"] != "https://example.test/diagram.png" {
 		t.Fatalf("multimodal content = %#v", content)
+	}
+}
+
+func TestCodexProviderProjectsAssistantHistoryAsInputMessage(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		writeCodexSSE(w, `{"type":"response.completed","response":{"id":"resp","status":"completed"}}`)
+	}))
+	t.Cleanup(server.Close)
+
+	provider, err := NewCodexProvider("opaque", WithCodexAccountID("account-123"), WithCodexBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewCodexProvider() error = %v", err)
+	}
+	_, err = provider.Complete(context.Background(), CompletionRequest{Messages: []Message{
+		{Role: "user", Content: "First"},
+		{Role: "assistant", Content: "Prior answer"},
+		{Role: "user", Content: "Follow up"},
+	}})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	input := captured["input"].([]any)
+	assistant := input[1].(map[string]any)
+	if assistant["role"] != "assistant" || assistant["type"] != nil || assistant["id"] != nil || assistant["status"] != nil {
+		t.Fatalf("assistant input = %#v", assistant)
+	}
+	content := assistant["content"].([]any)
+	if len(content) != 1 ||
+		content[0].(map[string]any)["type"] != "input_text" ||
+		content[0].(map[string]any)["text"] != "Prior answer" {
+		t.Fatalf("assistant content = %#v", content)
+	}
+}
+
+func TestCodexProviderHealthCheckValidatesCredentialsWithModelsEndpoint(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		statusCode int
+		wantErr    bool
+	}{
+		{name: "accepted", statusCode: http.StatusOK},
+		{name: "rejected", statusCode: http.StatusUnauthorized, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/backend-api/codex/models" {
+					t.Errorf("path = %q", r.URL.Path)
+				}
+				if r.Method != http.MethodGet {
+					t.Errorf("method = %q", r.Method)
+				}
+				if r.Header.Get("Authorization") != "Bearer access-token" ||
+					r.Header.Get("chatgpt-account-id") != "account-123" ||
+					r.Header.Get("originator") != "pi" {
+					t.Errorf("headers = %#v", r.Header)
+				}
+				w.WriteHeader(test.statusCode)
+				_, _ = w.Write([]byte(`{"models":[]}`))
+			}))
+			t.Cleanup(server.Close)
+			provider, err := NewCodexProvider(
+				"access-token",
+				WithCodexAccountID("account-123"),
+				WithCodexBaseURL(server.URL+"/backend-api"),
+			)
+			if err != nil {
+				t.Fatalf("NewCodexProvider() error = %v", err)
+			}
+			err = provider.HealthCheck(context.Background())
+			if (err != nil) != test.wantErr {
+				t.Fatalf("HealthCheck() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
 	}
 }
 
@@ -232,6 +311,72 @@ func TestCodexProviderCompleteNativePreservesToolContinuation(t *testing.T) {
 	}
 }
 
+func TestCodexProviderOmitsUnencryptedReasoningFromContinuation(t *testing.T) {
+	var mu sync.Mutex
+	var requests []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		mu.Lock()
+		requests = append(requests, request)
+		requestNumber := len(requests)
+		mu.Unlock()
+		if requestNumber == 1 {
+			writeCodexSSE(w,
+				`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs-no-encryption","summary":[{"type":"summary_text","text":"Need a tool."}]}}`,
+				`{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","id":"fc-1","call_id":"call-1","name":"lookup","arguments":"{}"}}`,
+				`{"type":"response.completed","response":{"id":"resp-tool","status":"completed"}}`,
+			)
+			return
+		}
+		writeCodexSSE(w,
+			`{"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg-1","content":[{"type":"output_text","text":"Done."}]}}`,
+			`{"type":"response.completed","response":{"id":"resp-final","status":"completed"}}`,
+		)
+	}))
+	t.Cleanup(server.Close)
+
+	provider, err := NewCodexProvider("opaque", WithCodexAccountID("account-123"), WithCodexBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewCodexProvider() error = %v", err)
+	}
+	tool := llm.Tool{Name: "lookup", Parameters: json.RawMessage(`{"type":"object","additionalProperties":false}`)}
+	first, err := provider.CompleteNative(context.Background(), "gpt-codex-test", llm.Context{
+		Messages: []llm.Message{llm.UserMessage{Content: []llm.UserContent{llm.TextContent{Text: "Look up"}}}},
+		Tools:    []llm.Tool{tool},
+	}, nil)
+	if err != nil {
+		t.Fatalf("first CompleteNative() error = %v", err)
+	}
+	thinking, ok := first.Content[0].(llm.ThinkingContent)
+	if !ok || thinking.Thinking != "Need a tool." || thinking.Signature != "" {
+		t.Fatalf("thinking = %#v", first.Content[0])
+	}
+	call := requireContractToolCall(t, first)
+	_, err = provider.CompleteNative(context.Background(), "gpt-codex-test", llm.Context{
+		Messages: []llm.Message{
+			llm.UserMessage{Content: []llm.UserContent{llm.TextContent{Text: "Look up"}}},
+			first,
+			llm.ToolResultMessage{ToolCallID: call.ID, ToolName: call.Name, Content: []llm.UserContent{llm.TextContent{Text: "Result"}}},
+		},
+		Tools: []llm.Tool{tool},
+	}, nil)
+	if err != nil {
+		t.Fatalf("continuation CompleteNative() error = %v", err)
+	}
+
+	mu.Lock()
+	continuation := requests[1]["input"].([]any)
+	mu.Unlock()
+	for _, raw := range continuation {
+		if raw.(map[string]any)["type"] == "reasoning" {
+			t.Fatalf("continuation replays unencrypted reasoning: %#v", continuation)
+		}
+	}
+}
+
 func TestCodexProviderRejectsMalformedReasoningSignatures(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -265,6 +410,102 @@ func TestCodexProviderRejectsMalformedReasoningSignatures(t *testing.T) {
 	}
 	if requests.Load() != 0 {
 		t.Fatalf("HTTP requests = %d, want 0", requests.Load())
+	}
+}
+
+func TestCodexProviderRefreshWaiterRecoversFromLeaderCancellation(t *testing.T) {
+	expired := codexTestJWT(t, "account-old", time.Now().Add(-time.Hour))
+	refreshed := codexTestJWT(t, "account-new", time.Now().Add(time.Hour))
+	firstRefreshStarted := make(chan struct{})
+	releaseFirstRefresh := make(chan struct{})
+	var refreshes atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token":
+			if refreshes.Add(1) == 1 {
+				close(firstRefreshStarted)
+				select {
+				case <-r.Context().Done():
+				case <-releaseFirstRefresh:
+				}
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  refreshed,
+				"refresh_token": "refresh-new",
+				"expires_in":    3600,
+			})
+		case "/codex/responses":
+			assertCodexHeaders(t, r, refreshed, "account-new")
+			writeCodexSSE(w, `{"type":"response.completed","response":{"id":"resp","status":"completed"}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	provider, err := NewCodexProvider(
+		expired,
+		WithCodexRefreshToken("refresh-old"),
+		WithCodexBaseURL(server.URL),
+		WithCodexAuthBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewCodexProvider() error = %v", err)
+	}
+	leaderCtx, cancelLeader := context.WithCancel(context.Background())
+	leaderErr := make(chan error, 1)
+	go func() {
+		_, err := provider.Complete(leaderCtx, CompletionRequest{Messages: []Message{{Role: "user", Content: "Hi"}}})
+		leaderErr <- err
+	}()
+	<-firstRefreshStarted
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := provider.Complete(context.Background(), CompletionRequest{Messages: []Message{{Role: "user", Content: "Hi"}}})
+		waiterErr <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancelLeader()
+	close(releaseFirstRefresh)
+
+	if err := <-leaderErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("leader error = %v, want context canceled", err)
+	}
+	if err := <-waiterErr; err != nil {
+		t.Fatalf("waiter Complete() error = %v", err)
+	}
+	if refreshes.Load() != 2 {
+		t.Fatalf("refreshes = %d, want 2", refreshes.Load())
+	}
+}
+
+func TestCodexProviderRefreshRetainsUnrotatedTokenAndUsesJWTExpiry(t *testing.T) {
+	refreshed := codexTestJWT(t, "account-new", time.Now().Add(time.Hour))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/token" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": refreshed})
+	}))
+	t.Cleanup(server.Close)
+
+	provider, err := NewCodexProvider(
+		codexTestJWT(t, "account-old", time.Now().Add(-time.Hour)),
+		WithCodexRefreshToken("refresh-old"),
+		WithCodexAuthBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewCodexProvider() error = %v", err)
+	}
+	credentials, err := provider.requestTokenRefresh(context.Background(), "refresh-old")
+	if err != nil {
+		t.Fatalf("requestTokenRefresh() error = %v", err)
+	}
+	if credentials.accessToken != refreshed || credentials.refreshToken != "refresh-old" ||
+		credentials.expiresAt.Before(time.Now().Add(50*time.Minute)) {
+		t.Fatalf("credentials = %#v", credentials)
 	}
 }
 
@@ -403,6 +644,46 @@ func TestCodexProviderStreamCompleteEmitsSSEDeltas(t *testing.T) {
 	}
 	if text.String() != "Hello world" || !done {
 		t.Fatalf("text = %q, done = %v", text.String(), done)
+	}
+}
+
+func TestCodexProviderPreservesMultipleMessageOutputItems(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeCodexSSE(w,
+			`{"type":"response.output_text.delta","output_index":0,"delta":"Al"}`,
+			`{"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg-1","content":[{"type":"output_text","text":"Alpha"}]}}`,
+			`{"type":"response.output_text.delta","output_index":1,"delta":"Be"}`,
+			`{"type":"response.output_item.done","output_index":1,"item":{"type":"message","id":"msg-2","content":[{"type":"output_text","text":"Beta"}]}}`,
+			`{"type":"response.completed","response":{"id":"resp","status":"completed"}}`,
+		)
+	}))
+	t.Cleanup(server.Close)
+	provider, err := NewCodexProvider("opaque", WithCodexAccountID("account-123"), WithCodexBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewCodexProvider() error = %v", err)
+	}
+
+	response, err := provider.Complete(context.Background(), CompletionRequest{Messages: []Message{{Role: "user", Content: "Hi"}}})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if response.Content != "AlphaBeta" {
+		t.Fatalf("Complete() content = %q", response.Content)
+	}
+
+	chunks, err := provider.StreamComplete(context.Background(), CompletionRequest{Messages: []Message{{Role: "user", Content: "Hi"}}})
+	if err != nil {
+		t.Fatalf("StreamComplete() error = %v", err)
+	}
+	var text strings.Builder
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			t.Fatalf("stream error = %v", chunk.Error)
+		}
+		text.WriteString(chunk.Content)
+	}
+	if text.String() != "AlphaBeta" {
+		t.Fatalf("stream content = %q", text.String())
 	}
 }
 

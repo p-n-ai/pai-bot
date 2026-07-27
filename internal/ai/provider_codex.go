@@ -334,8 +334,35 @@ func (p *CodexProvider) Models() []ModelInfo {
 }
 
 func (p *CodexProvider) HealthCheck(ctx context.Context) error {
-	_, _, err := p.credentials(ctx)
-	return err
+	token, accountID, err := p.credentials(ctx)
+	if err != nil {
+		return err
+	}
+	response, err := p.getModels(ctx, token, accountID)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+		_ = response.Body.Close()
+		if err := p.refreshCredentials(ctx, token, true); err != nil {
+			return fmt.Errorf("codex authentication rejected and token refresh failed: %w", err)
+		}
+		token, accountID, err = p.credentials(ctx)
+		if err != nil {
+			return err
+		}
+		response, err = p.getModels(ctx, token, accountID)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() { _ = response.Body.Close() }()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("codex models API returned status %d", response.StatusCode)
+	}
+	return nil
 }
 
 func (p *CodexProvider) complete(ctx context.Context, request codexRequest, onText func(string)) (codexResult, error) {
@@ -363,6 +390,7 @@ func (p *CodexProvider) openResponse(ctx context.Context, request codexRequest) 
 	if response.StatusCode != http.StatusUnauthorized && response.StatusCode != http.StatusForbidden {
 		return codexHTTPResponse(response)
 	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
 	_ = response.Body.Close()
 
 	if err := p.refreshCredentials(ctx, token, true); err != nil {
@@ -407,6 +435,25 @@ func (p *CodexProvider) post(ctx context.Context, body []byte, codexRequest code
 	return response, nil
 }
 
+func (p *CodexProvider) getModels(ctx context.Context, token, accountID string) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, codexModelsURL(p.baseURL), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Codex models request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("chatgpt-account-id", accountID)
+	request.Header.Set("originator", "pi")
+	request.Header.Set("Accept", "application/json")
+	response, err := p.client.Do(request)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, fmt.Errorf("send Codex models request: %w", err)
+	}
+	return response, nil
+}
+
 func codexHTTPResponse(response *http.Response) (*http.Response, error) {
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
 		return response, nil
@@ -432,55 +479,65 @@ func (p *CodexProvider) credentials(ctx context.Context) (string, string, error)
 }
 
 func (p *CodexProvider) refreshCredentials(ctx context.Context, staleToken string, force bool) error {
-	p.mu.Lock()
-	if p.accessToken != staleToken {
-		p.mu.Unlock()
-		return nil
-	}
-	if !force && (p.expiresAt.IsZero() || time.Now().Add(30*time.Second).Before(p.expiresAt)) {
-		p.mu.Unlock()
-		return nil
-	}
-	if p.refreshing != nil {
-		done := p.refreshing
-		p.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-done:
-		}
+	for {
 		p.mu.Lock()
-		defer p.mu.Unlock()
 		if p.accessToken != staleToken {
+			p.mu.Unlock()
 			return nil
 		}
-		return p.refreshErr
-	}
-	if p.refreshToken == "" {
-		p.mu.Unlock()
-		return errors.New("codex refresh token is unavailable")
-	}
-	done := make(chan struct{})
-	p.refreshing = done
-	refreshToken := p.refreshToken
-	p.mu.Unlock()
-
-	credentials, err := p.requestTokenRefresh(ctx, refreshToken)
-
-	p.mu.Lock()
-	if err == nil {
-		p.accessToken = credentials.accessToken
-		p.refreshToken = credentials.refreshToken
-		p.expiresAt = credentials.expiresAt
-		if !p.explicitAccountID {
-			p.accountID = credentials.accountID
+		if !force && (p.expiresAt.IsZero() || time.Now().Add(30*time.Second).Before(p.expiresAt)) {
+			p.mu.Unlock()
+			return nil
 		}
+		if p.refreshing != nil {
+			done := p.refreshing
+			p.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-done:
+			}
+			p.mu.Lock()
+			tokenChanged := p.accessToken != staleToken
+			refreshErr := p.refreshErr
+			p.mu.Unlock()
+			if tokenChanged || refreshErr == nil {
+				return nil
+			}
+			if errors.Is(refreshErr, context.Canceled) || errors.Is(refreshErr, context.DeadlineExceeded) {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				continue
+			}
+			return refreshErr
+		}
+		if p.refreshToken == "" {
+			p.mu.Unlock()
+			return errors.New("codex refresh token is unavailable")
+		}
+		done := make(chan struct{})
+		p.refreshing = done
+		refreshToken := p.refreshToken
+		p.mu.Unlock()
+
+		credentials, err := p.requestTokenRefresh(ctx, refreshToken)
+
+		p.mu.Lock()
+		if err == nil {
+			p.accessToken = credentials.accessToken
+			p.refreshToken = credentials.refreshToken
+			p.expiresAt = credentials.expiresAt
+			if !p.explicitAccountID {
+				p.accountID = credentials.accountID
+			}
+		}
+		p.refreshErr = err
+		p.refreshing = nil
+		close(done)
+		p.mu.Unlock()
+		return err
 	}
-	p.refreshErr = err
-	p.refreshing = nil
-	close(done)
-	p.mu.Unlock()
-	return err
 }
 
 type codexCredentials struct {
@@ -520,18 +577,28 @@ func (p *CodexProvider) requestTokenRefresh(ctx context.Context, refreshToken st
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&decoded); err != nil {
 		return codexCredentials{}, errors.New("decode Codex token refresh response")
 	}
-	if decoded.AccessToken == "" || decoded.RefreshToken == "" || decoded.ExpiresIn <= 0 {
-		return codexCredentials{}, errors.New("codex token refresh response is missing required fields")
+	if decoded.AccessToken == "" {
+		return codexCredentials{}, errors.New("codex token refresh response is missing an access token")
 	}
-	accountID, _, err := codexJWTMetadata(decoded.AccessToken)
+	if decoded.RefreshToken == "" {
+		decoded.RefreshToken = refreshToken
+	}
+	accountID, tokenExpiresAt, err := codexJWTMetadata(decoded.AccessToken)
 	if !p.explicitAccountID && (err != nil || accountID == "") {
 		return codexCredentials{}, errors.New("failed to extract Codex account ID from refreshed access token")
+	}
+	expiresAt := tokenExpiresAt
+	if decoded.ExpiresIn > 0 {
+		expiresAt = time.Now().Add(time.Duration(decoded.ExpiresIn) * time.Second)
+	}
+	if expiresAt.IsZero() {
+		return codexCredentials{}, errors.New("codex token refresh response is missing an expiry")
 	}
 	return codexCredentials{
 		accessToken:  decoded.AccessToken,
 		refreshToken: decoded.RefreshToken,
 		accountID:    accountID,
-		expiresAt:    time.Now().Add(time.Duration(decoded.ExpiresIn) * time.Second),
+		expiresAt:    expiresAt,
 	}, nil
 }
 
@@ -547,7 +614,6 @@ func buildCodexLegacyRequest(req CompletionRequest) (codexRequest, error) {
 		request.Temperature = &temperature
 	}
 	var instructions []string
-	assistantIndex := 0
 	for i, message := range req.Messages {
 		switch message.Role {
 		case "system", "developer":
@@ -566,8 +632,7 @@ func buildCodexLegacyRequest(req CompletionRequest) (codexRequest, error) {
 			if len(message.ImageURLs) > 0 {
 				return codexRequest{}, fmt.Errorf("codex assistant message at index %d cannot contain images", i)
 			}
-			request.Input = append(request.Input, codexAssistantInput(message.Content, assistantIndex))
-			assistantIndex++
+			request.Input = append(request.Input, codexAssistantInput(message.Content))
 		default:
 			return codexRequest{}, fmt.Errorf("unsupported Codex message role at index %d", i)
 		}
@@ -589,7 +654,6 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 	if c.SystemPrompt != "" {
 		instructions = append(instructions, c.SystemPrompt)
 	}
-	assistantIndex := 0
 	for _, message := range c.Messages {
 		switch typed := message.(type) {
 		case llm.SystemMessage:
@@ -608,8 +672,7 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 			for _, block := range typed.Content {
 				switch value := block.(type) {
 				case llm.TextContent:
-					request.Input = append(request.Input, codexAssistantInput(value.Text, assistantIndex))
-					assistantIndex++
+					request.Input = append(request.Input, codexAssistantInput(value.Text))
 				case llm.ToolCall:
 					arguments, err := json.Marshal(value.Arguments)
 					if err != nil {
@@ -745,14 +808,11 @@ func codexNativeUserContent(content []llm.UserContent) ([]any, error) {
 	return projected, nil
 }
 
-func codexAssistantInput(text string, index int) map[string]any {
+func codexAssistantInput(text string) map[string]any {
 	return map[string]any{
-		"type":   "message",
-		"id":     fmt.Sprintf("msg_pai_%d", index),
-		"role":   "assistant",
-		"status": "completed",
+		"role": "assistant",
 		"content": []any{
-			map[string]any{"type": "output_text", "text": text, "annotations": []any{}},
+			map[string]any{"type": "input_text", "text": text},
 		},
 	}
 }
@@ -824,6 +884,7 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 	result := codexResult{}
 	toolArguments := make(map[int]string)
 	outputItems := make(map[int]codexOutputItem)
+	messageText := make(map[int]string)
 	dispatch := func() error {
 		if len(dataLines) == 0 {
 			return nil
@@ -839,7 +900,7 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 		}
 		switch event.Type {
 		case "response.output_text.delta", "response.refusal.delta":
-			result.text += event.Delta
+			messageText[event.OutputIndex] += event.Delta
 			if onText != nil && event.Delta != "" {
 				onText(event.Delta)
 			}
@@ -866,12 +927,9 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 			switch item.parsed.Type {
 			case "message":
 				finalText := codexItemText(item.parsed)
-				if onText != nil && strings.HasPrefix(finalText, result.text) {
-					if delta := strings.TrimPrefix(finalText, result.text); delta != "" {
-						onText(delta)
-					}
+				if err := recordCodexMessageText(messageText, event.OutputIndex, finalText, onText); err != nil {
+					return err
 				}
-				result.text = finalText
 			case "function_call":
 				if item.parsed.Arguments != "" {
 					toolArguments[event.OutputIndex] = item.parsed.Arguments
@@ -882,7 +940,7 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 			if err := json.Unmarshal(event.Response, &terminal); err != nil {
 				return errors.New("decode Codex terminal response")
 			}
-			if err := applyCodexTerminal(&result, terminal, outputItems, toolArguments); err != nil {
+			if err := applyCodexTerminal(&result, terminal, outputItems, toolArguments, messageText, onText); err != nil {
 				return err
 			}
 		case "response.failed":
@@ -928,7 +986,14 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 	return result, nil
 }
 
-func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, items map[int]codexOutputItem, arguments map[int]string) error {
+func applyCodexTerminal(
+	result *codexResult,
+	terminal codexTerminalResponse,
+	items map[int]codexOutputItem,
+	arguments map[int]string,
+	messageText map[int]string,
+	onText func(string),
+) error {
 	result.id = terminal.ID
 	result.model = terminal.Model
 	result.status = terminal.Status
@@ -937,17 +1002,6 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 	result.input = max(0, terminal.Usage.InputTokens-result.cacheRead-result.cacheWrite)
 	result.output = terminal.Usage.OutputTokens
 	result.terminal = true
-	if result.text == "" {
-		for _, raw := range terminal.Output {
-			item, err := parseCodexOutputItem(raw)
-			if err != nil {
-				return errors.New("decode Codex terminal output item")
-			}
-			if item.parsed.Type == "message" {
-				result.text += codexItemText(item.parsed)
-			}
-		}
-	}
 	for i, raw := range terminal.Output {
 		terminalItem, err := parseCodexOutputItem(raw)
 		if err != nil {
@@ -960,15 +1014,28 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 			}
 		}
 		items[i] = terminalItem
+		if terminalItem.parsed.Type == "message" {
+			if err := recordCodexMessageText(messageText, i, codexItemText(terminalItem.parsed), onText); err != nil {
+				return err
+			}
+		}
 		if terminalItem.parsed.Type == "function_call" && terminalItem.parsed.Arguments != "" {
 			arguments[i] = terminalItem.parsed.Arguments
 		}
 	}
-	indexes := make([]int, 0, len(items))
+	indexSet := make(map[int]struct{}, len(items)+len(messageText))
 	for index := range items {
+		indexSet[index] = struct{}{}
+	}
+	for index := range messageText {
+		indexSet[index] = struct{}{}
+	}
+	indexes := make([]int, 0, len(indexSet))
+	for index := range indexSet {
 		indexes = append(indexes, index)
 	}
 	sort.Ints(indexes)
+	result.text = ""
 	for _, i := range indexes {
 		item := items[i]
 		switch item.parsed.Type {
@@ -983,11 +1050,19 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 			})
 			continue
 		case "message":
-			if text := codexItemText(item.parsed); text != "" {
-				result.content = append(result.content, llm.TextContent{Text: text})
+			finalText := codexItemText(item.parsed)
+			if finalText == "" {
+				finalText = messageText[i]
+			}
+			result.text += finalText
+			if finalText != "" {
+				result.content = append(result.content, llm.TextContent{Text: finalText})
 			}
 			continue
 		case "function_call":
+		case "":
+			result.text += messageText[i]
+			continue
 		default:
 			continue
 		}
@@ -1017,6 +1092,23 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 	if terminal.Status == "failed" || terminal.Status == "cancelled" {
 		return fmt.Errorf("codex response ended with status %s", terminal.Status)
 	}
+	return nil
+}
+
+func recordCodexMessageText(messageText map[int]string, index int, finalText string, onText func(string)) error {
+	streamedText := messageText[index]
+	if finalText == "" {
+		return nil
+	}
+	if !strings.HasPrefix(finalText, streamedText) {
+		return fmt.Errorf("codex message output %d does not match streamed text", index)
+	}
+	if onText != nil {
+		if delta := strings.TrimPrefix(finalText, streamedText); delta != "" {
+			onText(delta)
+		}
+	}
+	messageText[index] = finalText
 	return nil
 }
 
@@ -1062,6 +1154,9 @@ func backfillCodexReasoningItem(streamed, terminal codexOutputItem) (codexOutput
 func codexReasoningSignature(item codexOutputItem) (string, error) {
 	if item.parsed.Type != "reasoning" || item.parsed.ID == "" {
 		return "", errors.New("codex reasoning output item is not replayable")
+	}
+	if item.parsed.EncryptedContent == "" {
+		return "", nil
 	}
 	if _, err := parseCodexReasoningSignature(string(item.raw)); err != nil {
 		return "", err
@@ -1115,6 +1210,15 @@ func codexResponsesURL(baseURL string) string {
 		return normalized + "/responses"
 	}
 	return normalized + "/codex/responses"
+}
+
+func codexModelsURL(baseURL string) string {
+	normalized := strings.TrimRight(baseURL, "/")
+	normalized = strings.TrimSuffix(normalized, "/responses")
+	if strings.HasSuffix(normalized, "/codex") {
+		return normalized + "/models"
+	}
+	return normalized + "/codex/models"
 }
 
 func codexJWTMetadata(token string) (string, time.Time, error) {
