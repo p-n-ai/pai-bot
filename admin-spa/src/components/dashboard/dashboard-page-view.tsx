@@ -53,10 +53,10 @@ export function DashboardPageView({
 }: DashboardPageViewProps) {
   return (
     <AdminPageSection
-      description='Track who needs support today across the class.'
+      description='Welcome back. Start with the learners who need you most today.'
       eyebrow='Dashboard'
       hideEyebrow
-      title='Dashboard'
+      title='Today'
     >
       <DashboardContent
         nudgeMessage={nudgeMessage}

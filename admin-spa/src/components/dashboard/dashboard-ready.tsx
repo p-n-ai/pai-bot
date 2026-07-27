@@ -4,13 +4,18 @@ import {
   CheckCircle2Icon,
   ChevronRightIcon,
   CircleAlertIcon,
+  SearchIcon,
   SparklesIcon,
   TrendingUpIcon,
   UsersIcon,
 } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
-import type { ComponentType, ReactNode } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import type { ChangeEvent, ComponentType, ReactNode } from 'react'
 
+import type {
+  DashboardLearner,
+  LearnerProgressFilter,
+} from '@/lib/dashboard-learners'
 import type { ClassProgress } from '@/lib/dashboard-types'
 import {
   AdminSurface,
@@ -20,6 +25,8 @@ import { StatePanel } from '@/components/shared/state-panel'
 import { StudentDetailPanel } from '@/components/dashboard/student-detail-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Progress } from '@/components/ui/progress'
 import {
   Sheet,
@@ -36,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { getDashboardLearners } from '@/lib/dashboard-learners'
 import {
   Tooltip,
   TooltipContent,
@@ -75,6 +83,7 @@ export function DashboardReady({
   return (
     <div className='mt-7 flex flex-col gap-6'>
       <DashboardStats progress={progress} />
+      {nudgeMessage ? <NudgeFeedback message={nudgeMessage} /> : null}
       <DashboardHeatmap
         hasHeatmap={summary.hasHeatmap}
         onNudge={onNudge}
@@ -82,20 +91,23 @@ export function DashboardReady({
         progress={progress}
         sendingStudentID={sendingStudentID}
       />
-      {nudgeMessage ? (
-        <div
-          className='flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-[0_1px_2px_rgb(16_24_40/0.04)]'
-          role='status'
-        >
-          <CheckCircle2Icon aria-hidden='true' className='size-4 shrink-0' />
-          {nudgeMessage}
-        </div>
-      ) : null}
       <StudentDetailSheet
         onOpenChange={onCloseStudent}
         studentID={selectedStudentID}
         studentName={selectedStudent?.name}
       />
+    </div>
+  )
+}
+
+function NudgeFeedback({ message }: { message: string }) {
+  return (
+    <div
+      className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_8px_20px_rgb(16_24_40/0.08)]'
+      role='status'
+    >
+      <CheckCircle2Icon aria-hidden='true' className='size-4 shrink-0' />
+      {message}
     </div>
   )
 }
@@ -142,7 +154,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
           </div>
           <div className='mt-8 flex items-end justify-between gap-5'>
             <div>
-              <p className='text-5xl leading-none font-semibold text-white'>
+              <p className='text-5xl leading-none font-semibold text-white tabular-nums'>
                 {summary.studentCount}
               </p>
               <p
@@ -278,7 +290,7 @@ function DashboardMetricCard({
         <div className='mt-7'>
           <p
             className={cn(
-              'text-4xl leading-none font-semibold text-[#101828]',
+              'text-4xl leading-none font-semibold text-[#101828] tabular-nums',
               tone,
             )}
           >
@@ -343,104 +355,135 @@ function DashboardHeatmap({
   progress: ClassProgress
   sendingStudentID: string
 }) {
+  const [filter, setFilter] = useState<LearnerProgressFilter>('all')
+  const [query, setQuery] = useState('')
+  const learners = useMemo(
+    () => getDashboardLearners(progress, query, filter),
+    [filter, progress, query],
+  )
+  const hasLearners = progress.students.length > 0
+
   return (
     <AdminSurface
       className='shadow-[0_1px_2px_rgb(16_24_40/0.04),0_10px_28px_rgb(16_24_40/0.05)] ring-[#e6e9ef]'
       contentClassName='p-0'
     >
-      <section aria-label='Mastery heatmap'>
+      <section aria-label='Learner progress'>
         <AdminSurfaceHeader
           action={masteryLegend}
           className='flex-col items-start border-b border-[#eef0f3] p-5 sm:flex-row sm:items-center sm:p-6'
-          description='Students by topic with direct navigation into detail views.'
-          title='Mastery heatmap'
+          description='Start with learners who need support, then open progress or send a nudge.'
+          title='Learner progress'
         />
+        {hasLearners ? (
+          <LearnerProgressTools
+            filter={filter}
+            onFilterChange={setFilter}
+            onQueryChange={setQuery}
+            query={query}
+            resultCount={learners.length}
+            totalCount={progress.students.length}
+          />
+        ) : null}
         <div className='overflow-x-auto px-3 pb-3 sm:px-5 sm:pb-5'>
           {hasHeatmap ? (
-            <Table className='min-w-[820px] border-separate border-spacing-y-1.5'>
-              <TableHeader>
-                <TableRow className='border-0 hover:bg-transparent'>
-                  <TableHead className='sticky left-0 z-10 min-w-52 bg-white px-3 py-3 text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
-                    Student
-                  </TableHead>
-                  {progress.topic_ids.map((topicID) => (
-                    <TableHead
-                      className='min-w-28 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'
-                      key={topicID}
-                    >
-                      <TopicHeaderLabel topicID={topicID} />
+            learners.length > 0 ? (
+              <Table className='min-w-[960px] border-separate border-spacing-y-1.5'>
+                <TableHeader>
+                  <TableRow className='border-0 hover:bg-transparent'>
+                    <TableHead className='sticky left-0 z-10 min-w-52 bg-white px-3 py-3 text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                      Student
                     </TableHead>
-                  ))}
-                  <TableHead className='min-w-24 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
-                    Average
-                  </TableHead>
-                  <TableHead className='min-w-28 px-3 py-3 text-right text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
-                    Nudge
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {progress.students.map((student) => {
-                  const attention = getStudentAttention(progress, student)
-                  const rowSurfaceClass = attention.needsAttention
-                    ? 'bg-rose-50/75'
-                    : 'bg-[#f8fafc]'
-
-                  return (
-                    <TableRow
-                      className='group/heatmap-row border-0 hover:bg-transparent'
-                      key={student.id}
-                    >
-                      <TableCell
-                        className={cn(
-                          'sticky left-0 z-10 rounded-l-xl p-3 font-medium text-[#101828] shadow-[-6px_0_0_white] transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
-                          rowSurfaceClass,
-                        )}
+                    {progress.topic_ids.map((topicID) => (
+                      <TableHead
+                        className='min-w-28 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'
+                        key={topicID}
                       >
-                        <StudentDetailButton
-                          attention={attention}
-                          onSelectStudent={onSelectStudent}
-                          studentID={student.id}
-                          studentName={student.name}
-                        />
-                      </TableCell>
-                      {progress.topic_ids.map((topicID) => (
+                        <TopicHeaderLabel topicID={topicID} />
+                      </TableHead>
+                    ))}
+                    <TableHead className='min-w-24 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                      Average
+                    </TableHead>
+                    <TableHead className='min-w-64 px-3 py-3 text-right text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                      Next action
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {learners.map((learner) => {
+                    const rowSurfaceClass = learner.needsAttention
+                      ? 'bg-rose-50/75'
+                      : 'bg-[#f8fafc]'
+                    const { student } = learner
+
+                    return (
+                      <TableRow
+                        className='group/heatmap-row border-0 hover:bg-transparent'
+                        key={student.id}
+                      >
+                        <TableCell
+                          className={cn(
+                            'sticky left-0 z-10 rounded-l-xl p-3 font-medium text-[#101828] shadow-[-6px_0_0_white] transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                            rowSurfaceClass,
+                          )}
+                        >
+                          <StudentDetailButton
+                            learner={learner}
+                            onSelectStudent={onSelectStudent}
+                            studentID={student.id}
+                            studentName={student.name}
+                          />
+                        </TableCell>
+                        {progress.topic_ids.map((topicID) => (
+                          <TableCell
+                            className={cn(
+                              'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                              rowSurfaceClass,
+                            )}
+                            key={`${student.id}-${topicID}`}
+                          >
+                            <MasteryScore score={student.topics[topicID]} />
+                          </TableCell>
+                        ))}
                         <TableCell
                           className={cn(
                             'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
                             rowSurfaceClass,
                           )}
-                          key={`${student.id}-${topicID}`}
                         >
-                          <MasteryScore score={student.topics[topicID]} />
+                          <StudentAverage learner={learner} />
                         </TableCell>
-                      ))}
-                      <TableCell
-                        className={cn(
-                          'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
-                          rowSurfaceClass,
-                        )}
-                      >
-                        <StudentAverage attention={attention} />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          'rounded-r-xl p-3 text-right transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
-                          rowSurfaceClass,
-                        )}
-                      >
-                        <NudgeButton
-                          isSending={sendingStudentID === student.id}
-                          onNudge={onNudge}
-                          studentID={student.id}
-                          studentName={student.name}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                        <TableCell
+                          className={cn(
+                            'rounded-r-xl p-3 text-right transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                            rowSurfaceClass,
+                          )}
+                        >
+                          <div className='flex items-center justify-end gap-3'>
+                            <p className='max-w-44 text-right text-xs leading-5 font-medium text-[#475467]'>
+                              {learner.nextAction}
+                            </p>
+                            <NudgeButton
+                              isSending={sendingStudentID === student.id}
+                              onNudge={onNudge}
+                              studentID={student.id}
+                              studentName={student.name}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className='py-5'>
+                <StatePanel title='No learners match'>
+                  Try another name or progress filter.
+                </StatePanel>
+              </div>
+            )
           ) : (
             <div className='py-5'>
               <StatePanel title='No class heatmap yet'>
@@ -451,6 +494,86 @@ function DashboardHeatmap({
         </div>
       </section>
     </AdminSurface>
+  )
+}
+
+function LearnerProgressTools({
+  filter,
+  onFilterChange,
+  onQueryChange,
+  query,
+  resultCount,
+  totalCount,
+}: {
+  filter: LearnerProgressFilter
+  onFilterChange: (filter: LearnerProgressFilter) => void
+  onQueryChange: (query: string) => void
+  query: string
+  resultCount: number
+  totalCount: number
+}) {
+  const handleQueryChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onQueryChange(event.target.value)
+    },
+    [onQueryChange],
+  )
+  const handleFilterChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      onFilterChange(event.target.value as LearnerProgressFilter)
+    },
+    [onFilterChange],
+  )
+
+  return (
+    <div className='flex flex-col gap-3 border-b border-[#eef0f3] p-4 sm:flex-row sm:items-end sm:justify-between sm:px-6'>
+      <div className='grid flex-1 gap-3 sm:max-w-2xl sm:grid-cols-[minmax(0,1fr)_13rem]'>
+        <label
+          className='grid gap-1.5 text-xs font-medium text-[#475467]'
+          htmlFor='dashboard-learner-search'
+        >
+          Search learners
+          <span className='relative'>
+            <SearchIcon
+              aria-hidden='true'
+              className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#667085]'
+            />
+            <Input
+              className='h-11 bg-white pl-9'
+              id='dashboard-learner-search'
+              onChange={handleQueryChange}
+              placeholder='Search by name…'
+              type='search'
+              value={query}
+            />
+          </span>
+        </label>
+        <label
+          className='grid gap-1.5 text-xs font-medium text-[#475467]'
+          htmlFor='dashboard-progress-status'
+        >
+          Progress status
+          <NativeSelect
+            className='w-full [&_select]:h-11 [&_select]:bg-white [&_select]:text-base md:[&_select]:text-sm'
+            id='dashboard-progress-status'
+            onChange={handleFilterChange}
+            value={filter}
+          >
+            <NativeSelectOption value='all'>All learners</NativeSelectOption>
+            <NativeSelectOption value='attention'>
+              Needs attention
+            </NativeSelectOption>
+            <NativeSelectOption value='unmeasured'>
+              No activity yet
+            </NativeSelectOption>
+            <NativeSelectOption value='on-track'>On track</NativeSelectOption>
+          </NativeSelect>
+        </label>
+      </div>
+      <p aria-live='polite' className='text-sm text-[#667085] tabular-nums'>
+        Showing {resultCount} of {totalCount}
+      </p>
+    </div>
   )
 }
 
@@ -533,7 +656,7 @@ function TopicHeaderLabel({ topicID }: { topicID: string }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            className='inline-block max-w-28 truncate rounded-md border-0 bg-transparent px-1 py-1 align-middle font-[inherit] tracking-[inherit] text-inherit normal-case transition-[background-color,color] duration-150 hover:bg-[#f2f4f7] hover:text-[#344054] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed]'
+            className='inline-block min-h-11 max-w-28 truncate rounded-md border-0 bg-transparent px-1 py-1 align-middle font-[inherit] tracking-[inherit] text-inherit normal-case transition-[background-color,color] duration-150 hover:bg-[#f2f4f7] hover:text-[#344054] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] sm:min-h-8'
             type='button'
           >
             {topicLabel}
@@ -559,7 +682,7 @@ function MasteryScore({ score }: { score: number | undefined }) {
   return (
     <span
       className={cn(
-        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border px-3 py-1 text-xs font-semibold shadow-[inset_0_1px_0_rgb(255_255_255/0.45)]',
+        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border px-3 py-1 text-xs font-semibold tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.45)]',
         getMasteryScoreTone(score),
       )}
     >
@@ -568,8 +691,8 @@ function MasteryScore({ score }: { score: number | undefined }) {
   )
 }
 
-function StudentAverage({ attention }: { attention: StudentAttention }) {
-  if (attention.averageMastery === null) {
+function StudentAverage({ learner }: { learner: DashboardLearner }) {
+  if (learner.averageMastery === null) {
     return (
       <span
         aria-label='No average mastery data'
@@ -582,26 +705,26 @@ function StudentAverage({ attention }: { attention: StudentAttention }) {
 
   return (
     <span
-      aria-label={`${attention.averageMastery}% average mastery`}
+      aria-label={`${learner.averageMastery}% average mastery`}
       className={cn(
-        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border bg-white px-3 py-1 text-xs font-semibold',
-        attention.needsAttention
+        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border bg-white px-3 py-1 text-xs font-semibold tabular-nums',
+        learner.needsAttention
           ? 'border-rose-200 text-rose-700'
           : 'border-[#e6e9ef] text-[#344054]',
       )}
     >
-      {attention.averageMastery}%
+      {learner.averageMastery}%
     </span>
   )
 }
 
 function StudentDetailButton({
-  attention,
+  learner,
   onSelectStudent,
   studentID,
   studentName,
 }: {
-  attention: StudentAttention
+  learner: DashboardLearner
   onSelectStudent: (studentID: string) => void
   studentID: string
   studentName: string
@@ -612,6 +735,7 @@ function StudentDetailButton({
 
   return (
     <button
+      aria-label={`Open ${studentName} progress`}
       className='inline-flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent p-0 text-left font-[inherit] text-[#101828] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#175cd3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] active:scale-[0.96]'
       onClick={selectStudent}
       type='button'
@@ -620,7 +744,7 @@ function StudentDetailButton({
         <span
           className={cn(
             'flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
-            attention.needsAttention
+            learner.needsAttention
               ? 'bg-rose-100 text-rose-700'
               : 'bg-[#eaf2ff] text-[#175cd3]',
           )}
@@ -630,8 +754,8 @@ function StudentDetailButton({
         <span className='min-w-0'>
           <span className='block truncate'>{studentName}</span>
           <span className='mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-[#667085]'>
-            <AttentionDot attention={attention} />
-            {attention.needsAttention ? 'Needs attention' : 'On track'}
+            <AttentionDot learner={learner} />
+            {getLearnerStatusLabel(learner.status)}
           </span>
         </span>
       </span>
@@ -643,23 +767,35 @@ function StudentDetailButton({
   )
 }
 
-function AttentionDot({ attention }: { attention: StudentAttention }) {
+function AttentionDot({ learner }: { learner: DashboardLearner }) {
   return (
     <span
       aria-label={
-        attention.averageMastery === null
+        learner.averageMastery === null
           ? 'No mastery data'
-          : attention.needsAttention
-            ? `${attention.averageMastery}% average mastery`
+          : learner.needsAttention
+            ? `${learner.averageMastery}% average mastery`
             : 'No attention flag'
       }
       className={cn(
         'size-1.5 shrink-0 rounded-full',
-        attention.needsAttention ? 'bg-rose-500' : 'bg-emerald-500',
+        learner.needsAttention
+          ? 'bg-rose-500'
+          : learner.status === 'unmeasured'
+            ? 'bg-[#98a2b3]'
+            : 'bg-emerald-500',
       )}
       role='img'
     />
   )
+}
+
+function getLearnerStatusLabel(status: DashboardLearner['status']): string {
+  if (status === 'attention') {
+    return 'Needs attention'
+  }
+
+  return status === 'unmeasured' ? 'No activity yet' : 'On track'
 }
 
 function NudgeButton({
@@ -679,7 +815,10 @@ function NudgeButton({
 
   return (
     <Button
-      className='bg-[#101828] px-3 text-white shadow-[0_1px_2px_rgb(16_24_40/0.12)] hover:bg-[#344054]'
+      aria-label={
+        isSending ? `Sending nudge to ${studentName}` : `Nudge ${studentName}`
+      }
+      className='min-h-11 bg-[#101828] px-3 text-white shadow-[0_1px_2px_rgb(16_24_40/0.12)] hover:bg-[#344054] sm:min-h-8'
       disabled={isSending}
       onClick={sendNudge}
       size='sm'
@@ -692,7 +831,7 @@ function NudgeButton({
 }
 
 function getNudgeButtonLabel(isSending: boolean): string {
-  return isSending ? 'Sending...' : 'Nudge'
+  return isSending ? 'Sending…' : 'Nudge'
 }
 
 function getLearnerAttentionNote(attentionCount: number): string {
@@ -726,33 +865,6 @@ function getMasteryScoreTone(score: number): string {
     masteryScoreTones.find((tone) => score >= tone.minimum)?.className ??
     'border-rose-200 bg-rose-100 text-rose-900'
   )
-}
-
-type StudentAttention = {
-  averageMastery: number | null
-  needsAttention: boolean
-}
-
-function getStudentAttention(
-  progress: ClassProgress,
-  student: ClassProgress['students'][number],
-): StudentAttention {
-  const scores = progress.topic_ids.flatMap((topicID) => {
-    const score = student.topics[topicID]
-
-    return typeof score === 'number' ? [score] : []
-  })
-  const averageMastery: number | null =
-    scores.length > 0
-      ? Math.round(
-          (scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100,
-        )
-      : null
-
-  return {
-    averageMastery,
-    needsAttention: averageMastery !== null && averageMastery < 50,
-  }
 }
 
 const masteryScoreTones = [
