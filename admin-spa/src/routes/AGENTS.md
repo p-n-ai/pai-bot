@@ -24,15 +24,15 @@ routes/
 
 ## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| Root shell/providers | `__root.tsx`, `_authenticated.tsx` |
-| Public redirects | `index.tsx`, `-index.test.ts` |
-| Activation/join | `activate.tsx`, `join.$slug.tsx` |
-| Dashboard pages | `_authenticated/dashboard*.tsx` |
-| Settings pages | `_authenticated/settings/*.tsx` |
-| Detail pages | `_authenticated/students/$id.tsx`, `_authenticated/parents/$id.tsx` |
-| Generated route tree | `../routeTree.gen.ts` |
+| Task                 | Location                                                            |
+| -------------------- | ------------------------------------------------------------------- |
+| Root shell/providers | `__root.tsx`, `_authenticated.tsx`                                  |
+| Public redirects     | `index.tsx`, `-index.test.ts`                                       |
+| Activation/join      | `activate.tsx`, `join.$slug.tsx`                                    |
+| Dashboard pages      | `_authenticated/dashboard*.tsx`                                     |
+| Settings pages       | `_authenticated/settings/*.tsx`                                     |
+| Detail pages         | `_authenticated/students/$id.tsx`, `_authenticated/parents/$id.tsx` |
+| Generated route tree | `../routeTree.gen.ts`                                               |
 
 ## CONVENTIONS
 

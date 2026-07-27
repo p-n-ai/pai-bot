@@ -1,45 +1,43 @@
-import { useTheme } from "next-themes"
-import { Toaster as Sonner  } from "sonner"
-import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon } from "lucide-react"
-import type {ToasterProps} from "sonner";
+import { useTheme } from 'next-themes'
+import { Toaster as Sonner } from 'sonner'
+import {
+  CircleCheckIcon,
+  InfoIcon,
+  Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
+} from 'lucide-react'
+import type { ToasterProps } from 'sonner'
+
+const TOASTER_ICONS = {
+  success: <CircleCheckIcon className='size-4' />,
+  info: <InfoIcon className='size-4' />,
+  warning: <TriangleAlertIcon className='size-4' />,
+  error: <OctagonXIcon className='size-4' />,
+  loading: <Loader2Icon className='size-4 animate-spin' />,
+}
+const TOASTER_STYLE = {
+  '--normal-bg': 'var(--popover)',
+  '--normal-text': 'var(--popover-foreground)',
+  '--normal-border': 'var(--border)',
+  '--border-radius': 'var(--radius)',
+} as React.CSSProperties
+const TOAST_OPTIONS = {
+  classNames: {
+    toast: 'cn-toast',
+  },
+}
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const { theme = 'system' } = useTheme()
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
-      }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
-      }}
+      theme={theme as ToasterProps['theme']}
+      className='toaster group'
+      icons={TOASTER_ICONS}
+      style={TOASTER_STYLE}
+      toastOptions={TOAST_OPTIONS}
       {...props}
     />
   )

@@ -24,18 +24,18 @@ components/
 
 ## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| Shared admin surfaces | `shared/` |
-| Design primitives | `ui/` |
-| Auth screens | `auth/` |
-| Dashboard panels | `dashboard/` |
-| AI usage charts/tables | `ai-usage/` |
-| Onboarding wizard | `onboarding/` |
-| Classes/users management | `classes/`, `users/` |
-| Retrieval lab UI | `retrieval/` |
-| Embed/AI/WhatsApp settings | `settings/` |
-| Export workflows | `export/` |
+| Task                       | Location             |
+| -------------------------- | -------------------- |
+| Shared admin surfaces      | `shared/`            |
+| Design primitives          | `ui/`                |
+| Auth screens               | `auth/`              |
+| Dashboard panels           | `dashboard/`         |
+| AI usage charts/tables     | `ai-usage/`          |
+| Onboarding wizard          | `onboarding/`        |
+| Classes/users management   | `classes/`, `users/` |
+| Retrieval lab UI           | `retrieval/`         |
+| Embed/AI/WhatsApp settings | `settings/`          |
+| Export workflows           | `export/`            |
 
 ## CONVENTIONS
 

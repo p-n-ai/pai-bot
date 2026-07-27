@@ -6,6 +6,15 @@ import { StatePanel } from '@/components/shared/state-panel'
 import { Card, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
+const TABLE_HEADER_SKELETON_KEYS = [
+  'name',
+  'status',
+  'score',
+  'activity',
+  'action',
+]
+const TABLE_ROW_SKELETON_KEYS = ['first', 'second', 'third', 'fourth']
+
 export type DashboardState =
   | {
       status: 'loading'
@@ -118,15 +127,15 @@ function DashboardSkeleton() {
           </div>
           <div className='min-w-[760px]'>
             <div className='grid grid-cols-[1.4fr_repeat(3,1fr)_0.8fr] gap-2 px-3 py-2'>
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton className='h-4' key={index} />
+              {TABLE_HEADER_SKELETON_KEYS.map((key) => (
+                <Skeleton className='h-4' key={key} />
               ))}
             </div>
             <div className='flex flex-col gap-2'>
-              {Array.from({ length: 4 }).map((_, rowIndex) => (
+              {TABLE_ROW_SKELETON_KEYS.map((key) => (
                 <div
                   className='grid grid-cols-[1.4fr_repeat(3,1fr)_0.8fr] gap-2 rounded-lg bg-muted/40 p-3'
-                  key={rowIndex}
+                  key={key}
                 >
                   <Skeleton className='h-7 w-32' />
                   <Skeleton className='h-7 w-16 rounded-full' />

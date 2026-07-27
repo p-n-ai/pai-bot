@@ -225,6 +225,15 @@ prepare-local-dev:
   fi; \
   just check-local-db
 
+once-dev:
+  ./scripts/once-dev.sh
+
+once-stop:
+  ./scripts/once-dev.sh stop
+
+once-remove:
+  ./scripts/once-dev.sh remove
+
 # Development
 go:
   just prepare-local-dev

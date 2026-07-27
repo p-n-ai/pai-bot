@@ -13,7 +13,10 @@ import type {
   StudentDetail,
 } from '@/lib/student-detail-types'
 import { AdminInsetPanel } from '@/components/shared/admin-inset-panel'
-import { AdminSurface, AdminSurfaceHeader } from '@/components/shared/admin-surface'
+import {
+  AdminSurface,
+  AdminSurfaceHeader,
+} from '@/components/shared/admin-surface'
 import { LoadState } from '@/components/shared/load-state'
 import { PageHero } from '@/components/shared/page-hero'
 import { StatePanel } from '@/components/shared/state-panel'

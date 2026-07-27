@@ -268,20 +268,23 @@ function UserDirectoryToolbar({
   onTabChange: (value: string) => void
   search: string
 }) {
+  const handleAdminUsersClick = useCallback(
+    () => onTabChange('admin-users'),
+    [onTabChange],
+  )
+  const handleAllUsersClick = useCallback(
+    () => onTabChange('all-users'),
+    [onTabChange],
+  )
+
   return (
     <div className='rounded-t-lg border border-border bg-card p-3'>
       <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
         <TabsList className='w-fit'>
-          <TabsTrigger
-            onClick={() => onTabChange('admin-users')}
-            value='admin-users'
-          >
+          <TabsTrigger onClick={handleAdminUsersClick} value='admin-users'>
             Admin users
           </TabsTrigger>
-          <TabsTrigger
-            onClick={() => onTabChange('all-users')}
-            value='all-users'
-          >
+          <TabsTrigger onClick={handleAllUsersClick} value='all-users'>
             All users
           </TabsTrigger>
         </TabsList>
@@ -350,7 +353,7 @@ type DirectoryUser = {
 }
 
 function createDirectoryUsers(data: UserManagementView): Array<DirectoryUser> {
-  return [
+  const users = [
     ...data.active_users.map((user) => ({
       access: formatRole(user.role),
       contact: user.email || 'No email linked',
@@ -369,7 +372,15 @@ function createDirectoryUsers(data: UserManagementView): Array<DirectoryUser> {
       scope: student.form || 'Unassigned',
       type: 'Student',
     })),
-  ].sort((a, b) => b.joined.localeCompare(a.joined))
+  ]
+
+  return users.reduce<Array<DirectoryUser>>((sorted, user) => {
+    const insertAt = sorted.findIndex(
+      (item) => item.joined.localeCompare(user.joined) < 0,
+    )
+    sorted.splice(insertAt === -1 ? sorted.length : insertAt, 0, user)
+    return sorted
+  }, [])
 }
 
 function AllUsersTable({ users }: { users: Array<DirectoryUser> }) {

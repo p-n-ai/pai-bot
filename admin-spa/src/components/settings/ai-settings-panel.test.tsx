@@ -38,13 +38,13 @@ const unsetKeySettings = {
 }
 
 function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
+  let deferredResolve!: (value: T) => void
+  let deferredReject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolve, reject) => {
+    deferredResolve = resolve
+    deferredReject = reject
   })
-  return { promise, reject, resolve }
+  return { promise, reject: deferredReject, resolve: deferredResolve }
 }
 
 describe('AISettingsPanel', () => {

@@ -513,6 +513,25 @@ Recommended first setup sequence:
 
 Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
 
+The shortest path uses [ONCE](https://github.com/basecamp/once):
+
+```bash
+./scripts/once-dev.sh
+# or: just once-dev
+```
+
+This installs a pinned, checksum-verified ONCE binary under `~/.local/bin` when
+needed, builds the all-in-one development image, and runs P&AI at
+`http://localhost` with persistent storage, migrations, and demo data. Later
+runs rebuild and update the existing application. Use `just once-stop` to stop
+it or `just once-remove` to remove it. Set `PAI_ONCE_SEED_DEMO=false` for a clean
+database. Non-empty `LEARN_*` and `PAI_AUTH_*` values from `.env` are passed to
+the ONCE application, while its internal database, cache, and HTTP settings stay
+isolated inside the image.
+
+The lower-level workflow remains available when you need to run services
+independently:
+
 `just go` / `just next` require `LEARN_DATABASE_URL` to be present in `.env`; the local bootstrap path no longer falls back to an implicit default DSN or shell override.
 
 ```bash
