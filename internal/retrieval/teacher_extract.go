@@ -219,7 +219,7 @@ func extractXMLText(file *zip.File) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: open XML: %v", ErrMalformedFile, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(rc, maxArchiveEntryBytes+1))
 	if err != nil || len(raw) > maxArchiveEntryBytes {
 		return "", fmt.Errorf("%w: read XML entry", ErrMalformedFile)

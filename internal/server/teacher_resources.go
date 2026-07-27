@@ -79,7 +79,7 @@ func handleTeacherResourceUpload(service teacherResourceService) http.HandlerFun
 }
 
 func consumeTeacherPart(part *multipart.Part, input *retrieval.TeacherUploadInput) error {
-	defer part.Close()
+	defer func() { _ = part.Close() }()
 	name := part.FormName()
 	if name == "file" {
 		if len(input.Data) > 0 {

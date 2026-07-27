@@ -165,7 +165,7 @@ func (s *TeacherResourceService) Upload(ctx context.Context, input TeacherUpload
 	if err != nil {
 		return TeacherResource{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := verifyClasses(ctx, tx, input.TenantID, input.ClassIDs); err != nil {
 		return TeacherResource{}, err
 	}
@@ -525,7 +525,7 @@ func (s *TeacherResourceService) expandGraph(ctx context.Context, tenantID, seed
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 		SELECT set_config('graph.tenant_setting', 'app.pai_tenant_id', true),
 		       set_config('app.pai_tenant_id', $1, true)`, tenantID); err != nil {

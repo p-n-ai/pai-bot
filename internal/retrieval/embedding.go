@@ -75,7 +75,7 @@ func (e *OpenAICompatibleEmbedder) Embed(ctx context.Context, inputs []string) (
 	if err != nil {
 		return nil, fmt.Errorf("request embeddings: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return nil, fmt.Errorf("embedding endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
