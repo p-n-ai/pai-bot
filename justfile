@@ -140,6 +140,11 @@ db-migration-preflight:
   check_local_db_url "GOOSE_DSN" "$effective_goose_dsn"; \
   check_local_db_url "LEARN_DATABASE_URL" "${LEARN_DATABASE_URL:-}"
 
+conversation-identity-preflight:
+  just db-migration-preflight
+  @db_url="${GOOSE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}"; \
+  docker compose exec -T postgres psql "$db_url" -f - < scripts/preflight-conversation-identities.sql
+
 check-local-db:
   @db_url="$(just db-url)"; \
   db_url_redacted="$(just db-url-redacted)"; \
@@ -548,6 +553,7 @@ test-cover:
 # Database
 migrate:
   just db-migration-preflight
+  just conversation-identity-preflight
   docker compose --profile tools run --rm goose go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir /app/migrations "${GOOSE_DRIVER:-postgres}" "${GOOSE_DSN:-postgres://pai:pai@postgres:5432/pai?sslmode=disable}" up -allow-missing
 
 migrate-down:
