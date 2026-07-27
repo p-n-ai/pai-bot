@@ -352,11 +352,11 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 }
 
 type harnessEvidenceRetriever struct {
-	byQuery map[string][]retrieval.TutorEvidence
+	byCase map[string]map[string][]retrieval.TutorEvidence
 }
 
 func newHarnessEvidenceRetriever(conversations []conversationSpec) retrieval.TutorEvidenceRetriever {
-	byQuery := make(map[string][]retrieval.TutorEvidence)
+	byCase := make(map[string]map[string][]retrieval.TutorEvidence)
 	for _, conversation := range conversations {
 		var items []retrieval.TutorEvidence
 		for _, item := range conversation.Evidence {
@@ -366,28 +366,46 @@ func newHarnessEvidenceRetriever(conversations []conversationSpec) retrieval.Tut
 				LocatorEnd: item.LocatorEnd, Locator: item.Locator, Excerpt: item.Excerpt,
 			})
 		}
+		byQuery := make(map[string][]retrieval.TutorEvidence)
 		for _, turn := range conversation.Turns {
 			if len(items) > 0 {
 				byQuery[strings.TrimSpace(turn.User)] = items
 			}
 		}
+		if len(byQuery) > 0 {
+			byCase[strings.ToLower(conversation.ID)] = byQuery
+		}
 	}
-	if len(byQuery) == 0 {
+	if len(byCase) == 0 {
 		return nil
 	}
-	return &harnessEvidenceRetriever{byQuery: byQuery}
+	return &harnessEvidenceRetriever{byCase: byCase}
 }
 
 func (r *harnessEvidenceRetriever) Retrieve(_ context.Context, request retrieval.TutorEvidenceRequest) ([]retrieval.TutorEvidence, error) {
-	if items := r.byQuery[strings.TrimSpace(request.Query)]; len(items) > 0 {
+	byQuery := r.byCase[harnessCaseIDFromLearnerID(request.LearnerID)]
+	if items := byQuery[strings.TrimSpace(request.Query)]; len(items) > 0 {
 		return append([]retrieval.TutorEvidence(nil), items...), nil
 	}
-	for query, items := range r.byQuery {
+	for query, items := range byQuery {
 		if strings.Contains(request.Query, query) {
 			return append([]retrieval.TutorEvidence(nil), items...), nil
 		}
 	}
 	return nil, nil
+}
+
+func harnessCaseIDFromLearnerID(learnerID string) string {
+	const prefix = "harness-"
+	if !strings.HasPrefix(learnerID, prefix) {
+		return ""
+	}
+	scoped := strings.TrimPrefix(learnerID, prefix)
+	separator := strings.LastIndexByte(scoped, '-')
+	if separator <= 0 || separator == len(scoped)-1 {
+		return ""
+	}
+	return scoped[:separator]
 }
 
 func selectConversations(conversations []conversationSpec, caseID, tag string, maxCases int) []conversationSpec {

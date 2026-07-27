@@ -4,12 +4,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
 func TestBuildEngineLeavesProgressOffByDefault(t *testing.T) {
@@ -110,6 +112,63 @@ func TestValidateRequestOnlyModeRequiresDumpRequests(t *testing.T) {
 	}
 	if err := validateRequestOnlyMode(false, ""); err != nil {
 		t.Fatalf("validateRequestOnlyMode() error = %v", err)
+	}
+}
+
+func TestHarnessEvidenceRetrieverIsolatesIdenticalPromptsByCase(t *testing.T) {
+	retriever := newHarnessEvidenceRetriever([]conversationSpec{
+		{
+			ID: "CASE-A",
+			Evidence: []evidenceSpec{{
+				ID: "evidence-a", Origin: "teacher", Excerpt: "Method A",
+			}},
+			Turns: []turnSpec{{User: "Explain this method"}},
+		},
+		{
+			ID: "CASE-B",
+			Evidence: []evidenceSpec{{
+				ID: "evidence-b", Origin: "teacher", Excerpt: "Method B",
+			}},
+			Turns: []turnSpec{{User: "Explain this method"}},
+		},
+	})
+
+	for _, test := range []struct {
+		learnerID string
+		wantID    string
+	}{
+		{learnerID: "harness-case-a-1001", wantID: "evidence-a"},
+		{learnerID: "harness-case-b-1002", wantID: "evidence-b"},
+	} {
+		items, err := retriever.Retrieve(context.Background(), retrieval.TutorEvidenceRequest{
+			LearnerID: test.learnerID,
+			Query:     "Explain this method",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) != 1 || items[0].ID != test.wantID {
+			t.Fatalf("Retrieve(%q) = %#v, want evidence %q", test.learnerID, items, test.wantID)
+		}
+	}
+}
+
+func TestHarnessEvidenceRetrieverRejectsUnscopedLearner(t *testing.T) {
+	retriever := newHarnessEvidenceRetriever([]conversationSpec{{
+		ID:       "CASE-A",
+		Evidence: []evidenceSpec{{ID: "evidence-a", Origin: "teacher"}},
+		Turns:    []turnSpec{{User: "Same prompt"}},
+	}})
+
+	items, err := retriever.Retrieve(context.Background(), retrieval.TutorEvidenceRequest{
+		LearnerID: "another-case-a-1001",
+		Query:     "Same prompt",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("unscoped learner received evidence: %#v", items)
 	}
 }
 
