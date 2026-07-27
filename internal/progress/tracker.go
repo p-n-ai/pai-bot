@@ -4,6 +4,7 @@
 package progress
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,26 @@ import (
 
 // MasteryThreshold is the score at or above which a topic is considered mastered.
 const MasteryThreshold = 0.75
+
+// LearnerID identifies one internal user record. Chat-provider identifiers must
+// be resolved to this value before entering learner progress persistence.
+type LearnerID struct {
+	value string
+}
+
+// NewLearnerID creates a refined internal learner identifier.
+func NewLearnerID(value string) (LearnerID, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return LearnerID{}, fmt.Errorf("learner ID is required")
+	}
+	return LearnerID{value: value}, nil
+}
+
+// String returns the persistence-safe learner identifier.
+func (id LearnerID) String() string {
+	return id.value
+}
 
 // ProgressItem represents a student's progress on a single topic.
 type ProgressItem struct {
@@ -31,6 +52,16 @@ type Tracker interface {
 	GetMastery(userID, syllabusID, topicID string) (float64, error)
 	GetAllProgress(userID string) ([]ProgressItem, error)
 	GetDueReviews(userID string) ([]ProgressItem, error)
+}
+
+// LearnerTracker exposes progress operations keyed by an internal learner ID.
+// It lets runtime callers avoid ambiguous provider-owned external IDs while the
+// legacy Tracker interface remains available to existing scheduler callers.
+type LearnerTracker interface {
+	UpdateMasteryForLearner(learnerID LearnerID, syllabusID, topicID string, delta float64) error
+	GetMasteryForLearner(learnerID LearnerID, syllabusID, topicID string) (float64, error)
+	GetAllProgressForLearner(learnerID LearnerID) ([]ProgressItem, error)
+	GetDueReviewsForLearner(learnerID LearnerID) ([]ProgressItem, error)
 }
 
 // IsMastered returns true if the score meets or exceeds MasteryThreshold.
@@ -107,6 +138,10 @@ func (m *MemoryTracker) UpdateMastery(userID, syllabusID, topicID string, delta 
 	return nil
 }
 
+func (m *MemoryTracker) UpdateMasteryForLearner(learnerID LearnerID, syllabusID, topicID string, delta float64) error {
+	return m.UpdateMastery(learnerID.String(), syllabusID, topicID, delta)
+}
+
 func (m *MemoryTracker) GetMastery(userID, syllabusID, topicID string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -117,6 +152,10 @@ func (m *MemoryTracker) GetMastery(userID, syllabusID, topicID string) (float64,
 		return 0, nil
 	}
 	return item.MasteryScore, nil
+}
+
+func (m *MemoryTracker) GetMasteryForLearner(learnerID LearnerID, syllabusID, topicID string) (float64, error) {
+	return m.GetMastery(learnerID.String(), syllabusID, topicID)
 }
 
 func (m *MemoryTracker) GetAllProgress(userID string) ([]ProgressItem, error) {
@@ -132,6 +171,10 @@ func (m *MemoryTracker) GetAllProgress(userID string) ([]ProgressItem, error) {
 	return result, nil
 }
 
+func (m *MemoryTracker) GetAllProgressForLearner(learnerID LearnerID) ([]ProgressItem, error) {
+	return m.GetAllProgress(learnerID.String())
+}
+
 func (m *MemoryTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -144,6 +187,10 @@ func (m *MemoryTracker) GetDueReviews(userID string) ([]ProgressItem, error) {
 		}
 	}
 	return result, nil
+}
+
+func (m *MemoryTracker) GetDueReviewsForLearner(learnerID LearnerID) ([]ProgressItem, error) {
+	return m.GetDueReviews(learnerID.String())
 }
 
 // SetMastery directly sets a topic's mastery score (dev/testing only).

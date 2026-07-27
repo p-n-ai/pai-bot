@@ -25,6 +25,37 @@ func TestTracker_UpdateMastery(t *testing.T) {
 	}
 }
 
+func TestLearnerTracker_IsolatesInternalLearnerIDs(t *testing.T) {
+	tracker := NewMemoryTracker()
+	telegramLearner, err := NewLearnerID("9f832956-e935-41a3-b984-df499398a1b8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	slackLearner, err := NewLearnerID("232b2439-61d1-4b41-9468-0ddaa6295b84")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tracker.UpdateMasteryForLearner(telegramLearner, "syllabus", "topic", 0.9); err != nil {
+		t.Fatal(err)
+	}
+	if err := tracker.UpdateMasteryForLearner(slackLearner, "syllabus", "topic", 0.2); err != nil {
+		t.Fatal(err)
+	}
+
+	telegramScore, _ := tracker.GetMasteryForLearner(telegramLearner, "syllabus", "topic")
+	slackScore, _ := tracker.GetMasteryForLearner(slackLearner, "syllabus", "topic")
+	if telegramScore != 0.9 || slackScore != 0.2 {
+		t.Fatalf("scores = %v, %v, want 0.9 and 0.2", telegramScore, slackScore)
+	}
+}
+
+func TestNewLearnerIDRejectsEmptyValue(t *testing.T) {
+	if _, err := NewLearnerID(" "); err == nil {
+		t.Fatal("NewLearnerID(empty) error = nil, want error")
+	}
+}
+
 func TestTracker_UpdateMastery_WeightedBlend(t *testing.T) {
 	tracker := NewMemoryTracker()
 

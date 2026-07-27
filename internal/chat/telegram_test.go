@@ -94,7 +94,10 @@ func TestMapTelegramInbound_CallbackQuery(t *testing.T) {
 	if msg.CallbackMessageID != 88 {
 		t.Fatalf("CallbackMessageID = %d, want 88", msg.CallbackMessageID)
 	}
-	if msg.UserID != "123456" {
-		t.Fatalf("UserID = %q, want 123456", msg.UserID)
+	if msg.UserID != "777" {
+		t.Fatalf("UserID = %q, want callback actor 777", msg.UserID)
+	}
+	if msg.ThreadID != "telegram:123456" {
+		t.Fatalf("ThreadID = %q, want callback chat route", msg.ThreadID)
 	}
 }

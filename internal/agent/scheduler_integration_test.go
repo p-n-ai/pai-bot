@@ -128,6 +128,14 @@ func TestSchedulerIntegration_PostgresBackedNudges(t *testing.T) {
 func startSchedulerPostgres(t *testing.T, ctx context.Context) (*pgxpool.Pool, string) {
 	t.Helper()
 
+	pool, tenantID := startSchedulerPostgresBeforeConversationThreads(t, ctx)
+	applyMigrationFile(t, ctx, pool, filepath.Join("..", "..", "migrations", "20260726120000_conversation_threads.sql"))
+	return pool, tenantID
+}
+
+func startSchedulerPostgresBeforeConversationThreads(t *testing.T, ctx context.Context) (*pgxpool.Pool, string) {
+	t.Helper()
+
 	container, err := tcpostgres.Run(
 		ctx,
 		"postgres:17-alpine",

@@ -27,6 +27,9 @@ type Config struct {
 	Email          EmailConfig
 	Telegram       TelegramConfig
 	WhatsApp       WhatsAppConfig
+	Slack          SlackConfig
+	Discord        DiscordConfig
+	Teams          TeamsConfig
 	Auth           AuthConfig
 	Tenant         TenantConfig
 	Log            LogConfig
@@ -124,6 +127,29 @@ type OpenRouterConfig struct {
 // TelegramConfig holds Telegram Bot API settings.
 type TelegramConfig struct {
 	BotToken string
+}
+
+// SlackConfig holds Slack Events API and Web API settings.
+type SlackConfig struct {
+	Enabled       bool
+	BotToken      string
+	SigningSecret string
+}
+
+// DiscordConfig holds Discord interaction and REST API settings.
+type DiscordConfig struct {
+	Enabled       bool
+	BotToken      string
+	PublicKey     string
+	ApplicationID string
+}
+
+// TeamsConfig holds Microsoft Teams Bot Framework settings.
+type TeamsConfig struct {
+	Enabled     bool
+	AppID       string
+	AppPassword string
+	AppTenantID string
 }
 
 // EmailConfig holds invite email delivery settings.
@@ -259,6 +285,23 @@ func Load() (*Config, error) {
 			MeowDBPath:  envStr("LEARN_WHATSAPP_MEOW_DB", "file:whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"),
 			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
 		},
+		Slack: SlackConfig{
+			Enabled:       envBool("LEARN_SLACK_ENABLED", false),
+			BotToken:      envStr("LEARN_SLACK_BOT_TOKEN", ""),
+			SigningSecret: envStr("LEARN_SLACK_SIGNING_SECRET", ""),
+		},
+		Discord: DiscordConfig{
+			Enabled:       envBool("LEARN_DISCORD_ENABLED", false),
+			BotToken:      envStr("LEARN_DISCORD_BOT_TOKEN", ""),
+			PublicKey:     envStr("LEARN_DISCORD_PUBLIC_KEY", ""),
+			ApplicationID: envStr("LEARN_DISCORD_APPLICATION_ID", ""),
+		},
+		Teams: TeamsConfig{
+			Enabled:     envBool("LEARN_TEAMS_ENABLED", false),
+			AppID:       envStr("LEARN_TEAMS_APP_ID", ""),
+			AppPassword: envStr("LEARN_TEAMS_APP_PASSWORD", ""),
+			AppTenantID: envStr("LEARN_TEAMS_APP_TENANT_ID", ""),
+		},
 		Auth: AuthConfig{
 			JWTSecret: envStr("PAI_AUTH_SECRET", DefaultAuthSecret),
 			Google: GoogleOAuthConfig{
@@ -295,8 +338,8 @@ func Load() (*Config, error) {
 
 // Validate checks that required configuration is present.
 func (c *Config) Validate() error {
-	if c.Telegram.BotToken == "" && !c.Runtime.DevMode {
-		return fmt.Errorf("LEARN_TELEGRAM_BOT_TOKEN is required")
+	if !c.Runtime.DevMode && !c.hasExternalChatAdapter() {
+		return fmt.Errorf("at least one external chat adapter must be configured")
 	}
 
 	if !c.HasAIProvider() && !c.Runtime.DevMode {
@@ -322,6 +365,49 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.FocusedPage.BaseURL) != "" && c.Auth.JWTSecret == DefaultAuthSecret {
 		return fmt.Errorf("PAI_AUTH_SECRET must be set to a private secret when focused pages are enabled")
+	}
+	if err := c.validateChatAdapterCredentials(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) hasExternalChatAdapter() bool {
+	return strings.TrimSpace(c.Telegram.BotToken) != "" ||
+		c.Slack.Enabled ||
+		c.Discord.Enabled ||
+		c.Teams.Enabled ||
+		c.WhatsApp.Enabled
+}
+
+func (c *Config) validateChatAdapterCredentials() error {
+	slackConfigured := c.Slack.Enabled ||
+		strings.TrimSpace(c.Slack.BotToken) != "" ||
+		strings.TrimSpace(c.Slack.SigningSecret) != ""
+	if slackConfigured &&
+		(strings.TrimSpace(c.Slack.BotToken) == "" || strings.TrimSpace(c.Slack.SigningSecret) == "") {
+		return fmt.Errorf("LEARN_SLACK_BOT_TOKEN and LEARN_SLACK_SIGNING_SECRET must be configured together")
+	}
+
+	discordConfigured := c.Discord.Enabled ||
+		strings.TrimSpace(c.Discord.BotToken) != "" ||
+		strings.TrimSpace(c.Discord.PublicKey) != "" ||
+		strings.TrimSpace(c.Discord.ApplicationID) != ""
+	if discordConfigured &&
+		(strings.TrimSpace(c.Discord.BotToken) == "" ||
+			strings.TrimSpace(c.Discord.PublicKey) == "" ||
+			strings.TrimSpace(c.Discord.ApplicationID) == "") {
+		return fmt.Errorf("LEARN_DISCORD_BOT_TOKEN, LEARN_DISCORD_PUBLIC_KEY, and LEARN_DISCORD_APPLICATION_ID must be configured together")
+	}
+
+	teamsConfigured := c.Teams.Enabled ||
+		strings.TrimSpace(c.Teams.AppID) != "" ||
+		strings.TrimSpace(c.Teams.AppPassword) != "" ||
+		strings.TrimSpace(c.Teams.AppTenantID) != ""
+	if teamsConfigured &&
+		(strings.TrimSpace(c.Teams.AppID) == "" || strings.TrimSpace(c.Teams.AppPassword) == "") {
+		return fmt.Errorf("LEARN_TEAMS_APP_ID and LEARN_TEAMS_APP_PASSWORD must be configured together")
 	}
 
 	return nil

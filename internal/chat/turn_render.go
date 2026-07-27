@@ -10,6 +10,7 @@ func RenderTurn(in InboundMessage, text, focusedPageURL string, telegramContext 
 	out := OutboundMessage{
 		Channel:        in.Channel,
 		UserID:         in.UserID,
+		ThreadID:       in.ThreadID,
 		Text:           StripReviewActionCodes(text),
 		FocusedPageURL: strings.TrimSpace(focusedPageURL),
 	}
@@ -19,7 +20,7 @@ func RenderTurn(in InboundMessage, text, focusedPageURL string, telegramContext 
 		out.ParseMode = "Markdown"
 		out.ReplyKeyboard = BuildTelegramReplyKeyboard(text)
 		out.InlineKeyboard = BuildTelegramInlineKeyboardWithContext(text, telegramContext)
-		out.InlineKeyboard = AppendFocusedPageButton(out.InlineKeyboard, focusedPageURL)
+		out.InlineKeyboard = AppendFocusedPageButton(out.InlineKeyboard, out.FocusedPageURL)
 		out.Text = StripReviewActionCodes(out.Text)
 	}
 	return out, strings.TrimSpace(out.Text) != ""

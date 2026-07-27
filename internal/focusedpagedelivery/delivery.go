@@ -31,6 +31,7 @@ type Delivery struct {
 	TurnID              string
 	Channel             string
 	RecipientID         string
+	ThreadID            string
 	FinalText           string
 	FocusedPagePublicID string
 	Status              Status
@@ -48,6 +49,7 @@ type EnqueueInput struct {
 	TurnID              string
 	Channel             string
 	RecipientID         string
+	ThreadID            string
 	FinalText           string
 	FocusedPagePublicID string
 }

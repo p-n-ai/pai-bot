@@ -2189,6 +2189,7 @@ func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 
 func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 	mockAI := ai.NewMockProvider("0.7")
+	store := agent.NewMemoryStore()
 	progressTracker := progress.NewMemoryTracker()
 
 	resolver := &stubContextResolver{
@@ -2204,6 +2205,7 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:        mockRouter(mockAI),
 		ContextResolver: resolver,
+		Store:           store,
 		Tracker:         progressTracker,
 	})
 
@@ -2219,7 +2221,11 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 	// assessMasteryAsync runs in a goroutine; give it time to complete.
 	time.Sleep(100 * time.Millisecond)
 
-	score, err := progressTracker.GetMastery("mastery-user", "kssm-form1", "algebra-linear-eq")
+	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "mastery-user"))
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
+	}
+	score, err := progressTracker.GetMastery(learnerID, "kssm-form1", "algebra-linear-eq")
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}
@@ -2231,6 +2237,7 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
 	// Mock AI returns "0.8" for both the teaching response and the grading call.
 	mockAI := ai.NewMockProvider("0.8")
+	store := agent.NewMemoryStore()
 	progressTracker := progress.NewMemoryTracker()
 
 	resolver := &stubContextResolver{
@@ -2246,6 +2253,7 @@ func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
 	engine := agent.NewEngine(agent.EngineConfig{
 		AIRouter:        mockRouter(mockAI),
 		ContextResolver: resolver,
+		Store:           store,
 		Tracker:         progressTracker,
 	})
 
@@ -2260,7 +2268,11 @@ func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	items, err := progressTracker.GetAllProgress("sm2-user")
+	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "sm2-user"))
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
+	}
+	items, err := progressTracker.GetAllProgress(learnerID)
 	if err != nil {
 		t.Fatalf("GetAllProgress() error = %v", err)
 	}
@@ -2554,10 +2566,26 @@ func (s *autoStartStore) UserExists(userID string) bool {
 	return s.known[userID]
 }
 
+func (s *autoStartStore) UserExistsFor(identity agent.LearnerIdentity) bool {
+	return s.known[identity.Channel()+"\x00"+identity.ExternalID()] || s.known[identity.ExternalID()]
+}
+
 func (s *autoStartStore) CreateConversation(conv agent.Conversation) (string, error) {
 	id, err := s.MemoryStore.CreateConversation(conv)
 	if err == nil {
 		s.known[conv.UserID] = true
+	}
+	return id, err
+}
+
+func (s *autoStartStore) CreateConversationFor(identity agent.LearnerIdentity, conv agent.Conversation) (string, error) {
+	return s.CreateConversationForThread(identity, "", conv)
+}
+
+func (s *autoStartStore) CreateConversationForThread(identity agent.LearnerIdentity, threadID string, conv agent.Conversation) (string, error) {
+	id, err := s.MemoryStore.CreateConversationForThread(identity, threadID, conv)
+	if err == nil {
+		s.known[identity.Channel()+"\x00"+identity.ExternalID()] = true
 	}
 	return id, err
 }

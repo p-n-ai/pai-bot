@@ -90,15 +90,19 @@ func (e *Engine) resolveQuizStartTopic(msg chat.InboundMessage, conv *Conversati
 }
 
 func (e *Engine) startQuiz(msg chat.InboundMessage, conv *Conversation, topicID string) string {
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
 	if intensity := inferQuizStartIntensity(msg.Text); intensity != "" {
-		if err := e.store.SetUserPreferredQuizIntensity(msg.UserID, intensity); err != nil {
+		if err := e.setUserPreferredQuizIntensity(identity, intensity); err != nil {
 			slog.Error("failed to persist explicit quiz intensity preference", "user_id", msg.UserID, "error", err)
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 		}
 		return e.startQuizWithIntensity(msg, conv, topicID, intensity, true)
 	}
 
-	if intensity, hasIntensity := e.store.GetUserPreferredQuizIntensity(msg.UserID); hasIntensity && normalizeQuizIntensity(intensity) != "" {
+	if intensity, hasIntensity := e.getUserPreferredQuizIntensity(identity); hasIntensity && normalizeQuizIntensity(intensity) != "" {
 		return e.startQuizWithIntensity(msg, conv, topicID, intensity, true)
 	}
 
@@ -157,9 +161,13 @@ func (e *Engine) startQuizWithIntensity(msg chat.InboundMessage, conv *Conversat
 }
 
 func (e *Engine) handleQuizIntensitySelection(msg chat.InboundMessage, conv *Conversation, topicID string) string {
+	identity, identityErr := learnerIdentityForMessage(msg)
+	if identityErr != nil {
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+	}
 	intensity := parseQuizIntensityInput(msg)
 	if intensity == "" {
-		response := renderQuizIntensityPrompt(e.quizLearnerLabel(msg.UserID))
+		response := renderQuizIntensityPrompt(e.quizLearnerLabel(identity))
 		if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 			Role:    "assistant",
 			Content: response,
@@ -175,7 +183,7 @@ func (e *Engine) handleQuizIntensitySelection(msg chat.InboundMessage, conv *Con
 	}); err != nil {
 		slog.Error("failed to store quiz intensity answer", "conversation_id", conv.ID, "error", err)
 	}
-	if err := e.store.SetUserPreferredQuizIntensity(msg.UserID, intensity); err != nil {
+	if err := e.setUserPreferredQuizIntensity(identity, intensity); err != nil {
 		slog.Error("failed to persist quiz intensity preference", "user_id", msg.UserID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
@@ -313,7 +321,9 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 	}
 
 	result := session.SubmitAnswer(answerText)
-	e.recordQuizOutcomeAsync(msg.UserID, state.TopicID, quizInputSource(msg), question, result.Correct)
+	if identity, err := learnerIdentityForMessage(msg); err == nil {
+		e.recordQuizOutcomeAsync(identity, state.TopicID, quizInputSource(msg), question, result.Correct)
+	}
 	if !result.Correct {
 		response := renderQuizRetry(e.messageLocale(msg, conv), result)
 		if _, err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -759,9 +769,9 @@ func (e *Engine) lookupTopicName(topicID string) string {
 	return topic.Name
 }
 
-func (e *Engine) quizLearnerLabel(userID string) string {
-	name, hasName := e.store.GetUserName(userID)
-	form, hasForm := e.store.GetUserForm(userID)
+func (e *Engine) quizLearnerLabel(identity LearnerIdentity) string {
+	name, hasName := e.getUserName(identity)
+	form, hasForm := e.getUserForm(identity)
 	name = strings.TrimSpace(name)
 	form = strings.TrimSpace(form)
 

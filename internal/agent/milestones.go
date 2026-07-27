@@ -41,27 +41,27 @@ func FormatStreakRecordCelebration(locale string, days int) string {
 
 type pendingMilestones struct {
 	mu      sync.Mutex
-	pending map[string][]string
+	pending map[LearnerIdentity][]string
 }
 
 func newPendingMilestones() *pendingMilestones {
-	return &pendingMilestones{pending: make(map[string][]string)}
+	return &pendingMilestones{pending: make(map[LearnerIdentity][]string)}
 }
 
-func (p *pendingMilestones) add(userID, msg string) {
+func (p *pendingMilestones) add(identity LearnerIdentity, msg string) {
 	if msg == "" {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.pending[userID] = append(p.pending[userID], msg)
+	p.pending[identity] = append(p.pending[identity], msg)
 }
 
-func (p *pendingMilestones) drain(userID string) []string {
+func (p *pendingMilestones) drain(identity LearnerIdentity) []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	msgs := p.pending[userID]
-	delete(p.pending, userID)
+	msgs := p.pending[identity]
+	delete(p.pending, identity)
 	return msgs
 }
 

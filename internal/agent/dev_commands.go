@@ -19,7 +19,11 @@ func (e *Engine) handleDevBoost(msg chat.InboundMessage, args []string) (string,
 		return "[DEV] No tracker configured.", nil
 	}
 
-	conv, _ := e.store.GetActiveConversation(msg.UserID)
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "[DEV] Invalid learner identity.", nil
+	}
+	conv, _ := e.getActiveConversationForThread(identity, msg.ThreadID)
 	if conv == nil || conv.TopicID == "" {
 		return "[DEV] No active topic. Use /learn <topic> first.", nil
 	}
@@ -62,7 +66,7 @@ func (e *Engine) handleDevBoost(msg chat.InboundMessage, args []string) (string,
 	// Trigger unlock check.
 	if e.curriculumLoader != nil {
 		if t, ok := e.curriculumLoader.GetTopic(conv.TopicID); ok {
-			e.checkTopicUnlocks(msg.UserID, syllabusID, &t)
+			e.checkTopicUnlocks(identity, syllabusID, &t)
 		}
 	}
 
@@ -73,8 +77,10 @@ func (e *Engine) handleDevBoost(msg chat.InboundMessage, args []string) (string,
 // handleDevSummary triggers the daily summary for the current user.
 func (e *Engine) handleDevSummary(msg chat.InboundMessage) (string, error) {
 	locale := "ms"
-	if lang, ok := e.store.GetUserPreferredLanguage(msg.UserID); ok && lang != "" {
-		locale = lang
+	if identity, err := learnerIdentityForMessage(msg); err == nil {
+		if lang, ok := e.getUserPreferredLanguage(identity); ok && lang != "" {
+			locale = lang
+		}
 	}
 	summary := ComputeDailySummary(msg.UserID, e.tracker, e.streaks, e.xp)
 	result := FormatDailySummary(summary, locale)
@@ -87,15 +93,19 @@ func (e *Engine) handleDevSummary(msg chat.InboundMessage) (string, error) {
 // handleDevAB manually sets the user's AB test group.
 // Usage: /dev-ab A  or  /dev-ab B
 func (e *Engine) handleDevAB(msg chat.InboundMessage, args []string) (string, error) {
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "[DEV] Invalid learner identity.", nil
+	}
 	if len(args) == 0 {
-		current := e.userABGroup(msg.UserID)
+		current, _ := e.getUserABGroup(identity)
 		return fmt.Sprintf("[DEV] Current AB group: %s. Usage: /dev-ab A or /dev-ab B", current), nil
 	}
 	group := strings.ToUpper(strings.TrimSpace(args[0]))
 	if group != ABGroupA && group != ABGroupB {
 		return "[DEV] Invalid group. Use: /dev-ab A or /dev-ab B", nil
 	}
-	if err := e.store.SetUserABGroup(msg.UserID, group); err != nil {
+	if err := e.setUserABGroup(identity, group); err != nil {
 		slog.Error("dev-ab: failed to set AB group", "user_id", msg.UserID, "error", err)
 		return "[DEV] Failed to set AB group.", nil
 	}
@@ -107,12 +117,16 @@ func (e *Engine) handleDevAB(msg chat.InboundMessage, args []string) (string, er
 // Only available when DevMode is enabled (LEARN_DEV_MODE=true).
 func (e *Engine) handleDevReset(msg chat.InboundMessage) (string, error) {
 	userID := msg.UserID
+	identity, err := learnerIdentityForMessage(msg)
+	if err != nil {
+		return "[DEV] Invalid learner identity.", nil
+	}
 
 	// End active conversation.
-	e.endActiveConversation(userID)
+	e.endActiveConversation(identity, msg.ThreadID)
 
 	// Reset profile (form, language, quiz intensity).
-	e.resetLearnerProfile(userID)
+	e.resetLearnerProfile(identity, msg.ThreadID)
 
 	// Reset mastery/progress.
 	if e.tracker != nil {
@@ -150,7 +164,7 @@ func (e *Engine) handleDevReset(msg chat.InboundMessage) (string, error) {
 
 	// Clear pending unlocks.
 	if e.unlocks != nil {
-		e.unlocks.drain(userID)
+		e.unlocks.drain(identity)
 	}
 
 	slog.Info("dev-reset: user fully reset", "user_id", userID)

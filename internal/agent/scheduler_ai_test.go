@@ -75,7 +75,17 @@ func TestSchedulerUsesAIPersonalizedNudgeWhenEnabled(t *testing.T) {
 		NextReviewAt: now.Add(-48 * time.Hour),
 	}
 
-	msg := scheduler.buildNudgeMessage(context.Background(), "user-1", item, now)
+	learnerID, err := progress.NewLearnerID("user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := scheduler.buildNudgeMessage(
+		context.Background(),
+		ScheduledRecipient{Channel: "telegram", UserID: "user-1"},
+		learnerID,
+		item,
+		now,
+	)
 	want := "You've built a 4-day streak.\nLet's revisit linear equations for five focused minutes.\nStart now."
 	if msg != want {
 		t.Fatalf("buildNudgeMessage() = %q, want formatted AI response %q", msg, want)
@@ -150,7 +160,17 @@ func TestSchedulerFallsBackWhenAINudgeFails(t *testing.T) {
 		NextReviewAt: now.Add(-48 * time.Hour),
 	}
 
-	msg := scheduler.buildNudgeMessage(context.Background(), "user-2", item, now)
+	learnerID, err := progress.NewLearnerID("user-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := scheduler.buildNudgeMessage(
+		context.Background(),
+		ScheduledRecipient{Channel: "telegram", UserID: "user-2"},
+		learnerID,
+		item,
+		now,
+	)
 	if strings.TrimSpace(msg) == "" {
 		t.Fatal("buildNudgeMessage() should return fallback text")
 	}

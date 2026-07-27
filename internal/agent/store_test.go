@@ -4,9 +4,15 @@
 package agent_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+)
+
+var (
+	_ agent.IdentityConversationStore = (*agent.MemoryStore)(nil)
+	_ agent.IdentityConversationStore = (*agent.PostgresStore)(nil)
 )
 
 func TestConversationStore_Interface(t *testing.T) {
@@ -115,6 +121,193 @@ func TestConversationStore_UserChannel(t *testing.T) {
 	channel, ok := store.UserChannel("u-channel")
 	if !ok || channel != "telegram" {
 		t.Fatalf("UserChannel() = %q, %v, want telegram, true", channel, ok)
+	}
+}
+
+func TestIdentityConversationStore_IsolatesSameExternalIDAcrossChannels(t *testing.T) {
+	store := agent.NewMemoryStore()
+	telegram, err := agent.NewLearnerIdentity("telegram", "shared-user")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity(telegram) error = %v", err)
+	}
+	slack, err := agent.NewLearnerIdentity("slack", "shared-user")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity(slack) error = %v", err)
+	}
+
+	if err := store.SetUserNameFor(telegram, "Aina on Telegram"); err != nil {
+		t.Fatalf("SetUserNameFor(telegram) error = %v", err)
+	}
+	if err := store.SetUserNameFor(slack, "Aina on Slack"); err != nil {
+		t.Fatalf("SetUserNameFor(slack) error = %v", err)
+	}
+	if _, err := store.CreateConversationFor(telegram, agent.Conversation{State: "teaching"}); err != nil {
+		t.Fatalf("CreateConversationFor(telegram) error = %v", err)
+	}
+	if _, err := store.CreateConversationFor(slack, agent.Conversation{State: "teaching"}); err != nil {
+		t.Fatalf("CreateConversationFor(slack) error = %v", err)
+	}
+
+	if got, ok := store.GetUserNameFor(telegram); !ok || got != "Aina on Telegram" {
+		t.Fatalf("GetUserNameFor(telegram) = %q, %v, want Aina on Telegram, true", got, ok)
+	}
+	if got, ok := store.GetUserNameFor(slack); !ok || got != "Aina on Slack" {
+		t.Fatalf("GetUserNameFor(slack) = %q, %v, want Aina on Slack, true", got, ok)
+	}
+	telegramConversation, ok := store.GetActiveConversationFor(telegram)
+	if !ok || telegramConversation.Channel != "telegram" {
+		t.Fatalf("GetActiveConversationFor(telegram) = %#v, %v, want telegram conversation", telegramConversation, ok)
+	}
+	slackConversation, ok := store.GetActiveConversationFor(slack)
+	if !ok || slackConversation.Channel != "slack" {
+		t.Fatalf("GetActiveConversationFor(slack) = %#v, %v, want slack conversation", slackConversation, ok)
+	}
+	telegramUUID, err := store.ResolveUserUUIDFor(telegram)
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor(telegram) error = %v", err)
+	}
+	slackUUID, err := store.ResolveUserUUIDFor(slack)
+	if err != nil {
+		t.Fatalf("ResolveUserUUIDFor(slack) error = %v", err)
+	}
+	if telegramUUID == "" || slackUUID == "" || telegramUUID == slackUUID {
+		t.Fatalf("resolved UUIDs = %q, %q, want distinct non-empty values", telegramUUID, slackUUID)
+	}
+	if channel, ok := store.UserChannel("shared-user"); ok {
+		t.Fatalf("UserChannel(shared-user) = %q, true, want ambiguous identity miss", channel)
+	}
+}
+
+func TestIdentityConversationStore_IsolatesActiveConversationsByThread(t *testing.T) {
+	store := agent.NewMemoryStore()
+	learner, err := agent.NewLearnerIdentity("slack", "U123")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity() error = %v", err)
+	}
+
+	firstID, err := store.CreateConversationForThread(learner, "slack:C123:1700000000.000001", agent.Conversation{
+		State: "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversationForThread(first) error = %v", err)
+	}
+	secondID, err := store.CreateConversationForThread(learner, "slack:C123:1700000000.000002", agent.Conversation{
+		State: "teaching",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversationForThread(second) error = %v", err)
+	}
+	if firstID == secondID {
+		t.Fatalf("conversation IDs = %q for both threads, want distinct conversations", firstID)
+	}
+
+	first, ok := store.GetActiveConversationForThread(learner, "slack:C123:1700000000.000001")
+	if !ok {
+		t.Fatal("GetActiveConversationForThread(first) found = false, want true")
+	}
+	if first.ID != firstID || first.ThreadID != "slack:C123:1700000000.000001" {
+		t.Fatalf("first conversation = %#v, want ID %q and exact opaque thread ID", first, firstID)
+	}
+	second, ok := store.GetActiveConversationForThread(learner, "slack:C123:1700000000.000002")
+	if !ok {
+		t.Fatal("GetActiveConversationForThread(second) found = false, want true")
+	}
+	if second.ID != secondID || second.ThreadID != "slack:C123:1700000000.000002" {
+		t.Fatalf("second conversation = %#v, want ID %q and exact opaque thread ID", second, secondID)
+	}
+}
+
+func TestIdentityConversationStore_LatestActiveConversationPreservesSavedRoute(t *testing.T) {
+	store := agent.NewMemoryStore()
+	learner, err := agent.NewLearnerIdentity("slack", "U-latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstID, err := store.CreateConversationForThread(learner, "slack:C-old:1", agent.Conversation{
+		State: "teaching",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondID, err := store.CreateConversationForThread(learner, "slack:C-new:2", agent.Conversation{
+		State: "teaching",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	latest, found := store.GetLatestActiveConversationFor(learner)
+	if !found || latest.ID != secondID || latest.ThreadID != "slack:C-new:2" {
+		t.Fatalf("latest conversation = %#v, %v, want second saved route", latest, found)
+	}
+	if err := store.EndConversation(secondID); err != nil {
+		t.Fatal(err)
+	}
+	latest, found = store.GetLatestActiveConversationFor(learner)
+	if !found || latest.ID != firstID || latest.ThreadID != "slack:C-old:1" {
+		t.Fatalf("latest conversation after end = %#v, %v, want first saved route", latest, found)
+	}
+	if err := store.EndConversation(firstID); err != nil {
+		t.Fatal(err)
+	}
+	if latest, found := store.GetLatestActiveConversationFor(learner); found {
+		t.Fatalf("latest conversation = %#v, true, want no active route", latest)
+	}
+}
+
+func TestIdentityConversationStore_EmptyThreadPreservesLegacyConversationScope(t *testing.T) {
+	store := agent.NewMemoryStore()
+	learner, err := agent.NewLearnerIdentity("telegram", "123")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity() error = %v", err)
+	}
+
+	id, err := store.CreateConversationFor(learner, agent.Conversation{State: "teaching"})
+	if err != nil {
+		t.Fatalf("CreateConversationFor() error = %v", err)
+	}
+	legacy, ok := store.GetActiveConversationFor(learner)
+	if !ok {
+		t.Fatal("GetActiveConversationFor() found = false, want true")
+	}
+	scoped, ok := store.GetActiveConversationForThread(learner, "")
+	if !ok {
+		t.Fatal("GetActiveConversationForThread(empty) found = false, want true")
+	}
+	if legacy.ID != id || scoped.ID != id || scoped.ThreadID != "" {
+		t.Fatalf("legacy IDs = %q/%q, thread = %q, want %q/%q and empty thread", legacy.ID, scoped.ID, scoped.ThreadID, id, id)
+	}
+}
+
+func TestIdentityConversationStore_RejectsSecondActiveConversationInSameThread(t *testing.T) {
+	store := agent.NewMemoryStore()
+	learner, err := agent.NewLearnerIdentity("discord", "123")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity() error = %v", err)
+	}
+	if _, err := store.CreateConversationForThread(learner, "discord:guild:channel", agent.Conversation{}); err != nil {
+		t.Fatalf("CreateConversationForThread(first) error = %v", err)
+	}
+	if _, err := store.CreateConversationForThread(learner, "discord:guild:channel", agent.Conversation{}); !errors.Is(err, agent.ErrActiveConversationExists) {
+		t.Fatalf("CreateConversationForThread(second) error = %v, want ErrActiveConversationExists", err)
+	}
+}
+
+func TestNewLearnerIdentity_RequiresBothParts(t *testing.T) {
+	if _, err := agent.NewLearnerIdentity("", "user"); err == nil {
+		t.Fatal("NewLearnerIdentity(empty channel) error = nil, want error")
+	}
+	if _, err := agent.NewLearnerIdentity("slack", ""); err == nil {
+		t.Fatal("NewLearnerIdentity(empty external ID) error = nil, want error")
+	}
+
+	identity, err := agent.NewLearnerIdentity(" slack ", " user ")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity() error = %v", err)
+	}
+	if identity.Channel() != "slack" || identity.ExternalID() != "user" {
+		t.Fatalf("identity = %q/%q, want slack/user", identity.Channel(), identity.ExternalID())
 	}
 }
 

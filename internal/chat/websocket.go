@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ type WSChannel struct {
 	conns            map[string]*websocket.Conn // userID -> connection
 	handler          func(InboundMessage)       // set by Start()
 	stop             chan struct{}
+	stopOnce         sync.Once
 	embedConfigStore EmbedConfigStore   // nil for non-embed (terminal-chat) use
 	tokenManager     *auth.TokenManager // nil for non-embed use
 	maxMessageSize   int64              // 0 means no limit
@@ -201,18 +203,22 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtTo
 		return
 	}
 
-	// Register the connection.
-	ws.mu.Lock()
-	ws.conns[userID] = conn
-	ws.mu.Unlock()
-
-	slog.Info("websocket client connected", "user_id", userID)
-
 	// Send auth_ok.
 	if err := ws.writeJSON(ctx, conn, wsOutboundMsg{Type: "auth_ok"}); err != nil {
 		slog.Warn("websocket write auth_ok failed", "error", err, "user_id", userID)
-		ws.removeConn(userID)
 		return
+	}
+
+	previous, registered := ws.registerConn(userID, conn)
+	if !registered {
+		_ = conn.Close(websocket.StatusGoingAway, "server shutting down")
+		return
+	}
+
+	slog.Info("websocket client connected", "user_id", userID)
+
+	if previous != nil {
+		_ = previous.Close(websocket.StatusNormalClosure, "connection replaced")
 	}
 
 	// Start keepalive pinger.
@@ -242,7 +248,7 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtTo
 	ws.readLoop(ctx, conn, userID)
 
 	// Cleanup on disconnect.
-	ws.removeConn(userID)
+	ws.removeConn(userID, conn)
 	slog.Info("websocket client disconnected", "user_id", userID)
 }
 
@@ -377,17 +383,20 @@ func (ws *WSChannel) Start(_ context.Context, handler func(InboundMessage)) erro
 
 // Stop closes all active connections and signals the channel to shut down.
 func (ws *WSChannel) Stop() error {
-	close(ws.stop)
+	ws.stopOnce.Do(func() {
+		close(ws.stop)
 
-	ws.mu.Lock()
-	defer ws.mu.Unlock()
+		ws.mu.Lock()
+		conns := ws.conns
+		ws.conns = make(map[string]*websocket.Conn)
+		ws.mu.Unlock()
 
-	for userID, conn := range ws.conns {
-		_ = conn.Close(websocket.StatusGoingAway, "server shutting down")
-		delete(ws.conns, userID)
-	}
+		for _, conn := range conns {
+			_ = conn.Close(websocket.StatusGoingAway, "server shutting down")
+		}
 
-	slog.Info("websocket channel stopped")
+		slog.Info("websocket channel stopped")
+	})
 	return nil
 }
 
@@ -411,12 +420,13 @@ func (ws *WSChannel) SendNotification(ctx context.Context, userID string, text s
 // ConnectedUsers returns the list of currently connected user IDs.
 func (ws *WSChannel) ConnectedUsers() []string {
 	ws.mu.RLock()
-	defer ws.mu.RUnlock()
-
 	users := make([]string, 0, len(ws.conns))
 	for uid := range ws.conns {
 		users = append(users, uid)
 	}
+	ws.mu.RUnlock()
+
+	sort.Strings(users)
 	return users
 }
 
@@ -429,11 +439,30 @@ func (ws *WSChannel) writeJSON(ctx context.Context, conn *websocket.Conn, msg ws
 	return conn.Write(ctx, websocket.MessageText, data)
 }
 
-// removeConn removes a user's connection from the map.
-func (ws *WSChannel) removeConn(userID string) {
+// registerConn installs conn as the user's live connection unless the channel
+// is stopping. The caller owns closing any replaced connection.
+func (ws *WSChannel) registerConn(userID string, conn *websocket.Conn) (*websocket.Conn, bool) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	delete(ws.conns, userID)
+
+	select {
+	case <-ws.stop:
+		return nil, false
+	default:
+	}
+
+	previous := ws.conns[userID]
+	ws.conns[userID] = conn
+	return previous, true
+}
+
+// removeConn removes the connection only if it is still the user's live one.
+func (ws *WSChannel) removeConn(userID string, conn *websocket.Conn) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	if ws.conns[userID] == conn {
+		delete(ws.conns, userID)
+	}
 }
 
 // containsPromptInjection checks if a message contains common prompt injection markers.

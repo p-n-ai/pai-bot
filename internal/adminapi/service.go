@@ -88,6 +88,7 @@ type ParentSummary struct {
 type WeeklyParentReportSummary struct {
 	ParentExternalID   string
 	ParentChannel      string
+	ParentThreadID     string
 	ParentName         string
 	ChildName          string
 	ChildForm          string
@@ -620,8 +621,18 @@ func (s *Service) ListWeeklyParentReportSummaries(ctx context.Context) ([]Weekly
 			u.id::text,
 			COALESCE(NULLIF(u.external_id, ''), ''),
 			COALESCE(u.channel, ''),
+			COALESCE(route.thread_id, ''),
 			COALESCE(u.name, '')
 		FROM users u
+		LEFT JOIN LATERAL (
+			SELECT c.thread_id
+			FROM conversations c
+			WHERE c.tenant_id = u.tenant_id
+				AND c.user_id = u.id
+				AND c.ended_at IS NULL
+			ORDER BY c.started_at DESC, c.id DESC
+			LIMIT 1
+		) route ON TRUE
 		WHERE %s
 			AND u.role = 'parent'
 			AND COALESCE(NULLIF(u.external_id, ''), '') <> ''
@@ -636,13 +647,14 @@ func (s *Service) ListWeeklyParentReportSummaries(ctx context.Context) ([]Weekly
 		id         string
 		externalID string
 		channel    string
+		threadID   string
 		name       string
 	}
 
 	var recipients []parentRecipient
 	for parentRows.Next() {
 		var item parentRecipient
-		if err := parentRows.Scan(&item.id, &item.externalID, &item.channel, &item.name); err != nil {
+		if err := parentRows.Scan(&item.id, &item.externalID, &item.channel, &item.threadID, &item.name); err != nil {
 			return nil, fmt.Errorf("scan weekly parent recipient: %w", err)
 		}
 		recipients = append(recipients, item)
@@ -675,6 +687,7 @@ func (s *Service) ListWeeklyParentReportSummaries(ctx context.Context) ([]Weekly
 		summaries = append(summaries, WeeklyParentReportSummary{
 			ParentExternalID:   recipient.externalID,
 			ParentChannel:      recipient.channel,
+			ParentThreadID:     recipient.threadID,
 			ParentName:         recipient.name,
 			ChildName:          parentSummary.Child.Name,
 			ChildForm:          parentSummary.Child.Form,

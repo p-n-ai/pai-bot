@@ -221,6 +221,7 @@ func (s *MemoryGroupStore) GetGroupMembersWithChannel(groupID string) ([]GroupMe
 	var result []GroupMemberDelivery
 	for _, m := range s.members[groupID] {
 		result = append(result, GroupMemberDelivery{
+			LearnerID:  m.UserID,
 			ExternalID: m.UserID, // in memory store, userID doubles as externalID
 			Channel:    "telegram",
 			UserName:   "User " + m.UserID,

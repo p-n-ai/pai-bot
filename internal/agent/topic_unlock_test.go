@@ -13,14 +13,18 @@ import (
 
 func TestPendingUnlocks_AddAndDrain(t *testing.T) {
 	pu := newPendingUnlocks()
+	identity, err := NewLearnerIdentity("telegram", "user1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	topics := []curriculum.Topic{
 		{ID: "F1-06", Name: "Linear Equations"},
 	}
 
-	pu.add("user1", topics)
+	pu.add(identity, topics)
 
-	drained := pu.drain("user1")
+	drained := pu.drain(identity)
 	if len(drained) != 1 {
 		t.Fatalf("expected 1 drained topic, got %d", len(drained))
 	}
@@ -29,7 +33,7 @@ func TestPendingUnlocks_AddAndDrain(t *testing.T) {
 	}
 
 	// Second drain should be empty.
-	drained = pu.drain("user1")
+	drained = pu.drain(identity)
 	if len(drained) != 0 {
 		t.Errorf("expected 0 drained topics after second drain, got %d", len(drained))
 	}
@@ -37,11 +41,31 @@ func TestPendingUnlocks_AddAndDrain(t *testing.T) {
 
 func TestPendingUnlocks_AddEmpty(t *testing.T) {
 	pu := newPendingUnlocks()
-	pu.add("user1", nil)
+	identity, err := NewLearnerIdentity("telegram", "user1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pu.add(identity, nil)
 
-	drained := pu.drain("user1")
+	drained := pu.drain(identity)
 	if len(drained) != 0 {
 		t.Errorf("expected 0 drained topics, got %d", len(drained))
+	}
+}
+
+func TestPendingUnlocks_IsolatesSameExternalIDAcrossChannels(t *testing.T) {
+	pu := newPendingUnlocks()
+	telegram, _ := NewLearnerIdentity("telegram", "shared")
+	slack, _ := NewLearnerIdentity("slack", "shared")
+
+	pu.add(telegram, []curriculum.Topic{{ID: "telegram-topic"}})
+	pu.add(slack, []curriculum.Topic{{ID: "slack-topic"}})
+
+	if got := pu.drain(telegram); len(got) != 1 || got[0].ID != "telegram-topic" {
+		t.Fatalf("telegram drain = %#v, want telegram topic only", got)
+	}
+	if got := pu.drain(slack); len(got) != 1 || got[0].ID != "slack-topic" {
+		t.Fatalf("slack drain = %#v, want slack topic only", got)
 	}
 }
 

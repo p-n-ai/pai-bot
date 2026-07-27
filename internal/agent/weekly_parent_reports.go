@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
-	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
 const (
@@ -28,6 +27,7 @@ type WeeklyParentWeeklyStats struct {
 type WeeklyParentReportSummary struct {
 	ParentExternalID   string
 	ParentChannel      string
+	ParentThreadID     string
 	ParentName         string
 	ChildName          string
 	ChildForm          string
@@ -90,7 +90,12 @@ func (s *Scheduler) SendWeeklyParentReports(ctx context.Context, now time.Time) 
 	}
 
 	for _, summary := range summaries {
-		if strings.TrimSpace(summary.ParentExternalID) == "" || summary.ParentChannel != "telegram" {
+		recipient := ScheduledRecipient{
+			Channel:  summary.ParentChannel,
+			UserID:   summary.ParentExternalID,
+			ThreadID: summary.ParentThreadID,
+		}
+		if _, ok := recipient.outbound("", ""); !ok {
 			continue
 		}
 
@@ -99,10 +104,9 @@ func (s *Scheduler) SendWeeklyParentReports(ctx context.Context, now time.Time) 
 			continue
 		}
 
-		out := chat.OutboundMessage{
-			Channel: "telegram",
-			UserID:  summary.ParentExternalID,
-			Text:    msg,
+		out, ok := recipient.outbound(msg, "")
+		if !ok {
+			continue
 		}
 		if err := s.gateway.Send(ctx, out); err != nil {
 			s.logger.Error("failed to send weekly parent report", "parent_id", summary.ParentExternalID, "error", err)

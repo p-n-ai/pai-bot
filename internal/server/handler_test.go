@@ -16,6 +16,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/auth"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
@@ -2105,7 +2106,12 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 	}{
 		{
 			name: "quiz intensity pending",
-			conv: agent.Conversation{UserID: "u-intensity", State: "quiz_intensity"},
+			conv: agent.Conversation{
+				UserID:   "u-intensity",
+				Channel:  "telegram",
+				ThreadID: "telegram:u-intensity",
+				State:    "quiz_intensity",
+			},
 			want: struct {
 				intensity bool
 				active    bool
@@ -2115,8 +2121,10 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 		{
 			name: "quiz active",
 			conv: agent.Conversation{
-				UserID: "u-active",
-				State:  "quiz_active",
+				UserID:   "u-active",
+				Channel:  "telegram",
+				ThreadID: "telegram:u-active",
+				State:    "quiz_active",
 				QuizState: &agent.ConversationQuizState{
 					RunState: "active",
 				},
@@ -2130,8 +2138,10 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 		{
 			name: "quiz paused outside quiz state",
 			conv: agent.Conversation{
-				UserID: "u-paused",
-				State:  "teaching",
+				UserID:   "u-paused",
+				Channel:  "telegram",
+				ThreadID: "telegram:u-paused",
+				State:    "teaching",
 				QuizState: &agent.ConversationQuizState{
 					RunState: "paused",
 				},
@@ -2147,11 +2157,19 @@ func TestTelegramInlineKeyboardContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := agent.NewMemoryStore()
-			if _, err := store.CreateConversation(tt.conv); err != nil {
-				t.Fatalf("CreateConversation() error = %v", err)
+			identity, err := agent.NewLearnerIdentity(tt.conv.Channel, tt.conv.UserID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.CreateConversationForThread(identity, tt.conv.ThreadID, tt.conv); err != nil {
+				t.Fatalf("CreateConversationForThread() error = %v", err)
 			}
 
-			got := telegramInlineKeyboardContext(store, tt.conv.UserID)
+			got := telegramInlineKeyboardContext(store, chat.InboundMessage{
+				Channel:  tt.conv.Channel,
+				UserID:   tt.conv.UserID,
+				ThreadID: tt.conv.ThreadID,
+			})
 			if got.QuizIntensityPending != tt.want.intensity || got.QuizActive != tt.want.active || got.QuizPaused != tt.want.paused {
 				t.Fatalf("telegramInlineKeyboardContext() = %#v, want intensity=%v active=%v paused=%v", got, tt.want.intensity, tt.want.active, tt.want.paused)
 			}

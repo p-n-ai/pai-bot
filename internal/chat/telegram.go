@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,11 +23,12 @@ const telegramMaxMessageLen = 4096
 
 // TelegramChannel implements the Channel interface for Telegram Bot API.
 type TelegramChannel struct {
-	token   string
-	baseURL string
-	client  *http.Client
-	offset  int
-	stop    chan struct{}
+	token    string
+	baseURL  string
+	client   *http.Client
+	offset   int
+	stop     chan struct{}
+	stopOnce sync.Once
 
 	devMode bool
 }
@@ -51,26 +53,47 @@ func (t *TelegramChannel) SetDevMode(enabled bool) {
 	t.devMode = enabled
 }
 
-func (t *TelegramChannel) SendTyping(_ context.Context, userID string) error {
+func (t *TelegramChannel) SendTyping(ctx context.Context, userID string) error {
+	chatID, messageThreadID := parseTelegramThreadID(userID)
 	params := url.Values{
-		"chat_id": {userID},
+		"chat_id": {chatID},
 		"action":  {"typing"},
 	}
-	resp, err := t.client.PostForm(t.baseURL+"/sendChatAction", params)
+	if messageThreadID != "" {
+		params.Set("message_thread_id", messageThreadID)
+	}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		t.baseURL+"/sendChatAction",
+		strings.NewReader(params.Encode()),
+	)
+	if err != nil {
+		return fmt.Errorf("creating typing indicator request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := t.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("sending typing indicator: %w", err)
 	}
 	_ = resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("sending typing indicator: Telegram returned status %d", resp.StatusCode)
+	}
 	return nil
 }
 
 func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg OutboundMessage) error {
+	chatID, messageThreadID := parseTelegramThreadID(userID)
 	parts := SplitMessage(msg.Text, telegramMaxMessageLen)
 
 	for i, part := range parts {
 		params := url.Values{
-			"chat_id": {userID},
+			"chat_id": {chatID},
 			"text":    {part},
+		}
+		if messageThreadID != "" {
+			params.Set("message_thread_id", messageThreadID)
 		}
 		if msg.ParseMode != "" {
 			params.Set("parse_mode", msg.ParseMode)
@@ -111,7 +134,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			params.Set("reply_markup", string(b))
 		}
 
-		resp, err := t.client.PostForm(t.baseURL+"/sendMessage", params)
+		resp, err := t.postForm(ctx, "/sendMessage", params)
 		if err != nil {
 			return fmt.Errorf("sending Telegram message: %w", err)
 		}
@@ -122,7 +145,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			if msg.ParseMode != "" && resp.StatusCode == http.StatusBadRequest {
 				slog.Warn("Telegram markdown parse failed, retrying plain")
 				params.Del("parse_mode")
-				retryResp, retryErr := t.client.PostForm(t.baseURL+"/sendMessage", params)
+				retryResp, retryErr := t.postForm(ctx, "/sendMessage", params)
 				if retryErr != nil {
 					return fmt.Errorf("sending Telegram message (retry): %w", retryErr)
 				}
@@ -148,7 +171,9 @@ func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage
 }
 
 func (t *TelegramChannel) Stop() error {
-	close(t.stop)
+	t.stopOnce.Do(func() {
+		close(t.stop)
+	})
 	return nil
 }
 
@@ -164,7 +189,13 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 			updates, err := t.getUpdates(ctx)
 			if err != nil {
 				slog.Error("Telegram getUpdates error", "error", err)
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.stop:
+					return
+				case <-time.After(5 * time.Second):
+				}
 				continue
 			}
 
@@ -239,14 +270,15 @@ type tgUpdate struct {
 }
 
 type tgMessage struct {
-	MessageID      int         `json:"message_id"`
-	Text           string      `json:"text"`
-	Caption        string      `json:"caption"`
-	Photo          []tgPhoto   `json:"photo,omitempty"`
-	Document       *tgDocument `json:"document,omitempty"`
-	Chat           tgChat      `json:"chat"`
-	From           tgUser      `json:"from"`
-	ReplyToMessage *tgMessage  `json:"reply_to_message,omitempty"`
+	MessageID       int         `json:"message_id"`
+	MessageThreadID int         `json:"message_thread_id,omitempty"`
+	Text            string      `json:"text"`
+	Caption         string      `json:"caption"`
+	Photo           []tgPhoto   `json:"photo,omitempty"`
+	Document        *tgDocument `json:"document,omitempty"`
+	Chat            tgChat      `json:"chat"`
+	From            tgUser      `json:"from"`
+	ReplyToMessage  *tgMessage  `json:"reply_to_message,omitempty"`
 }
 
 type tgPhoto struct {
@@ -319,8 +351,11 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 		}
 		return InboundMessage{
 			Channel:           "telegram",
-			UserID:            strconv.FormatInt(cb.Message.Chat.ID, 10),
+			UserID:            strconv.FormatInt(cb.From.ID, 10),
 			ExternalID:        strconv.FormatInt(cb.From.ID, 10),
+			ThreadID:          telegramThreadID(cb.Message.Chat.ID, cb.Message.MessageThreadID),
+			MessageID:         strconv.Itoa(cb.Message.MessageID),
+			DeliveryID:        strconv.Itoa(u.UpdateID),
 			Text:              data,
 			Username:          cb.From.Username,
 			FirstName:         cb.From.FirstName,
@@ -349,8 +384,11 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 
 	msg := InboundMessage{
 		Channel:    "telegram",
-		UserID:     strconv.FormatInt(u.Message.Chat.ID, 10),
+		UserID:     strconv.FormatInt(u.Message.From.ID, 10),
 		ExternalID: strconv.FormatInt(u.Message.From.ID, 10),
+		ThreadID:   telegramThreadID(u.Message.Chat.ID, u.Message.MessageThreadID),
+		MessageID:  strconv.Itoa(u.Message.MessageID),
+		DeliveryID: strconv.Itoa(u.UpdateID),
 		Text:       text,
 		Caption:    caption,
 		HasImage:   hasImage,
@@ -381,11 +419,28 @@ func mapTelegramInbound(u tgUpdate) (InboundMessage, bool) {
 	return msg, true
 }
 
+func telegramThreadID(chatID int64, messageThreadID int) string {
+	threadID := "telegram:" + strconv.FormatInt(chatID, 10)
+	if messageThreadID != 0 {
+		threadID += ":" + strconv.Itoa(messageThreadID)
+	}
+	return threadID
+}
+
+func parseTelegramThreadID(route string) (chatID, messageThreadID string) {
+	encoded, ok := strings.CutPrefix(route, "telegram:")
+	if !ok {
+		return route, ""
+	}
+	chatID, messageThreadID, _ = strings.Cut(encoded, ":")
+	return chatID, messageThreadID
+}
+
 func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQueryID string) error {
 	params := url.Values{
 		"callback_query_id": {callbackQueryID},
 	}
-	resp, err := t.client.PostForm(t.baseURL+"/answerCallbackQuery", params)
+	resp, err := t.postForm(ctx, "/answerCallbackQuery", params)
 	if err != nil {
 		return fmt.Errorf("answer callback query: %w", err)
 	}
@@ -394,6 +449,20 @@ func (t *TelegramChannel) answerCallbackQuery(ctx context.Context, callbackQuery
 		return fmt.Errorf("telegram answerCallbackQuery error %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (t *TelegramChannel) postForm(ctx context.Context, endpoint string, params url.Values) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		t.baseURL+endpoint,
+		strings.NewReader(params.Encode()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return t.client.Do(request)
 }
 
 func pickImageFileID(m *tgMessage) string {

@@ -28,12 +28,12 @@ func (s *PostgresStore) Enqueue(ctx context.Context, input EnqueueInput, now tim
 	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO focused_page_deliveries (
-			tenant_id, turn_id, channel, recipient_id, final_text,
+			tenant_id, turn_id, channel, recipient_id, thread_id, final_text,
 			focused_page_public_id, status, next_attempt_at, created_at, updated_at
-		) VALUES ($1::uuid, $2, $3, $4, $5, $6, 'pending', $7, $7, $7)
+		) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'pending', $8, $8, $8)
 		ON CONFLICT (tenant_id, turn_id, channel) DO NOTHING`,
-		input.TenantID, input.TurnID, input.Channel, input.RecipientID, input.FinalText,
-		input.FocusedPagePublicID, now)
+		input.TenantID, input.TurnID, input.Channel, input.RecipientID, input.ThreadID,
+		input.FinalText, input.FocusedPagePublicID, now)
 	if err != nil {
 		return Delivery{}, fmt.Errorf("enqueue focused-page delivery: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *PostgresStore) claim(ctx context.Context, selector string, selectorArgs
 		FROM candidate
 		WHERE delivery.id = candidate.id
 		RETURNING delivery.id::text, delivery.tenant_id::text, delivery.turn_id,
-		          delivery.channel, delivery.recipient_id, delivery.final_text,
+		          delivery.channel, delivery.recipient_id, delivery.thread_id, delivery.final_text,
 		          delivery.focused_page_public_id, delivery.status, delivery.attempt_count,
 		          delivery.next_attempt_at, delivery.lease_token, delivery.lease_expires_at,
 		          delivery.delivered_at, delivery.created_at, delivery.updated_at`,
@@ -124,7 +124,7 @@ func (s *PostgresStore) ScheduleRetry(ctx context.Context, id, token string, nex
 
 func (s *PostgresStore) getByKey(ctx context.Context, tenantID, turnID, channel string) (Delivery, error) {
 	delivery, err := scanDelivery(s.pool.QueryRow(ctx, `
-		SELECT id::text, tenant_id::text, turn_id, channel, recipient_id, final_text,
+		SELECT id::text, tenant_id::text, turn_id, channel, recipient_id, thread_id, final_text,
 		       focused_page_public_id, status, attempt_count, next_attempt_at,
 		       COALESCE(lease_token, ''), lease_expires_at, delivered_at, created_at, updated_at
 		FROM focused_page_deliveries
@@ -144,7 +144,7 @@ func scanDelivery(row rowScanner) (Delivery, error) {
 	var delivery Delivery
 	err := row.Scan(
 		&delivery.ID, &delivery.TenantID, &delivery.TurnID, &delivery.Channel,
-		&delivery.RecipientID, &delivery.FinalText, &delivery.FocusedPagePublicID,
+		&delivery.RecipientID, &delivery.ThreadID, &delivery.FinalText, &delivery.FocusedPagePublicID,
 		&delivery.Status, &delivery.AttemptCount, &delivery.NextAttemptAt,
 		&delivery.LeaseToken, &delivery.LeaseExpiresAt, &delivery.DeliveredAt,
 		&delivery.CreatedAt, &delivery.UpdatedAt,

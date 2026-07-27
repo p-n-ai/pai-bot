@@ -5,6 +5,34 @@ package chat
 
 import "testing"
 
+func TestMapTelegramInboundPreservesIdentityAndTopicRoute(t *testing.T) {
+	msg, ok := mapTelegramInbound(tgUpdate{
+		UpdateID: 101,
+		Message: &tgMessage{
+			MessageID:       77,
+			MessageThreadID: 42,
+			Text:            "topic question",
+			Chat:            tgChat{ID: -100123},
+			From:            tgUser{ID: 999, Username: "learner"},
+		},
+	})
+	if !ok {
+		t.Fatal("mapTelegramInbound() rejected topic message")
+	}
+	if msg.UserID != "999" {
+		t.Fatalf("UserID = %q, want Telegram learner 999", msg.UserID)
+	}
+	if msg.ThreadID != "telegram:-100123:42" {
+		t.Fatalf("ThreadID = %q, want Telegram topic route", msg.ThreadID)
+	}
+	if msg.MessageID != "77" {
+		t.Fatalf("MessageID = %q, want Telegram message ID", msg.MessageID)
+	}
+	if msg.DeliveryID != "101" {
+		t.Fatalf("DeliveryID = %q, want Telegram update ID", msg.DeliveryID)
+	}
+}
+
 func TestMapTelegramInbound_TextMessage(t *testing.T) {
 	msg, ok := mapTelegramInbound(tgUpdate{
 		UpdateID: 1,

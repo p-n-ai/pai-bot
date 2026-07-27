@@ -153,10 +153,12 @@ func TestScheduler_SendWeeklyParentReports_FallsBackWhenAIUnavailable(t *testing
 	}
 }
 
-func TestScheduler_SendWeeklyParentReports_SkipsNonTelegramRecipients(t *testing.T) {
-	mockCh := &chat.MockChannel{}
+func TestScheduler_SendWeeklyParentReports_UsesDirectWhatsAppDestination(t *testing.T) {
+	telegram := &chat.MockChannel{}
+	whatsapp := &chat.MockChannel{}
 	gw := chat.NewGateway()
-	gw.Register("telegram", mockCh)
+	gw.Register("telegram", telegram)
+	gw.Register("whatsapp", whatsapp)
 
 	scheduler := NewScheduler(
 		SchedulerConfig{CheckInterval: time.Minute, MaxNudgesPerDay: MaxNudgesPerDay},
@@ -165,13 +167,71 @@ func TestScheduler_SendWeeklyParentReports_SkipsNonTelegramRecipients(t *testing
 	scheduler.SetWeeklyParentReportSource(stubWeeklyParentReportSource{
 		summaries: []WeeklyParentReportSummary{
 			{ParentExternalID: "parent-1", ParentChannel: "whatsapp", ChildName: "Alya Sofea"},
+		},
+	})
+
+	scheduler.SendWeeklyParentReports(context.Background(), time.Now())
+
+	if len(whatsapp.SentMessages) != 1 {
+		t.Fatalf("WhatsApp sent messages = %d, want 1", len(whatsapp.SentMessages))
+	}
+	if got := whatsapp.SentMessages[0]; got.Channel != "whatsapp" || got.UserID != "parent-1" {
+		t.Fatalf("destination = %#v, want WhatsApp parent-1", got)
+	}
+	if len(telegram.SentMessages) != 0 {
+		t.Fatalf("Telegram sent messages = %d, want 0", len(telegram.SentMessages))
+	}
+}
+
+func TestScheduler_SendWeeklyParentReports_UsesExplicitThreadDestination(t *testing.T) {
+	slack := &chat.MockChannel{}
+	gw := chat.NewGateway()
+	gw.Register("slack", slack)
+
+	scheduler := NewScheduler(
+		SchedulerConfig{CheckInterval: time.Minute, MaxNudgesPerDay: MaxNudgesPerDay},
+		nil, nil, nil, nil, nil, gw, nil, nil,
+	)
+	scheduler.SetWeeklyParentReportSource(stubWeeklyParentReportSource{
+		summaries: []WeeklyParentReportSummary{
+			{
+				ParentExternalID: "U123",
+				ParentChannel:    "slack",
+				ParentThreadID:   "slack:C456:1712345678.000100",
+				ChildName:        "Alya Sofea",
+			},
+		},
+	})
+
+	scheduler.SendWeeklyParentReports(context.Background(), time.Now())
+
+	if len(slack.SentMessages) != 1 {
+		t.Fatalf("Slack sent messages = %d, want 1", len(slack.SentMessages))
+	}
+	if got := slack.SentMessages[0]; got.UserID != "U123" || got.ThreadID != "slack:C456:1712345678.000100" {
+		t.Fatalf("destination = %#v, want explicit Slack parent thread", got)
+	}
+}
+
+func TestScheduler_SendWeeklyParentReports_SkipsThreadedChannelWithoutRoute(t *testing.T) {
+	slack := &chat.MockChannel{}
+	gw := chat.NewGateway()
+	gw.Register("slack", slack)
+
+	scheduler := NewScheduler(
+		SchedulerConfig{CheckInterval: time.Minute, MaxNudgesPerDay: MaxNudgesPerDay},
+		nil, nil, nil, nil, nil, gw, nil, nil,
+	)
+	scheduler.SetWeeklyParentReportSource(stubWeeklyParentReportSource{
+		summaries: []WeeklyParentReportSummary{
+			{ParentExternalID: "U123", ParentChannel: "slack", ChildName: "Alya Sofea"},
 			{ParentExternalID: "", ParentChannel: "telegram", ChildName: "Hakim"},
 		},
 	})
 
 	scheduler.SendWeeklyParentReports(context.Background(), time.Now())
 
-	if len(mockCh.SentMessages) != 0 {
-		t.Fatalf("sent messages = %d, want 0", len(mockCh.SentMessages))
+	if len(slack.SentMessages) != 0 {
+		t.Fatalf("Slack sent messages = %d, want 0", len(slack.SentMessages))
 	}
 }

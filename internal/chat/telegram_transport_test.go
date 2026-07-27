@@ -6,13 +6,137 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err = channel.SendMessage(ctx, "123", OutboundMessage{Text: "hello"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("requests = %d, want 0 after caller cancellation", got)
+	}
+}
+
+func TestTelegramChannelSendMessageRetryHonorsCanceledContext(t *testing.T) {
+	var requests atomic.Int32
+	ctx, cancel := context.WithCancel(t.Context())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			cancel()
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	err = channel.SendMessage(ctx, "123", OutboundMessage{
+		Text:      "hello",
+		ParseMode: "Markdown",
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("requests = %d, want no retry after caller cancellation", got)
+	}
+}
+
+func TestTelegramChannelSendMessageUsesTopicRoute(t *testing.T) {
+	var values url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatalf("ParseQuery() error = %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":101}}`))
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	if err := channel.SendMessage(t.Context(), "telegram:-100123:42", OutboundMessage{Text: "topic reply"}); err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if got := values.Get("chat_id"); got != "-100123" {
+		t.Fatalf("chat_id = %q, want -100123", got)
+	}
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+}
+
+func TestTelegramChannelSendTypingUsesTopicRoute(t *testing.T) {
+	var values url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatalf("ParseQuery() error = %v", err)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatalf("NewTelegramChannel() error = %v", err)
+	}
+	channel.baseURL = server.URL
+
+	if err := channel.SendTyping(t.Context(), "telegram:-100123:42"); err != nil {
+		t.Fatalf("SendTyping() error = %v", err)
+	}
+	if got := values.Get("chat_id"); got != "-100123" {
+		t.Fatalf("chat_id = %q, want -100123", got)
+	}
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+}
 
 func TestTelegramChannel_SendMessage_QuizInlineKeyboardPayload(t *testing.T) {
 	type requestCapture struct {

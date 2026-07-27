@@ -18,6 +18,19 @@ func TestGatewayTurnDelivererPersistsFocusedPageBeforeSendingStoredPayload(t *te
 	ctx := context.Background()
 	conversations := agent.NewMemoryStore()
 	_ = conversations.SetUserName("learner-1", "Aina")
+	threadID := "telegram:-100123:42"
+	learner, err := agent.NewLearnerIdentity("telegram", "learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conversations.CreateConversationForThread(learner, threadID, agent.Conversation{
+		State: "quiz_active",
+		QuizState: &agent.ConversationQuizState{
+			RunState: "active",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	pages, err := focusedpage.NewService(
 		focusedpage.NewMemoryStore(),
 		"https://pages.example",
@@ -48,7 +61,11 @@ func TestGatewayTurnDelivererPersistsFocusedPageBeforeSendingStoredPayload(t *te
 	}
 	deliverer := NewGatewayTurnDeliverer(gateway, conversations, processor)
 	result := agent.TurnResult{Text: "Your report is ready.", FocusedPage: &artifact}
-	if err := deliverer.DeliverTurn(ctx, chat.InboundMessage{Channel: "telegram", UserID: "learner-1"}, result); err != nil {
+	if err := deliverer.DeliverTurn(ctx, chat.InboundMessage{
+		Channel:  "telegram",
+		UserID:   "learner-1",
+		ThreadID: threadID,
+	}, result); err != nil {
 		t.Fatal(err)
 	}
 	if len(channel.SentMessages) != 1 {
@@ -58,16 +75,26 @@ func TestGatewayTurnDelivererPersistsFocusedPageBeforeSendingStoredPayload(t *te
 	if sent.Text != result.Text {
 		t.Fatalf("sent text = %q, want %q", sent.Text, result.Text)
 	}
+	if sent.ThreadID != threadID {
+		t.Fatalf("sent thread route = %q, want %q", sent.ThreadID, threadID)
+	}
 	var focusedURL string
+	var hintButton bool
 	for _, row := range sent.InlineKeyboard {
 		for _, button := range row {
 			if button.URL != "" {
 				focusedURL = button.URL
 			}
+			if button.CallbackData == "hint" {
+				hintButton = true
+			}
 		}
 	}
 	if focusedURL != artifact.URL {
 		t.Fatalf("focused-page URL = %q, want %q", focusedURL, artifact.URL)
+	}
+	if !hintButton {
+		t.Fatal("thread-scoped active quiz did not render its Hint control")
 	}
 }
 
@@ -75,6 +102,15 @@ func TestFocusedPageOutboxLeavesPlainTurnsRemindersAndNotificationsOnDirectGatew
 	ctx := context.Background()
 	conversations := agent.NewMemoryStore()
 	_ = conversations.SetUserName("learner-1", "Aina")
+	learner, err := agent.NewLearnerIdentity("telegram", "learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conversations.CreateConversationForThread(learner, "telegram:learner-1", agent.Conversation{
+		State: "teaching",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	gateway := chat.NewGateway()
 	channel := &chat.MockChannel{}
 	gateway.Register("telegram", channel)

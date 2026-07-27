@@ -70,13 +70,13 @@ func NewWhatsAppMeowChannel(dbPath string) (*WhatsAppMeowChannel, error) {
 }
 
 // SendMessage sends a text message to a WhatsApp user via whatsmeow.
-func (w *WhatsAppMeowChannel) SendMessage(_ context.Context, userID string, msg OutboundMessage) error {
+func (w *WhatsAppMeowChannel) SendMessage(ctx context.Context, userID string, msg OutboundMessage) error {
 	jid, err := parseJID(userID)
 	if err != nil {
 		return err
 	}
 
-	_, err = w.client.SendMessage(context.Background(), jid, &waE2E.Message{
+	_, err = w.client.SendMessage(ctx, jid, &waE2E.Message{
 		Conversation: proto.String(msg.Text),
 	})
 	if err != nil {
@@ -86,12 +86,12 @@ func (w *WhatsAppMeowChannel) SendMessage(_ context.Context, userID string, msg 
 }
 
 // SendTyping sends a typing indicator (composing presence).
-func (w *WhatsAppMeowChannel) SendTyping(_ context.Context, userID string) error {
+func (w *WhatsAppMeowChannel) SendTyping(ctx context.Context, userID string) error {
 	jid, err := parseJID(userID)
 	if err != nil {
 		return err
 	}
-	return w.client.SendChatPresence(context.Background(), jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+	return w.client.SendChatPresence(ctx, jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 }
 
 // Start connects to WhatsApp. If not yet authenticated, it generates a QR code
@@ -274,6 +274,9 @@ func (w *WhatsAppMeowChannel) handleMessage(msg *events.Message) {
 		Channel:    "whatsapp",
 		UserID:     msg.Info.Sender.ToNonAD().String(),
 		ExternalID: msg.Info.ID,
+		ThreadID:   msg.Info.Sender.ToNonAD().String(),
+		MessageID:  msg.Info.ID,
+		DeliveryID: msg.Info.ID,
 		Text:       text,
 		FirstName:  msg.Info.PushName,
 	}

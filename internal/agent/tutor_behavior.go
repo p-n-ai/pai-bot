@@ -198,7 +198,9 @@ func (e *Engine) recordDeterministicTutorReply(msg chat.InboundMessage, conv *Co
 		EventType:      eventType,
 		Data:           data,
 	})
-	e.recordActivityAsync(msg.UserID)
+	if identity, err := learnerIdentityForMessage(msg); err == nil {
+		e.recordActivityAsync(identity)
+	}
 }
 
 func asksForHiddenTutorInstructions(text string) bool {

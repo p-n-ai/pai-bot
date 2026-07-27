@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 )
 
-const defaultWhatsAppBaseURL = "https://graph.facebook.com"
+const (
+	defaultWhatsAppBaseURL             = "https://graph.facebook.com"
+	maxWhatsAppWebhookBodyBytes  int64 = 1 << 20
+	maxWhatsAppAPIErrorBodyBytes int64 = 4 << 10
+)
 
 // WhatsAppChannel implements the Channel interface for WhatsApp Cloud API.
 type WhatsAppChannel struct {
@@ -39,7 +44,7 @@ func NewWhatsAppChannel(accessToken, phoneID, verifyToken string) (*WhatsAppChan
 }
 
 // SendMessage sends a text message to a WhatsApp user.
-func (w *WhatsAppChannel) SendMessage(_ context.Context, userID string, msg OutboundMessage) error {
+func (w *WhatsAppChannel) SendMessage(ctx context.Context, userID string, msg OutboundMessage) error {
 	body := map[string]any{
 		"messaging_product": "whatsapp",
 		"to":                userID,
@@ -49,7 +54,7 @@ func (w *WhatsAppChannel) SendMessage(_ context.Context, userID string, msg Outb
 		},
 	}
 
-	return w.postJSON(fmt.Sprintf("/v21.0/%s/messages", w.phoneID), body)
+	return w.postJSON(ctx, fmt.Sprintf("/v21.0/%s/messages", w.phoneID), body)
 }
 
 // SendTyping is a no-op for WhatsApp — the Cloud API does not support typing indicators.
@@ -100,9 +105,14 @@ func (w *WhatsAppChannel) handleVerification(rw http.ResponseWriter, r *http.Req
 
 // handleInbound parses an inbound WhatsApp webhook payload and dispatches messages.
 func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request, handler func(InboundMessage)) {
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(rw, r.Body, maxWhatsAppWebhookBodyBytes))
 	if err != nil {
 		slog.Error("whatsapp webhook: read body failed", "error", err)
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(rw, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -138,24 +148,29 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 					Channel:    "whatsapp",
 					UserID:     msg.From,
 					ExternalID: msg.ID,
+					ThreadID:   msg.From,
+					MessageID:  msg.ID,
+					DeliveryID: msg.ID,
 					Text:       msg.Text.Body,
 				}
 				if contact, ok := contacts[msg.From]; ok {
 					inbound.FirstName = contact.Profile.Name
 				}
-				handler(inbound)
+				if handler != nil {
+					handler(inbound)
+				}
 			}
 		}
 	}
 }
 
-func (w *WhatsAppChannel) postJSON(path string, body any) error {
+func (w *WhatsAppChannel) postJSON(ctx context.Context, path string, body any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, w.baseURL+path, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.baseURL+path, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -169,7 +184,7 @@ func (w *WhatsAppChannel) postJSON(path string, body any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxWhatsAppAPIErrorBodyBytes))
 		return fmt.Errorf("whatsapp api error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
@@ -215,11 +230,11 @@ type waProfile struct {
 }
 
 type waMessage struct {
-	From      string    `json:"from"`
-	ID        string    `json:"id"`
-	Timestamp string    `json:"timestamp"`
-	Type      string    `json:"type"`
-	Text      waText    `json:"text"`
+	From      string `json:"from"`
+	ID        string `json:"id"`
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Text      waText `json:"text"`
 }
 
 type waText struct {
