@@ -71,25 +71,30 @@ func TelegramInlineKeyboardContext(store agent.ConversationStore, inbound chat.I
 }
 
 type TopMuxOptions struct {
-	APIHandler         http.Handler
-	WSChannel          *chat.WSChannel
-	EmbedConfigStore   chat.EmbedConfigStore
-	EmbedGuestService  EmbedGuestService
-	EmbedMessageStore  EmbedMessageStore
-	WACloudChannel     *chat.WhatsAppChannel
-	WAMeowChannel      *chat.WhatsAppMeowChannel
-	InboundHandler     func(chat.InboundMessage)
-	AuthService        AuthService
-	JWTSecret          string
-	AccessTokenTTL     time.Duration
-	FocusedPageHandler http.Handler
-	ChatWebhooks       map[string]http.Handler
+	APIHandler            http.Handler
+	WSChannel             *chat.WSChannel
+	EmbedWSChannel        *chat.WSChannel
+	EmbedConfigStore      chat.EmbedConfigStore
+	EmbedGuestService     EmbedGuestService
+	EmbedMessageStore     EmbedMessageStore
+	EmbedIdentityResolver EmbedIdentityResolver
+	WACloudChannel        *chat.WhatsAppChannel
+	WAMeowChannel         *chat.WhatsAppMeowChannel
+	InboundHandler        func(chat.InboundMessage)
+	AuthService           AuthService
+	JWTSecret             string
+	AccessTokenTTL        time.Duration
+	FocusedPageHandler    http.Handler
+	ChatWebhooks          map[string]http.Handler
 }
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
 	topMux := http.NewServeMux()
 	if opts.WSChannel != nil {
 		topMux.Handle("GET /ws/chat", opts.WSChannel.Handler())
+	}
+	if opts.EmbedWSChannel != nil {
+		topMux.Handle("GET /ws/embed", opts.EmbedWSChannel.Handler())
 	}
 	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
 	topMux.Handle("GET /embed/chat", chat.HandleChatPage(opts.EmbedConfigStore))

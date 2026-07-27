@@ -13,6 +13,7 @@ type EmbedRateLimiter struct {
 	handshakeLimit int // max handshakes per IP per window
 	messageLimit   int // max messages per user per window
 	window         time.Duration
+	maxBuckets     int
 
 	mu         sync.Mutex
 	handshakes map[string]rateLimitState
@@ -30,6 +31,7 @@ func NewEmbedRateLimiter(handshakeLimit, messageLimit int, window time.Duration)
 		handshakeLimit: handshakeLimit,
 		messageLimit:   messageLimit,
 		window:         window,
+		maxBuckets:     10000,
 		handshakes:     make(map[string]rateLimitState),
 		messages:       make(map[string]rateLimitState),
 	}
@@ -61,6 +63,7 @@ func (rl *EmbedRateLimiter) allow(buckets map[string]rateLimitState, key string,
 
 	state, ok := buckets[key]
 	if !ok || now.Sub(state.windowStart) >= rl.window {
+		rl.ensureBucketCapacity(buckets, key, now)
 		buckets[key] = rateLimitState{windowStart: now, count: 1}
 		return true
 	}
@@ -72,4 +75,27 @@ func (rl *EmbedRateLimiter) allow(buckets map[string]rateLimitState, key string,
 	}
 
 	return false
+}
+
+func (rl *EmbedRateLimiter) ensureBucketCapacity(buckets map[string]rateLimitState, key string, now time.Time) {
+	if _, exists := buckets[key]; exists || rl.maxBuckets <= 0 || len(buckets) < rl.maxBuckets {
+		return
+	}
+	for bucketKey, state := range buckets {
+		if !state.windowStart.Add(rl.window).After(now) {
+			delete(buckets, bucketKey)
+		}
+	}
+	if len(buckets) < rl.maxBuckets {
+		return
+	}
+	var oldestKey string
+	var oldestStart time.Time
+	for bucketKey, state := range buckets {
+		if oldestKey == "" || state.windowStart.Before(oldestStart) {
+			oldestKey = bucketKey
+			oldestStart = state.windowStart
+		}
+	}
+	delete(buckets, oldestKey)
 }

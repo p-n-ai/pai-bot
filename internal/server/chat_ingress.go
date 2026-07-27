@@ -157,7 +157,7 @@ func (i *ChatIngress) runWorker(
 }
 
 func chatIngressRoute(message chat.InboundMessage) string {
-	return message.Channel + "\x00" + message.DestinationID()
+	return message.TenantID + "\x00" + message.Channel + "\x00" + message.DestinationID()
 }
 
 func duplicateDelivery(
@@ -169,7 +169,7 @@ func duplicateDelivery(
 	if message.DeliveryID == "" {
 		return false
 	}
-	key := message.Channel + "\x00" + message.DeliveryID
+	key := message.TenantID + "\x00" + message.Channel + "\x00" + message.DeliveryID
 	if expiresAt, ok := seen[key]; ok && expiresAt.After(now) {
 		return true
 	}

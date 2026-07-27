@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
 import { Check, Copy, MessageCircle, X } from 'lucide-react'
+import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
 
+import type { EmbedConfig } from '@/lib/embed-config-types'
+import type {
+  EmbedLanguage,
+  EmbedPosition,
+  EmbedTheme,
+} from '@/lib/embed-widget'
 import { useAuth } from '@/auth-provider'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { LoadState } from '@/components/shared/load-state'
@@ -17,16 +23,10 @@ import {
   removeEmbedOrigin,
   updateEmbedConfig,
 } from '@/lib/admin-api'
-import type { EmbedConfig } from '@/lib/embed-config-types'
 import {
   buildEmbedSnippet,
   defaultEmbedTheme,
   readEmbedTheme,
-} from '@/lib/embed-widget'
-import type {
-  EmbedLanguage,
-  EmbedPosition,
-  EmbedTheme,
 } from '@/lib/embed-widget'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
@@ -132,6 +132,24 @@ export function EmbedConfigPanel() {
     await navigator.clipboard.writeText(snippet)
     setCopied(true)
   }, [snippet])
+  const handleColorChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setThemeField(setTheme, 'color', event.target.value)
+    },
+    [],
+  )
+  const handleLanguageChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      setThemeField(setTheme, 'language', event.target.value as EmbedLanguage)
+    },
+    [],
+  )
+  const handlePositionChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      setThemeField(setTheme, 'position', event.target.value as EmbedPosition)
+    },
+    [],
+  )
 
   if (status !== 'ready') {
     return (
@@ -190,9 +208,7 @@ export function EmbedConfigPanel() {
               <Label htmlFor='embed-color'>Theme color</Label>
               <Input
                 id='embed-color'
-                onChange={(event) =>
-                  setThemeField(setTheme, 'color', event.target.value)
-                }
+                onChange={handleColorChange}
                 type='color'
                 value={theme.color}
               />
@@ -202,13 +218,7 @@ export function EmbedConfigPanel() {
               <NativeSelect
                 className='w-full'
                 id='embed-language'
-                onChange={(event) =>
-                  setThemeField(
-                    setTheme,
-                    'language',
-                    event.target.value as EmbedLanguage,
-                  )
-                }
+                onChange={handleLanguageChange}
                 value={theme.language}
               >
                 <NativeSelectOption value='en'>English</NativeSelectOption>
@@ -223,13 +233,7 @@ export function EmbedConfigPanel() {
               <NativeSelect
                 className='w-full'
                 id='embed-position'
-                onChange={(event) =>
-                  setThemeField(
-                    setTheme,
-                    'position',
-                    event.target.value as EmbedPosition,
-                  )
-                }
+                onChange={handlePositionChange}
                 value={theme.position}
               >
                 <NativeSelectOption value='bottom-right'>
@@ -315,8 +319,10 @@ function OriginsSection({
   onRemove: (origin: string) => void
   origin: string
 }) {
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) =>
-    onChange(event.target.value)
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
+    [onChange],
+  )
 
   return (
     <section
@@ -352,26 +358,44 @@ function OriginsSection({
       ) : (
         <ul className='m-0 grid list-none gap-2 p-0'>
           {config.allowed_origins.map((allowedOrigin) => (
-            <li
-              className='flex items-center justify-between gap-3 rounded-md border p-3 text-sm'
+            <OriginItem
+              disabled={disabled}
               key={allowedOrigin}
-            >
-              <span className='break-all'>{allowedOrigin}</span>
-              <Button
-                aria-label={`Remove ${allowedOrigin}`}
-                disabled={disabled}
-                onClick={() => onRemove(allowedOrigin)}
-                size='sm'
-                type='button'
-                variant='outline'
-              >
-                Remove
-              </Button>
-            </li>
+              onRemove={onRemove}
+              origin={allowedOrigin}
+            />
           ))}
         </ul>
       )}
     </section>
+  )
+}
+
+function OriginItem({
+  disabled,
+  onRemove,
+  origin,
+}: {
+  disabled: boolean
+  onRemove: (origin: string) => void
+  origin: string
+}) {
+  const handleRemove = useCallback(() => onRemove(origin), [onRemove, origin])
+
+  return (
+    <li className='flex items-center justify-between gap-3 rounded-md border p-3 text-sm'>
+      <span className='break-all'>{origin}</span>
+      <Button
+        aria-label={`Remove ${origin}`}
+        disabled={disabled}
+        onClick={handleRemove}
+        size='sm'
+        type='button'
+        variant='outline'
+      >
+        Remove
+      </Button>
+    </li>
   )
 }
 
@@ -384,6 +408,13 @@ function WidgetPreview({
 }) {
   const [open, setOpen] = useState(true)
   const left = theme.position === 'bottom-left'
+  const themeStyle = useMemo(
+    () => ({ backgroundColor: theme.color }),
+    [theme.color],
+  )
+  const toggleOpen = useCallback(() => {
+    setOpen((value) => !value)
+  }, [])
 
   return (
     <section
@@ -403,7 +434,7 @@ function WidgetPreview({
         >
           <div
             className='p-4 text-sm font-semibold text-white'
-            style={{ backgroundColor: theme.color }}
+            style={themeStyle}
           >
             P&amp;AI Tutor
           </div>
@@ -429,9 +460,9 @@ function WidgetPreview({
         aria-label={open ? 'Close chat preview' : 'Open chat preview'}
         className={`absolute bottom-4 size-12 rounded-xl text-white ${left ? 'left-4' : 'right-4'}`}
         disabled={!enabled}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleOpen}
         size='icon'
-        style={{ backgroundColor: theme.color }}
+        style={themeStyle}
         type='button'
       >
         {open ? <X aria-hidden='true' /> : <MessageCircle aria-hidden='true' />}
@@ -440,10 +471,10 @@ function WidgetPreview({
   )
 }
 
-function setThemeField<Key extends keyof EmbedTheme>(
+function setThemeField<TKey extends keyof EmbedTheme>(
   setTheme: Dispatch<SetStateAction<EmbedTheme>>,
-  key: Key,
-  value: EmbedTheme[Key],
+  key: TKey,
+  value: EmbedTheme[TKey],
 ) {
   setTheme((current) => ({ ...current, [key]: value }))
 }

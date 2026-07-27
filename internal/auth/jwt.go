@@ -37,6 +37,8 @@ type TokenClaims struct {
 	TenantID     string    `json:"tenant_id"`
 	Role         Role      `json:"role"`
 	ParentOrigin string    `json:"parent_origin,omitempty"`
+	Channel      string    `json:"channel,omitempty"`
+	ExternalID   string    `json:"external_id,omitempty"`
 	IssuedAt     time.Time `json:"-"`
 	ExpiresAt    time.Time `json:"-"`
 }
@@ -46,6 +48,8 @@ type tokenPayload struct {
 	TenantID     string `json:"tenant_id"`
 	Role         Role   `json:"role"`
 	ParentOrigin string `json:"parent_origin,omitempty"`
+	Channel      string `json:"channel,omitempty"`
+	ExternalID   string `json:"external_id,omitempty"`
 	IssuedAt     int64  `json:"iat"`
 	ExpiresAt    int64  `json:"exp"`
 }
@@ -89,6 +93,8 @@ func (m *TokenManager) Issue(claims TokenClaims, now time.Time) (string, error) 
 		TenantID:     claims.TenantID,
 		Role:         claims.Role,
 		ParentOrigin: claims.ParentOrigin,
+		Channel:      claims.Channel,
+		ExternalID:   claims.ExternalID,
 		IssuedAt:     now.Unix(),
 		ExpiresAt:    now.Add(m.ttl).Unix(),
 	})
@@ -157,6 +163,8 @@ func (m *TokenManager) Parse(token string, now time.Time) (TokenClaims, error) {
 		TenantID:     payload.TenantID,
 		Role:         payload.Role,
 		ParentOrigin: payload.ParentOrigin,
+		Channel:      payload.Channel,
+		ExternalID:   payload.ExternalID,
 		IssuedAt:     time.Unix(payload.IssuedAt, 0).UTC(),
 		ExpiresAt:    time.Unix(payload.ExpiresAt, 0).UTC(),
 	}, nil

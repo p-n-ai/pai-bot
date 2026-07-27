@@ -16,22 +16,25 @@ import (
 
 // InboundMessage is a message received from any channel.
 type InboundMessage struct {
-	Channel      string
-	UserID       string
-	ExternalID   string
-	ThreadID     string
-	MessageID    string
-	DeliveryID   string
-	Text         string
-	Caption      string
-	HasImage     bool
-	ImageFileID  string
-	ImageDataURL string
-	ReplyToText  string // text of the message being replied to (if any)
-	Username     string
-	FirstName    string
-	LastName     string
-	Language     string
+	Channel         string
+	UserID          string
+	TenantID        string
+	InternalUserID  string
+	IdentityChannel string
+	ExternalID      string
+	ThreadID        string
+	MessageID       string
+	DeliveryID      string
+	Text            string
+	Caption         string
+	HasImage        bool
+	ImageFileID     string
+	ImageDataURL    string
+	ReplyToText     string // text of the message being replied to (if any)
+	Username        string
+	FirstName       string
+	LastName        string
+	Language        string
 	// CallbackQueryID is populated for Telegram inline-button callbacks.
 	CallbackQueryID string
 	// CallbackMessageID is the Telegram message ID that contains the clicked inline button.

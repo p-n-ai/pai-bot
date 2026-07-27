@@ -472,6 +472,8 @@ func issueGuestToken(t *testing.T, tm *auth.TokenManager, userID, tenantID strin
 		TenantID:     tenantID,
 		Role:         auth.RoleGuest,
 		ParentOrigin: "https://example.com",
+		Channel:      "embed",
+		ExternalID:   "guest-external-id",
 	}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -548,6 +550,12 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	if received[0].Channel != "embed" {
 		t.Errorf("expected embed channel, got %q", received[0].Channel)
 	}
+	if received[0].TenantID != "tenant-1" || received[0].InternalUserID != "guest-user-1" {
+		t.Errorf("authenticated scope = %q/%q", received[0].TenantID, received[0].InternalUserID)
+	}
+	if received[0].IdentityChannel != "embed" || received[0].ExternalID != "guest-external-id" {
+		t.Errorf("authenticated identity = %q/%q", received[0].IdentityChannel, received[0].ExternalID)
+	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)
 	}
@@ -619,6 +627,16 @@ func TestWSChannel_EmbedOriginUsesTokenBoundParent(t *testing.T) {
 	}
 	if response == nil || response.StatusCode != http.StatusForbidden {
 		t.Fatalf("spoofed origin status = %v, want 403", response)
+	}
+}
+
+func TestExtractClientIPDoesNotTrustForwardedHeaders(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.test/ws/embed", nil)
+	request.RemoteAddr = "192.0.2.10:4321"
+	request.Header.Set("X-Forwarded-For", "198.51.100.20")
+	request.Header.Set("X-Real-IP", "203.0.113.30")
+	if got := extractClientIP(request); got != "192.0.2.10" {
+		t.Fatalf("client IP = %q, want direct peer IP", got)
 	}
 }
 

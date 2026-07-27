@@ -35,8 +35,31 @@ type EmbedMessageStore interface {
 	ListEmbedMessages(ctx context.Context, tenantID, userID, before string, limit int) ([]EmbedMessage, bool, error)
 }
 
+type EmbedIdentity struct {
+	Channel    string
+	ExternalID string
+}
+
+type EmbedIdentityResolver interface {
+	ResolveEmbedIdentity(ctx context.Context, tenantID, userID string) (EmbedIdentity, error)
+}
+
 type PostgresEmbedMessageStore struct {
 	pool *pgxpool.Pool
+}
+
+func (s *PostgresEmbedMessageStore) ResolveEmbedIdentity(ctx context.Context, tenantID, userID string) (EmbedIdentity, error) {
+	var identity EmbedIdentity
+	err := s.pool.QueryRow(ctx,
+		`SELECT channel, external_id
+		 FROM users
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		userID, tenantID,
+	).Scan(&identity.Channel, &identity.ExternalID)
+	if err != nil {
+		return EmbedIdentity{}, err
+	}
+	return identity, nil
 }
 
 func NewPostgresEmbedMessageStore(pool *pgxpool.Pool) *PostgresEmbedMessageStore {
@@ -99,7 +122,7 @@ func registerEmbedRoutes(mux *http.ServeMux, opts TopMuxOptions, manager *auth.T
 		mux.Handle("POST /api/embed/auth/upgrade", handleEmbedUpgradeGuest(opts.EmbedGuestService, manager))
 	}
 	if opts.AuthService != nil {
-		mux.Handle("POST /api/embed/auth/login", handleEmbedLogin(opts.EmbedConfigStore, opts.AuthService, manager))
+		mux.Handle("POST /api/embed/auth/login", handleEmbedLogin(opts.EmbedConfigStore, opts.AuthService, opts.EmbedIdentityResolver, manager))
 	}
 	if opts.EmbedMessageStore != nil {
 		mux.Handle("GET /api/embed/messages", handleEmbedMessages(opts.EmbedMessageStore, manager))
@@ -192,7 +215,7 @@ func handleEmbedUpgradeGuest(guests EmbedGuestService, manager *auth.TokenManage
 	}
 }
 
-func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, manager *auth.TokenManager) http.HandlerFunc {
+func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, identities EmbedIdentityResolver, manager *auth.TokenManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Tenant       string `json:"tenant"`
@@ -231,8 +254,19 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc authService, manager 
 			http.Error(w, "embed login requires a student account", http.StatusForbidden)
 			return
 		}
+		if identities == nil {
+			http.Error(w, "embed identity resolution unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		identity, err := identities.ResolveEmbedIdentity(r.Context(), session.User.TenantID, session.User.UserID)
+		if err != nil || strings.TrimSpace(identity.Channel) == "" || strings.TrimSpace(identity.ExternalID) == "" {
+			slog.Error("embed login identity resolution failed", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 		token, err := manager.Issue(auth.TokenClaims{
 			Subject: session.User.UserID, TenantID: session.User.TenantID, Role: session.User.Role, ParentOrigin: parentOrigin,
+			Channel: identity.Channel, ExternalID: identity.ExternalID,
 		}, time.Now().UTC())
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)

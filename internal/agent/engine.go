@@ -522,11 +522,18 @@ func (e *Engine) getActiveConversationForThread(identity LearnerIdentity, thread
 }
 
 func learnerIdentityForMessage(msg chat.InboundMessage) (LearnerIdentity, error) {
-	channel := msg.Channel
+	channel := msg.IdentityChannel
+	if strings.TrimSpace(channel) == "" {
+		channel = msg.Channel
+	}
 	if strings.TrimSpace(channel) == "" {
 		channel = defaultChannel
 	}
-	return NewLearnerIdentity(channel, msg.UserID)
+	externalID := msg.ExternalID
+	if strings.TrimSpace(externalID) == "" {
+		externalID = msg.UserID
+	}
+	return NewLearnerIdentity(channel, externalID)
 }
 
 func (e *Engine) logEventAsync(event Event) {

@@ -20,6 +20,7 @@ const updateEmbedConfig = vi.hoisted(() => vi.fn())
 const addEmbedOrigin = vi.hoisted(() => vi.fn())
 const removeEmbedOrigin = vi.hoisted(() => vi.fn())
 const writeText = vi.hoisted(() => vi.fn())
+let rejectLoad: (reason: Error) => void = () => {}
 
 vi.mock('@/lib/admin-api', async (importOriginal) => {
   const actual = await importOriginal<typeof AdminAPI>()
@@ -69,6 +70,7 @@ describe('EmbedConfigPanel', () => {
     addEmbedOrigin.mockReset()
     removeEmbedOrigin.mockReset()
     writeText.mockReset()
+    rejectLoad = () => {}
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText },
@@ -78,9 +80,8 @@ describe('EmbedConfigPanel', () => {
   afterEach(cleanup)
 
   it('renders loading and error states', async () => {
-    let rejectLoad: (reason: Error) => void = () => {}
     getEmbedConfig.mockReturnValue(
-      new Promise((_, reject) => {
+      new Promise((_resolve, reject) => {
         rejectLoad = reject
       }),
     )
@@ -95,11 +96,13 @@ describe('EmbedConfigPanel', () => {
 
   it('saves enabled and presentation state', async () => {
     getEmbedConfig.mockResolvedValue(config)
-    updateEmbedConfig.mockImplementation(async (input) => ({
-      ...config,
-      enabled: input.enabled,
-      theme_config: input.theme_config,
-    }))
+    updateEmbedConfig.mockImplementation((input) =>
+      Promise.resolve({
+        ...config,
+        enabled: input.enabled,
+        theme_config: input.theme_config,
+      }),
+    )
     render(<EmbedConfigPanel />)
     await screen.findByText('Widget configuration')
 

@@ -78,3 +78,19 @@ func TestEmbedRateLimiter_NilSafe(t *testing.T) {
 		t.Fatal("nil limiter should always allow")
 	}
 }
+
+func TestEmbedRateLimiter_BoundsAndExpiresBuckets(t *testing.T) {
+	rl := NewEmbedRateLimiter(10, 10, time.Minute)
+	rl.maxBuckets = 2
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	rl.AllowHandshake("one", now)
+	rl.AllowHandshake("two", now.Add(time.Second))
+	rl.AllowHandshake("three", now.Add(2*time.Second))
+	if len(rl.handshakes) != 2 {
+		t.Fatalf("handshake buckets = %d, want 2", len(rl.handshakes))
+	}
+	rl.AllowHandshake("four", now.Add(2*time.Minute))
+	if len(rl.handshakes) != 1 {
+		t.Fatalf("expired handshake buckets = %d, want 1", len(rl.handshakes))
+	}
+}

@@ -301,7 +301,7 @@
         upgradeOverlayEl.classList.remove('active');
         // Clear messages and reconnect with student token
         messagesEl.innerHTML = '';
-        localStorage.removeItem(storageKey);
+        historyLoaded = false;
         if (ws) { ws.close(); }
       } else {
         var errText = 'Invalid email or password';
@@ -347,9 +347,9 @@
     token = null;
     userId = null;
     isUpgraded = false;
+    historyLoaded = false;
     clearSession();
     localStorage.removeItem(fpKey);
-    localStorage.removeItem(storageKey);
     fingerprint = generateFingerprint();
     // Clear messages from UI.
     messagesEl.innerHTML = '';
@@ -454,49 +454,33 @@
   function clearSession() {
     try { localStorage.removeItem(sessionKey); } catch(e) {}
   }
+  function tokenHasEmbedIdentity(rawToken) {
+    try {
+      var segment = rawToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (segment.length % 4) segment += '=';
+      var payload = JSON.parse(atob(segment));
+      return !!(payload.channel && payload.external_id && payload.tenant_id && payload.sub);
+    } catch(e) {
+      return false;
+    }
+  }
 
   var savedSession = loadSession();
   var reconnectDelay = 1000;
   var maxReconnectDelay = 30000;
   var queue = [];
-  var storageKey = 'pai-chat-' + tenant;
   var nextCursor = null;
   var hasMore = false;
   var loadingMore = false;
+  var historyLoaded = false;
 
-  function loadHistory() {
-    try {
-      var data = localStorage.getItem(storageKey);
-      if (data) {
-        var msgs = JSON.parse(data);
-        msgs.forEach(function(m) { addMessage(m.text, m.type, true); });
-      }
-    } catch(e) {}
-  }
-
-  function saveHistory() {
-    try {
-      var msgs = [];
-      var els = messagesEl.querySelectorAll('.msg');
-      var start = Math.max(0, els.length - 50);
-      for (var i = start; i < els.length; i++) {
-        msgs.push({
-          text: els[i].textContent,
-          type: els[i].classList.contains('user') ? 'user' : 'bot'
-        });
-      }
-      localStorage.setItem(storageKey, JSON.stringify(msgs));
-    } catch(e) {}
-  }
-
-  function addMessage(text, type, skipSave) {
+  function addMessage(text, type) {
     var div = document.createElement('div');
     div.className = 'msg ' + type;
     div.textContent = text;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     typingEl.classList.remove('active');
-    if (!skipSave) saveHistory();
   }
 
   function prependMessages(msgs) {
@@ -591,7 +575,7 @@
   function connect() {
     authenticate(function() {
       var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      var wsURL = proto + '//' + window.location.host + '/ws/chat';
+      var wsURL = proto + '//' + window.location.host + '/ws/embed';
 
       ws = new WebSocket(wsURL, ['pai-auth.' + token]);
 
@@ -608,8 +592,10 @@
           var msg = JSON.parse(e.data);
           switch(msg.type) {
             case 'auth_ok':
-              // Load message history from server on connect.
-              loadMessagesFromAPI(null);
+              if (!historyLoaded) {
+                historyLoaded = true;
+                loadMessagesFromAPI(null);
+              }
               break;
             case 'response':
               addMessage(msg.text, 'bot');
@@ -686,7 +672,7 @@
       var normalized = new URL(data.parent_origin).origin;
       if (event.origin !== normalized || (normalized.indexOf('http://') !== 0 && normalized.indexOf('https://') !== 0)) return;
       parentOrigin = normalized;
-      if (savedSession && savedSession.token && savedSession.parentOrigin === parentOrigin) {
+      if (savedSession && savedSession.token && savedSession.parentOrigin === parentOrigin && tokenHasEmbedIdentity(savedSession.token)) {
         token = savedSession.token;
         userId = savedSession.userId;
         if (savedSession.role === 'student' && savedSession.name) {
@@ -697,7 +683,6 @@
         clearSession();
       }
       started = true;
-      loadHistory();
       connect();
     } catch (e) {}
   });

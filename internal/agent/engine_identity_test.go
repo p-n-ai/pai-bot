@@ -50,6 +50,33 @@ func TestEngine_IsolatesActiveConversationsForSameExternalUserAcrossChannels(t *
 	}
 }
 
+func TestEngine_UsesAuthenticatedIdentityInsteadOfEmbedTransportUserID(t *testing.T) {
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("reply")),
+		Store:    store,
+	})
+	message := chat.InboundMessage{
+		Channel:         "embed",
+		UserID:          "internal-user-uuid",
+		InternalUserID:  "internal-user-uuid",
+		IdentityChannel: "telegram",
+		ExternalID:      "telegram-external-id",
+		Text:            "embedded question",
+	}
+	if _, err := engine.ProcessMessage(t.Context(), message); err != nil {
+		t.Fatal(err)
+	}
+	authenticatedIdentity := mustLearnerIdentity(t, "telegram", "telegram-external-id")
+	if _, ok := store.GetActiveConversationFor(authenticatedIdentity); !ok {
+		t.Fatal("conversation not stored under authenticated channel identity")
+	}
+	transportIdentity := mustLearnerIdentity(t, "embed", "internal-user-uuid")
+	if _, ok := store.GetActiveConversationFor(transportIdentity); ok {
+		t.Fatal("conversation stored under embed transport/internal UUID")
+	}
+}
+
 func TestEngine_IsolatesLearnerProfilesForSameExternalUserAcrossChannels(t *testing.T) {
 	store := agent.NewMemoryStore()
 	provider := ai.NewMockProvider("reply")

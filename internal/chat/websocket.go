@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -113,6 +114,10 @@ func (ws *WSChannel) Handler() http.Handler {
 				http.Error(w, "missing parent origin", http.StatusForbidden)
 				return
 			}
+			if strings.TrimSpace(claims.Channel) == "" || strings.TrimSpace(claims.ExternalID) == "" {
+				http.Error(w, "missing authenticated user identity", http.StatusForbidden)
+				return
+			}
 			if origin != parentOrigin && origin != requestServerOrigin(r) {
 				http.Error(w, "origin does not match parent origin", http.StatusForbidden)
 				return
@@ -180,34 +185,25 @@ func requestServerOrigin(r *http.Request) string {
 	return scheme + "://" + host
 }
 
-// extractClientIP extracts the client IP from the request, checking
-// X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
+// extractClientIP uses the direct peer because no trusted-proxy policy is configured.
 func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if ip := strings.TrimSpace(parts[0]); ip != "" {
-			return ip
-		}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return host
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-	// RemoteAddr is "host:port".
-	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	return host
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 // handleConn manages a single WebSocket connection lifecycle.
 func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtToken string) {
 	var userID string
+	var claims auth.TokenClaims
 
 	if jwtToken != "" && ws.tokenManager != nil {
 		// Subprotocol JWT auth (embed mode — already validated in Handler,
 		// but parse again to extract claims after upgrade).
-		claims, err := ws.tokenManager.Parse(jwtToken, time.Now().UTC())
+		var err error
+		claims, err = ws.tokenManager.Parse(jwtToken, time.Now().UTC())
 		if err != nil {
 			slog.Warn("websocket jwt auth failed", "error", err)
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid token")
@@ -271,7 +267,7 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtTo
 	}()
 
 	// Read loop.
-	ws.readLoop(ctx, conn, userID)
+	ws.readLoop(ctx, conn, userID, claims)
 
 	// Cleanup on disconnect.
 	ws.removeConn(userID, conn)
@@ -302,7 +298,7 @@ func (ws *WSChannel) readAuth(ctx context.Context, conn *websocket.Conn) (string
 }
 
 // readLoop reads messages from the client and dispatches them to the handler.
-func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID string) {
+func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID string, claims auth.TokenClaims) {
 	for {
 		select {
 		case <-ws.stop:
@@ -357,9 +353,13 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 				channel = "embed"
 			}
 			handler(InboundMessage{
-				Channel: channel,
-				UserID:  userID,
-				Text:    msg.Text,
+				Channel:         channel,
+				UserID:          userID,
+				TenantID:        claims.TenantID,
+				InternalUserID:  claims.Subject,
+				IdentityChannel: claims.Channel,
+				ExternalID:      claims.ExternalID,
+				Text:            msg.Text,
 			})
 		}
 	}

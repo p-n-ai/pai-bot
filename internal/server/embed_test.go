@@ -84,6 +84,14 @@ type embedMessagesStub struct {
 	userID   string
 }
 
+type embedIdentityResolverStub struct {
+	identity EmbedIdentity
+}
+
+func (s embedIdentityResolverStub) ResolveEmbedIdentity(context.Context, string, string) (EmbedIdentity, error) {
+	return s.identity, nil
+}
+
 func (s *embedMessagesStub) ListEmbedMessages(_ context.Context, tenantID, userID, before string, limit int) ([]EmbedMessage, bool, error) {
 	s.tenantID, s.userID = tenantID, userID
 	return []EmbedMessage{{ID: "message-1", Role: "assistant", Content: "Hello"}}, false, nil
@@ -253,6 +261,53 @@ func TestEmbedMessagesUsesTokenTenantAndUser(t *testing.T) {
 	}
 	if messages.tenantID != "tenant-a" || messages.userID != "user-a" {
 		t.Fatalf("history scope = %q/%q", messages.tenantID, messages.userID)
+	}
+}
+
+func TestEmbedStudentLoginTokenCarriesInternalAndChannelIdentity(t *testing.T) {
+	const secret = "embed-login-secret"
+	store := &embedConfigStoreStub{
+		configs: map[string]chat.EmbedConfig{},
+		tenantByOrigin: map[string]string{
+			"school|https://school.example": "tenant-a",
+		},
+	}
+	authSvc := &stubAuthService{loginResp: auth.Session{User: auth.UserSession{
+		UserID: "internal-student-id", TenantID: "tenant-a", Role: auth.RoleStudent, Name: "Student",
+	}}}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore: store,
+		AuthService:      authSvc,
+		EmbedIdentityResolver: embedIdentityResolverStub{identity: EmbedIdentity{
+			Channel: "telegram", ExternalID: "telegram-student-id",
+		}},
+		JWTSecret:      secret,
+		AccessTokenTTL: time.Hour,
+	})
+	request := httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/login", strings.NewReader(
+		`{"tenant":"school","parent_origin":"https://school.example","email":"student@example.com","password":"password"}`,
+	))
+	request.Header.Set("Origin", "https://api.example")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	claims, err := auth.NewTokenManager(secret, time.Hour).Parse(payload.Token, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.Subject != "internal-student-id" || claims.TenantID != "tenant-a" {
+		t.Fatalf("internal identity = %q/%q", claims.TenantID, claims.Subject)
+	}
+	if claims.Channel != "telegram" || claims.ExternalID != "telegram-student-id" {
+		t.Fatalf("channel identity = %q/%q", claims.Channel, claims.ExternalID)
 	}
 }
 

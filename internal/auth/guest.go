@@ -98,13 +98,14 @@ func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, f
 		}
 	}
 
-	if _, err = gs.pool.Exec(ctx,
-		`UPDATE users
-		 SET external_id = id::text, config = config || jsonb_build_object('embed_origin', $3::text)
-		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND channel = 'embed'`,
-		userID, tenantID, origin,
-	); err != nil {
-		return "", "", fmt.Errorf("bind guest embed identity: %w", err)
+	var externalID, channel string
+	if err = gs.pool.QueryRow(ctx,
+		`SELECT external_id, channel
+		 FROM users
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND role = 'guest'`,
+		userID, tenantID,
+	).Scan(&externalID, &channel); err != nil {
+		return "", "", fmt.Errorf("resolve guest embed identity: %w", err)
 	}
 
 	claims := TokenClaims{
@@ -112,6 +113,8 @@ func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, f
 		TenantID:     tenantID,
 		Role:         RoleGuest,
 		ParentOrigin: origin,
+		Channel:      channel,
+		ExternalID:   externalID,
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {
@@ -133,11 +136,11 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, pare
 	password = strings.TrimSpace(password)
 
 	// Verify the user exists and is a guest.
-	var role string
+	var role, externalID, channel string
 	if err := gs.pool.QueryRow(ctx,
-		`SELECT role FROM users WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT role, external_id, channel FROM users WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		userID, tenantID,
-	).Scan(&role); err != nil {
+	).Scan(&role, &externalID, &channel); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrNotGuest
 		}
@@ -196,6 +199,8 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, pare
 		TenantID:     tenantID,
 		Role:         RoleStudent,
 		ParentOrigin: parentOrigin,
+		Channel:      channel,
+		ExternalID:   externalID,
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {

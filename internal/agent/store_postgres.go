@@ -444,6 +444,23 @@ func NewPostgresStoreForChannel(ctx context.Context, pool *pgxpool.Pool, channel
 		return nil, fmt.Errorf("find default tenant: %w", err)
 	}
 
+	return NewPostgresStoreForTenantAndChannel(pool, tenantID, channel)
+}
+
+// NewPostgresStoreForTenantAndChannel creates a store with an explicit,
+// authenticated tenant scope.
+func NewPostgresStoreForTenantAndChannel(pool *pgxpool.Pool, tenantID, channel string) (*PostgresStore, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("pool is nil")
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant_id is required")
+	}
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = defaultChannel
+	}
 	return &PostgresStore{
 		pool:     pool,
 		tenantID: tenantID,
