@@ -16,7 +16,7 @@
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
     <a href="https://goreportcard.com/report/github.com/p-n-ai/pai-bot"><img src="https://goreportcard.com/badge/github.com/p-n-ai/pai-bot" alt="Go Report Card"></a>
-    <img src="https://img.shields.io/badge/go-%3E%3D1.22-00ADD8.svg" alt="Go Version">
+    <img src="https://img.shields.io/badge/go-%3E%3D1.25-00ADD8.svg" alt="Go Version">
     <img src="https://img.shields.io/badge/platform-Telegram%20%7C%20WhatsApp%20%7C%20Slack%20%7C%20Discord%20%7C%20Teams%20%7C%20Web-green.svg" alt="Platforms">
   </p>
 </p>
@@ -59,7 +59,7 @@ Get P&AI running in under 5 minutes.
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
-- Credentials for at least one external chat adapter, such as a Telegram bot token from [@BotFather](https://t.me/BotFather)
+- Credentials for an external chat adapter if you want to receive messages outside local development. Production requires at least one of Telegram, WhatsApp, Slack, Discord, or Microsoft Teams.
 - At least one AI provider API key (OpenAI, Anthropic, or use free self-hosted Ollama)
 
 ### 1. Clone and configure
@@ -87,6 +87,17 @@ LEARN_AI_DEFAULT_PROVIDER=ollama
 LEARN_AI_OLLAMA_ENABLED=true
 LEARN_AI_OLLAMA_MODEL=qwen3
 ```
+
+Telegram works as soon as `LEARN_TELEGRAM_BOT_TOKEN` is set. For another adapter, configure its complete credential set:
+
+| Adapter | Required configuration | Ingress |
+|---------|------------------------|---------|
+| Slack | `LEARN_SLACK_ENABLED=true`, `LEARN_SLACK_BOT_TOKEN`, `LEARN_SLACK_SIGNING_SECRET` | Events API: `POST /webhook/slack` |
+| Discord | `LEARN_DISCORD_ENABLED=true`, `LEARN_DISCORD_BOT_TOKEN`, `LEARN_DISCORD_PUBLIC_KEY`, `LEARN_DISCORD_APPLICATION_ID` | Gateway messages and interactions at `POST /webhook/discord`; enable the Message Content intent |
+| Microsoft Teams | `LEARN_TEAMS_ENABLED=true`, `LEARN_TEAMS_APP_ID`, `LEARN_TEAMS_APP_PASSWORD` | Bot Framework activities: `POST /webhook/teams` |
+| WhatsApp | `LEARN_WHATSAPP_ENABLED=true` plus the selected backend's credentials | Cloud API: `POST /webhook/whatsapp`; `meow` uses the local WhatsApp session |
+
+Webhook deployments need a public HTTPS base URL that forwards these paths to the Go server. Configure each Slack, Discord, or Teams credential set together; partial sets fail startup validation even when the adapter's enable flag is false.
 
 ### 2. Start everything
 
@@ -124,7 +135,7 @@ After that, set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_M
 
 ### 4. Chat with your bot
 
-Open Telegram, find your bot, and send `/start`. That's it — you're learning.
+Message the bot through the adapter you configured. On Telegram, find your bot and send `/start`; webhook adapters begin receiving messages after their provider points at the matching `/webhook/...` endpoint.
 
 ### 5. Access the admin panel
 
@@ -140,7 +151,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 
 ### 🎓 For Students
 
-- **AI Tutor on Telegram** — Learn any topic through natural chat conversation. The AI uses Socratic method, scaffolding, and growth mindset pedagogy.
+- **AI Tutor in Chat** — Learn through Telegram, WhatsApp, Slack, Discord, Microsoft Teams, or the web. The AI uses Socratic method, scaffolding, and growth mindset pedagogy.
 - **Step-by-Step Problem Solving** — Every math question is answered with a structured approach: Understand → Plan → Solve → Verify → Connect. Teaches students *how to think*, not just the answer.
 - **Adaptive Explanations** — The AI adjusts explanation complexity based on your mastery level. Beginners get simpler language and more examples; proficient students get concise explanations with harder challenges.
 - **Curriculum-Cited Responses** — Every explanation references the exact curriculum source (e.g., "KSSM Form 1 > Algebra > Linear Equations"), so students can find it in their textbook.
@@ -219,7 +230,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 
 | Component | Technology | Why |
 |-----------|-----------|-----|
-| **Backend** | Go 1.22+ (stdlib) | Goroutines handle millions of concurrent connections. Single binary, ~15MB. |
+| **Backend** | Go 1.25+ | Concurrent chat and scheduling services ship as a single binary. |
 | **Database** | PostgreSQL 17 | Standard, portable. Every cloud has managed Postgres. |
 | **Cache** | Dragonfly | Redis-compatible, multi-threaded, 80% less memory. |
 | **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
@@ -228,12 +239,16 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
 | **Deployment** | Docker Compose or Helm | Single server ($20/mo) to national deployment (millions of students). |
 
+### Chat Gateway
+
+Every inbound message keeps its provider identity, delivery ID, and provider-qualified thread route. The gateway serializes work per destination, deduplicates webhook retries, and persists the route so replies, scheduled nudges, and focused-page messages return to the learner's originating channel and thread.
+
 ### Current Admin Auth
 
 - Teachers, parents, school admins, and platform admins sign in through `/login`; visiting `/` routes signed-in users to their workspace and everyone else to the login flow.
 - Ongoing login uses `email + password`; if the same email belongs to multiple schools, the UI asks the user to pick the correct school before finishing sign-in.
 - The Go backend owns admin auth with one server session cookie (`pai_session`); bearer JWT parsing remains only as a compatibility lane.
-- Students continue to access P&AI primarily through Telegram; a student web login is not part of the current baseline.
+- Students access P&AI through the configured chat adapters; a student web login is not part of the current baseline.
 
 ### Project Structure
 
@@ -264,6 +279,12 @@ pai-bot/
 │   ├── chat/                        # Chat Gateway
 │   │   ├── gateway.go               # Unified message routing
 │   │   ├── telegram.go              # Telegram Bot API adapter
+│   │   ├── whatsapp.go              # WhatsApp Cloud API adapter
+│   │   ├── whatsapp_meow.go         # WhatsApp linked-device adapter
+│   │   ├── slack.go                 # Slack Events API + Web API adapter
+│   │   ├── discord.go               # Discord interactions + REST adapter
+│   │   ├── discord_gateway.go       # Discord Gateway lifecycle
+│   │   ├── teams.go                 # Microsoft Teams Bot Framework adapter
 │   │   └── websocket.go             # WebSocket adapter
 │   ├── curriculum/                   # Curriculum Service
 │   │   ├── loader.go                # Reads YAML from OSS repository
@@ -432,20 +453,25 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_TEAMS_APP_ID` | With Teams | — | Microsoft Bot Framework application ID |
 | `LEARN_TEAMS_APP_PASSWORD` | With Teams | — | Microsoft Bot Framework client secret |
 | `LEARN_TEAMS_APP_TENANT_ID` | No | `botframework.com` | Tenant used for Teams client-credential tokens |
+| `LEARN_WHATSAPP_ENABLED` | No | `false` | Enable the selected WhatsApp backend |
+| `LEARN_WHATSAPP_BACKEND` | No | `meow` | WhatsApp backend: `meow` for a linked device or `cloudapi` for Meta's Cloud API |
+| `LEARN_WHATSAPP_ACCESS_TOKEN` | With Cloud API | — | Meta Cloud API access token |
+| `LEARN_WHATSAPP_PHONE_ID` | With Cloud API | — | Meta WhatsApp phone number ID |
+| `LEARN_WHATSAPP_VERIFY_TOKEN` | With Cloud API | — | Token used to verify the Cloud API webhook |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
 | `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
-| `LEARN_AI_OPENAI_API_KEY` | No* | — | OpenAI API key |
+| `LEARN_AI_OPENAI_API_KEY` | No | — | OpenAI API key |
 | `LEARN_AI_OPENAI_MODEL` | No | — | Default OpenAI model when request model is not set |
-| `LEARN_AI_ANTHROPIC_API_KEY` | No* | — | Anthropic API key |
+| `LEARN_AI_ANTHROPIC_API_KEY` | No | — | Anthropic API key |
 | `LEARN_AI_ANTHROPIC_MODEL` | No | — | Default Anthropic model when request model is not set |
-| `LEARN_AI_DEEPSEEK_API_KEY` | No* | — | DeepSeek API key (OpenAI-compatible) |
+| `LEARN_AI_DEEPSEEK_API_KEY` | No | — | DeepSeek API key (OpenAI-compatible) |
 | `LEARN_AI_DEEPSEEK_MODEL` | No | — | Default DeepSeek model when request model is not set |
-| `LEARN_AI_GOOGLE_API_KEY` | No* | — | Google Gemini API key |
+| `LEARN_AI_GOOGLE_API_KEY` | No | — | Google Gemini API key |
 | `LEARN_AI_GOOGLE_MODEL` | No | — | Default Google model when request model is not set |
-| `LEARN_AI_OPENROUTER_API_KEY` | No* | — | OpenRouter API key (100+ models) |
+| `LEARN_AI_OPENROUTER_API_KEY` | No | — | OpenRouter API key (100+ models) |
 | `LEARN_AI_OPENROUTER_MODEL` | No | — | Default OpenRouter model when request model is not set |
-| `LEARN_AI_OLLAMA_ENABLED` | No* | `false` | Enable self-hosted Ollama |
+| `LEARN_AI_OLLAMA_ENABLED` | No | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
@@ -453,7 +479,7 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 
-*At least one AI provider must be configured.
+Outside development mode, configure at least one external chat adapter and one AI provider.
 
 ### First-Boot Tenant Flow
 
@@ -479,7 +505,7 @@ Recommended first setup sequence:
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Node.js 20+ (for admin panel)
 - Docker and Docker Compose
 
