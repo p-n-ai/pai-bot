@@ -124,7 +124,7 @@ func TestTeamsChannelOutboundRejectsUntrustedContinuationServiceURL(t *testing.T
 
 func TestTeamsChannelOutboundRequiresTokenProvider(t *testing.T) {
 	_, err := NewTeamsChannel(TeamsConfig{
-		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error { return nil }),
+		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error { return nil }),
 	})
 	if err == nil || !strings.Contains(err.Error(), "token provider") {
 		t.Fatalf("NewTeamsChannel() error = %v, want token provider error", err)
@@ -173,7 +173,7 @@ func newTeamsOutboundTestChannel(
 ) *TeamsChannel {
 	t.Helper()
 	channel, err := NewTeamsChannel(TeamsConfig{
-		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error { return nil }),
+		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error { return nil }),
 		TokenProvider:  tokenProvider,
 	})
 	if err != nil {

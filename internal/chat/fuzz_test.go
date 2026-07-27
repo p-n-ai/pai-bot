@@ -120,7 +120,7 @@ func FuzzTeamsWebhook(f *testing.F) {
 			return
 		}
 		channel, err := NewTeamsChannel(TeamsConfig{
-			TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error {
+			TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error {
 				return nil
 			}),
 			TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {

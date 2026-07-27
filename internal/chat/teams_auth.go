@@ -40,7 +40,7 @@ type TeamsAuthenticator struct {
 	keysMu         sync.Mutex
 	outboundToken  string
 	tokenExpiresAt time.Time
-	keys           map[string]*rsa.PublicKey
+	keys           map[string]teamsVerificationKey
 	keysExpiresAt  time.Time
 	issuer         string
 }
@@ -109,7 +109,7 @@ func (a *TeamsAuthenticator) Token(ctx context.Context) (string, error) {
 	return a.outboundToken, nil
 }
 
-func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL string) error {
+func (a *TeamsAuthenticator) Validate(ctx context.Context, token string, authContext TeamsAuthenticationContext) error {
 	header, claims, signed, signature, err := parseTeamsJWT(token)
 	if err != nil {
 		return err
@@ -121,12 +121,12 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 	if err != nil {
 		return err
 	}
-	key := keys[header.KeyID]
-	if key == nil {
+	key, ok := keys[header.KeyID]
+	if !ok {
 		return fmt.Errorf("teams signing key is unavailable")
 	}
 	digest := sha256.Sum256(signed)
-	if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, digest[:], signature); err != nil {
+	if err := rsa.VerifyPKCS1v15(key.publicKey, crypto.SHA256, digest[:], signature); err != nil {
 		return fmt.Errorf("invalid teams token signature")
 	}
 
@@ -137,13 +137,16 @@ func (a *TeamsAuthenticator) Validate(ctx context.Context, token, serviceURL str
 	if claims.Issuer != issuer || !claims.Audience.Contains(a.appID) {
 		return fmt.Errorf("teams token issuer or audience is invalid")
 	}
-	if claims.ServiceURL == "" || claims.ServiceURL != serviceURL {
+	if claims.ServiceURL == "" || claims.ServiceURL != authContext.ServiceURL {
 		return fmt.Errorf("teams token service URL does not match activity")
+	}
+	if !key.endorses(authContext.ChannelID) {
+		return errTeamsChannelNotEndorsed
 	}
 	return nil
 }
 
-func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]*rsa.PublicKey, string, error) {
+func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]teamsVerificationKey, string, error) {
 	a.keysMu.Lock()
 	defer a.keysMu.Unlock()
 
@@ -170,10 +173,13 @@ func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]*
 	if err := a.getJSON(ctx, metadata.JWKSURL, &set); err != nil {
 		return nil, "", fmt.Errorf("load Teams signing keys: %w", err)
 	}
-	keys := make(map[string]*rsa.PublicKey, len(set.Keys))
+	keys := make(map[string]teamsVerificationKey, len(set.Keys))
 	for _, jwk := range set.Keys {
-		if key, err := jwk.rsaPublicKey(); err == nil && jwk.KeyID != "" {
-			keys[jwk.KeyID] = key
+		if publicKey, err := jwk.rsaPublicKey(); err == nil && jwk.KeyID != "" {
+			keys[jwk.KeyID] = teamsVerificationKey{
+				publicKey:    publicKey,
+				endorsements: append([]string(nil), jwk.Endorsements...),
+			}
 		}
 	}
 	if len(keys) == 0 {
@@ -284,11 +290,30 @@ func parseTeamsJWT(token string) (teamsJWTHeader, teamsJWTClaims, []byte, []byte
 }
 
 type teamsJWK struct {
-	KeyID       string   `json:"kid"`
-	KeyType     string   `json:"kty"`
-	Modulus     string   `json:"n"`
-	Exponent    string   `json:"e"`
-	Certificate []string `json:"x5c"`
+	KeyID        string   `json:"kid"`
+	KeyType      string   `json:"kty"`
+	Modulus      string   `json:"n"`
+	Exponent     string   `json:"e"`
+	Certificate  []string `json:"x5c"`
+	Endorsements []string `json:"endorsements"`
+}
+
+type teamsVerificationKey struct {
+	publicKey    *rsa.PublicKey
+	endorsements []string
+}
+
+func (k teamsVerificationKey) endorses(channelID string) bool {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return false
+	}
+	for _, endorsement := range k.endorsements {
+		if endorsement == channelID {
+			return true
+		}
+	}
+	return false
 }
 
 func (j teamsJWK) rsaPublicKey() (*rsa.PublicKey, error) {

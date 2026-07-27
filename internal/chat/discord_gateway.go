@@ -51,8 +51,29 @@ func (d *DiscordChannel) Start(ctx context.Context, handler func(InboundMessage)
 		return err
 	}
 	gatewayRuntime.setConnection(connection)
-	go d.runGateway(runCtx, gatewayRuntime, connection, heartbeatInterval, session, handler)
-	return nil
+	startup := newDiscordGatewayStartup()
+	go d.runGateway(runCtx, gatewayRuntime, connection, heartbeatInterval, session, handler, startup)
+
+	startupTimeout := d.gatewayHandshakeTimeout
+	if startupTimeout <= 0 {
+		startupTimeout = defaultDiscordGatewayHandshakeTimeout
+	}
+	timer := time.NewTimer(startupTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-startup.result:
+		return err
+	case <-timer.C:
+		cancel()
+		gatewayRuntime.closeConnection()
+		<-gatewayRuntime.done
+		return fmt.Errorf("wait for Discord Gateway READY: %w", context.DeadlineExceeded)
+	case <-ctx.Done():
+		cancel()
+		gatewayRuntime.closeConnection()
+		<-gatewayRuntime.done
+		return ctx.Err()
+	}
 }
 
 // Stop disconnects the direct Gateway runtime and waits for its work to exit.
@@ -171,6 +192,7 @@ func (d *DiscordChannel) runGateway(
 	heartbeatInterval time.Duration,
 	session *discordGatewaySession,
 	handler func(InboundMessage),
+	startup *discordGatewayStartup,
 ) {
 	currentConnection := connection
 	currentHeartbeatInterval := heartbeatInterval
@@ -181,11 +203,13 @@ func (d *DiscordChannel) runGateway(
 			currentHeartbeatInterval,
 			session,
 			handler,
+			startup,
 		)
 		_ = currentConnection.CloseNow()
 		gatewayRuntime.setConnection(nil)
 
 		if ctx.Err() != nil {
+			startup.resolve(ctx.Err())
 			d.finishGateway(gatewayRuntime, ctx.Err())
 			return
 		}
@@ -195,6 +219,7 @@ func (d *DiscordChannel) runGateway(
 		if err != nil {
 			d.recordGatewayRuntimeError(err)
 			if terminalDiscordGatewayError(err) {
+				startup.resolve(err)
 				d.finishGateway(gatewayRuntime, err)
 				return
 			}
@@ -205,6 +230,7 @@ func (d *DiscordChannel) runGateway(
 			reconnectWait = waitDiscordGatewayReconnect
 		}
 		if err := reconnectWait(ctx, 1); err != nil {
+			startup.resolve(err)
 			d.finishGateway(gatewayRuntime, err)
 			return
 		}
@@ -223,16 +249,19 @@ func (d *DiscordChannel) runGateway(
 				break
 			}
 			if ctx.Err() != nil {
+				startup.resolve(ctx.Err())
 				d.finishGateway(gatewayRuntime, ctx.Err())
 				return
 			}
 			d.recordGatewayRuntimeError(connectErr)
 			if terminalDiscordGatewayError(connectErr) {
+				startup.resolve(connectErr)
 				d.finishGateway(gatewayRuntime, connectErr)
 				return
 			}
 			attempt++
 			if err := reconnectWait(ctx, attempt); err != nil {
+				startup.resolve(err)
 				d.finishGateway(gatewayRuntime, err)
 				return
 			}
@@ -246,6 +275,7 @@ func (d *DiscordChannel) consumeGateway(
 	heartbeatInterval time.Duration,
 	session *discordGatewaySession,
 	handler func(InboundMessage),
+	startup *discordGatewayStartup,
 ) (discordGatewayDirective, error) {
 	readCtx, cancelRead := context.WithCancel(ctx)
 	defer cancelRead()
@@ -308,6 +338,9 @@ func (d *DiscordChannel) consumeGateway(
 					}
 					session.id = ready.SessionID
 					session.resumeURL = ready.ResumeGatewayURL
+					startup.resolve(nil)
+				case "RESUMED":
+					startup.resolve(nil)
 				case "MESSAGE_CREATE":
 					var message discordGatewayData
 					if err := json.Unmarshal(read.payload.Data, &message); err != nil {
@@ -372,6 +405,21 @@ type discordGatewayRuntime struct {
 	connection *websocket.Conn
 	done       chan struct{}
 	err        error
+}
+
+type discordGatewayStartup struct {
+	once   sync.Once
+	result chan error
+}
+
+func newDiscordGatewayStartup() *discordGatewayStartup {
+	return &discordGatewayStartup{result: make(chan error, 1)}
+}
+
+func (s *discordGatewayStartup) resolve(err error) {
+	s.once.Do(func() {
+		s.result <- err
+	})
 }
 
 func (r *discordGatewayRuntime) setConnection(connection *websocket.Conn) {

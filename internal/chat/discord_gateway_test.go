@@ -11,7 +11,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -23,7 +22,8 @@ import (
 func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) {
 	identify := make(chan discordGatewayPayload, 1)
 	heartbeat := make(chan discordGatewayPayload, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		connection, err := websocket.Accept(response, request, nil)
 		if err != nil {
 			t.Errorf("accept Gateway connection: %v", err)
@@ -45,6 +45,17 @@ func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) 
 			return
 		}
 		identify <- gotIdentify
+
+		if err := writeDiscordTestPayload(request.Context(), connection, map[string]any{
+			"op": 0, "s": 1, "t": "READY",
+			"d": map[string]any{
+				"session_id":         "session-123",
+				"resume_gateway_url": "ws" + strings.TrimPrefix(server.URL, "http"),
+			},
+		}); err != nil {
+			t.Errorf("write READY: %v", err)
+			return
+		}
 
 		for _, event := range []map[string]any{
 			{
@@ -165,7 +176,8 @@ func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) 
 
 func TestDiscordChannelGatewayStopsOnContextCancellation(t *testing.T) {
 	connected := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		connection, err := websocket.Accept(response, request, nil)
 		if err != nil {
 			t.Errorf("accept Gateway connection: %v", err)
@@ -182,6 +194,15 @@ func TestDiscordChannelGatewayStopsOnContextCancellation(t *testing.T) {
 		var identify discordGatewayPayload
 		if err := readDiscordTestPayload(request.Context(), connection, &identify); err != nil {
 			t.Errorf("read IDENTIFY: %v", err)
+			return
+		}
+		if err := writeDiscordTestPayload(request.Context(), connection, map[string]any{
+			"op": 0, "s": 1, "t": "READY",
+			"d": map[string]any{
+				"session_id":         "session-123",
+				"resume_gateway_url": "ws" + strings.TrimPrefix(server.URL, "http"),
+			},
+		}); err != nil {
 			return
 		}
 		close(connected)
@@ -279,7 +300,10 @@ func TestDiscordChannelGatewayReconnectsWithResumeAfterOpcodeSeven(t *testing.T)
 		}
 		resume <- authenticate
 		_ = writeDiscordTestPayload(request.Context(), connection, map[string]any{
-			"op": 0, "s": 8, "t": "MESSAGE_CREATE",
+			"op": 0, "s": 8, "t": "RESUMED", "d": map[string]any{},
+		})
+		_ = writeDiscordTestPayload(request.Context(), connection, map[string]any{
+			"op": 0, "s": 9, "t": "MESSAGE_CREATE",
 			"d": map[string]any{
 				"id": "message-after-resume", "channel_id": "channel456", "guild_id": "guild789",
 				"content": "resumed",
@@ -382,7 +406,8 @@ func TestDiscordChannelGatewayReconnectsAfterDisconnectAndUsesBackoff(t *testing
 	backoffAttempts := make(chan int, 1)
 	var connections atomic.Int32
 
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		connection, err := websocket.Accept(response, request, nil)
 		if err != nil {
 			return
@@ -400,6 +425,13 @@ func TestDiscordChannelGatewayReconnectsAfterDisconnectAndUsesBackoff(t *testing
 			_ = connection.Close(websocket.StatusServiceRestart, "restart")
 			return
 		}
+		_ = writeDiscordTestPayload(request.Context(), connection, map[string]any{
+			"op": 0, "s": 1, "t": "READY",
+			"d": map[string]any{
+				"session_id":         "session-after-reconnect",
+				"resume_gateway_url": "ws" + strings.TrimPrefix(server.URL, "http"),
+			},
+		})
 		reconnected <- struct{}{}
 		var payload discordGatewayPayload
 		_ = readDiscordTestPayload(request.Context(), connection, &payload)
@@ -455,18 +487,10 @@ func TestDiscordChannelGatewayReportsTerminalRuntimeError(t *testing.T) {
 	defer server.Close()
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
-	if err := channel.Start(t.Context(), func(InboundMessage) {}); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	err := channel.Start(t.Context(), func(InboundMessage) {})
 	<-identified
-
-	deadline := time.Now().Add(time.Second)
-	for channel.RuntimeError() == nil && time.Now().Before(deadline) {
-		runtime.Gosched()
-	}
-	err := channel.RuntimeError()
 	if err == nil || websocket.CloseStatus(err) != websocket.StatusCode(4004) {
-		t.Fatalf("RuntimeError() = %v, want Discord authentication close error", err)
+		t.Fatalf("Start() error = %v, want Discord authentication close error", err)
 	}
 	if stopErr := channel.Stop(); !errors.Is(stopErr, err) {
 		t.Fatalf("Stop() error = %v, want terminal runtime error %v", stopErr, err)

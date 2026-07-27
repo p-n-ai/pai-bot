@@ -12,20 +12,23 @@ import (
 	"testing"
 )
 
-type teamsTokenValidatorFunc func(context.Context, string, string) error
+type teamsTokenValidatorFunc func(context.Context, string, TeamsAuthenticationContext) error
 
-func (f teamsTokenValidatorFunc) Validate(ctx context.Context, token, serviceURL string) error {
-	return f(ctx, token, serviceURL)
+func (f teamsTokenValidatorFunc) Validate(ctx context.Context, token string, authContext TeamsAuthenticationContext) error {
+	return f(ctx, token, authContext)
 }
 
 func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T) {
 	channel, err := NewTeamsChannel(TeamsConfig{
-		TokenValidator: teamsTokenValidatorFunc(func(_ context.Context, token, serviceURL string) error {
+		TokenValidator: teamsTokenValidatorFunc(func(_ context.Context, token string, authContext TeamsAuthenticationContext) error {
 			if token != "valid-token" {
 				return errors.New("invalid token")
 			}
-			if serviceURL != "https://smba.trafficmanager.net/teams/" {
+			if authContext.ServiceURL != "https://smba.trafficmanager.net/teams/" {
 				return errors.New("service URL mismatch")
+			}
+			if authContext.ChannelID != "msteams" {
+				return errors.New("channel ID mismatch")
 			}
 			return nil
 		}),
@@ -43,6 +46,7 @@ func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T)
 		"text":"  Hello from Teams  ",
 		"from":{"id":"user-1","name":"Alice","role":"user"},
 		"conversation":{"id":"19:abc@thread.tacv2"},
+		"channelId":"msteams",
 		"serviceUrl":"https://smba.trafficmanager.net/teams/",
 		"timestamp":"2024-01-01T00:00:00Z"
 	}`)
@@ -78,7 +82,7 @@ func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T)
 
 func TestTeamsChannelWebhookRejectsUnauthenticatedActivity(t *testing.T) {
 	channel, err := NewTeamsChannel(TeamsConfig{
-		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, string) error {
+		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error {
 			return errors.New("invalid token")
 		}),
 		TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {
@@ -97,6 +101,40 @@ func TestTeamsChannelWebhookRejectsUnauthenticatedActivity(t *testing.T) {
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestTeamsChannelWebhookRejectsUnendorsedActivityAsForbidden(t *testing.T) {
+	channel, err := NewTeamsChannel(TeamsConfig{
+		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error {
+			return errTeamsChannelNotEndorsed
+		}),
+		TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {
+			return "connector-token", nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewTeamsChannel() error = %v", err)
+	}
+	body := []byte(`{
+		"type":"message",
+		"id":"message-1",
+		"text":"hello",
+		"from":{"id":"user-1"},
+		"conversation":{"id":"conversation-1"},
+		"channelId":"msteams",
+		"serviceUrl":"https://smba.trafficmanager.net/teams/"
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/webhook/teams", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+
+	channel.WebhookHandler(func(InboundMessage) {
+		t.Fatal("unendorsed activity must not dispatch")
+	}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
 	}
 }
 

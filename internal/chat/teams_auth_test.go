@@ -74,7 +74,7 @@ func TestTeamsAuthenticatorValidatesAudienceIssuerAndServiceURL(t *testing.T) {
 		case "/keys":
 			keyRequests.Add(1)
 			_ = json.NewEncoder(response).Encode(map[string]any{
-				"keys": []map[string]string{teamsTestJWK("key-1", &privateKey.PublicKey)},
+				"keys": []map[string]any{teamsTestJWK("key-1", &privateKey.PublicKey, "msteams")},
 			})
 		default:
 			http.NotFound(response, request)
@@ -99,11 +99,21 @@ func TestTeamsAuthenticatorValidatesAudienceIssuerAndServiceURL(t *testing.T) {
 		"serviceurl": serviceURL,
 	})
 
-	if err := authenticator.Validate(context.Background(), token, serviceURL); err != nil {
+	authContext := TeamsAuthenticationContext{ServiceURL: serviceURL, ChannelID: "msteams"}
+	if err := authenticator.Validate(context.Background(), token, authContext); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
-	if err := authenticator.Validate(context.Background(), token, "https://smba.trafficmanager.net/other/"); err == nil {
+	if err := authenticator.Validate(context.Background(), token, TeamsAuthenticationContext{
+		ServiceURL: "https://smba.trafficmanager.net/other/",
+		ChannelID:  "msteams",
+	}); err == nil {
 		t.Fatal("Validate() accepted an activity service URL absent from the token")
+	}
+	if err := authenticator.Validate(context.Background(), token, TeamsAuthenticationContext{
+		ServiceURL: serviceURL,
+		ChannelID:  "webchat",
+	}); err == nil {
+		t.Fatal("Validate() accepted a channel absent from the signing key endorsements")
 	}
 	unknownKeyToken := teamsTestJWTWithKeyID(t, privateKey, "unknown-key", map[string]any{
 		"iss":        "https://api.botframework.test",
@@ -112,7 +122,7 @@ func TestTeamsAuthenticatorValidatesAudienceIssuerAndServiceURL(t *testing.T) {
 		"serviceurl": serviceURL,
 	})
 	for range 2 {
-		if err := authenticator.Validate(context.Background(), unknownKeyToken, serviceURL); err == nil {
+		if err := authenticator.Validate(context.Background(), unknownKeyToken, authContext); err == nil {
 			t.Fatal("Validate() accepted an unknown signing key")
 		}
 	}
@@ -125,13 +135,14 @@ func TestTeamsAuthenticatorValidatesAudienceIssuerAndServiceURL(t *testing.T) {
 	}
 }
 
-func teamsTestJWK(keyID string, key *rsa.PublicKey) map[string]string {
+func teamsTestJWK(keyID string, key *rsa.PublicKey, endorsements ...string) map[string]any {
 	exponent := big.NewInt(int64(key.E)).Bytes()
-	return map[string]string{
-		"kid": keyID,
-		"kty": "RSA",
-		"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
-		"e":   base64.RawURLEncoding.EncodeToString(exponent),
+	return map[string]any{
+		"kid":          keyID,
+		"kty":          "RSA",
+		"n":            base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+		"e":            base64.RawURLEncoding.EncodeToString(exponent),
+		"endorsements": endorsements,
 	}
 }
 

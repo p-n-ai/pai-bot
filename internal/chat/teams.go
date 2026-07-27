@@ -22,9 +22,18 @@ const (
 	maxTeamsThreadIDSize = 16 << 10
 )
 
+var errTeamsChannelNotEndorsed = errors.New("teams signing key is not endorsed for activity channel")
+
 // TeamsTokenValidator authenticates Bot Framework bearer tokens.
 type TeamsTokenValidator interface {
-	Validate(context.Context, string, string) error
+	Validate(context.Context, string, TeamsAuthenticationContext) error
+}
+
+// TeamsAuthenticationContext binds a Bot Framework token to the activity route
+// and channel that the signing key is authorized to represent.
+type TeamsAuthenticationContext struct {
+	ServiceURL string
+	ChannelID  string
 }
 
 // TeamsTokenProvider supplies a Bot Connector bearer token for outbound calls.
@@ -247,8 +256,15 @@ func (t *TeamsChannel) WebhookHandler(handler func(InboundMessage)) http.Handler
 			http.Error(response, "bad request", http.StatusBadRequest)
 			return
 		}
-		if t.tokenValidator.Validate(request.Context(), token, activity.ServiceURL) != nil {
-			http.Error(response, "unauthorized", http.StatusUnauthorized)
+		if err := t.tokenValidator.Validate(request.Context(), token, TeamsAuthenticationContext{
+			ServiceURL: activity.ServiceURL,
+			ChannelID:  activity.ChannelID,
+		}); err != nil {
+			if errors.Is(err, errTeamsChannelNotEndorsed) {
+				http.Error(response, "forbidden", http.StatusForbidden)
+			} else {
+				http.Error(response, "unauthorized", http.StatusUnauthorized)
+			}
 			return
 		}
 		if activity.Type != "message" {
@@ -294,6 +310,7 @@ type teamsActivity struct {
 	Text         string            `json:"text"`
 	From         teamsActivityFrom `json:"from"`
 	Conversation teamsConversation `json:"conversation"`
+	ChannelID    string            `json:"channelId"`
 	ServiceURL   string            `json:"serviceUrl"`
 }
 
@@ -312,7 +329,8 @@ func (a teamsActivity) inboundMessage() (InboundMessage, bool) {
 	authorID := strings.TrimSpace(a.From.ID)
 	conversationID := strings.TrimSpace(a.Conversation.ID)
 	serviceURL := strings.TrimSpace(a.ServiceURL)
-	if messageID == "" || text == "" || authorID == "" || conversationID == "" || !validTeamsServiceURL(serviceURL) {
+	channelID := strings.TrimSpace(a.ChannelID)
+	if messageID == "" || text == "" || authorID == "" || conversationID == "" || channelID == "" || !validTeamsServiceURL(serviceURL) {
 		return InboundMessage{}, false
 	}
 
