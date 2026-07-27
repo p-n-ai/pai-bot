@@ -213,7 +213,11 @@ function SelectedClassPanel({
   return (
     <div className='mt-6 flex flex-col gap-5'>
       <SelectedClassSummary group={group} />
-      <ClassResourcesPanel groups={groups} selectedClass={group} />
+      <ClassResourcesPanel
+        groups={groups}
+        key={group.id}
+        selectedClass={group}
+      />
       <RosterTable detail={detail.record} error={detail.error} />
       <AssignedTopicsPanel />
     </div>

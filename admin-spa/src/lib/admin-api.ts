@@ -410,10 +410,12 @@ export async function uploadTeacherResource(
     fetcher,
   )
 
-  if (
-    !isTeacherResource(payload) ||
-    !input.classIDs.every((classID) => payload.class_ids.includes(classID))
-  ) {
+  if (!isTeacherResource(payload)) {
+    throw new APIContractError('Invalid class resource upload response')
+  }
+
+  const responseClassIDs = new Set(payload.class_ids)
+  if (!input.classIDs.every((classID) => responseClassIDs.has(classID))) {
     throw new APIContractError('Invalid class resource upload response')
   }
 

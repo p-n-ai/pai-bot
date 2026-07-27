@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import type { GroupRecord } from '@/lib/group-types'
@@ -29,6 +29,42 @@ import { Label } from '@/components/ui/label'
 import { LoadingStatus, StatePanel } from '@/components/shared/state-panel'
 import { SurfaceSection } from '@/components/shared/surface-section'
 
+type UploadStatus = 'idle' | 'uploading' | 'complete' | 'error'
+
+type ResourcesState = {
+  resources: Array<TeacherResource>
+  loading: boolean
+  loadError: string
+  actionError: string
+  fileError: string
+  title: string
+  classIDs: Array<string>
+  uploadStatus: UploadStatus
+}
+
+type ResourcesAction =
+  | { type: 'loaded'; resources: Array<TeacherResource> }
+  | { type: 'loadFailed'; error: string }
+  | { type: 'fileSelected'; error: string }
+  | { type: 'titleChanged'; title: string }
+  | { type: 'classToggled'; classID: string; checked: boolean }
+  | { type: 'uploadStarted' }
+  | {
+      type: 'uploadSucceeded'
+      resource: TeacherResource
+      selectedClassID: string
+    }
+  | { type: 'uploadFailed'; error: string }
+  | { type: 'actionStarted' }
+  | { type: 'activeChanged'; resourceID: string; active: boolean }
+  | { type: 'resourceDeleted'; resourceID: string }
+  | { type: 'actionFailed'; error: string }
+
+const uploadedAtFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
 export function ClassResourcesPanel({
   groups,
   selectedClass,
@@ -36,43 +72,25 @@ export function ClassResourcesPanel({
   groups: Array<GroupRecord>
   selectedClass: GroupRecord
 }) {
-  const [resources, setResources] = useState<Array<TeacherResource>>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [actionError, setActionError] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [fileError, setFileError] = useState('')
-  const [title, setTitle] = useState('')
-  const [classIDs, setClassIDs] = useState<Array<string>>([selectedClass.id])
-  const [uploadStatus, setUploadStatus] = useState<
-    'idle' | 'uploading' | 'complete' | 'error'
-  >('idle')
+  const [state, dispatch] = useReducer(
+    resourcesReducer,
+    selectedClass.id,
+    createInitialState,
+  )
+  const fileRef = useRef<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    setClassIDs([selectedClass.id])
-    setResources([])
-    setFile(null)
-    setFileError('')
-    setTitle('')
-    setUploadStatus('idle')
-    setActionError('')
-    setLoading(true)
-    setLoadError('')
     listTeacherResources(selectedClass.id)
       .then((items) => {
         if (!cancelled) {
-          setResources(items)
+          dispatch({ type: 'loaded', resources: items })
         }
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
-          setLoadError(readResourceError(caught))
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
+          dispatch({ type: 'loadFailed', error: readResourceError(caught) })
         }
       })
 
@@ -84,15 +102,17 @@ export function ClassResourcesPanel({
   const selectFile = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0] ?? null
     if (nextFile && !isAllowedTeacherResourceFile(nextFile)) {
-      setFile(null)
-      setFileError('Choose a PDF, DOCX, or PPTX file.')
+      fileRef.current = null
+      dispatch({
+        type: 'fileSelected',
+        error: 'Choose a PDF, DOCX, or PPTX file.',
+      })
       event.target.value = ''
       return
     }
 
-    setFile(nextFile)
-    setFileError('')
-    setUploadStatus('idle')
+    fileRef.current = nextFile
+    dispatch({ type: 'fileSelected', error: '' })
   }, [])
 
   const toggleClass = useCallback(
@@ -100,11 +120,7 @@ export function ClassResourcesPanel({
       if (classID === selectedClass.id) {
         return
       }
-      setClassIDs((current) =>
-        checked
-          ? Array.from(new Set([...current, classID]))
-          : current.filter((id) => id !== classID),
-      )
+      dispatch({ type: 'classToggled', classID, checked })
     },
     [selectedClass.id],
   )
@@ -112,55 +128,54 @@ export function ClassResourcesPanel({
   const submitUpload = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      const form = event.currentTarget
+      const file = fileRef.current
       if (!file) {
-        setFileError('Choose a PDF, DOCX, or PPTX file.')
+        dispatch({
+          type: 'fileSelected',
+          error: 'Choose a PDF, DOCX, or PPTX file.',
+        })
         return
       }
 
-      setActionError('')
-      setUploadStatus('uploading')
+      dispatch({ type: 'uploadStarted' })
       try {
         const resource = await uploadTeacherResource({
           file,
-          title,
-          classIDs,
+          title: state.title,
+          classIDs: state.classIDs,
         })
-        setResources((current) => [resource, ...current])
-        setFile(null)
-        setTitle('')
-        setClassIDs([selectedClass.id])
-        setUploadStatus('complete')
-        const input = form.elements.namedItem('resource-file')
-        if (input instanceof HTMLInputElement) {
-          input.value = ''
+        fileRef.current = null
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
         }
+        dispatch({
+          type: 'uploadSucceeded',
+          resource,
+          selectedClassID: selectedClass.id,
+        })
       } catch (caught: unknown) {
-        setActionError(readResourceError(caught))
-        setUploadStatus('error')
+        dispatch({ type: 'uploadFailed', error: readResourceError(caught) })
       }
     },
-    [classIDs, file, selectedClass.id, title],
+    [selectedClass.id, state.classIDs, state.title],
   )
 
   const changeActive = useCallback(
     async (resource: TeacherResource) => {
-      setActionError('')
+      dispatch({ type: 'actionStarted' })
       try {
         await setTeacherResourceActive(
           resource.id,
           selectedClass.id,
           !resource.active,
         )
-        setResources((current) =>
-          current.map((item) =>
-            item.id === resource.id
-              ? { ...item, active: !resource.active }
-              : item,
-          ),
-        )
+        dispatch({
+          type: 'activeChanged',
+          resourceID: resource.id,
+          active: !resource.active,
+        })
       } catch (caught: unknown) {
-        setActionError(readResourceError(caught))
+        dispatch({ type: 'actionFailed', error: readResourceError(caught) })
       }
     },
     [selectedClass.id],
@@ -168,18 +183,18 @@ export function ClassResourcesPanel({
 
   const removeResource = useCallback(
     async (resource: TeacherResource) => {
-      setActionError('')
+      dispatch({ type: 'actionStarted' })
       try {
         await deleteTeacherResource(resource.id, selectedClass.id)
-        setResources((current) =>
-          current.filter((item) => item.id !== resource.id),
-        )
+        dispatch({ type: 'resourceDeleted', resourceID: resource.id })
       } catch (caught: unknown) {
-        setActionError(readResourceError(caught))
+        dispatch({ type: 'actionFailed', error: readResourceError(caught) })
       }
     },
     [selectedClass.id],
   )
+
+  const selectedClassIDs = new Set(state.classIDs)
 
   return (
     <SurfaceSection
@@ -191,16 +206,19 @@ export function ClassResourcesPanel({
           <Label htmlFor='resource-file'>Resource file</Label>
           <Input
             accept='.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation'
-            aria-describedby={fileError ? 'resource-file-error' : undefined}
-            aria-invalid={Boolean(fileError)}
+            aria-describedby={
+              state.fileError ? 'resource-file-error' : undefined
+            }
+            aria-invalid={Boolean(state.fileError)}
             id='resource-file'
             name='resource-file'
             onChange={selectFile}
+            ref={fileInputRef}
             type='file'
           />
-          {fileError ? (
+          {state.fileError ? (
             <p className='text-sm text-destructive' id='resource-file-error'>
-              {fileError}
+              {state.fileError}
             </p>
           ) : null}
         </div>
@@ -208,9 +226,11 @@ export function ClassResourcesPanel({
           <Label htmlFor='resource-title'>Display title (optional)</Label>
           <Input
             id='resource-title'
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) =>
+              dispatch({ type: 'titleChanged', title: event.target.value })
+            }
             placeholder='e.g. Week 3 revision'
-            value={title}
+            value={state.title}
           />
         </div>
         <fieldset className='grid gap-2'>
@@ -226,7 +246,7 @@ export function ClassResourcesPanel({
                 <div className='flex items-center gap-2' key={group.id}>
                   <input
                     className='size-4 rounded border-input accent-primary'
-                    checked={classIDs.includes(group.id)}
+                    checked={selectedClassIDs.has(group.id)}
                     disabled={required}
                     id={`resource-class-${group.id}`}
                     onChange={(event) =>
@@ -244,22 +264,22 @@ export function ClassResourcesPanel({
           </div>
         </fieldset>
         <div>
-          <Button disabled={uploadStatus === 'uploading'} type='submit'>
-            {uploadStatus === 'uploading'
+          <Button disabled={state.uploadStatus === 'uploading'} type='submit'>
+            {state.uploadStatus === 'uploading'
               ? 'Uploading resource…'
               : 'Upload resource'}
           </Button>
         </div>
-        <UploadFeedback error={actionError} status={uploadStatus} />
+        <UploadFeedback error={state.actionError} status={state.uploadStatus} />
       </form>
 
       <div className='mt-6 border-t border-border pt-6'>
         <ResourceList
-          error={loadError}
-          loading={loading}
+          error={state.loadError}
+          loading={state.loading}
           onChangeActive={changeActive}
           onDelete={removeResource}
-          resources={resources}
+          resources={state.resources}
         />
       </div>
     </SurfaceSection>
@@ -450,14 +470,83 @@ function readResourceError(caught: unknown): string {
 
 function formatUploadedAt(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(date)
+  return Number.isNaN(date.getTime()) ? value : uploadedAtFormatter.format(date)
 }
 
 function ignorePromise(promise: Promise<void>): void {
   promise.catch(() => undefined)
+}
+
+function createInitialState(selectedClassID: string): ResourcesState {
+  return {
+    resources: [],
+    loading: true,
+    loadError: '',
+    actionError: '',
+    fileError: '',
+    title: '',
+    classIDs: [selectedClassID],
+    uploadStatus: 'idle',
+  }
+}
+
+function resourcesReducer(
+  state: ResourcesState,
+  action: ResourcesAction,
+): ResourcesState {
+  switch (action.type) {
+    case 'loaded':
+      return { ...state, resources: action.resources, loading: false }
+    case 'loadFailed':
+      return { ...state, loadError: action.error, loading: false }
+    case 'fileSelected':
+      return {
+        ...state,
+        fileError: action.error,
+        uploadStatus: 'idle',
+      }
+    case 'titleChanged':
+      return { ...state, title: action.title }
+    case 'classToggled':
+      return {
+        ...state,
+        classIDs: action.checked
+          ? Array.from(new Set([...state.classIDs, action.classID]))
+          : state.classIDs.filter((id) => id !== action.classID),
+      }
+    case 'uploadStarted':
+      return { ...state, actionError: '', uploadStatus: 'uploading' }
+    case 'uploadSucceeded':
+      return {
+        ...state,
+        resources: [action.resource, ...state.resources],
+        actionError: '',
+        fileError: '',
+        title: '',
+        classIDs: [action.selectedClassID],
+        uploadStatus: 'complete',
+      }
+    case 'uploadFailed':
+      return { ...state, actionError: action.error, uploadStatus: 'error' }
+    case 'actionStarted':
+      return { ...state, actionError: '' }
+    case 'activeChanged':
+      return {
+        ...state,
+        resources: state.resources.map((resource) =>
+          resource.id === action.resourceID
+            ? { ...resource, active: action.active }
+            : resource,
+        ),
+      }
+    case 'resourceDeleted':
+      return {
+        ...state,
+        resources: state.resources.filter(
+          (resource) => resource.id !== action.resourceID,
+        ),
+      }
+    case 'actionFailed':
+      return { ...state, actionError: action.error }
+  }
 }
