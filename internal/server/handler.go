@@ -63,8 +63,8 @@ func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSour
 func NewTenantAdminDataSourceProvider(newForTenant func(string) AdminDataSource, newForPlatform func() AdminDataSource, defaultTenantID func(context.Context) (string, error)) TenantAdminDataSourceProvider {
 	return tenantAdminDataSourceProvider{newForTenant: newForTenant, newForPlatform: newForPlatform, defaultTenantID: defaultTenantID}
 }
-func TelegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
-	return telegramInlineKeyboardContext(store, userID)
+func TelegramInlineKeyboardContext(store agent.ConversationStore, inbound chat.InboundMessage) chat.TelegramInlineKeyboardContext {
+	return telegramInlineKeyboardContext(store, inbound)
 }
 
 type TopMuxOptions struct {
@@ -320,7 +320,7 @@ func (d gatewayTurnDeliverer) DeliverTurn(ctx context.Context, inbound chat.Inbo
 			FocusedPagePublicID: result.FocusedPage.PublicID,
 		})
 	}
-	out, ok := chat.RenderTurn(inbound, result.Text, "", telegramInlineKeyboardContext(d.store, inbound.UserID))
+	out, ok := chat.RenderTurn(inbound, result.Text, "", telegramInlineKeyboardContext(d.store, inbound))
 	if !ok {
 		return nil
 	}
@@ -346,7 +346,7 @@ func (s gatewayFocusedPageSender) SendFocusedPage(ctx context.Context, delivery 
 		UserID:   delivery.RecipientID,
 		ThreadID: delivery.ThreadID,
 	}
-	out, ok := chat.RenderTurn(inbound, delivery.FinalText, pageURL, telegramInlineKeyboardContext(s.store, delivery.RecipientID))
+	out, ok := chat.RenderTurn(inbound, delivery.FinalText, pageURL, telegramInlineKeyboardContext(s.store, inbound))
 	if !ok {
 		return nil
 	}
@@ -390,8 +390,16 @@ func channelNeedsThreadRoute(channel string) bool {
 	}
 }
 
-func telegramInlineKeyboardContext(store agent.ConversationStore, userID string) chat.TelegramInlineKeyboardContext {
-	conv, found := store.GetActiveConversation(userID)
+func telegramInlineKeyboardContext(store agent.ConversationStore, inbound chat.InboundMessage) chat.TelegramInlineKeyboardContext {
+	identity, err := agent.NewLearnerIdentity(inbound.Channel, inbound.UserID)
+	if err != nil {
+		return chat.TelegramInlineKeyboardContext{}
+	}
+	identityStore, ok := store.(agent.IdentityConversationStore)
+	if !ok {
+		return chat.TelegramInlineKeyboardContext{}
+	}
+	conv, found := identityStore.GetActiveConversationForThread(identity, inbound.ThreadID)
 	if !found || conv == nil {
 		return chat.TelegramInlineKeyboardContext{}
 	}

@@ -2,6 +2,18 @@
 ALTER TABLE conversations
     ADD COLUMN thread_id TEXT NOT NULL DEFAULT '';
 
+-- Before this release Telegram used the chat ID as users.external_id. Private
+-- chats can therefore retain active state under the new explicit route. Group
+-- history remains attached to its legacy group identity rather than being
+-- guessed onto one member.
+UPDATE conversations AS conversation
+SET thread_id = 'telegram:' || users.external_id
+FROM users
+WHERE users.id = conversation.user_id
+  AND users.tenant_id = conversation.tenant_id
+  AND users.channel = 'telegram'
+  AND COALESCE(users.external_id, '') <> '';
+
 -- The runtime resolves users by this exact provider-qualified identity. Refuse
 -- to guess when historical duplicates exist because merging user rows would
 -- also require reconciling learning progress, goals, auth, and challenge data.
