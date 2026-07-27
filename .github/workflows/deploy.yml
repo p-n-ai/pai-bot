@@ -143,7 +143,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,deploy/caddy,deploy/docker/Dockerfile.postgres,migrations,scripts/deploy-remote.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,deploy/caddy,deploy/docker/Dockerfile.postgres,migrations,scripts/deploy-remote.sh,scripts/preflight-conversation-identities.sql"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
