@@ -158,11 +158,11 @@ describe('DashboardReady', () => {
       />,
     )
 
+    expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Dashboard' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText('Track who needs support today across the class.'),
+      screen.getByText(
+        'Welcome back. Start with the learners who need you most today.',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -213,7 +213,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Alya/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Alya progress' }))
 
     expect(onSelectStudent).toHaveBeenCalledWith('student_1')
   })
@@ -228,9 +228,11 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
     const row = within(heatmap).getByRole('row', { name: /Alya/ })
-    const button = within(row).getByRole('button', { name: /Alya/ })
+    const button = within(row).getByRole('button', {
+      name: 'Open Alya progress',
+    })
 
     expect(row).toBeInTheDocument()
     expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
@@ -249,11 +251,65 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const hakim = screen.getByRole('button', { name: /Hakim/ })
+    const hakim = screen.getByRole('button', {
+      name: 'Open Hakim progress',
+    })
 
     expect(within(hakim).getByRole('img')).toHaveAccessibleName(
       '35% average mastery',
     )
+  })
+
+  it('orders attention first and shows contextual next actions', () => {
+    render(
+      <DashboardReady
+        nudgeMessage=''
+        onNudge={vi.fn()}
+        progress={progressWithAttention}
+        sendingStudentID=''
+      />,
+    )
+
+    const heatmap = screen.getByLabelText('Learner progress')
+    const learnerRows = within(heatmap).getAllByRole('row').slice(1)
+
+    expect(learnerRows[0]).toHaveTextContent('Hakim')
+    expect(learnerRows[0]).toHaveTextContent('Review Algebra')
+    expect(learnerRows[1]).toHaveTextContent('Alya')
+    expect(learnerRows[1]).toHaveTextContent(
+      'Open progress and plan the next stretch',
+    )
+  })
+
+  it('searches and filters learner progress', () => {
+    render(
+      <DashboardReady
+        nudgeMessage=''
+        onNudge={vi.fn()}
+        progress={progressWithAttention}
+        sendingStudentID=''
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Search learners'), {
+      target: { value: 'Alya' },
+    })
+
+    expect(screen.getByText('Showing 1 of 2')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Open Hakim progress' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Progress status'), {
+      target: { value: 'attention' },
+    })
+
+    expect(
+      screen.getByRole('heading', { name: 'No learners match' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Try another name or progress filter.'),
+    ).toBeInTheDocument()
   })
 
   it('renders the source-admin mastery heatmap surface heading', () => {
@@ -266,14 +322,14 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
 
     expect(
-      within(heatmap).getByRole('heading', { name: 'Mastery heatmap' }),
+      within(heatmap).getByRole('heading', { name: 'Learner progress' }),
     ).toBeInTheDocument()
     expect(
       within(heatmap).getByText(
-        'Students by topic with direct navigation into detail views.',
+        'Start with learners who need support, then open progress or send a nudge.',
       ),
     ).toBeInTheDocument()
     expect(within(heatmap).getByRole('table')).toBeInTheDocument()
@@ -289,10 +345,10 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
 
     expect(
-      within(heatmap).getByRole('heading', { name: 'Mastery heatmap' }),
+      within(heatmap).getByRole('heading', { name: 'Learner progress' }),
     ).toBeInTheDocument()
     expect(
       within(heatmap).getByRole('heading', { name: 'No class heatmap yet' }),
@@ -319,7 +375,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
     const topicHeader = within(heatmap).getByText(
       'Form One Linear Equations With Two Variables',
     )
@@ -338,7 +394,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
 
     expect(within(heatmap).getAllByText('80%')).toHaveLength(2)
     expect(within(heatmap).getByText('--')).toBeInTheDocument()
@@ -354,7 +410,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const heatmap = screen.getByLabelText('Mastery heatmap')
+    const heatmap = screen.getByLabelText('Learner progress')
 
     expect(
       within(heatmap).getByLabelText('No average mastery data'),
@@ -423,7 +479,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const nudgeButton = screen.getByRole('button', { name: 'Nudge' })
+    const nudgeButton = screen.getByRole('button', { name: 'Nudge Alya' })
 
     expect(nudgeButton).toHaveAttribute('data-size', 'sm')
     expect(nudgeButton).toHaveAttribute('data-variant', 'default')
@@ -441,12 +497,12 @@ describe('DashboardReady', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nudge' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nudge Alya' }))
 
     expect(onNudge).toHaveBeenCalledWith('student_1', 'Alya')
-    expect(
-      screen.getByText('Nudge sent to Alya on Telegram.'),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Nudge sent to Alya on Telegram.',
+    )
   })
 })
 
