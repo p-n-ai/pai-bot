@@ -55,6 +55,14 @@ spec:
                 name: {{ include "pai.fullname" . }}-app
                 port:
                   name: http
+          # Embeddable widget assets and iframe -> app
+          - path: /embed
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "pai.fullname" . }}-app
+                port:
+                  name: http
           # Webhook endpoints -> app
           - path: /webhook
             pathType: Prefix

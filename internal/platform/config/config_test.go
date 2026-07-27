@@ -35,6 +35,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_TEAMS_APP_TENANT_ID",
 		"LEARN_FOCUSED_PAGE_BASE_URL",
 		"LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL",
+		"LEARN_EMBED_BASE_URL",
 		"LEARN_EMAIL_SMTP_ADDR",
 		"LEARN_EMAIL_SMTP_USERNAME",
 		"LEARN_EMAIL_SMTP_PASSWORD",
@@ -160,6 +161,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_EMAIL_FROM_ADDRESS", "bot@example.com")
 	t.Setenv("LEARN_EMAIL_FROM_NAME", "Pandai Mailer")
 	t.Setenv("LEARN_EMAIL_BASE_URL", "https://admin.example.com")
+	t.Setenv("LEARN_EMBED_BASE_URL", "https://chat.example.com")
 	t.Setenv("LEARN_AI_OPENAI_API_KEY", "sk-test-key")
 	t.Setenv("LEARN_AI_OPENAI_MODEL", "gpt-4.1-mini")
 	t.Setenv("LEARN_AI_MOCK_RESPONSE", "mock tutor response")
@@ -214,6 +216,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Email.SMTPAddr != "smtp.example.com:587" {
 		t.Errorf("Email.SMTPAddr = %q, want smtp.example.com:587", cfg.Email.SMTPAddr)
+	}
+	if cfg.Embed.BaseURL != "https://chat.example.com" {
+		t.Errorf("Embed.BaseURL = %q, want https://chat.example.com", cfg.Embed.BaseURL)
 	}
 	if cfg.Email.SMTPUsername != "mailer" {
 		t.Errorf("Email.SMTPUsername = %q, want mailer", cfg.Email.SMTPUsername)
@@ -627,6 +632,18 @@ func TestValidateFocusedPageConfigurationIsPairedAndUsesPrivateSecret(t *testing
 	base.Auth.JWTSecret = "private-test-secret-value"
 	if err := base.Validate(); err != nil {
 		t.Fatalf("valid focused page config error = %v", err)
+	}
+}
+
+func TestValidateEmbedBaseURLRequiresOrigin(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.Embed.BaseURL = "https://chat.example/path"
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "LEARN_EMBED_BASE_URL") {
+		t.Fatalf("Validate() error = %v, want embed base URL error", err)
+	}
+	base.Embed.BaseURL = "https://chat.example"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("Validate() valid embed origin error = %v", err)
 	}
 }
 

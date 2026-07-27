@@ -318,17 +318,17 @@ func main() {
 			// Embed config store (for embeddable web chat widget).
 			embedConfigStore := chat.NewPostgresEmbedConfigStore(db.Pool)
 
-			// WebSocket channel (always enabled — used by terminal-chat and embed web clients).
-			// Dev mode keeps first-message auth for terminal-chat; production embed mode
-			// requires origin checking and subprotocol JWT auth.
-			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, time.Hour)
+			// Keep legacy terminal chat isolated from the JWT-authenticated embed socket.
+			embedTokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, defaultEmbedTokenTTL)
+			embedGuestService := auth.NewGuestService(db.Pool, embedTokenManager)
+			embedMessageStore := server.NewPostgresEmbedMessageStore(db.Pool)
 			var wsChannel *chat.WSChannel
 			if cfg.Runtime.DevMode {
 				wsChannel = chat.NewWSChannel()
-			} else {
-				wsChannel = chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
+				gw.Register("websocket", wsChannel)
 			}
-			gw.Register("websocket", wsChannel)
+			embedWSChannel := chat.NewEmbedWSChannel(embedConfigStore, embedTokenManager)
+			gw.Register("embed", embedWSChannel)
 
 			// Wire challenge notifications through the gateway.
 			engine.SetNotifier(server.NewGatewayNotifier(gw, store))
@@ -344,6 +344,40 @@ func main() {
 				}
 			}
 			engine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, store, focusedPageDeliveries))
+			turnRouter, err := server.NewTenantTurnRouter(engine, func(tenantID string) (server.TurnProcessor, error) {
+				tenantStore, err := agent.NewPostgresStoreForTenantAndChannel(db.Pool, tenantID, "embed")
+				if err != nil {
+					return nil, fmt.Errorf("initialize tenant conversation store: %w", err)
+				}
+				tenantEngine := agent.NewEngine(agent.EngineConfig{
+					AIRouter:             router,
+					Store:                tenantStore,
+					EventLogger:          eventLogger,
+					CurriculumLoader:     loader,
+					RetrievalService:     retrievalService,
+					EvidenceRetriever:    tutorEvidence,
+					DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
+					Tracker:              progress.NewPostgresTracker(db.Pool, tenantID),
+					Streaks:              progress.NewMemoryStreakTracker(),
+					XP:                   progress.NewMemoryXPTracker(),
+					Goals:                agent.NewPostgresGoalStore(db.Pool, tenantID),
+					Challenges:           agent.NewPostgresChallengeStoreForChannel(db.Pool, tenantID, "embed"),
+					Groups:               groupStore,
+					TenantID:             tenantID,
+					DevMode:              cfg.Runtime.DevMode,
+					FeatureFlags:         flagsProvider,
+					FocusedPages:         focusedPageService,
+					FocusedPageEnabled: func(msg chat.InboundMessage) bool {
+						return focusedPageChannelEnabled(cfg.Runtime.DevMode, msg)
+					},
+				})
+				tenantEngine.SetNotifier(server.NewGatewayNotifier(gw, tenantStore))
+				tenantEngine.SetTurnDeliverer(server.NewGatewayTurnDeliverer(gw, tenantStore, focusedPageDeliveries))
+				return tenantEngine, nil
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("initialize tenant turn router: %w", err)
+			}
 
 			// Start proactive scheduler (nudges for due reviews).
 			nudgeTracker := agent.NewPostgresNudgeTracker(db.Pool, store.TenantID())
@@ -378,7 +412,7 @@ func main() {
 					slog.Warn("failed to send typing indicator", "error", err)
 				}
 
-				_, err := engine.ProcessAndDeliver(processCtx, msg)
+				_, err := turnRouter.ProcessAndDeliver(processCtx, msg)
 				if err != nil {
 					slog.Error("process or deliver turn failed", "error", err, "user_id", msg.UserID)
 				}
@@ -461,17 +495,24 @@ func main() {
 			)
 
 			topMux := server.NewTopMux(server.TopMuxOptions{
-				APIHandler:         apiHandler,
-				WSChannel:          wsChannel,
-				EmbedConfigStore:   embedConfigStore,
-				WACloudChannel:     waCloudChannel,
-				WAMeowChannel:      waMeowChannel,
-				ChatWebhooks:       chatWebhooks,
-				InboundHandler:     handleInbound,
-				AuthService:        authService,
-				JWTSecret:          cfg.Auth.JWTSecret,
-				AccessTokenTTL:     defaultAccessTokenTTL,
-				FocusedPageHandler: focusedPageHandler,
+				APIHandler:            apiHandler,
+				WSChannel:             wsChannel,
+				EmbedWSChannel:        embedWSChannel,
+				EmbedConfigStore:      embedConfigStore,
+				EmbedGuestService:     embedGuestService,
+				EmbedMessageStore:     embedMessageStore,
+				EmbedIdentityResolver: embedMessageStore,
+				EmbedAuthenticator:    authService,
+				EmbedBaseURL:          cfg.Embed.BaseURL,
+				EmbedTokenTTL:         defaultEmbedTokenTTL,
+				WACloudChannel:        waCloudChannel,
+				WAMeowChannel:         waMeowChannel,
+				ChatWebhooks:          chatWebhooks,
+				InboundHandler:        handleInbound,
+				AuthService:           authService,
+				JWTSecret:             cfg.Auth.JWTSecret,
+				AccessTokenTTL:        defaultAccessTokenTTL,
+				FocusedPageHandler:    focusedPageHandler,
 			})
 
 			return http.Handler(topMux), func(ctx context.Context) error {
@@ -523,6 +564,7 @@ func main() {
 
 const (
 	defaultAccessTokenTTL = 15 * time.Minute
+	defaultEmbedTokenTTL  = time.Hour
 	defaultSessionTTL     = 7 * 24 * time.Hour
 )
 

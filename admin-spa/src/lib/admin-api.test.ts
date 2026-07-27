@@ -583,6 +583,7 @@ describe('admin dashboard API', () => {
       id: '',
       tenant_id: 'tenant_1',
       enabled: false,
+      public_embed_base_url: 'https://chat.example',
       allowed_origins: ['https://school.example'],
       theme_config: {
         color: '#0f172a',

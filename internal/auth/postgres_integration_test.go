@@ -99,6 +99,46 @@ func TestPostgresService_LoginRejectsInvalidPassword(t *testing.T) {
 	assertUserStillExists(t, ctx, pool, userID)
 }
 
+func TestPostgresService_AuthenticatePasswordDoesNotCreateBrowserSession(t *testing.T) {
+	ctx := context.Background()
+	pool := startAuthPostgres(t, ctx)
+	now := time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC)
+	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
+
+	tenantID := loadDefaultTenantID(t, ctx, pool)
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "student@example.com", RoleStudent, "secret-123")
+	user, err := svc.AuthenticatePassword(ctx, LoginRequest{
+		TenantID: tenantID,
+		Email:    "student@example.com",
+		Password: "secret-123",
+	})
+	if err != nil {
+		t.Fatalf("AuthenticatePassword() error = %v", err)
+	}
+	if user.UserID != userID || user.Role != RoleStudent {
+		t.Fatalf("authenticated user = %#v", user)
+	}
+
+	var sessions int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_sessions WHERE user_id = $1::uuid`, userID).Scan(&sessions); err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Fatalf("browser sessions = %d, want 0", sessions)
+	}
+	var lastLogin time.Time
+	if err := pool.QueryRow(ctx, `
+		SELECT last_login_at
+		FROM auth_identities
+		WHERE user_id = $1::uuid AND provider = 'password'
+	`, userID).Scan(&lastLogin); err != nil {
+		t.Fatal(err)
+	}
+	if !lastLogin.Equal(now) {
+		t.Fatalf("last_login_at = %s, want %s", lastLogin, now)
+	}
+}
+
 func TestPostgresService_IssueInvitePersistsHashedToken(t *testing.T) {
 	ctx := context.Background()
 	pool := startAuthPostgres(t, ctx)

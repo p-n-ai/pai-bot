@@ -6,6 +6,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -467,9 +468,12 @@ func newTestTokenManager() *auth.TokenManager {
 func issueGuestToken(t *testing.T, tm *auth.TokenManager, userID, tenantID string) string {
 	t.Helper()
 	token, err := tm.Issue(auth.TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     auth.RoleGuest,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         auth.RoleGuest,
+		ParentOrigin: "https://example.com",
+		Channel:      "embed",
+		ExternalID:   "guest-external-id",
 	}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -543,6 +547,15 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	if received[0].UserID != "guest-user-1" {
 		t.Errorf("expected user guest-user-1, got %q", received[0].UserID)
 	}
+	if received[0].Channel != "embed" {
+		t.Errorf("expected embed channel, got %q", received[0].Channel)
+	}
+	if received[0].TenantID != "tenant-1" || received[0].InternalUserID != "guest-user-1" {
+		t.Errorf("authenticated scope = %q/%q", received[0].TenantID, received[0].InternalUserID)
+	}
+	if received[0].IdentityChannel != "embed" || received[0].ExternalID != "guest-external-id" {
+		t.Errorf("authenticated identity = %q/%q", received[0].IdentityChannel, received[0].ExternalID)
+	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)
 	}
@@ -575,6 +588,98 @@ func TestWSChannel_EmbedSubprotocolAuth_InvalidToken(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected dial error for invalid token, got nil")
+	}
+}
+
+func TestWSChannel_EmbedOriginUsesTokenBoundParent(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+	ws := NewEmbedWSChannel(store, tm)
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	token := issueGuestToken(t, tm, "origin-user", "tenant-1")
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {srv.URL}},
+	})
+	if err != nil {
+		t.Fatalf("backend-origin iframe handshake: %v", err)
+	}
+	_ = conn.Close(websocket.StatusNormalClosure, "")
+
+	_, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		Subprotocols: []string{"pai-auth." + token},
+		HTTPHeader:   map[string][]string{"Origin": {"https://evil.example"}},
+	})
+	if err == nil {
+		t.Fatal("expected spoofed parent origin to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("spoofed origin status = %v, want 403", response)
+	}
+}
+
+func TestRequestServerOriginDoesNotTrustForwardedHost(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.test/ws/embed", nil)
+	request.Header.Set("X-Forwarded-Host", "evil.example")
+	request.Header.Set("X-Forwarded-Proto", "https")
+	if got := requestServerOrigin(request); got != "https://example.test" {
+		t.Fatalf("server origin = %q, want request host", got)
+	}
+}
+
+func TestWSChannel_EmbedHandshakeLimitIsPerAuthenticatedIdentity(t *testing.T) {
+	tm := newTestTokenManager()
+	store := newMockStore()
+	store.Configs["tenant-1"] = EmbedConfig{
+		TenantID:       "tenant-1",
+		Enabled:        true,
+		AllowedOrigins: []string{"https://example.com"},
+	}
+	ws := NewEmbedWSChannel(store, tm)
+	ws.rateLimiter = NewEmbedRateLimiter(1, 30, time.Minute)
+	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	dial := func(userID string) (*websocket.Conn, *http.Response, error) {
+		return websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+			Subprotocols: []string{"pai-auth." + issueGuestToken(t, tm, userID, "tenant-1")},
+			HTTPHeader:   map[string][]string{"Origin": {"https://example.com"}},
+		})
+	}
+
+	first, _, err := dial("user-a")
+	if err != nil {
+		t.Fatalf("first identity dial: %v", err)
+	}
+	defer func() { _ = first.CloseNow() }()
+	second, _, err := dial("user-b")
+	if err != nil {
+		t.Fatalf("second identity behind same peer was globally limited: %v", err)
+	}
+	defer func() { _ = second.CloseNow() }()
+
+	_, response, err := dial("user-a")
+	if err == nil {
+		t.Fatal("repeated identity handshake should be rate limited")
+	}
+	if response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("repeated identity status = %v, want 429", response)
 	}
 }
 

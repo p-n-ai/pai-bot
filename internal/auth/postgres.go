@@ -182,6 +182,39 @@ func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session,
 	return pair, nil
 }
 
+// AuthenticatePassword verifies a tenant password identity without creating a
+// browser session. Channel-specific callers can issue their own bounded token.
+func (s *PostgresService) AuthenticatePassword(ctx context.Context, req LoginRequest) (UserSession, error) {
+	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
+	defer cancel()
+
+	tenantID := strings.TrimSpace(req.TenantID)
+	email := NormalizeIdentifier(req.Email)
+	if email == "" || strings.TrimSpace(req.Password) == "" {
+		return UserSession{}, ErrInvalidCredentials
+	}
+	candidate, err := s.resolvePasswordLoginCandidate(ctx, tenantID, email)
+	if err != nil {
+		return UserSession{}, err
+	}
+	if err := ComparePassword(candidate.passwordHash, req.Password); err != nil {
+		return UserSession{}, ErrInvalidCredentials
+	}
+
+	now := s.now().UTC()
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE auth_identities
+		SET last_login_at = $3,
+		    updated_at = $3
+		WHERE tenant_id = $1::uuid
+		  AND provider = 'password'
+		  AND identifier_normalized = $2
+	`, candidate.tenantID, email, now); err != nil {
+		return UserSession{}, fmt.Errorf("update embed login last_login_at: %w", err)
+	}
+	return UserSession(candidate.sessionUser(email)), nil
+}
+
 type passwordLoginCandidate struct {
 	userID       string
 	tenantID     string

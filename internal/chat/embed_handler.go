@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -35,11 +36,13 @@ func HandleChatPage(store EmbedConfigStore) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 		// Look up tenant's allowed origins for CSP frame-ancestors.
 		if store != nil {
 			cfg, err := store.GetByTenantSlug(r.Context(), tenant)
-			if err == nil && len(cfg.AllowedOrigins) > 0 {
-				csp := "frame-ancestors " + strings.Join(cfg.AllowedOrigins, " ")
+			origins := validFrameAncestors(cfg.AllowedOrigins)
+			if err == nil && cfg.Enabled && len(origins) > 0 {
+				csp := "frame-ancestors " + strings.Join(origins, " ")
 				w.Header().Set("Content-Security-Policy", csp)
 			} else if err != nil {
 				slog.Debug("embed chat page: could not look up tenant config", "tenant", tenant, "error", err)
@@ -52,4 +55,17 @@ func HandleChatPage(store EmbedConfigStore) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Write(chatHTML) //nolint:errcheck
 	}
+}
+
+func validFrameAncestors(origins []string) []string {
+	valid := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		parsed, err := url.Parse(strings.TrimSpace(origin))
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+			parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+			continue
+		}
+		valid = append(valid, parsed.Scheme+"://"+parsed.Host)
+	}
+	return valid
 }

@@ -36,16 +36,19 @@ func NewGuestService(pool *pgxpool.Pool, tokenManager *TokenManager) *GuestServi
 
 // findGuestByFingerprint looks up an existing guest user by fingerprint for the given tenant.
 // Returns empty string if fingerprint is empty or no matching guest is found.
-func (gs *GuestService) findGuestByFingerprint(ctx context.Context, tenantID, fingerprint string) (string, error) {
+func (gs *GuestService) findGuestByFingerprint(ctx context.Context, tenantID, origin, fingerprint string) (string, error) {
 	if fingerprint == "" {
 		return "", nil
 	}
 	var userID string
 	err := gs.pool.QueryRow(ctx,
 		`SELECT id::text FROM users
-         WHERE tenant_id = $1::uuid AND role = 'guest' AND config->>'fingerprint' = $2
-         LIMIT 1`,
-		tenantID, fingerprint,
+	         WHERE tenant_id = $1::uuid
+	           AND role = 'guest'
+	           AND config->>'embed_origin' = $2
+	           AND config->>'fingerprint' = $3
+	         LIMIT 1`,
+		tenantID, origin, fingerprint,
 	).Scan(&userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -62,7 +65,7 @@ func (gs *GuestService) findGuestByFingerprint(ctx context.Context, tenantID, fi
 func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, fingerprint string) (token string, userID string, err error) {
 	// Try to reuse an existing guest if fingerprint is provided.
 	if fingerprint != "" {
-		userID, err = gs.findGuestByFingerprint(ctx, tenantID, fingerprint)
+		userID, err = gs.findGuestByFingerprint(ctx, tenantID, origin, fingerprint)
 		if err != nil {
 			return "", "", fmt.Errorf("find guest by fingerprint: %w", err)
 		}
@@ -95,10 +98,23 @@ func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, f
 		}
 	}
 
+	var externalID, channel string
+	if err = gs.pool.QueryRow(ctx,
+		`SELECT external_id, channel
+		 FROM users
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND role = 'guest'`,
+		userID, tenantID,
+	).Scan(&externalID, &channel); err != nil {
+		return "", "", fmt.Errorf("resolve guest embed identity: %w", err)
+	}
+
 	claims := TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     RoleGuest,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         RoleGuest,
+		ParentOrigin: origin,
+		Channel:      channel,
+		ExternalID:   externalID,
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {
@@ -111,7 +127,7 @@ func (gs *GuestService) IssueGuestToken(ctx context.Context, tenantID, origin, f
 // UpgradeGuest converts a guest user to a student, setting their name, email, and password.
 // The userID must be an existing guest in the given tenant.
 // Returns a new JWT with role=student.
-func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name, email, password string) (token string, err error) {
+func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, parentOrigin, name, email, password string) (token string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, authDBTimeout)
 	defer cancel()
 
@@ -120,11 +136,11 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name
 	password = strings.TrimSpace(password)
 
 	// Verify the user exists and is a guest.
-	var role string
+	var role, externalID, channel string
 	if err := gs.pool.QueryRow(ctx,
-		`SELECT role FROM users WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT role, external_id, channel FROM users WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		userID, tenantID,
-	).Scan(&role); err != nil {
+	).Scan(&role, &externalID, &channel); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrNotGuest
 		}
@@ -179,9 +195,12 @@ func (gs *GuestService) UpgradeGuest(ctx context.Context, userID, tenantID, name
 	}
 
 	claims := TokenClaims{
-		Subject:  userID,
-		TenantID: tenantID,
-		Role:     RoleStudent,
+		Subject:      userID,
+		TenantID:     tenantID,
+		Role:         RoleStudent,
+		ParentOrigin: parentOrigin,
+		Channel:      channel,
+		ExternalID:   externalID,
 	}
 	token, err = gs.tokenManager.Issue(claims, time.Now().UTC())
 	if err != nil {

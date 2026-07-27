@@ -7,6 +7,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ type Config struct {
 	Runtime        RuntimeConfig
 	FeatureFlags   featureflags.Features
 	FocusedPage    FocusedPageConfig
+	Embed          EmbedConfig
 	Retrieval      RetrievalConfig
 	CurriculumPath string
 }
@@ -57,6 +59,10 @@ type ServerConfig struct {
 type FocusedPageConfig struct {
 	BaseURL        string
 	TelegramCTAURL string
+}
+
+type EmbedConfig struct {
+	BaseURL string
 }
 
 type RetrievalConfig struct {
@@ -244,6 +250,9 @@ func Load() (*Config, error) {
 			BaseURL:        envStr("LEARN_FOCUSED_PAGE_BASE_URL", ""),
 			TelegramCTAURL: envStr("LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL", ""),
 		},
+		Embed: EmbedConfig{
+			BaseURL: envStr("LEARN_EMBED_BASE_URL", ""),
+		},
 		Retrieval: RetrievalConfig{
 			EmbeddingBaseURL:    envStr("LEARN_RETRIEVAL_EMBEDDING_BASE_URL", ""),
 			EmbeddingAPIKey:     envStr("LEARN_RETRIEVAL_EMBEDDING_API_KEY", ""),
@@ -383,6 +392,13 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.FocusedPage.BaseURL) != "" && c.Auth.JWTSecret == DefaultAuthSecret {
 		return fmt.Errorf("PAI_AUTH_SECRET must be set to a private secret when focused pages are enabled")
+	}
+	if raw := strings.TrimSpace(c.Embed.BaseURL); raw != "" {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+			parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("LEARN_EMBED_BASE_URL must be an HTTP or HTTPS origin")
+		}
 	}
 	if c.Retrieval.EmbeddingDimensions != 0 && c.Retrieval.EmbeddingDimensions != 1536 {
 		return fmt.Errorf("LEARN_RETRIEVAL_EMBEDDING_DIMENSIONS must be 1536")

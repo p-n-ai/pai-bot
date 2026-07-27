@@ -4,6 +4,7 @@ export interface EmbedConfig {
   id: string
   tenant_id: string
   enabled: boolean
+  public_embed_base_url: string
   allowed_origins: Array<string>
   theme_config: Record<string, unknown>
   created_at?: string
@@ -21,13 +22,18 @@ export function readEmbedConfig(value: unknown): EmbedConfig | null {
 
 function readRequiredEmbedConfig(
   value: Record<string, unknown>,
-): { enabled: boolean; tenantID: string } | null {
+): { enabled: boolean; publicEmbedBaseURL: string; tenantID: string } | null {
   const enabled = readBoolean(readField(value, 'enabled', 'Enabled'))
   const tenantID = readOptionalString(readField(value, 'tenant_id', 'TenantID'))
+  const publicEmbedBaseURL = readOptionalString(
+    readField(value, 'public_embed_base_url', 'PublicEmbedBaseURL'),
+  )
 
-  return enabled === null || tenantID === undefined
+  return enabled === null ||
+    tenantID === undefined ||
+    publicEmbedBaseURL === undefined
     ? null
-    : { enabled, tenantID }
+    : { enabled, publicEmbedBaseURL, tenantID }
 }
 
 function readField(
@@ -48,12 +54,17 @@ function readEmbedConfigRecord(
 
 function buildEmbedConfig(
   value: Record<string, unknown>,
-  required: { enabled: boolean; tenantID: string },
+  required: {
+    enabled: boolean
+    publicEmbedBaseURL: string
+    tenantID: string
+  },
 ): EmbedConfig {
   return {
     id: readOptionalString(readField(value, 'id', 'ID')) ?? '',
     tenant_id: required.tenantID,
     enabled: required.enabled,
+    public_embed_base_url: required.publicEmbedBaseURL,
     allowed_origins: readStringArray(
       readField(value, 'allowed_origins', 'AllowedOrigins'),
     ),

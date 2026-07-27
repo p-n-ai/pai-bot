@@ -108,8 +108,23 @@ func (ws *WSChannel) Handler() http.Handler {
 				return
 			}
 
-			// Validate origin against the tenant's allowlist.
-			allowed, err := ws.embedConfigStore.IsOriginAllowed(r.Context(), claims.TenantID, origin)
+			parentOrigin := strings.TrimSpace(claims.ParentOrigin)
+			if parentOrigin == "" {
+				http.Error(w, "missing parent origin", http.StatusForbidden)
+				return
+			}
+			if strings.TrimSpace(claims.Channel) == "" || strings.TrimSpace(claims.ExternalID) == "" {
+				http.Error(w, "missing authenticated user identity", http.StatusForbidden)
+				return
+			}
+			if origin != parentOrigin && origin != requestServerOrigin(r) {
+				http.Error(w, "origin does not match parent origin", http.StatusForbidden)
+				return
+			}
+
+			// The iframe's WebSocket Origin is the backend. Authorization is
+			// bound to the parent origin minted into the token.
+			allowed, err := ws.embedConfigStore.IsOriginAllowed(r.Context(), claims.TenantID, parentOrigin)
 			if err != nil {
 				slog.Error("websocket origin check failed", "error", err)
 				http.Error(w, "internal error", http.StatusInternalServerError)
@@ -120,10 +135,12 @@ func (ws *WSChannel) Handler() http.Handler {
 				return
 			}
 
-			// IP-based handshake rate limiting.
+			// Limit reconnect churn per authenticated embed identity. Keying on
+			// the direct peer would collapse every client behind an ingress into
+			// one global bucket.
 			if ws.rateLimiter != nil {
-				ip := extractClientIP(r)
-				if !ws.rateLimiter.AllowHandshake(ip, time.Now()) {
+				handshakeKey := claims.TenantID + "\x00" + claims.Subject
+				if !ws.rateLimiter.AllowHandshake(handshakeKey, time.Now()) {
 					http.Error(w, "too many connections", http.StatusTooManyRequests)
 					return
 				}
@@ -154,34 +171,27 @@ func (ws *WSChannel) Handler() http.Handler {
 	})
 }
 
-// extractClientIP extracts the client IP from the request, checking
-// X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
-func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if ip := strings.TrimSpace(parts[0]); ip != "" {
-			return ip
-		}
+func requestServerOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
+	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "http" || proto == "https" {
+		scheme = proto
 	}
-	// RemoteAddr is "host:port".
-	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	return host
+	return scheme + "://" + strings.ToLower(strings.TrimSpace(r.Host))
 }
 
 // handleConn manages a single WebSocket connection lifecycle.
 func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtToken string) {
 	var userID string
+	var claims auth.TokenClaims
 
 	if jwtToken != "" && ws.tokenManager != nil {
 		// Subprotocol JWT auth (embed mode — already validated in Handler,
 		// but parse again to extract claims after upgrade).
-		claims, err := ws.tokenManager.Parse(jwtToken, time.Now().UTC())
+		var err error
+		claims, err = ws.tokenManager.Parse(jwtToken, time.Now().UTC())
 		if err != nil {
 			slog.Warn("websocket jwt auth failed", "error", err)
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid token")
@@ -245,7 +255,7 @@ func (ws *WSChannel) handleConn(ctx context.Context, conn *websocket.Conn, jwtTo
 	}()
 
 	// Read loop.
-	ws.readLoop(ctx, conn, userID)
+	ws.readLoop(ctx, conn, userID, claims)
 
 	// Cleanup on disconnect.
 	ws.removeConn(userID, conn)
@@ -276,7 +286,7 @@ func (ws *WSChannel) readAuth(ctx context.Context, conn *websocket.Conn) (string
 }
 
 // readLoop reads messages from the client and dispatches them to the handler.
-func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID string) {
+func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID string, claims auth.TokenClaims) {
 	for {
 		select {
 		case <-ws.stop:
@@ -326,10 +336,18 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 		ws.mu.RUnlock()
 
 		if handler != nil {
+			channel := "websocket"
+			if ws.embedConfigStore != nil {
+				channel = "embed"
+			}
 			handler(InboundMessage{
-				Channel: "websocket",
-				UserID:  userID,
-				Text:    msg.Text,
+				Channel:         channel,
+				UserID:          userID,
+				TenantID:        claims.TenantID,
+				InternalUserID:  claims.Subject,
+				IdentityChannel: claims.Channel,
+				ExternalID:      claims.ExternalID,
+				Text:            msg.Text,
 			})
 		}
 	}

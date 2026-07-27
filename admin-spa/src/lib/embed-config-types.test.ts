@@ -8,6 +8,7 @@ describe('embed config response guard', () => {
       readEmbedConfig({
         TenantID: 'tenant_1',
         Enabled: true,
+        PublicEmbedBaseURL: 'https://chat.example',
         AllowedOrigins: ['https://school.example'],
         ThemeConfig: {
           color: '#0f172a',
@@ -17,6 +18,7 @@ describe('embed config response guard', () => {
       id: '',
       tenant_id: 'tenant_1',
       enabled: true,
+      public_embed_base_url: 'https://chat.example',
       allowed_origins: ['https://school.example'],
       theme_config: {
         color: '#0f172a',

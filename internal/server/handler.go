@@ -71,23 +71,33 @@ func TelegramInlineKeyboardContext(store agent.ConversationStore, inbound chat.I
 }
 
 type TopMuxOptions struct {
-	APIHandler         http.Handler
-	WSChannel          *chat.WSChannel
-	EmbedConfigStore   chat.EmbedConfigStore
-	WACloudChannel     *chat.WhatsAppChannel
-	WAMeowChannel      *chat.WhatsAppMeowChannel
-	InboundHandler     func(chat.InboundMessage)
-	AuthService        AuthService
-	JWTSecret          string
-	AccessTokenTTL     time.Duration
-	FocusedPageHandler http.Handler
-	ChatWebhooks       map[string]http.Handler
+	APIHandler            http.Handler
+	WSChannel             *chat.WSChannel
+	EmbedWSChannel        *chat.WSChannel
+	EmbedConfigStore      chat.EmbedConfigStore
+	EmbedGuestService     EmbedGuestService
+	EmbedMessageStore     EmbedMessageStore
+	EmbedIdentityResolver EmbedIdentityResolver
+	EmbedAuthenticator    EmbedPasswordAuthenticator
+	EmbedBaseURL          string
+	EmbedTokenTTL         time.Duration
+	WACloudChannel        *chat.WhatsAppChannel
+	WAMeowChannel         *chat.WhatsAppMeowChannel
+	InboundHandler        func(chat.InboundMessage)
+	AuthService           AuthService
+	JWTSecret             string
+	AccessTokenTTL        time.Duration
+	FocusedPageHandler    http.Handler
+	ChatWebhooks          map[string]http.Handler
 }
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
 	topMux := http.NewServeMux()
 	if opts.WSChannel != nil {
 		topMux.Handle("GET /ws/chat", opts.WSChannel.Handler())
+	}
+	if opts.EmbedWSChannel != nil {
+		topMux.Handle("GET /ws/embed", opts.EmbedWSChannel.Handler())
 	}
 	topMux.Handle("GET /embed/pai-chat.js", chat.HandleWidgetJS())
 	topMux.Handle("GET /embed/chat", chat.HandleChatPage(opts.EmbedConfigStore))
@@ -104,10 +114,30 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 		topMux.Handle("/webhook/whatsapp", opts.WACloudChannel.WebhookHandler(opts.InboundHandler))
 	}
 	manager := auth.NewTokenManager(opts.JWTSecret, opts.AccessTokenTTL)
+	embedTokenTTL := opts.EmbedTokenTTL
+	if embedTokenTTL <= 0 {
+		embedTokenTTL = time.Hour
+	}
+	embedManager := auth.NewTokenManager(opts.JWTSecret, embedTokenTTL)
+	embedMux := http.NewServeMux()
+	registerEmbedRoutes(embedMux, opts, embedManager, embedTokenTTL)
+	embedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
+	embedAuthLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
+	topMux.Handle("/api/embed/", withSecurityHeaders(withCORS(withAPIRateLimit(embedMux, time.Now, embedLimiter, embedAuthLimiter))))
 	waAuth := chain(
 		authenticateRequests(opts.AuthService, manager, time.Now),
 		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
+	if opts.EmbedConfigStore != nil {
+		embedAdminMux := http.NewServeMux()
+		embedAdminMux.Handle("GET /api/admin/embed/config", waAuth(handleAdminGetEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
+		embedAdminMux.Handle("PUT /api/admin/embed/config", waAuth(handleAdminUpdateEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
+		embedAdminMux.Handle("POST /api/admin/embed/origins", waAuth(handleAdminAddEmbedOrigin(opts.EmbedConfigStore)))
+		embedAdminMux.Handle("DELETE /api/admin/embed/origins", waAuth(handleAdminDeleteEmbedOrigin(opts.EmbedConfigStore)))
+		adminEmbedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
+		adminEmbedAuthLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
+		topMux.Handle("/api/admin/embed/", withSecurityHeaders(withCORS(withAPIRateLimit(embedAdminMux, time.Now, adminEmbedLimiter, adminEmbedAuthLimiter))))
+	}
 	if opts.WAMeowChannel != nil {
 		waStatusHandler := withCORS(waAuth(opts.WAMeowChannel.StatusHandler()))
 		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
@@ -120,7 +150,9 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
 		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
 	}
-	topMux.Handle("/", opts.APIHandler)
+	if opts.APIHandler != nil {
+		topMux.Handle("/", opts.APIHandler)
+	}
 	return topMux
 }
 
