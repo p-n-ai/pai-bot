@@ -80,7 +80,7 @@ func WithCodexAuthBaseURL(baseURL string) CodexOption {
 func NewCodexProvider(accessToken string, opts ...CodexOption) (*CodexProvider, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	if accessToken == "" {
-		return nil, errors.New("Codex access token is required")
+		return nil, errors.New("codex access token is required")
 	}
 	p := &CodexProvider{
 		accessToken: accessToken,
@@ -92,13 +92,13 @@ func NewCodexProvider(accessToken string, opts ...CodexOption) (*CodexProvider, 
 		opt(p)
 	}
 	if p.client == nil {
-		return nil, errors.New("Codex HTTP client is required")
+		return nil, errors.New("codex HTTP client is required")
 	}
 	if p.baseURL == "" {
-		return nil, errors.New("Codex base URL is required")
+		return nil, errors.New("codex base URL is required")
 	}
 	if p.authBaseURL == "" {
-		return nil, errors.New("Codex auth base URL is required")
+		return nil, errors.New("codex auth base URL is required")
 	}
 
 	accountID, expiresAt, err := codexJWTMetadata(accessToken)
@@ -366,7 +366,7 @@ func (p *CodexProvider) openResponse(ctx context.Context, request codexRequest) 
 	_ = response.Body.Close()
 
 	if err := p.refreshCredentials(ctx, token, true); err != nil {
-		return nil, fmt.Errorf("Codex authentication rejected and token refresh failed: %w", err)
+		return nil, fmt.Errorf("codex authentication rejected and token refresh failed: %w", err)
 	}
 	token, accountID, err = p.credentials(ctx)
 	if err != nil {
@@ -413,7 +413,7 @@ func codexHTTPResponse(response *http.Response) (*http.Response, error) {
 	}
 	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
-	return nil, fmt.Errorf("Codex API returned status %d", response.StatusCode)
+	return nil, fmt.Errorf("codex API returned status %d", response.StatusCode)
 }
 
 func (p *CodexProvider) credentials(ctx context.Context) (string, string, error) {
@@ -458,7 +458,7 @@ func (p *CodexProvider) refreshCredentials(ctx context.Context, staleToken strin
 	}
 	if p.refreshToken == "" {
 		p.mu.Unlock()
-		return errors.New("Codex refresh token is unavailable")
+		return errors.New("codex refresh token is unavailable")
 	}
 	done := make(chan struct{})
 	p.refreshing = done
@@ -510,7 +510,7 @@ func (p *CodexProvider) requestTokenRefresh(ctx context.Context, refreshToken st
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return codexCredentials{}, fmt.Errorf("Codex token refresh returned status %d", response.StatusCode)
+		return codexCredentials{}, fmt.Errorf("codex token refresh returned status %d", response.StatusCode)
 	}
 	var decoded struct {
 		AccessToken  string `json:"access_token"`
@@ -521,7 +521,7 @@ func (p *CodexProvider) requestTokenRefresh(ctx context.Context, refreshToken st
 		return codexCredentials{}, errors.New("decode Codex token refresh response")
 	}
 	if decoded.AccessToken == "" || decoded.RefreshToken == "" || decoded.ExpiresIn <= 0 {
-		return codexCredentials{}, errors.New("Codex token refresh response is missing required fields")
+		return codexCredentials{}, errors.New("codex token refresh response is missing required fields")
 	}
 	accountID, _, err := codexJWTMetadata(decoded.AccessToken)
 	if !p.explicitAccountID && (err != nil || accountID == "") {
@@ -552,7 +552,7 @@ func buildCodexLegacyRequest(req CompletionRequest) (codexRequest, error) {
 		switch message.Role {
 		case "system", "developer":
 			if len(message.ImageURLs) > 0 {
-				return codexRequest{}, fmt.Errorf("Codex system message at index %d cannot contain images", i)
+				return codexRequest{}, fmt.Errorf("codex system message at index %d cannot contain images", i)
 			}
 			if message.Content != "" {
 				instructions = append(instructions, message.Content)
@@ -564,7 +564,7 @@ func buildCodexLegacyRequest(req CompletionRequest) (codexRequest, error) {
 			}
 		case "assistant":
 			if len(message.ImageURLs) > 0 {
-				return codexRequest{}, fmt.Errorf("Codex assistant message at index %d cannot contain images", i)
+				return codexRequest{}, fmt.Errorf("codex assistant message at index %d cannot contain images", i)
 			}
 			request.Input = append(request.Input, codexAssistantInput(message.Content, assistantIndex))
 			assistantIndex++
@@ -613,7 +613,7 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 				case llm.ToolCall:
 					arguments, err := json.Marshal(value.Arguments)
 					if err != nil {
-						return codexRequest{}, fmt.Errorf("Codex tool call %q arguments: %w", value.Name, err)
+						return codexRequest{}, fmt.Errorf("codex tool call %q arguments: %w", value.Name, err)
 					}
 					if value.Arguments == nil {
 						arguments = []byte("{}")
@@ -731,7 +731,7 @@ func codexNativeUserContent(content []llm.UserContent) ([]any, error) {
 			projected = append(projected, map[string]any{"type": "input_image", "image_url": value.URL, "detail": "auto"})
 		case llm.ImageContent:
 			if _, err := base64.StdEncoding.DecodeString(value.Data); err != nil {
-				return nil, errors.New("Codex user message contains invalid image data")
+				return nil, errors.New("codex user message contains invalid image data")
 			}
 			projected = append(projected, map[string]any{
 				"type":      "input_image",
@@ -759,19 +759,19 @@ func codexAssistantInput(text string, index int) map[string]any {
 
 func parseCodexReasoningSignature(signature string) (json.RawMessage, error) {
 	if !json.Valid([]byte(signature)) {
-		return nil, errors.New("Codex reasoning signature is invalid JSON")
+		return nil, errors.New("codex reasoning signature is invalid JSON")
 	}
 	var item map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(signature), &item); err != nil || item == nil {
-		return nil, errors.New("Codex reasoning signature must be a JSON object")
+		return nil, errors.New("codex reasoning signature must be a JSON object")
 	}
 	var itemType string
 	if err := json.Unmarshal(item["type"], &itemType); err != nil || itemType != "reasoning" {
-		return nil, errors.New("Codex reasoning signature must contain a reasoning output item")
+		return nil, errors.New("codex reasoning signature must contain a reasoning output item")
 	}
 	var id string
 	if err := json.Unmarshal(item["id"], &id); err != nil || id == "" {
-		return nil, errors.New("Codex reasoning signature must contain an item ID")
+		return nil, errors.New("codex reasoning signature must contain an item ID")
 	}
 	return append(json.RawMessage(nil), signature...), nil
 }
@@ -781,7 +781,7 @@ func buildCodexTools(tools []llm.Tool) ([]codexTool, error) {
 	for i, tool := range tools {
 		var parameters map[string]any
 		if err := json.Unmarshal(tool.Parameters, &parameters); err != nil || parameters == nil {
-			return nil, fmt.Errorf("Codex tool %q parameters must be a JSON object", tool.Name)
+			return nil, fmt.Errorf("codex tool %q parameters must be a JSON object", tool.Name)
 		}
 		projected[i] = codexTool{
 			Type:        "function",
@@ -863,7 +863,8 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 			}
 			item.done = true
 			outputItems[event.OutputIndex] = item
-			if item.parsed.Type == "message" {
+			switch item.parsed.Type {
+			case "message":
 				finalText := codexItemText(item.parsed)
 				if onText != nil && strings.HasPrefix(finalText, result.text) {
 					if delta := strings.TrimPrefix(finalText, result.text); delta != "" {
@@ -871,7 +872,7 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 					}
 				}
 				result.text = finalText
-			} else if item.parsed.Type == "function_call" {
+			case "function_call":
 				if item.parsed.Arguments != "" {
 					toolArguments[event.OutputIndex] = item.parsed.Arguments
 				}
@@ -888,18 +889,18 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 			var terminal codexTerminalResponse
 			_ = json.Unmarshal(event.Response, &terminal)
 			if terminal.Error != nil && terminal.Error.Code != "" {
-				return fmt.Errorf("Codex response failed (%s)", terminal.Error.Code)
+				return fmt.Errorf("codex response failed (%s)", terminal.Error.Code)
 			}
-			return errors.New("Codex response failed")
+			return errors.New("codex response failed")
 		case "error":
 			code := event.Code
 			if code == "" && event.Error != nil {
 				code = event.Error.Code
 			}
 			if code != "" {
-				return fmt.Errorf("Codex stream error (%s)", code)
+				return fmt.Errorf("codex stream error (%s)", code)
 			}
-			return errors.New("Codex stream error")
+			return errors.New("codex stream error")
 		}
 		return nil
 	}
@@ -922,7 +923,7 @@ func parseCodexStream(reader io.Reader, onText func(string)) (codexResult, error
 		return codexResult{}, err
 	}
 	if !result.terminal {
-		return codexResult{}, errors.New("Codex SSE stream ended before a terminal response")
+		return codexResult{}, errors.New("codex SSE stream ended before a terminal response")
 	}
 	return result, nil
 }
@@ -996,7 +997,7 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 			encoded = "{}"
 		}
 		if err := json.Unmarshal([]byte(encoded), &decoded); err != nil || decoded == nil {
-			return fmt.Errorf("Codex tool call %q returned invalid arguments", item.parsed.Name)
+			return fmt.Errorf("codex tool call %q returned invalid arguments", item.parsed.Name)
 		}
 		callID := item.parsed.CallID
 		if callID == "" {
@@ -1014,7 +1015,7 @@ func applyCodexTerminal(result *codexResult, terminal codexTerminalResponse, ite
 		result.content = append(result.content, call)
 	}
 	if terminal.Status == "failed" || terminal.Status == "cancelled" {
-		return fmt.Errorf("Codex response ended with status %s", terminal.Status)
+		return fmt.Errorf("codex response ended with status %s", terminal.Status)
 	}
 	return nil
 }
@@ -1060,7 +1061,7 @@ func backfillCodexReasoningItem(streamed, terminal codexOutputItem) (codexOutput
 
 func codexReasoningSignature(item codexOutputItem) (string, error) {
 	if item.parsed.Type != "reasoning" || item.parsed.ID == "" {
-		return "", errors.New("Codex reasoning output item is not replayable")
+		return "", errors.New("codex reasoning output item is not replayable")
 	}
 	if _, err := parseCodexReasoningSignature(string(item.raw)); err != nil {
 		return "", err
@@ -1088,9 +1089,10 @@ func codexReasoningText(item codexResponseItem) string {
 func codexItemText(item codexResponseItem) string {
 	var text strings.Builder
 	for _, content := range item.Content {
-		if content.Type == "output_text" {
+		switch content.Type {
+		case "output_text":
 			text.WriteString(content.Text)
-		} else if content.Type == "refusal" {
+		case "refusal":
 			text.WriteString(content.Refusal)
 		}
 	}
