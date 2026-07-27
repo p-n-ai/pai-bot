@@ -7,14 +7,14 @@ shadcn/base UI primitives and low-level design-system wrappers used by feature c
 
 ## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
+| Task                 | Location                                                              |
+| -------------------- | --------------------------------------------------------------------- |
 | Buttons/inputs/forms | `button*.tsx`, `input*.tsx`, `field.tsx`, `label.tsx`, `textarea.tsx` |
-| Overlays | `dialog.tsx`, `sheet.tsx`, `drawer.tsx`, `popover.tsx`, `tooltip.tsx` |
-| Menus/selects | `dropdown-menu.tsx`, `select.tsx`, `command.tsx`, `combobox.tsx` |
-| Data display | `table.tsx`, `card.tsx`, `badge.tsx`, `chart.tsx` |
-| Navigation/layout | `sidebar.tsx`, `navigation-menu.tsx`, `breadcrumb.tsx`, `tabs.tsx` |
-| Feedback | `alert.tsx`, `sonner.tsx`, `skeleton.tsx`, `spinner.tsx`, `empty.tsx` |
+| Overlays             | `dialog.tsx`, `sheet.tsx`, `drawer.tsx`, `popover.tsx`, `tooltip.tsx` |
+| Menus/selects        | `dropdown-menu.tsx`, `select.tsx`, `command.tsx`, `combobox.tsx`      |
+| Data display         | `table.tsx`, `card.tsx`, `badge.tsx`, `chart.tsx`                     |
+| Navigation/layout    | `sidebar.tsx`, `navigation-menu.tsx`, `breadcrumb.tsx`, `tabs.tsx`    |
+| Feedback             | `alert.tsx`, `sonner.tsx`, `skeleton.tsx`, `spinner.tsx`, `empty.tsx` |
 
 ## CONVENTIONS
 

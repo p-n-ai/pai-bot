@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   addEmbedOrigin,
   createGroup,
+  deleteTeacherResource,
   disconnectWhatsApp,
   getAISettings,
   getAIUsage,
@@ -18,12 +19,15 @@ import {
   getWhatsAppStatus,
   issueInvite,
   listGroups,
+  listTeacherResources,
   reissueInvite,
   removeEmbedOrigin,
   sendStudentNudge,
+  setTeacherResourceActive,
   submitOnboarding,
   updateAISettings,
   updateEmbedConfig,
+  uploadTeacherResource,
   upsertTokenBudgetWindow,
 } from './admin-api'
 import { aiSettingsFixture } from './ai-settings-types.test'
@@ -34,6 +38,84 @@ import {
 } from './student-detail-types.test'
 
 describe('admin dashboard API', () => {
+  it('uploads class resources as multipart without a JSON content type', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(teacherResourceFixture), { status: 201 }),
+      )
+    const file = new File(['pdf'], 'algebra.pdf', {
+      type: 'application/pdf',
+    })
+
+    await expect(
+      uploadTeacherResource(
+        {
+          file,
+          title: 'Algebra revision',
+          classIDs: ['class-1'],
+        },
+        fetcher,
+      ),
+    ).resolves.toEqual(teacherResourceFixture)
+
+    expect(fetcher).toHaveBeenCalledOnce()
+    const [path, init] = fetcher.mock.calls[0]
+    expect(path).toBe('/api/admin/teacher-resources')
+    expect(init).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    expect(init.headers).toBeUndefined()
+    expect(init.body).toBeInstanceOf(FormData)
+    expect(init.body.get('file')).toBe(file)
+    expect(init.body.get('title')).toBe('Algebra revision')
+    expect(init.body.getAll('class_id')).toEqual(['class-1'])
+  })
+
+  it('rejects resources outside the requested class scope', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            { ...teacherResourceFixture, class_ids: ['another-class'] },
+          ]),
+        ),
+      )
+
+    await expect(listTeacherResources('class-1', fetcher)).rejects.toThrow(
+      'Invalid class resources response',
+    )
+  })
+
+  it('deactivates, reactivates, and deletes resources in class scope', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }))
+
+    await setTeacherResourceActive('resource/1', 'class 1', false, fetcher)
+    await setTeacherResourceActive('resource/1', 'class 1', true, fetcher)
+    await deleteTeacherResource('resource/1', 'class 1', fetcher)
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/teacher-resources/resource%2F1/deactivate?class_id=class%201',
+      { method: 'POST', credentials: 'include', cache: 'no-store' },
+    )
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/teacher-resources/resource%2F1/activate?class_id=class%201',
+      { method: 'POST', credentials: 'include', cache: 'no-store' },
+    )
+    expect(fetcher).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/teacher-resources/resource%2F1?class_id=class%201',
+      { method: 'DELETE', credentials: 'include', cache: 'no-store' },
+    )
+  })
+
   it('reads class progress with cookie credentials', async () => {
     const progress = {
       topic_ids: ['linear-equations'],
@@ -626,3 +708,18 @@ describe('admin dashboard API', () => {
     )
   })
 })
+
+const teacherResourceFixture = {
+  id: 'resource-1',
+  filename: 'algebra.pdf',
+  title: 'Algebra revision',
+  source_type: 'pdf',
+  media_type: 'application/pdf',
+  byte_size: 2048,
+  chunk_count: 12,
+  active: true,
+  class_ids: ['class-1'],
+  created_at: '2026-07-27T12:00:00Z',
+  updated_at: '2026-07-27T12:00:00Z',
+  uploader_name: 'Ms Lim',
+}

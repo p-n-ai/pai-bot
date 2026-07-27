@@ -12,6 +12,7 @@ concurrency:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 jobs:
   test:
@@ -109,6 +110,19 @@ jobs:
           docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}
           docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest
 
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push PostgreSQL retrieval image
+        run: |
+          docker build -f deploy/docker/Dockerfile.postgres \
+            -t ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5 .
+          docker push ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5
+
       - name: Generate ECR token for server
         id: ecr-token
         run: |
@@ -129,7 +143,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,deploy/caddy,migrations,scripts/deploy-remote.sh"
+          source: "docker-compose.yml,docker-compose.prod.yml,deploy/caddy,deploy/docker/Dockerfile.postgres,migrations,scripts/deploy-remote.sh"
           target: ${{ secrets.DEPLOY_DIR }}
           strip_components: 0
 
@@ -173,6 +187,15 @@ jobs:
               "POSTGRES_PASSWORD=${PG_PASS}" \
               > .env
             chmod 600 .env
+
+            if [ -n "${OPENAI_KEY}" ]; then
+              printf '%s\n' \
+                "LEARN_RETRIEVAL_EMBEDDING_BASE_URL=https://api.openai.com/v1" \
+                "LEARN_RETRIEVAL_EMBEDDING_API_KEY=${OPENAI_KEY}" \
+                "LEARN_RETRIEVAL_EMBEDDING_MODEL=text-embedding-3-small" \
+                "LEARN_RETRIEVAL_EMBEDDING_DIMENSIONS=1536" \
+                >> .env
+            fi
 
             if [ -n "${DOMAIN_VAL}" ] && [ "${DOMAIN_VAL}" != "localhost" ]; then
               echo "DOMAIN=${DOMAIN_VAL}" >> .env

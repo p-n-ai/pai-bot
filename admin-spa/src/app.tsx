@@ -7,6 +7,8 @@ import { Button } from './components/ui/button'
 import { Skeleton } from './components/ui/skeleton'
 import { router } from './router'
 
+const SKELETON_LINE_KEYS = ['first', 'second', 'third', 'fourth']
+
 export function AdminApp() {
   const { auth, setAnonymousSession } = useAuth()
   const routerContext = useMemo(() => ({ auth }), [auth])
@@ -83,8 +85,8 @@ function SkeletonGroup({ lines }: { lines: number }) {
   return (
     <div className='grid gap-3'>
       <Skeleton className='h-3 w-20' />
-      {Array.from({ length: lines }).map((_, index) => (
-        <Skeleton className='h-10 rounded-lg' key={index} />
+      {SKELETON_LINE_KEYS.slice(0, lines).map((key) => (
+        <Skeleton className='h-10 rounded-lg' key={key} />
       ))}
     </div>
   )

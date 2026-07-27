@@ -69,6 +69,31 @@ func adaptiveDepthBlock(topicMastery float64, allProgress []progress.ProgressIte
 	return b.String()
 }
 
+func unknownMasteryDepthBlock(allProgress []progress.ProgressItem) string {
+	var b strings.Builder
+	b.WriteString("\n========================================\n")
+	b.WriteString("ADAPTIVE EXPLANATION DEPTH\n")
+	b.WriteString("========================================\n\n")
+	b.WriteString(`Student mastery level: UNKNOWN
+- Do not treat missing mastery data as beginner evidence.
+- Infer only from the learner's current attempt and questions.
+- Start with a neutral amount of scaffolding, then adjust after a targeted check.`)
+	if len(allProgress) > 0 {
+		mastered, working, struggles := categorizeProgress(allProgress)
+		b.WriteString("\n\nSTUDENT PROGRESS CONTEXT:\n")
+		if len(mastered) > 0 {
+			fmt.Fprintf(&b, "- Mastered: %s\n", strings.Join(mastered, ", "))
+		}
+		if len(working) > 0 {
+			fmt.Fprintf(&b, "- Working on: %s\n", strings.Join(working, ", "))
+		}
+		if len(struggles) > 0 {
+			fmt.Fprintf(&b, "- Struggles with: %s\n", strings.Join(struggles, ", "))
+		}
+	}
+	return b.String()
+}
+
 // categorizeProgress splits progress items into mastered (≥0.75), working (0.3–0.75),
 // and struggles (<0.3) buckets, returning topic IDs for each.
 func categorizeProgress(items []progress.ProgressItem) (mastered, working, struggles []string) {

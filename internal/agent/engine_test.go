@@ -1098,8 +1098,8 @@ func TestEngine_SystemPrompt_EnforcesLanguageAndOutputContract(t *testing.T) {
 	if !contains(systemPrompt.Content, "Default to natural chat") {
 		t.Fatalf("system prompt missing natural-chat output contract")
 	}
-	if !contains(systemPrompt.Content, "ROBOT PERSONALITY ACTIVE: P&AI Study Buddy") {
-		t.Fatalf("system prompt missing robot personality block")
+	if !contains(systemPrompt.Content, "TEACHING DECISION CONTRACT") {
+		t.Fatalf("system prompt missing teaching decision contract")
 	}
 	if !contains(systemPrompt.Content, "Do not use worksheet section labels or fixed worksheet headings") {
 		t.Fatalf("system prompt missing no-label default contract")

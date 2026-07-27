@@ -1,0 +1,5 @@
+FROM ghcr.io/evokoa/pggraph@sha256:5b7cab9dbbbea72682d4a283bc43328e6ff7a51c3746840380fd021805517e5d
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-17-pgvector=0.8.5-1.pgdg12+1 \
+    && rm -rf /var/lib/apt/lists/*

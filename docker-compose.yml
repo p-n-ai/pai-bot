@@ -1,8 +1,11 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.postgres
     ports:
       - "5432:5432"
+    command: ["postgres", "-c", "shared_preload_libraries=pg_cron,graph", "-c", "cron.database_name=pai"]
     environment:
       POSTGRES_USER: pai
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pai}
@@ -10,7 +13,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pai"]
+      test: ["CMD-SHELL", "pg_isready -U pai && psql -U pai -d pai -Atqc \"SELECT count(*) = 2 AND bool_and((name = 'graph' AND default_version = '1.0.0') OR (name = 'vector' AND default_version = '0.8.5')) FROM pg_available_extensions WHERE name IN ('graph', 'vector')\" | grep -qx t"]
       interval: 5s
       timeout: 3s
       retries: 5

@@ -569,8 +569,11 @@ function FeatureFlagsSection({
   onToggle: (name: string, enabled: boolean) => void
   sources: Record<string, string>
 }) {
-  // Object.keys already returns a fresh array, so sorting in place is safe.
-  const names = Object.keys(flags).sort()
+  const names = Object.keys(flags).reduce<Array<string>>((sorted, name) => {
+    const insertAt = sorted.findIndex((item) => item > name)
+    sorted.splice(insertAt === -1 ? sorted.length : insertAt, 0, name)
+    return sorted
+  }, [])
 
   return (
     <SettingsSection
@@ -592,7 +595,11 @@ function FeatureFlagsSection({
               name={name}
               onReset={onReset}
               onToggle={onToggle}
-              source={sources[name] ?? 'none'}
+              source={
+                Object.prototype.hasOwnProperty.call(sources, name)
+                  ? sources[name]
+                  : 'none'
+              }
             />
           ))}
         </ul>

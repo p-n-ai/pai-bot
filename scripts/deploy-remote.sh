@@ -27,11 +27,15 @@ docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
 docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
 
 echo "--- Ensuring infra services ---"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build postgres
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly
 sleep 3
 
 echo "--- Running migrations ---"
 DB_URL=$(grep LEARN_DATABASE_URL .env | cut -d= -f2-)
+echo "--- Checking provider-qualified user identities ---"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  psql "$DB_URL" -f - < scripts/preflight-conversation-identities.sql
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
   go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 \
   -dir /app/migrations postgres "$DB_URL" up -allow-missing

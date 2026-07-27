@@ -10,7 +10,10 @@ import type { CSSProperties } from 'react'
 import type { ParentSummary } from '@/lib/parent-summary-types'
 import { AdminHighlightPanel } from '@/components/shared/admin-highlight-panel'
 import { AdminInsetPanel } from '@/components/shared/admin-inset-panel'
-import { AdminSurface, AdminSurfaceHeader } from '@/components/shared/admin-surface'
+import {
+  AdminSurface,
+  AdminSurfaceHeader,
+} from '@/components/shared/admin-surface'
 import { LoadState } from '@/components/shared/load-state'
 import { PageHero } from '@/components/shared/page-hero'
 import { StatePanel } from '@/components/shared/state-panel'

@@ -129,6 +129,7 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 		slog.Error("AI completion failed", "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
 	}
+	resp.Content = validateEvidenceCitations(resp.Content, turn.Packets)
 	turn.Model.Model = resp.Model
 	turn.Model.InputTokens = resp.InputTokens
 	turn.Model.OutputTokens = resp.OutputTokens

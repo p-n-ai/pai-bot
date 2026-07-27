@@ -19,17 +19,17 @@ admin-spa/
 
 ## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| Router setup | `src/router.tsx`, `src/routes`, `src/routeTree.gen.ts` |
-| Auth state | `src/auth-provider.tsx`, `src/lib/auth-client.ts`, `src/lib/auth-types.ts` |
-| Backend API calls | `src/lib/admin-api.ts` |
-| RBAC/redirects | `src/lib/rbac*.ts`, `src/lib/router-guards.ts`, `src/lib/*redirect*` |
-| Dashboard data/view models | `src/lib/dashboard-*`, `src/components/dashboard` |
-| AI usage | `src/lib/ai-usage-*`, `src/components/ai-usage` |
-| Onboarding/classes/users | `src/lib/onboarding-*`, `src/components/onboarding`, `src/components/classes`, `src/components/users` |
-| Retrieval lab | `src/lib/retrieval-lab*`, `src/components/retrieval` |
-| Shared UI primitives | `src/components/ui` |
+| Task                       | Location                                                                                              |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Router setup               | `src/router.tsx`, `src/routes`, `src/routeTree.gen.ts`                                                |
+| Auth state                 | `src/auth-provider.tsx`, `src/lib/auth-client.ts`, `src/lib/auth-types.ts`                            |
+| Backend API calls          | `src/lib/admin-api.ts`                                                                                |
+| RBAC/redirects             | `src/lib/rbac*.ts`, `src/lib/router-guards.ts`, `src/lib/*redirect*`                                  |
+| Dashboard data/view models | `src/lib/dashboard-*`, `src/components/dashboard`                                                     |
+| AI usage                   | `src/lib/ai-usage-*`, `src/components/ai-usage`                                                       |
+| Onboarding/classes/users   | `src/lib/onboarding-*`, `src/components/onboarding`, `src/components/classes`, `src/components/users` |
+| Retrieval lab              | `src/lib/retrieval-lab*`, `src/components/retrieval`                                                  |
+| Shared UI primitives       | `src/components/ui`                                                                                   |
 
 ## CONVENTIONS
 
