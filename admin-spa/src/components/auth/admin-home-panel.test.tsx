@@ -25,6 +25,7 @@ it('keeps signed-out navigation free of duplicate sign in links', () => {
   expect(
     screen.queryByRole('link', { name: /sign in/i }),
   ).not.toBeInTheDocument()
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 
 it('renders no signed-in interstitial because the route redirects instead', () => {

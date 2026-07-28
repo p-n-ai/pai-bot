@@ -25,7 +25,7 @@ export function AdminHomePanel({
   return (
     <section className='min-h-svh overflow-y-auto bg-background px-4 text-foreground sm:px-6'>
       <div className='mx-auto grid min-h-svh max-w-md grid-rows-[64px_1fr] font-inter'>
-        <LoginNav />
+        <LoginHeader />
         <AdminEntryPanel
           nextPath={nextPath}
           onAuthenticated={onAuthenticated}
@@ -37,19 +37,16 @@ export function AdminHomePanel({
 
 function noopAuthenticated() {}
 
-function LoginNav() {
+function LoginHeader() {
   return (
-    <nav
-      className='flex items-center border-b border-border/70'
-      aria-label='Admin entry'
-    >
+    <header className='flex items-center border-b border-border/70'>
       <div className='inline-flex items-center gap-2.5 text-sm font-semibold tracking-tight'>
         <span className='grid size-8 place-items-center rounded-lg bg-primary text-xs font-bold text-primary-foreground'>
           P
         </span>
         <span>P&AI Bot</span>
       </div>
-    </nav>
+    </header>
   )
 }
 
