@@ -3,12 +3,14 @@ import type { ReactNode } from 'react'
 
 import type { AIUsageLoadState } from '@/hooks/use-ai-usage-state'
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
+import type { ContentSkeletonVariant } from '@/components/shared/content-skeleton'
 import { LoadState } from '@/components/shared/load-state'
 
 export function AIUsageLoadBoundary({
   children,
   errorTitle,
   loadingTitle,
+  loadingVariant = 'analytics',
   setState,
   state,
 }: {
@@ -18,6 +20,7 @@ export function AIUsageLoadBoundary({
   }) => ReactNode
   errorTitle: string
   loadingTitle: string
+  loadingVariant?: ContentSkeletonVariant
   setState: (state: AIUsageLoadState) => void
   state: AIUsageLoadState
 }) {
@@ -34,6 +37,7 @@ export function AIUsageLoadBoundary({
         error={state.error}
         errorTitle={errorTitle}
         loadingTitle={loadingTitle}
+        loadingVariant={loadingVariant}
         status={state.status}
       />
     )

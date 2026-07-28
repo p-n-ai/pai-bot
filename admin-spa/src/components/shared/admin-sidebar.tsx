@@ -58,8 +58,9 @@ export function AdminSidebar() {
       <SidebarHeader className='px-4 pt-4 pb-3'>
         <div className='flex min-h-11 items-center gap-2'>
           <Link
-            className='flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1 text-sm font-semibold text-[#101828] no-underline transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f8fafc] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 focus-visible:outline-none active:scale-[0.96]'
+            className='flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1 text-sm font-semibold text-[#101828] no-underline transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f8fafc] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 focus-visible:outline-none active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none'
             onClick={handleCloseNavigation}
+            preload='intent'
             search={dashboardSearch}
             to='/dashboard'
           >
@@ -158,12 +159,14 @@ function AdminNavigationLink({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-11 gap-3 rounded-lg px-3 text-[#667085] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f4f7fb] hover:text-[#101828] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 active:scale-[0.96] data-active:bg-[#eaf2ff] data-active:font-semibold data-active:text-[#175cd3]'
+        className='relative h-11 gap-3 rounded-lg px-3 text-[#667085] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f4f7fb] hover:text-[#101828] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[#eaf2ff] data-active:font-semibold data-active:text-[#175cd3]'
         isActive={isActive}
       >
         <Link
           aria-current={isActive ? 'page' : undefined}
           onClick={onNavigate}
+          preload='intent'
+          search={href === '/dashboard' ? dashboardSearch : undefined}
           to={href}
         >
           <span

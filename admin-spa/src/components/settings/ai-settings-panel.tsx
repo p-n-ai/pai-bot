@@ -259,6 +259,7 @@ export function AISettingsPanel() {
         error={state.status === 'error' ? state.message : null}
         errorTitle='Could not load AI settings'
         loadingTitle='Loading AI settings'
+        loadingVariant='settings'
         status={state.status}
       />
     )

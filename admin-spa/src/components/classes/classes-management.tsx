@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { DataTable } from '@/components/shared/data-table'
 import { LoadingStatus, StatePanel } from '@/components/shared/state-panel'
+import { ContentSkeleton } from '@/components/shared/content-skeleton'
 import { StatItem } from '@/components/shared/stat-item'
 import { SurfaceSection } from '@/components/shared/surface-section'
 import { getGroupDetail } from '@/lib/admin-api'
@@ -86,7 +87,7 @@ export function ClassesContent({
   }, [onCreated])
 
   if (isInitialClassLoad(state)) {
-    return <LoadingStatus>Loading classes…</LoadingStatus>
+    return <ContentSkeleton label='Loading classes' variant='classes' />
   }
 
   if (state.status === 'error' && state.groups.length === 0) {
