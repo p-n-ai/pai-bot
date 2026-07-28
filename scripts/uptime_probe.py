@@ -37,9 +37,17 @@ def health_url(target: str, *, check: str = "app", allow_http: bool = False) -> 
         raise ProbeError("target must be a public origin without credentials")
     if parsed.query or parsed.fragment:
         raise ProbeError("target must not contain a query or fragment")
-    if parsed.path not in {"", "/", "/api", "/api/", "/health", "/health/ai"}:
+    if parsed.path not in {
+        "",
+        "/",
+        "/api",
+        "/api/",
+        "/health",
+        "/health/api",
+        "/health/ai",
+    }:
         raise ProbeError("target must be an origin, API base URL, or health URL")
-    path = "/health/ai" if check == "ai" else "/health"
+    path = "/health/ai" if check == "ai" else "/health/api"
     return urllib.parse.urlunsplit(
         (parsed.scheme, parsed.netloc, path, "", "")
     )
@@ -108,7 +116,10 @@ def probe(
 def parse_args() -> argparse.Namespace:
     """Parse command-line input at the process boundary."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("target", help="Public HTTPS origin, API base, or /health URL")
+    parser.add_argument(
+        "target",
+        help="Public HTTPS origin, API base, or health URL",
+    )
     parser.add_argument("--check", choices=("app", "ai"), default="app")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument(

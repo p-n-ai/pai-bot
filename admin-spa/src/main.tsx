@@ -8,6 +8,9 @@ import './styles.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const rootElement = document.getElementById('root')
+const isPublicStatusPage =
+  window.location.pathname === '/health' ||
+  window.location.pathname === '/health/'
 
 if (!rootElement) {
   throw new Error('Root element not found')
@@ -15,7 +18,7 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <AuthProvider>
+    <AuthProvider readSession={!isPublicStatusPage}>
       <TooltipProvider>
         <AdminApp />
       </TooltipProvider>

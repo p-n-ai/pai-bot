@@ -23,13 +23,16 @@ class UptimeRoutingTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 config = source(path)
-                self.assertIn("handle /health {", config)
+                self.assertIn("handle /health/api {", config)
+                self.assertIn("handle /health/status {", config)
                 self.assertIn("handle /health/ai {", config)
-                self.assertGreaterEqual(config.count("reverse_proxy app:8080"), 3)
+                self.assertNotIn("handle /health {", config)
+                self.assertGreaterEqual(config.count("reverse_proxy app:8080"), 4)
 
     def test_helm_routes_both_public_health_paths(self) -> None:
         ingress = source("deploy/helm/pai/templates/ingress.yaml")
-        self.assertIn("- path: /health\n            pathType: Exact", ingress)
+        self.assertIn("- path: /health/api\n            pathType: Exact", ingress)
+        self.assertIn("- path: /health/status\n            pathType: Exact", ingress)
         self.assertIn("- path: /health/ai\n            pathType: Exact", ingress)
 
     def test_nginx_surfaces_route_both_public_health_paths(self) -> None:
@@ -38,7 +41,11 @@ class UptimeRoutingTests(unittest.TestCase):
             source("deploy/nginx/pai-bot.conf"),
         )
         self.assertIn(
-            "health/ai",
+            "location = /health/status",
+            source("deploy/nginx/pai-bot.conf"),
+        )
+        self.assertIn(
+            "health/(api|status|ai)",
             source("deploy/once/nginx.conf"),
         )
 

@@ -26,7 +26,7 @@ const (
 	TurnHooks Feature = "turn_hooks"
 	// AgentCore enables native sequential tool continuation for teaching turns.
 	AgentCore Feature = "agent_core"
-	// PublicHealth exposes the public /health liveness alias.
+	// PublicHealth exposes the public status and external liveness routes.
 	PublicHealth Feature = "public_health"
 	// AIHealth exposes the authenticated /health/ai provider check.
 	AIHealth Feature = "ai_health"

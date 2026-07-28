@@ -21,7 +21,7 @@ class ResponseHandler(http.server.BaseHTTPRequestHandler):
     expected_token = ""
 
     def do_GET(self) -> None:
-        if self.path not in {"/health", "/health/ai"}:
+        if self.path not in {"/health/api", "/health/ai"}:
             self.send_error(404)
             return
         if self.path == "/health/ai" and self.headers.get("Authorization") != f"Bearer {self.expected_token}":
@@ -81,7 +81,7 @@ class ProbeTests(unittest.TestCase):
         with serve() as target:
             self.assertEqual(
                 uptime_probe.probe(target, timeout=1, allow_http=True),
-                f"{target}/health",
+                f"{target}/health/api",
             )
 
     def test_rejects_non_200_without_exposing_body(self) -> None:
@@ -122,7 +122,7 @@ class ProbeTests(unittest.TestCase):
                 uptime_probe.probe(target, timeout=0.05, allow_http=True)
 
     def test_rejects_redirect(self) -> None:
-        with serve(redirect_to="https://example.com/health") as target:
+        with serve(redirect_to="https://example.com/health/api") as target:
             with self.assertRaisesRegex(
                 uptime_probe.ProbeError, "returned HTTP 302"
             ):

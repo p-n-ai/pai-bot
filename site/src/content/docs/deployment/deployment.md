@@ -275,10 +275,13 @@ Graceful shutdown on `SIGTERM` with a 15-second termination grace period.
 
 ### External uptime
 
-The `Uptime` GitHub Actions workflow checks the feature-gated public `/health`
-endpoint every five minutes from outside the application host. It derives the
-current origin from the production `NEXT_PUBLIC_API_URL` secret and does not
-accept manual origin overrides.
+The feature-gated public `/health` page shows coarse application and AI
+availability without requiring an admin session. Its data comes from
+`/health/status`; provider names and upstream errors are never exposed. The
+`Uptime` GitHub Actions workflow separately checks the strict `/health/api`
+JSON contract every five minutes from outside the application host. It derives
+the current origin from the production `NEXT_PUBLIC_API_URL` secret and does
+not accept manual origin overrides.
 
 AI availability is monitored separately at authenticated `/health/ai`. Enable
 the `ai_health` feature alongside `public_health`, store a dedicated

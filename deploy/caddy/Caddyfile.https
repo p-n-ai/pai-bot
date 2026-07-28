@@ -7,7 +7,11 @@
 		reverse_proxy app:8080
 	}
 
-	handle /health {
+	handle /health/api {
+		reverse_proxy app:8080
+	}
+
+	handle /health/status {
 		reverse_proxy app:8080
 	}
 

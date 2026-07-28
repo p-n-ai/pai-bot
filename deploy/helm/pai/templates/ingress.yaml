@@ -40,7 +40,14 @@ spec:
                 name: {{ include "pai.fullname" . }}-app
                 port:
                   name: http
-          - path: /health
+          - path: /health/api
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "pai.fullname" . }}-app
+                port:
+                  name: http
+          - path: /health/status
             pathType: Exact
             backend:
               service:

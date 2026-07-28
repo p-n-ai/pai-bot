@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as ActivateRouteImport } from './routes/activate'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
@@ -28,6 +29,11 @@ import { Route as AuthenticatedDashboardMetricsRouteImport } from './routes/_aut
 import { Route as AuthenticatedDashboardClassesRouteImport } from './routes/_authenticated/dashboard/classes'
 import { Route as AuthenticatedDashboardAiUsageRouteImport } from './routes/_authenticated/dashboard/ai-usage'
 
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ActivateRoute = ActivateRouteImport.update({
   id: '/activate',
   path: '/activate',
@@ -131,6 +137,7 @@ const AuthenticatedDashboardAiUsageRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
+  '/health': typeof HealthRoute
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
+  '/health': typeof HealthRoute
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/activate': typeof ActivateRoute
+  '/health': typeof HealthRoute
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/_authenticated/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/activate'
+    | '/health'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/activate'
+    | '/health'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/activate'
+    | '/health'
     | '/_authenticated/export'
     | '/join/$slug'
     | '/_authenticated/dashboard/ai-usage'
@@ -252,11 +264,19 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   ActivateRoute: typeof ActivateRoute
+  HealthRoute: typeof HealthRoute
   JoinSlugRoute: typeof JoinSlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/activate': {
       id: '/activate'
       path: '/activate'
@@ -429,6 +449,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   ActivateRoute: ActivateRoute,
+  HealthRoute: HealthRoute,
   JoinSlugRoute: JoinSlugRoute,
 }
 export const routeTree = rootRouteImport

@@ -89,6 +89,8 @@ func TestBootstrapHealthOnlyServesInternalLiveness(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/healthz", wantStatus: http.StatusOK},
 		{method: http.MethodGet, path: "/health", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/api", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/status", wantStatus: http.StatusNotFound},
 		{method: http.MethodGet, path: "/health/ai", wantStatus: http.StatusNotFound},
 		{method: http.MethodPost, path: "/healthz", wantStatus: http.StatusNotFound},
 	}

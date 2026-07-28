@@ -21,7 +21,7 @@ func TestPublicHealthFeature(t *testing.T) {
 		},
 	})
 
-	assertResponse := func(path string, wantStatus int, wantBody string) {
+	assertResponse := func(path string, wantStatus int, wantBody string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
@@ -32,14 +32,60 @@ func TestPublicHealthFeature(t *testing.T) {
 		if response.Body.String() != wantBody {
 			t.Fatalf("%s body = %q, want %q", path, response.Body.String(), wantBody)
 		}
+		return response
 	}
 
-	assertResponse("/health", http.StatusNotFound, "404 page not found\n")
+	assertResponse("/health/api", http.StatusNotFound, "404 page not found\n")
+	assertResponse("/health/status", http.StatusNotFound, "404 page not found\n")
 	assertResponse("/healthz", http.StatusOK, `{"status":"ok"}`)
 
 	enabled = true
-	assertResponse("/health", http.StatusOK, `{"status":"ok"}`)
+	assertResponse("/health/api", http.StatusOK, `{"status":"ok"}`)
+	assertResponse(
+		"/health/status",
+		http.StatusOK,
+		"{\"status\":\"ok\",\"components\":[{\"id\":\"application\",\"status\":\"operational\"}]}\n",
+	)
 	assertResponse("/healthz", http.StatusOK, `{"status":"ok"}`)
+}
+
+func TestPublicStatusPageIncludesCoarseAIState(t *testing.T) {
+	checkErr := error(nil)
+	handler := NewTopMux(TopMuxOptions{
+		PublicHealthEnabled: func() bool { return true },
+		AIHealthEnabled:     func() bool { return true },
+		AIHealthCheck: func(context.Context) error {
+			return checkErr
+		},
+	})
+
+	request := func() string {
+		t.Helper()
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/status", nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("/health/status status = %d, want 200", response.Code)
+		}
+		return response.Body.String()
+	}
+
+	healthyBody := request()
+	for _, expected := range []string{`"status":"ok"`, `"id":"ai"`, `"status":"operational"`} {
+		if !strings.Contains(healthyBody, expected) {
+			t.Fatalf("healthy public status missing %q", expected)
+		}
+	}
+
+	checkErr = errors.New("private provider detail")
+	unavailableBody := request()
+	for _, expected := range []string{`"status":"degraded"`, `"status":"unavailable"`} {
+		if !strings.Contains(unavailableBody, expected) {
+			t.Fatalf("unavailable public status missing %q", expected)
+		}
+	}
+	if strings.Contains(unavailableBody, checkErr.Error()) {
+		t.Fatal("public status exposed provider error")
+	}
 }
 
 func TestAIHealthFeatureAndAuthentication(t *testing.T) {

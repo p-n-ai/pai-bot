@@ -40,10 +40,24 @@ const pendingAuth: AuthState = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>(pendingAuth)
+export function AuthProvider({
+  children,
+  readSession = true,
+}: {
+  children: ReactNode
+  readSession?: boolean
+}) {
+  const [auth, setAuth] = useState<AuthState>(
+    readSession
+      ? pendingAuth
+      : { status: 'anonymous', session: null, error: null },
+  )
 
   useEffect(() => {
+    if (!readSession) {
+      return
+    }
+
     let mounted = true
 
     readAuthSession()
@@ -73,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [readSession])
 
   const value = useMemo(
     () => ({

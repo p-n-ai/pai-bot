@@ -103,12 +103,19 @@ type TopMuxOptions struct {
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
 	topMux := http.NewServeMux()
-	topMux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	topMux.HandleFunc("GET /health/api", func(w http.ResponseWriter, r *http.Request) {
 		if opts.PublicHealthEnabled == nil || !opts.PublicHealthEnabled() {
 			http.NotFound(w, r)
 			return
 		}
 		handleHealthz(w, r)
+	})
+	topMux.HandleFunc("GET /health/status", func(w http.ResponseWriter, r *http.Request) {
+		if opts.PublicHealthEnabled == nil || !opts.PublicHealthEnabled() {
+			http.NotFound(w, r)
+			return
+		}
+		handlePublicStatus(w, r, opts)
 	})
 	topMux.HandleFunc("GET /health/ai", func(w http.ResponseWriter, r *http.Request) {
 		if opts.AIHealthEnabled == nil || !opts.AIHealthEnabled() ||
