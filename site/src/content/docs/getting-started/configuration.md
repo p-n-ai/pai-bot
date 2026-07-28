@@ -53,6 +53,7 @@ Set `LEARN_AI_DEFAULT_PROVIDER` to choose which provider handles requests by def
 | Variable | Description |
 |----------|-------------|
 | `PAI_AUTH_SECRET` | JWT signing secret |
+| `PAI_CONFIG_ENCRYPTION_KEY` | Independent key for encrypted admin runtime secrets; at least 32 characters |
 | `PAI_AUTH_GOOGLE_CLIENT_ID` | Google OAuth client ID (admin panel) |
 | `PAI_AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 

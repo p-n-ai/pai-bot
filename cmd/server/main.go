@@ -124,7 +124,13 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			}
 
 			// Runtime settings overlay env config; admin saves re-apply live.
-			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret, cfg.AI, cfg.FeatureFlags)
+			settingsStore := settings.New(
+				db.Pool,
+				cfg.Security.RuntimeSettingsEncryptionKey,
+				cfg.Auth.JWTSecret,
+				cfg.AI,
+				cfg.FeatureFlags,
+			)
 			if err := settingsStore.Start(ctx); err != nil {
 				// Degrade to env-only config: a crash loop here would lock
 				// admins out of the very UI that repairs the stored settings.

@@ -30,6 +30,7 @@ type Config struct {
 	Server         ServerConfig
 	Database       DatabaseConfig
 	Cache          CacheConfig
+	Security       SecurityConfig
 	AI             AIConfig
 	Email          EmailConfig
 	Telegram       TelegramConfig
@@ -46,6 +47,11 @@ type Config struct {
 	Embed          EmbedConfig
 	Retrieval      RetrievalConfig
 	CurriculumPath string
+}
+
+// SecurityConfig holds process-level cryptographic roots with distinct purposes.
+type SecurityConfig struct {
+	RuntimeSettingsEncryptionKey string
 }
 
 // RuntimeConfig holds runtime knobs. New product experiments use FeatureFlags.
@@ -264,6 +270,9 @@ func Load() (*Config, error) {
 		Cache: CacheConfig{
 			URL: envStr("LEARN_CACHE_URL", "redis://localhost:6379"),
 		},
+		Security: SecurityConfig{
+			RuntimeSettingsEncryptionKey: envStr("PAI_CONFIG_ENCRYPTION_KEY", ""),
+		},
 		FocusedPage: FocusedPageConfig{
 			BaseURL:        envStr("LEARN_FOCUSED_PAGE_BASE_URL", ""),
 			TelegramCTAURL: envStr("LEARN_FOCUSED_PAGE_TELEGRAM_CTA_URL", ""),
@@ -415,6 +424,13 @@ func (c *Config) Validate() error {
 	}
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
 		return fmt.Errorf("unsupported LEARN_AI_DEFAULT_PROVIDER %q", c.AI.DefaultProvider)
+	}
+	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && len(strings.TrimSpace(key)) < 32 {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must contain at least 32 non-whitespace characters")
+	}
+	if c.Security.RuntimeSettingsEncryptionKey != "" &&
+		c.Security.RuntimeSettingsEncryptionKey == c.Auth.JWTSecret {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must differ from PAI_AUTH_SECRET")
 	}
 
 	if c.Tenant.Mode != "single" && c.Tenant.Mode != "multi" {

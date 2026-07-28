@@ -8,6 +8,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ import (
 func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	ctx, pool := settingsTestPool(t)
 
-	store := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
+	store := New(pool, "test-settings-encryption-key-12345", "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 
 	empty, err := store.Load(ctx)
 	if err != nil {
@@ -64,7 +65,7 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 		t.Fatalf("Load().Flags = %v, want turn_hooks=true", got.Flags)
 	}
 
-	staleStore := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
+	staleStore := New(pool, "test-settings-encryption-key-12345", "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 	merged, err := staleStore.Update(ctx, func(cur Settings) (Settings, error) {
 		cur.AI.OpenRouterModel = "deepseek/deepseek-chat"
 		return cur, nil
@@ -97,7 +98,7 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 	ctx, pool := settingsTestPool(t)
 
-	s1 := New(pool, "secret-one", config.AIConfig{}, featureflags.Features{})
+	s1 := New(pool, "settings-encryption-key-one-12345", "secret-one", config.AIConfig{}, featureflags.Features{})
 	if _, err := s1.Update(ctx, func(cur Settings) (Settings, error) {
 		cur.AI.OpenRouterAPIKey = "sk-or-v1-original"
 		return cur, nil
@@ -111,7 +112,7 @@ func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 
 	// Rotated auth secret: the blob no longer decrypts, but a flag-only
 	// update must not destroy it.
-	s2 := New(pool, "secret-two", config.AIConfig{}, featureflags.Features{})
+	s2 := New(pool, "settings-encryption-key-two-12345", "secret-two", config.AIConfig{}, featureflags.Features{})
 	if _, err := s2.Update(ctx, func(cur Settings) (Settings, error) {
 		cur.Flags = map[string]bool{"turn_hooks": true}
 		return cur, nil
@@ -136,10 +137,58 @@ func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 	}
 }
 
+func TestStore_UpdateMigratesLegacyAuthCiphertext(t *testing.T) {
+	ctx, pool := settingsTestPool(t)
+
+	const (
+		legacyAuthKey = "legacy-auth-key"
+		encryptionKey = "dedicated-settings-encryption-key-123"
+		apiKey        = "sk-or-v1-legacy"
+	)
+	legacyBlob, err := encryptString(legacyAuthKey, apiKey)
+	if err != nil {
+		t.Fatalf("encrypt legacy key: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO runtime_settings (id, ai, flags, secrets)
+		VALUES (1, '{}', '{}', jsonb_build_object('openrouter_api_key', $1))
+	`, legacyBlob); err != nil {
+		t.Fatalf("insert legacy settings: %v", err)
+	}
+
+	store := New(pool, encryptionKey, legacyAuthKey, config.AIConfig{}, featureflags.Features{})
+	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
+		cur.Flags = map[string]bool{"turn_hooks": true}
+		return cur, nil
+	}, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	var secretsJSON []byte
+	if err := pool.QueryRow(ctx, `SELECT secrets FROM runtime_settings WHERE id = 1`).Scan(&secretsJSON); err != nil {
+		t.Fatalf("select migrated secrets: %v", err)
+	}
+	var secrets map[string]string
+	if err := json.Unmarshal(secretsJSON, &secrets); err != nil {
+		t.Fatalf("decode migrated secrets: %v", err)
+	}
+	migratedBlob := secrets[openRouterAPIKeySecret]
+	if migratedBlob == legacyBlob {
+		t.Fatal("legacy ciphertext was not replaced")
+	}
+	if _, err := decryptString(legacyAuthKey, migratedBlob); err == nil {
+		t.Fatal("migrated ciphertext still decrypts with legacy auth key")
+	}
+	got, err := decryptString(encryptionKey, migratedBlob)
+	if err != nil || got != apiKey {
+		t.Fatalf("decrypt migrated ciphertext = %q, %v; want %q", got, err, apiKey)
+	}
+}
+
 func TestStore_UpdateRejectsCorruptRow(t *testing.T) {
 	ctx, pool := settingsTestPool(t)
 
-	store := New(pool, "test-auth-secret", config.AIConfig{}, featureflags.Features{})
+	store := New(pool, "test-settings-encryption-key-12345", "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
 		cur.AI.OpenRouterModel = "openrouter/auto"
 		return cur, nil

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -22,25 +23,33 @@ import (
 
 const openRouterAPIKeySecret = "openrouter_api_key"
 
-// ErrDefaultAuthSecret refuses to encrypt API keys under the well-known
-// default auth secret; the HTTP layer maps it to a 400.
-var ErrDefaultAuthSecret = errors.New("set PAI_AUTH_SECRET before storing API keys")
+// ErrConfigEncryptionKey refuses secret writes until a dedicated,
+// sufficiently long encryption key is configured.
+var ErrConfigEncryptionKey = errors.New("set PAI_CONFIG_ENCRYPTION_KEY to at least 32 characters before storing API keys")
 
 // Store persists the single runtime_settings row layered over the env baseline captured at boot.
 type Store struct {
-	pool     *pgxpool.Pool
-	secret   string
-	envAI    config.AIConfig
-	envFlags featureflags.Features
+	pool                *pgxpool.Pool
+	encryptionKey       string
+	legacyDecryptionKey string
+	envAI               config.AIConfig
+	envFlags            featureflags.Features
 
 	updateMu sync.Mutex // orders Update commit+apply pairs within this process
 	mu       sync.RWMutex
 	current  Settings // in-process snapshot; single-process app, no cross-instance invalidation
 }
 
-// New builds a Store; secret is the auth secret used to encrypt stored keys.
-func New(pool *pgxpool.Pool, secret string, envAI config.AIConfig, envFlags featureflags.Features) *Store {
-	return &Store{pool: pool, secret: secret, envAI: envAI, envFlags: envFlags}
+// New builds a Store. encryptionKey is the only key used for new writes;
+// legacyDecryptionKey may read ciphertext created before the keys were split.
+func New(pool *pgxpool.Pool, encryptionKey, legacyDecryptionKey string, envAI config.AIConfig, envFlags featureflags.Features) *Store {
+	return &Store{
+		pool:                pool,
+		encryptionKey:       encryptionKey,
+		legacyDecryptionKey: legacyDecryptionKey,
+		envAI:               envAI,
+		envFlags:            envFlags,
+	}
 }
 
 // Start loads the initial snapshot served by Current.
@@ -98,16 +107,17 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 
 	// Strict decode: never rebuild the row from a degraded read, that would
 	// persist the data loss.
-	cur, prevSecrets, err := decodeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON)
+	cur, prevSecrets, err := decodeSettingsRow(s.decryptionKeys(), aiJSON, flagsJSON, secretsJSON)
 	if err != nil {
 		return Settings{}, fmt.Errorf("decode runtime settings for update: %w", err)
 	}
 	decodedKey := cur.AI.OpenRouterAPIKey
+	reencryptKey := s.secretNeedsReencryption(prevSecrets[openRouterAPIKeySecret], decodedKey)
 	st, err := mutate(cur)
 	if err != nil {
 		return Settings{}, err
 	}
-	if err := saveSettingsRow(ctx, tx, s.secret, st, prevSecrets, decodedKey); err != nil {
+	if err := saveSettingsRow(ctx, tx, s.writeEncryptionKey(), st, prevSecrets, decodedKey, reencryptKey); err != nil {
 		return Settings{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -133,14 +143,42 @@ func (s *Store) Load(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("load runtime settings: %w", err)
 	}
-	return degradeSettingsRow(s.secret, aiJSON, flagsJSON, secretsJSON), nil
+	return degradeSettingsRow(s.decryptionKeys(), aiJSON, flagsJSON, secretsJSON), nil
+}
+
+func (s *Store) decryptionKeys() []string {
+	keys := make([]string, 0, 2)
+	if s.encryptionKey != "" {
+		keys = append(keys, s.encryptionKey)
+	}
+	if s.legacyDecryptionKey != "" &&
+		s.legacyDecryptionKey != config.DefaultAuthSecret &&
+		s.legacyDecryptionKey != s.encryptionKey {
+		keys = append(keys, s.legacyDecryptionKey)
+	}
+	return keys
+}
+
+func (s *Store) writeEncryptionKey() string {
+	if s.encryptionKey == s.legacyDecryptionKey {
+		return ""
+	}
+	return s.encryptionKey
+}
+
+func (s *Store) secretNeedsReencryption(blob, plaintext string) bool {
+	key := s.writeEncryptionKey()
+	if blob == "" || plaintext == "" || key == "" {
+		return false
+	}
+	_, err := decryptString(key, blob)
+	return err != nil
 }
 
 // decodeSettingsRow strictly decodes the row, also returning the raw secrets
 // map for save paths. Corrupt jsonb is an error; an undecryptable key blob
-// (e.g. PAI_AUTH_SECRET rotated after the key was stored) is not — the key is
-// dropped with a warning so an admin can re-enter it.
-func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) (Settings, map[string]string, error) {
+// is not — the key is dropped with a warning so an admin can re-enter it.
+func decodeSettingsRow(decryptionKeys []string, aiJSON, flagsJSON, secretsJSON []byte) (Settings, map[string]string, error) {
 	var st Settings
 	if err := json.Unmarshal(aiJSON, &st.AI); err != nil {
 		return Settings{}, nil, fmt.Errorf("decode ai column: %w", err)
@@ -154,7 +192,7 @@ func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) (Se
 	}
 	pruneUnknownFlags(st.Flags)
 	if blob := secrets[openRouterAPIKeySecret]; blob != "" {
-		key, err := decryptString(secret, blob)
+		key, err := decryptStringWithKeys(decryptionKeys, blob)
 		if err != nil {
 			slog.Warn("runtime settings: dropping undecryptable openrouter api key", "error", err)
 		} else {
@@ -167,8 +205,8 @@ func decodeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) (Se
 // degradeSettingsRow never fails: a corrupted row degrades to zero Settings so
 // the server boots on env config. Updates refuse to overwrite corrupted rows,
 // so the stored settings need manual repair.
-func degradeSettingsRow(secret string, aiJSON, flagsJSON, secretsJSON []byte) Settings {
-	st, _, err := decodeSettingsRow(secret, aiJSON, flagsJSON, secretsJSON)
+func degradeSettingsRow(decryptionKeys []string, aiJSON, flagsJSON, secretsJSON []byte) Settings {
+	st, _, err := decodeSettingsRow(decryptionKeys, aiJSON, flagsJSON, secretsJSON)
 	if err != nil {
 		slog.Warn("runtime settings: corrupted row; using env config", "error", err)
 		return Settings{}
@@ -195,32 +233,46 @@ func pruneUnknownFlags(flags map[string]bool) {
 
 // mergeSecrets returns the secrets map to persist: prev with only the
 // openrouter key entry changed when the mutated key differs from decodedKey.
-func mergeSecrets(secret string, prev map[string]string, decodedKey, key string) (map[string]string, error) {
+func mergeSecrets(secret string, prev map[string]string, decodedKey, key string, forceReencrypt bool) (map[string]string, error) {
 	secrets := make(map[string]string, len(prev))
 	maps.Copy(secrets, prev)
 	switch key {
 	case decodedKey:
+		if forceReencrypt {
+			break
+		}
 		// Unchanged (including "" after an undecryptable blob was dropped at
 		// decode): keep the stored blob byte-for-byte so reverting
 		// PAI_AUTH_SECRET can still recover the key.
+		return secrets, nil
 	case "":
 		delete(secrets, openRouterAPIKeySecret)
-	default:
-		if secret == config.DefaultAuthSecret {
-			return nil, ErrDefaultAuthSecret
-		}
-		blob, err := encryptString(secret, key)
-		if err != nil {
-			return nil, fmt.Errorf("encrypt openrouter api key: %w", err)
-		}
-		secrets[openRouterAPIKeySecret] = blob
+		return secrets, nil
 	}
+	if len(strings.TrimSpace(secret)) < 32 {
+		return nil, ErrConfigEncryptionKey
+	}
+	blob, err := encryptString(secret, key)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt openrouter api key: %w", err)
+	}
+	secrets[openRouterAPIKeySecret] = blob
 	return secrets, nil
+}
+
+func decryptStringWithKeys(keys []string, blob string) (string, error) {
+	for _, key := range keys {
+		plaintext, err := decryptString(key, blob)
+		if err == nil {
+			return plaintext, nil
+		}
+	}
+	return "", errors.New("secret cannot be decrypted with configured keys")
 }
 
 // saveSettingsRow upserts the settings row; prevSecrets and decodedKey come
 // from the strict decode of the locked row (see mergeSecrets).
-func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings, prevSecrets map[string]string, decodedKey string) error {
+func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings, prevSecrets map[string]string, decodedKey string, forceReencrypt bool) error {
 	aiJSON, err := json.Marshal(st.AI)
 	if err != nil {
 		return fmt.Errorf("marshal ai settings: %w", err)
@@ -233,7 +285,7 @@ func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings,
 	if err != nil {
 		return fmt.Errorf("marshal flags: %w", err)
 	}
-	secrets, err := mergeSecrets(secret, prevSecrets, decodedKey, st.AI.OpenRouterAPIKey)
+	secrets, err := mergeSecrets(secret, prevSecrets, decodedKey, st.AI.OpenRouterAPIKey, forceReencrypt)
 	if err != nil {
 		return err
 	}

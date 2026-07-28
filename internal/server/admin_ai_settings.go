@@ -105,7 +105,7 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 			return
 		}
 		if err != nil {
-			if errors.Is(err, settings.ErrDefaultAuthSecret) {
+			if errors.Is(err, settings.ErrConfigEncryptionKey) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}

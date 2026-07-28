@@ -158,7 +158,7 @@ func TestDecodeSettingsRowDropsUndecryptableKey(t *testing.T) {
 		t.Fatalf("encryptString() error = %v", err)
 	}
 
-	st, secrets, err := decodeSettingsRow("rotated-auth-secret",
+	st, secrets, err := decodeSettingsRow([]string{"rotated-auth-secret"},
 		[]byte(`{"default_provider":"openrouter","openrouter_model":"m"}`),
 		[]byte(`{"turn_hooks":true}`),
 		[]byte(`{"openrouter_api_key":"`+blob+`"}`))
@@ -178,7 +178,7 @@ func TestDecodeSettingsRowDropsUndecryptableKey(t *testing.T) {
 }
 
 func TestDecodeSettingsRowPrunesUnknownFlags(t *testing.T) {
-	st, _, err := decodeSettingsRow("secret",
+	st, _, err := decodeSettingsRow([]string{"secret"},
 		[]byte(`{}`),
 		[]byte(`{"turn_hooks":true,"ghost_flag":true}`),
 		[]byte(`{}`))
@@ -206,10 +206,10 @@ func TestDecodeSettingsRowCorruptedJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeSettingsRow("secret", tt.aiJSON, tt.flagsJSON, tt.secrets); err == nil {
+			if _, _, err := decodeSettingsRow([]string{"secret"}, tt.aiJSON, tt.flagsJSON, tt.secrets); err == nil {
 				t.Fatal("decodeSettingsRow() should reject corrupted jsonb")
 			}
-			st := degradeSettingsRow("secret", tt.aiJSON, tt.flagsJSON, tt.secrets)
+			st := degradeSettingsRow([]string{"secret"}, tt.aiJSON, tt.flagsJSON, tt.secrets)
 			if st.AI != (AISettings{}) || len(st.Flags) != 0 {
 				t.Fatalf("degradeSettingsRow() = %+v, want zero Settings", st)
 			}
@@ -221,7 +221,7 @@ func TestMergeSecrets(t *testing.T) {
 	prev := map[string]string{openRouterAPIKeySecret: "stored-blob"}
 
 	t.Run("unchanged key preserves blob", func(t *testing.T) {
-		got, err := mergeSecrets("s", prev, "sk-old", "sk-old")
+		got, err := mergeSecrets("s", prev, "sk-old", "sk-old", false)
 		if err != nil {
 			t.Fatalf("mergeSecrets() error = %v", err)
 		}
@@ -232,7 +232,7 @@ func TestMergeSecrets(t *testing.T) {
 
 	t.Run("undecryptable blob survives unrelated update", func(t *testing.T) {
 		// Decoded key is "" because the blob did not decrypt; mutate left it "".
-		got, err := mergeSecrets("s", prev, "", "")
+		got, err := mergeSecrets("s", prev, "", "", false)
 		if err != nil {
 			t.Fatalf("mergeSecrets() error = %v", err)
 		}
@@ -242,7 +242,7 @@ func TestMergeSecrets(t *testing.T) {
 	})
 
 	t.Run("explicit clear deletes entry", func(t *testing.T) {
-		got, err := mergeSecrets("s", prev, "sk-old", "")
+		got, err := mergeSecrets("s", prev, "sk-old", "", false)
 		if err != nil {
 			t.Fatalf("mergeSecrets() error = %v", err)
 		}
@@ -252,11 +252,12 @@ func TestMergeSecrets(t *testing.T) {
 	})
 
 	t.Run("new key replaces entry", func(t *testing.T) {
-		got, err := mergeSecrets("s", prev, "sk-old", "sk-new")
+		const encryptionKey = "settings-test-encryption-key-123456"
+		got, err := mergeSecrets(encryptionKey, prev, "sk-old", "sk-new", false)
 		if err != nil {
 			t.Fatalf("mergeSecrets() error = %v", err)
 		}
-		key, err := decryptString("s", got[openRouterAPIKeySecret])
+		key, err := decryptString(encryptionKey, got[openRouterAPIKeySecret])
 		if err != nil || key != "sk-new" {
 			t.Fatalf("decrypt stored blob = %q, %v; want sk-new", key, err)
 		}
@@ -265,12 +266,92 @@ func TestMergeSecrets(t *testing.T) {
 		}
 	})
 
-	t.Run("default auth secret refused", func(t *testing.T) {
-		_, err := mergeSecrets(config.DefaultAuthSecret, nil, "", "sk-new")
-		if !errors.Is(err, ErrDefaultAuthSecret) {
-			t.Fatalf("mergeSecrets() error = %v, want ErrDefaultAuthSecret", err)
+	t.Run("missing dedicated encryption key refused", func(t *testing.T) {
+		_, err := mergeSecrets("", nil, "", "sk-new", false)
+		if !errors.Is(err, ErrConfigEncryptionKey) {
+			t.Fatalf("mergeSecrets() error = %v, want ErrConfigEncryptionKey", err)
 		}
 	})
+
+	t.Run("short dedicated encryption key refused", func(t *testing.T) {
+		_, err := mergeSecrets("too-short", nil, "", "sk-new", false)
+		if !errors.Is(err, ErrConfigEncryptionKey) {
+			t.Fatalf("mergeSecrets() error = %v, want ErrConfigEncryptionKey", err)
+		}
+	})
+
+	t.Run("legacy ciphertext is re-encrypted even when plaintext is unchanged", func(t *testing.T) {
+		const encryptionKey = "settings-test-encryption-key-123456"
+		got, err := mergeSecrets(encryptionKey, prev, "sk-old", "sk-old", true)
+		if err != nil {
+			t.Fatalf("mergeSecrets() error = %v", err)
+		}
+		if got[openRouterAPIKeySecret] == "stored-blob" {
+			t.Fatal("forced re-encryption must replace the stored blob")
+		}
+		key, err := decryptString(encryptionKey, got[openRouterAPIKeySecret])
+		if err != nil || key != "sk-old" {
+			t.Fatalf("decrypt re-encrypted blob = %q, %v; want sk-old", key, err)
+		}
+	})
+}
+
+func TestDecodeSettingsRowUsesLegacyDecryptionKey(t *testing.T) {
+	const legacyKey = "legacy-auth-secret"
+	blob, err := encryptString(legacyKey, "sk-or-legacy")
+	if err != nil {
+		t.Fatalf("encryptString() error = %v", err)
+	}
+
+	st, _, err := decodeSettingsRow(
+		[]string{"new-settings-encryption-key-1234", legacyKey},
+		[]byte(`{}`),
+		[]byte(`{}`),
+		[]byte(`{"openrouter_api_key":"`+blob+`"}`),
+	)
+	if err != nil {
+		t.Fatalf("decodeSettingsRow() error = %v", err)
+	}
+	if st.AI.OpenRouterAPIKey != "sk-or-legacy" {
+		t.Fatalf("OpenRouterAPIKey = %q, want legacy key decrypted", st.AI.OpenRouterAPIKey)
+	}
+}
+
+func TestStoreSeparatesEncryptionAndLegacyAuthKeys(t *testing.T) {
+	const sharedKey = "shared-auth-and-encryption-key-123"
+	store := New(nil, sharedKey, sharedKey, config.AIConfig{}, featureflags.Features{})
+	if store.writeEncryptionKey() != "" {
+		t.Fatal("shared auth and encryption key must be refused for writes")
+	}
+
+	legacyDefault := New(nil, "", config.DefaultAuthSecret, config.AIConfig{}, featureflags.Features{})
+	if keys := legacyDefault.decryptionKeys(); len(keys) != 0 {
+		t.Fatalf("default auth secret must not be accepted as a legacy decryption key: %v", keys)
+	}
+}
+
+func TestStoreDetectsLegacyCiphertextForReencryption(t *testing.T) {
+	const (
+		encryptionKey = "dedicated-settings-encryption-key-123"
+		legacyKey     = "legacy-auth-key"
+		plaintext     = "sk-or-legacy"
+	)
+	legacyBlob, err := encryptString(legacyKey, plaintext)
+	if err != nil {
+		t.Fatalf("encrypt legacy blob: %v", err)
+	}
+	store := New(nil, encryptionKey, legacyKey, config.AIConfig{}, featureflags.Features{})
+	if !store.secretNeedsReencryption(legacyBlob, plaintext) {
+		t.Fatal("legacy ciphertext should require re-encryption")
+	}
+
+	currentBlob, err := encryptString(encryptionKey, plaintext)
+	if err != nil {
+		t.Fatalf("encrypt current blob: %v", err)
+	}
+	if store.secretNeedsReencryption(currentBlob, plaintext) {
+		t.Fatal("current ciphertext should not require re-encryption")
+	}
 }
 
 func TestAISettingsAPIKeyNeverSerializes(t *testing.T) {

@@ -65,6 +65,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_OLLAMA_URL",
 		"LEARN_AI_OLLAMA_MODEL",
 		"PAI_AUTH_SECRET",
+		"PAI_CONFIG_ENCRYPTION_KEY",
 		"PAI_AUTH_GOOGLE_CLIENT_ID",
 		"PAI_AUTH_GOOGLE_CLIENT_SECRET",
 		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
@@ -202,6 +203,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_CODEX_MODEL", "gpt-test")
 	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "openrouter")
 	t.Setenv("PAI_AUTH_SECRET", "super-secret")
+	t.Setenv("PAI_CONFIG_ENCRYPTION_KEY", "runtime-settings-encryption-key-123")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_ID", "google-client")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_SECRET", "google-secret")
 	t.Setenv("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", "pandai.org")
@@ -293,6 +295,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.JWTSecret != "super-secret" {
 		t.Errorf("Auth.JWTSecret = %q, want super-secret", cfg.Auth.JWTSecret)
+	}
+	if cfg.Security.RuntimeSettingsEncryptionKey != "runtime-settings-encryption-key-123" {
+		t.Error("Security.RuntimeSettingsEncryptionKey was not loaded")
 	}
 	if cfg.Auth.Google.ClientID != "google-client" {
 		t.Errorf("Auth.Google.ClientID = %q, want google-client", cfg.Auth.Google.ClientID)
@@ -684,6 +689,26 @@ func TestValidate_InvalidTenantMode(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error for invalid tenant mode")
+	}
+}
+
+func TestValidateConfigEncryptionKeyIsLongAndIndependent(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.Auth.JWTSecret = "shared-secret-value-that-is-long-enough"
+
+	base.Security.RuntimeSettingsEncryptionKey = "too-short"
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "at least 32") {
+		t.Fatalf("short encryption key error = %v", err)
+	}
+
+	base.Security.RuntimeSettingsEncryptionKey = base.Auth.JWTSecret
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("shared encryption key error = %v", err)
+	}
+
+	base.Security.RuntimeSettingsEncryptionKey = "independent-runtime-settings-key-123"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("independent encryption key error = %v", err)
 	}
 }
 

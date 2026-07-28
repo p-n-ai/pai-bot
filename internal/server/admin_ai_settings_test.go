@@ -387,16 +387,16 @@ func (f *failingSettingsStore) Update(_ context.Context, mutate func(settings.Se
 	return settings.Settings{}, f.saveErr
 }
 
-func TestAdminAISettingsPutMapsDefaultAuthSecretTo400(t *testing.T) {
-	store := &failingSettingsStore{saveErr: settings.ErrDefaultAuthSecret}
+func TestAdminAISettingsPutMapsMissingConfigEncryptionKeyTo400(t *testing.T) {
+	store := &failingSettingsStore{saveErr: settings.ErrConfigEncryptionKey}
 	handler := newAISettingsHandler(store, nil)
 
 	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"openrouterApiKey":"sk-or-new-key"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "PAI_AUTH_SECRET") {
-		t.Fatalf("body = %q, want PAI_AUTH_SECRET message", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "PAI_CONFIG_ENCRYPTION_KEY") {
+		t.Fatalf("body = %q, want PAI_CONFIG_ENCRYPTION_KEY message", rec.Body.String())
 	}
 }
 
