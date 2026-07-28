@@ -1,28 +1,37 @@
-export interface GroupRecord {
-  id: string
-  name: string
-  type: 'class' | 'study_group'
-  description?: string
-  syllabus?: string
-  subject?: string
-  cadence?: string
-  join_code: string
-  member_count: number
-  created_at?: string
-  updated_at?: string
-}
+import { Schema } from 'effect'
 
-export interface GroupMemberRecord {
-  id: string
-  name: string
-  role: 'member' | 'leader' | 'teacher'
-  channel: string
-  mastery: number
-}
+export const GroupRecordSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  type: Schema.Literals(['class', 'study_group']),
+  description: Schema.optionalKey(Schema.String),
+  syllabus: Schema.optionalKey(Schema.String),
+  subject: Schema.optionalKey(Schema.String),
+  cadence: Schema.optionalKey(Schema.String),
+  join_code: Schema.String,
+  member_count: Schema.Number,
+  created_at: Schema.optionalKey(Schema.String),
+  updated_at: Schema.optionalKey(Schema.String),
+})
 
-export interface GroupDetail extends GroupRecord {
-  members: Array<GroupMemberRecord>
-}
+export type GroupRecord = typeof GroupRecordSchema.Type
+
+export const GroupMemberRecordSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  role: Schema.Literals(['member', 'leader', 'teacher']),
+  channel: Schema.String,
+  mastery: Schema.Number,
+})
+
+export type GroupMemberRecord = typeof GroupMemberRecordSchema.Type
+
+export const GroupDetailSchema = Schema.Struct({
+  ...GroupRecordSchema.fields,
+  members: Schema.mutable(Schema.Array(GroupMemberRecordSchema)),
+})
+
+export type GroupDetail = typeof GroupDetailSchema.Type
 
 export interface CreateGroupInput {
   name: string
@@ -32,74 +41,15 @@ export interface CreateGroupInput {
   subject: 'Mathematics'
 }
 
+const matchesGroupRecord = Schema.is(GroupRecordSchema)
+const matchesGroupDetail = Schema.is(GroupDetailSchema)
+
+/** Returns whether an unknown response satisfies the group summary contract. */
 export function isGroupRecord(value: unknown): value is GroupRecord {
-  return isRecord(value) && hasGroupShape(value)
+  return matchesGroupRecord(value)
 }
 
+/** Returns whether an unknown response satisfies the group detail contract. */
 export function isGroupDetail(value: unknown): value is GroupDetail {
-  return isGroupRecord(value) && hasMembers(value)
-}
-
-function hasGroupShape(value: Record<string, unknown>): boolean {
-  return [hasID, hasName, hasType, hasJoinCode, hasMemberCount].every((check) =>
-    check(value),
-  )
-}
-
-function hasMembers(value: GroupRecord): value is GroupDetail {
-  return (
-    'members' in value &&
-    Array.isArray(value.members) &&
-    value.members.every(isGroupMember)
-  )
-}
-
-function isGroupMember(value: unknown): value is GroupMemberRecord {
-  return isRecord(value) && hasMemberShape(value)
-}
-
-function hasMemberShape(value: Record<string, unknown>): boolean {
-  return [hasID, hasName, hasMemberRole, hasChannel, hasMastery].every(
-    (check) => check(value),
-  )
-}
-
-function hasID(value: Record<string, unknown>): boolean {
-  return typeof value.id === 'string'
-}
-
-function hasName(value: Record<string, unknown>): boolean {
-  return typeof value.name === 'string'
-}
-
-function hasType(value: Record<string, unknown>): boolean {
-  return value.type === 'class' || value.type === 'study_group'
-}
-
-function hasJoinCode(value: Record<string, unknown>): boolean {
-  return typeof value.join_code === 'string'
-}
-
-function hasMemberCount(value: Record<string, unknown>): boolean {
-  return typeof value.member_count === 'number'
-}
-
-function hasMemberRole(value: Record<string, unknown>): boolean {
-  return (
-    value.role === 'member' ||
-    value.role === 'leader' ||
-    value.role === 'teacher'
-  )
-}
-
-function hasChannel(value: Record<string, unknown>): boolean {
-  return typeof value.channel === 'string'
-}
-
-function hasMastery(value: Record<string, unknown>): boolean {
-  return typeof value.mastery === 'number'
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return matchesGroupDetail(value)
 }

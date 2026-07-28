@@ -1,86 +1,49 @@
+import { Schema } from 'effect'
+
 import {
-  isLearningStreak,
-  isProgressItem,
-  isStudentProfile,
-} from './learner-types'
-import {
-  hasNumberProps,
-  hasStringProps,
-  isRecord,
-  isString,
-} from './type-guards'
-import type {
-  LearningStreak,
-  ProgressItem,
-  StudentProfile,
+  LearningStreakSchema,
+  ProgressItemSchema,
+  StudentProfileSchema,
 } from './learner-types'
 
-export interface ParentProfile {
-  id: string
-  name: string
-  email: string
-  child_ids: Array<string>
-  created_at: string
-}
+export const ParentProfileSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  email: Schema.String,
+  child_ids: Schema.mutable(Schema.Array(Schema.String)),
+  created_at: Schema.String,
+})
 
-export interface WeeklyStats {
-  days_active: number
-  messages_exchanged: number
-  quizzes_completed: number
-  needs_review_count: number
-}
+export type ParentProfile = typeof ParentProfileSchema.Type
 
-export interface ParentSummary {
-  parent: ParentProfile
-  child: StudentProfile
-  streak: LearningStreak
-  weekly_stats: WeeklyStats
-  mastery: Array<ProgressItem>
-  encouragement: {
-    headline: string
-    text: string
-  }
-}
+export const WeeklyStatsSchema = Schema.Struct({
+  days_active: Schema.Number,
+  messages_exchanged: Schema.Number,
+  quizzes_completed: Schema.Number,
+  needs_review_count: Schema.Number,
+})
 
+export type WeeklyStats = typeof WeeklyStatsSchema.Type
+
+const Encouragement = Schema.Struct({
+  headline: Schema.String,
+  text: Schema.String,
+})
+
+export const ParentSummarySchema = Schema.Struct({
+  parent: ParentProfileSchema,
+  child: StudentProfileSchema,
+  streak: LearningStreakSchema,
+  weekly_stats: WeeklyStatsSchema,
+  mastery: Schema.mutable(Schema.Array(ProgressItemSchema)),
+  encouragement: Encouragement,
+})
+
+export type ParentSummary = typeof ParentSummarySchema.Type
+
+const matchesParentSummary = Schema.is(ParentSummarySchema)
+
+/** Returns whether an unknown response satisfies the complete parent summary contract. */
 export function isParentSummary(value: unknown): value is ParentSummary {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    isParentProfile(value.parent),
-    isStudentProfile(value.child),
-    isLearningStreak(value.streak),
-    isWeeklyStats(value.weekly_stats),
-    Array.isArray(value.mastery) && value.mastery.every(isProgressItem),
-    isEncouragement(value.encouragement),
-  ].every(Boolean)
-}
-
-function isParentProfile(value: unknown): value is ParentProfile {
-  return isRecord(value) && hasParentProfileShape(value)
-}
-
-function isWeeklyStats(value: unknown): value is WeeklyStats {
-  return (
-    isRecord(value) &&
-    hasNumberProps(value, [
-      'days_active',
-      'messages_exchanged',
-      'quizzes_completed',
-      'needs_review_count',
-    ])
-  )
-}
-
-function isEncouragement(value: unknown): boolean {
-  return isRecord(value) && hasStringProps(value, ['headline', 'text'])
-}
-
-function hasParentProfileShape(value: Record<string, unknown>): boolean {
-  return (
-    hasStringProps(value, ['id', 'name', 'email', 'created_at']) &&
-    Array.isArray(value.child_ids) &&
-    value.child_ids.every(isString)
-  )
+  return matchesParentSummary(value)
 }

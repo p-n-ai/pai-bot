@@ -1,70 +1,55 @@
-const adminRoles = [
+import { Schema } from 'effect'
+
+const AdminRoleSchema = Schema.Literals([
   'student',
   'teacher',
   'parent',
   'admin',
   'platform_admin',
-] as const
+])
 
-export type AdminRole = (typeof adminRoles)[number]
+export type AdminRole = typeof AdminRoleSchema.Type
 
-export interface AuthUser {
-  user_id: string
-  tenant_id?: string
-  tenant_slug?: string
-  tenant_name?: string
-  role: AdminRole
-  name?: string
-  email?: string
-  can_manage_ai_settings?: boolean
-}
+export const AuthUserSchema = Schema.Struct({
+  user_id: Schema.String,
+  tenant_id: Schema.optionalKey(Schema.String),
+  tenant_slug: Schema.optionalKey(Schema.String),
+  tenant_name: Schema.optionalKey(Schema.String),
+  role: AdminRoleSchema,
+  name: Schema.optionalKey(Schema.String),
+  email: Schema.optionalKey(Schema.String),
+  can_manage_ai_settings: Schema.optionalKey(Schema.Boolean),
+})
 
-export interface SchoolChoice {
-  tenant_id: string
-  tenant_slug?: string
-  tenant_name: string
-}
+export type AuthUser = typeof AuthUserSchema.Type
 
-export interface AuthSession {
-  expires_at: string
-  user: AuthUser
-  tenant_choices?: Array<SchoolChoice>
-}
+export const SchoolChoiceSchema = Schema.Struct({
+  tenant_id: Schema.String,
+  tenant_slug: Schema.optionalKey(Schema.String),
+  tenant_name: Schema.String,
+})
 
+export type SchoolChoice = typeof SchoolChoiceSchema.Type
+
+const SchoolChoices = Schema.mutable(Schema.Array(SchoolChoiceSchema))
+
+export const AuthSessionSchema = Schema.Struct({
+  expires_at: Schema.String,
+  user: AuthUserSchema,
+  tenant_choices: Schema.optionalKey(SchoolChoices),
+})
+
+export type AuthSession = typeof AuthSessionSchema.Type
+
+const matchesAuthSession = Schema.is(AuthSessionSchema)
+const matchesSchoolChoices = Schema.is(SchoolChoices)
+
+/** Returns whether an unknown response satisfies the complete auth session contract. */
 export function isAuthSession(value: unknown): value is AuthSession {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.expires_at === 'string' && isAuthUser(value.user)
+  return matchesAuthSession(value)
 }
 
+/** Returns whether an unknown response is a valid mutable school-choice list. */
 export function isSchoolChoices(value: unknown): value is Array<SchoolChoice> {
-  return Array.isArray(value) && value.every(isSchoolChoice)
-}
-
-function isAuthUser(value: unknown): value is AuthUser {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.user_id === 'string' && isAdminRole(value.role)
-}
-
-function isAdminRole(value: unknown): value is AdminRole {
-  return adminRoles.some((role) => role === value)
-}
-
-function isSchoolChoice(value: unknown): value is SchoolChoice {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    typeof value.tenant_id === 'string' && typeof value.tenant_name === 'string'
-  )
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return matchesSchoolChoices(value)
 }

@@ -1,35 +1,55 @@
-import { hasStringProps, isRecord } from './type-guards'
+import { Schema } from 'effect'
 
-export interface OnboardingCurriculum {
-  syllabus_id: string
-  label: string
-}
+export const OnboardingCurriculumSchema = Schema.Struct({
+  syllabus_id: Schema.String,
+  label: Schema.String,
+})
 
-export interface OnboardingFirstClass {
-  id?: string
-  name: string
-  slug: string
-}
+export type OnboardingCurriculum = typeof OnboardingCurriculumSchema.Type
 
-export interface OnboardingBotSetup {
-  preset: string
-}
+export const OnboardingFirstClassSchema = Schema.Struct({
+  id: Schema.optionalKey(Schema.String),
+  name: Schema.String,
+  slug: Schema.String,
+})
 
-export interface OnboardingState {
-  school_name?: string
-  curriculum: OnboardingCurriculum
-  first_class: OnboardingFirstClass
-  bot_setup: OnboardingBotSetup
-  join_link: string
-  save_status: string
-  configured_at: string
-}
+export type OnboardingFirstClass = typeof OnboardingFirstClassSchema.Type
 
-export interface OnboardingView {
-  tenant_id: string
-  tenant_name: string
-  onboarding?: OnboardingState | null
-}
+export const OnboardingBotSetupSchema = Schema.Struct({
+  preset: Schema.String,
+})
+
+export type OnboardingBotSetup = typeof OnboardingBotSetupSchema.Type
+
+export const OnboardingStateSchema = Schema.Struct({
+  school_name: Schema.optionalKey(Schema.String),
+  curriculum: OnboardingCurriculumSchema,
+  first_class: OnboardingFirstClassSchema,
+  bot_setup: OnboardingBotSetupSchema,
+  join_link: Schema.String,
+  save_status: Schema.String,
+  configured_at: Schema.String,
+})
+
+export type OnboardingState = typeof OnboardingStateSchema.Type
+
+export const OnboardingViewSchema = Schema.Struct({
+  tenant_id: Schema.String,
+  tenant_name: Schema.String,
+  onboarding: Schema.optionalKey(Schema.NullOr(OnboardingStateSchema)),
+})
+
+export type OnboardingView = typeof OnboardingViewSchema.Type
+
+export const SubmitOnboardingResultSchema = Schema.Struct({
+  class_id: Schema.String,
+  school_name: Schema.String,
+  class_name: Schema.String,
+  join_link: Schema.String,
+  save_status: Schema.String,
+})
+
+export type SubmitOnboardingResult = typeof SubmitOnboardingResultSchema.Type
 
 export interface SubmitOnboardingInput {
   school_name?: string
@@ -38,80 +58,17 @@ export interface SubmitOnboardingInput {
   bot_setup: OnboardingBotSetup
 }
 
-export interface SubmitOnboardingResult {
-  class_id: string
-  school_name: string
-  class_name: string
-  join_link: string
-  save_status: string
-}
+const matchesOnboardingView = Schema.is(OnboardingViewSchema)
+const matchesSubmitOnboardingResult = Schema.is(SubmitOnboardingResultSchema)
 
+/** Returns whether an unknown response satisfies the onboarding view contract. */
 export function isOnboardingView(value: unknown): value is OnboardingView {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    hasStringProps(value, ['tenant_id', 'tenant_name']) &&
-    hasOptionalOnboardingState(value.onboarding)
-  )
+  return matchesOnboardingView(value)
 }
 
+/** Returns whether an unknown response satisfies the onboarding result contract. */
 export function isSubmitOnboardingResult(
   value: unknown,
 ): value is SubmitOnboardingResult {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return hasStringProps(value, [
-    'class_id',
-    'school_name',
-    'class_name',
-    'join_link',
-    'save_status',
-  ])
-}
-
-function isOnboardingState(value: unknown): value is OnboardingState {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    hasOnboardingParts(value) &&
-    hasStringProps(value, ['join_link', 'save_status', 'configured_at'])
-  )
-}
-
-function hasOptionalOnboardingState(value: unknown): boolean {
-  return value === undefined || value === null || isOnboardingState(value)
-}
-
-function hasOnboardingParts(record: Record<string, unknown>): boolean {
-  return (
-    isOnboardingCurriculum(record.curriculum) &&
-    isOnboardingFirstClass(record.first_class) &&
-    isOnboardingBotSetup(record.bot_setup)
-  )
-}
-
-function isOnboardingCurriculum(value: unknown): value is OnboardingCurriculum {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return hasStringProps(value, ['syllabus_id', 'label'])
-}
-
-function isOnboardingFirstClass(value: unknown): value is OnboardingFirstClass {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return hasStringProps(value, ['name', 'slug'])
-}
-
-function isOnboardingBotSetup(value: unknown): value is OnboardingBotSetup {
-  return isRecord(value) && typeof value.preset === 'string'
+  return matchesSubmitOnboardingResult(value)
 }

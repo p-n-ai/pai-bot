@@ -1,366 +1,105 @@
-import { isNumber, isRecord, isString } from './type-guards'
+import { Schema } from 'effect'
 
-const managedUserRoles = new Set([
+const ManagedUserRoleSchema = Schema.Literals([
   'teacher',
   'parent',
   'admin',
   'platform_admin',
 ])
-const inviteDeliveryStatuses = new Set(['pending', 'sent', 'failed'])
+const InviteDeliveryStatusSchema = Schema.Literals([
+  'pending',
+  'sent',
+  'failed',
+])
+const OptionalNullableString = Schema.optionalKey(Schema.NullOr(Schema.String))
 
-export type ManagedUserRole = 'teacher' | 'parent' | 'admin' | 'platform_admin'
+export type ManagedUserRole = typeof ManagedUserRoleSchema.Type
 export type InviteIssueRole = 'teacher' | 'parent' | 'admin'
-export type InviteDeliveryStatus = 'pending' | 'sent' | 'failed'
+export type InviteDeliveryStatus = typeof InviteDeliveryStatusSchema.Type
 
-export interface InviteRecord {
-  activation_url?: string
-  delivery_error?: string
-  delivery_status?: InviteDeliveryStatus
-  email: string
-  expires_at?: string
-  id?: string
-  invite_token: string
-  invited_by_user_id?: string
-  role: ManagedUserRole
-}
+export const InviteRecordSchema = Schema.Struct({
+  activation_url: OptionalNullableString,
+  delivery_error: OptionalNullableString,
+  delivery_status: Schema.optionalKey(InviteDeliveryStatusSchema),
+  email: Schema.String,
+  expires_at: OptionalNullableString,
+  id: OptionalNullableString,
+  invite_token: Schema.String,
+  invited_by_user_id: OptionalNullableString,
+  role: ManagedUserRoleSchema,
+})
 
-export interface UserManagementSummary {
-  parents: number
-  pending_invites: number
-  students: number
-  teachers: number
-  total_users: number
-}
+export type InviteRecord = typeof InviteRecordSchema.Type
 
-export interface ManagedUser {
-  created_at: string
-  email: string
-  id: string
-  name: string
-  role: ManagedUserRole
-  status: 'active'
-  tenant_name?: string
-}
+export const UserManagementSummarySchema = Schema.Struct({
+  parents: Schema.Number,
+  pending_invites: Schema.Number,
+  students: Schema.Number,
+  teachers: Schema.Number,
+  total_users: Schema.Number,
+})
 
-export interface PendingInvite {
-  created_at: string
-  delivery_error?: string
-  delivery_sent_at?: string | null
-  delivery_status?: InviteDeliveryStatus
-  email: string
-  expires_at: string
-  id: string
-  invited_by: string
-  role: ManagedUserRole
-  status: 'pending'
-  tenant_name?: string
-}
+export type UserManagementSummary = typeof UserManagementSummarySchema.Type
 
-export interface UserManagementView {
-  active_users: Array<ManagedUser>
-  pending_invites: Array<PendingInvite>
-  students: Array<ManagedStudent>
-  summary: UserManagementSummary
-}
+export const ManagedUserSchema = Schema.Struct({
+  created_at: Schema.String,
+  email: Schema.String,
+  id: Schema.String,
+  name: Schema.String,
+  role: ManagedUserRoleSchema,
+  status: Schema.Literal('active'),
+  tenant_name: OptionalNullableString,
+})
 
-export interface ManagedStudent {
-  channel: string
-  created_at: string
-  external_id: string
-  form: string
-  id: string
-  name: string
-}
+export type ManagedUser = typeof ManagedUserSchema.Type
 
+export const PendingInviteSchema = Schema.Struct({
+  created_at: Schema.String,
+  delivery_error: OptionalNullableString,
+  delivery_sent_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  delivery_status: Schema.optionalKey(InviteDeliveryStatusSchema),
+  email: Schema.String,
+  expires_at: Schema.String,
+  id: Schema.String,
+  invited_by: Schema.String,
+  role: ManagedUserRoleSchema,
+  status: Schema.Literal('pending'),
+  tenant_name: OptionalNullableString,
+})
+
+export type PendingInvite = typeof PendingInviteSchema.Type
+
+export const ManagedStudentSchema = Schema.Struct({
+  channel: Schema.String,
+  created_at: Schema.String,
+  external_id: Schema.String,
+  form: Schema.String,
+  id: Schema.String,
+  name: Schema.String,
+})
+
+export type ManagedStudent = typeof ManagedStudentSchema.Type
+
+export const UserManagementViewSchema = Schema.Struct({
+  active_users: Schema.mutable(Schema.Array(ManagedUserSchema)),
+  pending_invites: Schema.mutable(Schema.Array(PendingInviteSchema)),
+  students: Schema.mutable(Schema.Array(ManagedStudentSchema)),
+  summary: UserManagementSummarySchema,
+})
+
+export type UserManagementView = typeof UserManagementViewSchema.Type
+
+const matchesInviteRecord = Schema.is(InviteRecordSchema)
+const matchesUserManagementView = Schema.is(UserManagementViewSchema)
+
+/** Returns whether an unknown response satisfies the invite contract. */
 export function isInviteRecord(value: unknown): value is InviteRecord {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    isInviteEmail,
-    hasInviteRole,
-    hasInviteToken,
-    hasOptionalInviteID,
-    hasOptionalActivationURL,
-    hasOptionalExpiry,
-    hasOptionalInviterID,
-    hasOptionalDeliveryError,
-    hasOptionalDeliveryStatus,
-  ].every((check) => check(value))
+  return matchesInviteRecord(value)
 }
 
+/** Returns whether an unknown response satisfies the user-management view contract. */
 export function isUserManagementView(
   value: unknown,
 ): value is UserManagementView {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    hasUserManagementSummary,
-    hasActiveUsers,
-    hasManagedStudents,
-    hasPendingInvites,
-  ].every((check) => check(value))
-}
-
-function isUserManagementSummary(
-  value: unknown,
-): value is UserManagementSummary {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    hasParentCount,
-    hasPendingInviteCount,
-    hasStudentCount,
-    hasTeacherCount,
-    hasTotalUserCount,
-  ].every((check) => check(value))
-}
-
-function isManagedUser(value: unknown): value is ManagedUser {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    hasManagedUserID,
-    hasManagedUserName,
-    hasManagedUserEmail,
-    hasManagedUserRole,
-    hasActiveStatus,
-    hasCreatedAt,
-    hasOptionalTenantName,
-  ].every((check) => check(value))
-}
-
-function isPendingInvite(value: unknown): value is PendingInvite {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    hasPendingInviteID,
-    hasPendingInviteEmail,
-    hasPendingInviteRole,
-    hasPendingStatus,
-    hasPendingExpiry,
-    hasPendingCreatedAt,
-    hasPendingInviter,
-    hasOptionalPendingDeliveryError,
-    hasOptionalDeliverySentAt,
-    hasOptionalPendingTenantName,
-    hasOptionalPendingDeliveryStatus,
-  ].every((check) => check(value))
-}
-
-function isManagedStudent(value: unknown): value is ManagedStudent {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    hasStudentID,
-    hasStudentName,
-    hasStudentExternalID,
-    hasStudentChannel,
-    hasStudentForm,
-    hasStudentCreatedAt,
-  ].every((check) => check(value))
-}
-
-function isInviteEmail(value: Record<string, unknown>): boolean {
-  return isString(value.email)
-}
-
-function hasInviteRole(value: Record<string, unknown>): boolean {
-  return isManagedUserRole(value.role)
-}
-
-function hasInviteToken(value: Record<string, unknown>): boolean {
-  return isString(value.invite_token)
-}
-
-function hasOptionalInviteID(value: Record<string, unknown>): boolean {
-  return optionalString(value.id)
-}
-
-function hasOptionalActivationURL(value: Record<string, unknown>): boolean {
-  return optionalString(value.activation_url)
-}
-
-function hasOptionalExpiry(value: Record<string, unknown>): boolean {
-  return optionalString(value.expires_at)
-}
-
-function hasOptionalInviterID(value: Record<string, unknown>): boolean {
-  return optionalString(value.invited_by_user_id)
-}
-
-function hasOptionalDeliveryError(value: Record<string, unknown>): boolean {
-  return optionalString(value.delivery_error)
-}
-
-function hasOptionalDeliveryStatus(value: Record<string, unknown>): boolean {
-  return optionalDeliveryStatus(value.delivery_status)
-}
-
-function hasUserManagementSummary(value: Record<string, unknown>): boolean {
-  return isUserManagementSummary(value.summary)
-}
-
-function hasActiveUsers(value: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(value.active_users) && value.active_users.every(isManagedUser)
-  )
-}
-
-function hasPendingInvites(value: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(value.pending_invites) &&
-    value.pending_invites.every(isPendingInvite)
-  )
-}
-
-function hasManagedStudents(value: Record<string, unknown>): boolean {
-  return Array.isArray(value.students) && value.students.every(isManagedStudent)
-}
-
-function hasParentCount(value: Record<string, unknown>): boolean {
-  return isNumber(value.parents)
-}
-
-function hasPendingInviteCount(value: Record<string, unknown>): boolean {
-  return isNumber(value.pending_invites)
-}
-
-function hasTeacherCount(value: Record<string, unknown>): boolean {
-  return isNumber(value.teachers)
-}
-
-function hasStudentCount(value: Record<string, unknown>): boolean {
-  return isNumber(value.students)
-}
-
-function hasTotalUserCount(value: Record<string, unknown>): boolean {
-  return isNumber(value.total_users)
-}
-
-function hasManagedUserID(value: Record<string, unknown>): boolean {
-  return isString(value.id)
-}
-
-function hasManagedUserName(value: Record<string, unknown>): boolean {
-  return isString(value.name)
-}
-
-function hasManagedUserEmail(value: Record<string, unknown>): boolean {
-  return isString(value.email)
-}
-
-function hasManagedUserRole(value: Record<string, unknown>): boolean {
-  return isManagedUserRole(value.role)
-}
-
-function hasActiveStatus(value: Record<string, unknown>): boolean {
-  return value.status === 'active'
-}
-
-function hasCreatedAt(value: Record<string, unknown>): boolean {
-  return isString(value.created_at)
-}
-
-function hasOptionalTenantName(value: Record<string, unknown>): boolean {
-  return optionalString(value.tenant_name)
-}
-
-function hasStudentID(value: Record<string, unknown>): boolean {
-  return isString(value.id)
-}
-
-function hasStudentName(value: Record<string, unknown>): boolean {
-  return isString(value.name)
-}
-
-function hasStudentExternalID(value: Record<string, unknown>): boolean {
-  return isString(value.external_id)
-}
-
-function hasStudentChannel(value: Record<string, unknown>): boolean {
-  return isString(value.channel)
-}
-
-function hasStudentForm(value: Record<string, unknown>): boolean {
-  return isString(value.form)
-}
-
-function hasStudentCreatedAt(value: Record<string, unknown>): boolean {
-  return isString(value.created_at)
-}
-
-function hasPendingInviteID(value: Record<string, unknown>): boolean {
-  return isString(value.id)
-}
-
-function hasPendingInviteEmail(value: Record<string, unknown>): boolean {
-  return isString(value.email)
-}
-
-function hasPendingInviteRole(value: Record<string, unknown>): boolean {
-  return isManagedUserRole(value.role)
-}
-
-function hasPendingStatus(value: Record<string, unknown>): boolean {
-  return value.status === 'pending'
-}
-
-function hasPendingExpiry(value: Record<string, unknown>): boolean {
-  return isString(value.expires_at)
-}
-
-function hasPendingCreatedAt(value: Record<string, unknown>): boolean {
-  return isString(value.created_at)
-}
-
-function hasPendingInviter(value: Record<string, unknown>): boolean {
-  return isString(value.invited_by)
-}
-
-function hasOptionalPendingDeliveryError(
-  value: Record<string, unknown>,
-): boolean {
-  return optionalString(value.delivery_error)
-}
-
-function hasOptionalDeliverySentAt(value: Record<string, unknown>): boolean {
-  return optionalString(value.delivery_sent_at)
-}
-
-function hasOptionalPendingTenantName(value: Record<string, unknown>): boolean {
-  return optionalString(value.tenant_name)
-}
-
-function hasOptionalPendingDeliveryStatus(
-  value: Record<string, unknown>,
-): boolean {
-  return optionalDeliveryStatus(value.delivery_status)
-}
-
-function isManagedUserRole(value: unknown): value is ManagedUserRole {
-  return isString(value) && managedUserRoles.has(value)
-}
-
-function optionalDeliveryStatus(value: unknown): boolean {
-  return value === undefined || isDeliveryStatus(value)
-}
-
-function optionalString(value: unknown): boolean {
-  return value === undefined || value === null || isString(value)
-}
-
-function isDeliveryStatus(value: unknown): value is InviteDeliveryStatus {
-  return isString(value) && inviteDeliveryStatuses.has(value)
+  return matchesUserManagementView(value)
 }

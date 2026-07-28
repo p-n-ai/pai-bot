@@ -12,6 +12,60 @@ const tailwindCSSPath = fileURLToPath(
   new URL('./src/styles.css', import.meta.url),
 )
 
+const genericGuardRestrictions = [
+  'error',
+  {
+    selector:
+      'Identifier[name=/^(isRecord|hasObjectProperties|hasStringProps|hasNumberProps|optionalStringOrNull)$/]',
+    message:
+      'Define an Effect Schema and decode unknown boundary input instead of using a generic property guard.',
+  },
+]
+
+export const effectBoundaryPlugin = {
+  rules: {
+    'require-schema-import': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          missing:
+            'Boundary modules must import Schema from Effect and model unknown payloads with explicit schemas.',
+        },
+      },
+      create(context) {
+        let importsEffectSchema = false
+
+        return {
+          ImportDeclaration(node) {
+            if (
+              (node.source.value === 'effect' &&
+                node.specifiers.some(
+                  (specifier) =>
+                    specifier.type === 'ImportNamespaceSpecifier' ||
+                    (specifier.type === 'ImportSpecifier' &&
+                      specifier.imported.type === 'Identifier' &&
+                      specifier.imported.name === 'Schema'),
+                )) ||
+              (node.source.value === 'effect/Schema' &&
+                node.specifiers.some(
+                  (specifier) => specifier.type === 'ImportNamespaceSpecifier',
+                ))
+            ) {
+              importsEffectSchema = true
+            }
+          },
+          'Program:exit'(node) {
+            if (!importsEffectSchema) {
+              context.report({ node, messageId: 'missing' })
+            }
+          },
+        }
+      },
+    },
+  },
+}
+
 export default tseslint.config(
   ...tanstackConfig,
   ...neostandard({
@@ -57,6 +111,18 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/no-unused-vars': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: './type-guards',
+              message:
+                'Boundary contracts belong in Effect Schemas, not generic type-guard modules.',
+            },
+          ],
+        },
+      ],
       'no-shadow': 'off',
       'tailwindcss/classnames-order': 'error',
       'tailwindcss/no-custom-classname': 'off',
@@ -76,6 +142,31 @@ export default tseslint.config(
         callees: ['cn', 'cva'],
         config: tailwindCSSPath,
       },
+    },
+  },
+  {
+    name: 'admin-spa/effect-boundaries',
+    files: ['src/lib/*-types.ts', 'src/lib/auth-client.ts'],
+    plugins: {
+      'effect-boundaries': effectBoundaryPlugin,
+    },
+    rules: {
+      'effect-boundaries/require-schema-import': 'error',
+      'no-restricted-syntax': [
+        ...genericGuardRestrictions,
+        {
+          selector:
+            'BinaryExpression[operator=/^(===|!==)$/][left.type="UnaryExpression"][left.operator="typeof"][right.value="object"]',
+          message:
+            'Model object boundaries with Effect Schema instead of hand-written typeof object guards.',
+        },
+        {
+          selector:
+            'BinaryExpression[operator=/^(===|!==)$/][right.type="UnaryExpression"][right.operator="typeof"][left.value="object"]',
+          message:
+            'Model object boundaries with Effect Schema instead of hand-written typeof object guards.',
+        },
+      ],
     },
   },
 )
