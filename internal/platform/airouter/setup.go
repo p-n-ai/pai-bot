@@ -21,16 +21,26 @@ func ProviderNames() []string {
 // Setup builds an AI router from env-backed config, honoring a preferred
 // default provider and per-provider default model selections.
 func Setup(cfg config.AIConfig) *ai.Router {
+	return SetupWithCodexAuth(cfg, nil)
+}
+
+// SetupWithCodexAuth builds a router whose managed Codex provider runs through app-server.
+func SetupWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexAppServerClient) *ai.Router {
 	router := ai.NewRouter()
-	Apply(router, cfg)
+	ApplyWithCodexAuth(router, cfg, codexAuth)
 	return router
 }
 
 // Apply replaces the router's provider set from cfg; providers with no config (e.g. a cleared API key) unregister.
 func Apply(router *ai.Router, cfg config.AIConfig) {
+	ApplyWithCodexAuth(router, cfg, nil)
+}
+
+// ApplyWithCodexAuth replaces providers and gives Codex its managed-session refresher.
+func ApplyWithCodexAuth(router *ai.Router, cfg config.AIConfig, codexAuth ai.CodexAppServerClient) {
 	var regs []ai.ProviderRegistration
 	for _, name := range providerOrder(cfg.DefaultProvider) {
-		reg, ok := buildProvider(name, cfg)
+		reg, ok := buildProviderWithCodexAuth(name, cfg, codexAuth)
 		if !ok {
 			continue
 		}
@@ -46,7 +56,25 @@ func WouldRegister(name string, cfg config.AIConfig) bool {
 	return ok
 }
 
+// HasProviderConfiguration reports whether name has credentials or managed
+// app-server configuration that a fully wired runtime can register.
+func HasProviderConfiguration(name string, cfg config.AIConfig) bool {
+	if name == "codex" &&
+		cfg.Codex.Enabled {
+		return true
+	}
+	return WouldRegister(name, cfg)
+}
+
 func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, bool) {
+	return buildProviderWithCodexAuth(name, cfg, nil)
+}
+
+func buildProviderWithCodexAuth(
+	name string,
+	cfg config.AIConfig,
+	codexAuth ai.CodexAppServerClient,
+) (ai.ProviderRegistration, bool) {
 	switch name {
 	case "mock":
 		if cfg.Mock.Response == "" {
@@ -58,20 +86,6 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 			return ai.ProviderRegistration{}, false
 		}
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true
-	case "codex":
-		if strings.TrimSpace(cfg.Codex.AccessToken) == "" {
-			return ai.ProviderRegistration{}, false
-		}
-		provider, err := ai.NewCodexProvider(
-			cfg.Codex.AccessToken,
-			ai.WithCodexRefreshToken(cfg.Codex.RefreshToken),
-			ai.WithCodexAccountID(cfg.Codex.AccountID),
-		)
-		if err != nil {
-			slog.Warn("failed to create Codex provider", "error", err)
-			return ai.ProviderRegistration{}, false
-		}
-		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true
 	case "anthropic":
 		if cfg.Anthropic.APIKey == "" {
 			return ai.ProviderRegistration{}, false
@@ -102,6 +116,31 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 			return ai.ProviderRegistration{}, false
 		}
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
+	case "codex":
+		if cfg.Codex.Enabled {
+			if codexAuth == nil || !codexAuth.Available() {
+				slog.Warn("Codex provider not registered; Codex app-server is unavailable")
+				return ai.ProviderRegistration{}, false
+			}
+			return ai.ProviderRegistration{
+				Name:         name,
+				Provider:     ai.NewCodexAppServerProvider(codexAuth, cfg.Codex.Model),
+				DefaultModel: cfg.Codex.Model,
+			}, true
+		}
+		if strings.TrimSpace(cfg.Codex.AccessToken) == "" {
+			return ai.ProviderRegistration{}, false
+		}
+		provider, err := ai.NewCodexProvider(
+			cfg.Codex.AccessToken,
+			ai.WithCodexRefreshToken(cfg.Codex.RefreshToken),
+			ai.WithCodexAccountID(cfg.Codex.AccountID),
+		)
+		if err != nil {
+			slog.Warn("failed to create Codex provider", "error", err)
+			return ai.ProviderRegistration{}, false
+		}
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true
 	}
 	return ai.ProviderRegistration{}, false
 }

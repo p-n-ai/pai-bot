@@ -1,5 +1,6 @@
 import { readClassProgress } from './dashboard-types'
 import { readAISettings } from './ai-settings-types'
+import { readCodexAuthStatus } from './codex-auth-types'
 import { isAIUsageSummary } from './ai-usage-types'
 import { isGroupDetail, isGroupRecord } from './group-types'
 import { isInviteRecord, isUserManagementView } from './user-management-types'
@@ -12,6 +13,7 @@ import { readEmbedConfig } from './embed-config-types'
 import { isTeacherResource } from './teacher-resource-types'
 import type { ClassProgress } from './dashboard-types'
 import type { AISettings, UpdateAISettingsInput } from './ai-settings-types'
+import type { CodexAuthStatus } from './codex-auth-types'
 import type { EmbedConfig, UpdateEmbedConfigInput } from './embed-config-types'
 import type {
   AIUsageSummary,
@@ -172,6 +174,32 @@ export async function updateAISettings(
   }
 
   return settings
+}
+
+/** Returns the server-owned Codex device authorization state. */
+export async function getCodexAuthStatus(
+  fetcher: typeof fetch = fetch,
+): Promise<CodexAuthStatus> {
+  const payload = await fetchJSON('/api/admin/ai/codex/auth', fetcher)
+  const status = readCodexAuthStatus(payload)
+  if (!status) {
+    throw new APIContractError('Invalid Codex auth response')
+  }
+  return status
+}
+
+/** Starts Codex device authorization on the server. */
+export async function startCodexDeviceAuth(
+  fetcher: typeof fetch = fetch,
+): Promise<CodexAuthStatus> {
+  const payload = await fetchJSON('/api/admin/ai/codex/auth/device', fetcher, {
+    method: 'POST',
+  })
+  const status = readCodexAuthStatus(payload)
+  if (!status) {
+    throw new APIContractError('Invalid Codex auth response')
+  }
+  return status
 }
 
 export async function getUserManagement(
