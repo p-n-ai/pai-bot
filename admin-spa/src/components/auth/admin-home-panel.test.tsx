@@ -4,10 +4,16 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { AdminHomePanel } from './admin-home-panel'
 
 import type { AuthState } from '@/auth-provider'
+
+vi.mock('@/lib/auth-client', () => ({
+  buildGoogleLoginURL: vi.fn(),
+  loginWithPassword: vi.fn(),
+  readAuthCapabilities: vi.fn().mockResolvedValue({ google_login: false }),
+}))
 
 afterEach(() => {
   cleanup()
@@ -17,15 +23,26 @@ it('keeps signed-out navigation free of duplicate sign in links', () => {
   render(<AdminHomePanel auth={anonymousAuth} nextPath='/dashboard' />)
 
   expect(
-    screen.getByRole('heading', { name: 'Sign in to P&AI Bot' }),
+    screen.getByRole('heading', { level: 1, name: 'Welcome back.' }),
   ).toBeInTheDocument()
   expect(
-    screen.getByText('Enter your school email and password.'),
+    screen.getByText(
+      'Sign in to review progress and support the right students.',
+    ),
   ).toBeInTheDocument()
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getByText('See who needs help next.')).toBeInTheDocument()
+  expect(screen.getByText('Guide the next lesson')).toBeInTheDocument()
+  expect(screen.getByText('Run the whole workspace')).toBeInTheDocument()
+  expect(screen.getByText('Keep access accountable')).toBeInTheDocument()
   expect(
     screen.queryByRole('link', { name: /sign in/i }),
   ).not.toBeInTheDocument()
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'P&AI Bot' })).toHaveAttribute(
+    'href',
+    '/',
+  )
 })
 
 it('renders no signed-in interstitial because the route redirects instead', () => {

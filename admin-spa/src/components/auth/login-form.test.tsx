@@ -14,7 +14,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LoginForm } from './login-form'
 import type { AuthSession } from '@/lib/auth-types'
-import type * as AuthClient from '@/lib/auth-client'
 
 const loginWithPassword = vi.hoisted(() => vi.fn())
 const readAuthCapabilities = vi.hoisted(() => vi.fn())
@@ -22,16 +21,11 @@ const buildGoogleLoginURL = vi.hoisted(() =>
   vi.fn(() => '/api/auth/google/start?next=%2Fdashboard'),
 )
 
-vi.mock('@/lib/auth-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof AuthClient>()
-
-  return {
-    ...actual,
-    buildGoogleLoginURL,
-    loginWithPassword,
-    readAuthCapabilities,
-  }
-})
+vi.mock('@/lib/auth-client', () => ({
+  buildGoogleLoginURL,
+  loginWithPassword,
+  readAuthCapabilities,
+}))
 
 const adminSession: AuthSession = {
   expires_at: '2026-05-08T00:00:00Z',
@@ -98,7 +92,11 @@ describe('LoginForm', () => {
     expect(
       await screen.findByRole('button', { name: 'Sign in with Google' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('G')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('google-mark')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
+    expect(screen.queryByText('G')).not.toBeInTheDocument()
     expect(screen.getByText('or sign in with email')).toBeInTheDocument()
   })
 
@@ -132,7 +130,7 @@ describe('LoginForm', () => {
       '/api/auth/google/start?next=%2Fdashboard',
     )
     expect(
-      screen.getByRole('button', { name: 'Sign in with Google' }),
+      screen.getByRole('button', { name: 'Redirecting to Google...' }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
     expect(screen.getByLabelText('Email')).toBeDisabled()
@@ -153,7 +151,7 @@ describe('LoginForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(
-      await screen.findByRole('button', { name: 'Sign in' }),
+      await screen.findByRole('button', { name: 'Signing in...' }),
     ).toBeDisabled()
     expect(screen.getByLabelText('Email')).toBeDisabled()
     expect(screen.getByLabelText('Password')).toBeDisabled()
