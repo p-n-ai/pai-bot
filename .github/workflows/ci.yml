@@ -18,7 +18,6 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      admin: ${{ steps.filter.outputs.admin }}
       admin_spa: ${{ steps.filter.outputs.admin_spa }}
       backend: ${{ steps.filter.outputs.backend }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -30,9 +29,6 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            admin:
-              - 'admin/**'
-              - '.github/workflows/ci.yml'
             admin_spa:
               - 'admin-spa/**'
               - '.github/workflows/ci.yml'
@@ -67,41 +63,6 @@ jobs:
               - '.dockerignore'
               - '.github/workflows/ci.yml'
 
-  admin:
-    name: Admin ${{ matrix.check }}
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.admin == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - check: lint
-            command: lint
-          - check: test
-            command: test
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.26.2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: admin/pnpm-lock.yaml
-
-      - name: Validate admin lockfile
-        working-directory: admin
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Run ${{ matrix.check }}
-        working-directory: admin
-        run: pnpm ${{ matrix.command }}
-
   admin-spa:
     name: Admin SPA
     runs-on: ubuntu-latest
@@ -127,6 +88,107 @@ jobs:
       - name: Check
         working-directory: admin-spa
         run: pnpm check
+
+  admin-spa-e2e:
+    name: Admin SPA backend E2E
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      needs.changes.outputs.admin_spa == 'true' ||
+      needs.changes.outputs.backend == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: admin-spa/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Start PostgreSQL and Dragonfly
+        run: docker compose up --build --detach --wait postgres dragonfly
+
+      - name: Install admin SPA dependencies
+        working-directory: admin-spa
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        working-directory: admin-spa
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run database migrations
+        run: go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://pai:pai@localhost:5432/pai?sslmode=disable" up -allow-missing
+
+      - name: Build Go backend
+        run: go build -o pai-bot ./cmd/server
+
+      - name: Start Go backend
+        run: |
+          ./pai-bot > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz > /dev/null; then
+              echo "Backend healthy after attempt $attempt"
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
+              cat /tmp/backend.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat /tmp/backend.log
+          exit 1
+        env:
+          LEARN_SERVER_HOST: 0.0.0.0
+          LEARN_SERVER_PORT: "8080"
+          LEARN_DATABASE_URL: postgres://pai:pai@localhost:5432/pai?sslmode=disable
+          LEARN_CACHE_URL: redis://localhost:6379
+          LEARN_TENANT_MODE: single
+          LEARN_CURRICULUM_PATH: ./oss
+          LEARN_DEV_MODE: "true"
+          LEARN_LOG_LEVEL: warn
+          LEARN_LOG_FORMAT: text
+          PAI_AUTH_SECRET: ci-test-secret
+          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: demo-password
+
+      - name: Run public browser tests
+        working-directory: admin-spa
+        run: pnpm test:e2e
+
+      - name: Run authenticated browser tests
+        working-directory: admin-spa
+        run: pnpm test:e2e:backend
+        env:
+          E2E_BACKEND_ENABLED: "true"
+          E2E_ADMIN_EMAIL: admin@example.com
+          E2E_ADMIN_PASSWORD: demo-password
+
+      - name: Dump backend logs
+        if: failure()
+        run: cat /tmp/backend.log || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-spa-playwright-report
+          path: |
+            admin-spa/playwright-report
+            admin-spa/test-results
+          if-no-files-found: ignore
 
   go:
     name: Go ${{ matrix.check }}
@@ -173,117 +235,6 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.4.0
-
-  e2e-backend:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: >-
-      (needs.changes.outputs.admin == 'true' ||
-      needs.changes.outputs.backend == 'true')
-
-    services:
-      dragonfly:
-        image: docker.dragonflydb.io/dragonflydb/dragonfly
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Start PostgreSQL with required extensions
-        run: docker compose up --build --detach --wait postgres
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.26.2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: admin/pnpm-lock.yaml
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Run database migrations
-        run: go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://pai:pai@localhost:5432/pai?sslmode=disable" up -allow-missing
-
-      - name: Build Go backend
-        run: go build -o pai-bot ./cmd/server
-
-      - name: Start backend
-        run: |
-          ./pai-bot > /tmp/backend.log 2>&1 &
-          echo $! > /tmp/backend.pid
-          # Wait for healthz
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/healthz > /dev/null 2>&1; then
-              echo "Backend healthy after attempt $i"
-              break
-            fi
-            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
-              echo "Backend process died"; cat /tmp/backend.log; exit 1
-            fi
-            sleep 2
-          done
-          curl -sf http://localhost:8080/healthz || (echo "Backend failed to start"; cat /tmp/backend.log; exit 1)
-        env:
-          LEARN_SERVER_HOST: 0.0.0.0
-          LEARN_SERVER_PORT: "8080"
-          LEARN_DATABASE_URL: postgres://pai:pai@localhost:5432/pai?sslmode=disable
-          LEARN_CACHE_URL: redis://localhost:6379
-          LEARN_TENANT_MODE: single
-          LEARN_CURRICULUM_PATH: ./oss
-          LEARN_DEV_MODE: "true"
-          LEARN_LOG_LEVEL: warn
-          LEARN_LOG_FORMAT: text
-          PAI_AUTH_SECRET: ci-test-secret
-          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
-          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: demo-password
-
-      - name: Install admin dependencies
-        working-directory: admin
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Install Playwright browsers
-        timeout-minutes: 10
-        working-directory: admin
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Playwright E2E (with backend)
-        timeout-minutes: 15
-        working-directory: admin
-        run: pnpm test:e2e
-        env:
-          INTERNAL_API_URL: http://localhost:8080
-          NEXT_PUBLIC_API_URL: http://localhost:8080
-          E2E_BACKEND_ENABLED: "true"
-          E2E_AUTH_ENABLED: "true"
-          E2E_ADMIN_EMAIL: admin@example.com
-          E2E_ADMIN_PASSWORD: demo-password
-
-      - name: Dump backend logs
-        if: failure()
-        run: cat /tmp/backend.log || true
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-backend
-          path: |
-            admin/playwright-report
-            admin/test-results
-          if-no-files-found: ignore
 
   docker:
     runs-on: ubuntu-latest

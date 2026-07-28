@@ -327,7 +327,6 @@ pai-bot/
 │       ├── cache/                   # Dragonfly client (go-redis)
 │       ├── mailer/                  # SMTP email delivery
 │       └── seed/                    # Demo data seeding
-├── admin/                           # Legacy Next.js admin panel
 ├── admin-spa/                       # Vite/TanStack admin SPA
 │   └── src/
 │       ├── routes/                  # TanStack Router routes
@@ -336,7 +335,7 @@ pai-bot/
 ├── deploy/
 │   ├── docker/
 │   │   ├── Dockerfile               # Multi-stage Go build
-│   │   └── Dockerfile.admin         # Multi-stage Next.js build
+│   │   └── Dockerfile.admin         # Multi-stage admin SPA build
 │   ├── caddy/                       # Reverse proxy config
 │   └── nginx/                       # Alternative reverse proxy
 ├── scripts/
@@ -535,7 +534,7 @@ Recommended first setup sequence:
 
 ### Local Development
 
-Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just next`.
+Note: `just` recipes are supported on macOS/Linux for now. On Windows, prefer Docker/WSL2 instead of `just go` / `just admin-spa`.
 
 The shortest path uses [ONCE](https://github.com/basecamp/once):
 
@@ -556,7 +555,7 @@ isolated inside the image.
 The lower-level workflow remains available when you need to run services
 independently:
 
-`just go` / `just next` require `LEARN_DATABASE_URL` to be present in `.env`; the local bootstrap path no longer falls back to an implicit default DSN or shell override.
+`just go` / `just admin-spa` require `LEARN_DATABASE_URL` to be present in `.env`; the local bootstrap path no longer falls back to an implicit default DSN or shell override.
 
 ```bash
 # Start infrastructure (Postgres, Dragonfly, Ollama)
@@ -577,12 +576,12 @@ just seed-docker
 # Start the Go server (turnkey deps + local Postgres/Dragonfly; auto-seeds only for the default local dev DB target)
 just go
 
-# Start the admin panel + Agentation MCP, and try to boot the Go server if needed
-# If backend boot fails, Next.js still starts; check /tmp/pai-go.log for backend errors
-# Ctrl-C also stops backend + Agentation started by this command
-just next
+# Start the admin SPA and try to boot the Go server if needed
+# If backend boot fails, Vite still starts; check /tmp/pai-go.log for backend errors
+# Ctrl-C also stops the backend started by this command
+just admin-spa
 
-# Start Google auth emulator + backend + admin + Agentation through one wrapper script
+# Start the backend + admin SPA through one wrapper script
 # Good target for Codex app "play" / run-button flows
 ./scripts/run-dev.sh
 
@@ -601,14 +600,12 @@ go test -tags=integration ./...   # Run integration tests
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
-cd admin && pnpm test      # Admin unit + component tests
-cd admin && pnpm test:e2e  # Admin Playwright smoke tests
-just admin-e2e             # Same Playwright run via just
-just test-all              # Convenience gate: lint + Go tests + admin unit/component tests
+cd admin-spa && pnpm test  # Admin SPA unit + component tests
+cd admin-spa && pnpm test:e2e  # Public login + protected-route browser tests
+cd admin-spa && E2E_ADMIN_EMAIL=admin@example.com E2E_ADMIN_PASSWORD=demo-password pnpm test:e2e:backend  # Real backend auth/session browser test
+just admin-spa-check       # Typecheck, lint, format, tests, and build
+just test-all              # Go lint/tests + full admin SPA check
 ```
-
-Backend-dependent E2E tests are tagged `@backend` and are skipped by default unless `E2E_BACKEND_ENABLED=true`. Authenticated routes also require `E2E_AUTH_ENABLED=true` plus `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD`.
-These `E2E_*` variables are documented in [`.env.example`](.env.example).
 
 OpenAI live conversation integration suite:
 

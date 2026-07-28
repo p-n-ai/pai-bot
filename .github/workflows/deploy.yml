@@ -20,51 +20,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: admin-spa/pnpm-lock.yaml
+
+      - name: Install admin SPA dependencies
+        working-directory: admin-spa
+        run: pnpm install --frozen-lockfile
+
+      - name: Check admin SPA
+        working-directory: admin-spa
+        run: pnpm check
+
+      - name: Install Playwright browser
+        working-directory: admin-spa
+        run: pnpm exec playwright install --with-deps chromium
 
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-
-      - name: Install pnpm
-        working-directory: admin
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.26.2 --activate
-
-      - name: Validate admin lockfile
-        working-directory: admin
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Admin lint
-        working-directory: admin
-        run: pnpm lint
-
-      - name: Admin test
-        working-directory: admin
-        run: pnpm test
-
-      - name: Install Playwright browsers
-        timeout-minutes: 10
-        working-directory: admin
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Admin E2E
-        timeout-minutes: 15
-        working-directory: admin
-        run: pnpm test:e2e
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-deploy
-          path: |
-            admin/playwright-report
-            admin/test-results
-          if-no-files-found: ignore
 
       - name: Download Go dependencies
         run: go mod download
@@ -74,6 +54,62 @@ jobs:
 
       - name: Test
         run: go test ./... -short -count=1
+
+      - name: Start PostgreSQL and Dragonfly
+        run: docker compose up --build --detach --wait postgres dragonfly
+
+      - name: Run database migrations
+        run: go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://pai:pai@localhost:5432/pai?sslmode=disable" up -allow-missing
+
+      - name: Build Go backend
+        run: go build -o pai-bot ./cmd/server
+
+      - name: Start Go backend
+        run: |
+          ./pai-bot > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz > /dev/null; then
+              echo "Backend healthy after attempt $attempt"
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
+              cat /tmp/backend.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat /tmp/backend.log
+          exit 1
+        env:
+          LEARN_SERVER_HOST: 0.0.0.0
+          LEARN_SERVER_PORT: "8080"
+          LEARN_DATABASE_URL: postgres://pai:pai@localhost:5432/pai?sslmode=disable
+          LEARN_CACHE_URL: redis://localhost:6379
+          LEARN_TENANT_MODE: single
+          LEARN_CURRICULUM_PATH: ./oss
+          LEARN_DEV_MODE: "true"
+          LEARN_LOG_LEVEL: warn
+          LEARN_LOG_FORMAT: text
+          PAI_AUTH_SECRET: deploy-test-secret
+          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: demo-password
+
+      - name: Run public browser tests
+        working-directory: admin-spa
+        run: pnpm test:e2e
+
+      - name: Run authenticated browser tests
+        working-directory: admin-spa
+        run: pnpm test:e2e:backend
+        env:
+          E2E_BACKEND_ENABLED: "true"
+          E2E_ADMIN_EMAIL: admin@example.com
+          E2E_ADMIN_PASSWORD: demo-password
+
+      - name: Dump backend logs
+        if: failure()
+        run: cat /tmp/backend.log || true
 
   push-images:
     runs-on: ubuntu-latest

@@ -9,4 +9,4 @@ if ! command -v just >/dev/null 2>&1; then
   exit 1
 fi
 
-exec just next-dev
+exec just admin-spa
