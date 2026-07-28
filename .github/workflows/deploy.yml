@@ -171,6 +171,9 @@ jobs:
               "LEARN_AI_DEEPSEEK_API_KEY=${DEEPSEEK_KEY}" \
               "LEARN_AI_GOOGLE_API_KEY=${GOOGLE_KEY}" \
               "LEARN_AI_OPENROUTER_API_KEY=${OPENROUTER_KEY}" \
+              "LEARN_AI_CODEX_ENABLED=true" \
+              "LEARN_AI_CODEX_HOME=/var/lib/pai-bot/codex" \
+              "LEARN_AI_CODEX_MODEL=gpt-5.4" \
               "LEARN_AI_OLLAMA_ENABLED=false" \
               "LEARN_TENANT_MODE=single" \
               "LEARN_CURRICULUM_PATH=./oss" \
