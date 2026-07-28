@@ -30,7 +30,9 @@ type TelegramChannel struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	devMode bool
+	devMode     bool
+	lifecycleMu sync.Mutex
+	done        chan struct{}
 }
 
 // NewTelegramChannel creates a Telegram channel adapter.
@@ -170,7 +172,18 @@ func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage
 	if err := t.syncCommands(); err != nil {
 		slog.Warn("failed to sync Telegram commands", "error", err)
 	}
-	go t.pollLoop(ctx, handler)
+	t.lifecycleMu.Lock()
+	if t.done != nil {
+		t.lifecycleMu.Unlock()
+		return nil
+	}
+	done := make(chan struct{})
+	t.done = done
+	t.lifecycleMu.Unlock()
+	go func() {
+		defer close(done)
+		t.pollLoop(ctx, handler)
+	}()
 	return nil
 }
 
@@ -178,6 +191,12 @@ func (t *TelegramChannel) Stop() error {
 	t.stopOnce.Do(func() {
 		close(t.stop)
 	})
+	t.lifecycleMu.Lock()
+	done := t.done
+	t.lifecycleMu.Unlock()
+	if done != nil {
+		<-done
+	}
 	return nil
 }
 

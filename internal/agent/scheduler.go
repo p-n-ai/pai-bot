@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -226,14 +227,23 @@ func (s *Scheduler) Start(ctx context.Context, userIDs []string) {
 func (s *Scheduler) StartForRecipients(ctx context.Context, recipients []ScheduledRecipient) {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
+	var timers sync.WaitGroup
+	defer timers.Wait()
+	startTimer := func(run func()) {
+		timers.Add(1)
+		go func() {
+			defer timers.Done()
+			run()
+		}()
+	}
 
 	// Start daily summary on a precise timer (22:00 MYT), not a polling tick.
-	go s.runDailySummaryTimer(ctx, recipients)
-	go s.runWeeklyParentReportTimer(ctx)
+	startTimer(func() { s.runDailySummaryTimer(ctx, recipients) })
+	startTimer(func() { s.runWeeklyParentReportTimer(ctx) })
 
 	// Start weekly leaderboard recap on Monday 8:00 AM MYT.
 	if s.groups != nil {
-		go s.runWeeklyLeaderboardTimer(ctx)
+		startTimer(func() { s.runWeeklyLeaderboardTimer(ctx) })
 	}
 
 	s.logger.Info("scheduler started", "interval", s.config.CheckInterval)

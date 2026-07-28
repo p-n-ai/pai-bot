@@ -47,9 +47,10 @@ func TestRunServesHealthBeforeSwapAndBuiltHandlerAfterSwap(t *testing.T) {
 		})
 	}()
 
-	if body := getEventually(t, "http://"+addr+"/anything"); body != `{"status":"ok"}` {
+	if body := getEventually(t, "http://"+addr+"/healthz"); body != `{"status":"ok"}` {
 		t.Fatalf("health body before swap = %q, want health JSON", body)
 	}
+	getStatusEventually(t, "http://"+addr+"/readyz", http.StatusServiceUnavailable)
 
 	close(allowBuild)
 	go func() {
@@ -80,6 +81,40 @@ func TestRunServesHealthBeforeSwapAndBuiltHandlerAfterSwap(t *testing.T) {
 	}
 }
 
+func TestRunRejectsUnsafeOptions(t *testing.T) {
+	valid := Options{
+		Addr:            "127.0.0.1:8080",
+		ReadTimeout:     time.Second,
+		WriteTimeout:    time.Second,
+		IdleTimeout:     time.Second,
+		ShutdownTimeout: time.Second,
+		BuildHandler: func(context.Context) (http.Handler, func(context.Context) error, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Options)
+	}{
+		{name: "empty address", mutate: func(opts *Options) { opts.Addr = "" }},
+		{name: "zero read timeout", mutate: func(opts *Options) { opts.ReadTimeout = 0 }},
+		{name: "negative write timeout", mutate: func(opts *Options) { opts.WriteTimeout = -time.Second }},
+		{name: "zero idle timeout", mutate: func(opts *Options) { opts.IdleTimeout = 0 }},
+		{name: "zero shutdown timeout", mutate: func(opts *Options) { opts.ShutdownTimeout = 0 }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := valid
+			tt.mutate(&opts)
+			if err := Run(t.Context(), opts); err == nil {
+				t.Fatal("Run() succeeded with unsafe options")
+			}
+		})
+	}
+}
+
 func TestRunCancelsPostSwapWorkWhenServerExits(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -99,6 +134,9 @@ func TestRunCancelsPostSwapWorkWhenServerExits(t *testing.T) {
 	started := make(chan struct{})
 	runErr := Run(context.Background(), Options{
 		Addr:            listener.Addr().String(),
+		ReadTimeout:     time.Second,
+		WriteTimeout:    time.Second,
+		IdleTimeout:     time.Second,
 		ShutdownTimeout: time.Second,
 		BuildHandler: func(context.Context) (http.Handler, func(context.Context) error, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), func(ctx context.Context) error {
@@ -162,4 +200,24 @@ func getEventually(t *testing.T, url string) string {
 	}
 	t.Fatalf("GET %s did not succeed: %v", url, lastErr)
 	return ""
+}
+
+func getStatusEventually(t *testing.T, url string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == want {
+				return
+			}
+			lastErr = fmt.Errorf("status %d", resp.StatusCode)
+		} else {
+			lastErr = err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("GET %s did not return %d: %v", url, want, lastErr)
 }
