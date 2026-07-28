@@ -74,7 +74,7 @@ func (t *TelegramChannel) SendTyping(ctx context.Context, userID string) error {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := t.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("sending typing indicator: %w", err)
+		return telegramTransportError(ctx, "sending typing indicator", err)
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
@@ -238,7 +238,7 @@ func (t *TelegramChannel) getUpdates(ctx context.Context) ([]tgUpdate, error) {
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, telegramTransportError(ctx, "Telegram getUpdates", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -462,7 +462,11 @@ func (t *TelegramChannel) postForm(ctx context.Context, endpoint string, params 
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return t.client.Do(request)
+	response, err := t.client.Do(request)
+	if err != nil {
+		return nil, telegramTransportError(ctx, "Telegram API", err)
+	}
+	return response, nil
 }
 
 func pickImageFileID(m *tgMessage) string {
@@ -493,7 +497,7 @@ func (t *TelegramChannel) getImageDataURL(ctx context.Context, fileID string) (s
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("download telegram file: %w", err)
+		return "", telegramTransportError(ctx, "Telegram file download", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -524,7 +528,7 @@ func (t *TelegramChannel) getFilePath(ctx context.Context, fileID string) (strin
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("telegram getFile request: %w", err)
+		return "", telegramTransportError(ctx, "Telegram getFile", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -591,7 +595,11 @@ func (t *TelegramChannel) syncCommands() error {
 
 	resp, err := t.client.PostForm(t.baseURL+"/setMyCommands", params)
 	if err != nil {
-		return fmt.Errorf("setMyCommands request failed: %w", err)
+		return telegramTransportError(
+			context.Background(),
+			"telegram setMyCommands",
+			err,
+		)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -601,4 +609,24 @@ func (t *TelegramChannel) syncCommands() error {
 	}
 
 	return nil
+}
+
+type telegramTransportFailure struct {
+	operation string
+	cause     error
+}
+
+func (failure telegramTransportFailure) Error() string {
+	return failure.operation + " request failed"
+}
+
+func (failure telegramTransportFailure) Unwrap() error {
+	return failure.cause
+}
+
+func telegramTransportError(ctx context.Context, operation string, cause error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return telegramTransportFailure{operation: operation, cause: cause}
 }
