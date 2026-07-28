@@ -89,6 +89,13 @@ func clearEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
 }
 
+func setPrivateProductionAuth(t *testing.T) {
+	t.Helper()
+	t.Setenv("PAI_AUTH_SECRET", "private-test-secret")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "private-bootstrap-password")
+}
+
 func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("PAI_FEATURES", "unknown_feature")
@@ -413,6 +420,43 @@ func TestValidate_DefaultProvider_Invalid(t *testing.T) {
 	}
 }
 
+func TestValidate_ProductionRequiresPrivateAuthConfiguration(t *testing.T) {
+	base := Config{
+		Runtime: RuntimeConfig{DevMode: false},
+		Tenant:  TenantConfig{Mode: "single"},
+		Telegram: TelegramConfig{
+			BotToken: "telegram-token",
+		},
+		AI: AIConfig{
+			Ollama: OllamaConfig{Enabled: true},
+		},
+		Auth: AuthConfig{
+			JWTSecret: DefaultAuthSecret,
+			BootstrapAdmin: BootstrapAdminConfig{
+				Email:    "platform-admin@example.com",
+				Password: "demo-password",
+			},
+		},
+	}
+
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "PAI_AUTH_SECRET") {
+		t.Fatalf("default auth secret error = %v", err)
+	}
+
+	base.Auth.JWTSecret = "private-test-secret"
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "PAI_AUTH_BOOTSTRAP") {
+		t.Fatalf("default bootstrap credentials error = %v", err)
+	}
+
+	base.Auth.BootstrapAdmin = BootstrapAdminConfig{
+		Email:    "owner@example.com",
+		Password: "private-bootstrap-password",
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("private production auth config error = %v", err)
+	}
+}
+
 func TestValidate_MissingBotToken(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("LEARN_AI_OLLAMA_ENABLED", "true")
@@ -462,6 +506,7 @@ func TestValidate_AllowsProductionWithoutTelegram(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clearEnv(t)
+			setPrivateProductionAuth(t)
 			t.Setenv("LEARN_AI_OLLAMA_ENABLED", "true")
 			for name, value := range tt.env {
 				t.Setenv(name, value)
@@ -692,6 +737,7 @@ func TestValidateEmbedBaseURLRequiresOrigin(t *testing.T) {
 
 func TestValidate_Success(t *testing.T) {
 	clearEnv(t)
+	setPrivateProductionAuth(t)
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
 	t.Setenv("LEARN_AI_OLLAMA_ENABLED", "true")
 
@@ -765,6 +811,7 @@ func TestHasAIProviderRejectsCodexDeviceSetupWithoutHome(t *testing.T) {
 
 func TestValidateAllowsAdminCodexSetupWithoutExistingProvider(t *testing.T) {
 	clearEnv(t)
+	setPrivateProductionAuth(t)
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
 	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
 

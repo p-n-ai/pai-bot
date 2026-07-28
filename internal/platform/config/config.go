@@ -20,6 +20,11 @@ import (
 // never be encrypted under it.
 const DefaultAuthSecret = "change-me-in-production"
 
+const (
+	defaultBootstrapAdminEmail    = "platform-admin@example.com"
+	defaultBootstrapAdminPassword = "demo-password"
+)
+
 // Config holds all application configuration.
 type Config struct {
 	Server         ServerConfig
@@ -360,8 +365,8 @@ func Load() (*Config, error) {
 				AdminBaseURL:          envStr("PAI_AUTH_GOOGLE_ADMIN_BASE_URL", ""),
 			},
 			BootstrapAdmin: BootstrapAdminConfig{
-				Email:    envStr("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "platform-admin@example.com"),
-				Password: envStr("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "demo-password"),
+				Email:    envStr("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", defaultBootstrapAdminEmail),
+				Password: envStr("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", defaultBootstrapAdminPassword),
 			},
 		},
 		Tenant: TenantConfig{
@@ -394,6 +399,17 @@ func (c *Config) Validate() error {
 	}
 	if !c.HasAIProvider() && !c.CodexDeviceAuthAvailable() && !c.Runtime.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
+	}
+	if !c.Runtime.DevMode {
+		if strings.TrimSpace(c.Auth.JWTSecret) == "" || c.Auth.JWTSecret == DefaultAuthSecret {
+			return fmt.Errorf("PAI_AUTH_SECRET must be set to a private secret in production")
+		}
+		if strings.TrimSpace(c.Auth.BootstrapAdmin.Email) == "" ||
+			strings.TrimSpace(c.Auth.BootstrapAdmin.Password) == "" ||
+			strings.EqualFold(strings.TrimSpace(c.Auth.BootstrapAdmin.Email), defaultBootstrapAdminEmail) ||
+			c.Auth.BootstrapAdmin.Password == defaultBootstrapAdminPassword {
+			return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL and PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD must be set to private credentials in production")
+		}
 	}
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
 		return fmt.Errorf("unsupported LEARN_AI_DEFAULT_PROVIDER %q", c.AI.DefaultProvider)
