@@ -3,6 +3,4 @@ version: "2"
 linters:
   exclusions:
     paths:
-      - admin/node_modules
-      - admin/.next
       - .golangci-cache

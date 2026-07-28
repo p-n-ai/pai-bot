@@ -3,7 +3,7 @@
 **Generated:** 2026-07-11
 **Commit:** bdd0c16
 
-K-12 proactive learning agent for Telegram, WhatsApp, WebSocket/embed chat, and admin dashboards. Go modular monolith with Vite/Next/Astro frontends; current primary scope is backend Go and `admin-spa/`.
+K-12 proactive learning agent for Telegram, WhatsApp, WebSocket/embed chat, and admin dashboards. Go modular monolith with Vite and Astro frontends; current primary scope is backend Go and `admin-spa/`.
 
 ## STRUCTURE
 
@@ -12,7 +12,6 @@ pai-bot/
 ├── cmd/          # entrypoint binaries (AGENTS.md)
 ├── internal/     # backend domains (AGENTS.md)
 ├── admin-spa/    # Vite + TanStack Router admin SPA (AGENTS.md)
-├── admin/        # Next admin app
 ├── site/         # Astro site
 ├── migrations/   # SQL migrations
 ├── deploy/       # Docker image/runtime assets
@@ -72,7 +71,7 @@ just setup
 just prepare-local-dev
 just go
 just admin-spa
-just frontend
+just once-dev
 just test
 just test-integration
 just test-all
@@ -83,6 +82,7 @@ just seed
 just db-url-redacted
 just db-seed-state
 cd admin-spa && pnpm test
+cd admin-spa && pnpm test:e2e
 cd admin-spa && pnpm typecheck
 cd admin-spa && pnpm build
 ```
@@ -102,7 +102,7 @@ cd admin-spa && pnpm build
 ## NOTES
 
 - Local runtime should stay local: never run migrations with `GOOSE_DSN`/`LEARN_DATABASE_URL` aimed at remote DBs.
-- `just frontend` starts the Next admin plus Agentation MCP; keep Agentation wiring dev-only.
+- `just admin-spa` starts the Vite admin SPA and attempts to boot the Go backend when needed.
 
 ## Agent skills
 

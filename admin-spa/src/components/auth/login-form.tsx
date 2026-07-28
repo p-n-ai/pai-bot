@@ -126,7 +126,7 @@ export function LoginForm({
   return (
     <form
       aria-busy={isPending || isGooglePending}
-      className='flex flex-col gap-5'
+      className='flex flex-col gap-5 font-sans'
       id='sign-in-form'
       onSubmit={submit}
     >
@@ -179,14 +179,14 @@ function LoginCredentialsFields({
     <>
       <Field data-disabled={disabled}>
         <FieldLabel
-          className='text-sm font-medium text-foreground'
+          className='text-[13px] font-semibold tracking-[0.01em] text-slate-text'
           htmlFor={emailID}
         >
           Email
         </FieldLabel>
         <Input
           autoComplete='username'
-          className='h-11 rounded-xl px-3 text-base sm:text-sm'
+          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-base text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf] sm:text-sm'
           disabled={disabled}
           id={emailID}
           name='email'
@@ -201,14 +201,14 @@ function LoginCredentialsFields({
 
       <Field data-disabled={disabled}>
         <FieldLabel
-          className='text-sm font-medium text-foreground'
+          className='text-[13px] font-semibold tracking-[0.01em] text-slate-text'
           htmlFor={passwordID}
         >
           Password
         </FieldLabel>
         <Input
           autoComplete='current-password'
-          className='h-11 rounded-xl px-3 text-base sm:text-sm'
+          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-base text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf] sm:text-sm'
           disabled={disabled}
           id={passwordID}
           name='password'
@@ -232,14 +232,14 @@ function PasswordLoginButton({
 }) {
   return (
     <Button
-      className='h-11 rounded-xl px-4 font-semibold'
+      className='h-11 rounded-[10px] bg-[#17211b] px-4 text-sm font-semibold text-cloud-white shadow-[0_10px_24px_rgba(23,33,27,0.18)] hover:bg-[#235f72] focus-visible:ring-[#2f6f5b]'
       disabled={isDisabled}
       type='submit'
     >
       {isPending ? (
         <Spinner aria-hidden='true' data-icon='inline-start' />
       ) : null}
-      Sign in
+      {isPending ? 'Signing in...' : 'Sign in'}
     </Button>
   )
 }
@@ -249,7 +249,11 @@ function LoginDivider({ visible }: { visible: boolean }) {
     return null
   }
 
-  return <FieldSeparator>or sign in with email</FieldSeparator>
+  return (
+    <FieldSeparator className='text-xs text-ash-gray'>
+      or sign in with email
+    </FieldSeparator>
+  )
 }
 
 function GoogleLoginButton({
@@ -269,7 +273,7 @@ function GoogleLoginButton({
 
   return (
     <Button
-      className='min-h-11 w-full rounded-xl font-semibold'
+      className='min-h-11 w-full rounded-[10px] border-[#d9d3ca] bg-cloud-white text-sm font-semibold text-slate-text shadow-subtle hover:bg-[#f7f5ef] focus-visible:ring-[#2f6f5b]'
       disabled={isPending}
       onClick={onClick}
       type='button'
@@ -278,16 +282,38 @@ function GoogleLoginButton({
       {isRedirecting ? (
         <Spinner aria-hidden='true' data-icon='inline-start' />
       ) : (
-        <span
-          aria-hidden='true'
-          className='inline-grid size-4 place-items-center text-sm leading-none font-extrabold'
-          data-icon='inline-start'
-        >
-          G
-        </span>
+        <GoogleMark />
       )}
-      Sign in with Google
+      {isRedirecting ? 'Redirecting to Google...' : 'Sign in with Google'}
     </Button>
+  )
+}
+
+function GoogleMark() {
+  return (
+    <svg
+      aria-hidden='true'
+      data-icon='inline-start'
+      data-testid='google-mark'
+      viewBox='0 0 18 18'
+    >
+      <path
+        d='M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.715v2.259h2.909c1.702-1.567 2.684-3.874 2.684-6.615Z'
+        fill='#4285F4'
+      />
+      <path
+        d='M9 18c2.43 0 4.467-.806 5.956-2.18l-2.909-2.259c-.806.54-1.835.859-3.047.859-2.344 0-4.328-1.585-5.037-3.714H.956v2.333A9 9 0 0 0 9 18Z'
+        fill='#34A853'
+      />
+      <path
+        d='M3.963 10.706A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.168.281-1.706V4.961H.956A9 9 0 0 0 0 9c0 1.45.347 2.824.956 4.039l3.007-2.333Z'
+        fill='#FBBC05'
+      />
+      <path
+        d='M9 3.58c1.321 0 2.507.454 3.44 1.345l2.581-2.581C13.463.892 11.426 0 9 0A9 9 0 0 0 .956 4.961l3.007 2.333C4.672 5.165 6.656 3.58 9 3.58Z'
+        fill='#EA4335'
+      />
+    </svg>
   )
 }
 
@@ -310,17 +336,20 @@ function SchoolSelect({
 
   return (
     <Field
-      className='rounded-xl border border-border bg-muted/50 p-3'
+      className='rounded-xl border border-[#d9d3ca] bg-[#f7fbf8] p-3'
       data-disabled={disabled}
     >
-      <div className='mb-3 flex gap-2 text-sm leading-5 text-muted-foreground'>
+      <div className='mb-3 flex gap-2 text-sm leading-5 text-[#445c4d]'>
         <Building2Icon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
         <p className='m-0'>
           This email belongs to more than one school. Choose where you want to
           sign in.
         </p>
       </div>
-      <FieldLabel className='text-xs font-semibold' htmlFor={id}>
+      <FieldLabel
+        className='text-xs font-semibold text-slate-text'
+        htmlFor={id}
+      >
         School
       </FieldLabel>
       <Select
@@ -329,7 +358,10 @@ function SchoolSelect({
         required
         value={value}
       >
-        <SelectTrigger className='mt-1.5 h-11 rounded-xl' id={id}>
+        <SelectTrigger
+          className='mt-1.5 h-11 rounded-[10px] border-[#d9d3ca] bg-cloud-white focus-visible:ring-[#2f6f5b]'
+          id={id}
+        >
           <SelectValue placeholder='Choose school' />
         </SelectTrigger>
         <SelectContent>

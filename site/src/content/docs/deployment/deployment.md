@@ -12,7 +12,7 @@ P&AI Bot supports two deployment models today: local development and single-serv
 
 ```bash
 just go       # Start backend: infra + migrations + Go server
-just next     # Start backend + Next.js admin panel
+just admin-spa # Start backend + Vite admin SPA
 just stop     # Stop everything
 ```
 
@@ -141,7 +141,7 @@ Multi-stage build:
 
 ## Kubernetes (Helm)
 
-A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, Next.js admin, PostgreSQL, and Dragonfly, with database migrations, health probes, and ingress routing.
+A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go app, Vite admin SPA, PostgreSQL, and Dragonfly, with database migrations, health probes, and ingress routing.
 
 ### Prerequisites
 
@@ -207,7 +207,7 @@ k3d cluster delete pai-local
 | Resource | Type | Purpose |
 |----------|------|---------|
 | `pai-app` | Deployment | Go backend (port 8080) |
-| `pai-admin` | Deployment | Next.js admin panel (port 3000) |
+| `pai-admin` | Deployment | Vite admin SPA (port 3000) |
 | `pai-postgres` | StatefulSet + PVC | PostgreSQL 17 database |
 | `pai-dragonfly` | StatefulSet + PVC | Dragonfly cache (Redis-compatible) |
 | `pai` | ConfigMap | Non-secret environment variables |

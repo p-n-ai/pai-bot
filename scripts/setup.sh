@@ -60,7 +60,7 @@ info "docker compose found"
 if command -v node &> /dev/null; then
     info "node found (needed for admin panel)"
 else
-    warn "node not found — admin panel (just next) won't work, but the backend will."
+    warn "node not found — admin panel (just admin-spa) won't work, but the backend will."
 fi
 echo ""
 
@@ -187,7 +187,7 @@ echo "    just go                    Or use the task runner"
 echo "    docker compose up -d       Or run everything in Docker"
 echo ""
 echo "  Start the admin panel:"
-echo "    just next                  Backend + admin on :3000"
+echo "    just admin-spa             Backend + admin SPA on :5173"
 echo ""
 echo "  Chat with your bot:"
 echo "    Open Telegram and send /start to your bot"

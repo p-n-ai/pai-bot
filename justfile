@@ -18,7 +18,7 @@ setup:
 
 install-deps:
   go mod download
-  if [ ! -d admin/node_modules ]; then cd admin && pnpm install --frozen-lockfile; fi
+  if [ ! -d admin-spa/node_modules ]; then cd admin-spa && pnpm install --frozen-lockfile; fi
   if [ ! -d site/node_modules ]; then cd site && pnpm install --frozen-lockfile; fi
 
 install-local-runtime:
@@ -163,13 +163,13 @@ check-local-db:
       ;; \
     missing_auth_schema) \
       echo "database schema is not ready (missing auth tables)"; \
-      echo "run 'just migrate' before 'just go' or 'just next'"; \
+      echo "run 'just migrate' before 'just go' or 'just admin-spa'"; \
       exit 1; \
       ;; \
     not_seeded) \
       if [ "$db_allows_auto_seed" = "yes" ]; then \
         echo "database is up but demo auth data is not ready ($seed_state)"; \
-        echo "run 'just seed' before 'just go' or 'just next'"; \
+        echo "run 'just seed' before 'just go' or 'just admin-spa'"; \
         exit 1; \
       fi; \
       echo "database is reachable and migrated; skipping demo seed requirement for target $db_url_redacted"; \
@@ -244,8 +244,8 @@ go:
   just prepare-local-dev
   set -a; source .env; set +a; go run ./cmd/server
 
-frontend-deps:
-  cd admin && pnpm install
+admin-spa-deps:
+  cd admin-spa && pnpm install
 
 admin-spa:
   #!/usr/bin/env bash
@@ -306,210 +306,6 @@ emulate-google:
 emulate-vercel:
   npx -y emulate@{{emulate_version}} --service vercel --port 4000 --seed tools/emulate/emulate.config.yaml
 
-frontend:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  state_dir="{{dev-state-dir}}"
-  frontend_port="${FRONTEND_PORT:-3000}"
-  agentation_port="${AGENTATION_PORT:-4747}"
-  find_frontend_listener() {
-    lsof -tiTCP:"$frontend_port" -sTCP:LISTEN 2>/dev/null | head -n 1
-  }
-  reclaim_stale_frontend() {
-    listener_pid="$(find_frontend_listener)"
-    if [ -z "$listener_pid" ]; then
-      return 1
-    fi
-    listener_cmd="$(ps -p "$listener_pid" -o command= 2>/dev/null || true)"
-    listener_cwd="$(lsof -a -p "$listener_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)"
-    parent_pid="$(ps -p "$listener_pid" -o ppid= 2>/dev/null | tr -d ' ' || true)"
-    parent_cmd=""
-    if [ -n "$parent_pid" ]; then
-      parent_cmd="$(ps -p "$parent_pid" -o command= 2>/dev/null || true)"
-    fi
-    case "$listener_cwd" in
-      */pai-bot/admin)
-        ;;
-      *)
-        return 1
-        ;;
-    esac
-    case "$listener_cmd $parent_cmd" in
-      *next*)
-        ;;
-      *)
-        return 1
-        ;;
-    esac
-    echo "reclaiming stale Next dev listener on port $frontend_port (pid $listener_pid)"
-    if [ -n "$parent_pid" ]; then
-      kill "$parent_pid" "$listener_pid" >/dev/null 2>&1 || kill "$listener_pid" >/dev/null 2>&1 || return 1
-    else
-      kill "$listener_pid" >/dev/null 2>&1 || return 1
-    fi
-    for _ in {1..10}; do
-      if ! lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
-        return 0
-      fi
-      sleep 1
-    done
-    return 1
-  }
-  started_agentation="no"
-  agentation_pid=""
-  frontend_pid=""
-  mkdir -p "$state_dir"
-  cleanup() {
-    code="$?"
-    rm -f "$state_dir/frontend.pid"
-    if [ -n "$frontend_pid" ] && kill -0 "$frontend_pid" >/dev/null 2>&1; then
-      kill "$frontend_pid" >/dev/null 2>&1 || true
-      wait "$frontend_pid" >/dev/null 2>&1 || true
-    fi
-    if [ "$started_agentation" = "yes" ] && [ -n "$agentation_pid" ] && kill -0 "$agentation_pid" >/dev/null 2>&1; then
-      kill "$agentation_pid" >/dev/null 2>&1 || true
-      wait "$agentation_pid" >/dev/null 2>&1 || true
-    fi
-    rm -f "$state_dir/agentation.pid"
-    exit "$code"
-  }
-  trap cleanup INT TERM EXIT
-  if ! lsof -nP -iTCP:"$agentation_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "starting Agentation MCP on http://127.0.0.1:$agentation_port"
-    (
-      cd admin
-      pnpm exec agentation-mcp server --port "$agentation_port"
-    ) >/tmp/pai-agentation.log 2>&1 &
-    agentation_pid="$!"
-    printf '%s\n' "$agentation_pid" >"$state_dir/agentation.pid"
-    started_agentation="yes"
-  fi
-  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    if curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then
-      echo "frontend already running on http://127.0.0.1:$frontend_port"
-      echo "agentation mcp on http://127.0.0.1:$agentation_port"
-      if [ "$started_agentation" = "yes" ]; then
-        echo "press Ctrl-C to stop Agentation started by this command"
-        wait "$agentation_pid"
-      fi
-      exit 0
-    fi
-    if reclaim_stale_frontend; then
-      echo "stale frontend listener cleared; starting fresh on http://127.0.0.1:$frontend_port"
-    fi
-  fi
-  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "port $frontend_port is already in use"
-    lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN
-    exit 1
-  fi
-  cd admin
-  NEXT_PUBLIC_AGENTATION_ENDPOINT="http://127.0.0.1:$agentation_port" \
-    pnpm dev --hostname 127.0.0.1 --port "$frontend_port" &
-  frontend_pid="$!"
-  printf '%s\n' "$frontend_pid" >"$state_dir/frontend.pid"
-  wait "$frontend_pid"
-
-next:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  state_dir="{{dev-state-dir}}"
-  mkdir -p "$state_dir"
-  just prepare-local-dev
-  backend_port="${BACKEND_PORT:-8080}"
-  frontend_port="${FRONTEND_PORT:-3000}"
-  agentation_port="${AGENTATION_PORT:-4747}"
-  started_backend="no"
-  backend_pid=""
-  cleanup() {
-    code="$?"
-    rm -f "$state_dir/backend.pid"
-    if [ "$started_backend" = "yes" ] && [ -n "$backend_pid" ] && kill -0 "$backend_pid" >/dev/null 2>&1; then
-      kill "$backend_pid" >/dev/null 2>&1 || true
-      wait "$backend_pid" >/dev/null 2>&1 || true
-    fi
-    exit "$code"
-  }
-  trap cleanup INT TERM EXIT
-  if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
-    echo "backend already running on http://127.0.0.1:$backend_port"
-  elif lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "port $backend_port is already in use"
-    lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN
-    exit 1
-  else
-    echo "starting Go server on http://127.0.0.1:$backend_port"
-    just go >/tmp/pai-go.log 2>&1 &
-    backend_pid="$!"
-    printf '%s\n' "$backend_pid" >"$state_dir/backend.pid"
-    started_backend="yes"
-    for _ in {1..20}; do
-      if curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-    done
-    if ! curl -fsS --max-time 3 "http://127.0.0.1:$backend_port/healthz" >/dev/null 2>&1; then
-      echo "backend failed to start; continuing with frontend only"
-      echo "check /tmp/pai-go.log for backend boot errors"
-    fi
-  fi
-  if lsof -nP -iTCP:"$frontend_port" -sTCP:LISTEN >/dev/null 2>&1 && \
-    curl -fsS -I --max-time 5 "http://127.0.0.1:$frontend_port" >/dev/null 2>&1; then
-    echo "frontend already running on http://127.0.0.1:$frontend_port"
-    echo "agentation mcp on http://127.0.0.1:$agentation_port"
-    if [ "$started_backend" = "yes" ]; then
-      echo "press Ctrl-C to stop backend started by this command"
-      wait "$backend_pid"
-    fi
-    exit 0
-  fi
-  FRONTEND_PORT="$frontend_port" AGENTATION_PORT="$agentation_port" just frontend
-
-next-dev:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  state_dir="{{dev-state-dir}}"
-  mkdir -p "$state_dir"
-  google_emulator_port="${GOOGLE_EMULATOR_PORT:-4002}"
-  started_google_emulator="no"
-  google_emulator_pid=""
-  cleanup() {
-    code="$?"
-    rm -f "$state_dir/google-emulator.pid"
-    if [ "$started_google_emulator" = "yes" ] && [ -n "$google_emulator_pid" ] && kill -0 "$google_emulator_pid" >/dev/null 2>&1; then
-      kill "$google_emulator_pid" >/dev/null 2>&1 || true
-      wait "$google_emulator_pid" >/dev/null 2>&1 || true
-    fi
-    exit "$code"
-  }
-  trap cleanup INT TERM EXIT
-  if curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
-    echo "google emulator already running on http://127.0.0.1:$google_emulator_port"
-  elif lsof -nP -iTCP:"$google_emulator_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "port $google_emulator_port is already in use"
-    lsof -nP -iTCP:"$google_emulator_port" -sTCP:LISTEN
-    exit 1
-  else
-    echo "starting Google emulator on http://127.0.0.1:$google_emulator_port"
-    just emulate-google >/tmp/pai-google-emulate.log 2>&1 &
-    google_emulator_pid="$!"
-    printf '%s\n' "$google_emulator_pid" >"$state_dir/google-emulator.pid"
-    started_google_emulator="yes"
-    for _ in {1..20}; do
-      if curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-    done
-    if ! curl -fsS --max-time 3 "http://127.0.0.1:$google_emulator_port/.well-known/openid-configuration" >/dev/null 2>&1; then
-      echo "google emulator failed to start"
-      echo "check /tmp/pai-google-emulate.log for details"
-      exit 1
-    fi
-  fi
-  just next
-
 chat-terminal:
   docker compose run --rm --entrypoint /pai-terminal-chat app
 
@@ -532,19 +328,19 @@ test-integration:
 lint:
   go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"${GOLANGCI_LINT_VERSION:-v2.4.0}" run ./...
 
-admin-lint:
-  cd admin && pnpm lint
+admin-spa-check:
+  cd admin-spa && pnpm check
 
-admin-lockfile:
-  cd admin && pnpm install --frozen-lockfile --ignore-scripts
+admin-spa-test:
+  cd admin-spa && pnpm test
 
-admin-test:
-  cd admin && pnpm test
+admin-spa-e2e:
+  cd admin-spa && pnpm test:e2e
 
-admin-e2e:
-  cd admin && pnpm test:e2e
+admin-spa-e2e-backend:
+  cd admin-spa && pnpm test:e2e:backend
 
-test-all: lint test admin-lockfile admin-lint admin-test
+test-all: lint test admin-spa-check
 
 test-cover:
   go test -coverprofile=coverage.out ./...
@@ -579,8 +375,8 @@ seed-docker:
 build-backend:
   CGO_ENABLED=0 go build -o bin/pai-server ./cmd/server
 
-admin-build:
-  cd admin && pnpm build
+admin-spa-build:
+  cd admin-spa && pnpm build
 
 site-dev:
   cd site && pnpm dev
@@ -588,7 +384,7 @@ site-dev:
 site-build:
   cd site && pnpm build
 
-build: build-backend admin-build
+build: build-backend admin-spa-build
 
 # Docker
 docker:
