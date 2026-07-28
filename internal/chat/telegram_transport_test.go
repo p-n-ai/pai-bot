@@ -27,9 +27,12 @@ func TestTelegramChannelTransportErrorDoesNotExposeToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	transportErr := errors.New(
+		"https://api.telegram.org/botsecret-test-token/sendChatAction",
+	)
 	channel.client = &http.Client{
-		Transport: telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
-			return nil, errors.New(request.URL.String())
+		Transport: telegramRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return nil, transportErr
 		}),
 	}
 
@@ -40,6 +43,9 @@ func TestTelegramChannelTransportErrorDoesNotExposeToken(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret-test-token") {
 		t.Fatalf("SendTyping() error exposed bot token: %v", err)
+	}
+	if !errors.Is(err, transportErr) {
+		t.Fatalf("SendTyping() error = %v, want transport error classification", err)
 	}
 }
 
