@@ -66,6 +66,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_OLLAMA_MODEL",
 		"PAI_AUTH_SECRET",
 		"PAI_CONFIG_ENCRYPTION_KEY",
+		"PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS",
 		"PAI_AUTH_GOOGLE_CLIENT_ID",
 		"PAI_AUTH_GOOGLE_CLIENT_SECRET",
 		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
@@ -706,9 +707,68 @@ func TestValidateConfigEncryptionKeyIsLongAndIndependent(t *testing.T) {
 		t.Fatalf("shared encryption key error = %v", err)
 	}
 
+	base.Security.RuntimeSettingsEncryptionKey = strings.Repeat("a", 32)
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "high-entropy") {
+		t.Fatalf("weak encryption key error = %v", err)
+	}
+
 	base.Security.RuntimeSettingsEncryptionKey = "independent-runtime-settings-key-123"
 	if err := base.Validate(); err != nil {
 		t.Fatalf("independent encryption key error = %v", err)
+	}
+}
+
+func TestLoadPreviousConfigEncryptionKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", `["previous-settings-encryption-key-one","previous-settings-encryption-key-two"]`)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.Security.PreviousSettingsEncryptionKeys) != 2 ||
+		cfg.Security.PreviousSettingsEncryptionKeys[0] != "previous-settings-encryption-key-one" {
+		t.Fatalf("PreviousSettingsEncryptionKeys = %#v", cfg.Security.PreviousSettingsEncryptionKeys)
+	}
+}
+
+func TestLoadRejectsMalformedPreviousConfigEncryptionKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", `not-json`)
+
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "JSON array") {
+		t.Fatalf("Load() error = %v, want safe JSON-array error", err)
+	}
+}
+
+func TestValidatePreviousConfigEncryptionKeys(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.Auth.JWTSecret = "auth-secret-value-that-is-long-enough"
+	base.Security.RuntimeSettingsEncryptionKey = "active-settings-encryption-key-1234"
+
+	tests := []struct {
+		name string
+		keys []string
+	}{
+		{name: "short", keys: []string{"short"}},
+		{name: "active reused", keys: []string{base.Security.RuntimeSettingsEncryptionKey}},
+		{name: "auth reused", keys: []string{base.Auth.JWTSecret}},
+		{name: "duplicate", keys: []string{"previous-settings-encryption-key-123", "previous-settings-encryption-key-123"}},
+		{name: "weak", keys: []string{strings.Repeat("a", 32)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			cfg.Security.PreviousSettingsEncryptionKeys = tt.keys
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() should reject invalid previous encryption keys")
+			}
+		})
+	}
+
+	base.Security.PreviousSettingsEncryptionKeys = []string{"previous-settings-encryption-key-123"}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("Validate() valid previous key error = %v", err)
 	}
 }
 

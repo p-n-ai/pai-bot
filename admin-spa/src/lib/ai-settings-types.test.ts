@@ -14,6 +14,37 @@ export const aiSettingsFixture = {
     proactive_nudges: false,
   },
   availableProviders: ['openai', 'openrouter'],
+  providers: [
+    {
+      name: 'openai',
+      supported: true,
+      configured: true,
+      registrable: true,
+      effective: true,
+      managedBy: 'environment',
+    },
+    {
+      name: 'openrouter',
+      supported: true,
+      configured: true,
+      registrable: true,
+      effective: false,
+      managedBy: 'runtime',
+    },
+  ],
+  health: {
+    revision: 3,
+    appliedRevision: 3,
+    drift: false,
+    openrouterKey: {
+      stored: true,
+      readable: true,
+      version: 'v1',
+      algorithm: 'a256gcm',
+      keyId: 'test-safe-key-id',
+      migrationNeeded: false,
+    },
+  },
   sources: {
     defaultProvider: 'db',
     openrouterModel: 'env',
@@ -23,6 +54,24 @@ export const aiSettingsFixture = {
       proactive_nudges: 'env',
     },
   },
+  baseline: {
+    defaultProvider: 'openai',
+    openrouterModel: 'anthropic/claude-sonnet-4.5',
+    openrouterKey: { set: false, last4: '' },
+  },
+  override: {
+    defaultProvider: 'openai',
+    openrouterModel: null,
+    openrouterKey: { set: true, last4: 'a1b2' },
+  },
+  effective: {
+    defaultProvider: 'openai',
+    openrouterModel: 'anthropic/claude-sonnet-4.5',
+    openrouterKey: { set: true, last4: 'a1b2' },
+  },
+  revision: 3,
+  appliedRevision: 3,
+  drift: false,
 }
 
 describe('AI settings response guard', () => {
@@ -104,5 +153,29 @@ describe('AI settings response guard', () => {
         sources: { ...aiSettingsFixture.sources, flags: null },
       }),
     ).toBeNull()
+  })
+
+  it('requires redacted baseline, override, and effective projections', () => {
+    expect(
+      readAISettings({ ...aiSettingsFixture, baseline: undefined }),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        override: {
+          ...aiSettingsFixture.override,
+          openrouterKey: { set: true, last4: 1234 },
+        },
+      }),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        override: {
+          ...aiSettingsFixture.override,
+          defaultProvider: null,
+        },
+      }),
+    ).not.toBeNull()
   })
 })

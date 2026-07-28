@@ -13,16 +13,48 @@ import (
 // OpenRouterAPIKey deliberately never serializes; it lives encrypted in the
 // secrets column, not in the ai jsonb.
 type AISettings struct {
-	DefaultProvider  string `json:"default_provider"`
-	OpenRouterModel  string `json:"openrouter_model"`
-	OpenRouterAPIKey string `json:"-"`
+	DefaultProvider           string                   `json:"default_provider,omitempty"`
+	OpenRouterModel           string                   `json:"openrouter_model,omitempty"`
+	OpenRouterAPIKey          string                   `json:"-"`
+	OpenRouterAPIKeyOperation SecretUpdateOperation    `json:"-"`
+	OpenRouterEnvelope        CredentialEnvelopeStatus `json:"-"`
 }
+
+// CredentialEnvelopeStatus is safe operational metadata for one stored
+// credential. It never contains ciphertext or plaintext characteristics.
+type CredentialEnvelopeStatus struct {
+	Stored          bool
+	Readable        bool
+	Version         string
+	Algorithm       string
+	KeyID           string
+	MigrationNeeded bool
+}
+
+// SecretUpdateOperation distinguishes an omitted secret from an explicit
+// clear when an existing ciphertext cannot be decrypted.
+type SecretUpdateOperation uint8
+
+const (
+	SecretPreserve SecretUpdateOperation = iota
+	SecretReplace
+	SecretClear
+)
 
 // Settings is the full runtime settings document.
 type Settings struct {
-	AI    AISettings
-	Flags map[string]bool
+	AI       AISettings
+	Flags    map[string]bool
+	Revision int64
 }
+
+// PreparedApply is a non-failing runtime mutation built and validated before
+// the desired settings transaction commits.
+type PreparedApply func()
+
+// PrepareApply validates runtime construction without mutating live state and
+// returns the exact atomic mutation to run after commit.
+type PrepareApply func(Settings) (PreparedApply, error)
 
 // MergeAI returns env with non-empty Settings fields overriding it; the DB
 // wins over env, env is the seed.
@@ -58,6 +90,35 @@ type EffectiveSettings struct {
 	OpenRouterKeySource   string
 	Flags                 map[string]bool
 	FlagSources           map[string]string
+	Baseline              AISettingsView
+	Override              AISettingsOverrideView
+	Effective             AISettingsView
+	Revision              int64
+	AppliedRevision       int64
+	Drift                 bool
+	OpenRouterEnvelope    CredentialEnvelopeStatus
+}
+
+// SecretView is the only projection of a provider credential allowed outside
+// the settings boundary.
+type SecretView struct {
+	Set   bool
+	Last4 string
+}
+
+// AISettingsView is a redacted configuration projection.
+type AISettingsView struct {
+	DefaultProvider string
+	OpenRouterModel string
+	OpenRouterKey   SecretView
+}
+
+// AISettingsOverrideView reports explicit database overrides. Nil scalar
+// fields mean the environment baseline remains in control.
+type AISettingsOverrideView struct {
+	DefaultProvider *string
+	OpenRouterModel *string
+	OpenRouterKey   SecretView
 }
 
 // Effective merges env config and DB settings with DB > env > default precedence.
@@ -73,12 +134,41 @@ func Effective(envAI config.AIConfig, envFlags featureflags.Features, st Setting
 	}
 
 	var eff EffectiveSettings
+	eff.Revision = st.Revision
+	eff.OpenRouterEnvelope = st.AI.OpenRouterEnvelope
 	eff.DefaultProvider, eff.DefaultProviderSource = pick(st.AI.DefaultProvider, envAI.DefaultProvider)
 	eff.OpenRouterModel, eff.OpenRouterModelSource = pick(st.AI.OpenRouterModel, envAI.OpenRouter.Model)
 	openRouterKey, openRouterKeySource := pick(st.AI.OpenRouterAPIKey, envAI.OpenRouter.APIKey)
 	eff.OpenRouterKeySet = openRouterKey != ""
 	eff.OpenRouterKeyLast4 = KeyLast4(openRouterKey)
 	eff.OpenRouterKeySource = openRouterKeySource
+	eff.Baseline = AISettingsView{
+		DefaultProvider: envAI.DefaultProvider,
+		OpenRouterModel: envAI.OpenRouter.Model,
+		OpenRouterKey: SecretView{
+			Set: envAI.OpenRouter.APIKey != "",
+		},
+	}
+	if st.AI.DefaultProvider != "" {
+		value := st.AI.DefaultProvider
+		eff.Override.DefaultProvider = &value
+	}
+	if st.AI.OpenRouterModel != "" {
+		value := st.AI.OpenRouterModel
+		eff.Override.OpenRouterModel = &value
+	}
+	eff.Override.OpenRouterKey = SecretView{
+		Set:   st.AI.OpenRouterAPIKey != "",
+		Last4: KeyLast4(st.AI.OpenRouterAPIKey),
+	}
+	eff.Effective = AISettingsView{
+		DefaultProvider: eff.DefaultProvider,
+		OpenRouterModel: eff.OpenRouterModel,
+		OpenRouterKey: SecretView{
+			Set:   eff.OpenRouterKeySet,
+			Last4: eff.OpenRouterKeyLast4,
+		},
+	}
 
 	defaults := featureflags.Defaults()
 	eff.Flags = make(map[string]bool, len(defaults))

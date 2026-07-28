@@ -4,6 +4,8 @@
 package airouter
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -12,6 +14,17 @@ import (
 )
 
 var defaultProviderOrder = []string{"openai", "codex", "anthropic", "deepseek", "google", "ollama", "openrouter"}
+
+// Plan is a fully constructed provider set that can be atomically installed
+// without further validation or provider construction.
+type Plan struct {
+	registrations []ai.ProviderRegistration
+}
+
+// Apply atomically installs the prepared provider set.
+func (p Plan) Apply(router *ai.Router) {
+	router.ReplaceProviders(p.registrations)
+}
 
 // ProviderNames returns every provider name Apply can register.
 func ProviderNames() []string {
@@ -38,16 +51,35 @@ func Apply(router *ai.Router, cfg config.AIConfig) {
 
 // ApplyWithCodexAuth replaces providers and gives Codex its managed-session refresher.
 func ApplyWithCodexAuth(router *ai.Router, cfg config.AIConfig, codexAuth ai.CodexAppServerClient) {
+	plan, err := PrepareWithCodexAuth(cfg, codexAuth)
+	if err != nil {
+		slog.Warn("preferred AI provider could not be prepared", "error", err)
+	}
+	plan.Apply(router)
+}
+
+// PrepareWithCodexAuth constructs the exact provider set to install and
+// rejects a preferred provider that cannot be constructed.
+func PrepareWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexAppServerClient) (Plan, error) {
 	var regs []ai.ProviderRegistration
+	preferred := strings.ToLower(strings.TrimSpace(cfg.DefaultProvider))
+	var preferredErr error
 	for _, name := range providerOrder(cfg.DefaultProvider) {
-		reg, ok := buildProviderWithCodexAuth(name, cfg, codexAuth)
+		reg, ok, err := buildProviderChecked(name, cfg, codexAuth)
+		if err != nil {
+			if name == preferred {
+				preferredErr = fmt.Errorf("provider %q is not registrable", name)
+			}
+			slog.Warn("AI provider not registered", "provider", name)
+			continue
+		}
 		if !ok {
 			continue
 		}
 		regs = append(regs, reg)
 		slog.Info("AI provider registered", "provider", name, "model", strings.TrimSpace(reg.DefaultModel))
 	}
-	router.ReplaceProviders(regs)
+	return Plan{registrations: regs}, preferredErr
 }
 
 // WouldRegister reports whether Apply would register provider name under cfg.
@@ -66,6 +98,16 @@ func HasProviderConfiguration(name string, cfg config.AIConfig) bool {
 	return WouldRegister(name, cfg)
 }
 
+// CanRegister reports whether the fully wired runtime can register provider
+// name. Managed Codex requires both enabled configuration and an available
+// app-server session; other providers are determined entirely by cfg.
+func CanRegister(name string, cfg config.AIConfig, managedCodexAvailable bool) bool {
+	if name == "codex" && cfg.Codex.Enabled {
+		return managedCodexAvailable
+	}
+	return WouldRegister(name, cfg)
+}
+
 func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, bool) {
 	return buildProviderWithCodexAuth(name, cfg, nil)
 }
@@ -75,61 +117,72 @@ func buildProviderWithCodexAuth(
 	cfg config.AIConfig,
 	codexAuth ai.CodexAppServerClient,
 ) (ai.ProviderRegistration, bool) {
+	reg, ok, err := buildProviderChecked(name, cfg, codexAuth)
+	if err != nil {
+		slog.Warn("AI provider not registered", "provider", name)
+		return ai.ProviderRegistration{}, false
+	}
+	return reg, ok
+}
+
+func buildProviderChecked(
+	name string,
+	cfg config.AIConfig,
+	codexAuth ai.CodexAppServerClient,
+) (ai.ProviderRegistration, bool, error) {
 	switch name {
 	case "mock":
 		if cfg.Mock.Response == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewMockProvider(cfg.Mock.Response)}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewMockProvider(cfg.Mock.Response)}, true, nil
 	case "openai":
 		if cfg.OpenAI.APIKey == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenAIProvider(cfg.OpenAI.APIKey), DefaultModel: cfg.OpenAI.Model}, true, nil
 	case "anthropic":
 		if cfg.Anthropic.APIKey == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
 		provider, err := ai.NewAnthropicProvider(cfg.Anthropic.APIKey)
 		if err != nil {
-			slog.Warn("failed to create Anthropic provider", "error", err)
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, true, err
 		}
-		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Anthropic.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Anthropic.Model}, true, nil
 	case "deepseek":
 		if cfg.DeepSeek.APIKey == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewDeepSeekProvider(cfg.DeepSeek.APIKey), DefaultModel: cfg.DeepSeek.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewDeepSeekProvider(cfg.DeepSeek.APIKey), DefaultModel: cfg.DeepSeek.Model}, true, nil
 	case "google":
 		if cfg.Google.APIKey == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewGoogleProvider(cfg.Google.APIKey), DefaultModel: cfg.Google.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewGoogleProvider(cfg.Google.APIKey), DefaultModel: cfg.Google.Model}, true, nil
 	case "ollama":
 		if !cfg.Ollama.Enabled {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewOllamaProvider(cfg.Ollama.URL), DefaultModel: cfg.Ollama.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOllamaProvider(cfg.Ollama.URL), DefaultModel: cfg.Ollama.Model}, true, nil
 	case "openrouter":
 		if cfg.OpenRouter.APIKey == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true, nil
 	case "codex":
 		if cfg.Codex.Enabled {
 			if codexAuth == nil || !codexAuth.Available() {
-				slog.Warn("Codex provider not registered; Codex app-server is unavailable")
-				return ai.ProviderRegistration{}, false
+				return ai.ProviderRegistration{}, true, errors.New("managed Codex app-server is unavailable")
 			}
 			return ai.ProviderRegistration{
 				Name:         name,
 				Provider:     ai.NewCodexAppServerProvider(codexAuth, cfg.Codex.Model),
 				DefaultModel: cfg.Codex.Model,
-			}, true
+			}, true, nil
 		}
 		if strings.TrimSpace(cfg.Codex.AccessToken) == "" {
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, false, nil
 		}
 		provider, err := ai.NewCodexProvider(
 			cfg.Codex.AccessToken,
@@ -137,12 +190,11 @@ func buildProviderWithCodexAuth(
 			ai.WithCodexAccountID(cfg.Codex.AccountID),
 		)
 		if err != nil {
-			slog.Warn("failed to create Codex provider", "error", err)
-			return ai.ProviderRegistration{}, false
+			return ai.ProviderRegistration{}, true, err
 		}
-		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true, nil
 	}
-	return ai.ProviderRegistration{}, false
+	return ai.ProviderRegistration{}, false, nil
 }
 
 func providerOrder(preferred string) []string {

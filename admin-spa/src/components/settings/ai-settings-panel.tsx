@@ -136,7 +136,9 @@ export function AISettingsPanel() {
       const seq = ++requestSeq.current
       sectionSeq.current[section] = seq
       submit.beginSubmit()
-      updateAISettings(input)
+      const revision =
+        state.status === 'ready' ? state.settings.revision : undefined
+      updateAISettings({ ...input, expectedRevision: revision })
         .then((next) => {
           if (seq !== requestSeq.current) {
             return
@@ -162,7 +164,7 @@ export function AISettingsPanel() {
           submit.finishSubmit()
         })
     },
-    [],
+    [state],
   )
 
   const handleProviderChange = useCallback(
@@ -177,6 +179,15 @@ export function AISettingsPanel() {
     [providerSubmit, submitSettings],
   )
 
+  const handleProviderReset = useCallback(() => {
+    submitSettings(
+      'provider',
+      { defaultProvider: null },
+      providerSubmit,
+      'Default provider could not be reset.',
+    )
+  }, [providerSubmit, submitSettings])
+
   const handleModelSave = useCallback(() => {
     submitSettings(
       'model',
@@ -186,6 +197,16 @@ export function AISettingsPanel() {
       (next) => setModel(next.openrouterModel),
     )
   }, [model, modelSubmit, submitSettings])
+
+  const handleModelReset = useCallback(() => {
+    submitSettings(
+      'model',
+      { openrouterModel: null },
+      modelSubmit,
+      'OpenRouter model could not be reset.',
+      (next) => setModel(next.openrouterModel),
+    )
+  }, [modelSubmit, submitSettings])
 
   const handleKeySave = useCallback(() => {
     if (!keyInput.trim()) {
@@ -210,7 +231,7 @@ export function AISettingsPanel() {
   const handleKeyClear = useCallback(() => {
     submitSettings(
       'key',
-      { openrouterApiKey: '' },
+      { openrouterApiKey: null },
       keySubmit,
       'OpenRouter API key could not be cleared.',
       () => {
@@ -269,10 +290,20 @@ export function AISettingsPanel() {
 
   return (
     <div className='mt-8 grid gap-6'>
+      <div className='flex flex-wrap items-center gap-2 text-sm text-muted-foreground'>
+        <Badge variant={settings.drift ? 'destructive' : 'secondary'}>
+          {settings.drift ? 'Runtime drift' : 'Runtime synchronized'}
+        </Badge>
+        <span>
+          Desired revision {settings.revision}, applied revision{' '}
+          {settings.appliedRevision}
+        </span>
+      </div>
       <DefaultProviderSection
         error={providerSubmit.error}
         isPending={providerSubmit.isPending}
         onProviderChange={handleProviderChange}
+        onProviderReset={handleProviderReset}
         settings={settings}
       />
       <CodexAuthSection
@@ -296,6 +327,7 @@ export function AISettingsPanel() {
         onKeyInputChange={setKeyInput}
         onModelChange={setModel}
         onModelSave={handleModelSave}
+        onModelReset={handleModelReset}
         onReplace={handleReplaceKey}
         onSave={handleKeySave}
       />
@@ -453,11 +485,13 @@ function DefaultProviderSection({
   error,
   isPending,
   onProviderChange,
+  onProviderReset,
   settings,
 }: {
   error: string
   isPending: boolean
   onProviderChange: (provider: string) => void
+  onProviderReset: () => void
   settings: AISettings
 }) {
   return (
@@ -472,22 +506,41 @@ function DefaultProviderSection({
           source={settings.sources.defaultProvider}
           text='Provider'
         />
-        <Select
-          disabled={isPending}
-          onValueChange={onProviderChange}
-          value={settings.defaultProvider}
-        >
-          <SelectTrigger className='sm:max-w-xs' id='ai-default-provider'>
-            <SelectValue placeholder='Not set' />
-          </SelectTrigger>
-          <SelectContent>
-            {settings.availableProviders.map((provider) => (
-              <SelectItem key={provider} value={provider}>
-                {provider}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className='flex flex-wrap gap-2'>
+          <Select
+            disabled={isPending}
+            onValueChange={onProviderChange}
+            value={settings.defaultProvider}
+          >
+            <SelectTrigger className='sm:max-w-xs' id='ai-default-provider'>
+              <SelectValue placeholder='Not set' />
+            </SelectTrigger>
+            <SelectContent>
+              {settings.availableProviders.map((provider) => (
+                <SelectItem
+                  disabled={
+                    settings.providers.find((item) => item.name === provider)
+                      ?.registrable === false
+                  }
+                  key={provider}
+                  value={provider}
+                >
+                  {provider}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {settings.sources.defaultProvider === 'db' ? (
+            <Button
+              disabled={isPending}
+              onClick={onProviderReset}
+              type='button'
+              variant='outline'
+            >
+              Reset to environment
+            </Button>
+          ) : null}
+        </div>
       </div>
       <AuthErrorAlert message={error} title='Provider update failed.' />
     </SettingsSection>
@@ -510,6 +563,7 @@ function OpenRouterSection({
   onKeyInputChange,
   onModelChange,
   onModelSave,
+  onModelReset,
   onReplace,
   onSave,
 }: {
@@ -528,6 +582,7 @@ function OpenRouterSection({
   onKeyInputChange: (value: string) => void
   onModelChange: (model: string) => void
   onModelSave: () => void
+  onModelReset: () => void
   onReplace: () => void
   onSave: () => void
 }) {
@@ -572,6 +627,16 @@ function OpenRouterSection({
           <Button disabled={isModelPending} type='submit'>
             Save model
           </Button>
+          {modelSource === 'db' ? (
+            <Button
+              disabled={isModelPending}
+              onClick={onModelReset}
+              type='button'
+              variant='outline'
+            >
+              Reset model to environment
+            </Button>
+          ) : null}
         </form>
         <AuthErrorAlert message={modelError} title='Model update failed.' />
       </div>
@@ -647,7 +712,7 @@ function ConfiguredKeyState({
             type='button'
             variant='outline'
           >
-            Clear key
+            Reset key to environment
           </Button>
         )}
       </div>

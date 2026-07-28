@@ -43,13 +43,58 @@ type aiSettingsSourcesDoc struct {
 	Flags           map[string]string `json:"flags"`
 }
 
+type aiSettingsViewDoc struct {
+	DefaultProvider string                 `json:"defaultProvider"`
+	OpenRouterModel string                 `json:"openrouterModel"`
+	OpenRouterKey   aiSettingsKeyStatusDoc `json:"openrouterKey"`
+}
+
+type aiSettingsOverrideDoc struct {
+	DefaultProvider *string                `json:"defaultProvider"`
+	OpenRouterModel *string                `json:"openrouterModel"`
+	OpenRouterKey   aiSettingsKeyStatusDoc `json:"openrouterKey"`
+}
+
+type aiProviderReadinessDoc struct {
+	Name        string `json:"name"`
+	Supported   bool   `json:"supported"`
+	Configured  bool   `json:"configured"`
+	Registrable bool   `json:"registrable"`
+	Effective   bool   `json:"effective"`
+	ManagedBy   string `json:"managedBy"`
+}
+
+type aiCredentialHealthDoc struct {
+	Stored          bool   `json:"stored"`
+	Readable        bool   `json:"readable"`
+	Version         string `json:"version"`
+	Algorithm       string `json:"algorithm"`
+	KeyID           string `json:"keyId"`
+	MigrationNeeded bool   `json:"migrationNeeded"`
+}
+
+type aiSettingsHealthDoc struct {
+	Revision        int64                 `json:"revision"`
+	AppliedRevision int64                 `json:"appliedRevision"`
+	Drift           bool                  `json:"drift"`
+	OpenRouterKey   aiCredentialHealthDoc `json:"openrouterKey"`
+}
+
 type aiSettingsResponseDoc struct {
-	DefaultProvider    string                 `json:"defaultProvider"`
-	OpenRouterModel    string                 `json:"openrouterModel"`
-	OpenRouterKey      aiSettingsKeyStatusDoc `json:"openrouterKey"`
-	Flags              map[string]bool        `json:"flags"`
-	Sources            aiSettingsSourcesDoc   `json:"sources"`
-	AvailableProviders []string               `json:"availableProviders"`
+	DefaultProvider    string                   `json:"defaultProvider"`
+	OpenRouterModel    string                   `json:"openrouterModel"`
+	OpenRouterKey      aiSettingsKeyStatusDoc   `json:"openrouterKey"`
+	Flags              map[string]bool          `json:"flags"`
+	Sources            aiSettingsSourcesDoc     `json:"sources"`
+	Baseline           aiSettingsViewDoc        `json:"baseline"`
+	Override           aiSettingsOverrideDoc    `json:"override"`
+	Effective          aiSettingsViewDoc        `json:"effective"`
+	Revision           int64                    `json:"revision"`
+	AppliedRevision    int64                    `json:"appliedRevision"`
+	Drift              bool                     `json:"drift"`
+	AvailableProviders []string                 `json:"availableProviders"`
+	Providers          []aiProviderReadinessDoc `json:"providers"`
+	Health             aiSettingsHealthDoc      `json:"health"`
 }
 
 type aiSettingsUpdateRequestDoc struct {
@@ -57,6 +102,7 @@ type aiSettingsUpdateRequestDoc struct {
 	OpenRouterModel  *string          `json:"openrouterModel,omitempty"`
 	OpenRouterAPIKey *string          `json:"openrouterApiKey,omitempty"`
 	Flags            map[string]*bool `json:"flags,omitempty"`
+	ExpectedRevision *int64           `json:"expectedRevision,omitempty"`
 }
 
 type healthResponse struct {
@@ -272,7 +318,7 @@ func Build() (*Document, error) {
 	doc.Paths["/api/admin/ai/settings"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Get effective AI settings for admins and platform admins",
-			Description: "Returns defaultProvider, openrouterModel, masked openrouterKey status, flags, per-field sources, and availableProviders. The API key itself is never returned. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Description: "Returns backward-compatible effective fields plus redacted baseline, override, effective, source, readiness, envelope-health, and desired/applied revision projections. The API key and ciphertext are never returned. In multi-tenant mode, only platform_admin may access this endpoint.",
 			Tags:        []string{"Admin"},
 			Security:    protected,
 			Responses: mergeResponses(
@@ -282,7 +328,7 @@ func Build() (*Document, error) {
 		},
 		Put: &Operation{
 			Summary:     "Update AI settings for admins and platform admins",
-			Description: "Partially updates defaultProvider, openrouterModel, openrouterApiKey, and flags, then returns the effective AI settings view. A null flag deletes the DB override; an empty openrouterApiKey clears the stored key; unknown fields are rejected with 400. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Description: "Partially updates defaultProvider, openrouterModel, openrouterApiKey, and flags, then returns the reconciled settings view. Null deletes the corresponding DB override and restores environment/default control; empty openrouterApiKey remains a legacy reset alias; expectedRevision rejects stale writes with 409; unknown fields are rejected with 400. In multi-tenant mode, only platform_admin may access this endpoint.",
 			Tags:        []string{"Admin"},
 			Security:    protected,
 			RequestBody: jsonBody(registry.refFor(aiSettingsUpdateRequestDoc{})),
@@ -290,6 +336,7 @@ func Build() (*Document, error) {
 				responseJSON("200", "Updated effective AI settings view.", registry.refFor(aiSettingsResponseDoc{})),
 				protectedErrors(),
 				responseText("400", "Request body is invalid, contains an unknown field, or would leave AI providers unusable."),
+				responseText("409", "Expected revision does not match the current runtime settings revision."),
 			),
 		},
 	}

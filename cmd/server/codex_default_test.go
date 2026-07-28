@@ -33,7 +33,7 @@ func (availableCodexAuth) Complete(
 func (m *memoryRuntimeSettingsUpdater) Update(
 	ctx context.Context,
 	mutate func(settings.Settings) (settings.Settings, error),
-	apply func(settings.Settings),
+	prepare settings.PrepareApply,
 ) (settings.Settings, error) {
 	if err := ctx.Err(); err != nil {
 		return settings.Settings{}, err
@@ -42,10 +42,17 @@ func (m *memoryRuntimeSettingsUpdater) Update(
 	if err != nil {
 		return settings.Settings{}, err
 	}
+	var apply settings.PreparedApply
+	if prepare != nil {
+		apply, err = prepare(next)
+		if err != nil {
+			return settings.Settings{}, err
+		}
+	}
 	m.current = next
 	m.updates++
 	if apply != nil {
-		apply(next)
+		apply()
 	}
 	return next, nil
 }
@@ -60,8 +67,8 @@ func TestMakeCodexDefaultPreservesOtherSettingsAndApplies(t *testing.T) {
 	}}
 	var applied settings.Settings
 
-	if err := makeCodexDefault(t.Context(), store, func(next settings.Settings) {
-		applied = next
+	if err := makeCodexDefault(t.Context(), store, func(next settings.Settings) (settings.PreparedApply, error) {
+		return func() { applied = next }, nil
 	}); err != nil {
 		t.Fatalf("makeCodexDefault() error = %v", err)
 	}
@@ -94,12 +101,12 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 	}
 	store := &memoryRuntimeSettingsUpdater{}
 
-	err := makeCodexDefault(t.Context(), store, func(next settings.Settings) {
-		airouter.ApplyWithCodexAuth(
-			router,
-			settings.MergeAI(aiConfig, next),
-			codexAuth,
-		)
+	err := makeCodexDefault(t.Context(), store, func(next settings.Settings) (settings.PreparedApply, error) {
+		plan, err := airouter.PrepareWithCodexAuth(settings.MergeAI(aiConfig, next), codexAuth)
+		if err != nil {
+			return nil, err
+		}
+		return func() { plan.Apply(router) }, nil
 	})
 	if err != nil {
 		t.Fatalf("makeCodexDefault() error = %v", err)

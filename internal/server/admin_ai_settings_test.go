@@ -32,29 +32,51 @@ type stubCodexDeviceAuth struct {
 	starts int
 }
 
+func (m *memorySettingsStore) Current() settings.Settings { return m.current }
+
 func (s *stubCodexDeviceAuth) Status() codexauth.Status { return s.status }
+func (s *stubCodexDeviceAuth) Available() bool {
+	return s.status.State == codexauth.StateConnected
+}
 func (s *stubCodexDeviceAuth) Start() (codexauth.Status, error) {
 	s.starts++
 	return s.status, nil
 }
 
 func (m *memorySettingsStore) Effective() settings.EffectiveSettings {
-	return settings.Effective(m.envAI, m.envFlags, m.current)
+	effective := settings.Effective(m.envAI, m.envFlags, m.current)
+	effective.AppliedRevision = m.current.Revision
+	return effective
+}
+
+func (m *memorySettingsStore) EffectiveFor(st settings.Settings) settings.EffectiveSettings {
+	effective := settings.Effective(m.envAI, m.envFlags, st)
+	effective.AppliedRevision = st.Revision
+	return effective
 }
 
 func (m *memorySettingsStore) MergedAI(st settings.Settings) config.AIConfig {
 	return settings.MergeAI(m.envAI, st)
 }
 
-func (m *memorySettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), apply func(settings.Settings)) (settings.Settings, error) {
+func (m *memorySettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), prepare settings.PrepareApply) (settings.Settings, error) {
 	st, err := mutate(m.current)
 	if err != nil {
 		return settings.Settings{}, err
 	}
+	var apply settings.PreparedApply
+	if prepare != nil {
+		apply, err = prepare(st)
+		if err != nil {
+			return settings.Settings{}, err
+		}
+	}
+	st.Revision = m.current.Revision + 1
+	st.AI.OpenRouterAPIKeyOperation = settings.SecretPreserve
 	m.current = st
 	m.saves++
 	if apply != nil {
-		apply(st)
+		apply()
 	}
 	return st, nil
 }
@@ -64,7 +86,13 @@ func newAISettingsHandler(store runtimeSettingsStore, apply func(settings.Settin
 }
 
 func newMultiTenantAISettingsHandler(store runtimeSettingsStore, apply func(settings.Settings), multiTenant bool) http.Handler {
-	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: stubAdminAPI{}}, nil, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "", store, apply, multiTenant)
+	var prepare settings.PrepareApply
+	if apply != nil {
+		prepare = func(st settings.Settings) (settings.PreparedApply, error) {
+			return func() { apply(st) }, nil
+		}
+	}
+	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: stubAdminAPI{}}, nil, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "", store, prepare, multiTenant)
 }
 
 func newCodexAuthHandler(store runtimeSettingsStore, deviceAuth codexDeviceAuth) http.Handler {
@@ -108,7 +136,36 @@ type aiSettingsPayload struct {
 		OpenRouterKey   string            `json:"openrouterKey"`
 		Flags           map[string]string `json:"flags"`
 	} `json:"sources"`
-	AvailableProviders []string `json:"availableProviders"`
+	Baseline struct {
+		DefaultProvider string `json:"defaultProvider"`
+		OpenRouterModel string `json:"openrouterModel"`
+		OpenRouterKey   struct {
+			Set   bool   `json:"set"`
+			Last4 string `json:"last4"`
+		} `json:"openrouterKey"`
+	} `json:"baseline"`
+	Override struct {
+		DefaultProvider *string `json:"defaultProvider"`
+		OpenRouterModel *string `json:"openrouterModel"`
+		OpenRouterKey   struct {
+			Set   bool   `json:"set"`
+			Last4 string `json:"last4"`
+		} `json:"openrouterKey"`
+	} `json:"override"`
+	Effective struct {
+		DefaultProvider string `json:"defaultProvider"`
+		OpenRouterModel string `json:"openrouterModel"`
+		OpenRouterKey   struct {
+			Set   bool   `json:"set"`
+			Last4 string `json:"last4"`
+		} `json:"openrouterKey"`
+	} `json:"effective"`
+	Revision           int64                 `json:"revision"`
+	AppliedRevision    int64                 `json:"appliedRevision"`
+	Drift              bool                  `json:"drift"`
+	AvailableProviders []string              `json:"availableProviders"`
+	Providers          []aiProviderReadiness `json:"providers"`
+	Health             aiSettingsHealth      `json:"health"`
 }
 
 func decodeAISettingsPayload(t *testing.T, rec *httptest.ResponseRecorder) aiSettingsPayload {
@@ -167,6 +224,21 @@ func TestAdminAISettingsGetReportsEffectiveState(t *testing.T) {
 	if !payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "env" {
 		t.Fatalf("turn_hooks = %v (%s), want true (env)", payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
 	}
+	if payload.Baseline.DefaultProvider != "openai" || payload.Baseline.OpenRouterModel != "env-model" {
+		t.Fatalf("baseline = %+v, want env provider/model", payload.Baseline)
+	}
+	if payload.Baseline.OpenRouterKey.Last4 != "" || !payload.Baseline.OpenRouterKey.Set {
+		t.Fatalf("baseline.openrouterKey = %+v, want set without env key hint", payload.Baseline.OpenRouterKey)
+	}
+	if payload.Override.DefaultProvider != nil || payload.Override.OpenRouterModel != nil || payload.Override.OpenRouterKey.Set {
+		t.Fatalf("override = %+v, want no DB overrides", payload.Override)
+	}
+	if payload.Effective.DefaultProvider != payload.DefaultProvider || payload.Effective.OpenRouterModel != payload.OpenRouterModel {
+		t.Fatalf("effective = %+v, want top-level compatibility aliases", payload.Effective)
+	}
+	if payload.Revision != 0 || payload.AppliedRevision != 0 || payload.Drift {
+		t.Fatalf("revision state = %d/%d drift=%v, want synced zero state", payload.Revision, payload.AppliedRevision, payload.Drift)
+	}
 
 	store.current = settings.Settings{
 		AI:    settings.AISettings{DefaultProvider: "openrouter"},
@@ -184,6 +256,42 @@ func TestAdminAISettingsGetReportsEffectiveState(t *testing.T) {
 	}
 }
 
+func TestAdminAISettingsPutNullScalarsRemoveOverrides(t *testing.T) {
+	envAI := config.AIConfig{DefaultProvider: "openai"}
+	envAI.OpenRouter.Model = "env-model"
+	envAI.OpenRouter.APIKey = "sk-or-env-5678"
+	store := &memorySettingsStore{
+		envAI: envAI,
+		current: settings.Settings{AI: settings.AISettings{
+			DefaultProvider:  "openrouter",
+			OpenRouterModel:  "db-model",
+			OpenRouterAPIKey: "sk-or-db-1234",
+		}},
+	}
+	handler := newAISettingsHandler(store, nil)
+
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(
+		t,
+		handler,
+		http.MethodPut,
+		mustIssueAdminToken(t),
+		`{"defaultProvider":null,"openrouterModel":null,"openrouterApiKey":null}`,
+	))
+
+	if payload.DefaultProvider != "openai" || payload.OpenRouterModel != "env-model" {
+		t.Fatalf("effective provider/model = %q/%q, want env values", payload.DefaultProvider, payload.OpenRouterModel)
+	}
+	if !payload.OpenRouterKey.Set || payload.OpenRouterKey.Last4 != "5678" {
+		t.Fatalf("effective key = %+v, want redacted env fallback", payload.OpenRouterKey)
+	}
+	if payload.Override.DefaultProvider != nil || payload.Override.OpenRouterModel != nil || payload.Override.OpenRouterKey.Set {
+		t.Fatalf("override = %+v, want all DB overrides deleted", payload.Override)
+	}
+	if store.current.AI != (settings.AISettings{}) {
+		t.Fatalf("stored AI = %+v, want zero overrides", store.current.AI)
+	}
+}
+
 func TestAdminAISettingsPutSetsKeyAndNeverReturnsIt(t *testing.T) {
 	const secretKey = "sk-or-verysecret-9876"
 	store := &memorySettingsStore{}
@@ -193,6 +301,9 @@ func TestAdminAISettingsPutSetsKeyAndNeverReturnsIt(t *testing.T) {
 	payload := decodeAISettingsPayload(t, rec)
 	if !payload.OpenRouterKey.Set || payload.OpenRouterKey.Last4 != "9876" {
 		t.Fatalf("openrouterKey = %#v, want set with last4 9876", payload.OpenRouterKey)
+	}
+	if payload.Revision != 1 || payload.AppliedRevision != 1 || payload.Drift {
+		t.Fatalf("revision state = %d/%d drift=%v, want applied revision 1", payload.Revision, payload.AppliedRevision, payload.Drift)
 	}
 	if strings.Contains(rec.Body.String(), "verysecret") {
 		t.Fatalf("PUT response leaked the API key: %q", rec.Body.String())
@@ -227,6 +338,28 @@ func TestAdminAISettingsPutAbsentFieldsUnchanged(t *testing.T) {
 	}
 	if store.current.AI.OpenRouterAPIKey != "sk-or-1234" || !store.current.Flags["turn_hooks"] {
 		t.Fatalf("stored settings = %#v, want key and flags untouched", store.current)
+	}
+}
+
+func TestAdminAISettingsPutRejectsStaleRevision(t *testing.T) {
+	store := &memorySettingsStore{current: settings.Settings{
+		AI:       settings.AISettings{DefaultProvider: "openai"},
+		Revision: 4,
+	}}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(
+		t,
+		handler,
+		http.MethodPut,
+		mustIssueAdminToken(t),
+		`{"expectedRevision":3,"openrouterModel":"new-model"}`,
+	)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if store.saves != 0 || store.current.AI.OpenRouterModel != "" || store.current.Revision != 4 {
+		t.Fatalf("store = %+v saves=%d, want unchanged revision 4", store.current, store.saves)
 	}
 }
 
@@ -321,6 +454,21 @@ func TestAdminAISettingsPutRejectsUnconfiguredDefaultProvider(t *testing.T) {
 	}
 }
 
+func TestAdminAISettingsPutRejectsManagedCodexWhenRuntimeUnavailable(t *testing.T) {
+	store := &memorySettingsStore{envAI: config.AIConfig{
+		Codex: config.CodexConfig{Enabled: true},
+	}}
+	handler := newAISettingsHandler(store, nil)
+
+	rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), `{"defaultProvider":"codex"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body %q)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if store.saves != 0 {
+		t.Fatalf("saves = %d, want 0", store.saves)
+	}
+}
+
 func TestAdminAISettingsPutClearKeyKeepsStaleDefault(t *testing.T) {
 	store := &memorySettingsStore{
 		envAI: config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "sk-env"}},
@@ -380,7 +528,7 @@ type failingSettingsStore struct {
 	saveErr error
 }
 
-func (f *failingSettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), _ func(settings.Settings)) (settings.Settings, error) {
+func (f *failingSettingsStore) Update(_ context.Context, mutate func(settings.Settings) (settings.Settings, error), _ settings.PrepareApply) (settings.Settings, error) {
 	if _, err := mutate(f.current); err != nil {
 		return settings.Settings{}, err
 	}

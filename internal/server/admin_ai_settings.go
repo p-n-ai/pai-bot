@@ -23,15 +23,17 @@ import (
 // runtimeSettingsStore is the seam the AI settings handlers need; the
 // concrete *settings.Store satisfies it.
 type runtimeSettingsStore interface {
+	Current() settings.Settings
 	Effective() settings.EffectiveSettings
+	EffectiveFor(settings.Settings) settings.EffectiveSettings
 	MergedAI(settings.Settings) config.AIConfig
-	// Update must run apply (nil ok) before releasing its write lock so live re-applies happen in save order.
-	Update(ctx context.Context, mutate func(settings.Settings) (settings.Settings, error), apply func(settings.Settings)) (settings.Settings, error)
+	Update(ctx context.Context, mutate func(settings.Settings) (settings.Settings, error), prepare settings.PrepareApply) (settings.Settings, error)
 }
 
 type codexDeviceAuth interface {
 	Status() codexauth.Status
 	Start() (codexauth.Status, error)
+	Available() bool
 }
 
 type aiSettingsKeyStatus struct {
@@ -48,29 +50,102 @@ type aiSettingsSources struct {
 }
 
 type aiSettingsResponse struct {
-	DefaultProvider    string              `json:"defaultProvider"`
-	OpenRouterModel    string              `json:"openrouterModel"`
-	OpenRouterKey      aiSettingsKeyStatus `json:"openrouterKey"`
-	Flags              map[string]bool     `json:"flags"`
-	Sources            aiSettingsSources   `json:"sources"`
-	AvailableProviders []string            `json:"availableProviders"`
+	DefaultProvider    string                `json:"defaultProvider"`
+	OpenRouterModel    string                `json:"openrouterModel"`
+	OpenRouterKey      aiSettingsKeyStatus   `json:"openrouterKey"`
+	Flags              map[string]bool       `json:"flags"`
+	Sources            aiSettingsSources     `json:"sources"`
+	Baseline           aiSettingsView        `json:"baseline"`
+	Override           aiSettingsOverride    `json:"override"`
+	Effective          aiSettingsView        `json:"effective"`
+	Revision           int64                 `json:"revision"`
+	AppliedRevision    int64                 `json:"appliedRevision"`
+	Drift              bool                  `json:"drift"`
+	AvailableProviders []string              `json:"availableProviders"`
+	Providers          []aiProviderReadiness `json:"providers"`
+	Health             aiSettingsHealth      `json:"health"`
 }
 
-// A null flag value deletes the DB override so the flag returns to env control.
+type aiProviderReadiness struct {
+	Name        string `json:"name"`
+	Supported   bool   `json:"supported"`
+	Configured  bool   `json:"configured"`
+	Registrable bool   `json:"registrable"`
+	Effective   bool   `json:"effective"`
+	ManagedBy   string `json:"managedBy"`
+}
+
+type aiCredentialHealth struct {
+	Stored          bool   `json:"stored"`
+	Readable        bool   `json:"readable"`
+	Version         string `json:"version"`
+	Algorithm       string `json:"algorithm"`
+	KeyID           string `json:"keyId"`
+	MigrationNeeded bool   `json:"migrationNeeded"`
+}
+
+type aiSettingsHealth struct {
+	Revision        int64              `json:"revision"`
+	AppliedRevision int64              `json:"appliedRevision"`
+	Drift           bool               `json:"drift"`
+	OpenRouterKey   aiCredentialHealth `json:"openrouterKey"`
+}
+
+type aiSettingsView struct {
+	DefaultProvider string              `json:"defaultProvider"`
+	OpenRouterModel string              `json:"openrouterModel"`
+	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
+}
+
+type aiSettingsOverride struct {
+	DefaultProvider *string             `json:"defaultProvider"`
+	OpenRouterModel *string             `json:"openrouterModel"`
+	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
+}
+
+// nullableString distinguishes an omitted update field from an explicit null,
+// which deletes the database override and restores the environment baseline.
+type nullableString struct {
+	Present bool
+	Value   *string
+}
+
+func (v *nullableString) UnmarshalJSON(data []byte) error {
+	v.Present = true
+	if string(data) == "null" {
+		v.Value = nil
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	v.Value = &value
+	return nil
+}
+
+// A null scalar or flag value deletes the DB override so the field returns to
+// environment/default control. Omitted fields remain unchanged.
 type aiSettingsUpdateRequest struct {
-	DefaultProvider  *string          `json:"defaultProvider"`
-	OpenRouterModel  *string          `json:"openrouterModel"`
-	OpenRouterAPIKey *string          `json:"openrouterApiKey"`
+	DefaultProvider  nullableString   `json:"defaultProvider"`
+	OpenRouterModel  nullableString   `json:"openrouterModel"`
+	OpenRouterAPIKey nullableString   `json:"openrouterApiKey"`
 	Flags            map[string]*bool `json:"flags"`
+	ExpectedRevision *int64           `json:"expectedRevision"`
 }
 
-func handleAdminGetAISettings(store runtimeSettingsStore) http.HandlerFunc {
+func handleAdminGetAISettings(store runtimeSettingsStore, deviceAuth codexDeviceAuth) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, buildAISettingsResponse(store.Effective()))
+		effective := store.Effective()
+		writeJSON(w, http.StatusOK, buildAISettingsResponse(
+			effective,
+			store.MergedAI(store.Current()),
+			codexAvailable(deviceAuth),
+		))
 	}
 }
 
-func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(settings.Settings)) http.HandlerFunc {
+func handleAdminUpdateAISettings(store runtimeSettingsStore, prepareSettings settings.PrepareApply, deviceAuth codexDeviceAuth) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body aiSettingsUpdateRequest
 		if err := decodeStrictJSONBody(r, &body); err != nil {
@@ -79,19 +154,22 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 		}
 
 		var badReq error
-		_, err := store.Update(r.Context(), func(cur settings.Settings) (settings.Settings, error) {
+		saved, err := store.Update(r.Context(), func(cur settings.Settings) (settings.Settings, error) {
+			if body.ExpectedRevision != nil && *body.ExpectedRevision != cur.Revision {
+				return settings.Settings{}, settings.ErrRevisionConflict
+			}
 			next, err := applyAISettingsUpdate(cur, body)
 			// Only a request that sets defaultProvider is checked against the
 			// merged config: clearing a key under a stale default must still work.
-			if err == nil && body.DefaultProvider != nil && next.AI.DefaultProvider != "" &&
-				!airouter.HasProviderConfiguration(next.AI.DefaultProvider, store.MergedAI(next)) {
+			if err == nil && body.DefaultProvider.Present && next.AI.DefaultProvider != "" &&
+				!airouter.CanRegister(next.AI.DefaultProvider, store.MergedAI(next), codexAvailable(deviceAuth)) {
 				err = fmt.Errorf("provider %q has no usable configuration", next.AI.DefaultProvider)
 			}
 			// Clearing the key is the only update that can remove a provider;
 			// an empty router would crash-loop the next boot outside dev mode,
 			// taking down the admin UI that could repair it.
-			if err == nil && body.OpenRouterAPIKey != nil && next.AI.OpenRouterAPIKey == "" &&
-				!anyProviderRegistrable(store.MergedAI(next)) {
+			if err == nil && body.OpenRouterAPIKey.Present && next.AI.OpenRouterAPIKey == "" &&
+				!anyProviderRegistrable(store.MergedAI(next), codexAvailable(deviceAuth)) {
 				err = errors.New("clearing the API key would leave no AI providers configured")
 			}
 			badReq = err
@@ -99,12 +177,16 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 				return settings.Settings{}, err
 			}
 			return next, nil
-		}, applySettings)
+		}, prepareSettings)
 		if badReq != nil {
 			http.Error(w, badReq.Error(), http.StatusBadRequest)
 			return
 		}
 		if err != nil {
+			if errors.Is(err, settings.ErrRevisionConflict) {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
 			if errors.Is(err, settings.ErrConfigEncryptionKey) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -112,7 +194,11 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, buildAISettingsResponse(store.Effective()))
+		writeJSON(w, http.StatusOK, buildAISettingsResponse(
+			store.EffectiveFor(saved),
+			store.MergedAI(saved),
+			codexAvailable(deviceAuth),
+		))
 	}
 }
 
@@ -129,9 +215,13 @@ func handleAdminStartCodexAuth(deviceAuth codexDeviceAuth) http.HandlerFunc {
 	}
 }
 
-func anyProviderRegistrable(cfg config.AIConfig) bool {
+func codexAvailable(deviceAuth codexDeviceAuth) bool {
+	return deviceAuth != nil && deviceAuth.Available()
+}
+
+func anyProviderRegistrable(cfg config.AIConfig, managedCodexAvailable bool) bool {
 	return slices.ContainsFunc(airouter.ProviderNames(), func(name string) bool {
-		return airouter.HasProviderConfiguration(name, cfg)
+		return airouter.CanRegister(name, cfg, managedCodexAvailable)
 	})
 }
 
@@ -160,18 +250,31 @@ func decodeStrictJSONBody(r *http.Request, target any) (err error) {
 // applyAISettingsUpdate merges the request onto current settings: absent
 // fields stay unchanged, an empty openrouterApiKey clears the stored key.
 func applyAISettingsUpdate(st settings.Settings, req aiSettingsUpdateRequest) (settings.Settings, error) {
-	if req.DefaultProvider != nil {
-		name := strings.ToLower(strings.TrimSpace(*req.DefaultProvider))
+	if req.DefaultProvider.Present {
+		name := ""
+		if req.DefaultProvider.Value != nil {
+			name = strings.ToLower(strings.TrimSpace(*req.DefaultProvider.Value))
+		}
 		if name != "" && !slices.Contains(airouter.ProviderNames(), name) {
 			return settings.Settings{}, fmt.Errorf("unknown provider %q", name)
 		}
 		st.AI.DefaultProvider = name
 	}
-	if req.OpenRouterModel != nil {
-		st.AI.OpenRouterModel = strings.TrimSpace(*req.OpenRouterModel)
+	if req.OpenRouterModel.Present {
+		st.AI.OpenRouterModel = ""
+		if req.OpenRouterModel.Value != nil {
+			st.AI.OpenRouterModel = strings.TrimSpace(*req.OpenRouterModel.Value)
+		}
 	}
-	if req.OpenRouterAPIKey != nil {
-		st.AI.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey)
+	if req.OpenRouterAPIKey.Present {
+		st.AI.OpenRouterAPIKey = ""
+		st.AI.OpenRouterAPIKeyOperation = settings.SecretClear
+		if req.OpenRouterAPIKey.Value != nil {
+			st.AI.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey.Value)
+			if st.AI.OpenRouterAPIKey != "" {
+				st.AI.OpenRouterAPIKeyOperation = settings.SecretReplace
+			}
+		}
 	}
 	if req.Flags != nil {
 		// Null values only delete overrides, but their names must still be known.
@@ -198,12 +301,78 @@ func applyAISettingsUpdate(st settings.Settings, req aiSettingsUpdateRequest) (s
 }
 
 // buildAISettingsResponse never includes the API key itself — only set/last4.
-func buildAISettingsResponse(eff settings.EffectiveSettings) aiSettingsResponse {
+func buildAISettingsResponse(
+	eff settings.EffectiveSettings,
+	cfg config.AIConfig,
+	managedCodexAvailable bool,
+) aiSettingsResponse {
+	providers := make([]aiProviderReadiness, 0, len(airouter.ProviderNames()))
+	for _, name := range airouter.ProviderNames() {
+		managedBy := "environment"
+		if name == "openrouter" &&
+			(eff.DefaultProviderSource == settings.SourceDB ||
+				eff.OpenRouterModelSource == settings.SourceDB ||
+				eff.OpenRouterKeySource == settings.SourceDB) {
+			managedBy = "runtime"
+		}
+		if name == "codex" && cfg.Codex.Enabled {
+			managedBy = "managed_codex"
+		}
+		providers = append(providers, aiProviderReadiness{
+			Name:        name,
+			Supported:   true,
+			Configured:  airouter.HasProviderConfiguration(name, cfg),
+			Registrable: airouter.CanRegister(name, cfg, managedCodexAvailable),
+			Effective:   name == eff.DefaultProvider,
+			ManagedBy:   managedBy,
+		})
+	}
 	return aiSettingsResponse{
 		DefaultProvider: eff.DefaultProvider,
 		OpenRouterModel: eff.OpenRouterModel,
 		OpenRouterKey:   aiSettingsKeyStatus{Set: eff.OpenRouterKeySet, Last4: eff.OpenRouterKeyLast4},
 		Flags:           eff.Flags,
+		Baseline: aiSettingsView{
+			DefaultProvider: eff.Baseline.DefaultProvider,
+			OpenRouterModel: eff.Baseline.OpenRouterModel,
+			OpenRouterKey: aiSettingsKeyStatus{
+				Set:   eff.Baseline.OpenRouterKey.Set,
+				Last4: eff.Baseline.OpenRouterKey.Last4,
+			},
+		},
+		Override: aiSettingsOverride{
+			DefaultProvider: eff.Override.DefaultProvider,
+			OpenRouterModel: eff.Override.OpenRouterModel,
+			OpenRouterKey: aiSettingsKeyStatus{
+				Set:   eff.Override.OpenRouterKey.Set,
+				Last4: eff.Override.OpenRouterKey.Last4,
+			},
+		},
+		Effective: aiSettingsView{
+			DefaultProvider: eff.Effective.DefaultProvider,
+			OpenRouterModel: eff.Effective.OpenRouterModel,
+			OpenRouterKey: aiSettingsKeyStatus{
+				Set:   eff.Effective.OpenRouterKey.Set,
+				Last4: eff.Effective.OpenRouterKey.Last4,
+			},
+		},
+		Revision:        eff.Revision,
+		AppliedRevision: eff.AppliedRevision,
+		Drift:           eff.Drift,
+		Providers:       providers,
+		Health: aiSettingsHealth{
+			Revision:        eff.Revision,
+			AppliedRevision: eff.AppliedRevision,
+			Drift:           eff.Drift,
+			OpenRouterKey: aiCredentialHealth{
+				Stored:          eff.OpenRouterEnvelope.Stored,
+				Readable:        eff.OpenRouterEnvelope.Readable,
+				Version:         eff.OpenRouterEnvelope.Version,
+				Algorithm:       eff.OpenRouterEnvelope.Algorithm,
+				KeyID:           eff.OpenRouterEnvelope.KeyID,
+				MigrationNeeded: eff.OpenRouterEnvelope.MigrationNeeded,
+			},
+		},
 		Sources: aiSettingsSources{
 			DefaultProvider: eff.DefaultProviderSource,
 			OpenRouterModel: eff.OpenRouterModelSource,

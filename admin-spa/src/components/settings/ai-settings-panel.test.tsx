@@ -140,6 +140,7 @@ describe('AISettingsPanel', () => {
 
     expect(await screen.findByText(/configured .+ z9y8/)).toBeInTheDocument()
     expect(updateAISettings).toHaveBeenCalledWith({
+      expectedRevision: 3,
       openrouterApiKey: 'sk-or-secret',
     })
     expect(screen.queryByPlaceholderText('sk-or-...')).not.toBeInTheDocument()
@@ -177,7 +178,7 @@ describe('AISettingsPanel', () => {
     expect(screen.getByPlaceholderText('sk-or-...')).toHaveValue('sk-or-secret')
   })
 
-  it('marks an env-sourced key and offers no Clear action', async () => {
+  it('marks an env-sourced key and offers no reset action', async () => {
     getAISettings.mockResolvedValue({
       ...aiSettingsFixture,
       sources: { ...aiSettingsFixture.sources, openrouterKey: 'env' },
@@ -190,11 +191,52 @@ describe('AISettingsPanel', () => {
       screen.getByText('Set in server environment; clear it there.'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Clear key' }),
+      screen.queryByRole('button', { name: 'Reset key to environment' }),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Replace key' }),
     ).toBeInTheDocument()
+  })
+
+  it('resets db overrides to their environment baselines with null', async () => {
+    const dbSettings = {
+      ...aiSettingsFixture,
+      sources: { ...aiSettingsFixture.sources, openrouterModel: 'db' },
+    }
+    getAISettings.mockResolvedValue(dbSettings)
+    updateAISettings.mockResolvedValue(dbSettings)
+
+    render(<AISettingsPanel />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reset to environment' }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        defaultProvider: null,
+        expectedRevision: 3,
+      })
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reset model to environment' }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        openrouterModel: null,
+      })
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reset key to environment' }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        openrouterApiKey: null,
+      })
+    })
   })
 
   it('resets a db-sourced flag by sending a null override', async () => {
@@ -220,6 +262,7 @@ describe('AISettingsPanel', () => {
 
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
         flags: { turn_hooks: null },
       })
     })
@@ -250,6 +293,7 @@ describe('AISettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
         flags: { turn_hooks: false },
       })
     })
@@ -263,6 +307,7 @@ describe('AISettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
         openrouterModel: 'openrouter/new-model',
       })
     })

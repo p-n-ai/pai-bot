@@ -108,6 +108,9 @@ secrets:
   # -- Independent key for encrypting API keys stored through admin settings.
   # Must contain at least 32 characters when runtime secret writes are used.
   configEncryptionKey: ""
+  # -- Retired encryption roots retained during credential rotation.
+  # Values are serialized to PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS as JSON.
+  previousConfigEncryptionKeys: []
   # -- Bearer token for the feature-gated /health/ai monitor.
   aiHealthToken: ""
   # -- Telegram bot token (required unless devMode)

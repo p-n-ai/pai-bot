@@ -6,12 +6,17 @@
 package config
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
@@ -51,7 +56,8 @@ type Config struct {
 
 // SecurityConfig holds process-level cryptographic roots with distinct purposes.
 type SecurityConfig struct {
-	RuntimeSettingsEncryptionKey string
+	RuntimeSettingsEncryptionKey   string
+	PreviousSettingsEncryptionKeys []string
 }
 
 // RuntimeConfig holds runtime knobs. New product experiments use FeatureFlags.
@@ -256,6 +262,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	previousSettingsEncryptionKeys, err := secretListEnv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS")
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := &Config{
 		Server: ServerConfig{
@@ -271,7 +281,8 @@ func Load() (*Config, error) {
 			URL: envStr("LEARN_CACHE_URL", "redis://localhost:6379"),
 		},
 		Security: SecurityConfig{
-			RuntimeSettingsEncryptionKey: envStr("PAI_CONFIG_ENCRYPTION_KEY", ""),
+			RuntimeSettingsEncryptionKey:   envStr("PAI_CONFIG_ENCRYPTION_KEY", ""),
+			PreviousSettingsEncryptionKeys: previousSettingsEncryptionKeys,
 		},
 		FocusedPage: FocusedPageConfig{
 			BaseURL:        envStr("LEARN_FOCUSED_PAGE_BASE_URL", ""),
@@ -425,12 +436,22 @@ func (c *Config) Validate() error {
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
 		return fmt.Errorf("unsupported LEARN_AI_DEFAULT_PROVIDER %q", c.AI.DefaultProvider)
 	}
-	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && len(strings.TrimSpace(key)) < 32 {
+	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && nonWhitespaceLen(key) < 32 {
 		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must contain at least 32 non-whitespace characters")
+	}
+	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && weakSecretRoot(key) {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must be a high-entropy secret")
 	}
 	if c.Security.RuntimeSettingsEncryptionKey != "" &&
 		c.Security.RuntimeSettingsEncryptionKey == c.Auth.JWTSecret {
 		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must differ from PAI_AUTH_SECRET")
+	}
+	if err := validatePreviousSettingsEncryptionKeys(
+		c.Security.RuntimeSettingsEncryptionKey,
+		c.Auth.JWTSecret,
+		c.Security.PreviousSettingsEncryptionKeys,
+	); err != nil {
+		return err
 	}
 
 	if c.Tenant.Mode != "single" && c.Tenant.Mode != "multi" {
@@ -592,4 +613,81 @@ func envBool(key string, fallback bool) bool {
 		return strings.EqualFold(v, "true") || v == "1"
 	}
 	return fallback
+}
+
+func secretListEnv(key string) ([]string, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return nil, nil
+	}
+	var values []string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return nil, fmt.Errorf("%s must be a JSON array of strings", key)
+	}
+	return values, nil
+}
+
+func validatePreviousSettingsEncryptionKeys(active, auth string, previous []string) error {
+	if len(previous) > 8 {
+		return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS must contain at most 8 keys")
+	}
+	total := 0
+	seen := make(map[string]struct{}, len(previous))
+	seenIDs := make(map[string]struct{}, len(previous)+1)
+	if active != "" {
+		seenIDs[RuntimeSettingsKeyID(active)] = struct{}{}
+	}
+	for _, key := range previous {
+		total += len(key)
+		if nonWhitespaceLen(key) < 32 {
+			return fmt.Errorf("each PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS value must contain at least 32 non-whitespace characters")
+		}
+		if weakSecretRoot(key) {
+			return fmt.Errorf("each PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS value must be a high-entropy secret")
+		}
+		if key == active || key == auth {
+			return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS must differ from active encryption and auth keys")
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS must not contain duplicates")
+		}
+		seen[key] = struct{}{}
+		keyID := RuntimeSettingsKeyID(key)
+		if _, duplicate := seenIDs[keyID]; duplicate {
+			return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS must have unique derived key IDs")
+		}
+		seenIDs[keyID] = struct{}{}
+	}
+	if total > 8*1024 {
+		return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS exceeds the 8 KiB limit")
+	}
+	return nil
+}
+
+func weakSecretRoot(value string) bool {
+	distinct := make(map[rune]struct{})
+	for _, r := range value {
+		if !unicode.IsSpace(r) {
+			distinct[r] = struct{}{}
+		}
+	}
+	return len(distinct) < 12
+}
+
+// RuntimeSettingsKeyID derives the stable non-secret identifier used for
+// exact encryption-root lookup in versioned credential envelopes.
+func RuntimeSettingsKeyID(secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte("pai-bot/runtime-settings/key-id/v1"))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:16])
+}
+
+func nonWhitespaceLen(value string) int {
+	count := 0
+	for _, r := range value {
+		if !unicode.IsSpace(r) {
+			count++
+		}
+	}
+	return count
 }

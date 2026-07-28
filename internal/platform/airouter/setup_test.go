@@ -110,6 +110,12 @@ func TestManagedCodexRequiresRuntimeManagerToRegister(t *testing.T) {
 	if !HasProviderConfiguration("codex", cfg) {
 		t.Fatal("HasProviderConfiguration() = false for connected managed Codex")
 	}
+	if CanRegister("codex", cfg, false) {
+		t.Fatal("CanRegister() = true without available managed Codex runtime")
+	}
+	if !CanRegister("codex", cfg, true) {
+		t.Fatal("CanRegister() = false with available managed Codex runtime")
+	}
 }
 
 type unavailableCodexAuth struct{ stubCodexAuth }
@@ -221,5 +227,27 @@ func TestApplyUnregistersProviderWhenKeyCleared(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "no providers registered") {
 		t.Fatalf("Complete() error = %v, want no-providers failure without touching the stale provider", err)
+	}
+}
+
+func TestPrepareRejectsUnbuildablePreferredProviderWithoutMutatingRouter(t *testing.T) {
+	router := Setup(config.AIConfig{
+		DefaultProvider: "mock",
+		Mock:            config.MockAIConfig{Response: "existing"},
+	})
+	before := router.ProviderOrder()
+	cfg := config.AIConfig{
+		DefaultProvider: "codex",
+		Codex: config.CodexConfig{
+			Enabled: true,
+		},
+		Mock: config.MockAIConfig{Response: "replacement"},
+	}
+
+	if _, err := PrepareWithCodexAuth(cfg, nil); err == nil {
+		t.Fatal("PrepareWithCodexAuth() error = nil, want unavailable managed Codex")
+	}
+	if got := router.ProviderOrder(); !reflect.DeepEqual(got, before) {
+		t.Fatalf("router order after failed prepare = %v, want unchanged %v", got, before)
 	}
 }
