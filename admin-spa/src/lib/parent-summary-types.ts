@@ -1,10 +1,10 @@
 import { Schema } from 'effect'
-
 import {
   LearningStreakSchema,
   ProgressItemSchema,
   StudentProfileSchema,
 } from './learner-types'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const ParentProfileSchema = Schema.Struct({
   id: Schema.String,
@@ -14,7 +14,9 @@ export const ParentProfileSchema = Schema.Struct({
   created_at: Schema.String,
 })
 
-export type ParentProfile = typeof ParentProfileSchema.Type
+export interface ParentProfile extends EffectSchema.Type<
+  typeof ParentProfileSchema
+> {}
 
 export const WeeklyStatsSchema = Schema.Struct({
   days_active: Schema.Number,
@@ -23,7 +25,9 @@ export const WeeklyStatsSchema = Schema.Struct({
   needs_review_count: Schema.Number,
 })
 
-export type WeeklyStats = typeof WeeklyStatsSchema.Type
+export interface WeeklyStats extends EffectSchema.Type<
+  typeof WeeklyStatsSchema
+> {}
 
 const Encouragement = Schema.Struct({
   headline: Schema.String,
@@ -39,7 +43,9 @@ export const ParentSummarySchema = Schema.Struct({
   encouragement: Encouragement,
 })
 
-export type ParentSummary = typeof ParentSummarySchema.Type
+export interface ParentSummary extends EffectSchema.Type<
+  typeof ParentSummarySchema
+> {}
 
 const matchesParentSummary = Schema.is(ParentSummarySchema)
 

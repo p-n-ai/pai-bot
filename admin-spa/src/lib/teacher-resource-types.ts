@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const TeacherResourceSchema = Schema.Struct({
   id: Schema.String,
@@ -17,7 +18,9 @@ export const TeacherResourceSchema = Schema.Struct({
   extraction_error: Schema.optionalKey(Schema.String),
 })
 
-export type TeacherResource = typeof TeacherResourceSchema.Type
+export interface TeacherResource extends EffectSchema.Type<
+  typeof TeacherResourceSchema
+> {}
 
 export interface UploadTeacherResourceInput {
   file: File

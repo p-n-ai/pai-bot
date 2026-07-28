@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 const AdminRoleSchema = Schema.Literals([
   'student',
@@ -21,7 +22,7 @@ export const AuthUserSchema = Schema.Struct({
   can_manage_ai_settings: Schema.optionalKey(Schema.Boolean),
 })
 
-export type AuthUser = typeof AuthUserSchema.Type
+export interface AuthUser extends EffectSchema.Type<typeof AuthUserSchema> {}
 
 export const SchoolChoiceSchema = Schema.Struct({
   tenant_id: Schema.String,
@@ -29,7 +30,9 @@ export const SchoolChoiceSchema = Schema.Struct({
   tenant_name: Schema.String,
 })
 
-export type SchoolChoice = typeof SchoolChoiceSchema.Type
+export interface SchoolChoice extends EffectSchema.Type<
+  typeof SchoolChoiceSchema
+> {}
 
 const SchoolChoices = Schema.mutable(Schema.Array(SchoolChoiceSchema))
 
@@ -39,7 +42,9 @@ export const AuthSessionSchema = Schema.Struct({
   tenant_choices: Schema.optionalKey(SchoolChoices),
 })
 
-export type AuthSession = typeof AuthSessionSchema.Type
+export interface AuthSession extends EffectSchema.Type<
+  typeof AuthSessionSchema
+> {}
 
 const matchesAuthSession = Schema.is(AuthSessionSchema)
 const matchesSchoolChoices = Schema.is(SchoolChoices)

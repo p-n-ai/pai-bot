@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const JoinClassViewSchema = Schema.Struct({
   class_id: Schema.String,
@@ -8,7 +9,9 @@ export const JoinClassViewSchema = Schema.Struct({
   school_name: Schema.String,
 })
 
-export type JoinClassView = typeof JoinClassViewSchema.Type
+export interface JoinClassView extends EffectSchema.Type<
+  typeof JoinClassViewSchema
+> {}
 
 const matchesJoinClassView = Schema.is(JoinClassViewSchema)
 

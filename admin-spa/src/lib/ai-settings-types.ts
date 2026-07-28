@@ -1,11 +1,14 @@
 import { Option, Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const AISettingsKeyStatusSchema = Schema.Struct({
   set: Schema.Boolean,
   last4: Schema.String,
 })
 
-export type AISettingsKeyStatus = typeof AISettingsKeyStatusSchema.Type
+export interface AISettingsKeyStatus extends EffectSchema.Type<
+  typeof AISettingsKeyStatusSchema
+> {}
 
 export const AISettingsSourcesSchema = Schema.Struct({
   defaultProvider: Schema.String,
@@ -14,7 +17,9 @@ export const AISettingsSourcesSchema = Schema.Struct({
   flags: Schema.Record(Schema.String, Schema.String),
 })
 
-export type AISettingsSources = typeof AISettingsSourcesSchema.Type
+export interface AISettingsSources extends EffectSchema.Type<
+  typeof AISettingsSourcesSchema
+> {}
 
 export const AISettingsSchema = Schema.Struct({
   defaultProvider: Schema.String,
@@ -25,7 +30,9 @@ export const AISettingsSchema = Schema.Struct({
   sources: AISettingsSourcesSchema,
 })
 
-export type AISettings = typeof AISettingsSchema.Type
+export interface AISettings extends EffectSchema.Type<
+  typeof AISettingsSchema
+> {}
 
 export interface UpdateAISettingsInput {
   defaultProvider?: string

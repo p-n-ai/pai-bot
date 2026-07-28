@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 const OptionalNullableNumber = Schema.optionalKey(Schema.NullOr(Schema.Number))
 
@@ -11,7 +12,9 @@ export const AIProviderUsageSchema = Schema.Struct({
   total_tokens: Schema.Number,
 })
 
-export type AIProviderUsage = typeof AIProviderUsageSchema.Type
+export interface AIProviderUsage extends EffectSchema.Type<
+  typeof AIProviderUsageSchema
+> {}
 
 export const AIUsageDailyPointSchema = Schema.Struct({
   date: Schema.String,
@@ -20,7 +23,9 @@ export const AIUsageDailyPointSchema = Schema.Struct({
   cost_usd: OptionalNullableNumber,
 })
 
-export type AIUsageDailyPoint = typeof AIUsageDailyPointSchema.Type
+export interface AIUsageDailyPoint extends EffectSchema.Type<
+  typeof AIUsageDailyPointSchema
+> {}
 
 export const AIUsageSummarySchema = Schema.Struct({
   total_messages: Schema.Number,
@@ -41,7 +46,9 @@ export const AIUsageSummarySchema = Schema.Struct({
   ),
 })
 
-export type AIUsageSummary = typeof AIUsageSummarySchema.Type
+export interface AIUsageSummary extends EffectSchema.Type<
+  typeof AIUsageSummarySchema
+> {}
 
 export interface UpsertTokenBudgetWindowInput {
   budget_tokens: number

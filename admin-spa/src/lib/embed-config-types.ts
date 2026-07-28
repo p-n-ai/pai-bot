@@ -1,4 +1,5 @@
 import { Option, Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 const StringArray = Schema.mutable(Schema.Array(Schema.String))
 const ThemeConfig = Schema.Record(Schema.String, Schema.Unknown)
@@ -33,7 +34,9 @@ export const EmbedConfigSchema = Schema.Struct({
   updated_at: Schema.optionalKey(Schema.String),
 })
 
-export type EmbedConfig = typeof EmbedConfigSchema.Type
+export interface EmbedConfig extends EffectSchema.Type<
+  typeof EmbedConfigSchema
+> {}
 
 export interface UpdateEmbedConfigInput {
   enabled?: boolean
@@ -58,16 +61,10 @@ export function readEmbedConfig(value: unknown): EmbedConfig | null {
     decodeString(wire.tenant_id ?? wire.TenantID),
   )
   const publicEmbedBaseURL = Option.getOrNull(
-    decodeString(
-      wire.public_embed_base_url ?? wire.PublicEmbedBaseURL,
-    ),
+    decodeString(wire.public_embed_base_url ?? wire.PublicEmbedBaseURL),
   )
 
-  if (
-    enabled === null ||
-    tenantID === null ||
-    publicEmbedBaseURL === null
-  ) {
+  if (enabled === null || tenantID === null || publicEmbedBaseURL === null) {
     return null
   }
 

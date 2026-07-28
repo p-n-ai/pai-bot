@@ -1,11 +1,14 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const OnboardingCurriculumSchema = Schema.Struct({
   syllabus_id: Schema.String,
   label: Schema.String,
 })
 
-export type OnboardingCurriculum = typeof OnboardingCurriculumSchema.Type
+export interface OnboardingCurriculum extends EffectSchema.Type<
+  typeof OnboardingCurriculumSchema
+> {}
 
 export const OnboardingFirstClassSchema = Schema.Struct({
   id: Schema.optionalKey(Schema.String),
@@ -13,13 +16,17 @@ export const OnboardingFirstClassSchema = Schema.Struct({
   slug: Schema.String,
 })
 
-export type OnboardingFirstClass = typeof OnboardingFirstClassSchema.Type
+export interface OnboardingFirstClass extends EffectSchema.Type<
+  typeof OnboardingFirstClassSchema
+> {}
 
 export const OnboardingBotSetupSchema = Schema.Struct({
   preset: Schema.String,
 })
 
-export type OnboardingBotSetup = typeof OnboardingBotSetupSchema.Type
+export interface OnboardingBotSetup extends EffectSchema.Type<
+  typeof OnboardingBotSetupSchema
+> {}
 
 export const OnboardingStateSchema = Schema.Struct({
   school_name: Schema.optionalKey(Schema.String),
@@ -31,7 +38,9 @@ export const OnboardingStateSchema = Schema.Struct({
   configured_at: Schema.String,
 })
 
-export type OnboardingState = typeof OnboardingStateSchema.Type
+export interface OnboardingState extends EffectSchema.Type<
+  typeof OnboardingStateSchema
+> {}
 
 export const OnboardingViewSchema = Schema.Struct({
   tenant_id: Schema.String,
@@ -39,7 +48,9 @@ export const OnboardingViewSchema = Schema.Struct({
   onboarding: Schema.optionalKey(Schema.NullOr(OnboardingStateSchema)),
 })
 
-export type OnboardingView = typeof OnboardingViewSchema.Type
+export interface OnboardingView extends EffectSchema.Type<
+  typeof OnboardingViewSchema
+> {}
 
 export const SubmitOnboardingResultSchema = Schema.Struct({
   class_id: Schema.String,
@@ -49,7 +60,9 @@ export const SubmitOnboardingResultSchema = Schema.Struct({
   save_status: Schema.String,
 })
 
-export type SubmitOnboardingResult = typeof SubmitOnboardingResultSchema.Type
+export interface SubmitOnboardingResult extends EffectSchema.Type<
+  typeof SubmitOnboardingResultSchema
+> {}
 
 export interface SubmitOnboardingInput {
   school_name?: string

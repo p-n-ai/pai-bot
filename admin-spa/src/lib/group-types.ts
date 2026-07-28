@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const GroupRecordSchema = Schema.Struct({
   id: Schema.String,
@@ -14,7 +15,9 @@ export const GroupRecordSchema = Schema.Struct({
   updated_at: Schema.optionalKey(Schema.String),
 })
 
-export type GroupRecord = typeof GroupRecordSchema.Type
+export interface GroupRecord extends EffectSchema.Type<
+  typeof GroupRecordSchema
+> {}
 
 export const GroupMemberRecordSchema = Schema.Struct({
   id: Schema.String,
@@ -24,14 +27,18 @@ export const GroupMemberRecordSchema = Schema.Struct({
   mastery: Schema.Number,
 })
 
-export type GroupMemberRecord = typeof GroupMemberRecordSchema.Type
+export interface GroupMemberRecord extends EffectSchema.Type<
+  typeof GroupMemberRecordSchema
+> {}
 
 export const GroupDetailSchema = Schema.Struct({
   ...GroupRecordSchema.fields,
   members: Schema.mutable(Schema.Array(GroupMemberRecordSchema)),
 })
 
-export type GroupDetail = typeof GroupDetailSchema.Type
+export interface GroupDetail extends EffectSchema.Type<
+  typeof GroupDetailSchema
+> {}
 
 export interface CreateGroupInput {
   name: string

@@ -1,4 +1,5 @@
 import { Option, Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const ClassProgressStudentSchema = Schema.Struct({
   id: Schema.String,
@@ -6,7 +7,9 @@ export const ClassProgressStudentSchema = Schema.Struct({
   topics: Schema.Record(Schema.String, Schema.Number),
 })
 
-export type ClassProgressStudent = typeof ClassProgressStudentSchema.Type
+export interface ClassProgressStudent extends EffectSchema.Type<
+  typeof ClassProgressStudentSchema
+> {}
 
 const ClassProgressStudents = Schema.mutable(
   Schema.Array(ClassProgressStudentSchema),
@@ -23,7 +26,9 @@ export const ClassProgressSchema = Schema.Struct({
   topic_ids: TopicIDs,
 })
 
-export type ClassProgress = typeof ClassProgressSchema.Type
+export interface ClassProgress extends EffectSchema.Type<
+  typeof ClassProgressSchema
+> {}
 
 const decodeClassProgress = Schema.decodeUnknownOption(ClassProgressWire)
 

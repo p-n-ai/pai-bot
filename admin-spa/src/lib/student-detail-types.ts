@@ -1,10 +1,10 @@
 import { Schema } from 'effect'
-
 import {
   LearningStreakSchema,
   ProgressItemSchema,
   StudentProfileSchema,
 } from './learner-types'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const StudentDetailSchema = Schema.Struct({
   student: StudentProfileSchema,
@@ -12,7 +12,9 @@ export const StudentDetailSchema = Schema.Struct({
   streak: LearningStreakSchema,
 })
 
-export type StudentDetail = typeof StudentDetailSchema.Type
+export interface StudentDetail extends EffectSchema.Type<
+  typeof StudentDetailSchema
+> {}
 
 export const StudentConversationSchema = Schema.Struct({
   id: Schema.String,
@@ -21,7 +23,9 @@ export const StudentConversationSchema = Schema.Struct({
   text: Schema.String,
 })
 
-export type StudentConversation = typeof StudentConversationSchema.Type
+export interface StudentConversation extends EffectSchema.Type<
+  typeof StudentConversationSchema
+> {}
 
 const StudentConversations = Schema.mutable(
   Schema.Array(StudentConversationSchema),

@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const StudentProfileSchema = Schema.Struct({
   id: Schema.String,
@@ -9,7 +10,9 @@ export const StudentProfileSchema = Schema.Struct({
   created_at: Schema.String,
 })
 
-export type StudentProfile = typeof StudentProfileSchema.Type
+export interface StudentProfile extends EffectSchema.Type<
+  typeof StudentProfileSchema
+> {}
 
 export const ProgressItemSchema = Schema.Struct({
   topic_id: Schema.String,
@@ -20,7 +23,9 @@ export const ProgressItemSchema = Schema.Struct({
   last_studied_at: Schema.NullOr(Schema.String),
 })
 
-export type ProgressItem = typeof ProgressItemSchema.Type
+export interface ProgressItem extends EffectSchema.Type<
+  typeof ProgressItemSchema
+> {}
 
 export const LearningStreakSchema = Schema.Struct({
   current: Schema.Number,
@@ -28,7 +33,9 @@ export const LearningStreakSchema = Schema.Struct({
   total_xp: Schema.Number,
 })
 
-export type LearningStreak = typeof LearningStreakSchema.Type
+export interface LearningStreak extends EffectSchema.Type<
+  typeof LearningStreakSchema
+> {}
 
 const matchesStudentProfile = Schema.is(StudentProfileSchema)
 const matchesProgressItem = Schema.is(ProgressItemSchema)

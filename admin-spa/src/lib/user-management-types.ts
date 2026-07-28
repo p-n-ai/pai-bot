@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 const ManagedUserRoleSchema = Schema.Literals([
   'teacher',
@@ -29,7 +30,9 @@ export const InviteRecordSchema = Schema.Struct({
   role: ManagedUserRoleSchema,
 })
 
-export type InviteRecord = typeof InviteRecordSchema.Type
+export interface InviteRecord extends EffectSchema.Type<
+  typeof InviteRecordSchema
+> {}
 
 export const UserManagementSummarySchema = Schema.Struct({
   parents: Schema.Number,
@@ -39,7 +42,9 @@ export const UserManagementSummarySchema = Schema.Struct({
   total_users: Schema.Number,
 })
 
-export type UserManagementSummary = typeof UserManagementSummarySchema.Type
+export interface UserManagementSummary extends EffectSchema.Type<
+  typeof UserManagementSummarySchema
+> {}
 
 export const ManagedUserSchema = Schema.Struct({
   created_at: Schema.String,
@@ -51,7 +56,9 @@ export const ManagedUserSchema = Schema.Struct({
   tenant_name: OptionalNullableString,
 })
 
-export type ManagedUser = typeof ManagedUserSchema.Type
+export interface ManagedUser extends EffectSchema.Type<
+  typeof ManagedUserSchema
+> {}
 
 export const PendingInviteSchema = Schema.Struct({
   created_at: Schema.String,
@@ -67,7 +74,9 @@ export const PendingInviteSchema = Schema.Struct({
   tenant_name: OptionalNullableString,
 })
 
-export type PendingInvite = typeof PendingInviteSchema.Type
+export interface PendingInvite extends EffectSchema.Type<
+  typeof PendingInviteSchema
+> {}
 
 export const ManagedStudentSchema = Schema.Struct({
   channel: Schema.String,
@@ -78,7 +87,9 @@ export const ManagedStudentSchema = Schema.Struct({
   name: Schema.String,
 })
 
-export type ManagedStudent = typeof ManagedStudentSchema.Type
+export interface ManagedStudent extends EffectSchema.Type<
+  typeof ManagedStudentSchema
+> {}
 
 export const UserManagementViewSchema = Schema.Struct({
   active_users: Schema.mutable(Schema.Array(ManagedUserSchema)),
@@ -87,7 +98,9 @@ export const UserManagementViewSchema = Schema.Struct({
   summary: UserManagementSummarySchema,
 })
 
-export type UserManagementView = typeof UserManagementViewSchema.Type
+export interface UserManagementView extends EffectSchema.Type<
+  typeof UserManagementViewSchema
+> {}
 
 const matchesInviteRecord = Schema.is(InviteRecordSchema)
 const matchesUserManagementView = Schema.is(UserManagementViewSchema)

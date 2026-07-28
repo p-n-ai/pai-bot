@@ -1,4 +1,5 @@
 import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const WhatsAppStatusSchema = Schema.Struct({
   connected: Schema.Boolean,
@@ -7,7 +8,9 @@ export const WhatsAppStatusSchema = Schema.Struct({
   qr_image: Schema.optionalKey(Schema.String),
 })
 
-export type WhatsAppStatus = typeof WhatsAppStatusSchema.Type
+export interface WhatsAppStatus extends EffectSchema.Type<
+  typeof WhatsAppStatusSchema
+> {}
 
 const matchesWhatsAppStatus = Schema.is(WhatsAppStatusSchema)
 
