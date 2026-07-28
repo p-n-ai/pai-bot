@@ -9,8 +9,11 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/ai"
 )
 
 func TestDeviceLoginUsesStructuredAppServerFlow(t *testing.T) {
@@ -131,6 +134,37 @@ func TestWithCodexHomeReplacesInheritedValue(t *testing.T) {
 	}
 }
 
+func TestCompleteUsesEphemeralNonInteractiveAppServerThread(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	manager := New(ctx, t.TempDir(), "codex", nil)
+	manager.command = helperCommand("codex-app-server-completion")
+
+	response, err := manager.Complete(t.Context(), ai.CompletionRequest{
+		Model: "gpt-test",
+		Messages: []ai.Message{
+			{Role: "system", Content: "Teach clearly."},
+			{Role: "user", Content: "Explain fractions."},
+		},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "answer",
+			JSONSchema: json.RawMessage(`{"type":"object","required":["answer"],"properties":{"answer":{"type":"string"}}}`),
+			Strict:     true,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if response.Content != `{"answer":"Use equal parts."}` ||
+		string(response.StructuredOutput) != response.Content ||
+		response.Model != "gpt-test" ||
+		response.InputTokens != 17 ||
+		response.OutputTokens != 6 {
+		t.Fatalf("Complete() response = %#v", response)
+	}
+}
+
 func newTestManager(
 	ctx context.Context,
 	home string,
@@ -181,6 +215,7 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 	mode := os.Args[len(os.Args)-1]
 	if mode != "codex-app-server-helper" &&
 		mode != "codex-app-server-awaits-login" &&
+		mode != "codex-app-server-completion" &&
 		mode != "codex-app-server-stops-after-login" &&
 		mode != "codex-app-server-stops-during-login" {
 		return
@@ -253,6 +288,95 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 			if mode == "codex-app-server-stops-after-login" {
 				os.Exit(0)
 			}
+		case "thread/start":
+			var params struct {
+				BaseInstructions      string   `json:"baseInstructions"`
+				CWD                   string   `json:"cwd"`
+				DeveloperInstructions string   `json:"developerInstructions"`
+				DynamicTools          []any    `json:"dynamicTools"`
+				Environments          []any    `json:"environments"`
+				Ephemeral             bool     `json:"ephemeral"`
+				Model                 string   `json:"model"`
+				Permissions           string   `json:"permissions"`
+				RuntimeWorkspaceRoots []string `json:"runtimeWorkspaceRoots"`
+			}
+			if json.Unmarshal(request.Params, &params) != nil ||
+				params.BaseInstructions != "Teach clearly." ||
+				params.CWD == "" ||
+				!strings.Contains(params.DeveloperInstructions, "Do not inspect files") ||
+				params.DynamicTools == nil ||
+				params.Environments == nil ||
+				!params.Ephemeral ||
+				params.Model != "gpt-test" ||
+				params.Permissions != ":read-only" ||
+				len(params.RuntimeWorkspaceRoots) != 1 ||
+				params.RuntimeWorkspaceRoots[0] != params.CWD {
+				_ = encoder.Encode(map[string]any{
+					"id":    *request.ID,
+					"error": map[string]any{"code": -1, "message": "unsafe thread parameters"},
+				})
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"id": *request.ID,
+				"result": map[string]any{
+					"thread": map[string]any{"id": "thread-1"},
+					"model":  "gpt-test",
+				},
+			})
+		case "turn/start":
+			var params struct {
+				ApprovalPolicy string           `json:"approvalPolicy"`
+				Input          []map[string]any `json:"input"`
+				OutputSchema   map[string]any   `json:"outputSchema"`
+				Permissions    string           `json:"permissions"`
+				ThreadID       string           `json:"threadId"`
+			}
+			var text string
+			if json.Unmarshal(request.Params, &params) != nil {
+				text = ""
+			} else if len(params.Input) > 0 {
+				text, _ = params.Input[0]["text"].(string)
+			}
+			if params.ApprovalPolicy != "never" ||
+				!strings.Contains(text, "USER:\nExplain fractions.") ||
+				params.OutputSchema["type"] != "object" ||
+				params.Permissions != ":read-only" ||
+				params.ThreadID != "thread-1" {
+				_ = encoder.Encode(map[string]any{
+					"id":    *request.ID,
+					"error": map[string]any{"code": -1, "message": "unsafe turn parameters"},
+				})
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"id":     *request.ID,
+				"result": map[string]any{"turn": map[string]any{"id": "turn-1"}},
+			})
+			_ = encoder.Encode(map[string]any{
+				"method": "thread/tokenUsage/updated",
+				"params": map[string]any{
+					"threadId": "thread-1",
+					"tokenUsage": map[string]any{
+						"last": map[string]any{"inputTokens": 17, "outputTokens": 6},
+					},
+				},
+			})
+			_ = encoder.Encode(map[string]any{
+				"method": "turn/completed",
+				"params": map[string]any{
+					"threadId": "thread-1",
+					"turn": map[string]any{
+						"status": "completed",
+						"items": []map[string]any{{
+							"id":    "message-1",
+							"type":  "agentMessage",
+							"text":  `{"answer":"Use equal parts."}`,
+							"phase": "final_answer",
+						}},
+					},
+				},
+			})
 		}
 	}
 	os.Exit(0)

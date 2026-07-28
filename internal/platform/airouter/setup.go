@@ -118,8 +118,7 @@ func buildProviderWithCodexAuth(
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
 	case "codex":
 		if cfg.Codex.Enabled {
-			availability, ok := codexAuth.(interface{ Available() bool })
-			if codexAuth == nil || !ok || !availability.Available() {
+			if codexAuth == nil || !codexAuth.Available() {
 				slog.Warn("Codex provider not registered; Codex app-server is unavailable")
 				return ai.ProviderRegistration{}, false
 			}

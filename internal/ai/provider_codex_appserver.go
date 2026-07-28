@@ -12,6 +12,7 @@ import (
 // CodexAppServerClient executes completions through a Codex app-server session.
 // The implementation owns authentication; PaiBot never reads Codex credentials.
 type CodexAppServerClient interface {
+	Available() bool
 	Complete(context.Context, CompletionRequest) (CompletionResponse, error)
 	Refresh(context.Context) error
 }
@@ -34,7 +35,7 @@ func (p *codexAppServerProvider) Complete(
 	req CompletionRequest,
 ) (CompletionResponse, error) {
 	if p.client == nil {
-		return CompletionResponse{}, errors.New("Codex app-server is unavailable")
+		return CompletionResponse{}, errors.New("codex app-server is unavailable")
 	}
 	if strings.TrimSpace(req.Model) == "" {
 		req.Model = p.model
@@ -69,7 +70,7 @@ func (p *codexAppServerProvider) Models() []ModelInfo {
 
 func (p *codexAppServerProvider) HealthCheck(ctx context.Context) error {
 	if p.client == nil {
-		return errors.New("Codex app-server is unavailable")
+		return errors.New("codex app-server is unavailable")
 	}
 	return p.client.Refresh(ctx)
 }

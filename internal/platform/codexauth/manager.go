@@ -193,7 +193,7 @@ func (m *Manager) refresh(ctx context.Context, refreshToken bool) error {
 	}
 	if response.Account == nil || response.Account.Type != "chatgpt" {
 		m.setStatusUnlessLoginActive(Status{State: StateDisconnected})
-		return errors.New("Codex ChatGPT login is not connected")
+		return errors.New("codex ChatGPT login is not connected")
 	}
 	m.setStatusUnlessLoginActive(Status{State: StateConnected})
 	return nil
@@ -244,14 +244,14 @@ func (m *Manager) ensureProcess(ctx context.Context) error {
 		return nil
 	}
 	if m.executable == "" || m.home == "" {
-		return errors.New("Codex app-server is unavailable")
+		return errors.New("codex app-server is unavailable")
 	}
 	if err := os.MkdirAll(m.home, 0o700); err != nil {
 		return errors.New("prepare Codex home")
 	}
 	homeInfo, err := os.Lstat(m.home)
 	if err != nil || !homeInfo.IsDir() {
-		return errors.New("Codex home must be a real directory")
+		return errors.New("codex home must be a real directory")
 	}
 	workspace, err := os.MkdirTemp("", "pai-bot-codex-runtime-")
 	if err != nil {
@@ -332,7 +332,7 @@ func (m *Manager) callRunning(ctx context.Context, method string, params any) (j
 			return nil, result.err
 		}
 		if result.message.Error != nil {
-			return nil, errors.New("Codex app-server request failed")
+			return nil, errors.New("codex app-server request failed")
 		}
 		return result.message.Result, nil
 	case <-ctx.Done():
@@ -353,7 +353,7 @@ func (m *Manager) write(message any) error {
 	running := m.running
 	m.mu.RUnlock()
 	if !running || stdin == nil {
-		return errors.New("Codex app-server is not running")
+		return errors.New("codex app-server is not running")
 	}
 	if err := json.NewEncoder(stdin).Encode(message); err != nil {
 		return errors.New("write Codex app-server request")
@@ -484,10 +484,10 @@ func (m *Manager) processStopped() {
 		_ = os.RemoveAll(workspace)
 	}
 	for _, waiter := range pending {
-		waiter <- pendingResponse{err: errors.New("Codex app-server stopped")}
+		waiter <- pendingResponse{err: errors.New("codex app-server stopped")}
 	}
 	for _, completion := range completions {
-		completion.waiter <- completionResult{err: errors.New("Codex app-server stopped")}
+		completion.waiter <- completionResult{err: errors.New("codex app-server stopped")}
 	}
 }
 

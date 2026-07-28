@@ -21,14 +21,14 @@ func (m *Manager) Complete(
 	request ai.CompletionRequest,
 ) (ai.CompletionResponse, error) {
 	if err := m.Refresh(ctx); err != nil {
-		return ai.CompletionResponse{}, errors.New("Codex login is not connected; reconnect it in Admin")
+		return ai.CompletionResponse{}, errors.New("codex login is not connected; reconnect it in Admin")
 	}
 
 	m.mu.RLock()
 	workspace := m.workspace
 	m.mu.RUnlock()
 	if workspace == "" {
-		return ai.CompletionResponse{}, errors.New("Codex runtime workspace is unavailable")
+		return ai.CompletionResponse{}, errors.New("codex runtime workspace is unavailable")
 	}
 
 	baseInstructions, messages := splitInstructions(request.Messages)
@@ -161,12 +161,12 @@ func (m *Manager) handleTurnCompleted(params json.RawMessage) {
 		return
 	}
 	if completed.Turn.Status != "completed" {
-		state.waiter <- completionResult{err: errors.New("Codex response failed")}
+		state.waiter <- completionResult{err: errors.New("codex response failed")}
 		return
 	}
 	content := finalAgentMessage(completed.Turn.Items)
 	if content == "" {
-		state.waiter <- completionResult{err: errors.New("Codex returned an empty response")}
+		state.waiter <- completionResult{err: errors.New("codex returned an empty response")}
 		return
 	}
 	state.waiter <- completionResult{response: ai.CompletionResponse{
