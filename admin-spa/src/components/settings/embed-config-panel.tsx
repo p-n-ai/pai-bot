@@ -205,6 +205,7 @@ export function EmbedConfigPanel() {
         error={error}
         errorTitle='Could not load embed settings'
         loadingTitle='Loading embed settings'
+        loadingVariant='settings'
         status={status}
       />
     )

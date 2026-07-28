@@ -24,6 +24,7 @@ function BudgetSettingsRoute() {
       <AIUsageLoadBoundary
         errorTitle='Unable to load token budget'
         loadingTitle='Loading token budget...'
+        loadingVariant='budget'
         setState={setState}
         state={state}
       >

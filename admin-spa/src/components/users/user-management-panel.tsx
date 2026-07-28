@@ -100,6 +100,7 @@ export function UserManagementPanel() {
         error={state.error}
         errorTitle='User management unavailable'
         loadingTitle='Loading users and invites...'
+        loadingVariant='users'
         status={state.status}
       />
     )
