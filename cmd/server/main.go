@@ -129,7 +129,11 @@ func main() {
 			// Initialize AI router with configured providers.
 			initialAI := settings.MergeAI(cfg.AI, settingsStore.Current())
 			router := airouter.SetupWithCodexAuth(initialAI, codexDeviceAuth)
-			aiHealthCheck := server.NewCachedHealthCheck(router.HealthCheck, time.Minute, 5*time.Second)
+			aiHealthCheck := server.NewCachedHealthCheck(
+				server.NewAIHealthCheck(router),
+				time.Minute,
+				5*time.Second,
+			)
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
 					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")

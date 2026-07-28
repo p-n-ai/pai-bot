@@ -56,52 +56,45 @@ export function PublicStatusPage() {
   const presentation = statusPresentation(viewState)
 
   return (
-    <div className='min-h-svh overflow-hidden bg-[oklch(0.982_0.004_250)] text-[oklch(0.22_0.018_255)]'>
-      <div
-        aria-hidden='true'
-        className='pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[radial-gradient(circle_at_50%_-12rem,oklch(0.91_0.05_230/0.75),transparent_32rem)]'
-      />
-      <div className='relative mx-auto w-[min(calc(100%-2rem),48rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-12 lg:py-14'>
-        <header className='mb-12 flex items-center justify-between gap-4 sm:mb-16'>
+    <div className='min-h-svh bg-[oklch(0.982_0.004_250)] text-[oklch(0.22_0.018_255)]'>
+      <div className='mx-auto w-[min(calc(100%-2rem),40rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-12'>
+        <header className='mb-14 sm:mb-16'>
           <a
-            className='inline-flex min-h-11 items-center gap-3 rounded-xl text-base font-semibold tracking-[-0.015em] no-underline outline-offset-4 focus-visible:outline-2'
+            className='inline-flex min-h-11 items-center gap-3 rounded-lg text-sm font-semibold tracking-[-0.01em] no-underline outline-offset-4 focus-visible:outline-2'
             href='/health'
           >
             <span
               aria-hidden='true'
-              className='grid size-9 place-items-center rounded-xl bg-[oklch(0.22_0.018_255)] text-xs font-bold tracking-[-0.04em] text-white'
+              className='grid size-8 place-items-center rounded-lg bg-[oklch(0.22_0.018_255)] text-[11px] font-bold tracking-[-0.04em] text-white'
             >
               P&amp;
             </span>
             <span>P&amp;AI Status</span>
           </a>
-          <span className='inline-flex items-center gap-2 text-[13px] font-medium whitespace-nowrap text-[oklch(0.49_0.018_255)]'>
-            <span
-              aria-hidden='true'
-              className={
-                presentation.tone === 'operational'
-                  ? 'size-2.5 rounded-full bg-[oklch(0.58_0.16_153)] shadow-[0_0_0_4px_oklch(0.94_0.052_153)]'
-                  : presentation.tone === 'degraded'
-                    ? 'size-2.5 rounded-full bg-[oklch(0.63_0.18_45)] shadow-[0_0_0_4px_oklch(0.95_0.045_75)]'
-                    : 'size-2.5 rounded-full bg-[oklch(0.6_0.012_250)] shadow-[0_0_0_4px_oklch(0.93_0.006_250)]'
-              }
-            />
-            {presentation.liveLabel}
-          </span>
         </header>
 
-        <div aria-live='polite' className='grid gap-12'>
+        <div aria-live='polite' className='grid gap-14'>
           <section aria-labelledby='status-heading' className='max-w-2xl'>
-            <p className='mb-4 text-[13px] font-semibold tracking-[0.08em] text-[oklch(0.49_0.018_255)] uppercase'>
-              Current status
+            <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[oklch(0.49_0.018_255)]'>
+              <span
+                aria-hidden='true'
+                className={
+                  presentation.tone === 'operational'
+                    ? 'size-2.5 rounded-full bg-[oklch(0.58_0.16_153)]'
+                    : presentation.tone === 'degraded'
+                      ? 'size-2.5 rounded-full bg-[oklch(0.63_0.18_45)]'
+                      : 'size-2.5 rounded-full bg-[oklch(0.6_0.012_250)]'
+                }
+              />
+              {presentation.liveLabel}
             </p>
             <h1
-              className='m-0 max-w-[14ch] text-[clamp(2.5rem,8vw,4.75rem)] leading-[1.02] font-semibold tracking-[-0.055em] text-balance'
+              className='m-0 text-[clamp(2rem,6vw,3rem)] leading-[1.08] font-semibold tracking-[-0.04em] text-balance'
               id='status-heading'
             >
               {presentation.headline}
             </h1>
-            <p className='mt-6 max-w-[60ch] text-[clamp(1rem,2.5vw,1.125rem)] leading-[1.6] text-pretty text-[oklch(0.49_0.018_255)]'>
+            <p className='mt-4 max-w-[60ch] text-base leading-7 text-pretty text-[oklch(0.49_0.018_255)]'>
               {presentation.summary}
             </p>
           </section>
@@ -109,15 +102,14 @@ export function PublicStatusPage() {
           <section
             aria-busy={viewState.kind === 'loading'}
             aria-labelledby='systems-heading'
-            className='rounded-3xl bg-white/92 p-5 shadow-[0_0_0_1px_oklch(0_0_0/0.06),0_1.5rem_4rem_oklch(0.3_0.03_250/0.08)] sm:p-8'
           >
             <h2
-              className='mb-7 text-base leading-tight font-semibold'
+              className='mb-6 text-sm leading-tight font-semibold'
               id='systems-heading'
             >
               System status
             </h2>
-            <ul className='m-0 grid list-none gap-7 p-0'>
+            <ul className='m-0 grid list-none gap-8 p-0'>
               {presentation.components.map((component) => (
                 <StatusRow component={component} key={component.id} />
               ))}
@@ -125,15 +117,12 @@ export function PublicStatusPage() {
           </section>
         </div>
 
-        <footer className='mt-8 flex flex-wrap justify-between gap-x-8 gap-y-4 text-[13px] leading-5 text-[oklch(0.49_0.018_255)]'>
-          <p className='m-0 max-w-[52ch]'>
-            Availability is reported across P&amp;AI’s shared services.
-          </p>
+        <footer className='mt-14 text-[13px] leading-5 text-[oklch(0.49_0.018_255)]'>
           <a
-            className='min-h-11 rounded-sm py-3 underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
+            className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
             href='/health/api'
           >
-            View JSON status
+            JSON status
           </a>
         </footer>
       </div>
@@ -154,7 +143,7 @@ function StatusRow({ component }: { component: StatusRowModel }) {
         : 'Unknown'
 
   return (
-    <li className='grid items-center gap-4 min-[32rem]:grid-cols-[minmax(0,1fr)_auto]'>
+    <li className='grid items-start gap-3 min-[32rem]:grid-cols-[minmax(0,1fr)_auto]'>
       <div className='min-w-0'>
         <h3 className='m-0 text-base leading-[1.3] font-semibold'>
           {copy.name}
@@ -166,10 +155,10 @@ function StatusRow({ component }: { component: StatusRowModel }) {
       <span
         className={
           operational
-            ? 'inline-flex min-h-8 w-fit items-center gap-2 rounded-full bg-[oklch(0.94_0.052_153)] px-3 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.39_0.13_153)]'
+            ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.39_0.13_153)]'
             : unavailable
-              ? 'inline-flex min-h-8 w-fit items-center gap-2 rounded-full bg-[oklch(0.95_0.045_75)] px-3 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.16_42)]'
-              : 'inline-flex min-h-8 w-fit items-center gap-2 rounded-full bg-[oklch(0.95_0.006_250)] px-3 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.018_255)]'
+              ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.16_42)]'
+              : 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.018_255)]'
         }
       >
         <span aria-hidden='true' className='size-2 rounded-full bg-current' />

@@ -39,9 +39,10 @@ it('shows the application and AI availability without requiring admin auth', asy
   expect(screen.getByText('Application API')).toBeInTheDocument()
   expect(screen.getByText('AI services')).toBeInTheDocument()
   expect(screen.getAllByText('Operational')).toHaveLength(2)
-  expect(
-    screen.getByRole('link', { name: 'View JSON status' }),
-  ).toHaveAttribute('href', '/health/api')
+  expect(screen.getByRole('link', { name: 'JSON status' })).toHaveAttribute(
+    'href',
+    '/health/api',
+  )
 })
 
 it('does not claim an outage when the status service cannot be reached', async () => {
