@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
+	"github.com/p-n-ai/pai-bot/internal/platform/codexauth"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 )
@@ -108,5 +109,24 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 		len(order) != 1 ||
 		order[0] != "codex" {
 		t.Fatalf("default/order = %q/%v, want codex first", store.current.AI.DefaultProvider, order)
+	}
+}
+
+func TestCanAwaitCodexDeviceAuthRequiresExecutable(t *testing.T) {
+	home := t.TempDir()
+	cfg := &config.Config{AI: config.AIConfig{Codex: config.CodexConfig{
+		Enabled:  true,
+		Home:     home,
+		AuthFile: filepath.Join(home, "auth.json"),
+	}}}
+
+	unavailable := codexauth.New(t.Context(), cfg.AI.Codex.Home, "", nil)
+	if canAwaitCodexDeviceAuth(cfg, unavailable) {
+		t.Fatal("canAwaitCodexDeviceAuth() = true without a Codex executable")
+	}
+
+	available := codexauth.New(t.Context(), cfg.AI.Codex.Home, "/test/codex", nil)
+	if !canAwaitCodexDeviceAuth(cfg, available) {
+		t.Fatal("canAwaitCodexDeviceAuth() = false with configured storage and executable")
 	}
 }

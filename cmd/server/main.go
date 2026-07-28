@@ -62,6 +62,13 @@ func makeCodexDefault(
 	return err
 }
 
+func canAwaitCodexDeviceAuth(cfg *config.Config, manager *codexauth.Manager) bool {
+	return cfg != nil &&
+		manager != nil &&
+		cfg.CodexDeviceAuthAvailable() &&
+		manager.Available()
+}
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -125,7 +132,7 @@ func main() {
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
 					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
-				} else if cfg.CodexDeviceAuthAvailable() {
+				} else if canAwaitCodexDeviceAuth(cfg, codexDeviceAuth) {
 					slog.Warn("no AI providers authenticated; continuing so an admin can connect Codex")
 				} else {
 					slog.Error("no AI providers configured")
