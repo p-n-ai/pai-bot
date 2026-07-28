@@ -17,8 +17,15 @@ it('keeps signed-out navigation free of duplicate sign in links', () => {
   render(<AdminHomePanel auth={anonymousAuth} nextPath='/dashboard' />)
 
   expect(
+    screen.getByRole('heading', { name: 'Sign in to P&AI Bot' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText('Enter your school email and password.'),
+  ).toBeInTheDocument()
+  expect(
     screen.queryByRole('link', { name: /sign in/i }),
   ).not.toBeInTheDocument()
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
 
 it('renders no signed-in interstitial because the route redirects instead', () => {

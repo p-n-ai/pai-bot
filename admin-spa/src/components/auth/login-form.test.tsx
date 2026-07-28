@@ -90,16 +90,16 @@ describe('LoginForm', () => {
     )
   })
 
-  it('shows the source-admin email divider when the server enables Google sign-in', async () => {
+  it('shows the email divider when the server enables Google sign-in', async () => {
     readAuthCapabilities.mockResolvedValue({ google_login: true })
 
     render(<LoginForm onAuthenticated={vi.fn()} />)
 
     expect(
-      await screen.findByRole('button', { name: 'Continue with Google' }),
+      await screen.findByRole('button', { name: 'Sign in with Google' }),
     ).toBeInTheDocument()
     expect(screen.getByText('G')).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByText('or use email')).toBeInTheDocument()
+    expect(screen.getByText('or sign in with email')).toBeInTheDocument()
   })
 
   it('keeps password sign-in available when capabilities cannot be loaded', async () => {
@@ -111,7 +111,7 @@ describe('LoginForm', () => {
       expect(readAuthCapabilities).toHaveBeenCalledOnce()
     })
     expect(
-      screen.queryByRole('button', { name: 'Continue with Google' }),
+      screen.queryByRole('button', { name: 'Sign in with Google' }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   })
@@ -124,7 +124,7 @@ describe('LoginForm', () => {
     render(<LoginForm onAuthenticated={vi.fn()} nextPath='/dashboard' />)
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Continue with Google' }),
+      await screen.findByRole('button', { name: 'Sign in with Google' }),
     )
 
     expect(buildGoogleLoginURL).toHaveBeenCalledWith('/dashboard')
@@ -132,9 +132,31 @@ describe('LoginForm', () => {
       '/api/auth/google/start?next=%2Fdashboard',
     )
     expect(
-      screen.getByRole('button', { name: 'Redirecting to Google...' }),
+      screen.getByRole('button', { name: 'Sign in with Google' }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+    expect(screen.getByLabelText('Email')).toBeDisabled()
+    expect(screen.getByLabelText('Password')).toBeDisabled()
+  })
+
+  it('shows password progress and disables the form while signing in', async () => {
+    loginWithPassword.mockReturnValue(new Promise(() => {}))
+
+    render(<LoginForm onAuthenticated={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'teacher@school.edu' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'secret' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(
+      await screen.findByRole('button', { name: 'Sign in' }),
+    ).toBeDisabled()
+    expect(screen.getByLabelText('Email')).toBeDisabled()
+    expect(screen.getByLabelText('Password')).toBeDisabled()
   })
 
   it('retries password login with the selected school when tenant selection is required', async () => {
