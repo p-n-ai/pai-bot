@@ -36,7 +36,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	var handler atomic.Pointer[http.Handler]
-	initialHandler := http.Handler(http.HandlerFunc(handleHealthz))
+	initialHandler := http.Handler(http.HandlerFunc(handleBootstrapHealth))
 	handler.Store(&initialHandler)
 
 	srv := &http.Server{
@@ -93,6 +93,14 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	return nil
+}
+
+func handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet || r.URL.Path != "/healthz" {
+		http.NotFound(w, r)
+		return
+	}
+	handleHealthz(w, r)
 }
 
 func shutdownAfterStartupError(srv *http.Server, timeout time.Duration, runErr error) error {

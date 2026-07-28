@@ -296,6 +296,32 @@ func (r *Router) HasProvider() bool {
 	return len(r.providers) > 0
 }
 
+// HealthCheck reports whether at least one configured routing fallback is
+// operational without mutating completion circuit state.
+func (r *Router) HealthCheck(ctx context.Context) error {
+	providers, order, _ := r.snapshotProviders()
+	if len(order) == 0 {
+		return fmt.Errorf("AI health check failed: no providers registered")
+	}
+
+	var failures []string
+	for _, name := range order {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		provider := providers[name]
+		if provider == nil {
+			continue
+		}
+		if err := provider.HealthCheck(ctx); err != nil {
+			failures = append(failures, name)
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("AI health check failed for providers: %s", strings.Join(failures, ", "))
+}
+
 // HasNativeProvider reports whether any configured provider preserves native tool calls.
 func (r *Router) HasNativeProvider() bool {
 	r.mu.RLock()

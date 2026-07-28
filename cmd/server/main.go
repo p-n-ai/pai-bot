@@ -129,6 +129,11 @@ func main() {
 			// Initialize AI router with configured providers.
 			initialAI := settings.MergeAI(cfg.AI, settingsStore.Current())
 			router := airouter.SetupWithCodexAuth(initialAI, codexDeviceAuth)
+			aiHealthCheck := server.NewCachedHealthCheck(
+				server.NewAIHealthCheck(router),
+				time.Minute,
+				5*time.Second,
+			)
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
 					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
@@ -551,6 +556,14 @@ func main() {
 				JWTSecret:             cfg.Auth.JWTSecret,
 				AccessTokenTTL:        defaultAccessTokenTTL,
 				FocusedPageHandler:    focusedPageHandler,
+				PublicHealthEnabled: func() bool {
+					return flagsProvider().Enabled(featureflags.PublicHealth)
+				},
+				AIHealthEnabled: func() bool {
+					return flagsProvider().Enabled(featureflags.AIHealth)
+				},
+				AIHealthToken: cfg.Runtime.AIHealthToken,
+				AIHealthCheck: aiHealthCheck,
 			})
 
 			return http.Handler(topMux), func(ctx context.Context) error {

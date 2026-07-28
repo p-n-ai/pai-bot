@@ -48,6 +48,7 @@ type RuntimeConfig struct {
 	DisableMultiLanguage        bool
 	AIPersonalizedNudgesEnabled bool
 	DevMode                     bool
+	AIHealthToken               string
 }
 
 // ServerConfig holds HTTP server settings.
@@ -375,6 +376,7 @@ func Load() (*Config, error) {
 			DevMode:                     envBool("LEARN_DEV_MODE", false),
 			DisableMultiLanguage:        envBool("LEARN_DISABLE_MULTI_LANGUAGE", false),
 			AIPersonalizedNudgesEnabled: envBool("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", true),
+			AIHealthToken:               envStr("PAI_AI_HEALTH_TOKEN", ""),
 		},
 		FeatureFlags:   parsedFeatureFlags,
 		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),

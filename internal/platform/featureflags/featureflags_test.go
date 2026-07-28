@@ -16,6 +16,12 @@ func TestParseEmptyFeatureSet(t *testing.T) {
 	if features.Enabled(AgentCore) {
 		t.Fatal("agent_core should default to disabled")
 	}
+	if features.Enabled(PublicHealth) {
+		t.Fatal("public_health should default to disabled")
+	}
+	if features.Enabled(AIHealth) {
+		t.Fatal("ai_health should default to disabled")
+	}
 	if features.Enabled(Feature("missing")) {
 		t.Fatal("missing feature should not be enabled")
 	}
@@ -52,6 +58,26 @@ func TestParseAgentCoreFeature(t *testing.T) {
 	}
 	if !features.Enabled(AgentCore) {
 		t.Fatal("agent_core should be enabled")
+	}
+}
+
+func TestParsePublicHealthFeature(t *testing.T) {
+	features, err := Parse("public_health")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !features.Enabled(PublicHealth) {
+		t.Fatal("public_health should be enabled")
+	}
+}
+
+func TestParseAIHealthFeature(t *testing.T) {
+	features, err := Parse("ai_health")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !features.Enabled(AIHealth) {
+		t.Fatal("ai_health should be enabled")
 	}
 }
 
@@ -110,5 +136,11 @@ func TestDefaults(t *testing.T) {
 	}
 	if enabled, ok := defaults["agent_core"]; !ok || enabled {
 		t.Fatalf("Defaults()[agent_core] = %v, %v; want false, present", enabled, ok)
+	}
+	if enabled, ok := defaults["public_health"]; !ok || enabled {
+		t.Fatalf("Defaults()[public_health] = %v, %v; want false, present", enabled, ok)
+	}
+	if enabled, ok := defaults["ai_health"]; !ok || enabled {
+		t.Fatalf("Defaults()[ai_health] = %v, %v; want false, present", enabled, ok)
 	}
 }
