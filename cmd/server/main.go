@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -86,14 +87,20 @@ func main() {
 	// Graceful shutdown on SIGTERM/SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	var cleanup []func()
+
+	if err := run(ctx, cfg); err != nil {
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, cfg *config.Config) (runErr error) {
+	var cleanup []func() error
 	defer func() {
-		for i := len(cleanup) - 1; i >= 0; i-- {
-			cleanup[i]()
-		}
+		runErr = errors.Join(runErr, closeAll(cleanup))
 	}()
 
-	if err := server.Run(ctx, server.Options{
+	return server.Run(ctx, server.Options{
 		Addr:            fmt.Sprintf(":%d", cfg.Server.Port),
 		ReadTimeout:     10 * time.Second,
 		WriteTimeout:    30 * time.Second,
@@ -102,22 +109,23 @@ func main() {
 		BuildHandler: func(ctx context.Context) (http.Handler, func(context.Context) error, error) {
 
 			// Initialize PostgreSQL-backed conversation store.
-			db, err := database.New(context.Background(), cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
+			db, err := database.New(ctx, cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns)
 			if err != nil {
-				slog.Error("failed to connect to database", "error", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("connect to database: %w", err)
 			}
-			cleanup = append(cleanup, db.Close)
+			cleanup = append(cleanup, func() error {
+				db.Close()
+				return nil
+			})
 
 			// In single-tenant mode, ensure the default tenant exists for runtime dependencies.
-			if _, err := tenant.EnsureDefaultTenantForPool(context.Background(), cfg.Tenant.Mode, db.Pool); err != nil {
-				slog.Error("failed to bootstrap tenant mode", "mode", cfg.Tenant.Mode, "error", err)
-				os.Exit(1)
+			if _, err := tenant.EnsureDefaultTenantForPool(ctx, cfg.Tenant.Mode, db.Pool); err != nil {
+				return nil, nil, fmt.Errorf("bootstrap tenant mode %q: %w", cfg.Tenant.Mode, err)
 			}
 
 			// Runtime settings overlay env config; admin saves re-apply live.
 			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret, cfg.AI, cfg.FeatureFlags)
-			if err := settingsStore.Start(context.Background()); err != nil {
+			if err := settingsStore.Start(ctx); err != nil {
 				// Degrade to env-only config: a crash loop here would lock
 				// admins out of the very UI that repairs the stored settings.
 				slog.Warn("runtime settings unavailable; using env config", "error", err)
@@ -140,8 +148,7 @@ func main() {
 				} else if canAwaitCodexDeviceAuth(cfg, codexDeviceAuth) {
 					slog.Warn("no AI providers authenticated; continuing so an admin can connect Codex")
 				} else {
-					slog.Error("no AI providers configured")
-					os.Exit(1)
+					return nil, nil, errors.New("no AI providers configured")
 				}
 			}
 			applySettings := func(st settings.Settings) {
@@ -172,21 +179,22 @@ func main() {
 
 			// Initialize cache (warn if unavailable, don't fail).
 			if cfg.Cache.URL != "" {
-				c, err := cache.New(context.Background(), cfg.Cache.URL)
+				c, err := cache.New(ctx, cfg.Cache.URL)
 				if err != nil {
 					slog.Warn("cache not connected", "error", err)
 				} else {
-					cleanup = append(cleanup, func() { _ = c.Close() })
+					cleanup = append(cleanup, func() error {
+						return c.Close()
+					})
 					slog.Info("cache connected")
 				}
 			} else {
 				slog.Warn("cache not configured, running without cache")
 			}
 
-			store, err := agent.NewPostgresStore(context.Background(), db.Pool)
+			store, err := agent.NewPostgresStore(ctx, db.Pool)
 			if err != nil {
-				slog.Error("failed to initialize conversation store", "error", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("initialize conversation store: %w", err)
 			}
 			focusedPageStore := focusedpage.NewPostgresStore(db.Pool)
 			focusedPageCleanup, err := server.NewFocusedPageCleanupWorker(focusedPageStore, nil)
@@ -284,8 +292,7 @@ func main() {
 			if strings.TrimSpace(cfg.Telegram.BotToken) != "" {
 				tg, err := chat.NewTelegramChannel(cfg.Telegram.BotToken)
 				if err != nil {
-					slog.Error("failed to create Telegram channel", "error", err)
-					os.Exit(1)
+					return nil, nil, fmt.Errorf("create Telegram channel: %w", err)
 				}
 				tg.SetDevMode(cfg.Runtime.DevMode)
 				gw.Register("telegram", tg)
@@ -338,8 +345,7 @@ func main() {
 					var waErr error
 					waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
 					if waErr != nil {
-						slog.Error("failed to create WhatsApp Cloud API channel", "error", waErr)
-						os.Exit(1)
+						return nil, nil, fmt.Errorf("create WhatsApp Cloud API channel: %w", waErr)
 					}
 					gw.Register("whatsapp", waCloudChannel)
 					slog.Info("whatsapp backend: Cloud API")
@@ -347,8 +353,7 @@ func main() {
 					var waErr error
 					waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
 					if waErr != nil {
-						slog.Error("failed to create WhatsApp meow channel", "error", waErr)
-						os.Exit(1)
+						return nil, nil, fmt.Errorf("create WhatsApp meow channel: %w", waErr)
 					}
 					gw.Register("whatsapp", waMeowChannel)
 					slog.Info("whatsapp backend: whatsmeow")
@@ -492,19 +497,17 @@ func main() {
 					FromName:    cfg.Email.FromName,
 				})
 				if err != nil {
-					slog.Error("failed to create invite mailer", "error", err)
-					os.Exit(1)
+					return nil, nil, fmt.Errorf("create invite mailer: %w", err)
 				}
 				authService.ConfigureInviteEmail(inviteMailer)
 			}
 			createdBootstrapAdmin, err := authService.EnsureBootstrapPlatformAdmin(
-				context.Background(),
+				ctx,
 				cfg.Auth.BootstrapAdmin.Email,
 				cfg.Auth.BootstrapAdmin.Password,
 			)
 			if err != nil {
-				slog.Error("failed to ensure bootstrap platform admin", "error", err)
-				os.Exit(1)
+				return nil, nil, fmt.Errorf("ensure bootstrap platform admin: %w", err)
 			}
 			if createdBootstrapAdmin {
 				slog.Info("bootstrap platform admin created", "email", cfg.Auth.BootstrapAdmin.Email)
@@ -578,12 +581,11 @@ func main() {
 					<-ingressDone
 					return err
 				}
-				cleanup = append(cleanup, func() {
-					if err := gw.StopAll(); err != nil {
-						slog.Warn("failed to stop chat channels cleanly", "error", err)
-					}
+				cleanup = append(cleanup, func() error {
+					err := gw.StopAll()
 					cancelIngress()
 					<-ingressDone
+					return err
 				})
 				if focusedPageDeliveries != nil {
 					workerCtx, cancelWorker := context.WithCancel(ctx)
@@ -592,9 +594,10 @@ func main() {
 						defer close(workerDone)
 						focusedPageDeliveries.Run(workerCtx)
 					}()
-					cleanup = append(cleanup, func() {
+					cleanup = append(cleanup, func() error {
 						cancelWorker()
 						<-workerDone
+						return nil
 					})
 				}
 				focusedPageCleanupDone := make(chan struct{})
@@ -602,15 +605,25 @@ func main() {
 					defer close(focusedPageCleanupDone)
 					focusedPageCleanup.Run(ctx)
 				}()
-				cleanup = append(cleanup, func() { <-focusedPageCleanupDone })
+				cleanup = append(cleanup, func() error {
+					<-focusedPageCleanupDone
+					return nil
+				})
 				slog.Info("P&AI Bot is running")
 				return nil
 			}, nil
 		},
-	}); err != nil {
-		slog.Error("server stopped", "error", err)
-		os.Exit(1)
+	})
+}
+
+func closeAll(cleanup []func() error) error {
+	var cleanupErrs []error
+	for i := len(cleanup) - 1; i >= 0; i-- {
+		if err := cleanup[i](); err != nil {
+			cleanupErrs = append(cleanupErrs, err)
+		}
 	}
+	return errors.Join(cleanupErrs...)
 }
 
 const (

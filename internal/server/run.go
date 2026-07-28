@@ -26,14 +26,11 @@ func Run(ctx context.Context, opts Options) error {
 	if ctx == nil {
 		return errors.New("context is required")
 	}
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
-	if opts.BuildHandler == nil {
-		return errors.New("build handler is required")
-	}
-	if opts.ShutdownTimeout <= 0 {
-		opts.ShutdownTimeout = 10 * time.Second
-	}
 
 	var handler atomic.Pointer[http.Handler]
 	initialHandler := http.Handler(http.HandlerFunc(handleBootstrapHealth))
@@ -95,12 +92,40 @@ func Run(ctx context.Context, opts Options) error {
 	return nil
 }
 
+func validateOptions(opts Options) error {
+	if opts.Addr == "" {
+		return errors.New("server address is required")
+	}
+	if opts.ReadTimeout <= 0 {
+		return errors.New("read timeout must be positive")
+	}
+	if opts.WriteTimeout <= 0 {
+		return errors.New("write timeout must be positive")
+	}
+	if opts.IdleTimeout <= 0 {
+		return errors.New("idle timeout must be positive")
+	}
+	if opts.ShutdownTimeout <= 0 {
+		return errors.New("shutdown timeout must be positive")
+	}
+	if opts.BuildHandler == nil {
+		return errors.New("build handler is required")
+	}
+	return nil
+}
+
 func handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet || r.URL.Path != "/healthz" {
-		http.NotFound(w, r)
+	if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+		handleHealthz(w, r)
 		return
 	}
-	handleHealthz(w, r)
+	if r.Method == http.MethodGet && r.URL.Path == "/readyz" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"starting"}`))
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func shutdownAfterStartupError(srv *http.Server, timeout time.Duration, runErr error) error {

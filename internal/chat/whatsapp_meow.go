@@ -34,6 +34,10 @@ type WhatsAppMeowChannel struct {
 	// latestQR holds the current QR code string for the HTTP endpoint.
 	latestQR string
 	qrMu     sync.RWMutex
+
+	lifecycleMu sync.Mutex
+	qrCancel    context.CancelFunc
+	qrDone      chan struct{}
 }
 
 // NewWhatsAppMeowChannel creates a WhatsApp channel backed by whatsmeow.
@@ -96,19 +100,31 @@ func (w *WhatsAppMeowChannel) SendTyping(ctx context.Context, userID string) err
 
 // Start connects to WhatsApp. If not yet authenticated, it generates a QR code
 // available via the QRHandler HTTP endpoint.
-func (w *WhatsAppMeowChannel) Start(_ context.Context, handler func(InboundMessage)) error {
+func (w *WhatsAppMeowChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
 	w.mu.Lock()
 	w.handler = handler
 	w.mu.Unlock()
 
 	if w.client.Store.ID == nil {
 		// Not yet authenticated — need QR code scan.
-		qrChan, _ := w.client.GetQRChannel(context.Background())
+		qrCtx, cancelQR := context.WithCancel(ctx)
+		qrChan, err := w.client.GetQRChannel(qrCtx)
+		if err != nil {
+			cancelQR()
+			return fmt.Errorf("whatsmeow QR channel: %w", err)
+		}
 		if err := w.client.Connect(); err != nil {
+			cancelQR()
 			return fmt.Errorf("whatsmeow connect: %w", err)
 		}
+		qrDone := make(chan struct{})
+		w.lifecycleMu.Lock()
+		w.qrCancel = cancelQR
+		w.qrDone = qrDone
+		w.lifecycleMu.Unlock()
 		// Process QR events in background.
 		go func() {
+			defer close(qrDone)
 			for evt := range qrChan {
 				switch evt.Event {
 				case "code":
@@ -142,7 +158,19 @@ func (w *WhatsAppMeowChannel) Start(_ context.Context, handler func(InboundMessa
 
 // Stop disconnects from WhatsApp.
 func (w *WhatsAppMeowChannel) Stop() error {
+	w.lifecycleMu.Lock()
+	cancelQR := w.qrCancel
+	qrDone := w.qrDone
+	w.qrCancel = nil
+	w.qrDone = nil
+	w.lifecycleMu.Unlock()
+	if cancelQR != nil {
+		cancelQR()
+	}
 	w.client.Disconnect()
+	if qrDone != nil {
+		<-qrDone
+	}
 	return nil
 }
 
