@@ -276,6 +276,92 @@ func TestTelegramChannel_SendMessage_QuizInlineKeyboardPayload(t *testing.T) {
 	}
 }
 
+func TestTelegramChannel_SendMessage_UsesOneTimeOnboardingKeyboard(t *testing.T) {
+	var values url.Values
+	transport := telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.client.Transport = transport
+	if err := channel.SendMessage(t.Context(), "123", OutboundMessage{
+		Text:          "Which form are you in now?",
+		ReplyKeyboard: [][]string{{"1", "2", "3"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var markup struct {
+		Keyboard        [][]string `json:"keyboard"`
+		ResizeKeyboard  bool       `json:"resize_keyboard"`
+		OneTimeKeyboard bool       `json:"one_time_keyboard"`
+		IsPersistent    bool       `json:"is_persistent"`
+	}
+	if err := json.Unmarshal([]byte(values.Get("reply_markup")), &markup); err != nil {
+		t.Fatal(err)
+	}
+	if len(markup.Keyboard) != 1 || !markup.ResizeKeyboard || !markup.OneTimeKeyboard || markup.IsPersistent {
+		t.Fatalf("reply markup = %#v", markup)
+	}
+}
+
+func TestTelegramChannel_SendMessage_OmitsReplyKeyboardFromGroupTopic(t *testing.T) {
+	var values url.Values
+	transport := telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.client.Transport = transport
+	if err := channel.SendMessage(
+		t.Context(),
+		"telegram:-100123:42",
+		OutboundMessage{
+			Text:          "Which form are you in now?",
+			ReplyKeyboard: [][]string{{"1", "2", "3"}},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+	if got := values.Get("reply_markup"); got != "" {
+		t.Fatalf("reply_markup = %q, want omitted for a group topic", got)
+	}
+}
+
 func TestTelegramChannel_DoesNotBuildRatingUI(t *testing.T) {
 	for _, text := range []string{
 		"Nilai penerangan saya (1-5)",

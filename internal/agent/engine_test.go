@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -187,6 +188,31 @@ func TestEngine_ProcessMessage_StartCommand_CreatesOnboardingConversation(t *tes
 	}
 	if conv.State != "onboarding_language" {
 		t.Fatalf("conversation state = %q, want onboarding_language", conv.State)
+	}
+}
+
+func TestEngine_ProcessMessage_StartCommand_RendersTelegramLanguageChoices(t *testing.T) {
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter: mockRouter(ai.NewMockProvider("")),
+		Store:    agent.NewMemoryStore(),
+	})
+	inbound := chat.InboundMessage{
+		Channel:   "telegram",
+		UserID:    "u-start-keyboard",
+		Text:      "/start",
+		FirstName: "Aina",
+	}
+	response, err := engine.ProcessMessage(t.Context(), inbound)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbound, ok := chat.RenderTurn(inbound, response, "", chat.TelegramInlineKeyboardContext{})
+	if !ok {
+		t.Fatal("RenderTurn() omitted onboarding response")
+	}
+	want := [][]string{{"English", "Bahasa Melayu", "中文"}}
+	if !reflect.DeepEqual(outbound.ReplyKeyboard, want) {
+		t.Fatalf("ReplyKeyboard = %#v, want %#v", outbound.ReplyKeyboard, want)
 	}
 }
 
