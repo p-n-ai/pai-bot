@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,6 +111,32 @@ func TestRunRejectsUnsafeOptions(t *testing.T) {
 			tt.mutate(&opts)
 			if err := Run(t.Context(), opts); err == nil {
 				t.Fatal("Run() succeeded with unsafe options")
+			}
+		})
+	}
+}
+
+func TestBootstrapHealthOnlyServesInternalLiveness(t *testing.T) {
+	tests := []struct {
+		method     string
+		path       string
+		wantStatus int
+	}{
+		{method: http.MethodGet, path: "/healthz", wantStatus: http.StatusOK},
+		{method: http.MethodGet, path: "/readyz", wantStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/health", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/api", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/status", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/ai", wantStatus: http.StatusNotFound},
+		{method: http.MethodPost, path: "/healthz", wantStatus: http.StatusNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			request := httptest.NewRequest(test.method, test.path, nil)
+			response := httptest.NewRecorder()
+			handleBootstrapHealth(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
 			}
 		})
 	}

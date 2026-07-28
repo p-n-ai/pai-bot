@@ -6,6 +6,7 @@ import { routeTree } from './routeTree.gen'
 export const router = createRouter({
   routeTree,
   context: initialAuthContext,
+  defaultPreload: 'intent',
 })
 
 declare module '@tanstack/react-router' {

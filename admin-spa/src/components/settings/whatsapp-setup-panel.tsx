@@ -80,6 +80,7 @@ function WhatsAppStatusView({
         error={statusState.loadError}
         errorTitle='Could not load WhatsApp status'
         loadingTitle='Loading WhatsApp status'
+        loadingVariant='settings'
         status={statusState.loadState}
       />
     )

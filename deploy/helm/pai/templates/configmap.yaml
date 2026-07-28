@@ -13,6 +13,7 @@ data:
   LEARN_TENANT_MODE: {{ .Values.config.tenantMode | quote }}
   LEARN_CURRICULUM_PATH: {{ .Values.config.curriculumPath | quote }}
   LEARN_DEV_MODE: {{ .Values.config.devMode | quote }}
+  PAI_FEATURES: {{ .Values.config.featureFlags | quote }}
   LEARN_DISABLE_MULTI_LANGUAGE: {{ .Values.config.disableMultiLanguage | quote }}
   LEARN_AI_PERSONALIZED_NUDGES_ENABLED: {{ .Values.config.personalizedNudgesEnabled | quote }}
   LEARN_EMBED_BASE_URL: {{ .Values.config.embedBaseUrl | quote }}

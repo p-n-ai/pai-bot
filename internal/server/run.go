@@ -33,7 +33,7 @@ func Run(ctx context.Context, opts Options) error {
 	defer cancelRun()
 
 	var handler atomic.Pointer[http.Handler]
-	initialHandler := http.Handler(startupHandler())
+	initialHandler := http.Handler(http.HandlerFunc(handleBootstrapHealth))
 	handler.Store(&initialHandler)
 
 	srv := &http.Server{
@@ -114,15 +114,18 @@ func validateOptions(opts Options) error {
 	return nil
 }
 
-func startupHandler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handleHealthz)
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+func handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+		handleHealthz(w, r)
+		return
+	}
+	if r.Method == http.MethodGet && r.URL.Path == "/readyz" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"status":"starting"}`))
-	})
-	return mux
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func shutdownAfterStartupError(srv *http.Server, timeout time.Duration, runErr error) error {

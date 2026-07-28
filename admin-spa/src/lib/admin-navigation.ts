@@ -1,5 +1,4 @@
 import {
-  BarChart3Icon,
   BookOpenCheckIcon,
   BotIcon,
   CableIcon,
@@ -27,11 +26,6 @@ const navigationGroups = [
         Icon: BookOpenCheckIcon,
         href: '/dashboard/classes',
         label: 'My classes',
-      },
-      {
-        Icon: BarChart3Icon,
-        href: '/dashboard/metrics',
-        label: 'Learning progress',
       },
     ],
   },

@@ -30,6 +30,16 @@ export default defineConfig({
         changeOrigin: true,
         xfwd: true,
       },
+      '/health/api': {
+        target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        xfwd: true,
+      },
+      '/health/status': {
+        target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        xfwd: true,
+      },
       '/embed': {
         target: process.env.VITE_API_URL ?? 'http://127.0.0.1:8080',
         changeOrigin: false,

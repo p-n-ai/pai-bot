@@ -1,0 +1,98 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      verification_mode:
+        description: Run normally or fail after a healthy owned-origin response
+        required: true
+        default: healthy
+        type: choice
+        options:
+          - healthy
+          - deliberate-failure
+      check:
+        description: Health surface to verify
+        required: true
+        default: app
+        type: choice
+        options:
+          - app
+          - ai
+
+concurrency:
+  group: uptime-production-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.check == 'app') ||
+      (github.event_name == 'schedule' && vars.PAI_UPTIME_ENABLED == 'true')
+    name: Public health probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: production
+    env:
+      TARGET_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require monitoring target
+        run: |
+          if [ -z "$TARGET_URL" ]; then
+            echo "::error::Set NEXT_PUBLIC_API_URL in the production environment."
+            exit 1
+          fi
+
+      - name: Probe public health endpoint
+        env:
+          VERIFICATION_MODE: ${{ inputs.verification_mode }}
+        run: |
+          if [ "$VERIFICATION_MODE" = "deliberate-failure" ]; then
+            python3 scripts/uptime_probe.py "$TARGET_URL" --timeout 10 --deliberate-failure
+          else
+            python3 scripts/uptime_probe.py "$TARGET_URL" --timeout 10
+          fi
+
+  ai-probe:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.check == 'ai') ||
+      (github.event_name == 'schedule' && vars.PAI_AI_UPTIME_ENABLED == 'true')
+    name: AI provider health probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: production
+    env:
+      TARGET_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+      PAI_AI_HEALTH_TOKEN: ${{ secrets.PAI_AI_HEALTH_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AI monitoring configuration
+        run: |
+          if [ -z "$TARGET_URL" ]; then
+            echo "::error::Set NEXT_PUBLIC_API_URL in the production environment."
+            exit 1
+          fi
+          if [ -z "$PAI_AI_HEALTH_TOKEN" ]; then
+            echo "::error::Set PAI_AI_HEALTH_TOKEN in the production environment."
+            exit 1
+          fi
+
+      - name: Probe AI health endpoint
+        env:
+          VERIFICATION_MODE: ${{ inputs.verification_mode }}
+        run: |
+          if [ "$VERIFICATION_MODE" = "deliberate-failure" ]; then
+            python3 scripts/uptime_probe.py "$TARGET_URL" --check ai --timeout 10 --deliberate-failure
+          else
+            python3 scripts/uptime_probe.py "$TARGET_URL" --check ai --timeout 10
+          fi

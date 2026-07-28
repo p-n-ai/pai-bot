@@ -189,7 +189,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL
+          envs: DEPLOY_DIR,PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL,FEATURES,AI_HEALTH_TOKEN
           script: |
             cd "$DEPLOY_DIR"
             printf '%s\n' \
@@ -213,6 +213,8 @@ jobs:
               "LEARN_AI_OLLAMA_ENABLED=false" \
               "LEARN_TENANT_MODE=single" \
               "LEARN_CURRICULUM_PATH=./oss" \
+              "PAI_FEATURES=${FEATURES}" \
+              "PAI_AI_HEALTH_TOKEN=${AI_HEALTH_TOKEN}" \
               "LEARN_DISABLE_MULTI_LANGUAGE=false" \
               "LEARN_RATING_PROMPT_EVERY_REPLIES=5" \
               "LEARN_AI_PERSONALIZED_NUDGES_ENABLED=true" \
@@ -261,6 +263,8 @@ jobs:
           SMTP_FROM: ${{ secrets.LEARN_EMAIL_FROM_ADDRESS }}
           SMTP_NAME: ${{ secrets.LEARN_EMAIL_FROM_NAME }}
           DOMAIN_VAL: ${{ secrets.DOMAIN }}
+          FEATURES: ${{ vars.PAI_FEATURES }}
+          AI_HEALTH_TOKEN: ${{ secrets.PAI_AI_HEALTH_TOKEN }}
 
       - name: Deploy
         uses: appleboy/ssh-action@v1

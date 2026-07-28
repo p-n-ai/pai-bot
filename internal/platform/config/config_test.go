@@ -80,6 +80,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_CURRICULUM_PATH",
 		"LEARN_DEV_MODE",
 		"PAI_FEATURES",
+		"PAI_AI_HEALTH_TOKEN",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_MOCK_RESPONSE",
 	}
@@ -94,6 +95,19 @@ func setPrivateProductionAuth(t *testing.T) {
 	t.Setenv("PAI_AUTH_SECRET", "private-test-secret")
 	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
 	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "private-bootstrap-password")
+}
+
+func TestLoadAIHealthToken(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_AI_HEALTH_TOKEN", "monitor-secret")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Runtime.AIHealthToken != "monitor-secret" {
+		t.Fatal("AI health token was not loaded")
+	}
 }
 
 func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {

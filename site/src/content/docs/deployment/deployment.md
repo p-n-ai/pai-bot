@@ -273,6 +273,50 @@ Graceful shutdown on `SIGTERM` with a 15-second termination grace period.
 
 ## Monitoring
 
+### External uptime
+
+The feature-gated public `/health` page shows coarse application and AI
+availability without requiring an admin session. Its data comes from
+`/health/status`; provider names and upstream errors are never exposed. The
+`Uptime` GitHub Actions workflow separately checks the strict `/health/api`
+JSON contract every five minutes from outside the application host. It derives
+the current origin from the production `NEXT_PUBLIC_API_URL` secret and does
+not accept manual origin overrides.
+
+AI availability is monitored separately at authenticated `/health/ai`. Enable
+the `ai_health` feature alongside `public_health`, store a dedicated
+`PAI_AI_HEALTH_TOKEN` production secret for both the app and workflow, and
+enable its schedule independently:
+
+The server checks configured providers in routing order until one is healthy,
+with a five-second bound and a one-minute cache that coalesces concurrent
+requests. Public responses never expose provider names or upstream errors.
+Anthropic's current provider check performs a one-token completion if routing
+falls through to it, so keep the AI schedule disabled when that cost is not
+acceptable.
+
+Roll out both checks in this order:
+
+1. Merge the workflow while `PAI_UPTIME_ENABLED` and
+   `PAI_AI_UPTIME_ENABLED` are unset or `false`.
+2. Read the existing feature list with
+   `gh variable get PAI_FEATURES --env production`, then append
+   `public_health,ai_health` without removing any existing flags.
+3. Store a generated monitor secret with
+   `gh secret set PAI_AI_HEALTH_TOKEN --env production`.
+4. Run the `Deploy` workflow so the app receives the flags and bearer secret.
+5. Dispatch `Uptime` in `healthy` and `deliberate-failure` mode for both `app`
+   and `ai`. The failed runs prove GitHub retains useful diagnostics; no paging
+   destination is configured by this workflow.
+6. Enable schedules only after those checks pass:
+   `gh variable set PAI_UPTIME_ENABLED --body true` and
+   `gh variable set PAI_AI_UPTIME_ENABLED --body true`.
+7. Confirm a completed scheduled run for both jobs.
+
+Set either schedule variable to `false` to stop that monitor. To remove the
+public routes, remove only `public_health` and/or `ai_health` from the preserved
+feature list and redeploy.
+
 ### Logs
 
 Structured JSON logs via `slog`:

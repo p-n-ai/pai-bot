@@ -95,6 +95,7 @@ config:
   # -- Dev mode (disables Telegram/AI provider requirement)
   devMode: false
   # -- Feature flags
+  featureFlags: ""
   disableMultiLanguage: false
   personalizedNudgesEnabled: true
   # -- Optional public origin for widget assets. Defaults to the ingress/request origin.
@@ -107,6 +108,8 @@ secrets:
   # (rotate back to recover, or re-enter via the admin UI); storing keys is refused
   # while this is the default. MUST override in production.
   authSecret: change-me-in-production
+  # -- Bearer token for the feature-gated /health/ai monitor.
+  aiHealthToken: ""
   # -- Telegram bot token (required unless devMode)
   telegramBotToken: ""
   # -- AI provider keys (at least one required unless devMode)
