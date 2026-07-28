@@ -468,7 +468,12 @@ P&AI is designed to run on any cloud without lock-in:
 
 ## Configuration Reference
 
-Configuration is environment-driven. Core app variables use `LEARN_`; auth variables use `PAI_AUTH_` only. See [`.env.example`](.env.example) for the complete list.
+Environment variables define the immutable deployment baseline. Platform
+administrators can override the supported AI runtime fields in Admin; resetting
+an override returns control to the current environment value without rewriting
+the process environment or `.env` files. Core app variables use `LEARN_`; auth
+variables use `PAI_AUTH_` only. See [`.env.example`](.env.example) for the
+complete baseline list.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -513,11 +518,22 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
 | `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret used for JWTs and focused-page capabilities; use a private value in production |
-| `PAI_CONFIG_ENCRYPTION_KEY` | No | — | Independent key used to encrypt API keys stored through admin settings; secret writes require at least 32 characters. `PAI_AUTH_SECRET` is tried only to read legacy ciphertext |
+| `PAI_CONFIG_ENCRYPTION_KEY` | No | — | Active independent high-entropy root used for versioned encryption of API keys stored through admin settings |
+| `PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS` | No | `[]` | JSON array of up to eight retired encryption roots retained while stored credentials and backups are migrated. `PAI_AUTH_SECRET` remains a read-only candidate only for legacy unversioned ciphertext |
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 
 Outside development mode, configure at least one external chat adapter and one AI provider.
+See [Runtime AI settings](docs/operations/runtime-ai-settings.md) for the
+env/override reconciliation contract and the safe encryption-key rotation
+sequence.
+
+Generate independent auth and configuration-encryption roots in a new private
+file with:
+
+```bash
+go run ./cmd/init-secrets -out /path/to/pai-bot-secrets.env
+```
 
 ### First-Boot Tenant Flow
 
