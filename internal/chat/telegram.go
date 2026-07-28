@@ -121,7 +121,7 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			}
 			params.Set("reply_markup", string(b))
 		}
-		if len(msg.ReplyKeyboard) > 0 {
+		if len(msg.ReplyKeyboard) > 0 && telegramReplyKeyboardAllowed(chatID) {
 			replyMarkup := map[string]any{
 				"keyboard":          msg.ReplyKeyboard,
 				"resize_keyboard":   true,
@@ -160,6 +160,10 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 	}
 
 	return nil
+}
+
+func telegramReplyKeyboardAllowed(chatID string) bool {
+	return !strings.HasPrefix(chatID, "-")
 }
 
 func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
