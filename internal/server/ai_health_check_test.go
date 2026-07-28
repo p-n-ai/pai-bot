@@ -6,7 +6,6 @@ package server
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
@@ -31,9 +30,7 @@ func TestAIHealthCheckUsesCompletionPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			router := ai.NewRouterWithConfig(ai.RouterConfig{
-				RetryBackoff: []time.Duration{time.Nanosecond},
-			})
+			router := ai.NewRouter()
 			router.Register("provider", &ai.MockProvider{
 				Response: test.response,
 				Err:      test.err,
