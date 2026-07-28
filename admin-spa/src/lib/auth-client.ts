@@ -1,4 +1,6 @@
-import { isAuthSession, isSchoolChoices } from './auth-types'
+import { Option, Schema } from 'effect'
+
+import { SchoolChoiceSchema, isAuthSession } from './auth-types'
 import { isSafeRedirectPath } from './rbac-paths'
 import type { AuthSession } from './auth-types'
 
@@ -27,11 +29,13 @@ export interface TenantRequiredResult {
   message: string
 }
 
-interface TenantRequiredPayload {
-  kind: 'tenant_required'
-  error: 'tenant_required'
-  tenant_choices: NonNullable<AuthSession['tenant_choices']>
-}
+const TenantRequiredPayloadSchema = Schema.Struct({
+  kind: Schema.Literal('tenant_required'),
+  error: Schema.Literal('tenant_required'),
+  tenant_choices: Schema.mutable(Schema.Array(SchoolChoiceSchema)),
+})
+
+type TenantRequiredPayload = typeof TenantRequiredPayloadSchema.Type
 
 export type LoginResult =
   | {
@@ -41,9 +45,17 @@ export type LoginResult =
   | TenantRequiredResult
 
 /** Auth methods that the running backend is ready to serve. */
-export interface AuthCapabilities {
-  google_login: boolean
-}
+export const AuthCapabilitiesSchema = Schema.Struct({
+  google_login: Schema.Boolean,
+})
+
+export type AuthCapabilities = typeof AuthCapabilitiesSchema.Type
+
+const ErrorPayloadSchema = Schema.Struct({
+  error: Schema.String,
+})
+
+const matchesAuthCapabilities = Schema.is(AuthCapabilitiesSchema)
 
 /** Reads runtime auth availability without exposing provider credentials. */
 export async function readAuthCapabilities(
@@ -206,7 +218,7 @@ function parseLoginFailure(
 function isTenantRequiredPayload(
   payload: unknown,
 ): payload is TenantRequiredPayload {
-  return isRecord(payload) && hasTenantRequiredShape(payload)
+  return Schema.is(TenantRequiredPayloadSchema)(payload)
 }
 
 function readErrorMessage(payload: unknown, fallback: string): string {
@@ -231,28 +243,19 @@ function isInternalAuthFailurePayload(payload: unknown): boolean {
   )
 }
 
-function hasTenantRequiredShape(payload: Record<string, unknown>): boolean {
-  return (
-    payload.kind === 'tenant_required' &&
-    payload.error === 'tenant_required' &&
-    isSchoolChoices(payload.tenant_choices)
-  )
-}
-
 function readStringPayload(payload: unknown): string | undefined {
   return typeof payload === 'string' ? payload : undefined
 }
 
 function readPayloadError(payload: unknown): string | undefined {
-  return isRecord(payload) && typeof payload.error === 'string'
-    ? payload.error
-    : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return Option.getOrUndefined(
+    Option.map(
+      Schema.decodeUnknownOption(ErrorPayloadSchema)(payload),
+      (errorPayload) => errorPayload.error,
+    ),
+  )
 }
 
 function isAuthCapabilities(value: unknown): value is AuthCapabilities {
-  return isRecord(value) && typeof value.google_login === 'boolean'
+  return matchesAuthCapabilities(value)
 }

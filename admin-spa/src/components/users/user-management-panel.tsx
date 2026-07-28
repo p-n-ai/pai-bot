@@ -576,7 +576,7 @@ function formatRole(value: string): string {
 
 function formatWithTenant(
   value: string,
-  tenantName: string | undefined,
+  tenantName: string | null | undefined,
 ): string {
   return tenantName ? `${value} (${tenantName})` : value
 }

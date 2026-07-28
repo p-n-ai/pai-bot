@@ -1,37 +1,54 @@
-import { hasNumberProps, hasStringProps, isRecord } from './type-guards'
+import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
-export interface AIProviderUsage {
-  provider: string
-  model: string
-  messages: number
-  input_tokens: number
-  output_tokens: number
-  total_tokens: number
-}
+const OptionalNullableNumber = Schema.optionalKey(Schema.NullOr(Schema.Number))
 
-export interface AIUsageDailyPoint {
-  date: string
-  messages: number
-  tokens: number
-  cost_usd?: number | null
-}
+export const AIProviderUsageSchema = Schema.Struct({
+  provider: Schema.String,
+  model: Schema.String,
+  messages: Schema.Number,
+  input_tokens: Schema.Number,
+  output_tokens: Schema.Number,
+  total_tokens: Schema.Number,
+})
 
-export interface AIUsageSummary {
-  total_messages: number
-  total_input_tokens: number
-  total_output_tokens: number
-  providers: Array<AIProviderUsage>
-  monthly_cost_usd?: number | null
-  budget_limit_usd?: number | null
-  per_student_average_tokens?: number | null
-  per_student_average_cost_usd?: number | null
-  budget_limit_tokens?: number | null
-  budget_used_tokens?: number | null
-  budget_remaining_tokens?: number | null
-  budget_period_start?: string
-  budget_period_end?: string
-  daily_usage?: Array<AIUsageDailyPoint>
-}
+export interface AIProviderUsage extends EffectSchema.Type<
+  typeof AIProviderUsageSchema
+> {}
+
+export const AIUsageDailyPointSchema = Schema.Struct({
+  date: Schema.String,
+  messages: Schema.Number,
+  tokens: Schema.Number,
+  cost_usd: OptionalNullableNumber,
+})
+
+export interface AIUsageDailyPoint extends EffectSchema.Type<
+  typeof AIUsageDailyPointSchema
+> {}
+
+export const AIUsageSummarySchema = Schema.Struct({
+  total_messages: Schema.Number,
+  total_input_tokens: Schema.Number,
+  total_output_tokens: Schema.Number,
+  providers: Schema.mutable(Schema.Array(AIProviderUsageSchema)),
+  monthly_cost_usd: OptionalNullableNumber,
+  budget_limit_usd: OptionalNullableNumber,
+  per_student_average_tokens: OptionalNullableNumber,
+  per_student_average_cost_usd: OptionalNullableNumber,
+  budget_limit_tokens: OptionalNullableNumber,
+  budget_used_tokens: OptionalNullableNumber,
+  budget_remaining_tokens: OptionalNullableNumber,
+  budget_period_start: Schema.optionalKey(Schema.String),
+  budget_period_end: Schema.optionalKey(Schema.String),
+  daily_usage: Schema.optionalKey(
+    Schema.mutable(Schema.Array(AIUsageDailyPointSchema)),
+  ),
+})
+
+export interface AIUsageSummary extends EffectSchema.Type<
+  typeof AIUsageSummarySchema
+> {}
 
 export interface UpsertTokenBudgetWindowInput {
   budget_tokens: number
@@ -39,34 +56,9 @@ export interface UpsertTokenBudgetWindowInput {
   period_end: string
 }
 
+const matchesAIUsageSummary = Schema.is(AIUsageSummarySchema)
+
+/** Returns whether an unknown response satisfies the complete AI usage contract. */
 export function isAIUsageSummary(value: unknown): value is AIUsageSummary {
-  return isRecord(value) && hasAIUsageSummaryShape(value)
-}
-
-function hasAIUsageSummaryShape(value: Record<string, unknown>): boolean {
-  return (
-    hasNumberProps(value, [
-      'total_messages',
-      'total_input_tokens',
-      'total_output_tokens',
-    ]) &&
-    Array.isArray(value.providers) &&
-    value.providers.every(isAIProviderUsage)
-  )
-}
-
-function isAIProviderUsage(value: unknown): value is AIProviderUsage {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    hasStringProps(value, ['provider', 'model']) &&
-    hasNumberProps(value, [
-      'messages',
-      'input_tokens',
-      'output_tokens',
-      'total_tokens',
-    ])
-  )
+  return matchesAIUsageSummary(value)
 }

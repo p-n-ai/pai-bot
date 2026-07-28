@@ -75,4 +75,57 @@ describe('user management type guards', () => {
       }),
     ).toBe(true)
   })
+
+  it('preserves nullable optional strings accepted by the legacy boundary', () => {
+    expect(
+      isInviteRecord({
+        activation_url: null,
+        delivery_error: null,
+        email: 'teacher@example.com',
+        expires_at: null,
+        id: null,
+        invite_token: 'token_1',
+        invited_by_user_id: null,
+        role: 'teacher',
+      }),
+    ).toBe(true)
+
+    expect(
+      isUserManagementView({
+        summary: {
+          parents: 0,
+          pending_invites: 1,
+          students: 0,
+          teachers: 1,
+          total_users: 1,
+        },
+        active_users: [
+          {
+            created_at: '2026-05-08T00:00:00Z',
+            email: 'teacher@example.com',
+            id: 'teacher_1',
+            name: 'Teacher One',
+            role: 'teacher',
+            status: 'active',
+            tenant_name: null,
+          },
+        ],
+        students: [],
+        pending_invites: [
+          {
+            created_at: '2026-05-08T00:00:00Z',
+            delivery_error: null,
+            delivery_sent_at: null,
+            email: 'parent@example.com',
+            expires_at: '2026-05-15T00:00:00Z',
+            id: 'invite_1',
+            invited_by: 'Admin',
+            role: 'parent',
+            status: 'pending',
+            tenant_name: null,
+          },
+        ],
+      }),
+    ).toBe(true)
+  })
 })

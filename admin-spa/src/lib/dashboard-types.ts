@@ -1,64 +1,44 @@
-import { isNumber, isRecord, isString } from './type-guards'
+import { Option, Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
-export interface ClassProgressStudent {
-  id: string
-  name: string
-  topics: Record<string, number>
-}
+export const ClassProgressStudentSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  topics: Schema.Record(Schema.String, Schema.Number),
+})
 
-export interface ClassProgress {
-  students: Array<ClassProgressStudent>
-  topic_ids: Array<string>
-}
+export interface ClassProgressStudent extends EffectSchema.Type<
+  typeof ClassProgressStudentSchema
+> {}
 
+const ClassProgressStudents = Schema.mutable(
+  Schema.Array(ClassProgressStudentSchema),
+)
+const TopicIDs = Schema.mutable(Schema.Array(Schema.String))
+
+const ClassProgressWire = Schema.Struct({
+  students: Schema.NullOr(ClassProgressStudents),
+  topic_ids: Schema.NullOr(TopicIDs),
+})
+
+export const ClassProgressSchema = Schema.Struct({
+  students: ClassProgressStudents,
+  topic_ids: TopicIDs,
+})
+
+export interface ClassProgress extends EffectSchema.Type<
+  typeof ClassProgressSchema
+> {}
+
+const decodeClassProgress = Schema.decodeUnknownOption(ClassProgressWire)
+
+/** Decodes class progress while normalizing nullable backend slices to arrays. */
 export function readClassProgress(value: unknown): ClassProgress | null {
-  return isRecord(value) ? buildClassProgress(value) : null
-}
-
-function buildClassProgress(value: Record<string, unknown>) {
-  const students = readArrayOrNull(value.students, isClassProgressStudent)
-  const topicIDs = readArrayOrNull(value.topic_ids, isString)
-
-  return students && topicIDs ? { students, topic_ids: topicIDs } : null
-}
-
-function readArrayOrNull<T>(
-  value: unknown,
-  guard: (item: unknown) => item is T,
-): Array<T> | null {
-  const array = normalizeNullableArray(value)
-  return Array.isArray(array) ? readGuardedArray(array, guard) : null
-}
-
-function normalizeNullableArray(value: unknown) {
-  return value === null ? [] : value
-}
-
-function readGuardedArray<T>(
-  value: Array<unknown>,
-  guard: (item: unknown) => item is T,
-): Array<T> | null {
-  return value.every(guard) ? value : null
-}
-
-function isClassProgressStudent(value: unknown): value is ClassProgressStudent {
-  return isRecord(value) && hasStudentShape(value)
-}
-
-function hasStudentShape(value: Record<string, unknown>): boolean {
-  return [hasStudentID, hasStudentName, hasTopicScores].every((check) =>
-    check(value),
-  )
-}
-
-function hasStudentID(value: Record<string, unknown>): boolean {
-  return typeof value.id === 'string'
-}
-
-function hasStudentName(value: Record<string, unknown>): boolean {
-  return typeof value.name === 'string'
-}
-
-function hasTopicScores(value: Record<string, unknown>): boolean {
-  return isRecord(value.topics) && Object.values(value.topics).every(isNumber)
+  return Option.match(decodeClassProgress(value), {
+    onNone: () => null,
+    onSome: (progress) => ({
+      students: progress.students ?? [],
+      topic_ids: progress.topic_ids ?? [],
+    }),
+  })
 }

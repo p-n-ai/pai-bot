@@ -1,57 +1,46 @@
+import { Schema } from 'effect'
 import {
-  isLearningStreak,
-  isProgressItem,
-  isStudentProfile,
+  LearningStreakSchema,
+  ProgressItemSchema,
+  StudentProfileSchema,
 } from './learner-types'
-import { hasStringProps, isRecord } from './type-guards'
-import type {
-  LearningStreak,
-  ProgressItem,
-  StudentProfile,
-} from './learner-types'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
-export interface StudentDetail {
-  student: StudentProfile
-  progress: Array<ProgressItem>
-  streak: LearningStreak
-}
+export const StudentDetailSchema = Schema.Struct({
+  student: StudentProfileSchema,
+  progress: Schema.mutable(Schema.Array(ProgressItemSchema)),
+  streak: LearningStreakSchema,
+})
 
-export interface StudentConversation {
-  id: string
-  timestamp: string
-  role: 'student' | 'assistant'
-  text: string
-}
+export interface StudentDetail extends EffectSchema.Type<
+  typeof StudentDetailSchema
+> {}
 
+export const StudentConversationSchema = Schema.Struct({
+  id: Schema.String,
+  timestamp: Schema.String,
+  role: Schema.Literals(['student', 'assistant']),
+  text: Schema.String,
+})
+
+export interface StudentConversation extends EffectSchema.Type<
+  typeof StudentConversationSchema
+> {}
+
+const StudentConversations = Schema.mutable(
+  Schema.Array(StudentConversationSchema),
+)
+const matchesStudentDetail = Schema.is(StudentDetailSchema)
+const matchesStudentConversations = Schema.is(StudentConversations)
+
+/** Returns whether an unknown response satisfies the student detail contract. */
 export function isStudentDetail(value: unknown): value is StudentDetail {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return [
-    isStudentProfile(value.student),
-    isLearningStreak(value.streak),
-    Array.isArray(value.progress) && value.progress.every(isProgressItem),
-  ].every(Boolean)
+  return matchesStudentDetail(value)
 }
 
+/** Returns whether an unknown response is a valid conversation list. */
 export function isStudentConversations(
   value: unknown,
 ): value is Array<StudentConversation> {
-  return Array.isArray(value) && value.every(isStudentConversation)
-}
-
-function isStudentConversation(value: unknown): value is StudentConversation {
-  return isRecord(value) && hasStudentConversationShape(value)
-}
-
-function hasStudentConversationShape(value: Record<string, unknown>): boolean {
-  return (
-    hasStringProps(value, ['id', 'timestamp', 'text']) &&
-    isMessageRole(value.role)
-  )
-}
-
-function isMessageRole(value: unknown): value is StudentConversation['role'] {
-  return value === 'student' || value === 'assistant'
+  return matchesStudentConversations(value)
 }

@@ -1,25 +1,38 @@
-import { isRecord, isString } from './type-guards'
+import { Option, Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
-export interface AISettingsKeyStatus {
-  set: boolean
-  last4: string
-}
+export const AISettingsKeyStatusSchema = Schema.Struct({
+  set: Schema.Boolean,
+  last4: Schema.String,
+})
 
-export interface AISettingsSources {
-  defaultProvider: string
-  openrouterModel: string
-  openrouterKey: string
-  flags: Record<string, string>
-}
+export interface AISettingsKeyStatus extends EffectSchema.Type<
+  typeof AISettingsKeyStatusSchema
+> {}
 
-export interface AISettings {
-  defaultProvider: string
-  openrouterModel: string
-  openrouterKey: AISettingsKeyStatus
-  flags: Record<string, boolean>
-  availableProviders: Array<string>
-  sources: AISettingsSources
-}
+export const AISettingsSourcesSchema = Schema.Struct({
+  defaultProvider: Schema.String,
+  openrouterModel: Schema.String,
+  openrouterKey: Schema.String,
+  flags: Schema.Record(Schema.String, Schema.String),
+})
+
+export interface AISettingsSources extends EffectSchema.Type<
+  typeof AISettingsSourcesSchema
+> {}
+
+export const AISettingsSchema = Schema.Struct({
+  defaultProvider: Schema.String,
+  openrouterModel: Schema.String,
+  openrouterKey: AISettingsKeyStatusSchema,
+  flags: Schema.Record(Schema.String, Schema.Boolean),
+  availableProviders: Schema.mutable(Schema.Array(Schema.String)),
+  sources: AISettingsSourcesSchema,
+})
+
+export interface AISettings extends EffectSchema.Type<
+  typeof AISettingsSchema
+> {}
 
 export interface UpdateAISettingsInput {
   defaultProvider?: string
@@ -29,109 +42,9 @@ export interface UpdateAISettingsInput {
   flags?: Record<string, boolean | null>
 }
 
+const decodeAISettings = Schema.decodeUnknownOption(AISettingsSchema)
+
+/** Decodes an unknown response into AI settings, discarding mismatch details. */
 export function readAISettings(value: unknown): AISettings | null {
-  return isRecord(value) ? readAISettingsRecord(value) : null
-}
-
-function readAISettingsRecord(
-  value: Record<string, unknown>,
-): AISettings | null {
-  const openrouterKey = readKeyStatus(value.openrouterKey)
-  const flags = readFlags(value.flags)
-  const availableProviders = readProviderList(value.availableProviders)
-  const sources = readSources(value.sources)
-
-  if (
-    !isString(value.defaultProvider) ||
-    !isString(value.openrouterModel) ||
-    openrouterKey === null ||
-    flags === null ||
-    availableProviders === null ||
-    sources === null
-  ) {
-    return null
-  }
-
-  return {
-    defaultProvider: value.defaultProvider,
-    openrouterModel: value.openrouterModel,
-    openrouterKey,
-    flags,
-    availableProviders,
-    sources,
-  }
-}
-
-function readSources(value: unknown): AISettingsSources | null {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  const flags = readFlagSources(value.flags)
-
-  if (
-    !isString(value.defaultProvider) ||
-    !isString(value.openrouterModel) ||
-    !isString(value.openrouterKey) ||
-    flags === null
-  ) {
-    return null
-  }
-
-  return {
-    defaultProvider: value.defaultProvider,
-    openrouterModel: value.openrouterModel,
-    openrouterKey: value.openrouterKey,
-    flags,
-  }
-}
-
-function readFlagSources(value: unknown): Record<string, string> | null {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  const sources: Record<string, string> = {}
-
-  for (const [name, source] of Object.entries(value)) {
-    if (!isString(source)) {
-      return null
-    }
-
-    sources[name] = source
-  }
-
-  return sources
-}
-
-function readKeyStatus(value: unknown): AISettingsKeyStatus | null {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  return typeof value.set === 'boolean' && isString(value.last4)
-    ? { set: value.set, last4: value.last4 }
-    : null
-}
-
-function readFlags(value: unknown): Record<string, boolean> | null {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  const flags: Record<string, boolean> = {}
-
-  for (const [name, enabled] of Object.entries(value)) {
-    if (typeof enabled !== 'boolean') {
-      return null
-    }
-
-    flags[name] = enabled
-  }
-
-  return flags
-}
-
-function readProviderList(value: unknown): Array<string> | null {
-  return Array.isArray(value) && value.every(isString) ? value : null
+  return Option.getOrNull(decodeAISettings(value))
 }

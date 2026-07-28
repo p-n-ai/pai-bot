@@ -1,23 +1,21 @@
-import { hasStringProps, isRecord } from './type-guards'
+import { Schema } from 'effect'
+import type { Schema as EffectSchema } from 'effect/Schema'
 
-export interface JoinClassView {
-  class_id: string
-  class_name: string
-  class_slug: string
-  curriculum_label: string
-  school_name: string
-}
+export const JoinClassViewSchema = Schema.Struct({
+  class_id: Schema.String,
+  class_name: Schema.String,
+  class_slug: Schema.String,
+  curriculum_label: Schema.String,
+  school_name: Schema.String,
+})
 
+export interface JoinClassView extends EffectSchema.Type<
+  typeof JoinClassViewSchema
+> {}
+
+const matchesJoinClassView = Schema.is(JoinClassViewSchema)
+
+/** Returns whether an unknown response satisfies the join-class view contract. */
 export function isJoinClassView(value: unknown): value is JoinClassView {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return hasStringProps(value, [
-    'class_id',
-    'class_name',
-    'class_slug',
-    'curriculum_label',
-    'school_name',
-  ])
+  return matchesJoinClassView(value)
 }
