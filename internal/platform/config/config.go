@@ -6,7 +6,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -147,35 +146,10 @@ type OpenRouterConfig struct {
 type CodexConfig struct {
 	Enabled      bool
 	Home         string
-	AuthFile     string
 	AccessToken  string
 	RefreshToken string
 	AccountID    string
 	Model        string
-}
-
-// Authenticated reports whether the isolated server credential file contains
-// a credential shape the Codex provider can use or refresh.
-func (c CodexConfig) Authenticated() bool {
-	info, err := os.Stat(strings.TrimSpace(c.AuthFile))
-	if err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
-		return false
-	}
-	data, err := os.ReadFile(strings.TrimSpace(c.AuthFile))
-	if err != nil {
-		return false
-	}
-	var auth struct {
-		AuthMode string `json:"auth_mode"`
-		Tokens struct {
-			AccessToken string `json:"access_token"`
-		} `json:"tokens"`
-	}
-	if json.Unmarshal(data, &auth) != nil {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(auth.AuthMode), "chatgpt") &&
-		strings.TrimSpace(auth.Tokens.AccessToken) != ""
 }
 
 // TelegramConfig holds Telegram Bot API settings.
@@ -332,7 +306,6 @@ func Load() (*Config, error) {
 			Codex: CodexConfig{
 				Enabled:      envBool("LEARN_AI_CODEX_ENABLED", false),
 				Home:         envStr("LEARN_AI_CODEX_HOME", defaultCodexHome()),
-				AuthFile:     filepath.Join(envStr("LEARN_AI_CODEX_HOME", defaultCodexHome()), "auth.json"),
 				AccessToken:  envStr("LEARN_AI_CODEX_ACCESS_TOKEN", ""),
 				RefreshToken: envStr("LEARN_AI_CODEX_REFRESH_TOKEN", ""),
 				AccountID:    envStr("LEARN_AI_CODEX_ACCOUNT_ID", ""),
@@ -516,15 +489,14 @@ func (c *Config) HasAIProvider() bool {
 		c.AI.Google.APIKey != "" ||
 		c.AI.OpenRouter.APIKey != "" ||
 		c.AI.Ollama.Enabled ||
-		(c.AI.Codex.Enabled && c.AI.Codex.Authenticated())
+		c.CodexDeviceAuthAvailable()
 }
 
 // CodexDeviceAuthAvailable reports whether the server has isolated storage
 // where an authenticated admin can establish the Codex provider.
 func (c *Config) CodexDeviceAuthAvailable() bool {
 	return c.AI.Codex.Enabled &&
-		strings.TrimSpace(c.AI.Codex.Home) != "" &&
-		strings.TrimSpace(c.AI.Codex.AuthFile) != ""
+		strings.TrimSpace(c.AI.Codex.Home) != ""
 }
 
 func (c *Config) mockAIProviderEnabled() bool {

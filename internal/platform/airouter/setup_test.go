@@ -5,8 +5,6 @@ package airouter
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -60,21 +58,17 @@ func TestBuildProviderUsesCodexCredentialsAndModel(t *testing.T) {
 	}
 }
 
-func TestBuildProviderUsesCodexLoginAdapterWhenAuthenticated(t *testing.T) {
+func TestBuildProviderUsesCodexAppServerWhenEnabled(t *testing.T) {
 	cfg := config.AIConfig{}
 	cfg.Codex.Enabled = true
-	cfg.Codex.AuthFile = filepath.Join(t.TempDir(), "auth.json")
 	cfg.Codex.Model = "gpt-test"
-	if err := os.WriteFile(cfg.Codex.AuthFile, []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token","account_id":"test-account"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	reg, ok := buildProviderWithCodexAuth("codex", cfg, stubCodexAuth{})
 	if !ok {
-		t.Fatal("buildProvider(codex) = not registered with server auth present")
+		t.Fatal("buildProvider(codex) = not registered with app-server available")
 	}
-	if _, ok := reg.Provider.(*ai.CodexProvider); !ok {
-		t.Fatalf("Codex provider type = %T, want *ai.CodexProvider", reg.Provider)
+	if _, native := reg.Provider.(ai.NativeProvider); native {
+		t.Fatalf("Codex app-server provider unexpectedly implements NativeProvider: %T", reg.Provider)
 	}
 	if reg.Name != "codex" || reg.DefaultModel != "gpt-test" {
 		t.Fatalf("Codex registration = %#v", reg)
@@ -85,29 +79,30 @@ type stubCodexAuth struct{}
 
 func (stubCodexAuth) Refresh(context.Context) error { return nil }
 func (stubCodexAuth) Available() bool               { return true }
+func (stubCodexAuth) Complete(
+	context.Context,
+	ai.CompletionRequest,
+) (ai.CompletionResponse, error) {
+	return ai.CompletionResponse{Content: "ok"}, nil
+}
 
 func TestSetupWithCodexAuthRegistersManagedLoginAdapter(t *testing.T) {
 	cfg := config.AIConfig{DefaultProvider: "codex"}
 	cfg.Codex.Enabled = true
-	cfg.Codex.AuthFile = filepath.Join(t.TempDir(), "auth.json")
-	if err := os.WriteFile(cfg.Codex.AuthFile, []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token","account_id":"test-account"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	router := SetupWithCodexAuth(cfg, stubCodexAuth{})
 
-	if !router.HasNativeProvider() {
-		t.Fatal("Codex provider was not registered as a native provider")
+	if !router.HasProvider() {
+		t.Fatal("Codex app-server provider was not registered")
+	}
+	if router.HasNativeProvider() {
+		t.Fatal("Codex app-server provider must not expose PaiBot native tool continuation")
 	}
 }
 
 func TestManagedCodexRequiresRuntimeManagerToRegister(t *testing.T) {
 	cfg := config.AIConfig{DefaultProvider: "codex"}
 	cfg.Codex.Enabled = true
-	cfg.Codex.AuthFile = filepath.Join(t.TempDir(), "auth.json")
-	if err := os.WriteFile(cfg.Codex.AuthFile, []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token","account_id":"test-account"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	if Setup(cfg).HasProvider() {
 		t.Fatal("Setup() registered managed Codex without app-server")
@@ -125,10 +120,6 @@ func TestSetupWithUnavailableCodexAuthLeavesProviderUnregistered(t *testing.T) {
 	cfg := config.AIConfig{DefaultProvider: "codex"}
 	cfg.OpenAI.APIKey = "fallback-key"
 	cfg.Codex.Enabled = true
-	cfg.Codex.AuthFile = filepath.Join(t.TempDir(), "auth.json")
-	if err := os.WriteFile(cfg.Codex.AuthFile, []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token","account_id":"test-account"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	router := SetupWithCodexAuth(cfg, unavailableCodexAuth{})
 

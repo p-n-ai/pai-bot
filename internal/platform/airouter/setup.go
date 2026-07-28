@@ -24,8 +24,8 @@ func Setup(cfg config.AIConfig) *ai.Router {
 	return SetupWithCodexAuth(cfg, nil)
 }
 
-// SetupWithCodexAuth builds a router whose Codex provider refreshes through app-server.
-func SetupWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexCredentialRefresher) *ai.Router {
+// SetupWithCodexAuth builds a router whose managed Codex provider runs through app-server.
+func SetupWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexAppServerClient) *ai.Router {
 	router := ai.NewRouter()
 	ApplyWithCodexAuth(router, cfg, codexAuth)
 	return router
@@ -37,7 +37,7 @@ func Apply(router *ai.Router, cfg config.AIConfig) {
 }
 
 // ApplyWithCodexAuth replaces providers and gives Codex its managed-session refresher.
-func ApplyWithCodexAuth(router *ai.Router, cfg config.AIConfig, codexAuth ai.CodexCredentialRefresher) {
+func ApplyWithCodexAuth(router *ai.Router, cfg config.AIConfig, codexAuth ai.CodexAppServerClient) {
 	var regs []ai.ProviderRegistration
 	for _, name := range providerOrder(cfg.DefaultProvider) {
 		reg, ok := buildProviderWithCodexAuth(name, cfg, codexAuth)
@@ -57,11 +57,10 @@ func WouldRegister(name string, cfg config.AIConfig) bool {
 }
 
 // HasProviderConfiguration reports whether name has credentials or managed
-// login state that a fully wired runtime can register.
+// app-server configuration that a fully wired runtime can register.
 func HasProviderConfiguration(name string, cfg config.AIConfig) bool {
 	if name == "codex" &&
-		cfg.Codex.Enabled &&
-		cfg.Codex.Authenticated() {
+		cfg.Codex.Enabled {
 		return true
 	}
 	return WouldRegister(name, cfg)
@@ -74,7 +73,7 @@ func buildProvider(name string, cfg config.AIConfig) (ai.ProviderRegistration, b
 func buildProviderWithCodexAuth(
 	name string,
 	cfg config.AIConfig,
-	codexAuth ai.CodexCredentialRefresher,
+	codexAuth ai.CodexAppServerClient,
 ) (ai.ProviderRegistration, bool) {
 	switch name {
 	case "mock":
@@ -118,18 +117,17 @@ func buildProviderWithCodexAuth(
 		}
 		return ai.ProviderRegistration{Name: name, Provider: ai.NewOpenRouterLLMAdapter(cfg.OpenRouter.APIKey), DefaultModel: cfg.OpenRouter.Model}, true
 	case "codex":
-		if cfg.Codex.Enabled && cfg.Codex.Authenticated() {
+		if cfg.Codex.Enabled {
 			availability, ok := codexAuth.(interface{ Available() bool })
 			if codexAuth == nil || !ok || !availability.Available() {
 				slog.Warn("Codex provider not registered; Codex app-server is unavailable")
 				return ai.ProviderRegistration{}, false
 			}
-			provider, err := ai.NewManagedCodexProvider(cfg.Codex.AuthFile, codexAuth)
-			if err != nil {
-				slog.Warn("failed to create managed Codex provider", "error", err)
-				return ai.ProviderRegistration{}, false
-			}
-			return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Codex.Model}, true
+			return ai.ProviderRegistration{
+				Name:         name,
+				Provider:     ai.NewCodexAppServerProvider(codexAuth, cfg.Codex.Model),
+				DefaultModel: cfg.Codex.Model,
+			}, true
 		}
 		if strings.TrimSpace(cfg.Codex.AccessToken) == "" {
 			return ai.ProviderRegistration{}, false

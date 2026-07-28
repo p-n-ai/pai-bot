@@ -264,7 +264,6 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if !cfg.AI.Codex.Enabled ||
 		cfg.AI.Codex.Home != "/tmp/pai-bot-codex" ||
-		cfg.AI.Codex.AuthFile != "/tmp/pai-bot-codex/auth.json" ||
 		cfg.AI.Codex.Model != "gpt-test" {
 		t.Errorf("AI.Codex = %#v", cfg.AI.Codex)
 	}
@@ -742,43 +741,25 @@ func TestHasAIProvider(t *testing.T) {
 	}
 }
 
-func TestHasAIProviderRecognizesExistingCodexLogin(t *testing.T) {
+func TestHasAIProviderRecognizesEnabledCodexDeviceSetup(t *testing.T) {
 	clearEnv(t)
 	home := t.TempDir()
 	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
 	t.Setenv("LEARN_AI_CODEX_HOME", home)
-	if err := os.WriteFile(
-		filepath.Join(home, "auth.json"),
-		[]byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token"}}`),
-		0o600,
-	); err != nil {
-		t.Fatal(err)
-	}
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	if !cfg.HasAIProvider() {
-		t.Fatal("HasAIProvider() = false, want true for existing Codex auth")
+		t.Fatal("HasAIProvider() = false, want true for enabled Codex device setup")
 	}
 }
 
-func TestHasAIProviderRejectsUnusableCodexAuthFile(t *testing.T) {
-	clearEnv(t)
-	home := t.TempDir()
-	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
-	t.Setenv("LEARN_AI_CODEX_HOME", home)
-	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
+func TestHasAIProviderRejectsCodexDeviceSetupWithoutHome(t *testing.T) {
+	cfg := Config{AI: AIConfig{Codex: CodexConfig{Enabled: true}}}
 	if cfg.HasAIProvider() {
-		t.Fatal("HasAIProvider() = true for unusable Codex auth")
+		t.Fatal("HasAIProvider() = true without Codex device storage")
 	}
 }
 
@@ -791,8 +772,8 @@ func TestValidateAllowsAdminCodexSetupWithoutExistingProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.HasAIProvider() {
-		t.Fatal("HasAIProvider() = true before Codex auth")
+	if !cfg.HasAIProvider() {
+		t.Fatal("HasAIProvider() = false for enabled Codex app-server setup")
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v, want Admin Codex setup allowed", err)

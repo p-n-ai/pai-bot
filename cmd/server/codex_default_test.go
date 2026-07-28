@@ -5,10 +5,9 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/codexauth"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -24,6 +23,12 @@ type availableCodexAuth struct{}
 
 func (availableCodexAuth) Refresh(context.Context) error { return nil }
 func (availableCodexAuth) Available() bool               { return true }
+func (availableCodexAuth) Complete(
+	context.Context,
+	ai.CompletionRequest,
+) (ai.CompletionResponse, error) {
+	return ai.CompletionResponse{Content: "ok"}, nil
+}
 
 func (m *memoryRuntimeSettingsUpdater) Update(
 	ctx context.Context,
@@ -77,19 +82,15 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 	home := t.TempDir()
 	aiConfig := config.AIConfig{
 		Codex: config.CodexConfig{
-			Enabled:  true,
-			Home:     home,
-			AuthFile: filepath.Join(home, "auth.json"),
-			Model:    "gpt-test",
+			Enabled: true,
+			Home:    home,
+			Model:   "gpt-test",
 		},
 	}
 	codexAuth := availableCodexAuth{}
 	router := airouter.SetupWithCodexAuth(aiConfig, codexAuth)
-	if router.HasProvider() {
-		t.Fatal("Codex registered before device auth")
-	}
-	if err := os.WriteFile(aiConfig.Codex.AuthFile, []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token","account_id":"test-account"}}`), 0o600); err != nil {
-		t.Fatal(err)
+	if !router.HasProvider() {
+		t.Fatal("Codex app-server provider was not registered")
 	}
 	store := &memoryRuntimeSettingsUpdater{}
 
@@ -115,9 +116,8 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 func TestCanAwaitCodexDeviceAuthRequiresExecutable(t *testing.T) {
 	home := t.TempDir()
 	cfg := &config.Config{AI: config.AIConfig{Codex: config.CodexConfig{
-		Enabled:  true,
-		Home:     home,
-		AuthFile: filepath.Join(home, "auth.json"),
+		Enabled: true,
+		Home:    home,
 	}}}
 
 	unavailable := codexauth.New(t.Context(), cfg.AI.Codex.Home, "", nil)

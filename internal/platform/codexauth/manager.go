@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/ai"
 )
 
 const requestTimeout = 15 * time.Second
@@ -48,7 +50,7 @@ type rpcError struct {
 }
 
 type rpcMessage struct {
-	ID     *int64          `json:"id,omitempty"`
+	ID     json.RawMessage `json:"id,omitempty"`
 	Method string          `json:"method,omitempty"`
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
@@ -58,6 +60,17 @@ type rpcMessage struct {
 type pendingResponse struct {
 	message rpcMessage
 	err     error
+}
+
+type completionResult struct {
+	response ai.CompletionResponse
+	err      error
+}
+
+type completionState struct {
+	waiter       chan completionResult
+	inputTokens  int
+	outputTokens int
 }
 
 type Manager struct {
@@ -76,6 +89,8 @@ type Manager struct {
 	stdin       io.WriteCloser
 	cancel      context.CancelFunc
 	pending     map[int64]chan pendingResponse
+	completions map[string]*completionState
+	workspace   string
 }
 
 func New(parent context.Context, home, executable string, onConnected func(context.Context) error) *Manager {
@@ -90,6 +105,7 @@ func New(parent context.Context, home, executable string, onConnected func(conte
 		onConnected: onConnected,
 		status:      Status{State: StateDisconnected},
 		pending:     make(map[int64]chan pendingResponse),
+		completions: make(map[string]*completionState),
 	}
 }
 
@@ -233,6 +249,14 @@ func (m *Manager) ensureProcess(ctx context.Context) error {
 	if err := os.MkdirAll(m.home, 0o700); err != nil {
 		return errors.New("prepare Codex home")
 	}
+	homeInfo, err := os.Lstat(m.home)
+	if err != nil || !homeInfo.IsDir() {
+		return errors.New("Codex home must be a real directory")
+	}
+	workspace, err := os.MkdirTemp("", "pai-bot-codex-runtime-")
+	if err != nil {
+		return errors.New("prepare Codex runtime workspace")
+	}
 
 	processCtx, cancel := context.WithCancel(m.parent)
 	cmd := m.command(processCtx, m.executable, "app-server", "--listen", "stdio://")
@@ -240,16 +264,19 @@ func (m *Manager) ensureProcess(ctx context.Context) error {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
+		_ = os.RemoveAll(workspace)
 		return errors.New("open Codex app-server input")
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		_ = os.RemoveAll(workspace)
 		return errors.New("open Codex app-server output")
 	}
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		cancel()
+		_ = os.RemoveAll(workspace)
 		return errors.New("start Codex app-server")
 	}
 
@@ -257,6 +284,7 @@ func (m *Manager) ensureProcess(ctx context.Context) error {
 	m.running = true
 	m.stdin = stdin
 	m.cancel = cancel
+	m.workspace = workspace
 	m.mu.Unlock()
 	go m.readLoop(cmd, stdout)
 
@@ -341,16 +369,38 @@ func (m *Manager) readLoop(cmd *exec.Cmd, output io.Reader) {
 		if json.Unmarshal(scanner.Bytes(), &message) != nil {
 			continue
 		}
-		if message.ID != nil {
-			m.resolve(*message.ID, pendingResponse{message: message})
+		if len(message.ID) > 0 && string(message.ID) != "null" {
+			if message.Method != "" {
+				m.rejectServerRequest(message.ID)
+				continue
+			}
+			var id int64
+			if json.Unmarshal(message.ID, &id) == nil {
+				m.resolve(id, pendingResponse{message: message})
+			}
 			continue
 		}
-		if message.Method == "account/login/completed" {
+		switch message.Method {
+		case "account/login/completed":
 			m.handleLoginCompleted(message.Params)
+		case "thread/tokenUsage/updated":
+			m.handleTokenUsage(message.Params)
+		case "turn/completed":
+			m.handleTurnCompleted(message.Params)
 		}
 	}
 	_ = cmd.Wait()
 	m.processStopped()
+}
+
+func (m *Manager) rejectServerRequest(id json.RawMessage) {
+	_ = m.write(map[string]any{
+		"id": id,
+		"error": map[string]any{
+			"code":    -32601,
+			"message": "PaiBot does not expose interactive Codex tools",
+		},
+	})
 }
 
 func (m *Manager) handleLoginCompleted(params json.RawMessage) {
@@ -411,6 +461,8 @@ func (m *Manager) processStopped() {
 	m.running = false
 	m.stdin = nil
 	m.cancel = nil
+	workspace := m.workspace
+	m.workspace = ""
 	if m.status.State == StateStarting || m.status.State == StateAwaiting {
 		m.status = Status{
 			State:   StateFailed,
@@ -425,9 +477,17 @@ func (m *Manager) processStopped() {
 	}
 	pending := m.pending
 	m.pending = make(map[int64]chan pendingResponse)
+	completions := m.completions
+	m.completions = make(map[string]*completionState)
 	m.mu.Unlock()
+	if workspace != "" {
+		_ = os.RemoveAll(workspace)
+	}
 	for _, waiter := range pending {
 		waiter <- pendingResponse{err: errors.New("Codex app-server stopped")}
+	}
+	for _, completion := range completions {
+		completion.waiter <- completionResult{err: errors.New("Codex app-server stopped")}
 	}
 }
 
