@@ -16,6 +16,33 @@ import (
 	"testing"
 )
 
+type telegramRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f telegramRoundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestTelegramChannelTransportErrorDoesNotExposeToken(t *testing.T) {
+	channel, err := NewTelegramChannel("secret-test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.client = &http.Client{
+		Transport: telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			return nil, errors.New(request.URL.String())
+		}),
+	}
+
+	err = channel.SendTyping(t.Context(), "123")
+
+	if err == nil || !strings.Contains(err.Error(), "sending typing indicator request failed") {
+		t.Fatalf("SendTyping() error = %v, want redacted operation", err)
+	}
+	if strings.Contains(err.Error(), "secret-test-token") {
+		t.Fatalf("SendTyping() error exposed bot token: %v", err)
+	}
+}
+
 func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -36,6 +63,9 @@ func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
 	err = channel.SendMessage(ctx, "123", OutboundMessage{Text: "hello"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if strings.Contains(err.Error(), "test-token") {
+		t.Fatalf("SendMessage() error exposed bot token: %v", err)
 	}
 	if got := requests.Load(); got != 0 {
 		t.Fatalf("requests = %d, want 0 after caller cancellation", got)
@@ -68,8 +98,28 @@ func TestTelegramChannelSendMessageRetryHonorsCanceledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
 	}
+	if strings.Contains(err.Error(), "test-token") {
+		t.Fatalf("SendMessage() retry error exposed bot token: %v", err)
+	}
 	if got := requests.Load(); got != 1 {
 		t.Fatalf("requests = %d, want no retry after caller cancellation", got)
+	}
+}
+
+func TestTelegramChannelGetUpdatesCancellationDoesNotExposeToken(t *testing.T) {
+	channel, err := NewTelegramChannel("secret-test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err = channel.getUpdates(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("getUpdates() error = %v, want context.Canceled", err)
+	}
+	if strings.Contains(err.Error(), "secret-test-token") {
+		t.Fatalf("getUpdates() error exposed bot token: %v", err)
 	}
 }
 
