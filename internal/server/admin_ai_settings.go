@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
+	"github.com/p-n-ai/pai-bot/internal/platform/codexauth"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
@@ -26,6 +27,11 @@ type runtimeSettingsStore interface {
 	MergedAI(settings.Settings) config.AIConfig
 	// Update must run apply (nil ok) before releasing its write lock so live re-applies happen in save order.
 	Update(ctx context.Context, mutate func(settings.Settings) (settings.Settings, error), apply func(settings.Settings)) (settings.Settings, error)
+}
+
+type codexDeviceAuth interface {
+	Status() codexauth.Status
+	Start() (codexauth.Status, error)
 }
 
 type aiSettingsKeyStatus struct {
@@ -78,7 +84,7 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 			// Only a request that sets defaultProvider is checked against the
 			// merged config: clearing a key under a stale default must still work.
 			if err == nil && body.DefaultProvider != nil && next.AI.DefaultProvider != "" &&
-				!airouter.WouldRegister(next.AI.DefaultProvider, store.MergedAI(next)) {
+				!airouter.HasProviderConfiguration(next.AI.DefaultProvider, store.MergedAI(next)) {
 				err = fmt.Errorf("provider %q has no usable configuration", next.AI.DefaultProvider)
 			}
 			// Clearing the key is the only update that can remove a provider;
@@ -110,9 +116,22 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, applySettings func(
 	}
 }
 
+func handleAdminGetCodexAuth(deviceAuth codexDeviceAuth) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, deviceAuth.Status())
+	}
+}
+
+func handleAdminStartCodexAuth(deviceAuth codexDeviceAuth) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		status, _ := deviceAuth.Start()
+		writeJSON(w, http.StatusOK, status)
+	}
+}
+
 func anyProviderRegistrable(cfg config.AIConfig) bool {
 	return slices.ContainsFunc(airouter.ProviderNames(), func(name string) bool {
-		return airouter.WouldRegister(name, cfg)
+		return airouter.HasProviderConfiguration(name, cfg)
 	})
 }
 

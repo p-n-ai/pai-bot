@@ -58,6 +58,77 @@ func TestBuildProviderUsesCodexCredentialsAndModel(t *testing.T) {
 	}
 }
 
+func TestBuildProviderUsesCodexAppServerWhenEnabled(t *testing.T) {
+	cfg := config.AIConfig{}
+	cfg.Codex.Enabled = true
+	cfg.Codex.Model = "gpt-test"
+
+	reg, ok := buildProviderWithCodexAuth("codex", cfg, stubCodexAuth{})
+	if !ok {
+		t.Fatal("buildProvider(codex) = not registered with app-server available")
+	}
+	if _, native := reg.Provider.(ai.NativeProvider); native {
+		t.Fatalf("Codex app-server provider unexpectedly implements NativeProvider: %T", reg.Provider)
+	}
+	if reg.Name != "codex" || reg.DefaultModel != "gpt-test" {
+		t.Fatalf("Codex registration = %#v", reg)
+	}
+}
+
+type stubCodexAuth struct{}
+
+func (stubCodexAuth) Refresh(context.Context) error { return nil }
+func (stubCodexAuth) Available() bool               { return true }
+func (stubCodexAuth) Complete(
+	context.Context,
+	ai.CompletionRequest,
+) (ai.CompletionResponse, error) {
+	return ai.CompletionResponse{Content: "ok"}, nil
+}
+
+func TestSetupWithCodexAuthRegistersManagedLoginAdapter(t *testing.T) {
+	cfg := config.AIConfig{DefaultProvider: "codex"}
+	cfg.Codex.Enabled = true
+
+	router := SetupWithCodexAuth(cfg, stubCodexAuth{})
+
+	if !router.HasProvider() {
+		t.Fatal("Codex app-server provider was not registered")
+	}
+	if router.HasNativeProvider() {
+		t.Fatal("Codex app-server provider must not expose PaiBot native tool continuation")
+	}
+}
+
+func TestManagedCodexRequiresRuntimeManagerToRegister(t *testing.T) {
+	cfg := config.AIConfig{DefaultProvider: "codex"}
+	cfg.Codex.Enabled = true
+
+	if Setup(cfg).HasProvider() {
+		t.Fatal("Setup() registered managed Codex without app-server")
+	}
+	if !HasProviderConfiguration("codex", cfg) {
+		t.Fatal("HasProviderConfiguration() = false for connected managed Codex")
+	}
+}
+
+type unavailableCodexAuth struct{ stubCodexAuth }
+
+func (unavailableCodexAuth) Available() bool { return false }
+
+func TestSetupWithUnavailableCodexAuthLeavesProviderUnregistered(t *testing.T) {
+	cfg := config.AIConfig{DefaultProvider: "codex"}
+	cfg.OpenAI.APIKey = "fallback-key"
+	cfg.Codex.Enabled = true
+
+	router := SetupWithCodexAuth(cfg, unavailableCodexAuth{})
+
+	order := router.ProviderOrder()
+	if len(order) != 1 || order[0] != "openai" {
+		t.Fatalf("ProviderOrder() = %v, want [openai] fallback without Codex", order)
+	}
+}
+
 func TestBuildProviderRejectsUnusableCodexCredentials(t *testing.T) {
 	for _, test := range []struct {
 		name   string

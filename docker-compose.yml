@@ -57,9 +57,11 @@ services:
       LEARN_DATABASE_URL: postgres://pai:${POSTGRES_PASSWORD:-pai}@postgres:5432/pai?sslmode=disable
       LEARN_CACHE_URL: redis://dragonfly:6379
       LEARN_AI_OLLAMA_URL: http://ollama:11434
+      LEARN_AI_CODEX_HOME: /var/lib/pai-bot/codex
       LEARN_WHATSAPP_MEOW_DB: "file:/data/whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
     volumes:
       - whatsmeow-data:/data
+      - codex-data:/var/lib/pai-bot/codex
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -123,5 +125,6 @@ volumes:
   caddy_data:
   caddy_config:
   ollama-data:
+  codex-data:
   goose-gomod:
   goose-gocache:

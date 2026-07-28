@@ -16,9 +16,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AISettingsPanel } from './ai-settings-panel'
 import type * as AdminAPI from '@/lib/admin-api'
 import type { AISettings } from '@/lib/ai-settings-types'
+import { AdminAPIError } from '@/lib/admin-api'
 import { aiSettingsFixture } from '@/lib/ai-settings-types.test'
 
 const getAISettings = vi.hoisted(() => vi.fn())
+const getCodexAuthStatus = vi.hoisted(() => vi.fn())
+const startCodexDeviceAuth = vi.hoisted(() => vi.fn())
 const updateAISettings = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/admin-api', async (importOriginal) => {
@@ -27,6 +30,8 @@ vi.mock('@/lib/admin-api', async (importOriginal) => {
   return {
     ...actual,
     getAISettings,
+    getCodexAuthStatus,
+    startCodexDeviceAuth,
     updateAISettings,
   }
 })
@@ -50,11 +55,74 @@ function deferred<T>() {
 describe('AISettingsPanel', () => {
   beforeEach(() => {
     getAISettings.mockReset()
+    getCodexAuthStatus.mockReset()
+    getCodexAuthStatus.mockResolvedValue({
+      state: 'disconnected',
+      verificationUrl: '',
+      userCode: '',
+      message: '',
+    })
+    startCodexDeviceAuth.mockReset()
     updateAISettings.mockReset()
   })
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('starts Codex device login and shows the one-time code', async () => {
+    getAISettings.mockResolvedValue(aiSettingsFixture)
+    startCodexDeviceAuth.mockResolvedValue({
+      state: 'awaiting_authorization',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-1234',
+      message: '',
+    })
+
+    render(<AISettingsPanel />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Connect Codex' }),
+    )
+
+    expect(await screen.findByText('ABCD-1234')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Open Codex verification' }),
+    ).toHaveAttribute('href', 'https://auth.openai.com/codex/device')
+    expect(startCodexDeviceAuth).toHaveBeenCalledOnce()
+  })
+
+  it('allows an existing server login to be renewed with device auth', async () => {
+    getAISettings.mockResolvedValue(aiSettingsFixture)
+    getCodexAuthStatus.mockResolvedValue({
+      state: 'connected',
+      verificationUrl: '',
+      userCode: '',
+      message: '',
+    })
+
+    render(<AISettingsPanel />)
+
+    expect(
+      await screen.findByRole('button', { name: 'Reconnect Codex' }),
+    ).toBeEnabled()
+  })
+
+  it('hides Codex setup when the server feature is disabled', async () => {
+    getAISettings.mockResolvedValue(aiSettingsFixture)
+    getCodexAuthStatus.mockRejectedValue(
+      new AdminAPIError('Request failed: 404', 404),
+    )
+
+    render(<AISettingsPanel />)
+
+    await screen.findByText('Default provider')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Connect Codex' }),
+    ).not.toBeInTheDocument()
   })
 
   it('saves a new key, clears the input, and shows the masked state', async () => {
