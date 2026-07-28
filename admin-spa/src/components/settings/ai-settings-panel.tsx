@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
 import type { AISettings, UpdateAISettingsInput } from '@/lib/ai-settings-types'
+import type { CodexAuthStatus } from '@/lib/codex-auth-types'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getAISettings, updateAISettings } from '@/lib/admin-api'
+import {
+  AdminAPIError,
+  getAISettings,
+  getCodexAuthStatus,
+  startCodexDeviceAuth,
+  updateAISettings,
+} from '@/lib/admin-api'
 import { useSubmitStatus } from '@/hooks/use-submit-status'
 
 type PanelState =
@@ -26,12 +33,21 @@ type PanelState =
 
 type SubmitStatus = ReturnType<typeof useSubmitStatus>
 type SubmitSection = 'provider' | 'model' | 'key' | 'flags'
+type CodexState =
+  | { status: 'loading' }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; auth: CodexAuthStatus }
 
 export function AISettingsPanel() {
   const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [model, setModel] = useState('')
   const [keyInput, setKeyInput] = useState('')
   const [isReplacingKey, setIsReplacingKey] = useState(false)
+  const [codexState, setCodexState] = useState<CodexState>({
+    status: 'loading',
+  })
+  const [isStartingCodex, setIsStartingCodex] = useState(false)
   const requestSeq = useRef(0)
   const sectionSeq = useRef<Record<string, number>>({})
   const providerSubmit = useSubmitStatus('')
@@ -54,6 +70,58 @@ export function AISettingsPanel() {
               : 'AI settings could not be loaded.',
         })
       })
+  }, [])
+
+  const loadCodexStatus = useCallback(() => {
+    return getCodexAuthStatus()
+      .then((auth) => setCodexState({ status: 'ready', auth }))
+      .catch((caught: unknown) => {
+        if (caught instanceof AdminAPIError && caught.status === 404) {
+          setCodexState({ status: 'unavailable' })
+          return
+        }
+        setCodexState({
+          status: 'error',
+          message:
+            caught instanceof Error
+              ? caught.message
+              : 'Codex login status could not be loaded.',
+        })
+      })
+  }, [])
+
+  useEffect(() => {
+    loadCodexStatus()
+  }, [loadCodexStatus])
+
+  useEffect(() => {
+    if (
+      codexState.status !== 'ready' ||
+      (codexState.auth.state !== 'starting' &&
+        codexState.auth.state !== 'awaiting_authorization')
+    ) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      loadCodexStatus()
+    }, 1500)
+    return () => window.clearInterval(timer)
+  }, [codexState, loadCodexStatus])
+
+  const handleStartCodex = useCallback(() => {
+    setIsStartingCodex(true)
+    startCodexDeviceAuth()
+      .then((auth) => setCodexState({ status: 'ready', auth }))
+      .catch((caught: unknown) => {
+        setCodexState({
+          status: 'error',
+          message:
+            caught instanceof Error
+              ? caught.message
+              : 'Codex device login could not be started.',
+        })
+      })
+      .finally(() => setIsStartingCodex(false))
   }, [])
 
   const submitSettings = useCallback(
@@ -206,6 +274,11 @@ export function AISettingsPanel() {
         onProviderChange={handleProviderChange}
         settings={settings}
       />
+      <CodexAuthSection
+        isStarting={isStartingCodex}
+        onStart={handleStartCodex}
+        state={codexState}
+      />
       <OpenRouterSection
         keyError={keySubmit.error}
         isKeyPending={keySubmit.isPending}
@@ -234,6 +307,89 @@ export function AISettingsPanel() {
         sources={settings.sources.flags}
       />
     </div>
+  )
+}
+
+function CodexAuthSection({
+  isStarting,
+  onStart,
+  state,
+}: {
+  isStarting: boolean
+  onStart: () => void
+  state: CodexState
+}) {
+  if (state.status === 'loading' || state.status === 'unavailable') {
+    return null
+  }
+
+  const auth = state.status === 'ready' ? state.auth : null
+  const awaiting = auth?.state === 'awaiting_authorization'
+  const connected = auth?.state === 'connected'
+
+  return (
+    <SettingsSection
+      description='Connect this server to ChatGPT with Codex device authorization. PaiBot never reads your personal Codex login.'
+      label='Codex login'
+      title='Codex'
+    >
+      <div className='flex flex-wrap items-center gap-3'>
+        <Badge variant={connected ? 'secondary' : 'outline'}>
+          {connected
+            ? 'Connected'
+            : (auth?.state.replaceAll('_', ' ') ?? 'Loading')}
+        </Badge>
+        <Button
+          disabled={
+            isStarting ||
+            auth?.state === 'starting' ||
+            auth?.state === 'awaiting_authorization'
+          }
+          onClick={onStart}
+          type='button'
+        >
+          {connected
+            ? 'Reconnect Codex'
+            : auth?.state === 'failed'
+              ? 'Retry device login'
+              : 'Connect Codex'}
+        </Button>
+      </div>
+      {awaiting ? (
+        <div className='grid gap-3 rounded-md border border-border bg-background p-4'>
+          <p className='m-0 text-sm text-muted-foreground'>
+            Open the verification page, sign in to ChatGPT, then enter this
+            one-time code:
+          </p>
+          <code className='w-fit rounded bg-muted px-3 py-2 text-lg font-semibold tracking-widest text-foreground'>
+            {auth.userCode}
+          </code>
+          <a
+            className='w-fit text-sm font-medium text-primary underline'
+            href={auth.verificationUrl}
+            rel='noreferrer'
+            target='_blank'
+          >
+            Open Codex verification
+          </a>
+        </div>
+      ) : null}
+      {connected ? (
+        <p className='m-0 text-sm text-muted-foreground'>
+          This server is authenticated and Codex is selected automatically.
+        </p>
+      ) : null}
+      <AuthErrorAlert
+        message={
+          state.status === 'error'
+            ? state.message
+            : auth?.state === 'failed'
+              ? auth.message
+              : ''
+        }
+        title='Codex login failed.'
+      />
+    </SettingsSection>
   )
 }
 

@@ -8,6 +8,7 @@ import {
   getAISettings,
   getAIUsage,
   getClassProgress,
+  getCodexAuthStatus,
   getEmbedConfig,
   getGroupDetail,
   getJoinClass,
@@ -24,6 +25,7 @@ import {
   removeEmbedOrigin,
   sendStudentNudge,
   setTeacherResourceActive,
+  startCodexDeviceAuth,
   submitOnboarding,
   updateAISettings,
   updateEmbedConfig,
@@ -389,6 +391,47 @@ describe('admin dashboard API', () => {
 
     await expect(getAISettings(fetcher)).rejects.toThrow(
       'Invalid AI settings response',
+    )
+  })
+
+  it('reads and starts Codex device authorization', async () => {
+    const awaiting = {
+      state: 'awaiting_authorization',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-1234',
+    }
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ state: 'disconnected' })),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(awaiting)))
+
+    await expect(getCodexAuthStatus(fetcher)).resolves.toEqual({
+      state: 'disconnected',
+      verificationUrl: '',
+      userCode: '',
+      message: '',
+    })
+    await expect(startCodexDeviceAuth(fetcher)).resolves.toEqual({
+      ...awaiting,
+      message: '',
+    })
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, '/api/admin/ai/codex/auth', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {},
+    })
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/ai/codex/auth/device',
+      {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {},
+      },
     )
   })
 
