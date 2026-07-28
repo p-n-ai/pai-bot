@@ -15,6 +15,12 @@ import (
 
 const codexChatInstructions = `Act only as PaiBot's chat completion engine. Answer from the supplied conversation and instructions. Do not inspect files, run commands, call tools, ask for approval, or modify the environment. Return only the assistant response.`
 
+type agentMessageItem struct {
+	Type  string `json:"type"`
+	Text  string `json:"text"`
+	Phase string `json:"phase"`
+}
+
 // Complete runs one ephemeral, non-interactive Codex thread.
 func (m *Manager) Complete(
 	ctx context.Context,
@@ -36,19 +42,16 @@ func (m *Manager) Complete(
 		"approvalPolicy":        "never",
 		"cwd":                   workspace,
 		"developerInstructions": codexChatInstructions,
-		"dynamicTools":          []any{},
-		"environments":          []any{},
 		"ephemeral":             true,
 		"model":                 strings.TrimSpace(request.Model),
-		"permissions":           ":read-only",
-		"runtimeWorkspaceRoots": []string{workspace},
+		"sandbox":               "read-only",
 	}
 	if baseInstructions != "" {
 		threadParams["baseInstructions"] = baseInstructions
 	}
 	threadRaw, err := m.call(ctx, "thread/start", threadParams)
 	if err != nil {
-		return ai.CompletionResponse{}, errors.New("start Codex chat")
+		return ai.CompletionResponse{}, fmt.Errorf("start Codex chat: %w", err)
 	}
 	var started struct {
 		Thread struct {
@@ -69,7 +72,6 @@ func (m *Manager) Complete(
 	turnParams := map[string]any{
 		"approvalPolicy": "never",
 		"input":          completionInput(messages),
-		"permissions":    ":read-only",
 		"threadId":       threadID,
 	}
 	if request.StructuredOutput != nil {
@@ -82,7 +84,7 @@ func (m *Manager) Complete(
 	}
 	if _, err := m.call(ctx, "turn/start", turnParams); err != nil {
 		m.removeCompletion(threadID)
-		return ai.CompletionResponse{}, errors.New("start Codex response")
+		return ai.CompletionResponse{}, fmt.Errorf("start Codex response: %w", err)
 	}
 
 	select {
@@ -137,16 +139,30 @@ func (m *Manager) handleTokenUsage(params json.RawMessage) {
 	m.mu.Unlock()
 }
 
+func (m *Manager) handleItemCompleted(params json.RawMessage) {
+	var completed struct {
+		ThreadID string           `json:"threadId"`
+		Item     agentMessageItem `json:"item"`
+	}
+	if json.Unmarshal(params, &completed) != nil ||
+		completed.ThreadID == "" ||
+		completed.Item.Type != "agentMessage" ||
+		strings.TrimSpace(completed.Item.Text) == "" {
+		return
+	}
+	m.mu.Lock()
+	if state := m.completions[completed.ThreadID]; state != nil {
+		state.messages = append(state.messages, completed.Item)
+	}
+	m.mu.Unlock()
+}
+
 func (m *Manager) handleTurnCompleted(params json.RawMessage) {
 	var completed struct {
 		ThreadID string `json:"threadId"`
 		Turn     struct {
-			Status string `json:"status"`
-			Items  []struct {
-				Type  string `json:"type"`
-				Text  string `json:"text"`
-				Phase string `json:"phase"`
-			} `json:"items"`
+			Status string             `json:"status"`
+			Items  []agentMessageItem `json:"items"`
 		} `json:"turn"`
 	}
 	if json.Unmarshal(params, &completed) != nil || completed.ThreadID == "" {
@@ -164,7 +180,11 @@ func (m *Manager) handleTurnCompleted(params json.RawMessage) {
 		state.waiter <- completionResult{err: errors.New("codex response failed")}
 		return
 	}
-	content := finalAgentMessage(completed.Turn.Items)
+	messages := completed.Turn.Items
+	if len(messages) == 0 {
+		messages = state.messages
+	}
+	content := finalAgentMessage(messages)
 	if content == "" {
 		state.waiter <- completionResult{err: errors.New("codex returned an empty response")}
 		return
@@ -216,11 +236,7 @@ func completionInput(messages []ai.Message) []map[string]any {
 	return append([]map[string]any{textInput}, input...)
 }
 
-func finalAgentMessage(items []struct {
-	Type  string `json:"type"`
-	Text  string `json:"text"`
-	Phase string `json:"phase"`
-}) string {
+func finalAgentMessage(items []agentMessageItem) string {
 	var final string
 	var messages []string
 	for _, item := range items {

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -49,6 +50,14 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+type rpcRequestError struct {
+	code int
+}
+
+func (e *rpcRequestError) Error() string {
+	return fmt.Sprintf("codex app-server request failed (%d)", e.code)
+}
+
 type rpcMessage struct {
 	ID     json.RawMessage `json:"id,omitempty"`
 	Method string          `json:"method,omitempty"`
@@ -71,6 +80,7 @@ type completionState struct {
 	waiter       chan completionResult
 	inputTokens  int
 	outputTokens int
+	messages     []agentMessageItem
 }
 
 type Manager struct {
@@ -332,7 +342,9 @@ func (m *Manager) callRunning(ctx context.Context, method string, params any) (j
 			return nil, result.err
 		}
 		if result.message.Error != nil {
-			return nil, errors.New("codex app-server request failed")
+			return nil, &rpcRequestError{
+				code: result.message.Error.Code,
+			}
 		}
 		return result.message.Result, nil
 	case <-ctx.Done():
@@ -385,6 +397,8 @@ func (m *Manager) readLoop(cmd *exec.Cmd, output io.Reader) {
 			m.handleLoginCompleted(message.Params)
 		case "thread/tokenUsage/updated":
 			m.handleTokenUsage(message.Params)
+		case "item/completed":
+			m.handleItemCompleted(message.Params)
 		case "turn/completed":
 			m.handleTurnCompleted(message.Params)
 		}

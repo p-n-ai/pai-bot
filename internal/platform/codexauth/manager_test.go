@@ -290,27 +290,20 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 			}
 		case "thread/start":
 			var params struct {
-				BaseInstructions      string   `json:"baseInstructions"`
-				CWD                   string   `json:"cwd"`
-				DeveloperInstructions string   `json:"developerInstructions"`
-				DynamicTools          []any    `json:"dynamicTools"`
-				Environments          []any    `json:"environments"`
-				Ephemeral             bool     `json:"ephemeral"`
-				Model                 string   `json:"model"`
-				Permissions           string   `json:"permissions"`
-				RuntimeWorkspaceRoots []string `json:"runtimeWorkspaceRoots"`
+				BaseInstructions      string `json:"baseInstructions"`
+				CWD                   string `json:"cwd"`
+				DeveloperInstructions string `json:"developerInstructions"`
+				Ephemeral             bool   `json:"ephemeral"`
+				Model                 string `json:"model"`
+				Sandbox               string `json:"sandbox"`
 			}
 			if json.Unmarshal(request.Params, &params) != nil ||
 				params.BaseInstructions != "Teach clearly." ||
 				params.CWD == "" ||
 				!strings.Contains(params.DeveloperInstructions, "Do not inspect files") ||
-				params.DynamicTools == nil ||
-				params.Environments == nil ||
 				!params.Ephemeral ||
 				params.Model != "gpt-test" ||
-				params.Permissions != ":read-only" ||
-				len(params.RuntimeWorkspaceRoots) != 1 ||
-				params.RuntimeWorkspaceRoots[0] != params.CWD {
+				params.Sandbox != "read-only" {
 				_ = encoder.Encode(map[string]any{
 					"id":    *request.ID,
 					"error": map[string]any{"code": -1, "message": "unsafe thread parameters"},
@@ -329,7 +322,6 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 				ApprovalPolicy string           `json:"approvalPolicy"`
 				Input          []map[string]any `json:"input"`
 				OutputSchema   map[string]any   `json:"outputSchema"`
-				Permissions    string           `json:"permissions"`
 				ThreadID       string           `json:"threadId"`
 			}
 			var text string
@@ -341,7 +333,6 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 			if params.ApprovalPolicy != "never" ||
 				!strings.Contains(text, "USER:\nExplain fractions.") ||
 				params.OutputSchema["type"] != "object" ||
-				params.Permissions != ":read-only" ||
 				params.ThreadID != "thread-1" {
 				_ = encoder.Encode(map[string]any{
 					"id":    *request.ID,
@@ -363,17 +354,25 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 				},
 			})
 			_ = encoder.Encode(map[string]any{
+				"method": "item/completed",
+				"params": map[string]any{
+					"threadId": "thread-1",
+					"turnId":   "turn-1",
+					"item": map[string]any{
+						"id":    "message-1",
+						"type":  "agentMessage",
+						"text":  `{"answer":"Use equal parts."}`,
+						"phase": "final_answer",
+					},
+				},
+			})
+			_ = encoder.Encode(map[string]any{
 				"method": "turn/completed",
 				"params": map[string]any{
 					"threadId": "thread-1",
 					"turn": map[string]any{
 						"status": "completed",
-						"items": []map[string]any{{
-							"id":    "message-1",
-							"type":  "agentMessage",
-							"text":  `{"answer":"Use equal parts."}`,
-							"phase": "final_answer",
-						}},
+						"items":  []map[string]any{},
 					},
 				},
 			})
