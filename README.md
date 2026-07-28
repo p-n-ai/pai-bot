@@ -126,7 +126,7 @@ just seed-docker
 
 When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres` and `dragonfly` instead of `localhost`. The `app` service already reads `.env`, so school admins can choose AI provider and default model purely with Docker env vars. For Ollama, Compose overrides `LEARN_AI_OLLAMA_URL` inside the app container to `http://ollama:11434`.
 
-The Codex provider is for a local, single-user server. Sign in to Admin with the existing email/password flow, choose **Connect Codex** in AI settings, open the displayed OpenAI verification page, and enter the one-time device code. PaiBot uses the structured `codex app-server` account API, which owns login and automatic token refresh inside an isolated server-owned Codex home. PaiBot never reads the operator's personal `~/.codex` login.
+The Codex provider is for a self-hosted server with trusted administrators. Sign in to Admin with the existing email/password flow, choose **Connect Codex** in AI settings, open the displayed OpenAI verification page, and enter the one-time device code. The browser can be on a different machine from the server: Codex completes authorization through the device flow and stores the resulting login in an isolated server-owned Codex home. PaiBot uses the structured `codex app-server` account API and never reads the operator's personal `~/.codex` login.
 
 ```env
 LEARN_AI_CODEX_ENABLED=true
@@ -134,7 +134,7 @@ LEARN_AI_CODEX_ENABLED=true
 LEARN_AI_CODEX_HOME=/var/lib/pai-bot/codex
 ```
 
-The Codex CLI must be installed and on the backend process `PATH`. The backend user also needs write access to `LEARN_AI_CODEX_HOME`.
+The production app image includes a pinned Codex CLI. Docker Compose mounts `LEARN_AI_CODEX_HOME` from the persistent `codex-data` volume, so the login survives container replacement. When running the backend outside that image, install the Codex CLI on the backend `PATH` and give the backend user write access to `LEARN_AI_CODEX_HOME`.
 
 ### 3. Pull a free AI model (optional)
 

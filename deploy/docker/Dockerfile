@@ -1,4 +1,16 @@
-# Stage 1: Build Go binary
+ARG CODEX_CLI_VERSION=0.145.0
+
+# Package the native Codex binary without carrying Node into the runtime image.
+FROM node:22-alpine AS codex-cli
+ARG CODEX_CLI_VERSION
+RUN npm install --global --omit=dev --no-audit --no-fund "@openai/codex@${CODEX_CLI_VERSION}" \
+    && codex --version \
+    && codex_path="$(find /usr/local/lib/node_modules/@openai/codex -type f -path '*/bin/codex' | head -n 1)" \
+    && test -n "${codex_path}" \
+    && cp "${codex_path}" /codex \
+    && chmod 0755 /codex
+
+# Build the Go binaries.
 FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -20,5 +32,7 @@ COPY --from=builder /pai-terminal-nudge /pai-terminal-nudge
 COPY --from=builder /pai-seed /pai-seed
 COPY --from=builder /app/oss /oss
 COPY --from=builder /app/migrations /migrations
+COPY --from=codex-cli /codex /usr/local/bin/codex
+RUN codex --version
 EXPOSE 8080
 ENTRYPOINT ["/pai-server"]
