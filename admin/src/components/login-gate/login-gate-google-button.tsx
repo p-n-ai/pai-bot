@@ -2,6 +2,7 @@
 
 import { IconBrandGoogle } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useLoginGate } from "@/components/login-gate/use-login-gate";
 
 export function LoginGateGoogleButton() {
@@ -14,10 +15,14 @@ export function LoginGateGoogleButton() {
       size="lg"
       onClick={startGoogleLogin}
       disabled={isPending || isGooglePending}
-      className="h-12 w-full rounded-full border-slate-300/80 bg-white text-slate-950 transition-all duration-150 ease-out hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-900"
+      className="h-12 w-full rounded-full border-border bg-background text-foreground transition-all duration-150 ease-out hover:bg-accent"
     >
-      <IconBrandGoogle data-icon="inline-start" className="size-4" />
-      {isGooglePending ? "Redirecting to Google..." : "Continue with Google"}
+      {isGooglePending ? (
+        <Spinner aria-hidden="true" />
+      ) : (
+        <IconBrandGoogle data-icon="inline-start" />
+      )}
+      Continue with Google
     </Button>
   );
 }

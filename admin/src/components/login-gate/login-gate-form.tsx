@@ -1,16 +1,26 @@
 "use client";
 
-import { IconAlertCircle } from "@tabler/icons-react";
+import { useState } from "react";
+import { IconAlertCircle, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { LoginGateGoogleButton } from "@/components/login-gate/login-gate-google-button";
 import { useLoginGate } from "@/components/login-gate/use-login-gate";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 
 export function LoginGateForm() {
   const { email, password, error, isPending, isGooglePending, setEmail, setPassword, submit } = useLoginGate();
+  const [showPassword, setShowPassword] = useState(false);
   const showGoogleLogin = process.env.NEXT_PUBLIC_PAI_AUTH_GOOGLE_LOGIN_ENABLED === "true";
+  const isBusy = isPending || isGooglePending;
 
   const errorMessage =
     error === "Failed to fetch"
@@ -18,62 +28,78 @@ export function LoginGateForm() {
       : error;
 
   return (
-    <form id="sign-in-form" className="space-y-5 transition-[opacity,transform] duration-200 ease-out" onSubmit={submit}>
+    <form
+      id="sign-in-form"
+      className="space-y-6 transition-[opacity,transform] duration-200 ease-out"
+      aria-busy={isBusy}
+      aria-describedby={error ? "sign-in-error" : undefined}
+      onSubmit={submit}
+    >
       {showGoogleLogin ? (
-        <div className="space-y-4">
+        <FieldGroup className="gap-5">
           <LoginGateGoogleButton />
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              or use email
-            </span>
-            <div className="h-px flex-1 bg-slate-200/80 dark:bg-white/10" />
-          </div>
-        </div>
+          <FieldSeparator>or use email</FieldSeparator>
+        </FieldGroup>
       ) : null}
 
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-slate-700 dark:text-slate-200">
-          Email
-        </Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="teacher@school.edu"
-          autoComplete="email"
-          className="h-12 rounded-2xl border-slate-300/80 bg-white text-slate-950 placeholder:text-slate-400 transition-all duration-150 ease-out dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 dark:placeholder:text-slate-500"
-          required
-        />
-      </div>
+      <FieldGroup className="gap-5">
+        <Field data-disabled={isBusy}>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="teacher@school.edu"
+            autoComplete="username"
+            spellCheck={false}
+            className="h-12 rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground transition-all duration-150 ease-out"
+            disabled={isBusy}
+            required
+          />
+        </Field>
 
-      <div className="space-y-2">
-        <Label htmlFor="password" className="text-slate-700 dark:text-slate-200">
-          Password
-        </Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Enter your password"
-          autoComplete="current-password"
-          className="h-12 rounded-2xl border-slate-300/80 bg-white text-slate-950 placeholder:text-slate-400 transition-all duration-150 ease-out dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 dark:placeholder:text-slate-500"
-          required
-        />
-      </div>
+        <Field data-disabled={isBusy}>
+          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <InputGroup className="h-12 rounded-2xl border border-border bg-background">
+            <InputGroupInput
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              className="text-foreground placeholder:text-muted-foreground"
+              disabled={isBusy}
+              required
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-sm"
+                className="size-10"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((isVisible) => !isVisible)}
+                disabled={isBusy}
+              >
+                {showPassword ? <IconEyeOff /> : <IconEye />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </Field>
+      </FieldGroup>
 
       {error ? (
         <Alert
+          id="sign-in-error"
           variant="destructive"
-          className="animate-in fade-in-0 slide-in-from-top-1 gap-y-1 rounded-2xl border-rose-200/80 bg-rose-50/90 px-4 py-3 shadow-none duration-200 dark:border-rose-400/25 dark:bg-rose-500/10"
+          aria-live="assertive"
+          className="animate-in fade-in-0 slide-in-from-top-1 gap-y-1 rounded-2xl px-4 py-3 shadow-none duration-200"
         >
           <IconAlertCircle />
           <AlertTitle>Sign-in failed.</AlertTitle>
-          <AlertDescription className="leading-6 text-rose-700 dark:text-rose-200">
+          <AlertDescription className="leading-6">
             {errorMessage}
           </AlertDescription>
         </Alert>
@@ -82,10 +108,17 @@ export function LoginGateForm() {
       <Button
         type="submit"
         size="lg"
-        className="h-12 w-full rounded-full bg-slate-950 text-white transition-all duration-150 ease-out hover:bg-slate-800 active:translate-y-px dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
-        disabled={isPending || isGooglePending}
+        className="h-12 w-full rounded-full transition-all duration-150 ease-out active:translate-y-px"
+        disabled={isBusy}
       >
-        {isPending ? "Signing in..." : "Sign in"}
+        {isPending ? (
+          <>
+            <Spinner aria-hidden="true" />
+            Sign in
+          </>
+        ) : (
+          "Sign in"
+        )}
       </Button>
     </form>
   );

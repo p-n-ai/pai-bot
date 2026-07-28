@@ -31,6 +31,10 @@ describe("LoginGate", () => {
     );
 
     expect(container.querySelectorAll("form")).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1, name: "Sign in to your workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Know where every learner needs help." })).toBeInTheDocument();
+    expect(screen.getByText("See progress, spot gaps, and support the right student sooner.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
     expect(screen.getByTestId("login-gate-light-backdrop")).toBeInTheDocument();
     expect(screen.getByTestId("login-gate-dark-backdrop")).toBeInTheDocument();
@@ -89,5 +93,23 @@ describe("LoginGate", () => {
     );
 
     expect(screen.getByText(/allowed workspace domain/i)).toBeInTheDocument();
+  });
+
+  it("lets the user reveal and hide their password", () => {
+    render(
+      <ThemeProvider>
+        <LoginGate />
+      </ThemeProvider>,
+    );
+
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Hide password" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
   });
 });
