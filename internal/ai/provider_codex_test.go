@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -616,6 +618,84 @@ func TestCodexProviderRefreshesAndRetriesAfterAuthRejection(t *testing.T) {
 	}
 }
 
+type testCodexCredentialRefresher struct {
+	calls   atomic.Int32
+	refresh func() error
+}
+
+func (r *testCodexCredentialRefresher) Refresh(context.Context) error {
+	r.calls.Add(1)
+	if r.refresh == nil {
+		return nil
+	}
+	return r.refresh()
+}
+
+func TestManagedCodexProviderRefreshesLoginAndPreservesNativeContinuation(t *testing.T) {
+	authFile := filepath.Join(t.TempDir(), "auth.json")
+	writeManagedCodexAuth(t, authFile, "old-token", "account-123")
+	refresher := &testCodexCredentialRefresher{
+		refresh: func() error {
+			writeManagedCodexAuth(t, authFile, "fresh-token", "account-123")
+			return nil
+		},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertCodexHeaders(t, r, "fresh-token", "account-123")
+		writeCodexSSE(w,
+			`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs-managed","encrypted_content":"encrypted","summary":[{"type":"summary_text","text":"Use the lookup tool."}]}}`,
+			`{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","id":"fc-managed","call_id":"call-managed","name":"lookup","arguments":"{\"topic\":\"fractions\"}"}}`,
+			`{"type":"response.completed","response":{"id":"resp-managed","model":"gpt-codex-test","status":"completed","output":[{"type":"reasoning","id":"rs-managed","encrypted_content":"encrypted","summary":[{"type":"summary_text","text":"Use the lookup tool."}]},{"type":"function_call","id":"fc-managed","call_id":"call-managed","name":"lookup","arguments":"{\"topic\":\"fractions\"}"}]}}`,
+		)
+	}))
+	t.Cleanup(server.Close)
+
+	provider, err := NewManagedCodexProvider(
+		authFile,
+		refresher,
+		WithCodexBaseURL(server.URL),
+		WithCodexHTTPClient(server.Client()),
+	)
+	if err != nil {
+		t.Fatalf("NewManagedCodexProvider() error = %v", err)
+	}
+	response, err := provider.CompleteNative(t.Context(), "gpt-codex-test", llm.Context{
+		Messages: []llm.Message{llm.UserText("Help me.")},
+		Tools: []llm.Tool{{
+			Name:       "lookup",
+			Parameters: json.RawMessage(`{"type":"object","properties":{"topic":{"type":"string"}}}`),
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("CompleteNative() error = %v", err)
+	}
+	if refresher.calls.Load() != 1 {
+		t.Fatalf("Refresh() calls = %d, want 1", refresher.calls.Load())
+	}
+	if len(response.Content) != 2 {
+		t.Fatalf("content = %#v", response.Content)
+	}
+	thinking, ok := response.Content[0].(llm.ThinkingContent)
+	if !ok || thinking.Thinking != "Use the lookup tool." || !strings.Contains(thinking.Signature, "encrypted") {
+		t.Fatalf("thinking = %#v", response.Content[0])
+	}
+	call, ok := response.Content[1].(llm.ToolCall)
+	if !ok || call.ID != "call-managed|fc-managed" || call.Arguments["topic"] != "fractions" {
+		t.Fatalf("tool call = %#v", response.Content[1])
+	}
+}
+
+func TestManagedCodexProviderErrorDoesNotExposeAuthPath(t *testing.T) {
+	authFile := filepath.Join(t.TempDir(), "private-auth.json")
+	_, err := NewManagedCodexProvider(authFile, &testCodexCredentialRefresher{})
+	if err == nil {
+		t.Fatal("NewManagedCodexProvider() error = nil")
+	}
+	if strings.Contains(err.Error(), authFile) {
+		t.Fatalf("error exposed auth path: %v", err)
+	}
+}
+
 func TestCodexProviderStreamCompleteEmitsSSEDeltas(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeCodexSSE(w,
@@ -684,6 +764,23 @@ func TestCodexProviderPreservesMultipleMessageOutputItems(t *testing.T) {
 	}
 	if text.String() != "AlphaBeta" {
 		t.Fatalf("stream content = %q", text.String())
+	}
+}
+
+func writeManagedCodexAuth(t *testing.T, path, token, accountID string) {
+	t.Helper()
+	data, err := json.Marshal(codexAuthFile{
+		AuthMode: "chatgpt",
+		Tokens: codexTokens{
+			AccessToken: token,
+			AccountID:   accountID,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -27,12 +28,15 @@ const (
 	defaultCodexAuthBaseURL = "https://auth.openai.com"
 	defaultCodexModel       = "gpt-5.4"
 	codexOAuthClientID      = "app_EMoamEEZ73f0CkXaXp7hrann"
+	maxCodexAuthBytes       = 1 << 20
 )
 
 type CodexProvider struct {
 	baseURL     string
 	authBaseURL string
 	client      *http.Client
+	authFile    string
+	refresher   CodexCredentialRefresher
 
 	mu                sync.Mutex
 	accessToken       string
@@ -42,6 +46,23 @@ type CodexProvider struct {
 	expiresAt         time.Time
 	refreshing        chan struct{}
 	refreshErr        error
+}
+
+// CodexCredentialRefresher asks Codex app-server to refresh its managed
+// ChatGPT login before PaiBot reloads the isolated credential file.
+type CodexCredentialRefresher interface {
+	Refresh(context.Context) error
+}
+
+type codexAuthFile struct {
+	AuthMode string      `json:"auth_mode"`
+	Tokens   codexTokens `json:"tokens"`
+}
+
+type codexTokens struct {
+	AccessToken string `json:"access_token"`
+	AccountID   string `json:"account_id"`
+	IDToken     string `json:"id_token"`
 }
 
 type CodexOption func(*CodexProvider)
@@ -110,6 +131,42 @@ func NewCodexProvider(accessToken string, opts ...CodexOption) (*CodexProvider, 
 	}
 	if err == nil {
 		p.expiresAt = expiresAt
+	}
+	return p, nil
+}
+
+// NewManagedCodexProvider creates a provider backed by a ChatGPT login owned
+// by Codex app-server in an isolated server directory.
+func NewManagedCodexProvider(
+	authFile string,
+	refresher CodexCredentialRefresher,
+	opts ...CodexOption,
+) (*CodexProvider, error) {
+	authFile = strings.TrimSpace(authFile)
+	if authFile == "" {
+		return nil, errors.New("codex managed auth is not configured")
+	}
+	if refresher == nil {
+		return nil, errors.New("codex managed login refresh is unavailable")
+	}
+	p := &CodexProvider{
+		authFile:    authFile,
+		refresher:   refresher,
+		baseURL:     defaultCodexBaseURL,
+		authBaseURL: defaultCodexAuthBaseURL,
+		client:      http.DefaultClient,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	if p.client == nil {
+		return nil, errors.New("codex HTTP client is required")
+	}
+	if p.baseURL == "" {
+		return nil, errors.New("codex base URL is required")
+	}
+	if _, err := p.readManagedCredentials(); err != nil {
+		return nil, err
 	}
 	return p, nil
 }
@@ -464,6 +521,17 @@ func codexHTTPResponse(response *http.Response) (*http.Response, error) {
 }
 
 func (p *CodexProvider) credentials(ctx context.Context) (string, string, error) {
+	if p.authFile != "" {
+		if err := p.refresher.Refresh(ctx); err != nil {
+			return "", "", errors.New("refresh Codex managed login")
+		}
+		credentials, err := p.readManagedCredentials()
+		if err != nil {
+			return "", "", err
+		}
+		return credentials.accessToken, credentials.accountID, nil
+	}
+
 	p.mu.Lock()
 	token := p.accessToken
 	expired := !p.expiresAt.IsZero() && !time.Now().Add(30*time.Second).Before(p.expiresAt)
@@ -479,6 +547,13 @@ func (p *CodexProvider) credentials(ctx context.Context) (string, string, error)
 }
 
 func (p *CodexProvider) refreshCredentials(ctx context.Context, staleToken string, force bool) error {
+	if p.authFile != "" {
+		if err := p.refresher.Refresh(ctx); err != nil {
+			return errors.New("refresh Codex managed login")
+		}
+		return nil
+	}
+
 	for {
 		p.mu.Lock()
 		if p.accessToken != staleToken {
@@ -545,6 +620,57 @@ type codexCredentials struct {
 	refreshToken string
 	accountID    string
 	expiresAt    time.Time
+}
+
+func (p *CodexProvider) readManagedCredentials() (codexCredentials, error) {
+	file, err := os.Open(p.authFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return codexCredentials{}, errors.New("Codex login is not connected; connect it in Admin")
+		}
+		return codexCredentials{}, errors.New("read Codex managed login")
+	}
+	defer func() { _ = file.Close() }()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxCodexAuthBytes+1))
+	if err != nil {
+		return codexCredentials{}, errors.New("read Codex managed login")
+	}
+	if len(data) > maxCodexAuthBytes {
+		return codexCredentials{}, errors.New("Codex managed login is too large")
+	}
+	var auth codexAuthFile
+	if err := json.Unmarshal(data, &auth); err != nil {
+		return codexCredentials{}, errors.New("Codex managed login is malformed")
+	}
+	if !strings.EqualFold(strings.TrimSpace(auth.AuthMode), "chatgpt") {
+		return codexCredentials{}, errors.New("Codex ChatGPT login is not connected; connect it in Admin")
+	}
+	accessToken := strings.TrimSpace(auth.Tokens.AccessToken)
+	if accessToken == "" {
+		return codexCredentials{}, errors.New("Codex ChatGPT login has no access token; reconnect it in Admin")
+	}
+	accountID := strings.TrimSpace(auth.Tokens.AccountID)
+	tokenAccountID, expiresAt, tokenErr := codexJWTMetadata(accessToken)
+	if accountID == "" && tokenErr == nil {
+		accountID = tokenAccountID
+	}
+	if accountID == "" && strings.TrimSpace(auth.Tokens.IDToken) != "" {
+		if idTokenAccountID, _, err := codexJWTMetadata(strings.TrimSpace(auth.Tokens.IDToken)); err == nil {
+			accountID = idTokenAccountID
+		}
+	}
+	if accountID == "" {
+		return codexCredentials{}, errors.New("Codex ChatGPT login has no account ID; reconnect it in Admin")
+	}
+	if tokenErr == nil && !expiresAt.IsZero() && !time.Now().Add(30*time.Second).Before(expiresAt) {
+		return codexCredentials{}, errors.New("Codex login is expired; reconnect it in Admin")
+	}
+	return codexCredentials{
+		accessToken: accessToken,
+		accountID:   accountID,
+		expiresAt:   expiresAt,
+	}, nil
 }
 
 func (p *CodexProvider) requestTokenRefresh(ctx context.Context, refreshToken string) (codexCredentials, error) {

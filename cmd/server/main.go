@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/focusedpagedelivery"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/cache"
+	"github.com/p-n-ai/pai-bot/internal/platform/codexauth"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/database"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
@@ -38,6 +40,26 @@ import (
 
 func focusedPageChannelEnabled(devMode bool, msg chat.InboundMessage) bool {
 	return msg.Channel == "telegram" || (devMode && msg.Channel == "websocket")
+}
+
+type runtimeSettingsUpdater interface {
+	Update(
+		context.Context,
+		func(settings.Settings) (settings.Settings, error),
+		func(settings.Settings),
+	) (settings.Settings, error)
+}
+
+func makeCodexDefault(
+	ctx context.Context,
+	store runtimeSettingsUpdater,
+	applySettings func(settings.Settings),
+) error {
+	_, err := store.Update(ctx, func(current settings.Settings) (settings.Settings, error) {
+		current.AI.DefaultProvider = "codex"
+		return current, nil
+	}, applySettings)
+	return err
 }
 
 func main() {
@@ -94,25 +116,33 @@ func main() {
 				slog.Warn("runtime settings unavailable; using env config", "error", err)
 			}
 
+			codexExecutable, _ := exec.LookPath("codex")
+			codexDeviceAuth := codexauth.New(ctx, cfg.AI.Codex.Home, codexExecutable, nil)
+
 			// Initialize AI router with configured providers.
-			lastApplied := settings.MergeAI(cfg.AI, settingsStore.Current())
-			router := airouter.Setup(lastApplied)
+			initialAI := settings.MergeAI(cfg.AI, settingsStore.Current())
+			router := airouter.SetupWithCodexAuth(initialAI, codexDeviceAuth)
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
 					slog.Warn("no AI providers configured; continuing in dev mode without AI-backed chat responses")
+				} else if cfg.CodexDeviceAuthAvailable() {
+					slog.Warn("no AI providers authenticated; continuing so an admin can connect Codex")
 				} else {
 					slog.Error("no AI providers configured")
 					os.Exit(1)
 				}
 			}
 			applySettings := func(st settings.Settings) {
-				// Applies run in commit order under the store's update lock, so a plain lastApplied variable is safe.
 				merged := settings.MergeAI(cfg.AI, st)
-				if merged == lastApplied {
-					return
-				}
-				lastApplied = merged
-				airouter.Apply(router, merged)
+				airouter.ApplyWithCodexAuth(router, merged, codexDeviceAuth)
+			}
+			var adminCodexDeviceAuth server.CodexDeviceAuth
+			if cfg.AI.Codex.Enabled {
+				codexDeviceAuth.SetOnConnected(func(callbackCtx context.Context) error {
+					return makeCodexDefault(callbackCtx, settingsStore, applySettings)
+				})
+				codexDeviceAuth.Initialize()
+				adminCodexDeviceAuth = codexDeviceAuth
 			}
 
 			var warnFlagOverrides sync.Once
@@ -469,7 +499,7 @@ func main() {
 			}
 
 			// HTTP endpoints.
-			apiHandler := server.NewHandlerWithAdminProviderAndTeacherResources(
+			apiHandler := server.NewHandlerWithAdminProviderAndTeacherResourcesAndCodexAuth(
 				server.NewTenantAdminDataSourceProvider(
 					func(tenantID string) server.AdminDataSource {
 						return adminapi.New(db.Pool, tenantID)
@@ -492,6 +522,7 @@ func main() {
 				settingsStore,
 				applySettings,
 				cfg.Tenant.Mode == "multi",
+				adminCodexDeviceAuth,
 			)
 
 			topMux := server.NewTopMux(server.TopMuxOptions{

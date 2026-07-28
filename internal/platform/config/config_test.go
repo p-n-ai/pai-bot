@@ -5,6 +5,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,6 +57,9 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_GOOGLE_MODEL",
 		"LEARN_AI_OPENROUTER_API_KEY",
 		"LEARN_AI_OPENROUTER_MODEL",
+		"LEARN_AI_CODEX_ENABLED",
+		"LEARN_AI_CODEX_HOME",
+		"LEARN_AI_CODEX_MODEL",
 		"LEARN_AI_DEFAULT_PROVIDER",
 		"LEARN_AI_OLLAMA_ENABLED",
 		"LEARN_AI_OLLAMA_URL",
@@ -82,6 +86,7 @@ func clearEnv(t *testing.T) {
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
 	}
+	t.Setenv("LEARN_AI_CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
 }
 
 func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {
@@ -171,6 +176,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_MOCK_RESPONSE", "mock tutor response")
 	t.Setenv("LEARN_AI_OLLAMA_URL", "http://localhost:11434")
 	t.Setenv("LEARN_AI_OLLAMA_MODEL", "qwen3:14b")
+	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
+	t.Setenv("LEARN_AI_CODEX_HOME", "/tmp/pai-bot-codex")
+	t.Setenv("LEARN_AI_CODEX_MODEL", "gpt-test")
 	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "openrouter")
 	t.Setenv("PAI_AUTH_SECRET", "super-secret")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_ID", "google-client")
@@ -253,6 +261,12 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.AI.Ollama.Model != "qwen3:14b" {
 		t.Errorf("AI.Ollama.Model = %q, want qwen3:14b", cfg.AI.Ollama.Model)
+	}
+	if !cfg.AI.Codex.Enabled ||
+		cfg.AI.Codex.Home != "/tmp/pai-bot-codex" ||
+		cfg.AI.Codex.AuthFile != "/tmp/pai-bot-codex/auth.json" ||
+		cfg.AI.Codex.Model != "gpt-test" {
+		t.Errorf("AI.Codex = %#v", cfg.AI.Codex)
 	}
 	if cfg.AI.DefaultProvider != "openrouter" {
 		t.Errorf("AI.DefaultProvider = %q, want openrouter", cfg.AI.DefaultProvider)
@@ -395,7 +409,6 @@ func TestValidate_DefaultProvider_Invalid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should reject unsupported LEARN_AI_DEFAULT_PROVIDER")
 	}
@@ -474,6 +487,7 @@ func TestValidate_MissingAIProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
+	cfg.AI.Codex = CodexConfig{}
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error when no AI provider is configured")
@@ -725,6 +739,99 @@ func TestHasAIProvider(t *testing.T) {
 				t.Errorf("HasAIProvider() = %v, want %v", cfg.HasAIProvider(), tt.want)
 			}
 		})
+	}
+}
+
+func TestHasAIProviderRecognizesExistingCodexLogin(t *testing.T) {
+	clearEnv(t)
+	home := t.TempDir()
+	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
+	t.Setenv("LEARN_AI_CODEX_HOME", home)
+	if err := os.WriteFile(
+		filepath.Join(home, "auth.json"),
+		[]byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test-token"}}`),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.HasAIProvider() {
+		t.Fatal("HasAIProvider() = false, want true for existing Codex auth")
+	}
+}
+
+func TestHasAIProviderRejectsUnusableCodexAuthFile(t *testing.T) {
+	clearEnv(t)
+	home := t.TempDir()
+	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
+	t.Setenv("LEARN_AI_CODEX_HOME", home)
+	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HasAIProvider() {
+		t.Fatal("HasAIProvider() = true for unusable Codex auth")
+	}
+}
+
+func TestValidateAllowsAdminCodexSetupWithoutExistingProvider(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
+	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HasAIProvider() {
+		t.Fatal("HasAIProvider() = true before Codex auth")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want Admin Codex setup allowed", err)
+	}
+}
+
+func TestValidateRejectsAdminCodexSetupWhenDisabled(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.CodexDeviceAuthAvailable() {
+		t.Fatal("CodexDeviceAuthAvailable() = true while Codex is disabled")
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject zero providers while Codex is disabled")
+	}
+}
+
+func TestValidateRejectsPersonalCodexHome(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")
+	t.Setenv("LEARN_AI_CODEX_ENABLED", "true")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LEARN_AI_CODEX_HOME", filepath.Join(home, ".codex"))
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "personal .codex") {
+		t.Fatalf("Validate() error = %v, want personal Codex home rejection", err)
 	}
 }
 

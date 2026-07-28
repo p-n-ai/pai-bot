@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/platform/codexauth"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/platform/settings"
@@ -24,6 +25,17 @@ type memorySettingsStore struct {
 	envFlags featureflags.Features
 	current  settings.Settings
 	saves    int
+}
+
+type stubCodexDeviceAuth struct {
+	status codexauth.Status
+	starts int
+}
+
+func (s *stubCodexDeviceAuth) Status() codexauth.Status { return s.status }
+func (s *stubCodexDeviceAuth) Start() (codexauth.Status, error) {
+	s.starts++
+	return s.status, nil
 }
 
 func (m *memorySettingsStore) Effective() settings.EffectiveSettings {
@@ -53,6 +65,24 @@ func newAISettingsHandler(store runtimeSettingsStore, apply func(settings.Settin
 
 func newMultiTenantAISettingsHandler(store runtimeSettingsStore, apply func(settings.Settings), multiTenant bool) http.Handler {
 	return newHandlerWithAdminProvider(fixedAdminDataSourceProvider{source: stubAdminAPI{}}, nil, &chatGatewayStub{}, retrieval.NewMemoryService(), &stubAuthService{}, "change-me-in-production", time.Hour, "", store, apply, multiTenant)
+}
+
+func newCodexAuthHandler(store runtimeSettingsStore, deviceAuth codexDeviceAuth) http.Handler {
+	return NewHandlerWithAdminProviderAndTeacherResourcesAndCodexAuth(
+		fixedAdminDataSourceProvider{source: stubAdminAPI{}},
+		nil,
+		&chatGatewayStub{},
+		retrieval.NewMemoryService(),
+		nil,
+		&stubAuthService{},
+		"change-me-in-production",
+		time.Hour,
+		"",
+		store,
+		nil,
+		false,
+		deviceAuth,
+	)
 }
 
 func doAISettingsRequest(t *testing.T, handler http.Handler, method, token, body string) *httptest.ResponseRecorder {
@@ -422,4 +452,43 @@ func TestAdminAISettingsMultiTenantRejectsTenantAdmin(t *testing.T) {
 		}
 	}
 	decodeAISettingsPayload(t, doAISettingsRequest(t, handler, http.MethodGet, mustIssuePlatformAdminToken(t), ""))
+}
+
+func TestAdminCodexDeviceAuthReturnsOnlySafeParsedState(t *testing.T) {
+	deviceAuth := &stubCodexDeviceAuth{status: codexauth.Status{
+		State:           codexauth.StateAwaiting,
+		VerificationURL: "https://auth.openai.com/codex/device",
+		UserCode:        "ABCD-1234",
+	}}
+	handler := newCodexAuthHandler(&memorySettingsStore{}, deviceAuth)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/ai/codex/auth/device", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK || deviceAuth.starts != 1 {
+		t.Fatalf("status/starts = %d/%d, want 200/1", rec.Code, deviceAuth.starts)
+	}
+	var payload codexauth.Status
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload != deviceAuth.status {
+		t.Fatalf("payload = %#v, want %#v", payload, deviceAuth.status)
+	}
+}
+
+func TestAdminCodexDeviceAuthRejectsTeacher(t *testing.T) {
+	deviceAuth := &stubCodexDeviceAuth{}
+	handler := newCodexAuthHandler(&memorySettingsStore{}, deviceAuth)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/ai/codex/auth/device", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueTeacherToken(t))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden || deviceAuth.starts != 0 {
+		t.Fatalf("status/starts = %d/%d, want 403/0", rec.Code, deviceAuth.starts)
+	}
 }

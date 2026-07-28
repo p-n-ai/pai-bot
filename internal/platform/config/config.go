@@ -6,9 +6,11 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -110,14 +112,6 @@ type OpenAIConfig struct {
 	Model  string
 }
 
-// CodexConfig holds Codex provider settings.
-type CodexConfig struct {
-	AccessToken  string
-	RefreshToken string
-	AccountID    string
-	Model        string
-}
-
 // AnthropicConfig holds Anthropic provider settings.
 type AnthropicConfig struct {
 	APIKey string
@@ -147,6 +141,41 @@ type OllamaConfig struct {
 type OpenRouterConfig struct {
 	APIKey string
 	Model  string
+}
+
+// CodexConfig holds local Codex CLI credential and model settings.
+type CodexConfig struct {
+	Enabled      bool
+	Home         string
+	AuthFile     string
+	AccessToken  string
+	RefreshToken string
+	AccountID    string
+	Model        string
+}
+
+// Authenticated reports whether the isolated server credential file contains
+// a credential shape the Codex provider can use or refresh.
+func (c CodexConfig) Authenticated() bool {
+	info, err := os.Stat(strings.TrimSpace(c.AuthFile))
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+		return false
+	}
+	data, err := os.ReadFile(strings.TrimSpace(c.AuthFile))
+	if err != nil {
+		return false
+	}
+	var auth struct {
+		AuthMode string `json:"auth_mode"`
+		Tokens struct {
+			AccessToken string `json:"access_token"`
+		} `json:"tokens"`
+	}
+	if json.Unmarshal(data, &auth) != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(auth.AuthMode), "chatgpt") &&
+		strings.TrimSpace(auth.Tokens.AccessToken) != ""
 }
 
 // TelegramConfig holds Telegram Bot API settings.
@@ -279,12 +308,6 @@ func Load() (*Config, error) {
 				APIKey: envStr("LEARN_AI_OPENAI_API_KEY", ""),
 				Model:  envStr("LEARN_AI_OPENAI_MODEL", ""),
 			},
-			Codex: CodexConfig{
-				AccessToken:  envStr("LEARN_AI_CODEX_ACCESS_TOKEN", ""),
-				RefreshToken: envStr("LEARN_AI_CODEX_REFRESH_TOKEN", ""),
-				AccountID:    envStr("LEARN_AI_CODEX_ACCOUNT_ID", ""),
-				Model:        envStr("LEARN_AI_CODEX_MODEL", ""),
-			},
 			Anthropic: AnthropicConfig{
 				APIKey: envStr("LEARN_AI_ANTHROPIC_API_KEY", ""),
 				Model:  envStr("LEARN_AI_ANTHROPIC_MODEL", ""),
@@ -305,6 +328,15 @@ func Load() (*Config, error) {
 			OpenRouter: OpenRouterConfig{
 				APIKey: envStr("LEARN_AI_OPENROUTER_API_KEY", ""),
 				Model:  envStr("LEARN_AI_OPENROUTER_MODEL", ""),
+			},
+			Codex: CodexConfig{
+				Enabled:      envBool("LEARN_AI_CODEX_ENABLED", false),
+				Home:         envStr("LEARN_AI_CODEX_HOME", defaultCodexHome()),
+				AuthFile:     filepath.Join(envStr("LEARN_AI_CODEX_HOME", defaultCodexHome()), "auth.json"),
+				AccessToken:  envStr("LEARN_AI_CODEX_ACCESS_TOKEN", ""),
+				RefreshToken: envStr("LEARN_AI_CODEX_REFRESH_TOKEN", ""),
+				AccountID:    envStr("LEARN_AI_CODEX_ACCOUNT_ID", ""),
+				Model:        envStr("LEARN_AI_CODEX_MODEL", "gpt-5.4"),
 			},
 		},
 		Email: EmailConfig{
@@ -384,7 +416,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("at least one external chat adapter must be configured")
 	}
 
-	if !c.HasAIProvider() && !c.Runtime.DevMode {
+	if c.AI.Codex.Enabled && isPersonalCodexHome(c.AI.Codex.Home) {
+		return fmt.Errorf("LEARN_AI_CODEX_HOME must not use the backend user's personal .codex directory")
+	}
+	if !c.HasAIProvider() && !c.CodexDeviceAuthAvailable() && !c.Runtime.DevMode {
 		return fmt.Errorf("at least one AI provider must be configured")
 	}
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
@@ -480,7 +515,16 @@ func (c *Config) HasAIProvider() bool {
 		c.AI.DeepSeek.APIKey != "" ||
 		c.AI.Google.APIKey != "" ||
 		c.AI.OpenRouter.APIKey != "" ||
-		c.AI.Ollama.Enabled
+		c.AI.Ollama.Enabled ||
+		(c.AI.Codex.Enabled && c.AI.Codex.Authenticated())
+}
+
+// CodexDeviceAuthAvailable reports whether the server has isolated storage
+// where an authenticated admin can establish the Codex provider.
+func (c *Config) CodexDeviceAuthAvailable() bool {
+	return c.AI.Codex.Enabled &&
+		strings.TrimSpace(c.AI.Codex.Home) != "" &&
+		strings.TrimSpace(c.AI.Codex.AuthFile) != ""
 }
 
 func (c *Config) mockAIProviderEnabled() bool {
@@ -495,6 +539,30 @@ func isKnownAIProvider(name string) bool {
 	default:
 		return false
 	}
+}
+
+func defaultCodexHome() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(configDir, "pai-bot", "codex")
+}
+
+func isPersonalCodexHome(configured string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(configured) == "" {
+		return false
+	}
+	personal := filepath.Join(home, ".codex")
+	configuredAbs, configuredErr := filepath.Abs(configured)
+	personalAbs, personalErr := filepath.Abs(personal)
+	if configuredErr == nil && personalErr == nil && filepath.Clean(configuredAbs) == filepath.Clean(personalAbs) {
+		return true
+	}
+	configuredInfo, configuredErr := os.Stat(configured)
+	personalInfo, personalErr := os.Stat(personal)
+	return configuredErr == nil && personalErr == nil && os.SameFile(configuredInfo, personalInfo)
 }
 
 func envStr(key, fallback string) string {

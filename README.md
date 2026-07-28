@@ -60,7 +60,7 @@ Get P&AI running in under 5 minutes.
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
 - Credentials for an external chat adapter if you want to receive messages outside local development. Production requires at least one of Telegram, WhatsApp, Slack, Discord, or Microsoft Teams.
-- At least one AI provider API key (OpenAI, Anthropic, or use free self-hosted Ollama)
+- At least one AI provider: an API key, free self-hosted Ollama, or a local Codex CLI login
 
 ### 1. Clone and configure
 
@@ -77,7 +77,12 @@ Edit `.env` with your credentials:
 # Optional external chat adapter
 LEARN_TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
-# AI Providers (at least one required)
+# Preferred: connect your ChatGPT subscription from Admin → AI settings
+LEARN_AI_DEFAULT_PROVIDER=codex
+LEARN_AI_CODEX_ENABLED=true
+LEARN_AI_CODEX_MODEL=gpt-5.4
+
+# Or use OpenRouter
 LEARN_AI_DEFAULT_PROVIDER=openrouter
 LEARN_AI_OPENROUTER_API_KEY=sk-or-v1-...
 LEARN_AI_OPENROUTER_MODEL=qwen/qwen3-max
@@ -120,6 +125,16 @@ just seed-docker
 ```
 
 When the backend is running in Docker, make sure `.env` uses Compose service names such as `postgres` and `dragonfly` instead of `localhost`. The `app` service already reads `.env`, so school admins can choose AI provider and default model purely with Docker env vars. For Ollama, Compose overrides `LEARN_AI_OLLAMA_URL` inside the app container to `http://ollama:11434`.
+
+The Codex provider is for a local, single-user server. Sign in to Admin with the existing email/password flow, choose **Connect Codex** in AI settings, open the displayed OpenAI verification page, and enter the one-time device code. PaiBot uses the structured `codex app-server` account API, which owns login and automatic token refresh inside an isolated server-owned Codex home. PaiBot never reads the operator's personal `~/.codex` login.
+
+```env
+LEARN_AI_CODEX_ENABLED=true
+# Optional; defaults to the OS config directory under pai-bot/codex.
+LEARN_AI_CODEX_HOME=/var/lib/pai-bot/codex
+```
+
+The Codex CLI must be installed and on the backend process `PATH`. The backend user also needs write access to `LEARN_AI_CODEX_HOME`.
 
 ### 3. Pull a free AI model (optional)
 
@@ -214,6 +229,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 │  │  ┌─────────┐  │ │ Service  │ │  + Dragonfly  │   │
 │  │  │OpenAI   │  │ │  (OSS)   │ │               │   │
 │  │  │Anthropic│  │ └──────────┘ └───────────────┘   │
+│  │  │Codex    │  │                                  │
 │  │  │Ollama   │  │                                  │
 │  │  │Custom   │  │                                  │
 │  │  └─────────┘  │                                  │
@@ -233,7 +249,7 @@ Open `http://localhost:8080/docs` for the Scalar-powered API reference. The raw 
 | **Backend** | Go 1.25+ | Concurrent chat and scheduling services ship as a single binary. |
 | **Database** | PostgreSQL 17 | Standard, portable. Every cloud has managed Postgres. |
 | **Cache** | Dragonfly | Redis-compatible, multi-threaded, 80% less memory. |
-| **AI Providers** | OpenAI, Anthropic, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
+| **AI Providers** | OpenAI, Anthropic, Codex, Ollama, OpenRouter | Provider-agnostic gateway. Swap models without code changes. |
 | **Chat** | Telegram, WhatsApp, Slack, Discord, Microsoft Teams, WebSocket | One gateway preserves provider identity, thread routes, delivery IDs, and adapter lifecycle. |
 | **Admin Panel** | Next.js 16, TypeScript, TanStack Query, shadcn/ui | Teacher dashboards, parent views, school admin. |
 | **Curriculum** | [Open School Syllabus](https://github.com/p-n-ai/oss) | Structured YAML curriculum consumed by the agent. |
@@ -268,7 +284,8 @@ pai-bot/
 │   │   ├── provider_anthropic.go    # Anthropic Claude
 │   │   ├── provider_google.go       # Google Gemini
 │   │   ├── provider_ollama.go       # Self-hosted (Llama, Qwen, etc.)
-│   │   └── provider_openrouter_llm_adapter.go   # 100+ models via OpenRouter
+│   │   ├── provider_openrouter_llm_adapter.go   # 100+ models via OpenRouter
+│   │   └── provider_codex.go         # Codex through a server-owned app-server login
 │   ├── agent/                       # Agent Engine
 │   │   ├── engine.go                # Conversation state machine
 │   │   ├── scheduler.go             # Proactive nudge scheduler
@@ -347,10 +364,11 @@ P&AI is not locked to any AI model. Configure one or more providers:
 | **Google Gemini** | Gemini 3 Flash Preview, Gemini 3 Pro Preview | Paid API | Set `LEARN_AI_GOOGLE_API_KEY` and optionally `LEARN_AI_GOOGLE_MODEL` |
 | **Ollama** | Qwen3, Qwen3 14B, Qwen3 30B | Free (self-hosted) | Set `LEARN_AI_OLLAMA_ENABLED=true` and optionally `LEARN_AI_OLLAMA_MODEL` |
 | **OpenRouter** | Qwen3 Max, Qwen3 Coder Next, 100+ others | Varies | Set `LEARN_AI_OPENROUTER_API_KEY` and optionally `LEARN_AI_OPENROUTER_MODEL` |
+| **Codex** | GPT-5.6 Sol | ChatGPT subscription | Install the Codex CLI, then connect from Admin → AI settings |
 
 DeepSeek uses the OpenAI-compatible API format — no extra code, just a different API key and base URL. Its official `deepseek-chat` alias already tracks the current DeepSeek-V3.2 non-thinking model. Gemini 3 models are the latest family, but note that the current Flash/Pro API IDs are preview models. Preview Gemini IDs can have different or tighter rate limits, so for steadier production behavior it is usually safer to set `LEARN_AI_GOOGLE_MODEL` to a non-preview model name such as `gemini-2.5-flash`. Qwen, Kimi, and other models are accessible via OpenRouter or self-hosted via Ollama.
 
-To prefer one provider first, set `LEARN_AI_DEFAULT_PROVIDER` to one of: `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`.
+To prefer one provider first, set `LEARN_AI_DEFAULT_PROVIDER` to one of: `openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`, `codex`.
 
 The AI Gateway automatically routes by task type:
 
@@ -460,7 +478,7 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_WHATSAPP_VERIFY_TOKEN` | With Cloud API | — | Token used to verify the Cloud API webhook |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
-| `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`) |
+| `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`, `codex`) |
 | `LEARN_AI_OPENAI_API_KEY` | No | — | OpenAI API key |
 | `LEARN_AI_OPENAI_MODEL` | No | — | Default OpenAI model when request model is not set |
 | `LEARN_AI_ANTHROPIC_API_KEY` | No | — | Anthropic API key |
@@ -471,6 +489,12 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_GOOGLE_MODEL` | No | — | Default Google model when request model is not set |
 | `LEARN_AI_OPENROUTER_API_KEY` | No | — | OpenRouter API key (100+ models) |
 | `LEARN_AI_OPENROUTER_MODEL` | No | — | Default OpenRouter model when request model is not set |
+| `LEARN_AI_CODEX_ENABLED` | No | `false` | Enable authenticated Admin device authorization for the local Codex provider |
+| `LEARN_AI_CODEX_HOME` | No | OS config directory under `pai-bot/codex` | Isolated server-owned Codex credential directory |
+| `LEARN_AI_CODEX_ACCESS_TOKEN` | No | — | Legacy manual Codex access token; Admin device authorization is preferred |
+| `LEARN_AI_CODEX_REFRESH_TOKEN` | No | — | Legacy manual Codex refresh token |
+| `LEARN_AI_CODEX_ACCOUNT_ID` | No | — | Legacy manual ChatGPT account ID |
+| `LEARN_AI_CODEX_MODEL` | No | `gpt-5.4` | Default Codex model |
 | `LEARN_AI_OLLAMA_ENABLED` | No | `false` | Enable self-hosted Ollama |
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
