@@ -19,7 +19,7 @@ func NewAIHealthCheck(router *ai.Router) func(context.Context) error {
 			return fmt.Errorf("AI completion health check failed: router unavailable")
 		}
 
-		response, err := router.Complete(ctx, ai.CompletionRequest{
+		response, err := router.ProbePrimaryCompletion(ctx, ai.CompletionRequest{
 			Messages: []ai.Message{
 				{Role: "user", Content: "Reply with only OK."},
 			},

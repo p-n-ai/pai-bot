@@ -322,6 +322,29 @@ func (r *Router) HealthCheck(ctx context.Context) error {
 	return fmt.Errorf("AI health check failed for providers: %s", strings.Join(failures, ", "))
 }
 
+// ProbePrimaryCompletion calls the primary configured provider exactly once
+// without fallback, retry, tracing, or circuit-breaker mutation.
+func (r *Router) ProbePrimaryCompletion(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
+	providers, order, _ := r.snapshotProviders()
+	if len(order) == 0 {
+		return CompletionResponse{}, fmt.Errorf("AI completion probe failed: no providers registered")
+	}
+
+	name := order[0]
+	provider := providers[name]
+	if provider == nil {
+		return CompletionResponse{}, fmt.Errorf("AI completion probe failed: primary provider unavailable")
+	}
+	if req.Model == "" {
+		req.Model = r.defaultModelForProvider(name)
+	}
+	response, err := provider.Complete(ctx, req)
+	if err != nil {
+		return CompletionResponse{}, fmt.Errorf("AI completion probe failed: %w", err)
+	}
+	return response, nil
+}
+
 // HasNativeProvider reports whether any configured provider preserves native tool calls.
 func (r *Router) HasNativeProvider() bool {
 	r.mu.RLock()

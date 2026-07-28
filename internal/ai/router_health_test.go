@@ -16,10 +16,14 @@ type healthProvider struct {
 	mu    sync.Mutex
 	calls int
 	err   error
+	resp  ai.CompletionResponse
 }
 
-func (*healthProvider) Complete(context.Context, ai.CompletionRequest) (ai.CompletionResponse, error) {
-	return ai.CompletionResponse{}, errors.New("not implemented")
+func (p *healthProvider) Complete(context.Context, ai.CompletionRequest) (ai.CompletionResponse, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls++
+	return p.resp, p.err
 }
 
 func (*healthProvider) StreamComplete(context.Context, ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
@@ -93,5 +97,25 @@ func TestRouterHealthCheckHonorsCancellation(t *testing.T) {
 	cancel()
 	if err := router.HealthCheck(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("HealthCheck() error = %v, want context canceled", err)
+	}
+}
+
+func TestProbePrimaryCompletionDoesNotRetryOrFallback(t *testing.T) {
+	router := ai.NewRouter()
+	primary := &healthProvider{err: errors.New("primary unavailable")}
+	fallback := &healthProvider{resp: ai.CompletionResponse{Content: "fallback"}}
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "primary", Provider: primary},
+		{Name: "fallback", Provider: fallback},
+	})
+
+	if _, err := router.ProbePrimaryCompletion(context.Background(), ai.CompletionRequest{}); err == nil {
+		t.Fatal("ProbePrimaryCompletion() error = nil, want primary failure")
+	}
+	if primary.callCount() != 1 {
+		t.Fatalf("primary calls = %d, want 1", primary.callCount())
+	}
+	if fallback.callCount() != 0 {
+		t.Fatalf("fallback calls = %d, want 0", fallback.callCount())
 	}
 }
