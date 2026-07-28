@@ -282,9 +282,33 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,PG_PASS,TG_TOKEN,AUTH_SECRET,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL,FEATURES,AI_HEALTH_TOKEN
+          envs: DEPLOY_DIR,PG_PASS,TG_TOKEN,AUTH_SECRET,CONFIG_ENCRYPTION_KEY,BOOTSTRAP_ADMIN_EMAIL,BOOTSTRAP_ADMIN_PASSWORD,OPENAI_KEY,ANTHROPIC_KEY,DEEPSEEK_KEY,GOOGLE_KEY,OPENROUTER_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_ALLOWED_DOMAIN,SMTP_ADDR,SMTP_USER,SMTP_PASS,SMTP_FROM,SMTP_NAME,DOMAIN_VAL,FEATURES,AI_HEALTH_TOKEN
           script: |
             cd "$DEPLOY_DIR"
+            if [ -z "${AUTH_SECRET}" ] || [ "${AUTH_SECRET}" = "change-me-in-production" ]; then
+              echo "PAI_AUTH_SECRET must be a private value" >&2
+              exit 1
+            fi
+            if [ "${#CONFIG_ENCRYPTION_KEY}" -lt 32 ] || [ "${CONFIG_ENCRYPTION_KEY}" = "${AUTH_SECRET}" ]; then
+              echo "PAI_CONFIG_ENCRYPTION_KEY must be independent and at least 32 characters" >&2
+              exit 1
+            fi
+            if [ -z "${BOOTSTRAP_ADMIN_PASSWORD}" ] || [ "${BOOTSTRAP_ADMIN_PASSWORD}" = "demo-password" ]; then
+              echo "PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD must be a private value" >&2
+              exit 1
+            fi
+            case "${PG_PASS}${TG_TOKEN}${AUTH_SECRET}${CONFIG_ENCRYPTION_KEY}${BOOTSTRAP_ADMIN_EMAIL}${BOOTSTRAP_ADMIN_PASSWORD}${OPENAI_KEY}${ANTHROPIC_KEY}${DEEPSEEK_KEY}${GOOGLE_KEY}${OPENROUTER_KEY}${GOOGLE_CLIENT_ID}${GOOGLE_CLIENT_SECRET}${GOOGLE_ALLOWED_DOMAIN}${SMTP_ADDR}${SMTP_USER}${SMTP_PASS}${SMTP_FROM}${SMTP_NAME}${DOMAIN_VAL}${FEATURES}${AI_HEALTH_TOKEN}" in
+              *$'\n'*|*$'\r'*)
+                echo "deployment values must not contain newlines" >&2
+                exit 1
+                ;;
+            esac
+            case "${PG_PASS}" in
+              *[!A-Za-z0-9._~-]*)
+                echo "POSTGRES_PASSWORD must use URL-safe characters" >&2
+                exit 1
+                ;;
+            esac
             printf '%s\n' \
               "LEARN_SERVER_PORT=8080" \
               "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
@@ -292,6 +316,9 @@ jobs:
               "LEARN_CACHE_URL=redis://dragonfly:6379" \
               "LEARN_TELEGRAM_BOT_TOKEN=${TG_TOKEN}" \
               "PAI_AUTH_SECRET=${AUTH_SECRET}" \
+              "PAI_CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY}" \
+              "PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL=${BOOTSTRAP_ADMIN_EMAIL}" \
+              "PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}" \
               "PAI_AUTH_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
               "PAI_AUTH_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}" \
               "PAI_AUTH_GOOGLE_ALLOWED_DOMAIN=${GOOGLE_ALLOWED_DOMAIN}" \
@@ -342,6 +369,9 @@ jobs:
           PG_PASS: ${{ secrets.POSTGRES_PASSWORD }}
           TG_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
           AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET }}
+          CONFIG_ENCRYPTION_KEY: ${{ secrets.PAI_CONFIG_ENCRYPTION_KEY }}
+          BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL }}
+          BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENAI_KEY: ${{ secrets.LEARN_AI_OPENAI_API_KEY }}
           ANTHROPIC_KEY: ${{ secrets.LEARN_AI_ANTHROPIC_API_KEY }}
           DEEPSEEK_KEY: ${{ secrets.LEARN_AI_DEEPSEEK_API_KEY }}

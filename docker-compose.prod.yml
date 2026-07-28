@@ -25,6 +25,12 @@ services:
     image: pai-bot:latest
     build: !reset null
     dns: !reset []
+    environment:
+      LEARN_DEV_MODE: "false"
+      PAI_AUTH_SECRET: ${PAI_AUTH_SECRET:?Set a private PAI_AUTH_SECRET}
+      PAI_CONFIG_ENCRYPTION_KEY: ${PAI_CONFIG_ENCRYPTION_KEY:?Set an independent PAI_CONFIG_ENCRYPTION_KEY}
+      PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: ${PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL:?Set PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL}
+      PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: ${PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD:?Set a private PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD}
     ports: !reset []
     expose:
       - "8080"
