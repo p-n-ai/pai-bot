@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Building2Icon, LockKeyholeIcon } from 'lucide-react'
+import { Building2Icon } from 'lucide-react'
 import type { FormEvent } from 'react'
 
 import type { AuthSession, SchoolChoice } from '@/lib/auth-types'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Select,
   SelectContent,
@@ -88,8 +94,8 @@ export function LoginForm({
           setError(
             readAuthDisplayError(
               caught,
-              'Login failed',
-              "We couldn't reach the sign-in service. Check your connection and try again.",
+              'Sign-in failed',
+              'Unable to reach the sign-in service. Check your connection and try again.',
             ),
           )
         })
@@ -119,40 +125,50 @@ export function LoginForm({
 
   return (
     <form
-      className='flex flex-col gap-4 font-inter'
+      aria-busy={isPending || isGooglePending}
+      className='flex flex-col gap-5'
       id='sign-in-form'
       onSubmit={submit}
     >
-      <GoogleLoginButton
-        isPending={isPending || isGooglePending}
-        isRedirecting={isGooglePending}
-        onClick={startGoogleLogin}
-        visible={showGoogleLogin}
-      />
-      <GoogleLoginDivider visible={showGoogleLogin} />
+      <FieldGroup>
+        <GoogleLoginButton
+          isPending={isPending || isGooglePending}
+          isRedirecting={isGooglePending}
+          onClick={startGoogleLogin}
+          visible={showGoogleLogin}
+        />
+        <LoginDivider visible={showGoogleLogin} />
 
-      <LoginCredentialsFields email={email} password={password} />
-      <SchoolSelect
-        choices={tenantChoices}
-        id={schoolID}
-        onChange={setTenantID}
-        value={tenantID}
-      />
+        <LoginCredentialsFields
+          disabled={isPending || isGooglePending}
+          email={email}
+          password={password}
+        />
+        <SchoolSelect
+          choices={tenantChoices}
+          disabled={isPending || isGooglePending}
+          id={schoolID}
+          onChange={setTenantID}
+          value={tenantID}
+        />
 
-      <AuthErrorAlert message={error} title='Sign-in failed.' />
+        <AuthErrorAlert message={error} title='Sign-in failed.' />
 
-      <PasswordLoginButton
-        isDisabled={isPending || isGooglePending}
-        isPending={isPending}
-      />
+        <PasswordLoginButton
+          isDisabled={isPending || isGooglePending}
+          isPending={isPending}
+        />
+      </FieldGroup>
     </form>
   )
 }
 
 function LoginCredentialsFields({
+  disabled,
   email,
   password,
 }: {
+  disabled: boolean
   email: ReturnType<typeof useInputValue>
   password: ReturnType<typeof useInputValue>
 }) {
@@ -161,41 +177,39 @@ function LoginCredentialsFields({
 
   return (
     <>
-      <div className='flex flex-col gap-1.5'>
-        <Label
-          className='text-[12px] font-semibold tracking-[0.03em] text-slate-text'
+      <Field data-disabled={disabled}>
+        <FieldLabel
+          className='text-sm font-medium text-foreground'
           htmlFor={emailID}
         >
           Email
-        </Label>
+        </FieldLabel>
         <Input
-          autoComplete='email'
-          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-[14px] text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf]'
+          autoComplete='username'
+          className='h-11 rounded-xl px-3 text-base sm:text-sm'
+          disabled={disabled}
           id={emailID}
           name='email'
           onChange={email.handleChange}
-          placeholder='teacher@school.edu'
+          placeholder='name@school.edu'
           required
+          spellCheck={false}
           type='email'
           value={email.value}
         />
-      </div>
+      </Field>
 
-      <div className='flex flex-col gap-1.5'>
-        <div className='flex items-center justify-between gap-3'>
-          <Label
-            className='text-[12px] font-semibold tracking-[0.03em] text-slate-text'
-            htmlFor={passwordID}
-          >
-            Password
-          </Label>
-          <span className='text-[12px] font-medium text-ash-gray'>
-            Invite-issued account
-          </span>
-        </div>
+      <Field data-disabled={disabled}>
+        <FieldLabel
+          className='text-sm font-medium text-foreground'
+          htmlFor={passwordID}
+        >
+          Password
+        </FieldLabel>
         <Input
           autoComplete='current-password'
-          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-[14px] text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf]'
+          className='h-11 rounded-xl px-3 text-base sm:text-sm'
+          disabled={disabled}
           id={passwordID}
           name='password'
           onChange={password.handleChange}
@@ -204,7 +218,7 @@ function LoginCredentialsFields({
           type='password'
           value={password.value}
         />
-      </div>
+      </Field>
     </>
   )
 }
@@ -218,27 +232,24 @@ function PasswordLoginButton({
 }) {
   return (
     <Button
-      className='mt-1 h-11 rounded-[10px] bg-[#17211b] px-4 text-[14px] font-semibold text-cloud-white shadow-[0_10px_24px_rgba(23,33,27,0.18)] hover:bg-[#235f72]'
+      className='h-11 rounded-xl px-4 font-semibold'
       disabled={isDisabled}
       type='submit'
     >
-      {isPending ? 'Signing in...' : 'Sign in'}
+      {isPending ? (
+        <Spinner aria-hidden='true' data-icon='inline-start' />
+      ) : null}
+      Sign in
     </Button>
   )
 }
 
-function GoogleLoginDivider({ visible }: { visible: boolean }) {
+function LoginDivider({ visible }: { visible: boolean }) {
   if (!visible) {
     return null
   }
 
-  return (
-    <div className='flex items-center gap-3 text-[11px] font-bold tracking-[0.12em] text-ash-gray uppercase'>
-      <span className='h-px flex-1 bg-stone-border' aria-hidden='true' />
-      <span>or use email</span>
-      <span className='h-px flex-1 bg-stone-border' aria-hidden='true' />
-    </div>
-  )
+  return <FieldSeparator>or sign in with email</FieldSeparator>
 }
 
 function GoogleLoginButton({
@@ -258,30 +269,37 @@ function GoogleLoginButton({
 
   return (
     <Button
-      className='min-h-11 w-full rounded-[10px] border-[#d9d3ca] bg-cloud-white text-[14px] font-semibold text-slate-text shadow-subtle hover:bg-[#f7f5ef]'
+      className='min-h-11 w-full rounded-xl font-semibold'
       disabled={isPending}
       onClick={onClick}
       type='button'
       variant='outline'
     >
-      <span
-        aria-hidden='true'
-        className='inline-grid size-4 place-items-center text-sm leading-none font-extrabold text-[#4285f4]'
-      >
-        G
-      </span>
-      {isRedirecting ? 'Redirecting to Google...' : 'Continue with Google'}
+      {isRedirecting ? (
+        <Spinner aria-hidden='true' data-icon='inline-start' />
+      ) : (
+        <span
+          aria-hidden='true'
+          className='inline-grid size-4 place-items-center text-sm leading-none font-extrabold'
+          data-icon='inline-start'
+        >
+          G
+        </span>
+      )}
+      Sign in with Google
     </Button>
   )
 }
 
 function SchoolSelect({
   choices,
+  disabled,
   id,
   onChange,
   value,
 }: {
   choices: Array<SchoolChoice>
+  disabled: boolean
   id: string
   onChange: (value: string) => void
   value: string
@@ -291,19 +309,27 @@ function SchoolSelect({
   }
 
   return (
-    <div className='rounded-[12px] border border-[#d9d3ca] bg-[#f7fbf8] p-3'>
-      <div className='mb-3 flex gap-2 text-[13px] leading-5 text-[#445c4d]'>
+    <Field
+      className='rounded-xl border border-border bg-muted/50 p-3'
+      data-disabled={disabled}
+    >
+      <div className='mb-3 flex gap-2 text-sm leading-5 text-muted-foreground'>
         <Building2Icon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
         <p className='m-0'>
-          This email belongs to more than one school. Choose the workspace for
-          this session.
+          This email belongs to more than one school. Choose where you want to
+          sign in.
         </p>
       </div>
-      <Label className='text-[12px] font-semibold' htmlFor={id}>
+      <FieldLabel className='text-xs font-semibold' htmlFor={id}>
         School
-      </Label>
-      <Select onValueChange={onChange} required value={value}>
-        <SelectTrigger className='mt-1.5 h-11 rounded-[10px]' id={id}>
+      </FieldLabel>
+      <Select
+        disabled={disabled}
+        onValueChange={onChange}
+        required
+        value={value}
+      >
+        <SelectTrigger className='mt-1.5 h-11 rounded-xl' id={id}>
           <SelectValue placeholder='Choose school' />
         </SelectTrigger>
         <SelectContent>
@@ -314,10 +340,6 @@ function SchoolSelect({
           ))}
         </SelectContent>
       </Select>
-      <p className='mt-2 mb-0 flex items-start gap-2 text-[12px] leading-5 text-ash-gray'>
-        <LockKeyholeIcon aria-hidden='true' className='mt-0.5 size-3.5' />
-        Your role and tenant access are checked again by the backend.
-      </p>
-    </div>
+    </Field>
   )
 }

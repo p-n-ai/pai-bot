@@ -16,6 +16,39 @@ import (
 	"testing"
 )
 
+type telegramRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f telegramRoundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestTelegramChannelTransportErrorDoesNotExposeToken(t *testing.T) {
+	channel, err := NewTelegramChannel("secret-test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	transportErr := errors.New(
+		"https://api.telegram.org/botsecret-test-token/sendChatAction",
+	)
+	channel.client = &http.Client{
+		Transport: telegramRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return nil, transportErr
+		}),
+	}
+
+	err = channel.SendTyping(t.Context(), "123")
+
+	if err == nil || !strings.Contains(err.Error(), "sending typing indicator request failed") {
+		t.Fatalf("SendTyping() error = %v, want redacted operation", err)
+	}
+	if strings.Contains(err.Error(), "secret-test-token") {
+		t.Fatalf("SendTyping() error exposed bot token: %v", err)
+	}
+	if !errors.Is(err, transportErr) {
+		t.Fatalf("SendTyping() error = %v, want transport error classification", err)
+	}
+}
+
 func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -36,6 +69,9 @@ func TestTelegramChannelSendMessageHonorsCanceledContext(t *testing.T) {
 	err = channel.SendMessage(ctx, "123", OutboundMessage{Text: "hello"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
+	}
+	if strings.Contains(err.Error(), "test-token") {
+		t.Fatalf("SendMessage() error exposed bot token: %v", err)
 	}
 	if got := requests.Load(); got != 0 {
 		t.Fatalf("requests = %d, want 0 after caller cancellation", got)
@@ -68,8 +104,28 @@ func TestTelegramChannelSendMessageRetryHonorsCanceledContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("SendMessage() error = %v, want context.Canceled", err)
 	}
+	if strings.Contains(err.Error(), "test-token") {
+		t.Fatalf("SendMessage() retry error exposed bot token: %v", err)
+	}
 	if got := requests.Load(); got != 1 {
 		t.Fatalf("requests = %d, want no retry after caller cancellation", got)
+	}
+}
+
+func TestTelegramChannelGetUpdatesCancellationDoesNotExposeToken(t *testing.T) {
+	channel, err := NewTelegramChannel("secret-test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err = channel.getUpdates(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("getUpdates() error = %v, want context.Canceled", err)
+	}
+	if strings.Contains(err.Error(), "secret-test-token") {
+		t.Fatalf("getUpdates() error exposed bot token: %v", err)
 	}
 }
 
@@ -217,6 +273,92 @@ func TestTelegramChannel_SendMessage_QuizInlineKeyboardPayload(t *testing.T) {
 		if button.Text != want[i].text || button.CallbackData != want[i].data {
 			t.Fatalf("button[%d] = %#v, want text=%q callback_data=%q", i, button, want[i].text, want[i].data)
 		}
+	}
+}
+
+func TestTelegramChannel_SendMessage_UsesOneTimeOnboardingKeyboard(t *testing.T) {
+	var values url.Values
+	transport := telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.client.Transport = transport
+	if err := channel.SendMessage(t.Context(), "123", OutboundMessage{
+		Text:          "Which form are you in now?",
+		ReplyKeyboard: [][]string{{"1", "2", "3"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var markup struct {
+		Keyboard        [][]string `json:"keyboard"`
+		ResizeKeyboard  bool       `json:"resize_keyboard"`
+		OneTimeKeyboard bool       `json:"one_time_keyboard"`
+		IsPersistent    bool       `json:"is_persistent"`
+	}
+	if err := json.Unmarshal([]byte(values.Get("reply_markup")), &markup); err != nil {
+		t.Fatal(err)
+	}
+	if len(markup.Keyboard) != 1 || !markup.ResizeKeyboard || !markup.OneTimeKeyboard || markup.IsPersistent {
+		t.Fatalf("reply markup = %#v", markup)
+	}
+}
+
+func TestTelegramChannel_SendMessage_OmitsReplyKeyboardFromGroupTopic(t *testing.T) {
+	var values url.Values
+	transport := telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values, err = url.ParseQuery(string(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	channel, err := NewTelegramChannel("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.client.Transport = transport
+	if err := channel.SendMessage(
+		t.Context(),
+		"telegram:-100123:42",
+		OutboundMessage{
+			Text:          "Which form are you in now?",
+			ReplyKeyboard: [][]string{{"1", "2", "3"}},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := values.Get("message_thread_id"); got != "42" {
+		t.Fatalf("message_thread_id = %q, want 42", got)
+	}
+	if got := values.Get("reply_markup"); got != "" {
+		t.Fatalf("reply_markup = %q, want omitted for a group topic", got)
 	}
 }
 
