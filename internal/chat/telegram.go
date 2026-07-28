@@ -596,7 +596,7 @@ func (t *TelegramChannel) syncCommands() error {
 
 	resp, err := t.client.PostForm(t.baseURL+"/setMyCommands", params)
 	if err != nil {
-		return errors.New("Telegram setMyCommands request failed")
+		return errors.New("telegram setMyCommands request failed")
 	}
 	defer func() { _ = resp.Body.Close() }()
 
