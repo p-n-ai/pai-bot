@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -47,7 +48,7 @@ func TestRunServesHealthBeforeSwapAndBuiltHandlerAfterSwap(t *testing.T) {
 		})
 	}()
 
-	if body := getEventually(t, "http://"+addr+"/anything"); body != `{"status":"ok"}` {
+	if body := getEventually(t, "http://"+addr+"/healthz"); body != `{"status":"ok"}` {
 		t.Fatalf("health body before swap = %q, want health JSON", body)
 	}
 
@@ -77,6 +78,29 @@ func TestRunServesHealthBeforeSwapAndBuiltHandlerAfterSwap(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for Run shutdown")
+	}
+}
+
+func TestBootstrapHealthOnlyServesInternalLiveness(t *testing.T) {
+	tests := []struct {
+		method     string
+		path       string
+		wantStatus int
+	}{
+		{method: http.MethodGet, path: "/healthz", wantStatus: http.StatusOK},
+		{method: http.MethodGet, path: "/health", wantStatus: http.StatusNotFound},
+		{method: http.MethodGet, path: "/health/ai", wantStatus: http.StatusNotFound},
+		{method: http.MethodPost, path: "/healthz", wantStatus: http.StatusNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			request := httptest.NewRequest(test.method, test.path, nil)
+			response := httptest.NewRecorder()
+			handleBootstrapHealth(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+		})
 	}
 }
 

@@ -5,6 +5,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -93,10 +95,33 @@ type TopMuxOptions struct {
 	AccessTokenTTL        time.Duration
 	FocusedPageHandler    http.Handler
 	ChatWebhooks          map[string]http.Handler
+	PublicHealthEnabled   func() bool
+	AIHealthEnabled       func() bool
+	AIHealthToken         string
+	AIHealthCheck         func(context.Context) error
 }
 
 func NewTopMux(opts TopMuxOptions) http.Handler {
 	topMux := http.NewServeMux()
+	topMux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		if opts.PublicHealthEnabled == nil || !opts.PublicHealthEnabled() {
+			http.NotFound(w, r)
+			return
+		}
+		handleHealthz(w, r)
+	})
+	topMux.HandleFunc("GET /health/ai", func(w http.ResponseWriter, r *http.Request) {
+		if opts.AIHealthEnabled == nil || !opts.AIHealthEnabled() ||
+			opts.AIHealthCheck == nil || !healthBearerMatches(opts.AIHealthToken, r.Header.Get("Authorization")) {
+			http.NotFound(w, r)
+			return
+		}
+		if err := opts.AIHealthCheck(r.Context()); err != nil {
+			writeHealthStatus(w, http.StatusServiceUnavailable, "unavailable")
+			return
+		}
+		writeHealthStatus(w, http.StatusOK, "ok")
+	})
 	if opts.WSChannel != nil {
 		topMux.Handle("GET /ws/chat", opts.WSChannel.Handler())
 	}
@@ -696,15 +721,27 @@ func registerRetrievalRoutes(
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	writeHealthStatus(w, http.StatusOK, "ok")
 }
 
 func handleReadyz(w http.ResponseWriter, r *http.Request) {
+	writeHealthStatus(w, http.StatusOK, "ready")
+}
+
+func writeHealthStatus(w http.ResponseWriter, status int, value string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ready"}`))
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `{"status":%q}`, value)
+}
+
+func healthBearerMatches(expected, authorization string) bool {
+	const prefix = "Bearer "
+	if expected == "" || !strings.HasPrefix(authorization, prefix) {
+		return false
+	}
+	expectedHash := sha256.Sum256([]byte(expected))
+	actualHash := sha256.Sum256([]byte(strings.TrimPrefix(authorization, prefix)))
+	return subtle.ConstantTimeCompare(expectedHash[:], actualHash[:]) == 1
 }
 
 func handleOpenAPI(w http.ResponseWriter, r *http.Request) {

@@ -80,6 +80,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_CURRICULUM_PATH",
 		"LEARN_DEV_MODE",
 		"PAI_FEATURES",
+		"PAI_AI_HEALTH_TOKEN",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
 		"LEARN_AI_MOCK_RESPONSE",
 	}
@@ -87,6 +88,19 @@ func clearEnv(t *testing.T) {
 		_ = os.Unsetenv(v)
 	}
 	t.Setenv("LEARN_AI_CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
+}
+
+func TestLoadAIHealthToken(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_AI_HEALTH_TOKEN", "monitor-secret")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Runtime.AIHealthToken != "monitor-secret" {
+		t.Fatal("AI health token was not loaded")
+	}
 }
 
 func TestLoad_FeatureFlagsRejectUnknown(t *testing.T) {
