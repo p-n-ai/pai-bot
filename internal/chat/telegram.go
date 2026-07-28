@@ -123,9 +123,9 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 		}
 		if len(msg.ReplyKeyboard) > 0 {
 			replyMarkup := map[string]any{
-				"keyboard":        msg.ReplyKeyboard,
-				"resize_keyboard": true,
-				"is_persistent":   true,
+				"keyboard":          msg.ReplyKeyboard,
+				"resize_keyboard":   true,
+				"one_time_keyboard": true,
 			}
 			b, err := json.Marshal(replyMarkup)
 			if err != nil {
