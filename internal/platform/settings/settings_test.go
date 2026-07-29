@@ -318,6 +318,47 @@ func TestAISettingsCredentialsNeverSerialize(t *testing.T) {
 	}
 }
 
+func TestCloneSettingsForMutationDoesNotAliasLockedSnapshot(t *testing.T) {
+	source := Settings{
+		AI: AISettings{
+			DefaultProvider: stringPointer("openrouter"),
+			Providers: ProviderOverrides{
+				APIKey: map[APIKeyProvider]APIKeyProviderOverride{
+					APIKeyProviderOpenRouter: {Model: stringPointer("original-api-model")},
+				},
+				Ollama:       &EnabledModelOverride{Enabled: boolPointer(true), Model: stringPointer("original-ollama-model")},
+				ManagedCodex: &ModelOverride{Model: stringPointer("original-codex-model")},
+			},
+			Credentials: map[APIKeyProvider]CredentialOverride{
+				APIKeyProviderOpenRouter: {Value: "original-key"},
+			},
+		},
+		Flags:    map[string]bool{"turn_hooks": true},
+		Revision: 7,
+	}
+
+	mutable := cloneSettingsForMutation(source)
+	*mutable.AI.DefaultProvider = "ollama"
+	apiOverride := mutable.AI.Providers.APIKey[APIKeyProviderOpenRouter]
+	*apiOverride.Model = "changed-api-model"
+	mutable.AI.Providers.APIKey[APIKeyProviderOpenRouter] = apiOverride
+	*mutable.AI.Providers.Ollama.Enabled = false
+	*mutable.AI.Providers.Ollama.Model = "changed-ollama-model"
+	*mutable.AI.Providers.ManagedCodex.Model = "changed-codex-model"
+	mutable.AI.Credentials[APIKeyProviderOpenRouter] = CredentialOverride{Value: "changed-key"}
+	mutable.Flags["turn_hooks"] = false
+
+	if *source.AI.DefaultProvider != "openrouter" ||
+		*source.AI.Providers.APIKey[APIKeyProviderOpenRouter].Model != "original-api-model" ||
+		!*source.AI.Providers.Ollama.Enabled ||
+		*source.AI.Providers.Ollama.Model != "original-ollama-model" ||
+		*source.AI.Providers.ManagedCodex.Model != "original-codex-model" ||
+		source.AI.Credentials[APIKeyProviderOpenRouter].Value != "original-key" ||
+		!source.Flags["turn_hooks"] {
+		t.Fatalf("mutation clone changed locked snapshot: %+v", source)
+	}
+}
+
 func TestStoreCanonicalizesOverridesEqualToEnvironment(t *testing.T) {
 	envFlags, err := featureflags.Parse("turn_hooks")
 	if err != nil {
