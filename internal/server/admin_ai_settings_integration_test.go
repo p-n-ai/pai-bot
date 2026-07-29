@@ -6,9 +6,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -66,6 +68,10 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	envAI := config.AIConfig{
 		DefaultProvider: "mock",
 		Mock:            config.MockAIConfig{Response: "wrong provider"},
+		OpenRouter: config.OpenRouterConfig{
+			APIKey: "sk-or-env-fallback-2468",
+			Model:  "env/openrouter-model",
+		},
 		Ollama: config.OllamaConfig{
 			Enabled: true,
 			URL:     fakeOllama.URL,
@@ -79,11 +85,25 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		// Fixed pre-PR #224 base64(nonce || AES-GCM ciphertext || tag)
 		// encrypted with jwtSecret. The HTTP update must migrate it.
 		legacyOpenRouterBlob = "ABEiM0RVZneImaq7QQF+vEphZow1zsXjvEnSz0txnpYvitq0NVWKsOVPCjK4gtdd9cm8bJUSqkiS"
+		unknownSecretName    = "future_provider_token"
+		unknownSecretValue   = "opaque-future-secret-value"
 	)
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO runtime_settings (id, ai, flags, secrets)
-		VALUES (1, '{}', '{}', jsonb_build_object('openrouter_api_key', $1::text))
-	`, legacyOpenRouterBlob); err != nil {
+		VALUES (
+			1,
+			'{}',
+			'{}',
+			jsonb_build_object(
+				'openrouter_api_key', $1::text,
+				$2::text, $3::text
+			)
+		)
+	`, legacyOpenRouterBlob, unknownSecretName, unknownSecretValue); err != nil {
 		t.Fatalf("seed legacy runtime credential: %v", err)
 	}
 	store := settings.New(pool, encryptionKey, jwtSecret, envAI, featureflags.Features{})
@@ -115,6 +135,12 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		prepareSettings,
 		false,
 	)
+	topMux := NewTopMux(TopMuxOptions{
+		APIHandler:      handler,
+		AIHealthEnabled: func() bool { return true },
+		AIHealthToken:   "integration-health-token",
+		AIHealthCheck:   NewAIHealthCheck(router),
+	})
 	token, err := auth.NewTokenManager(jwtSecret, time.Hour).Issue(auth.TokenClaims{
 		Subject:  "admin-1",
 		TenantID: "tenant-1",
@@ -147,7 +173,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 				req.Header.Set("Authorization", "Bearer "+tt.token)
 			}
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
+			topMux.ServeHTTP(rec, req)
 			if rec.Code != tt.want {
 				t.Fatalf("PUT status = %d, want %d", rec.Code, tt.want)
 			}
@@ -166,7 +192,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/api/admin/ai/settings", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	topMux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT status = %d, want %d (body %q)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -210,7 +236,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPut, "/api/admin/ai/settings", strings.NewReader(tt.body))
 			req.Header.Set("Authorization", "Bearer "+token)
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
+			topMux.ServeHTTP(rec, req)
 			if rec.Code != tt.want {
 				t.Fatalf("PUT status = %d, want %d (body %q)", rec.Code, tt.want, rec.Body.String())
 			}
@@ -236,6 +262,25 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	if strings.Contains(rawSecrets, legacyOpenRouterBlob) {
 		t.Fatal("HTTP update did not migrate the legacy credential envelope")
 	}
+	var persistedSecrets map[string]string
+	if err := json.Unmarshal([]byte(rawSecrets), &persistedSecrets); err != nil {
+		t.Fatalf("decode persisted secrets: %v", err)
+	}
+	migratedOpenRouterBlob := persistedSecrets["openrouter_api_key"]
+	if !strings.HasPrefix(migratedOpenRouterBlob, "pai:v1:a256gcm:") {
+		t.Fatalf("migrated OpenRouter credential has unexpected envelope")
+	}
+	var preservedUnknownSecret string
+	if err := pool.QueryRow(
+		ctx,
+		`SELECT secrets->>$1 FROM runtime_settings WHERE id = 1`,
+		unknownSecretName,
+	).Scan(&preservedUnknownSecret); err != nil {
+		t.Fatalf("read preserved unknown secret: %v", err)
+	}
+	if preservedUnknownSecret != unknownSecretValue {
+		t.Fatalf("unknown secret = %q, want byte-for-byte preserved value", preservedUnknownSecret)
+	}
 	var persistedRevision int64
 	if err := pool.QueryRow(ctx, `SELECT revision FROM runtime_settings WHERE id = 1`).Scan(&persistedRevision); err != nil {
 		t.Fatalf("read runtime settings revision: %v", err)
@@ -244,22 +289,25 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		t.Fatalf("persisted revision = %d, want rejected writes to preserve %d", persistedRevision, response.Revision)
 	}
 
+	if got := router.ProviderOrder(); len(got) == 0 || got[0] != "ollama" {
+		t.Fatalf("live provider order = %v, want ollama first", got)
+	}
+	assertLocalCompletion(t, ctx, router)
+
 	getReq := httptest.NewRequest(http.MethodGet, "/api/admin/ai/settings", nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	getRec := httptest.NewRecorder()
-	handler.ServeHTTP(getRec, getReq)
+	topMux.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
 		t.Fatalf("GET status = %d, want %d", getRec.Code, http.StatusOK)
 	}
 	if strings.Contains(getRec.Body.String(), openRouterKey) ||
 		strings.Contains(getRec.Body.String(), "integration-secret") ||
-		strings.Contains(getRec.Body.String(), rawSecrets) {
+		strings.Contains(getRec.Body.String(), rawSecrets) ||
+		strings.Contains(getRec.Body.String(), unknownSecretValue) {
 		t.Fatalf("GET response leaked secret material: %q", getRec.Body.String())
 	}
-	if got := router.ProviderOrder(); len(got) == 0 || got[0] != "ollama" {
-		t.Fatalf("live provider order = %v, want ollama first", got)
-	}
-	assertLocalCompletion(t, ctx, router)
+	assertAIHealthOK(t, topMux)
 
 	restartedStore := settings.New(pool, encryptionKey, "", envAI, featureflags.Features{})
 	if err := restartedStore.Start(ctx); err != nil {
@@ -312,15 +360,177 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		t.Fatalf("restarted GET was not safe: status=%d body=%q", restartedGetRec.Code, restartedGetRec.Body.String())
 	}
 
-	healthReq := httptest.NewRequest(http.MethodGet, "/health/ai", nil)
-	healthReq.Header.Set("Authorization", "Bearer integration-health-token")
-	healthRec := httptest.NewRecorder()
-	restartedTopMux.ServeHTTP(healthRec, healthReq)
-	if healthRec.Code != http.StatusOK || healthRec.Body.String() != `{"status":"ok"}` {
-		t.Fatalf("restarted AI health = %d %q, want redacted ok", healthRec.Code, healthRec.Body.String())
+	assertAIHealthOK(t, restartedTopMux)
+
+	resetReq := httptest.NewRequest(
+		http.MethodPut,
+		"/api/admin/ai/settings",
+		strings.NewReader(
+			`{"expectedRevision":`+fmt.Sprint(response.Revision)+`,"openrouterApiKey":null}`,
+		),
+	)
+	resetReq.Header.Set("Authorization", "Bearer "+token)
+	resetRec := httptest.NewRecorder()
+	restartedTopMux.ServeHTTP(resetRec, resetReq)
+	if resetRec.Code != http.StatusOK {
+		t.Fatalf("reset PUT status = %d, want %d (body %q)", resetRec.Code, http.StatusOK, resetRec.Body.String())
 	}
-	if got := completions.Load(); got != 3 {
-		t.Fatalf("local completion requests = %d, want 3", got)
+	var resetResponse aiSettingsPayload
+	if err := json.Unmarshal(resetRec.Body.Bytes(), &resetResponse); err != nil {
+		t.Fatalf("decode reset response: %v", err)
+	}
+	if resetResponse.Sources.OpenRouterKey != "env" ||
+		!resetResponse.Effective.OpenRouterKey.Set ||
+		resetResponse.Effective.OpenRouterKey.Last4 != "2468" ||
+		resetResponse.Override.OpenRouterKey.Set {
+		t.Fatalf("reset response = %#v, want environment credential fallback", resetResponse)
+	}
+	var storedOpenRouterKey, storedUnknownSecret *string
+	if err := pool.QueryRow(ctx, `
+		SELECT secrets->>'openrouter_api_key', secrets->>$1
+		FROM runtime_settings
+		WHERE id = 1
+	`, unknownSecretName).Scan(&storedOpenRouterKey, &storedUnknownSecret); err != nil {
+		t.Fatalf("read secrets after reset: %v", err)
+	}
+	if storedOpenRouterKey != nil || storedUnknownSecret == nil || *storedUnknownSecret != unknownSecretValue {
+		t.Fatalf("reset persisted openrouter=%v unknown=%v, want only unknown entry preserved",
+			storedOpenRouterKey, storedUnknownSecret)
+	}
+	assertLocalCompletion(t, ctx, restartedRouter)
+
+	if got := completions.Load(); got != 5 {
+		t.Fatalf("local completion requests = %d, want three explicit completions and two health probes", got)
+	}
+	assertCredentialFailureResponsesAreSafe(
+		t,
+		ctx,
+		pool,
+		envAI,
+		jwtSecret,
+		token,
+		encryptionKey,
+		migratedOpenRouterBlob,
+		unknownSecretName,
+		unknownSecretValue,
+	)
+	for _, sensitive := range []string{
+		openRouterKey,
+		envAI.OpenRouter.APIKey,
+		legacyOpenRouterBlob,
+		unknownSecretValue,
+		token,
+		"Bearer " + token,
+	} {
+		if sensitive != "" && strings.Contains(logs.String(), sensitive) {
+			t.Fatalf("logs leaked sensitive runtime settings material")
+		}
+	}
+}
+
+func assertCredentialFailureResponsesAreSafe(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	envAI config.AIConfig,
+	jwtSecret, token, encryptionKey, validBlob, unknownSecretName, unknownSecretValue string,
+) {
+	t.Helper()
+
+	unknownKeyParts := strings.Split(validBlob, ":")
+	if len(unknownKeyParts) != 5 {
+		t.Fatalf("valid credential envelope has %d fields, want 5", len(unknownKeyParts))
+	}
+	unknownKeyParts[3] = "AAAAAAAAAAAAAAAAAAAAAA"
+	unknownKeyBlob := strings.Join(unknownKeyParts, ":")
+
+	tamperedBlob := validBlob
+	last := len(tamperedBlob) - 1
+	if tamperedBlob[last] == 'A' {
+		tamperedBlob = tamperedBlob[:last] + "B"
+	} else {
+		tamperedBlob = tamperedBlob[:last] + "A"
+	}
+
+	for _, tt := range []struct {
+		name      string
+		activeKey string
+		blob      string
+	}{
+		{name: "missing active key", blob: validBlob},
+		{name: "unknown key id", activeKey: encryptionKey, blob: unknownKeyBlob},
+		{name: "tampered ciphertext", activeKey: encryptionKey, blob: tamperedBlob},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := pool.Exec(ctx, `
+				UPDATE runtime_settings
+				SET secrets = jsonb_build_object(
+					'openrouter_api_key', $1::text,
+					$2::text, $3::text
+				)
+				WHERE id = 1
+			`, tt.blob, unknownSecretName, unknownSecretValue); err != nil {
+				t.Fatalf("seed unreadable credential: %v", err)
+			}
+
+			failureStore := settings.New(
+				pool,
+				tt.activeKey,
+				"",
+				envAI,
+				featureflags.Features{},
+			)
+			if err := failureStore.Start(ctx); err != nil {
+				t.Fatalf("start with unreadable credential: %v", err)
+			}
+			failureStore.MarkApplied(failureStore.Current().Revision)
+			failureHandler := newHandlerWithAdminProvider(
+				fixedAdminDataSourceProvider{source: stubAdminAPI{}},
+				nil,
+				&chatGatewayStub{},
+				retrieval.NewMemoryService(),
+				&stubAuthService{},
+				jwtSecret,
+				time.Hour,
+				"",
+				failureStore,
+				nil,
+				false,
+			)
+			failureMux := NewTopMux(TopMuxOptions{
+				APIHandler: failureHandler,
+			})
+			req := httptest.NewRequest(http.MethodGet, "/api/admin/ai/settings", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			failureMux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET unreadable credential status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			var got aiSettingsPayload
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode unreadable credential response: %v", err)
+			}
+			if !got.Health.OpenRouterKey.Stored || got.Health.OpenRouterKey.Readable {
+				t.Fatalf("credential health = %+v, want stored and unreadable", got.Health.OpenRouterKey)
+			}
+			for _, sensitive := range []string{tt.blob, unknownSecretValue, token} {
+				if strings.Contains(rec.Body.String(), sensitive) {
+					t.Fatal("unreadable credential response leaked sensitive material")
+				}
+			}
+			var preserved string
+			if err := pool.QueryRow(
+				ctx,
+				`SELECT secrets->>$1 FROM runtime_settings WHERE id = 1`,
+				unknownSecretName,
+			).Scan(&preserved); err != nil {
+				t.Fatalf("read unknown secret after failure: %v", err)
+			}
+			if preserved != unknownSecretValue {
+				t.Fatalf("unknown secret = %q, want preserved", preserved)
+			}
+		})
 	}
 }
 
@@ -348,6 +558,17 @@ func assertLocalCompletion(t *testing.T, ctx context.Context, router *ai.Router)
 	if response.Content != "local answer" || response.Model != "local-test" ||
 		response.InputTokens != 3 || response.OutputTokens != 2 {
 		t.Fatalf("Router.Complete() = %#v, want local fake response", response)
+	}
+}
+
+func assertAIHealthOK(t *testing.T, handler http.Handler) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/health/ai", nil)
+	req.Header.Set("Authorization", "Bearer integration-health-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != `{"status":"ok"}` {
+		t.Fatalf("AI health = %d %q, want redacted ok", rec.Code, rec.Body.String())
 	}
 }
 

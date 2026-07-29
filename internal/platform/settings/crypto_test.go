@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/quick"
 )
 
 func TestCredentialEnvelopeRoundTrip(t *testing.T) {
@@ -151,5 +152,52 @@ func TestCredentialEnvelopeRejectsCiphertextBitFlip(t *testing.T) {
 
 	if _, err := decryptCredential(secret, nil, nil, tampered, ctx); !errors.Is(err, errCredentialAuthentication) {
 		t.Fatalf("decryptCredential(bit flip) error = %v, want authentication failure", err)
+	}
+}
+
+func TestCredentialEnvelopeRoundTripProperty(t *testing.T) {
+	const secret = "credential-envelope-property-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	property := func(plaintext []byte) bool {
+		encoded, err := encryptCredential(secret, string(plaintext), ctx)
+		if err != nil {
+			return false
+		}
+		got, err := decryptCredential(secret, nil, nil, encoded, ctx)
+		return err == nil &&
+			got.Plaintext == string(plaintext) &&
+			got.KeyID == credentialKeyID(secret) &&
+			!got.Legacy &&
+			!got.NeedsRewrite
+	}
+	if err := quick.Check(property, &quick.Config{MaxCount: 200}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCredentialEnvelopeTamperProperty(t *testing.T) {
+	const secret = "credential-envelope-property-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	property := func(plaintext []byte, position uint16, mask byte) bool {
+		encoded, err := encryptCredential(secret, string(plaintext), ctx)
+		if err != nil {
+			return false
+		}
+		prefix := credentialEnvelopePrefix + credentialKeyID(secret) + ":"
+		payload := strings.TrimPrefix(encoded, prefix)
+		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil || len(raw) == 0 {
+			return false
+		}
+		mask |= 1
+		raw[int(position)%len(raw)] ^= mask
+		tampered := prefix + base64.RawURLEncoding.EncodeToString(raw)
+		_, err = decryptCredential(secret, nil, nil, tampered, ctx)
+		return errors.Is(err, errCredentialAuthentication)
+	}
+	if err := quick.Check(property, &quick.Config{MaxCount: 200}); err != nil {
+		t.Fatal(err)
 	}
 }
