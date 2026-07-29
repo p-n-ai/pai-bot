@@ -31,6 +31,9 @@ docker pull "$REGISTRY/pai-bot/admin:$TAG"
 docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
 docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
 
+echo "--- Validating production secrets ---"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm config-check
+
 echo "--- Ensuring infra services ---"
 printf '%s' "$GHCR_TOKEN" | docker login --username "$GHCR_USER" --password-stdin ghcr.io
 docker compose -f docker-compose.yml -f docker-compose.prod.yml pull postgres dragonfly

@@ -56,3 +56,26 @@ func TestWriteNewSecretEnvFileRefusesOverwrite(t *testing.T) {
 		t.Fatalf("existing file changed to %q", raw)
 	}
 }
+
+func TestWriteNewSecretEnvFileRefusesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.env")
+	if err := os.WriteFile(target, []byte("keep-me\n"), 0o600); err != nil {
+		t.Fatalf("seed target file: %v", err)
+	}
+	link := filepath.Join(dir, "secrets.env")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	if err := WriteNewSecretEnvFile(link); err == nil {
+		t.Fatal("WriteNewSecretEnvFile() error = nil, want symlink refusal")
+	}
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target file: %v", err)
+	}
+	if string(raw) != "keep-me\n" {
+		t.Fatalf("symlink target changed to %q", raw)
+	}
+}

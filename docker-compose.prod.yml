@@ -1,6 +1,14 @@
 # Production overrides for single-server deployment
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 services:
+  config-check:
+    image: pai-bot:latest
+    env_file:
+      - .env
+    entrypoint:
+      - /pai-validate-production-secrets
+    restart: "no"
+
   postgres:
     build: !reset null
     ports: !reset []
@@ -32,6 +40,9 @@ services:
       PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS: ${PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS:-[]}
       PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: ${PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL:?Set PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL}
       PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: ${PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD:?Set a private PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD}
+    depends_on:
+      config-check:
+        condition: service_completed_successfully
     ports: !reset []
     expose:
       - "8080"

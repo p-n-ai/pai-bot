@@ -772,6 +772,60 @@ func TestValidatePreviousConfigEncryptionKeys(t *testing.T) {
 	}
 }
 
+func TestValidateProductionSecretsRejectsUnsafeDeploymentValues(t *testing.T) {
+	validAuth := "auth-secret-value-with-enough-variety"
+	validActive := "active-settings-encryption-key-1234"
+	validBootstrap := "private-bootstrap-password"
+	previous := "previous-settings-encryption-key-123"
+
+	tests := []struct {
+		name      string
+		auth      string
+		active    string
+		previous  []string
+		bootstrap string
+	}{
+		{name: "missing auth", active: validActive, bootstrap: validBootstrap},
+		{name: "default auth", auth: DefaultAuthSecret, active: validActive, bootstrap: validBootstrap},
+		{name: "missing active", auth: validAuth, bootstrap: validBootstrap},
+		{name: "weak active", auth: validAuth, active: strings.Repeat("a", 32), bootstrap: validBootstrap},
+		{name: "active reuses auth", auth: validAuth, active: validAuth, bootstrap: validBootstrap},
+		{name: "duplicate previous", auth: validAuth, active: validActive, previous: []string{previous, previous}, bootstrap: validBootstrap},
+		{name: "previous reuses auth", auth: validAuth, active: validActive, previous: []string{validAuth}, bootstrap: validBootstrap},
+		{name: "missing bootstrap", auth: validAuth, active: validActive},
+		{name: "default bootstrap", auth: validAuth, active: validActive, bootstrap: "demo-password"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateProductionSecrets(tt.auth, tt.active, tt.previous, tt.bootstrap); err == nil {
+				t.Fatal("ValidateProductionSecrets() error = nil, want unsafe deployment rejection")
+			}
+		})
+	}
+
+	if err := ValidateProductionSecrets(
+		validAuth,
+		validActive,
+		[]string{previous},
+		validBootstrap,
+	); err != nil {
+		t.Fatalf("ValidateProductionSecrets() error = %v", err)
+	}
+}
+
+func TestValidateProductionSecretEnvironmentParsesPreviousKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_AUTH_SECRET", "auth-secret-value-with-enough-variety")
+	t.Setenv("PAI_CONFIG_ENCRYPTION_KEY", "active-settings-encryption-key-1234")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "private-bootstrap-password")
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", "not-json")
+
+	if err := ValidateProductionSecretEnvironment(); err == nil ||
+		!strings.Contains(err.Error(), "JSON array") {
+		t.Fatalf("ValidateProductionSecretEnvironment() error = %v", err)
+	}
+}
+
 func TestValidate_EmailDeliveryRequiresSMTPAndFromAddress(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("LEARN_TELEGRAM_BOT_TOKEN", "test-token")

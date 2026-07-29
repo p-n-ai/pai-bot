@@ -436,17 +436,7 @@ func (c *Config) Validate() error {
 	if c.AI.DefaultProvider != "" && !isKnownAIProvider(c.AI.DefaultProvider) {
 		return fmt.Errorf("unsupported LEARN_AI_DEFAULT_PROVIDER %q", c.AI.DefaultProvider)
 	}
-	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && nonWhitespaceLen(key) < 32 {
-		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must contain at least 32 non-whitespace characters")
-	}
-	if key := c.Security.RuntimeSettingsEncryptionKey; key != "" && weakSecretRoot(key) {
-		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must be a high-entropy secret")
-	}
-	if c.Security.RuntimeSettingsEncryptionKey != "" &&
-		c.Security.RuntimeSettingsEncryptionKey == c.Auth.JWTSecret {
-		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must differ from PAI_AUTH_SECRET")
-	}
-	if err := validatePreviousSettingsEncryptionKeys(
+	if err := ValidateRuntimeSettingsKeys(
 		c.Security.RuntimeSettingsEncryptionKey,
 		c.Auth.JWTSecret,
 		c.Security.PreviousSettingsEncryptionKeys,
@@ -627,7 +617,19 @@ func secretListEnv(key string) ([]string, error) {
 	return values, nil
 }
 
-func validatePreviousSettingsEncryptionKeys(active, auth string, previous []string) error {
+// ValidateRuntimeSettingsKeys checks the active and retired encryption roots
+// without requiring an active root. Runtime secret writes enforce that
+// requirement at their own boundary.
+func ValidateRuntimeSettingsKeys(active, auth string, previous []string) error {
+	if active != "" && nonWhitespaceLen(active) < 32 {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must contain at least 32 non-whitespace characters")
+	}
+	if active != "" && weakSecretRoot(active) {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must be a high-entropy secret")
+	}
+	if active != "" && active == auth {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must differ from PAI_AUTH_SECRET")
+	}
 	if len(previous) > 8 {
 		return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS must contain at most 8 keys")
 	}
@@ -662,6 +664,36 @@ func validatePreviousSettingsEncryptionKeys(active, auth string, previous []stri
 		return fmt.Errorf("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS exceeds the 8 KiB limit")
 	}
 	return nil
+}
+
+// ValidateProductionSecrets rejects deployment credentials that are missing,
+// public defaults, or invalid runtime-settings encryption roots.
+func ValidateProductionSecrets(auth, active string, previous []string, bootstrapAdminPassword string) error {
+	if auth == "" || auth == DefaultAuthSecret {
+		return fmt.Errorf("PAI_AUTH_SECRET must be a private value")
+	}
+	if active == "" {
+		return fmt.Errorf("PAI_CONFIG_ENCRYPTION_KEY must be set to an independent high-entropy secret")
+	}
+	if bootstrapAdminPassword == "" || bootstrapAdminPassword == "demo-password" {
+		return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD must be a private value")
+	}
+	return ValidateRuntimeSettingsKeys(active, auth, previous)
+}
+
+// ValidateProductionSecretEnvironment parses and validates only the secrets
+// required by production deployment preflights.
+func ValidateProductionSecretEnvironment() error {
+	previous, err := secretListEnv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS")
+	if err != nil {
+		return err
+	}
+	return ValidateProductionSecrets(
+		os.Getenv("PAI_AUTH_SECRET"),
+		os.Getenv("PAI_CONFIG_ENCRYPTION_KEY"),
+		previous,
+		os.Getenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD"),
+	)
 }
 
 func weakSecretRoot(value string) bool {

@@ -535,6 +535,11 @@ file with:
 go run ./cmd/init-secrets -out /path/to/pai-bot-secrets.env
 ```
 
+Before a production rollout, run `go run
+./cmd/validate-production-secrets`. The production Compose overlay and Helm
+chart also block startup or rendering when required secrets are missing, use
+public defaults, reuse a root, or contain an invalid retired-key list.
+
 ### First-Boot Tenant Flow
 
 The first setup behavior depends on `LEARN_TENANT_MODE`:

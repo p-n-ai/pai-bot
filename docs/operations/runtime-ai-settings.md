@@ -32,6 +32,27 @@ symlinks and existing files, and never prints either value. Load the fragment
 through the deployment's secret mechanism; do not commit it or concatenate it
 into a tracked `.env` file.
 
+## Validate production secrets
+
+Run the canonical preflight before changing a production deployment:
+
+```bash
+go run ./cmd/validate-production-secrets
+```
+
+It reads only `PAI_AUTH_SECRET`, `PAI_CONFIG_ENCRYPTION_KEY`,
+`PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS`, and
+`PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD`. It rejects public defaults, missing active
+roots, malformed or oversized previous-key lists, short or low-diversity roots,
+duplicates, and reuse across auth, active, and retired roots without printing
+any secret.
+
+The production Compose overlay runs the same check before the app starts, and
+the remote deployment runs it before migrations. The GitHub deployment
+validates before copying files and replaces the mode-`0600` server `.env`
+atomically. The Helm chart rejects the same unsafe value classes during
+rendering, before a workload is installed or upgraded.
+
 ## Encryption key rotation
 
 `PAI_CONFIG_ENCRYPTION_KEY` encrypts new or replaced provider credentials.
