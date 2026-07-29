@@ -37,11 +37,6 @@ type aiSettingsKeyStatusDoc struct {
 	Last4 string `json:"last4"`
 }
 
-type aiProviderSelectorDoc struct {
-	Type string `json:"type"`
-	Name string `json:"name,omitempty"`
-}
-
 type aiDefaultProviderProjectionDoc struct {
 	Baseline  any    `json:"baseline"`
 	Override  any    `json:"override"`

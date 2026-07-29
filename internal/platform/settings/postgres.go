@@ -387,20 +387,6 @@ func (s *Store) Load(ctx context.Context) (Settings, error) {
 	return st, nil
 }
 
-func (s *Store) decryptionKeys() []string {
-	keys := make([]string, 0, 2+len(s.previousEncryptionKeys))
-	if s.encryptionKey != "" {
-		keys = append(keys, s.encryptionKey)
-	}
-	keys = appendUniqueSecrets(keys, s.previousEncryptionKeys...)
-	if s.legacyDecryptionKey != "" &&
-		s.legacyDecryptionKey != config.DefaultAuthSecret &&
-		s.legacyDecryptionKey != s.encryptionKey {
-		keys = appendUniqueSecrets(keys, s.legacyDecryptionKey)
-	}
-	return keys
-}
-
 func (s *Store) legacyKeys() []string {
 	if s.legacyDecryptionKey == "" ||
 		s.legacyDecryptionKey == config.DefaultAuthSecret ||

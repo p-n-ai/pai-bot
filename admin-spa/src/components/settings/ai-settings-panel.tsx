@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
+import type {
+  ChangeEvent,
+  Dispatch,
+  FormEvent,
+  ReactNode,
+  SetStateAction,
+} from 'react'
 
 import type {
   AISettings,
@@ -172,6 +178,136 @@ export function AISettingsPanel() {
     [state],
   )
 
+  const setDefaultProvider = useCallback(
+    (value: string) => {
+      submitSettings(
+        'provider',
+        { defaultProvider: decodeSelectorValue(value) },
+        providerSubmit,
+        'Default provider could not be changed.',
+      )
+    },
+    [providerSubmit, submitSettings],
+  )
+  const resetDefaultProvider = useCallback(() => {
+    submitSettings(
+      'provider',
+      { defaultProvider: null },
+      providerSubmit,
+      'Default provider could not be reset.',
+    )
+  }, [providerSubmit, submitSettings])
+  const saveModel = useCallback(
+    (provider: ProviderProjection) => {
+      const id = providerID(provider)
+      const model = (modelInputs[id] ?? '').trim()
+      if (!model) {
+        modelSubmit.setError('Model is required.')
+        return
+      }
+      submitSettings(
+        'model',
+        { provider: modelPatch(provider, model) },
+        modelSubmit,
+        'Provider model could not be saved.',
+      )
+    },
+    [modelInputs, modelSubmit, submitSettings],
+  )
+  const resetModel = useCallback(
+    (provider: ProviderProjection) => {
+      submitSettings(
+        'model',
+        { provider: modelPatch(provider, null) },
+        modelSubmit,
+        'Provider model could not be reset.',
+      )
+    },
+    [modelSubmit, submitSettings],
+  )
+  const saveKey = useCallback(
+    (provider: Extract<ProviderProjection, { type: 'api_key' }>) => {
+      const key = keyInputs[provider.name] ?? ''
+      if (!key.trim()) {
+        keySubmit.setError('API key is required.')
+        return
+      }
+      submitSettings(
+        'key',
+        {
+          provider: {
+            type: 'api_key',
+            name: provider.name,
+            apiKey: key,
+          },
+        },
+        keySubmit,
+        `${providerLabels[provider.name]} API key could not be saved.`,
+        () => {
+          setKeyInputs((current) => ({ ...current, [provider.name]: '' }))
+          setReplacingKeys((current) => ({
+            ...current,
+            [provider.name]: false,
+          }))
+        },
+      )
+    },
+    [keyInputs, keySubmit, submitSettings],
+  )
+  const resetKey = useCallback(
+    (provider: Extract<ProviderProjection, { type: 'api_key' }>) => {
+      submitSettings(
+        'key',
+        {
+          provider: {
+            type: 'api_key',
+            name: provider.name,
+            apiKey: null,
+          },
+        },
+        keySubmit,
+        `${providerLabels[provider.name]} API key could not be reset.`,
+      )
+    },
+    [keySubmit, submitSettings],
+  )
+  const setOllamaEnabled = useCallback(
+    (
+      provider: Extract<ProviderProjection, { type: 'ollama' }>,
+      enabled: boolean | null,
+    ) => {
+      submitSettings(
+        'enabled',
+        { provider: { type: 'ollama', enabled } },
+        enabledSubmit,
+        'Ollama availability could not be changed.',
+      )
+    },
+    [enabledSubmit, submitSettings],
+  )
+  const toggleFlag = useCallback(
+    (name: string, enabled: boolean) => {
+      submitSettings(
+        'flags',
+        { flags: { [name]: !enabled } },
+        flagsSubmit,
+        'Feature flag could not be changed.',
+      )
+    },
+    [flagsSubmit, submitSettings],
+  )
+  const resetFlag = useCallback(
+    (name: string) => {
+      submitSettings(
+        'flags',
+        { flags: { [name]: null } },
+        flagsSubmit,
+        'Feature flag could not be reset.',
+      )
+    },
+    [flagsSubmit, submitSettings],
+  )
+
   if (state.status !== 'ready') {
     return (
       <LoadState
@@ -185,115 +321,6 @@ export function AISettingsPanel() {
   }
 
   const settings = state.settings
-  const setDefaultProvider = (value: string) => {
-    submitSettings(
-      'provider',
-      { defaultProvider: decodeSelectorValue(value) },
-      providerSubmit,
-      'Default provider could not be changed.',
-    )
-  }
-  const resetDefaultProvider = () => {
-    submitSettings(
-      'provider',
-      { defaultProvider: null },
-      providerSubmit,
-      'Default provider could not be reset.',
-    )
-  }
-  const saveModel = (provider: ProviderProjection) => {
-    const id = providerID(provider)
-    const model = (modelInputs[id] ?? '').trim()
-    if (!model) {
-      modelSubmit.setError('Model is required.')
-      return
-    }
-    submitSettings(
-      'model',
-      { provider: modelPatch(provider, model) },
-      modelSubmit,
-      'Provider model could not be saved.',
-    )
-  }
-  const resetModel = (provider: ProviderProjection) => {
-    submitSettings(
-      'model',
-      { provider: modelPatch(provider, null) },
-      modelSubmit,
-      'Provider model could not be reset.',
-    )
-  }
-  const saveKey = (
-    provider: Extract<ProviderProjection, { type: 'api_key' }>,
-  ) => {
-    const key = keyInputs[provider.name] ?? ''
-    if (!key.trim()) {
-      keySubmit.setError('API key is required.')
-      return
-    }
-    submitSettings(
-      'key',
-      {
-        provider: {
-          type: 'api_key',
-          name: provider.name,
-          apiKey: key,
-        },
-      },
-      keySubmit,
-      `${providerLabels[provider.name]} API key could not be saved.`,
-      () => {
-        setKeyInputs((current) => ({ ...current, [provider.name]: '' }))
-        setReplacingKeys((current) => ({
-          ...current,
-          [provider.name]: false,
-        }))
-      },
-    )
-  }
-  const resetKey = (
-    provider: Extract<ProviderProjection, { type: 'api_key' }>,
-  ) => {
-    submitSettings(
-      'key',
-      {
-        provider: {
-          type: 'api_key',
-          name: provider.name,
-          apiKey: null,
-        },
-      },
-      keySubmit,
-      `${providerLabels[provider.name]} API key could not be reset.`,
-    )
-  }
-  const setOllamaEnabled = (
-    provider: Extract<ProviderProjection, { type: 'ollama' }>,
-    enabled: boolean | null,
-  ) => {
-    submitSettings(
-      'enabled',
-      { provider: { type: 'ollama', enabled } },
-      enabledSubmit,
-      'Ollama availability could not be changed.',
-    )
-  }
-  const toggleFlag = (name: string, enabled: boolean) => {
-    submitSettings(
-      'flags',
-      { flags: { [name]: !enabled } },
-      flagsSubmit,
-      'Feature flag could not be changed.',
-    )
-  }
-  const resetFlag = (name: string) => {
-    submitSettings(
-      'flags',
-      { flags: { [name]: null } },
-      flagsSubmit,
-      'Feature flag could not be reset.',
-    )
-  }
 
   return (
     <div className='mt-8 grid gap-6'>
@@ -314,7 +341,7 @@ export function AISettingsPanel() {
         settings={settings}
       />
       {settings.providers.map((provider) => (
-        <ProviderEditor
+        <ProviderEditorController
           codexState={codexState}
           enabledError={enabledSubmit.error}
           isEnabledPending={enabledSubmit.isPending}
@@ -327,36 +354,16 @@ export function AISettingsPanel() {
           key={providerID(provider)}
           model={modelInputs[providerID(provider)] ?? ''}
           modelError={modelSubmit.error}
-          onCancelKey={() => {
-            const id = providerID(provider)
-            setKeyInputs((current) => ({ ...current, [id]: '' }))
-            setReplacingKeys((current) => ({ ...current, [id]: false }))
-          }}
-          onKeyChange={(value) => {
-            const id = providerID(provider)
-            setKeyInputs((current) => ({ ...current, [id]: value }))
-          }}
-          onModelChange={(value) => {
-            const id = providerID(provider)
-            setModelInputs((current) => ({ ...current, [id]: value }))
-          }}
-          onReplaceKey={() => {
-            const id = providerID(provider)
-            setReplacingKeys((current) => ({ ...current, [id]: true }))
-          }}
-          onResetKey={() => {
-            if (provider.type === 'api_key') resetKey(provider)
-          }}
-          onResetModel={() => resetModel(provider)}
-          onSaveKey={() => {
-            if (provider.type === 'api_key') saveKey(provider)
-          }}
-          onSaveModel={() => saveModel(provider)}
-          onSetOllamaEnabled={(enabled) => {
-            if (provider.type === 'ollama') setOllamaEnabled(provider, enabled)
-          }}
+          onResetKey={resetKey}
+          onResetModel={resetModel}
+          onSaveKey={saveKey}
+          onSaveModel={saveModel}
+          onSetOllamaEnabled={setOllamaEnabled}
           onStartCodex={handleStartCodex}
           provider={provider}
+          setKeyInputs={setKeyInputs}
+          setModelInputs={setModelInputs}
+          setReplacingKeys={setReplacingKeys}
         />
       ))}
       <FeatureFlagsSection
@@ -456,6 +463,103 @@ type ProviderEditorProps = {
   provider: ProviderProjection
 }
 
+type ProviderEditorControllerProps = Omit<
+  ProviderEditorProps,
+  | 'onCancelKey'
+  | 'onKeyChange'
+  | 'onModelChange'
+  | 'onReplaceKey'
+  | 'onResetKey'
+  | 'onResetModel'
+  | 'onSaveKey'
+  | 'onSaveModel'
+  | 'onSetOllamaEnabled'
+> & {
+  onResetKey: (
+    provider: Extract<ProviderProjection, { type: 'api_key' }>,
+  ) => void
+  onResetModel: (provider: ProviderProjection) => void
+  onSaveKey: (
+    provider: Extract<ProviderProjection, { type: 'api_key' }>,
+  ) => void
+  onSaveModel: (provider: ProviderProjection) => void
+  onSetOllamaEnabled: (
+    provider: Extract<ProviderProjection, { type: 'ollama' }>,
+    enabled: boolean | null,
+  ) => void
+  setKeyInputs: Dispatch<SetStateAction<Record<string, string>>>
+  setModelInputs: Dispatch<SetStateAction<Record<string, string>>>
+  setReplacingKeys: Dispatch<SetStateAction<Record<string, boolean>>>
+}
+
+function ProviderEditorController({
+  onResetKey,
+  onResetModel,
+  onSaveKey,
+  onSaveModel,
+  onSetOllamaEnabled,
+  provider,
+  setKeyInputs,
+  setModelInputs,
+  setReplacingKeys,
+  ...props
+}: ProviderEditorControllerProps) {
+  const id = providerID(provider)
+  const cancelKey = useCallback(() => {
+    setKeyInputs((current) => ({ ...current, [id]: '' }))
+    setReplacingKeys((current) => ({ ...current, [id]: false }))
+  }, [id, setKeyInputs, setReplacingKeys])
+  const changeKey = useCallback(
+    (value: string) => {
+      setKeyInputs((current) => ({ ...current, [id]: value }))
+    },
+    [id, setKeyInputs],
+  )
+  const changeModel = useCallback(
+    (value: string) => {
+      setModelInputs((current) => ({ ...current, [id]: value }))
+    },
+    [id, setModelInputs],
+  )
+  const replaceKey = useCallback(() => {
+    setReplacingKeys((current) => ({ ...current, [id]: true }))
+  }, [id, setReplacingKeys])
+  const resetKey = useCallback(() => {
+    if (provider.type === 'api_key') onResetKey(provider)
+  }, [onResetKey, provider])
+  const resetModel = useCallback(() => {
+    onResetModel(provider)
+  }, [onResetModel, provider])
+  const saveKey = useCallback(() => {
+    if (provider.type === 'api_key') onSaveKey(provider)
+  }, [onSaveKey, provider])
+  const saveModel = useCallback(() => {
+    onSaveModel(provider)
+  }, [onSaveModel, provider])
+  const setEnabled = useCallback(
+    (enabled: boolean | null) => {
+      if (provider.type === 'ollama') onSetOllamaEnabled(provider, enabled)
+    },
+    [onSetOllamaEnabled, provider],
+  )
+
+  return (
+    <ProviderEditor
+      {...props}
+      onCancelKey={cancelKey}
+      onKeyChange={changeKey}
+      onModelChange={changeModel}
+      onReplaceKey={replaceKey}
+      onResetKey={resetKey}
+      onResetModel={resetModel}
+      onSaveKey={saveKey}
+      onSaveModel={saveModel}
+      onSetOllamaEnabled={setEnabled}
+      provider={provider}
+    />
+  )
+}
+
 function ProviderEditor(props: ProviderEditorProps) {
   const { provider } = props
   switch (provider.type) {
@@ -547,6 +651,12 @@ function OllamaProviderEditor({
 }: ProviderEditorProps & {
   provider: Extract<ProviderProjection, { type: 'ollama' }>
 }) {
+  const toggleEnabled = useCallback(() => {
+    onSetOllamaEnabled(!provider.enabled.effective)
+  }, [onSetOllamaEnabled, provider.enabled.effective])
+  const resetEnabled = useCallback(() => {
+    onSetOllamaEnabled(null)
+  }, [onSetOllamaEnabled])
   return (
     <SettingsSection
       description='Local Ollama provider. Its endpoint remains deployment-managed.'
@@ -557,7 +667,7 @@ function OllamaProviderEditor({
         <SourceBadge source={provider.enabled.source} />
         <Button
           disabled={isEnabledPending}
-          onClick={() => onSetOllamaEnabled(!provider.enabled.effective)}
+          onClick={toggleEnabled}
           type='button'
         >
           {provider.enabled.effective ? 'Disable Ollama' : 'Enable Ollama'}
@@ -565,7 +675,7 @@ function OllamaProviderEditor({
         {provider.enabled.source === 'db' ? (
           <Button
             disabled={isEnabledPending}
-            onClick={() => onSetOllamaEnabled(null)}
+            onClick={resetEnabled}
             type='button'
             variant='outline'
           >
@@ -640,17 +750,26 @@ function ModelEditor({
   onSave: () => void
   provider: ProviderProjection
 }) {
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    onSave()
-  }
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      onSave()
+    },
+    [onSave],
+  )
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onChange(event.target.value)
+    },
+    [onChange],
+  )
   return (
     <div className='grid gap-2'>
       <FieldHeading source={provider.model.source} text='Model' />
       <form className='flex flex-col gap-3 sm:flex-row' onSubmit={handleSubmit}>
         <Input
           aria-label={`${providerTitle(provider)} model`}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={handleChange}
           value={model}
         />
         <Button disabled={isPending} type='submit'>
@@ -797,20 +916,25 @@ function KeyEntryForm({
   onSave: () => void
   value: string
 }) {
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      onSave()
+    },
+    [onSave],
+  )
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onChange(event.target.value)
+    },
+    [onChange],
+  )
   return (
-    <form
-      className='flex flex-col gap-3 sm:flex-row'
-      onSubmit={(event) => {
-        event.preventDefault()
-        onSave()
-      }}
-    >
+    <form className='flex flex-col gap-3 sm:flex-row' onSubmit={handleSubmit}>
       <Input
         aria-label={label}
         autoComplete='off'
-        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-          onChange(event.target.value)
-        }
+        onChange={handleChange}
         placeholder='API key'
         type='password'
         value={value}
@@ -847,7 +971,11 @@ function FeatureFlagsSection({
   onToggle: (name: string, enabled: boolean) => void
   sources: Record<string, string>
 }) {
-  const names = Object.keys(flags).sort()
+  const names = (
+    Object.keys(flags) as Array<string> & {
+      toSorted: () => Array<string>
+    }
+  ).toSorted()
   return (
     <SettingsSection
       description='Turn platform-wide AI behaviors on or off for every tenant.'
@@ -860,46 +988,73 @@ function FeatureFlagsSection({
         </StatePanel>
       ) : (
         <ul className='m-0 grid list-none gap-2 p-0'>
-          {names.map((name) => {
-            const enabled = flags[name] === true
-            const source = sources[name] ?? 'none'
-            return (
-              <li
-                className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'
-                key={name}
-              >
-                <span className='flex flex-wrap items-center gap-2'>
-                  <span className='font-mono text-[13px]'>{name}</span>
-                  <SourceBadge source={source} />
-                </span>
-                <div className='flex gap-2'>
-                  {source === 'db' ? (
-                    <Button
-                      aria-label={`Reset ${name}`}
-                      disabled={isPending}
-                      onClick={() => onReset(name)}
-                      type='button'
-                      variant='outline'
-                    >
-                      Reset
-                    </Button>
-                  ) : null}
-                  <Button
-                    disabled={isPending}
-                    onClick={() => onToggle(name, enabled)}
-                    type='button'
-                    variant={enabled ? 'outline' : 'default'}
-                  >
-                    {enabled ? 'Disable' : 'Enable'}
-                  </Button>
-                </div>
-              </li>
-            )
-          })}
+          {names.map((name) => (
+            <FeatureFlagRow
+              enabled={flags[name] === true}
+              isPending={isPending}
+              key={name}
+              name={name}
+              onReset={onReset}
+              onToggle={onToggle}
+              source={sources[name] ?? 'none'}
+            />
+          ))}
         </ul>
       )}
       <AuthErrorAlert message={error} title='Flag update failed.' />
     </SettingsSection>
+  )
+}
+
+function FeatureFlagRow({
+  enabled,
+  isPending,
+  name,
+  onReset,
+  onToggle,
+  source,
+}: {
+  enabled: boolean
+  isPending: boolean
+  name: string
+  onReset: (name: string) => void
+  onToggle: (name: string, enabled: boolean) => void
+  source: string
+}) {
+  const reset = useCallback(() => {
+    onReset(name)
+  }, [name, onReset])
+  const toggle = useCallback(() => {
+    onToggle(name, enabled)
+  }, [enabled, name, onToggle])
+  return (
+    <li className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
+      <span className='flex flex-wrap items-center gap-2'>
+        <span className='font-mono text-[13px]'>{name}</span>
+        <SourceBadge source={source} />
+      </span>
+      <div className='flex gap-2'>
+        {source === 'db' ? (
+          <Button
+            aria-label={`Reset ${name}`}
+            disabled={isPending}
+            onClick={reset}
+            type='button'
+            variant='outline'
+          >
+            Reset
+          </Button>
+        ) : null}
+        <Button
+          disabled={isPending}
+          onClick={toggle}
+          type='button'
+          variant={enabled ? 'outline' : 'default'}
+        >
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </div>
+    </li>
   )
 }
 
