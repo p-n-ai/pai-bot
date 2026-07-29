@@ -344,8 +344,17 @@ describe('admin dashboard API', () => {
   it('reads and updates AI settings without echoing the key', async () => {
     const updated = {
       ...aiSettingsFixture,
-      defaultProvider: 'openrouter',
-      openrouterKey: { set: true, last4: 'z9y8' },
+      providers: aiSettingsFixture.providers.map((provider) =>
+        provider.type === 'api_key' && provider.name === 'openrouter'
+          ? {
+              ...provider,
+              credential: {
+                ...provider.credential,
+                effective: { set: true, last4: 'z9y8' },
+              },
+            }
+          : provider,
+      ),
     }
     const fetcher = vi
       .fn()
@@ -356,8 +365,12 @@ describe('admin dashboard API', () => {
     await expect(
       updateAISettings(
         {
-          defaultProvider: 'openrouter',
-          openrouterApiKey: 'sk-or-secret',
+          defaultProvider: { type: 'api_key', name: 'openrouter' },
+          provider: {
+            type: 'api_key',
+            name: 'openrouter',
+            apiKey: 'sk-or-secret',
+          },
         },
         fetcher,
       ),
@@ -371,8 +384,12 @@ describe('admin dashboard API', () => {
     expect(fetcher).toHaveBeenNthCalledWith(2, '/api/admin/ai/settings', {
       method: 'PUT',
       body: JSON.stringify({
-        defaultProvider: 'openrouter',
-        openrouterApiKey: 'sk-or-secret',
+        defaultProvider: { type: 'api_key', name: 'openrouter' },
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          apiKey: 'sk-or-secret',
+        },
       }),
       headers: {
         'Content-Type': 'application/json',

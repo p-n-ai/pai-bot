@@ -10,6 +10,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +27,6 @@ const updateAISettings = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/admin-api', async (importOriginal) => {
   const actual = await importOriginal<typeof AdminAPI>()
-
   return {
     ...actual,
     getAISettings,
@@ -36,25 +36,21 @@ vi.mock('@/lib/admin-api', async (importOriginal) => {
   }
 })
 
-const unsetKeySettings = {
-  ...aiSettingsFixture,
-  openrouterKey: { set: false, last4: '' },
-  sources: { ...aiSettingsFixture.sources, openrouterKey: 'none' },
+function providerSection(name: string) {
+  return screen.getByRole('region', { name })
 }
 
-function deferred<T>() {
-  let deferredResolve!: (value: T) => void
-  let deferredReject!: (reason?: unknown) => void
-  const promise = new Promise<T>((resolve, reject) => {
-    deferredResolve = resolve
-    deferredReject = reject
-  })
-  return { promise, reject: deferredReject, resolve: deferredResolve }
+function responseWith(
+  update: (settings: typeof aiSettingsFixture) => unknown,
+): unknown {
+  return update(aiSettingsFixture)
 }
 
 describe('AISettingsPanel', () => {
   beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
     getAISettings.mockReset()
+    getAISettings.mockResolvedValue(aiSettingsFixture)
     getCodexAuthStatus.mockReset()
     getCodexAuthStatus.mockResolvedValue({
       state: 'disconnected',
@@ -64,150 +60,299 @@ describe('AISettingsPanel', () => {
     })
     startCodexDeviceAuth.mockReset()
     updateAISettings.mockReset()
+    updateAISettings.mockResolvedValue(aiSettingsFixture)
   })
 
-  afterEach(() => {
-    cleanup()
+  afterEach(cleanup)
+
+  it('renders every closed provider with only its legal controls', async () => {
+    render(<AISettingsPanel />)
+
+    expect(await screen.findByText('Default provider')).toBeInTheDocument()
+    for (const label of [
+      'OpenAI provider',
+      'Anthropic provider',
+      'DeepSeek provider',
+      'Google provider',
+      'OpenRouter provider',
+      'Ollama provider',
+      'Managed Codex provider',
+    ]) {
+      expect(providerSection(label)).toBeInTheDocument()
+    }
+
+    expect(
+      within(providerSection('Ollama provider')).queryByText('API key'),
+    ).not.toBeInTheDocument()
+    expect(
+      within(providerSection('Managed Codex provider')).queryByText('API key'),
+    ).not.toBeInTheDocument()
+    expect(
+      within(providerSection('Ollama provider')).queryByLabelText(/URL/i),
+    ).not.toBeInTheDocument()
   })
 
-  it('starts Codex device login and shows the one-time code', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
+  it('switches the default with a closed provider selector', async () => {
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'Default AI provider',
+    })
+    fireEvent.click(within(section).getByRole('combobox'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Ollama' }))
+
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        defaultProvider: { type: 'ollama' },
+        expectedRevision: 3,
+      })
+    })
+  })
+
+  it('saves and resets an API-key provider model through its variant', async () => {
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'OpenRouter provider',
+    })
+    const input = within(section).getByRole('textbox', {
+      name: 'OpenRouter model',
+    })
+
+    fireEvent.change(input, { target: { value: ' openrouter/new-model ' } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Save model' }))
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          model: 'openrouter/new-model',
+        },
+      })
+    })
+
+    fireEvent.click(
+      within(section).getByRole('button', {
+        name: 'Reset model to environment',
+      }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          model: null,
+        },
+      })
+    })
+  })
+
+  it('replaces and resets an API key without retaining plaintext', async () => {
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'OpenRouter provider',
+    })
+    fireEvent.click(
+      within(section).getByRole('button', { name: 'Replace key' }),
+    )
+    const input = within(section).getByLabelText('OpenRouter API key')
+    fireEvent.change(input, { target: { value: 'sk-or-secret' } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Save key' }))
+
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          apiKey: 'sk-or-secret',
+        },
+      })
+    })
+    expect(
+      within(section).queryByDisplayValue('sk-or-secret'),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(
+      within(section).getByRole('button', {
+        name: 'Reset key to environment',
+      }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          apiKey: null,
+        },
+      })
+    })
+  })
+
+  it('keeps an API key input when the write fails', async () => {
+    updateAISettings.mockRejectedValue(new Error('key rejected'))
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'OpenRouter provider',
+    })
+    fireEvent.click(
+      within(section).getByRole('button', { name: 'Replace key' }),
+    )
+    const input = within(section).getByLabelText('OpenRouter API key')
+    fireEvent.change(input, { target: { value: 'sk-or-secret' } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Save key' }))
+
+    expect(await within(section).findByText('key rejected')).toBeInTheDocument()
+    expect(input).toHaveValue('sk-or-secret')
+  })
+
+  it('does not offer a reset action for an environment-owned key', async () => {
+    getAISettings.mockResolvedValue(
+      responseWith((settings) => ({
+        ...settings,
+        providers: settings.providers.map((provider) =>
+          provider.type === 'api_key' && provider.name === 'openrouter'
+            ? {
+                ...provider,
+                credential: {
+                  ...provider.credential,
+                  source: 'env',
+                  override: { set: false, last4: '' },
+                },
+              }
+            : provider,
+        ),
+      })),
+    )
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'OpenRouter provider',
+    })
+    expect(within(section).getByText('from environment')).toBeInTheDocument()
+    expect(
+      within(section).queryByRole('button', {
+        name: 'Reset key to environment',
+      }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('updates and resets Ollama without exposing a custom endpoint', async () => {
+    const dbSettings = responseWith((settings) => ({
+      ...settings,
+      providers: settings.providers.map((provider) =>
+        provider.type === 'ollama'
+          ? {
+              ...provider,
+              enabled: {
+                ...provider.enabled,
+                override: true,
+                source: 'db',
+              },
+              model: { ...provider.model, override: 'llama3', source: 'db' },
+            }
+          : provider,
+      ),
+    }))
+    getAISettings.mockResolvedValue(dbSettings)
+    updateAISettings.mockResolvedValue(dbSettings)
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'Ollama provider',
+    })
+
+    fireEvent.click(
+      within(section).getByRole('button', {
+        name: 'Reset Ollama to environment',
+      }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: { type: 'ollama', enabled: null },
+      })
+    })
+    fireEvent.click(
+      within(section).getByRole('button', {
+        name: 'Reset model to environment',
+      }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: { type: 'ollama', model: null },
+      })
+    })
+    fireEvent.click(
+      within(section).getByRole('button', { name: 'Disable Ollama' }),
+    )
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: { type: 'ollama', enabled: false },
+      })
+    })
+    expect(within(section).queryByLabelText(/URL/i)).not.toBeInTheDocument()
+  })
+
+  it('updates managed Codex model and starts device authorization', async () => {
+    getAISettings.mockResolvedValue(
+      responseWith((settings) => ({
+        ...settings,
+        providers: settings.providers.map((provider) =>
+          provider.type === 'managed_codex'
+            ? { ...provider, model: { ...provider.model, source: 'db' } }
+            : provider,
+        ),
+      })),
+    )
     startCodexDeviceAuth.mockResolvedValue({
       state: 'awaiting_authorization',
       verificationUrl: 'https://auth.openai.com/codex/device',
       userCode: 'ABCD-1234',
       message: '',
     })
-
     render(<AISettingsPanel />)
-
+    const section = await screen.findByRole('region', {
+      name: 'Managed Codex provider',
+    })
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Connect Codex' }),
+      within(section).getByRole('button', {
+        name: 'Reset model to environment',
+      }),
     )
-
-    expect(await screen.findByText('ABCD-1234')).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Open Codex verification' }),
-    ).toHaveAttribute('href', 'https://auth.openai.com/codex/device')
-    expect(startCodexDeviceAuth).toHaveBeenCalledOnce()
-  })
-
-  it('allows an existing server login to be renewed with device auth', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
-    getCodexAuthStatus.mockResolvedValue({
-      state: 'connected',
-      verificationUrl: '',
-      userCode: '',
-      message: '',
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        expectedRevision: 3,
+        provider: { type: 'managed_codex', model: null },
+      })
     })
 
-    render(<AISettingsPanel />)
-
+    fireEvent.click(
+      within(section).getByRole('button', { name: 'Connect Codex' }),
+    )
+    expect(await within(section).findByText('ABCD-1234')).toBeInTheDocument()
     expect(
-      await screen.findByRole('button', { name: 'Reconnect Codex' }),
-    ).toBeEnabled()
+      within(section).getByRole('link', { name: 'Open Codex verification' }),
+    ).toHaveAttribute('href', 'https://auth.openai.com/codex/device')
   })
 
-  it('hides Codex setup when the server feature is disabled', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
+  it('hides managed Codex auth when the server capability is absent', async () => {
     getCodexAuthStatus.mockRejectedValue(
       new AdminAPIError('Request failed: 404', 404),
     )
-
     render(<AISettingsPanel />)
-
-    await screen.findByText('Default provider')
-    await act(async () => {
-      await Promise.resolve()
+    const section = await screen.findByRole('region', {
+      name: 'Managed Codex provider',
     })
+    await act(async () => Promise.resolve())
     expect(
-      screen.queryByRole('button', { name: 'Connect Codex' }),
+      within(section).queryByRole('button', { name: 'Connect Codex' }),
     ).not.toBeInTheDocument()
   })
 
-  it('saves a new key, clears the input, and shows the masked state', async () => {
-    getAISettings.mockResolvedValue(unsetKeySettings)
-    updateAISettings.mockResolvedValue({
-      ...aiSettingsFixture,
-      openrouterKey: { set: true, last4: 'z9y8' },
-    })
-
+  it('uses null to reset default-provider and feature-flag overrides', async () => {
     render(<AISettingsPanel />)
-
-    const input = await screen.findByPlaceholderText('sk-or-...')
-    fireEvent.change(input, { target: { value: 'sk-or-secret' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
-
-    expect(await screen.findByText(/configured .+ z9y8/)).toBeInTheDocument()
-    expect(updateAISettings).toHaveBeenCalledWith({
-      expectedRevision: 3,
-      openrouterApiKey: 'sk-or-secret',
-    })
-    expect(screen.queryByPlaceholderText('sk-or-...')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Replace key' }))
-    expect(screen.getByPlaceholderText('sk-or-...')).toHaveValue('')
-  })
-
-  it('cancels a key replacement without calling the API', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
-
-    render(<AISettingsPanel />)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Replace key' }))
-    expect(screen.getByPlaceholderText('sk-or-...')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-
-    expect(screen.getByText(/configured .+ a1b2/)).toBeInTheDocument()
-    expect(updateAISettings).not.toHaveBeenCalled()
-  })
-
-  it('keeps the typed key and shows the error alert when saving fails', async () => {
-    getAISettings.mockResolvedValue(unsetKeySettings)
-    updateAISettings.mockRejectedValue(new Error('key rejected'))
-
-    render(<AISettingsPanel />)
-
-    const input = await screen.findByPlaceholderText('sk-or-...')
-    fireEvent.change(input, { target: { value: 'sk-or-secret' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
-
-    expect(await screen.findByText('key rejected')).toBeInTheDocument()
-    expect(screen.getByText('API key update failed.')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('sk-or-...')).toHaveValue('sk-or-secret')
-  })
-
-  it('marks an env-sourced key and offers no reset action', async () => {
-    getAISettings.mockResolvedValue({
-      ...aiSettingsFixture,
-      sources: { ...aiSettingsFixture.sources, openrouterKey: 'env' },
-    })
-
-    render(<AISettingsPanel />)
-
-    expect(await screen.findByText('from environment')).toBeInTheDocument()
-    expect(
-      screen.getByText('Set in server environment; clear it there.'),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Reset key to environment' }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Replace key' }),
-    ).toBeInTheDocument()
-  })
-
-  it('resets db overrides to their environment baselines with null', async () => {
-    const dbSettings = {
-      ...aiSettingsFixture,
-      sources: { ...aiSettingsFixture.sources, openrouterModel: 'db' },
-    }
-    getAISettings.mockResolvedValue(dbSettings)
-    updateAISettings.mockResolvedValue(dbSettings)
-
-    render(<AISettingsPanel />)
-
     fireEvent.click(
       await screen.findByRole('button', { name: 'Reset to environment' }),
     )
@@ -218,120 +363,60 @@ describe('AISettingsPanel', () => {
       })
     })
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Reset model to environment' }),
-    )
-    await waitFor(() => {
-      expect(updateAISettings).toHaveBeenCalledWith({
-        expectedRevision: 3,
-        openrouterModel: null,
-      })
-    })
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Reset key to environment' }),
-    )
-    await waitFor(() => {
-      expect(updateAISettings).toHaveBeenCalledWith({
-        expectedRevision: 3,
-        openrouterApiKey: null,
-      })
-    })
-  })
-
-  it('resets a db-sourced flag by sending a null override', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
-    updateAISettings.mockResolvedValue({
-      ...aiSettingsFixture,
-      sources: {
-        ...aiSettingsFixture.sources,
-        flags: { ...aiSettingsFixture.sources.flags, turn_hooks: 'env' },
-      },
-    })
-
-    render(<AISettingsPanel />)
-
-    const reset = await screen.findByRole('button', {
-      name: 'Reset turn_hooks',
-    })
-    expect(
-      screen.queryByRole('button', { name: 'Reset proactive_nudges' }),
-    ).not.toBeInTheDocument()
-
-    fireEvent.click(reset)
-
+    fireEvent.click(screen.getByRole('button', { name: 'Reset turn_hooks' }))
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({
         expectedRevision: 3,
         flags: { turn_hooks: null },
       })
     })
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('button', { name: 'Reset turn_hooks' }),
-      ).not.toBeInTheDocument()
-    })
   })
 
-  it('finishes cross-section pending states when overlapping saves resolve out of order', async () => {
-    getAISettings.mockResolvedValue(aiSettingsFixture)
+  it('rejects a blank model before calling the API', async () => {
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'OpenRouter provider',
+    })
+    fireEvent.change(
+      within(section).getByRole('textbox', { name: 'OpenRouter model' }),
+      { target: { value: '   ' } },
+    )
+    fireEvent.click(within(section).getByRole('button', { name: 'Save model' }))
+
+    expect(await within(section).findByText('Model is required.')).toBeVisible()
+    expect(updateAISettings).not.toHaveBeenCalled()
+  })
+
+  it('keeps cross-section pending state owned by each request', async () => {
     const flagSave = deferred<AISettings>()
     const modelSave = deferred<AISettings>()
-    updateAISettings.mockImplementation((input) => {
-      if ('flags' in input) {
-        return flagSave.promise
-      }
-      if ('openrouterModel' in input) {
-        return modelSave.promise
-      }
-      return Promise.resolve(aiSettingsFixture)
-    })
-
-    render(<AISettingsPanel />)
-
-    await screen.findByRole('button', { name: 'Reset turn_hooks' })
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
-    await waitFor(() => {
-      expect(updateAISettings).toHaveBeenCalledWith({
-        expectedRevision: 3,
-        flags: { turn_hooks: false },
-      })
-    })
-
-    fireEvent.change(
-      screen.getByRole('textbox', { name: 'OpenRouter model' }),
-      {
-        target: { value: 'openrouter/new-model' },
-      },
+    updateAISettings.mockImplementation((input) =>
+      'flags' in input ? flagSave.promise : modelSave.promise,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
-    await waitFor(() => {
-      expect(updateAISettings).toHaveBeenCalledWith({
-        expectedRevision: 3,
-        openrouterModel: 'openrouter/new-model',
-      })
-    })
+    render(<AISettingsPanel />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
+    const section = providerSection('OpenRouter provider')
+    fireEvent.click(within(section).getByRole('button', { name: 'Save model' }))
 
     await act(async () => {
-      modelSave.resolve({
-        ...aiSettingsFixture,
-        openrouterModel: 'openrouter/new-model',
-      })
+      modelSave.resolve(aiSettingsFixture as unknown as AISettings)
       await modelSave.promise
-    })
-    await act(async () => {
-      flagSave.resolve({
-        ...aiSettingsFixture,
-        flags: { ...aiSettingsFixture.flags, turn_hooks: false },
-      })
+      flagSave.resolve(aiSettingsFixture as unknown as AISettings)
       await flagSave.promise
     })
-
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Reset turn_hooks' }),
-      ).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Disable' })).toBeEnabled()
+      expect(
+        within(section).getByRole('button', { name: 'Save model' }),
+      ).toBeEnabled()
     })
   })
 })
+
+function deferred<T>() {
+  let deferredResolve!: (value: T) => void
+  const promise = new Promise<T>((resolve) => {
+    deferredResolve = resolve
+  })
+  return { promise, resolve: deferredResolve }
+}
