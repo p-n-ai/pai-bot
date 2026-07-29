@@ -1,6 +1,6 @@
 #!/bin/bash
 # deploy-remote.sh — Runs ON the server via SSH.
-# Expects env vars: ECR_TOKEN, REGISTRY, TAG
+# Expects env vars: ECR_TOKEN, GHCR_TOKEN, GHCR_USER, POSTGRES_IMAGE, REGISTRY, TAG
 # Expects DEPLOY_DIR env var or defaults to /opt/pai-bot.
 # No AWS CLI required — only Docker + docker compose.
 set -euo pipefail
@@ -31,7 +31,11 @@ docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
 docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
 
 echo "--- Ensuring infra services ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build postgres
+printf '%s' "$GHCR_TOKEN" | docker login --username "$GHCR_USER" --password-stdin ghcr.io
+trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull postgres dragonfly
+docker logout ghcr.io >/dev/null 2>&1 || true
+trap - EXIT
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly
 sleep 3
 

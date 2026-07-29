@@ -1,121 +1,43 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      admin_changed:
+        required: true
+        type: boolean
+      app_changed:
+        required: true
+        type: boolean
+      deployable:
+        required: true
+        type: boolean
+      postgres_changed:
+        required: true
+        type: boolean
   workflow_dispatch:
+    inputs:
+      rebuild_postgres:
+        description: Build PostgreSQL when this SHA has no recorded image
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
-permissions:
-  id-token: write
-  contents: read
-  packages: write
-
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.31.0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: pnpm
-          cache-dependency-path: admin-spa/pnpm-lock.yaml
-
-      - name: Install admin SPA dependencies
-        working-directory: admin-spa
-        run: pnpm install --frozen-lockfile
-
-      - name: Check admin SPA
-        working-directory: admin-spa
-        run: pnpm check
-
-      - name: Install Playwright browser
-        working-directory: admin-spa
-        run: pnpm exec playwright install --with-deps chromium
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Download Go dependencies
-        run: go mod download
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -short -count=1
-
-      - name: Start PostgreSQL and Dragonfly
-        run: docker compose up --build --detach --wait postgres dragonfly
-
-      - name: Run database migrations
-        run: go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 -dir migrations postgres "postgres://pai:pai@localhost:5432/pai?sslmode=disable" up -allow-missing
-
-      - name: Build Go backend
-        run: go build -o pai-bot ./cmd/server
-
-      - name: Start Go backend
-        run: |
-          ./pai-bot > /tmp/backend.log 2>&1 &
-          echo $! > /tmp/backend.pid
-          for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/healthz > /dev/null; then
-              echo "Backend healthy after attempt $attempt"
-              exit 0
-            fi
-            if ! kill -0 "$(cat /tmp/backend.pid)" 2>/dev/null; then
-              cat /tmp/backend.log
-              exit 1
-            fi
-            sleep 2
-          done
-          cat /tmp/backend.log
-          exit 1
-        env:
-          LEARN_SERVER_HOST: 0.0.0.0
-          LEARN_SERVER_PORT: "8080"
-          LEARN_DATABASE_URL: postgres://pai:pai@localhost:5432/pai?sslmode=disable
-          LEARN_CACHE_URL: redis://localhost:6379
-          LEARN_TENANT_MODE: single
-          LEARN_CURRICULUM_PATH: ./oss
-          LEARN_DEV_MODE: "true"
-          LEARN_LOG_LEVEL: warn
-          LEARN_LOG_FORMAT: text
-          PAI_AUTH_SECRET: deploy-test-secret
-          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
-          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: demo-password
-
-      - name: Run public browser tests
-        working-directory: admin-spa
-        run: pnpm test:e2e
-
-      - name: Run authenticated browser tests
-        working-directory: admin-spa
-        run: pnpm test:e2e:backend
-        env:
-          E2E_BACKEND_ENABLED: "true"
-          E2E_ADMIN_EMAIL: admin@example.com
-          E2E_ADMIN_PASSWORD: demo-password
-
-      - name: Dump backend logs
-        if: failure()
-        run: cat /tmp/backend.log || true
-
   push-images:
     runs-on: ubuntu-latest
-    needs: test
+    if: github.event_name == 'workflow_dispatch' || inputs.deployable
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     outputs:
       ecr-token: ${{ steps.ecr-token.outputs.token }}
+      postgres-image: ${{ steps.postgres-image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,21 +52,55 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - uses: docker/setup-buildx-action@v3
+
       - name: Build and push app image
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          inputs.app_changed
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ECR_REGISTRY }}/pai-bot/app:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/pai-bot/app:latest
+          cache-from: type=gha,scope=deploy-app
+          cache-to: type=gha,mode=max,scope=deploy-app
+
+      - name: Promote existing app image to deployment SHA
+        if: >-
+          github.event_name != 'workflow_dispatch' &&
+          inputs.app_changed == false
         run: |
-          docker build -f deploy/docker/Dockerfile \
-            -t ${{ secrets.ECR_REGISTRY }}/pai-bot/app:${{ github.sha }} \
-            -t ${{ secrets.ECR_REGISTRY }}/pai-bot/app:latest .
-          docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/app:${{ github.sha }}
-          docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/app:latest
+          docker buildx imagetools create \
+            --tag "${{ secrets.ECR_REGISTRY }}/pai-bot/app:${{ github.sha }}" \
+            "${{ secrets.ECR_REGISTRY }}/pai-bot/app:latest"
 
       - name: Build and push admin image
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          inputs.admin_changed
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.admin
+          push: true
+          tags: |
+            ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest
+          cache-from: type=gha,scope=deploy-admin
+          cache-to: type=gha,mode=max,scope=deploy-admin
+
+      - name: Promote existing admin image to deployment SHA
+        if: >-
+          github.event_name != 'workflow_dispatch' &&
+          inputs.admin_changed == false
         run: |
-          docker build -f deploy/docker/Dockerfile.admin \
-            -t ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }} \
-            -t ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest .
-          docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}
-          docker push ${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest
+          docker buildx imagetools create \
+            --tag "${{ secrets.ECR_REGISTRY }}/pai-bot/admin:${{ github.sha }}" \
+            "${{ secrets.ECR_REGISTRY }}/pai-bot/admin:latest"
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -153,11 +109,104 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push PostgreSQL retrieval image
+      - name: Resolve recorded PostgreSQL image
+        id: recorded-postgres
+        env:
+          DEPLOYMENT_TAG: ghcr.io/p-n-ai/pai-postgres:${{ github.sha }}
         run: |
-          docker build -f deploy/docker/Dockerfile.postgres \
-            -t ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5 .
-          docker push ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5
+          if manifest=$(docker buildx imagetools inspect "$DEPLOYMENT_TAG" 2> /dev/null); then
+            digest=$(printf '%s\n' "$manifest" | awk '$1 == "Digest:" { print $2; exit }')
+            case "$digest" in
+              sha256:*) ;;
+              *) echo "Invalid recorded PostgreSQL image digest: $digest" >&2; exit 1 ;;
+            esac
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push PostgreSQL retrieval image
+        id: build-postgres
+        if: >-
+          steps.recorded-postgres.outputs.exists != 'true' &&
+          (inputs.postgres_changed ||
+           (github.event_name == 'workflow_dispatch' &&
+            inputs.rebuild_postgres))
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.postgres
+          push: true
+          tags: ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5
+          cache-from: type=gha,scope=deploy-postgres
+          cache-to: type=gha,mode=max,scope=deploy-postgres
+
+      - name: Resolve immutable PostgreSQL image
+        id: postgres-image
+        env:
+          BUILT_DIGEST: ${{ steps.build-postgres.outputs.digest }}
+          RECORDED_DIGEST: ${{ steps.recorded-postgres.outputs.digest }}
+        run: |
+          digest="$BUILT_DIGEST"
+          [ -n "$digest" ] || digest="$RECORDED_DIGEST"
+          if [ -z "$digest" ]; then
+            digest=$(
+              docker buildx imagetools inspect \
+                ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5 |
+                awk '$1 == "Digest:" { print $2; exit }'
+            )
+          fi
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "Invalid PostgreSQL image digest: $digest" >&2; exit 1 ;;
+          esac
+          echo "image=ghcr.io/p-n-ai/pai-postgres@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Record PostgreSQL image for deployment SHA
+        id: record-postgres
+        env:
+          DEPLOYMENT_TAG: ghcr.io/p-n-ai/pai-postgres:${{ github.sha }}
+          POSTGRES_IMAGE: ${{ steps.postgres-image.outputs.image }}
+          RECORDED: ${{ steps.recorded-postgres.outputs.exists }}
+          REBUILT: ${{ steps.build-postgres.outcome == 'success' }}
+        run: |
+          if [ "$RECORDED" = "true" ]; then
+            action=reused
+          else
+            docker buildx imagetools create \
+              --tag "$DEPLOYMENT_TAG" \
+              "$POSTGRES_IMAGE"
+            [ "$REBUILT" = "true" ] && action=rebuilt || action=promoted
+          fi
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+
+      - name: Record image-build metrics
+        env:
+          ADMIN_CHANGED: ${{ inputs.admin_changed }}
+          APP_CHANGED: ${{ inputs.app_changed }}
+          POSTGRES_IMAGE: ${{ steps.postgres-image.outputs.image }}
+          POSTGRES_ACTION: ${{ steps.record-postgres.outputs.action }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            admin_action=rebuilt
+            app_action=rebuilt
+          else
+            [ "$ADMIN_CHANGED" = "true" ] && admin_action=rebuilt || admin_action=promoted
+            [ "$APP_CHANGED" = "true" ] && app_action=rebuilt || app_action=promoted
+          fi
+          {
+            echo "### Image build plan"
+            echo "| Image | Action |"
+            echo "| --- | --- |"
+            echo "| App | $app_action |"
+            echo "| Admin | $admin_action |"
+            echo "| PostgreSQL | $POSTGRES_ACTION |"
+            echo
+            echo "PostgreSQL deployment image: \`$POSTGRES_IMAGE\`"
+            echo
+            echo "Build duration and combined runner time are available from this run's job and step timings."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate ECR token for server
         id: ecr-token
@@ -169,6 +218,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: push-images
     environment: production
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v4
@@ -272,13 +324,18 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          envs: DEPLOY_DIR,ECR_TOKEN,REGISTRY,TAG
+          envs: DEPLOY_DIR,ECR_TOKEN,GHCR_TOKEN,GHCR_USER,POSTGRES_IMAGE,REGISTRY,TAG
           script: |
             chmod +x "$DEPLOY_DIR/scripts/deploy-remote.sh"
-            DEPLOY_DIR="$DEPLOY_DIR" ECR_TOKEN="$ECR_TOKEN" REGISTRY="$REGISTRY" TAG="$TAG" \
+            DEPLOY_DIR="$DEPLOY_DIR" ECR_TOKEN="$ECR_TOKEN" GHCR_TOKEN="$GHCR_TOKEN" \
+              GHCR_USER="$GHCR_USER" POSTGRES_IMAGE="$POSTGRES_IMAGE" \
+              REGISTRY="$REGISTRY" TAG="$TAG" \
               "$DEPLOY_DIR/scripts/deploy-remote.sh"
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           ECR_TOKEN: ${{ needs.push-images.outputs.ecr-token }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          POSTGRES_IMAGE: ${{ needs.push-images.outputs.postgres-image }}
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           TAG: ${{ github.sha }}
