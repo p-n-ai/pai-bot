@@ -478,22 +478,46 @@ jobs:
           cache-from: type=gha,scope=ci-once
           cache-to: type=gha,mode=max,scope=ci-once
 
-  production-deploy:
-    name: Production deploy
-    if: >-
-      always() &&
-      github.event_name == 'push' &&
-      needs.changes.outputs.deployable == 'true' &&
-      needs.changes.result == 'success' &&
-      (needs.config.result == 'success' || needs.config.result == 'skipped') &&
-      (needs.admin-spa.result == 'success' || needs.admin-spa.result == 'skipped') &&
-      (needs.admin-spa-e2e.result == 'success' || needs.admin-spa-e2e.result == 'skipped') &&
-      (needs.go.result == 'success' || needs.go.result == 'skipped') &&
-      (needs.go-lint.result == 'success' || needs.go-lint.result == 'skipped') &&
-      (needs.docker.result == 'success' || needs.docker.result == 'skipped') &&
-      (needs.admin-docker.result == 'success' || needs.admin-docker.result == 'skipped') &&
-      (needs.postgres-image.result == 'success' || needs.postgres-image.result == 'skipped') &&
-      (needs.once.result == 'success' || needs.once.result == 'skipped')
+  api-compatibility:
+    name: API compatibility
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check out proposed API
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+      - name: Check out base API
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: head/go.sum
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@v1.26.1
+
+      - name: Generate API contracts
+        run: |
+          if [ ! -f base/cmd/openapi/main.go ]; then
+            mkdir -p base/cmd/openapi
+            cp head/cmd/openapi/main.go base/cmd/openapi/main.go
+          fi
+          (cd base && go run ./cmd/openapi) > base-openapi.json
+          (cd head && go run ./cmd/openapi) > head-openapi.json
+
+      - name: Reject breaking API changes
+        run: oasdiff breaking --fail-on ERR --format githubactions base-openapi.json head-openapi.json
+
+  gate:
+    name: Required CI gate
+    runs-on: ubuntu-latest
+    if: always()
     needs:
       - changes
       - config
@@ -505,13 +529,10 @@ jobs:
       - admin-docker
       - postgres-image
       - once
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    uses: ./.github/workflows/deploy.yml
-    with:
-      admin_changed: ${{ needs.changes.outputs.admin_image == 'true' }}
-      app_changed: ${{ needs.changes.outputs.app_image == 'true' }}
-      postgres_changed: ${{ needs.changes.outputs.postgres_image == 'true' }}
-    secrets: inherit
+      - api-compatibility
+    steps:
+      - name: Require every applicable check
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$RESULTS"

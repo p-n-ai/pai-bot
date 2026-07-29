@@ -1,0 +1,164 @@
+name: Stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful Nightly candidate workflow run ID
+        required: true
+        type: string
+      version:
+        description: Stable tag in vMAJOR.MINOR.PATCH form
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+      app_digest: ${{ steps.verify.outputs.app_digest }}
+      admin_digest: ${{ steps.verify.outputs.admin_digest }}
+      postgres_image: ${{ steps.verify.outputs.postgres_image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate version and candidate run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "stable releases must run from main" >&2
+            exit 1
+          fi
+          if ! [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "candidate run ID must be a positive integer" >&2
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "version must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
+          jq -e '
+            .name == "Nightly candidate" and
+            .event == "workflow_run" and
+            .head_branch == "main" and
+            .conclusion == "success"
+          ' <<<"$run" >/dev/null
+
+      - name: Download candidate provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          mkdir candidate
+          gh run download "$RUN_ID" --pattern 'nightly-candidate-*' --dir candidate
+
+      - name: Verify candidate provenance
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          mapfile -t manifests < <(find candidate -name candidate.json -type f)
+          if [ "${#manifests[@]}" -ne 1 ]; then
+            echo "expected exactly one candidate manifest" >&2
+            exit 1
+          fi
+          manifest=${manifests[0]}
+          jq -e \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson nightly_run_id "$RUN_ID" \
+            '.repository == $repository and .nightly_run_id == $nightly_run_id' \
+            "$manifest" >/dev/null
+          sha=$(jq -er '.sha | select(test("^[0-9a-f]{40}$"))' "$manifest")
+          if [ "$(basename "$(dirname "$manifest")")" != "nightly-candidate-$sha" ]; then
+            echo "candidate artifact name does not match its SHA" >&2
+            exit 1
+          fi
+          source_run_id=$(jq -er '.source_run_id' "$manifest")
+          source_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")
+          jq -e \
+            --arg sha "$sha" \
+            '.name == "CI" and .event == "push" and .head_branch == "main" and
+             .head_sha == $sha and .conclusion == "success"' \
+            <<<"$source_run" >/dev/null
+          app_digest=$(jq -er \
+            --arg prefix "${{ secrets.ECR_REGISTRY }}/pai-bot/app@" \
+            '.app_image | select(startswith($prefix)) | ltrimstr($prefix) |
+             select(test("^sha256:[0-9a-f]{64}$"))' "$manifest")
+          admin_digest=$(jq -er \
+            --arg prefix "${{ secrets.ECR_REGISTRY }}/pai-bot/admin@" \
+            '.admin_image | select(startswith($prefix)) | ltrimstr($prefix) |
+             select(test("^sha256:[0-9a-f]{64}$"))' "$manifest")
+          postgres_image=$(jq -er \
+            '.postgres_image |
+             select(test("^ghcr\\.io/p-n-ai/pai-postgres@sha256:[0-9a-f]{64}$"))' \
+            "$manifest")
+          tag_sha=$(git ls-remote --tags origin "refs/tags/$VERSION" | awk '{print $1}')
+          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$sha" ]; then
+            echo "tag $VERSION already points to another commit" >&2
+            exit 1
+          fi
+          {
+            echo "sha=$sha"
+            echo "app_digest=$app_digest"
+            echo "admin_digest=$admin_digest"
+            echo "postgres_image=$postgres_image"
+          } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: candidate
+    uses: ./.github/workflows/deploy.yml
+    with:
+      sha: ${{ needs.candidate.outputs.sha }}
+      app_digest: ${{ needs.candidate.outputs.app_digest }}
+      admin_digest: ${{ needs.candidate.outputs.admin_digest }}
+      postgres_image: ${{ needs.candidate.outputs.postgres_image }}
+    secrets: inherit
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [candidate, deploy]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish semantic tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.candidate.outputs.sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha 2>/dev/null || true)
+          if [ -z "$tag_sha" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              --method POST \
+              -f ref="refs/tags/$VERSION" \
+              -f sha="$SHA"
+          elif [ "$tag_sha" != "$SHA" ]; then
+            echo "tag $VERSION points to $tag_sha, expected $SHA" >&2
+            exit 1
+          fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "GitHub Release $VERSION already exists"
+          else
+            gh release create "$VERSION" --verify-tag --generate-notes
+          fi
