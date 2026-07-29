@@ -47,12 +47,14 @@ type aiSettingsViewDoc struct {
 	DefaultProvider string                 `json:"defaultProvider"`
 	OpenRouterModel string                 `json:"openrouterModel"`
 	OpenRouterKey   aiSettingsKeyStatusDoc `json:"openrouterKey"`
+	Flags           map[string]bool        `json:"flags"`
 }
 
 type aiSettingsOverrideDoc struct {
 	DefaultProvider *string                `json:"defaultProvider"`
 	OpenRouterModel *string                `json:"openrouterModel"`
 	OpenRouterKey   aiSettingsKeyStatusDoc `json:"openrouterKey"`
+	Flags           map[string]bool        `json:"flags"`
 }
 
 type aiProviderReadinessDoc struct {

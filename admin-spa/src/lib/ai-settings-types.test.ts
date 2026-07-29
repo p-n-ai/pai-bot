@@ -58,16 +58,27 @@ export const aiSettingsFixture = {
     defaultProvider: 'openai',
     openrouterModel: 'anthropic/claude-sonnet-4.5',
     openrouterKey: { set: false, last4: '' },
+    flags: {
+      turn_hooks: false,
+      proactive_nudges: false,
+    },
   },
   override: {
     defaultProvider: 'openai',
     openrouterModel: null,
     openrouterKey: { set: true, last4: 'a1b2' },
+    flags: {
+      turn_hooks: true,
+    },
   },
   effective: {
     defaultProvider: 'openai',
     openrouterModel: 'anthropic/claude-sonnet-4.5',
     openrouterKey: { set: true, last4: 'a1b2' },
+    flags: {
+      turn_hooks: true,
+      proactive_nudges: false,
+    },
   },
   revision: 3,
   appliedRevision: 3,
@@ -177,5 +188,14 @@ describe('AI settings response guard', () => {
         },
       }),
     ).not.toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        effective: {
+          ...aiSettingsFixture.effective,
+          flags: { turn_hooks: 'true' },
+        },
+      }),
+    ).toBeNull()
   })
 })

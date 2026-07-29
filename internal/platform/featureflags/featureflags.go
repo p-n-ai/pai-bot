@@ -39,9 +39,10 @@ type Spec struct {
 	DefaultEnabled bool
 }
 
-// Features is the effective feature set for this process.
+// Features is the effective feature set and its explicit configuration overrides.
 type Features struct {
-	enabled map[Feature]struct{}
+	enabled   map[Feature]struct{}
+	overrides map[Feature]bool
 }
 
 var registry = map[Feature]Spec{
@@ -89,13 +90,17 @@ func Parse(value string) (Features, error) {
 		}
 		seen[feature] = struct{}{}
 		features.set(feature, enabled)
+		features.overrides[feature] = enabled
 	}
 
 	return features, nil
 }
 
 func withDefaults() Features {
-	features := Features{enabled: map[Feature]struct{}{}}
+	features := Features{
+		enabled:   map[Feature]struct{}{},
+		overrides: map[Feature]bool{},
+	}
 	for feature, spec := range registry {
 		if spec.DefaultEnabled {
 			features.enabled[feature] = struct{}{}
@@ -137,9 +142,15 @@ func (f Features) set(feature Feature, enabled bool) {
 // WithOverrides returns a copy of f with overrides applied on top.
 // Unknown flag names are rejected against the registry; f is not mutated.
 func (f Features) WithOverrides(overrides map[string]bool) (Features, error) {
-	merged := Features{enabled: map[Feature]struct{}{}}
+	merged := Features{
+		enabled:   map[Feature]struct{}{},
+		overrides: map[Feature]bool{},
+	}
 	for feature := range f.enabled {
 		merged.enabled[feature] = struct{}{}
+	}
+	for feature, enabled := range f.overrides {
+		merged.overrides[feature] = enabled
 	}
 	for name, enabled := range overrides {
 		feature := Feature(name)
@@ -147,6 +158,7 @@ func (f Features) WithOverrides(overrides map[string]bool) (Features, error) {
 			return Features{}, fmt.Errorf("unknown feature flag %q", name)
 		}
 		merged.set(feature, enabled)
+		merged.overrides[feature] = enabled
 	}
 	return merged, nil
 }
@@ -164,4 +176,10 @@ func Defaults() map[string]bool {
 func (f Features) Enabled(feature Feature) bool {
 	_, ok := f.enabled[feature]
 	return ok
+}
+
+// Override returns an explicitly configured value and whether it was present.
+func (f Features) Override(feature Feature) (bool, bool) {
+	value, ok := f.overrides[feature]
+	return value, ok
 }

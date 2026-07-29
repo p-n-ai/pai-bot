@@ -105,6 +105,13 @@ func TestEffective(t *testing.T) {
 		if !eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceEnv {
 			t.Fatalf("turn_hooks = %v (%s), want true (env)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
 		}
+		if !eff.Baseline.Flags["turn_hooks"] || !eff.Effective.Flags["turn_hooks"] {
+			t.Fatalf("flag projections = baseline:%v effective:%v, want true/true",
+				eff.Baseline.Flags, eff.Effective.Flags)
+		}
+		if len(eff.Override.Flags) != 0 {
+			t.Fatalf("Override.Flags = %v, want no DB overrides", eff.Override.Flags)
+		}
 	})
 
 	t.Run("db overrides env", func(t *testing.T) {
@@ -123,6 +130,11 @@ func TestEffective(t *testing.T) {
 		}
 		if eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceDB {
 			t.Fatalf("turn_hooks = %v (%s), want false (db)", eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
+		}
+		if !eff.Baseline.Flags["turn_hooks"] || eff.Override.Flags["turn_hooks"] ||
+			eff.Effective.Flags["turn_hooks"] {
+			t.Fatalf("flag projections = baseline:%v override:%v effective:%v, want true/false/false",
+				eff.Baseline.Flags, eff.Override.Flags, eff.Effective.Flags)
 		}
 		if eff.Baseline.DefaultProvider != "openai" || eff.Baseline.OpenRouterModel != "env-model" {
 			t.Fatalf("Baseline = %+v, want env provider/model", eff.Baseline)
@@ -143,6 +155,25 @@ func TestEffective(t *testing.T) {
 			eff.Effective.OpenRouterModel != eff.OpenRouterModel ||
 			eff.Effective.OpenRouterKey.Last4 != eff.OpenRouterKeyLast4 {
 			t.Fatalf("Effective projection = %+v, aliases = provider:%q model:%q key:%q", eff.Effective, eff.DefaultProvider, eff.OpenRouterModel, eff.OpenRouterKeyLast4)
+		}
+	})
+
+	t.Run("explicit false env override retains env source", func(t *testing.T) {
+		explicitFalse, err := featureflags.Parse("turn_hooks=false")
+		if err != nil {
+			t.Fatalf("featureflags.Parse() error = %v", err)
+		}
+		eff := Effective(config.AIConfig{}, explicitFalse, Settings{})
+		if eff.Flags["turn_hooks"] || eff.FlagSources["turn_hooks"] != SourceEnv {
+			t.Fatalf("turn_hooks = %v (%s), want false from env",
+				eff.Flags["turn_hooks"], eff.FlagSources["turn_hooks"])
+		}
+		if eff.Baseline.Flags["turn_hooks"] || eff.Effective.Flags["turn_hooks"] {
+			t.Fatalf("flag projections = baseline:%v effective:%v, want false/false",
+				eff.Baseline.Flags, eff.Effective.Flags)
+		}
+		if len(eff.Override.Flags) != 0 {
+			t.Fatalf("Override.Flags = %v, want no DB overrides", eff.Override.Flags)
 		}
 	})
 

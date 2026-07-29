@@ -111,6 +111,7 @@ type AISettingsView struct {
 	DefaultProvider string
 	OpenRouterModel string
 	OpenRouterKey   SecretView
+	Flags           map[string]bool
 }
 
 // AISettingsOverrideView reports explicit database overrides. Nil scalar
@@ -119,6 +120,7 @@ type AISettingsOverrideView struct {
 	DefaultProvider *string
 	OpenRouterModel *string
 	OpenRouterKey   SecretView
+	Flags           map[string]bool
 }
 
 // Effective merges env config and DB settings with DB > env > default precedence.
@@ -173,16 +175,23 @@ func Effective(envAI config.AIConfig, envFlags featureflags.Features, st Setting
 	defaults := featureflags.Defaults()
 	eff.Flags = make(map[string]bool, len(defaults))
 	eff.FlagSources = make(map[string]string, len(defaults))
-	for name, defaultEnabled := range defaults {
-		value, source := envFlags.Enabled(featureflags.Feature(name)), SourceNone
-		if value != defaultEnabled {
+	eff.Baseline.Flags = make(map[string]bool, len(defaults))
+	eff.Override.Flags = make(map[string]bool, len(st.Flags))
+	eff.Effective.Flags = make(map[string]bool, len(defaults))
+	for name := range defaults {
+		feature := featureflags.Feature(name)
+		value, source := envFlags.Enabled(feature), SourceNone
+		if _, explicitlyConfigured := envFlags.Override(feature); explicitlyConfigured {
 			source = SourceEnv
 		}
 		if dbEnabled, ok := st.Flags[name]; ok {
 			value, source = dbEnabled, SourceDB
+			eff.Override.Flags[name] = dbEnabled
 		}
 		eff.Flags[name] = value
 		eff.FlagSources[name] = source
+		eff.Baseline.Flags[name] = envFlags.Enabled(feature)
+		eff.Effective.Flags[name] = value
 	}
 	return eff
 }

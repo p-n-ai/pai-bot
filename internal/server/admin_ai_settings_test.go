@@ -137,24 +137,27 @@ type aiSettingsPayload struct {
 		Flags           map[string]string `json:"flags"`
 	} `json:"sources"`
 	Baseline struct {
-		DefaultProvider string `json:"defaultProvider"`
-		OpenRouterModel string `json:"openrouterModel"`
+		DefaultProvider string          `json:"defaultProvider"`
+		OpenRouterModel string          `json:"openrouterModel"`
+		Flags           map[string]bool `json:"flags"`
 		OpenRouterKey   struct {
 			Set   bool   `json:"set"`
 			Last4 string `json:"last4"`
 		} `json:"openrouterKey"`
 	} `json:"baseline"`
 	Override struct {
-		DefaultProvider *string `json:"defaultProvider"`
-		OpenRouterModel *string `json:"openrouterModel"`
+		DefaultProvider *string         `json:"defaultProvider"`
+		OpenRouterModel *string         `json:"openrouterModel"`
+		Flags           map[string]bool `json:"flags"`
 		OpenRouterKey   struct {
 			Set   bool   `json:"set"`
 			Last4 string `json:"last4"`
 		} `json:"openrouterKey"`
 	} `json:"override"`
 	Effective struct {
-		DefaultProvider string `json:"defaultProvider"`
-		OpenRouterModel string `json:"openrouterModel"`
+		DefaultProvider string          `json:"defaultProvider"`
+		OpenRouterModel string          `json:"openrouterModel"`
+		Flags           map[string]bool `json:"flags"`
 		OpenRouterKey   struct {
 			Set   bool   `json:"set"`
 			Last4 string `json:"last4"`
@@ -230,8 +233,15 @@ func TestAdminAISettingsGetReportsEffectiveState(t *testing.T) {
 	if payload.Baseline.OpenRouterKey.Last4 != "" || !payload.Baseline.OpenRouterKey.Set {
 		t.Fatalf("baseline.openrouterKey = %+v, want set without env key hint", payload.Baseline.OpenRouterKey)
 	}
+	if !payload.Baseline.Flags["turn_hooks"] || !payload.Effective.Flags["turn_hooks"] {
+		t.Fatalf("flag projections = baseline:%v effective:%v, want true/true",
+			payload.Baseline.Flags, payload.Effective.Flags)
+	}
 	if payload.Override.DefaultProvider != nil || payload.Override.OpenRouterModel != nil || payload.Override.OpenRouterKey.Set {
 		t.Fatalf("override = %+v, want no DB overrides", payload.Override)
+	}
+	if len(payload.Override.Flags) != 0 {
+		t.Fatalf("override.flags = %v, want no DB overrides", payload.Override.Flags)
 	}
 	if payload.Effective.DefaultProvider != payload.DefaultProvider || payload.Effective.OpenRouterModel != payload.OpenRouterModel {
 		t.Fatalf("effective = %+v, want top-level compatibility aliases", payload.Effective)
@@ -251,8 +261,43 @@ func TestAdminAISettingsGetReportsEffectiveState(t *testing.T) {
 	if payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "db" {
 		t.Fatalf("turn_hooks = %v (%s), want false (db)", payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
 	}
+	if override, ok := payload.Override.Flags["turn_hooks"]; !ok || override {
+		t.Fatalf("override.flags[turn_hooks] = %v, %v; want false, true",
+			override, ok)
+	}
+	if payload.Effective.Flags["turn_hooks"] {
+		t.Fatal("effective.flags[turn_hooks] = true, want false")
+	}
 	if payload.OpenRouterModel != "env-model" || payload.Sources.OpenRouterModel != "env" {
 		t.Fatalf("openrouterModel = %q (%s), want env-model (env)", payload.OpenRouterModel, payload.Sources.OpenRouterModel)
+	}
+}
+
+func TestAdminAISettingsGetReportsExplicitFalseEnvironmentFlag(t *testing.T) {
+	envFlags, err := featureflags.Parse("turn_hooks=false")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	handler := newAISettingsHandler(&memorySettingsStore{envFlags: envFlags}, nil)
+
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(
+		t,
+		handler,
+		http.MethodGet,
+		mustIssueAdminToken(t),
+		"",
+	))
+
+	if payload.Flags["turn_hooks"] || payload.Sources.Flags["turn_hooks"] != "env" {
+		t.Fatalf("turn_hooks = %v (%s), want false from env",
+			payload.Flags["turn_hooks"], payload.Sources.Flags["turn_hooks"])
+	}
+	if payload.Baseline.Flags["turn_hooks"] || payload.Effective.Flags["turn_hooks"] {
+		t.Fatalf("flag projections = baseline:%v effective:%v, want false/false",
+			payload.Baseline.Flags, payload.Effective.Flags)
+	}
+	if len(payload.Override.Flags) != 0 {
+		t.Fatalf("override.flags = %v, want no DB overrides", payload.Override.Flags)
 	}
 }
 

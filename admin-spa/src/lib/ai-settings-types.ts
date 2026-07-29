@@ -25,12 +25,14 @@ export const AISettingsViewSchema = Schema.Struct({
   defaultProvider: Schema.String,
   openrouterModel: Schema.String,
   openrouterKey: AISettingsKeyStatusSchema,
+  flags: Schema.Record(Schema.String, Schema.Boolean),
 })
 
 export const AISettingsOverrideSchema = Schema.Struct({
   defaultProvider: Schema.NullOr(Schema.String),
   openrouterModel: Schema.NullOr(Schema.String),
   openrouterKey: AISettingsKeyStatusSchema,
+  flags: Schema.Record(Schema.String, Schema.Boolean),
 })
 
 export const AIProviderReadinessSchema = Schema.Struct({

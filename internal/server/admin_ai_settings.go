@@ -95,12 +95,14 @@ type aiSettingsView struct {
 	DefaultProvider string              `json:"defaultProvider"`
 	OpenRouterModel string              `json:"openrouterModel"`
 	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
+	Flags           map[string]bool     `json:"flags"`
 }
 
 type aiSettingsOverride struct {
 	DefaultProvider *string             `json:"defaultProvider"`
 	OpenRouterModel *string             `json:"openrouterModel"`
 	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
+	Flags           map[string]bool     `json:"flags"`
 }
 
 // nullableString distinguishes an omitted update field from an explicit null,
@@ -335,6 +337,7 @@ func buildAISettingsResponse(
 		Baseline: aiSettingsView{
 			DefaultProvider: eff.Baseline.DefaultProvider,
 			OpenRouterModel: eff.Baseline.OpenRouterModel,
+			Flags:           eff.Baseline.Flags,
 			OpenRouterKey: aiSettingsKeyStatus{
 				Set:   eff.Baseline.OpenRouterKey.Set,
 				Last4: eff.Baseline.OpenRouterKey.Last4,
@@ -343,6 +346,7 @@ func buildAISettingsResponse(
 		Override: aiSettingsOverride{
 			DefaultProvider: eff.Override.DefaultProvider,
 			OpenRouterModel: eff.Override.OpenRouterModel,
+			Flags:           eff.Override.Flags,
 			OpenRouterKey: aiSettingsKeyStatus{
 				Set:   eff.Override.OpenRouterKey.Set,
 				Last4: eff.Override.OpenRouterKey.Last4,
@@ -351,6 +355,7 @@ func buildAISettingsResponse(
 		Effective: aiSettingsView{
 			DefaultProvider: eff.Effective.DefaultProvider,
 			OpenRouterModel: eff.Effective.OpenRouterModel,
+			Flags:           eff.Effective.Flags,
 			OpenRouterKey: aiSettingsKeyStatus{
 				Set:   eff.Effective.OpenRouterKey.Set,
 				Last4: eff.Effective.OpenRouterKey.Last4,
