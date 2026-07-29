@@ -18,6 +18,65 @@ Security, database, listener, and bootstrap settings remain environment-only.
 Runtime AI settings are global platform configuration and require platform-admin
 authorization; they are not tenant-scoped.
 
+## Runtime provider model
+
+The runtime API accepts a closed provider variant, so each provider can expose
+only fields that its production adapter supports:
+
+- API-key providers (`openai`, `anthropic`, `deepseek`, `google`, and
+  `openrouter`) allow model and write-only credential overrides.
+- Ollama allows enabled and model overrides. Its URL remains environment-only
+  because runtime custom endpoints require a separately reviewed SSRF policy.
+- Managed Codex allows a model override. Enablement and device authentication
+  remain owned by the environment and the managed login flow.
+
+An omitted field is unchanged. A JSON `null` deletes that field's database
+override and restores the environment baseline. Empty or whitespace-only
+models and credentials are rejected rather than treated as reset aliases.
+
+For example, replace an OpenRouter model and credential:
+
+```json
+{
+  "expectedRevision": 7,
+  "provider": {
+    "type": "api_key",
+    "name": "openrouter",
+    "model": "anthropic/claude-sonnet-4.5",
+    "apiKey": "write-only-value"
+  }
+}
+```
+
+Reset only the stored credential override:
+
+```json
+{
+  "expectedRevision": 8,
+  "provider": {
+    "type": "api_key",
+    "name": "openrouter",
+    "apiKey": null
+  }
+}
+```
+
+Select a default using the same closed discriminator:
+
+```json
+{
+  "expectedRevision": 9,
+  "defaultProvider": {
+    "type": "ollama"
+  }
+}
+```
+
+The settings response returns baseline, override, effective value, and source
+per non-secret field. Credentials return only set state, source, an optional
+safe last-four hint, and envelope health; plaintext and ciphertext are never
+returned.
+
 ## Generate independent roots
 
 Create a new env fragment at an explicit, previously unused path:

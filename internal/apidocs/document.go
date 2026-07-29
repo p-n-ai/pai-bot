@@ -93,10 +93,16 @@ type Schema struct {
 	Format               string             `json:"format,omitempty"`
 	Description          string             `json:"description,omitempty"`
 	Enum                 []any              `json:"enum,omitempty"`
+	OneOf                []*Schema          `json:"oneOf,omitempty"`
+	Discriminator        *Discriminator     `json:"discriminator,omitempty"`
 	Properties           map[string]*Schema `json:"properties,omitempty"`
 	Items                *Schema            `json:"items,omitempty"`
 	Required             []string           `json:"required,omitempty"`
 	AdditionalProperties any                `json:"additionalProperties,omitempty"`
+}
+
+type Discriminator struct {
+	PropertyName string `json:"propertyName"`
 }
 
 func JSON() ([]byte, error) {

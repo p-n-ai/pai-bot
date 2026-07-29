@@ -58,7 +58,8 @@ func makeCodexDefault(
 	prepareSettings settings.PrepareApply,
 ) error {
 	_, err := store.Update(ctx, func(current settings.Settings) (settings.Settings, error) {
-		current.AI.DefaultProvider = "codex"
+		provider := "codex"
+		current.AI.DefaultProvider = &provider
 		return current, nil
 	}, prepareSettings)
 	return err

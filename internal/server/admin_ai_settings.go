@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"slices"
@@ -41,33 +42,49 @@ type aiSettingsKeyStatus struct {
 	Last4 string `json:"last4"`
 }
 
-// aiSettingsSources tags each effective field: "db" | "env" | "none".
-type aiSettingsSources struct {
-	DefaultProvider string            `json:"defaultProvider"`
-	OpenRouterModel string            `json:"openrouterModel"`
-	OpenRouterKey   string            `json:"openrouterKey"`
-	Flags           map[string]string `json:"flags"`
+type aiProviderSelector struct {
+	Type settings.ProviderKind `json:"type"`
+	Name string                `json:"name,omitempty"`
 }
 
 type aiSettingsResponse struct {
-	DefaultProvider    string                `json:"defaultProvider"`
-	OpenRouterModel    string                `json:"openrouterModel"`
-	OpenRouterKey      aiSettingsKeyStatus   `json:"openrouterKey"`
-	Flags              map[string]bool       `json:"flags"`
-	Sources            aiSettingsSources     `json:"sources"`
-	Baseline           aiSettingsView        `json:"baseline"`
-	Override           aiSettingsOverride    `json:"override"`
-	Effective          aiSettingsView        `json:"effective"`
-	Revision           int64                 `json:"revision"`
-	AppliedRevision    int64                 `json:"appliedRevision"`
-	Drift              bool                  `json:"drift"`
-	AvailableProviders []string              `json:"availableProviders"`
-	Providers          []aiProviderReadiness `json:"providers"`
-	Health             aiSettingsHealth      `json:"health"`
+	DefaultProvider aiDefaultProviderProjection `json:"defaultProvider"`
+	Providers       []any                       `json:"providers"`
+	Flags           aiFlagsProjection           `json:"flags"`
+	Revision        int64                       `json:"revision"`
+	AppliedRevision int64                       `json:"appliedRevision"`
+	Drift           bool                        `json:"drift"`
+}
+
+type aiDefaultProviderProjection struct {
+	Baseline  *aiProviderSelector `json:"baseline"`
+	Override  *aiProviderSelector `json:"override"`
+	Effective *aiProviderSelector `json:"effective"`
+	Source    string              `json:"source"`
+}
+
+type aiStringProjection struct {
+	Baseline  *string `json:"baseline"`
+	Override  *string `json:"override"`
+	Effective *string `json:"effective"`
+	Source    string  `json:"source"`
+}
+
+type aiBoolProjection struct {
+	Baseline  bool   `json:"baseline"`
+	Override  *bool  `json:"override"`
+	Effective bool   `json:"effective"`
+	Source    string `json:"source"`
+}
+
+type aiFlagsProjection struct {
+	Baseline  map[string]bool   `json:"baseline"`
+	Override  map[string]bool   `json:"override"`
+	Effective map[string]bool   `json:"effective"`
+	Sources   map[string]string `json:"sources"`
 }
 
 type aiProviderReadiness struct {
-	Name        string `json:"name"`
 	Supported   bool   `json:"supported"`
 	Configured  bool   `json:"configured"`
 	Registrable bool   `json:"registrable"`
@@ -84,29 +101,36 @@ type aiCredentialHealth struct {
 	MigrationNeeded bool   `json:"migrationNeeded"`
 }
 
-type aiSettingsHealth struct {
-	Revision        int64              `json:"revision"`
-	AppliedRevision int64              `json:"appliedRevision"`
-	Drift           bool               `json:"drift"`
-	OpenRouterKey   aiCredentialHealth `json:"openrouterKey"`
+type aiCredentialProjection struct {
+	Baseline  aiSettingsKeyStatus `json:"baseline"`
+	Override  aiSettingsKeyStatus `json:"override"`
+	Effective aiSettingsKeyStatus `json:"effective"`
+	Source    string              `json:"source"`
+	Health    aiCredentialHealth  `json:"health"`
 }
 
-type aiSettingsView struct {
-	DefaultProvider string              `json:"defaultProvider"`
-	OpenRouterModel string              `json:"openrouterModel"`
-	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
-	Flags           map[string]bool     `json:"flags"`
+type aiAPIKeyProviderProjection struct {
+	Type       settings.ProviderKind  `json:"type"`
+	Name       string                 `json:"name"`
+	Model      aiStringProjection     `json:"model"`
+	Credential aiCredentialProjection `json:"credential"`
+	Readiness  aiProviderReadiness    `json:"readiness"`
 }
 
-type aiSettingsOverride struct {
-	DefaultProvider *string             `json:"defaultProvider"`
-	OpenRouterModel *string             `json:"openrouterModel"`
-	OpenRouterKey   aiSettingsKeyStatus `json:"openrouterKey"`
-	Flags           map[string]bool     `json:"flags"`
+type aiOllamaProviderProjection struct {
+	Type      settings.ProviderKind `json:"type"`
+	Enabled   aiBoolProjection      `json:"enabled"`
+	Model     aiStringProjection    `json:"model"`
+	Readiness aiProviderReadiness   `json:"readiness"`
 }
 
-// nullableString distinguishes an omitted update field from an explicit null,
-// which deletes the database override and restores the environment baseline.
+type aiManagedCodexProviderProjection struct {
+	Type      settings.ProviderKind `json:"type"`
+	Enabled   aiBoolProjection      `json:"enabled"`
+	Model     aiStringProjection    `json:"model"`
+	Readiness aiProviderReadiness   `json:"readiness"`
+}
+
 type nullableString struct {
 	Present bool
 	Value   *string
@@ -126,15 +150,92 @@ func (v *nullableString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// A null scalar or flag value deletes the DB override so the field returns to
-// environment/default control. Omitted fields remain unchanged.
-type aiSettingsUpdateRequest struct {
-	DefaultProvider  nullableString   `json:"defaultProvider"`
-	OpenRouterModel  nullableString   `json:"openrouterModel"`
-	OpenRouterAPIKey nullableString   `json:"openrouterApiKey"`
-	Flags            map[string]*bool `json:"flags"`
-	ExpectedRevision *int64           `json:"expectedRevision"`
+type nullableBool struct {
+	Present bool
+	Value   *bool
 }
+
+func (v *nullableBool) UnmarshalJSON(data []byte) error {
+	v.Present = true
+	if string(data) == "null" {
+		v.Value = nil
+		return nil
+	}
+	var value bool
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	v.Value = &value
+	return nil
+}
+
+type optionalJSON struct {
+	Present bool
+	Value   json.RawMessage
+}
+
+func (v *optionalJSON) UnmarshalJSON(data []byte) error {
+	v.Present = true
+	v.Value = append(v.Value[:0], data...)
+	return nil
+}
+
+type optionalFlags struct {
+	Present bool
+	Value   map[string]*bool
+}
+
+func (v *optionalFlags) UnmarshalJSON(data []byte) error {
+	v.Present = true
+	if string(data) == "null" {
+		return errors.New("flags must be an object")
+	}
+	return json.Unmarshal(data, &v.Value)
+}
+
+type aiSettingsUpdateWire struct {
+	DefaultProvider  optionalJSON  `json:"defaultProvider"`
+	Provider         optionalJSON  `json:"provider"`
+	Flags            optionalFlags `json:"flags"`
+	ExpectedRevision *int64        `json:"expectedRevision"`
+}
+
+type parsedAISettingsUpdate struct {
+	DefaultProvider  optionalProviderSelector
+	Provider         providerPatch
+	Flags            optionalFlags
+	ExpectedRevision *int64
+}
+
+type optionalProviderSelector struct {
+	Present bool
+	Value   *aiProviderSelector
+}
+
+type providerPatch interface {
+	providerPatch()
+}
+
+type apiKeyProviderPatch struct {
+	Provider settings.APIKeyProvider
+	Model    nullableString
+	APIKey   nullableString
+}
+
+func (apiKeyProviderPatch) providerPatch() {}
+
+type ollamaProviderPatch struct {
+	Enabled nullableBool
+	Model   nullableString
+}
+
+func (ollamaProviderPatch) providerPatch() {}
+
+type managedCodexProviderPatch struct {
+	Model nullableString
+}
+
+func (managedCodexProviderPatch) providerPatch() {}
 
 func handleAdminGetAISettings(store runtimeSettingsStore, deviceAuth codexDeviceAuth) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -149,8 +250,13 @@ func handleAdminGetAISettings(store runtimeSettingsStore, deviceAuth codexDevice
 
 func handleAdminUpdateAISettings(store runtimeSettingsStore, prepareSettings settings.PrepareApply, deviceAuth codexDeviceAuth) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var body aiSettingsUpdateRequest
-		if err := decodeStrictJSONBody(r, &body); err != nil {
+		var wire aiSettingsUpdateWire
+		if err := decodeStrictJSONBody(r, &wire); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		body, err := parseAISettingsUpdate(wire)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -161,18 +267,14 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, prepareSettings set
 				return settings.Settings{}, settings.ErrRevisionConflict
 			}
 			next, err := applyAISettingsUpdate(cur, body)
-			// Only a request that sets defaultProvider is checked against the
-			// merged config: clearing a key under a stale default must still work.
-			if err == nil && body.DefaultProvider.Present && next.AI.DefaultProvider != "" &&
-				!airouter.CanRegister(next.AI.DefaultProvider, store.MergedAI(next), codexAvailable(deviceAuth)) {
-				err = fmt.Errorf("provider %q has no usable configuration", next.AI.DefaultProvider)
+			merged := store.MergedAI(next)
+			if err == nil && body.DefaultProvider.Present && body.DefaultProvider.Value != nil &&
+				!airouter.CanRegister(providerSelectorName(*body.DefaultProvider.Value), merged, codexAvailable(deviceAuth)) {
+				err = fmt.Errorf("provider %q has no usable configuration", providerSelectorName(*body.DefaultProvider.Value))
 			}
-			// Clearing the key is the only update that can remove a provider;
-			// an empty router would crash-loop the next boot outside dev mode,
-			// taking down the admin UI that could repair it.
-			if err == nil && body.OpenRouterAPIKey.Present && next.AI.OpenRouterAPIKey == "" &&
-				!anyProviderRegistrable(store.MergedAI(next), codexAvailable(deviceAuth)) {
-				err = errors.New("clearing the API key would leave no AI providers configured")
+			if err == nil && providerPatchCanRemoveProvider(body.Provider) &&
+				!anyProviderRegistrable(merged, codexAvailable(deviceAuth)) {
+				err = errors.New("update would leave no AI providers configured")
 			}
 			badReq = err
 			if err != nil {
@@ -238,59 +340,290 @@ func decodeStrictJSONBody(r *http.Request, target any) (err error) {
 		}
 	}()
 
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err = dec.Decode(target); err != nil {
+	if err = decodeStrictJSON(r.Body, target); err != nil {
 		return fmt.Errorf("invalid json body: %v", err)
-	}
-	if dec.More() {
-		return fmt.Errorf("invalid json body: trailing data")
 	}
 	return nil
 }
 
-// applyAISettingsUpdate merges the request onto current settings: absent
-// fields stay unchanged, an empty openrouterApiKey clears the stored key.
-func applyAISettingsUpdate(st settings.Settings, req aiSettingsUpdateRequest) (settings.Settings, error) {
-	if req.DefaultProvider.Present {
-		name := ""
-		if req.DefaultProvider.Value != nil {
-			name = strings.ToLower(strings.TrimSpace(*req.DefaultProvider.Value))
-		}
-		if name != "" && !slices.Contains(airouter.ProviderNames(), name) {
-			return settings.Settings{}, fmt.Errorf("unknown provider %q", name)
-		}
-		st.AI.DefaultProvider = name
+func decodeStrictJSON(reader io.Reader, target any) error {
+	dec := json.NewDecoder(reader)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(target); err != nil {
+		return err
 	}
-	if req.OpenRouterModel.Present {
-		st.AI.OpenRouterModel = ""
-		if req.OpenRouterModel.Value != nil {
-			st.AI.OpenRouterModel = strings.TrimSpace(*req.OpenRouterModel.Value)
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("trailing data")
 		}
+		return err
 	}
-	if req.OpenRouterAPIKey.Present {
-		st.AI.OpenRouterAPIKey = ""
-		st.AI.OpenRouterAPIKeyOperation = settings.SecretClear
-		if req.OpenRouterAPIKey.Value != nil {
-			st.AI.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey.Value)
-			if st.AI.OpenRouterAPIKey != "" {
-				st.AI.OpenRouterAPIKeyOperation = settings.SecretReplace
+	return nil
+}
+
+func decodeStrictJSONBytes(data []byte, target any) error {
+	return decodeStrictJSON(strings.NewReader(string(data)), target)
+}
+
+func parseAISettingsUpdate(wire aiSettingsUpdateWire) (parsedAISettingsUpdate, error) {
+	result := parsedAISettingsUpdate{
+		Flags:            wire.Flags,
+		ExpectedRevision: wire.ExpectedRevision,
+	}
+	if wire.DefaultProvider.Present {
+		result.DefaultProvider.Present = true
+		if string(wire.DefaultProvider.Value) != "null" {
+			selector, err := parseProviderSelector(wire.DefaultProvider.Value)
+			if err != nil {
+				return parsedAISettingsUpdate{}, fmt.Errorf("defaultProvider: %w", err)
 			}
+			result.DefaultProvider.Value = &selector
 		}
 	}
-	if req.Flags != nil {
+	if wire.Provider.Present {
+		patch, err := parseProviderPatch(wire.Provider.Value)
+		if err != nil {
+			return parsedAISettingsUpdate{}, fmt.Errorf("provider: %w", err)
+		}
+		result.Provider = patch
+	}
+	return result, nil
+}
+
+func parseProviderSelector(raw json.RawMessage) (aiProviderSelector, error) {
+	if string(raw) == "null" {
+		return aiProviderSelector{}, errors.New("must be a provider selector or null")
+	}
+	var discriminator struct {
+		Type settings.ProviderKind `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &discriminator); err != nil {
+		return aiProviderSelector{}, errors.New("must be an object")
+	}
+	switch discriminator.Type {
+	case settings.ProviderKindAPIKey:
+		var value struct {
+			Type settings.ProviderKind `json:"type"`
+			Name string                `json:"name"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return aiProviderSelector{}, fmt.Errorf("invalid api_key selector: %v", err)
+		}
+		provider, ok := settings.ParseAPIKeyProvider(value.Name)
+		if !ok {
+			return aiProviderSelector{}, fmt.Errorf("unknown api_key provider %q", value.Name)
+		}
+		return aiProviderSelector{Type: settings.ProviderKindAPIKey, Name: string(provider)}, nil
+	case settings.ProviderKindOllama:
+		var value struct {
+			Type settings.ProviderKind `json:"type"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return aiProviderSelector{}, fmt.Errorf("invalid ollama selector: %v", err)
+		}
+		return aiProviderSelector{Type: settings.ProviderKindOllama}, nil
+	case settings.ProviderKindManagedCodex:
+		var value struct {
+			Type settings.ProviderKind `json:"type"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return aiProviderSelector{}, fmt.Errorf("invalid managed_codex selector: %v", err)
+		}
+		return aiProviderSelector{Type: settings.ProviderKindManagedCodex}, nil
+	default:
+		return aiProviderSelector{}, fmt.Errorf("unknown provider type %q", discriminator.Type)
+	}
+}
+
+func parseProviderPatch(raw json.RawMessage) (providerPatch, error) {
+	if string(raw) == "null" {
+		return nil, errors.New("must be a provider object; reset individual fields with null")
+	}
+	var discriminator struct {
+		Type settings.ProviderKind `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &discriminator); err != nil {
+		return nil, errors.New("must be an object")
+	}
+	switch discriminator.Type {
+	case settings.ProviderKindAPIKey:
+		var value struct {
+			Type   settings.ProviderKind `json:"type"`
+			Name   string                `json:"name"`
+			Model  nullableString        `json:"model"`
+			APIKey nullableString        `json:"apiKey"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return nil, fmt.Errorf("invalid api_key patch: %v", err)
+		}
+		provider, ok := settings.ParseAPIKeyProvider(value.Name)
+		if !ok {
+			return nil, fmt.Errorf("unknown api_key provider %q", value.Name)
+		}
+		if !value.Model.Present && !value.APIKey.Present {
+			return nil, errors.New("api_key patch must update model or apiKey")
+		}
+		if err := refineNullableString("model", &value.Model); err != nil {
+			return nil, err
+		}
+		if err := refineNullableString("apiKey", &value.APIKey); err != nil {
+			return nil, err
+		}
+		return apiKeyProviderPatch{Provider: provider, Model: value.Model, APIKey: value.APIKey}, nil
+	case settings.ProviderKindOllama:
+		var value struct {
+			Type    settings.ProviderKind `json:"type"`
+			Enabled nullableBool          `json:"enabled"`
+			Model   nullableString        `json:"model"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return nil, fmt.Errorf("invalid ollama patch: %v", err)
+		}
+		if !value.Enabled.Present && !value.Model.Present {
+			return nil, errors.New("ollama patch must update enabled or model")
+		}
+		if err := refineNullableString("model", &value.Model); err != nil {
+			return nil, err
+		}
+		return ollamaProviderPatch{Enabled: value.Enabled, Model: value.Model}, nil
+	case settings.ProviderKindManagedCodex:
+		var value struct {
+			Type  settings.ProviderKind `json:"type"`
+			Model nullableString        `json:"model"`
+		}
+		if err := decodeStrictJSONBytes(raw, &value); err != nil {
+			return nil, fmt.Errorf("invalid managed_codex patch: %v", err)
+		}
+		if !value.Model.Present {
+			return nil, errors.New("managed_codex patch must update model")
+		}
+		if err := refineNullableString("model", &value.Model); err != nil {
+			return nil, err
+		}
+		return managedCodexProviderPatch{Model: value.Model}, nil
+	default:
+		return nil, fmt.Errorf("unknown provider type %q", discriminator.Type)
+	}
+}
+
+func refineNullableString(field string, value *nullableString) error {
+	if !value.Present || value.Value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value.Value)
+	if trimmed == "" {
+		return fmt.Errorf("%s must not be empty", field)
+	}
+	value.Value = &trimmed
+	return nil
+}
+
+func providerSelectorName(selector aiProviderSelector) string {
+	switch selector.Type {
+	case settings.ProviderKindAPIKey:
+		return selector.Name
+	case settings.ProviderKindOllama:
+		return "ollama"
+	case settings.ProviderKindManagedCodex:
+		return "codex"
+	default:
+		panic("unreachable provider selector")
+	}
+}
+
+func providerPatchCanRemoveProvider(patch providerPatch) bool {
+	switch patch := patch.(type) {
+	case nil:
+		return false
+	case apiKeyProviderPatch:
+		return patch.APIKey.Present && patch.APIKey.Value == nil
+	case ollamaProviderPatch:
+		return patch.Enabled.Present && (patch.Enabled.Value == nil || !*patch.Enabled.Value)
+	case managedCodexProviderPatch:
+		return false
+	default:
+		panic("unreachable provider patch")
+	}
+}
+
+func applyAISettingsUpdate(st settings.Settings, req parsedAISettingsUpdate) (settings.Settings, error) {
+	if req.DefaultProvider.Present {
+		st.AI.DefaultProvider = nil
+		if req.DefaultProvider.Value != nil {
+			name := providerSelectorName(*req.DefaultProvider.Value)
+			st.AI.DefaultProvider = &name
+		}
+	}
+	switch patch := req.Provider.(type) {
+	case nil:
+	case apiKeyProviderPatch:
+		if st.AI.Providers.APIKey == nil {
+			st.AI.Providers.APIKey = make(map[settings.APIKeyProvider]settings.APIKeyProviderOverride)
+		} else {
+			st.AI.Providers.APIKey = maps.Clone(st.AI.Providers.APIKey)
+		}
+		override := st.AI.Providers.APIKey[patch.Provider]
+		if patch.Model.Present {
+			override.Model = patch.Model.Value
+		}
+		if override.Model == nil {
+			delete(st.AI.Providers.APIKey, patch.Provider)
+		} else {
+			st.AI.Providers.APIKey[patch.Provider] = override
+		}
+		if patch.APIKey.Present {
+			if st.AI.Credentials == nil {
+				st.AI.Credentials = make(map[settings.APIKeyProvider]settings.CredentialOverride)
+			} else {
+				st.AI.Credentials = maps.Clone(st.AI.Credentials)
+			}
+			credential := st.AI.Credentials[patch.Provider]
+			credential.Value = ""
+			credential.Operation = settings.SecretClear
+			if patch.APIKey.Value != nil {
+				credential.Value = *patch.APIKey.Value
+				credential.Operation = settings.SecretReplace
+			}
+			st.AI.Credentials[patch.Provider] = credential
+		}
+	case ollamaProviderPatch:
+		override := cloneEnabledModelOverride(st.AI.Providers.Ollama)
+		if patch.Enabled.Present {
+			override.Enabled = patch.Enabled.Value
+		}
+		if patch.Model.Present {
+			override.Model = patch.Model.Value
+		}
+		if override.Enabled == nil && override.Model == nil {
+			st.AI.Providers.Ollama = nil
+		} else {
+			st.AI.Providers.Ollama = &override
+		}
+	case managedCodexProviderPatch:
+		override := cloneModelOverride(st.AI.Providers.ManagedCodex)
+		override.Model = patch.Model.Value
+		if override.Model == nil {
+			st.AI.Providers.ManagedCodex = nil
+		} else {
+			st.AI.Providers.ManagedCodex = &override
+		}
+	default:
+		panic("unreachable provider patch")
+	}
+	if req.Flags.Present {
 		// Null values only delete overrides, but their names must still be known.
-		overrides := make(map[string]bool, len(req.Flags))
-		for name, v := range req.Flags {
+		overrides := make(map[string]bool, len(req.Flags.Value))
+		for name, v := range req.Flags.Value {
 			overrides[name] = v != nil && *v
 		}
 		if _, err := (featureflags.Features{}).WithOverrides(overrides); err != nil {
 			return settings.Settings{}, err
 		}
 		// Copy before writing: st.Flags may alias the caller's settings map.
-		flags := make(map[string]bool, len(st.Flags)+len(req.Flags))
+		flags := make(map[string]bool, len(st.Flags)+len(req.Flags.Value))
 		maps.Copy(flags, st.Flags)
-		for name, v := range req.Flags {
+		for name, v := range req.Flags.Value {
 			if v == nil {
 				delete(flags, name)
 			} else {
@@ -302,88 +635,193 @@ func applyAISettingsUpdate(st settings.Settings, req aiSettingsUpdateRequest) (s
 	return st, nil
 }
 
-// buildAISettingsResponse never includes the API key itself — only set/last4.
+func cloneEnabledModelOverride(value *settings.EnabledModelOverride) settings.EnabledModelOverride {
+	if value == nil {
+		return settings.EnabledModelOverride{}
+	}
+	return settings.EnabledModelOverride{
+		Enabled: cloneBool(value.Enabled),
+		Model:   cloneString(value.Model),
+	}
+}
+
+func cloneModelOverride(value *settings.ModelOverride) settings.ModelOverride {
+	if value == nil {
+		return settings.ModelOverride{}
+	}
+	return settings.ModelOverride{Model: cloneString(value.Model)}
+}
+
+func cloneString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+// buildAISettingsResponse projects the closed provider model without ever
+// including credential plaintext or ciphertext.
 func buildAISettingsResponse(
 	eff settings.EffectiveSettings,
 	cfg config.AIConfig,
 	managedCodexAvailable bool,
 ) aiSettingsResponse {
-	providers := make([]aiProviderReadiness, 0, len(airouter.ProviderNames()))
-	for _, name := range airouter.ProviderNames() {
-		managedBy := "environment"
-		if name == "openrouter" &&
-			(eff.DefaultProviderSource == settings.SourceDB ||
-				eff.OpenRouterModelSource == settings.SourceDB ||
-				eff.OpenRouterKeySource == settings.SourceDB) {
-			managedBy = "runtime"
-		}
-		if name == "codex" && cfg.Codex.Enabled {
-			managedBy = "managed_codex"
-		}
-		providers = append(providers, aiProviderReadiness{
-			Name:        name,
-			Supported:   true,
-			Configured:  airouter.HasProviderConfiguration(name, cfg),
-			Registrable: airouter.CanRegister(name, cfg, managedCodexAvailable),
-			Effective:   name == eff.DefaultProvider,
-			ManagedBy:   managedBy,
+	providers := make([]any, 0, len(settings.APIKeyProviders())+2)
+	for _, provider := range settings.APIKeyProviders() {
+		name := string(provider)
+		baseline := eff.Baseline.Providers[name]
+		override := eff.Override.Providers[name]
+		effective := eff.Effective.Providers[name]
+		sources := eff.ProviderSources[name]
+		providers = append(providers, aiAPIKeyProviderProjection{
+			Type:  settings.ProviderKindAPIKey,
+			Name:  name,
+			Model: stringProjection(baseline.Model, override.Model, effective.Model, sources.Model),
+			Credential: aiCredentialProjection{
+				Baseline:  keyStatus(baseline.Credential),
+				Override:  keyStatus(override.Credential),
+				Effective: keyStatus(effective.Credential),
+				Source:    sources.Credential,
+				Health:    credentialHealth(eff.CredentialEnvelopes[name]),
+			},
+			Readiness: providerReadiness(name, eff, cfg, managedCodexAvailable),
 		})
 	}
+
+	ollamaBaseline := eff.Baseline.Providers["ollama"]
+	ollamaOverride := eff.Override.Providers["ollama"]
+	ollamaEffective := eff.Effective.Providers["ollama"]
+	ollamaSources := eff.ProviderSources["ollama"]
+	providers = append(providers, aiOllamaProviderProjection{
+		Type: settings.ProviderKindOllama,
+		Enabled: aiBoolProjection{
+			Baseline:  ollamaBaseline.Enabled,
+			Override:  cloneBool(ollamaOverride.Enabled),
+			Effective: ollamaEffective.Enabled,
+			Source:    ollamaSources.Enabled,
+		},
+		Model:     stringProjection(ollamaBaseline.Model, ollamaOverride.Model, ollamaEffective.Model, ollamaSources.Model),
+		Readiness: providerReadiness("ollama", eff, cfg, managedCodexAvailable),
+	})
+
+	codexBaseline := eff.Baseline.Providers["codex"]
+	codexOverride := eff.Override.Providers["codex"]
+	codexEffective := eff.Effective.Providers["codex"]
+	codexSources := eff.ProviderSources["codex"]
+	providers = append(providers, aiManagedCodexProviderProjection{
+		Type: settings.ProviderKindManagedCodex,
+		Enabled: aiBoolProjection{
+			Baseline:  codexBaseline.Enabled,
+			Override:  nil,
+			Effective: codexEffective.Enabled,
+			Source:    codexSources.Enabled,
+		},
+		Model:     stringProjection(codexBaseline.Model, codexOverride.Model, codexEffective.Model, codexSources.Model),
+		Readiness: providerReadiness("codex", eff, cfg, managedCodexAvailable),
+	})
+
 	return aiSettingsResponse{
-		DefaultProvider: eff.DefaultProvider,
-		OpenRouterModel: eff.OpenRouterModel,
-		OpenRouterKey:   aiSettingsKeyStatus{Set: eff.OpenRouterKeySet, Last4: eff.OpenRouterKeyLast4},
-		Flags:           eff.Flags,
-		Baseline: aiSettingsView{
-			DefaultProvider: eff.Baseline.DefaultProvider,
-			OpenRouterModel: eff.Baseline.OpenRouterModel,
-			Flags:           eff.Baseline.Flags,
-			OpenRouterKey: aiSettingsKeyStatus{
-				Set:   eff.Baseline.OpenRouterKey.Set,
-				Last4: eff.Baseline.OpenRouterKey.Last4,
-			},
+		DefaultProvider: aiDefaultProviderProjection{
+			Baseline:  providerSelectorForName(eff.Baseline.DefaultProvider),
+			Override:  providerSelectorForOptionalName(eff.Override.DefaultProvider),
+			Effective: providerSelectorForName(eff.Effective.DefaultProvider),
+			Source:    eff.DefaultProviderSource,
 		},
-		Override: aiSettingsOverride{
-			DefaultProvider: eff.Override.DefaultProvider,
-			OpenRouterModel: eff.Override.OpenRouterModel,
-			Flags:           eff.Override.Flags,
-			OpenRouterKey: aiSettingsKeyStatus{
-				Set:   eff.Override.OpenRouterKey.Set,
-				Last4: eff.Override.OpenRouterKey.Last4,
-			},
-		},
-		Effective: aiSettingsView{
-			DefaultProvider: eff.Effective.DefaultProvider,
-			OpenRouterModel: eff.Effective.OpenRouterModel,
-			Flags:           eff.Effective.Flags,
-			OpenRouterKey: aiSettingsKeyStatus{
-				Set:   eff.Effective.OpenRouterKey.Set,
-				Last4: eff.Effective.OpenRouterKey.Last4,
-			},
+		Providers: providers,
+		Flags: aiFlagsProjection{
+			Baseline:  eff.Baseline.Flags,
+			Override:  eff.Override.Flags,
+			Effective: eff.Effective.Flags,
+			Sources:   eff.FlagSources,
 		},
 		Revision:        eff.Revision,
 		AppliedRevision: eff.AppliedRevision,
 		Drift:           eff.Drift,
-		Providers:       providers,
-		Health: aiSettingsHealth{
-			Revision:        eff.Revision,
-			AppliedRevision: eff.AppliedRevision,
-			Drift:           eff.Drift,
-			OpenRouterKey: aiCredentialHealth{
-				Stored:          eff.OpenRouterEnvelope.Stored,
-				Readable:        eff.OpenRouterEnvelope.Readable,
-				Version:         eff.OpenRouterEnvelope.Version,
-				Algorithm:       eff.OpenRouterEnvelope.Algorithm,
-				KeyID:           eff.OpenRouterEnvelope.KeyID,
-				MigrationNeeded: eff.OpenRouterEnvelope.MigrationNeeded,
-			},
-		},
-		Sources: aiSettingsSources{
-			DefaultProvider: eff.DefaultProviderSource,
-			OpenRouterModel: eff.OpenRouterModelSource,
-			OpenRouterKey:   eff.OpenRouterKeySource,
-			Flags:           eff.FlagSources,
-		},
-		AvailableProviders: airouter.ProviderNames(),
+	}
+}
+
+func stringProjection(baseline string, override *string, effective string, source string) aiStringProjection {
+	return aiStringProjection{
+		Baseline:  optionalNonEmptyString(baseline),
+		Override:  cloneString(override),
+		Effective: optionalNonEmptyString(effective),
+		Source:    source,
+	}
+}
+
+func optionalNonEmptyString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func keyStatus(value settings.SecretView) aiSettingsKeyStatus {
+	return aiSettingsKeyStatus{Set: value.Set, Last4: value.Last4}
+}
+
+func credentialHealth(value settings.CredentialEnvelopeStatus) aiCredentialHealth {
+	return aiCredentialHealth{
+		Stored:          value.Stored,
+		Readable:        value.Readable,
+		Version:         value.Version,
+		Algorithm:       value.Algorithm,
+		KeyID:           value.KeyID,
+		MigrationNeeded: value.MigrationNeeded,
+	}
+}
+
+func providerReadiness(
+	name string,
+	eff settings.EffectiveSettings,
+	cfg config.AIConfig,
+	managedCodexAvailable bool,
+) aiProviderReadiness {
+	managedBy := "environment"
+	sources := eff.ProviderSources[name]
+	if sources.Enabled == settings.SourceDB ||
+		sources.Model == settings.SourceDB ||
+		sources.Credential == settings.SourceDB {
+		managedBy = "runtime"
+	}
+	if name == "codex" {
+		managedBy = "managed_codex"
+	}
+	return aiProviderReadiness{
+		Supported:   true,
+		Configured:  airouter.HasProviderConfiguration(name, cfg),
+		Registrable: airouter.CanRegister(name, cfg, managedCodexAvailable),
+		Effective:   name == eff.DefaultProvider,
+		ManagedBy:   managedBy,
+	}
+}
+
+func providerSelectorForOptionalName(name *string) *aiProviderSelector {
+	if name == nil {
+		return nil
+	}
+	return providerSelectorForName(*name)
+}
+
+func providerSelectorForName(name string) *aiProviderSelector {
+	if provider, ok := settings.ParseAPIKeyProvider(name); ok {
+		return &aiProviderSelector{Type: settings.ProviderKindAPIKey, Name: string(provider)}
+	}
+	switch name {
+	case "ollama":
+		return &aiProviderSelector{Type: settings.ProviderKindOllama}
+	case "codex":
+		return &aiProviderSelector{Type: settings.ProviderKindManagedCodex}
+	default:
+		return nil
 	}
 }

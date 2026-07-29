@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,15 +32,19 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(missing row) error = %v", err)
 	}
-	if empty.AI != (AISettings{}) || len(empty.Flags) != 0 {
+	if !reflect.DeepEqual(empty.AI, AISettings{}) || len(empty.Flags) != 0 {
 		t.Fatalf("Load(missing row) = %+v, want zero Settings", empty)
 	}
 
 	want := Settings{
 		AI: AISettings{
-			DefaultProvider:  "openrouter",
-			OpenRouterModel:  "openrouter/auto",
-			OpenRouterAPIKey: "sk-or-v1-roundtrip",
+			DefaultProvider: stringPointer("openrouter"),
+			Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
+				APIKeyProviderOpenRouter: {Model: stringPointer("openrouter/auto")},
+			}},
+			Credentials: map[APIKeyProvider]CredentialOverride{
+				APIKeyProviderOpenRouter: {Value: "sk-or-v1-roundtrip", Operation: SecretReplace},
+			},
 		},
 		Flags: map[string]bool{"turn_hooks": true},
 	}
@@ -72,12 +77,12 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if got.AI.DefaultProvider != want.AI.DefaultProvider ||
-		got.AI.OpenRouterModel != want.AI.OpenRouterModel ||
-		got.AI.OpenRouterAPIKey != want.AI.OpenRouterAPIKey {
+	if !reflect.DeepEqual(got.AI.DefaultProvider, want.AI.DefaultProvider) ||
+		openRouterModel(got.AI) != openRouterModel(want.AI) ||
+		openRouterCredential(got.AI).Value != openRouterCredential(want.AI).Value {
 		t.Fatalf("Load().AI = %+v, want provider/model/key from %+v", got.AI, want.AI)
 	}
-	if envelope := got.AI.OpenRouterEnvelope; !envelope.Stored || !envelope.Readable ||
+	if envelope := openRouterCredential(got.AI).Envelope; !envelope.Stored || !envelope.Readable ||
 		envelope.Version != "v1" || envelope.Algorithm != "a256gcm" ||
 		envelope.KeyID == "" || envelope.MigrationNeeded {
 		t.Fatalf("Load().OpenRouterEnvelope = %+v, want current readable envelope", envelope)
@@ -91,13 +96,14 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 
 	staleStore := New(pool, "test-settings-encryption-key-12345", "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 	merged, err := staleStore.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterModel = "deepseek/deepseek-chat"
+		setOpenRouterModel(&cur.AI, stringPointer("deepseek/deepseek-chat"))
 		return cur, nil
 	}, nil)
 	if err != nil {
 		t.Fatalf("Update(stale instance) error = %v", err)
 	}
-	if merged.AI.OpenRouterAPIKey != want.AI.OpenRouterAPIKey || merged.AI.DefaultProvider != want.AI.DefaultProvider {
+	if openRouterCredential(merged.AI).Value != openRouterCredential(want.AI).Value ||
+		!reflect.DeepEqual(merged.AI.DefaultProvider, want.AI.DefaultProvider) {
 		t.Fatalf("Update(stale instance) = %+v, want key and provider merged from DB row", merged.AI)
 	}
 	if merged.Revision != 2 {
@@ -115,8 +121,7 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	}
 
 	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterAPIKey = ""
-		cur.AI.OpenRouterAPIKeyOperation = SecretClear
+		setOpenRouterCredential(&cur.AI, CredentialOverride{Operation: SecretClear})
 		return cur, nil
 	}, nil); err != nil {
 		t.Fatalf("Update(cleared key) error = %v", err)
@@ -125,11 +130,11 @@ func TestStore_SaveLoadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(cleared key) error = %v", err)
 	}
-	if got.AI.OpenRouterAPIKey != "" {
+	if openRouterCredential(got.AI).Value != "" {
 		t.Fatal("cleared API key should not survive a save/load roundtrip")
 	}
-	if got.AI.OpenRouterModel != "deepseek/deepseek-chat" {
-		t.Fatalf("Load().AI.OpenRouterModel = %q, want stale instance's write preserved", got.AI.OpenRouterModel)
+	if openRouterModel(got.AI) != "deepseek/deepseek-chat" {
+		t.Fatalf("Load().AI OpenRouter model = %q, want stale instance's write preserved", openRouterModel(got.AI))
 	}
 }
 
@@ -138,7 +143,7 @@ func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 
 	s1 := New(pool, "settings-encryption-key-one-12345", "secret-one", config.AIConfig{}, featureflags.Features{})
 	if _, err := s1.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterAPIKey = "sk-or-v1-original"
+		setOpenRouterCredential(&cur.AI, CredentialOverride{Value: "sk-or-v1-original", Operation: SecretReplace})
 		return cur, nil
 	}, nil); err != nil {
 		t.Fatalf("Update(store key) error = %v", err)
@@ -170,14 +175,13 @@ func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(original secret) error = %v", err)
 	}
-	if got.AI.OpenRouterAPIKey != "sk-or-v1-original" {
-		t.Fatalf("Load(original secret).OpenRouterAPIKey = %q, want key recoverable after reverting the auth secret", got.AI.OpenRouterAPIKey)
+	if openRouterCredential(got.AI).Value != "sk-or-v1-original" {
+		t.Fatalf("Load(original secret) credential = %q, want key recoverable after reverting the auth secret", openRouterCredential(got.AI).Value)
 	}
 
 	var appliedRevision int64
 	cleared, err := s2.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterAPIKey = ""
-		cur.AI.OpenRouterAPIKeyOperation = SecretClear
+		setOpenRouterCredential(&cur.AI, CredentialOverride{Operation: SecretClear})
 		return cur, nil
 	}, func(st Settings) (PreparedApply, error) {
 		return func() { appliedRevision = st.Revision }, nil
@@ -220,7 +224,7 @@ func TestStore_ConcurrentUpdatesApplyInCommittedRevisionOrder(t *testing.T) {
 
 	go func() {
 		_, err := store.Update(ctx, func(st Settings) (Settings, error) {
-			st.AI.OpenRouterModel = "first/model"
+			setOpenRouterModel(&st.AI, stringPointer("first/model"))
 			return st, nil
 		}, prepare)
 		errs <- err
@@ -228,7 +232,7 @@ func TestStore_ConcurrentUpdatesApplyInCommittedRevisionOrder(t *testing.T) {
 	<-firstApplying
 	go func() {
 		_, err := store.Update(ctx, func(st Settings) (Settings, error) {
-			st.AI.OpenRouterModel = "second/model"
+			setOpenRouterModel(&st.AI, stringPointer("second/model"))
 			return st, nil
 		}, prepare)
 		errs <- err
@@ -250,7 +254,7 @@ func TestStore_ConcurrentUpdatesApplyInCommittedRevisionOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if loaded.Revision != 2 || loaded.AI.OpenRouterModel != "second/model" {
+	if loaded.Revision != 2 || openRouterModel(loaded.AI) != "second/model" {
 		t.Fatalf("persisted settings = %+v, want revision 2 second/model", loaded)
 	}
 	effective := store.Effective()
@@ -267,8 +271,8 @@ func TestStore_ReconcilesEnvironmentChangesAndPersistedOverridesAcrossRestart(t 
 	}
 	store := New(pool, "", "", env, featureflags.Features{})
 	if _, err := store.Update(ctx, func(st Settings) (Settings, error) {
-		st.AI.DefaultProvider = env.DefaultProvider
-		st.AI.OpenRouterModel = env.OpenRouter.Model
+		st.AI.DefaultProvider = stringPointer(env.DefaultProvider)
+		setOpenRouterModel(&st.AI, stringPointer(env.OpenRouter.Model))
 		return st, nil
 	}, nil); err != nil {
 		t.Fatalf("save redundant overrides: %v", err)
@@ -287,14 +291,14 @@ func TestStore_ReconcilesEnvironmentChangesAndPersistedOverridesAcrossRestart(t 
 	if err := restarted.Start(ctx); err != nil {
 		t.Fatalf("restart with changed environment: %v", err)
 	}
-	if effective := restarted.Effective(); effective.OpenRouterModel != "environment/two" ||
-		effective.OpenRouterModelSource != SourceEnv {
+	if effective := restarted.Effective(); effective.Providers["openrouter"].Model != "environment/two" ||
+		effective.ProviderSources["openrouter"].Model != SourceEnv {
 		t.Fatalf("effective after environment change = %q/%q, want environment/two from env",
-			effective.OpenRouterModel, effective.OpenRouterModelSource)
+			effective.Providers["openrouter"].Model, effective.ProviderSources["openrouter"].Model)
 	}
 
 	if _, err := restarted.Update(ctx, func(st Settings) (Settings, error) {
-		st.AI.OpenRouterModel = "database/model"
+		setOpenRouterModel(&st.AI, stringPointer("database/model"))
 		return st, nil
 	}, nil); err != nil {
 		t.Fatalf("save nonredundant override: %v", err)
@@ -305,14 +309,14 @@ func TestStore_ReconcilesEnvironmentChangesAndPersistedOverridesAcrossRestart(t 
 	if err := withOverride.Start(ctx); err != nil {
 		t.Fatalf("restart with preserved override: %v", err)
 	}
-	if effective := withOverride.Effective(); effective.OpenRouterModel != "database/model" ||
-		effective.OpenRouterModelSource != SourceDB {
+	if effective := withOverride.Effective(); effective.Providers["openrouter"].Model != "database/model" ||
+		effective.ProviderSources["openrouter"].Model != SourceDB {
 		t.Fatalf("effective preserved override = %q/%q, want database/model from db",
-			effective.OpenRouterModel, effective.OpenRouterModelSource)
+			effective.Providers["openrouter"].Model, effective.ProviderSources["openrouter"].Model)
 	}
 
 	if _, err := withOverride.Update(ctx, func(st Settings) (Settings, error) {
-		st.AI.OpenRouterModel = ""
+		setOpenRouterModel(&st.AI, nil)
 		return st, nil
 	}, nil); err != nil {
 		t.Fatalf("reset model override: %v", err)
@@ -323,10 +327,10 @@ func TestStore_ReconcilesEnvironmentChangesAndPersistedOverridesAcrossRestart(t 
 	if err := afterReset.Start(ctx); err != nil {
 		t.Fatalf("restart after reset: %v", err)
 	}
-	if effective := afterReset.Effective(); effective.OpenRouterModel != "environment/four" ||
-		effective.OpenRouterModelSource != SourceEnv {
+	if effective := afterReset.Effective(); effective.Providers["openrouter"].Model != "environment/four" ||
+		effective.ProviderSources["openrouter"].Model != SourceEnv {
 		t.Fatalf("effective after reset = %q/%q, want environment/four from env",
-			effective.OpenRouterModel, effective.OpenRouterModelSource)
+			effective.Providers["openrouter"].Model, effective.ProviderSources["openrouter"].Model)
 	}
 }
 
@@ -337,7 +341,7 @@ func TestStore_CommitFailureLeavesDesiredAndRuntimeUnchanged(t *testing.T) {
 		CREATE FUNCTION pai_test_reject_runtime_setting() RETURNS trigger
 		LANGUAGE plpgsql AS $$
 		BEGIN
-			IF NEW.ai->>'openrouter_model' = 'reject-at-commit' THEN
+				IF NEW.ai #>> '{providers,api_key,openrouter,model}' = 'reject-at-commit' THEN
 				RAISE EXCEPTION 'sentinel commit rejection';
 			END IF;
 			RETURN NEW;
@@ -357,7 +361,7 @@ func TestStore_CommitFailureLeavesDesiredAndRuntimeUnchanged(t *testing.T) {
 	store := New(pool, "", "", config.AIConfig{}, featureflags.Features{})
 	var applies atomic.Int32
 	_, err := store.Update(ctx, func(st Settings) (Settings, error) {
-		st.AI.OpenRouterModel = "reject-at-commit"
+		setOpenRouterModel(&st.AI, stringPointer("reject-at-commit"))
 		return st, nil
 	}, func(Settings) (PreparedApply, error) {
 		return func() { applies.Add(1) }, nil
@@ -375,7 +379,7 @@ func TestStore_CommitFailureLeavesDesiredAndRuntimeUnchanged(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("runtime settings rows = %d, want transaction rolled back", count)
 	}
-	if got := store.Current(); got.AI != (AISettings{}) || len(got.Flags) != 0 || got.Revision != 0 {
+	if got := store.Current(); !reflect.DeepEqual(got.AI, AISettings{}) || len(got.Flags) != 0 || got.Revision != 0 {
 		t.Fatalf("Current() = %+v, want unchanged zero settings", got)
 	}
 }
@@ -423,16 +427,19 @@ func TestStore_UpdateMigratesLegacyCiphertextAndRestartsWithActiveKeyOnly(t *tes
 			if err := json.Unmarshal(secretsJSON, &secrets); err != nil {
 				t.Fatalf("decode migrated secrets: %v", err)
 			}
-			migratedBlob := secrets[openRouterAPIKeySecret]
+			migratedBlob := secrets[credentialSecretName(APIKeyProviderOpenRouter)]
 			if legacyBlob == migratedBlob || !strings.HasPrefix(migratedBlob, credentialEnvelopePrefix) {
 				t.Fatalf("migrated ciphertext = %q, want new versioned envelope", migratedBlob)
+			}
+			if _, exists := secrets[legacyOpenRouterAPIKeySecret]; exists {
+				t.Fatal("legacy secret slot survived canonical migration")
 			}
 
 			restarted := New(pool, encryptionKey, "", config.AIConfig{}, featureflags.Features{})
 			if err := restarted.Start(ctx); err != nil {
 				t.Fatalf("restart with active key only: %v", err)
 			}
-			if got := restarted.Current().AI.OpenRouterAPIKey; got != apiKey {
+			if got := openRouterCredential(restarted.Current().AI).Value; got != apiKey {
 				t.Fatalf("restarted key = %q, want %q", got, apiKey)
 			}
 		})
@@ -449,8 +456,7 @@ func TestStore_UpdateRotatesRetiredVersionedCiphertext(t *testing.T) {
 	)
 	retiredStore := New(pool, retiredKey, "", config.AIConfig{}, featureflags.Features{})
 	if _, err := retiredStore.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterAPIKey = apiKey
-		cur.AI.OpenRouterAPIKeyOperation = SecretReplace
+		setOpenRouterCredential(&cur.AI, CredentialOverride{Value: apiKey, Operation: SecretReplace})
 		return cur, nil
 	}, nil); err != nil {
 		t.Fatalf("write retired-key envelope: %v", err)
@@ -464,7 +470,7 @@ func TestStore_UpdateRotatesRetiredVersionedCiphertext(t *testing.T) {
 	if err := json.Unmarshal(retiredSecretsJSON, &retiredSecrets); err != nil {
 		t.Fatalf("decode retired-key secrets: %v", err)
 	}
-	retiredBlob := retiredSecrets[openRouterAPIKeySecret]
+	retiredBlob := retiredSecrets[credentialSecretName(APIKeyProviderOpenRouter)]
 	if !strings.Contains(retiredBlob, credentialKeyID(retiredKey)) {
 		t.Fatalf("retired envelope does not contain its derived key ID")
 	}
@@ -492,7 +498,7 @@ func TestStore_UpdateRotatesRetiredVersionedCiphertext(t *testing.T) {
 	if err := json.Unmarshal(activeSecretsJSON, &activeSecrets); err != nil {
 		t.Fatalf("decode active secrets: %v", err)
 	}
-	activeBlob := activeSecrets[openRouterAPIKeySecret]
+	activeBlob := activeSecrets[credentialSecretName(APIKeyProviderOpenRouter)]
 	if activeBlob == retiredBlob || !strings.Contains(activeBlob, credentialKeyID(activeKey)) {
 		t.Fatal("retired envelope was not rewritten with the active key")
 	}
@@ -501,7 +507,7 @@ func TestStore_UpdateRotatesRetiredVersionedCiphertext(t *testing.T) {
 	if err := restarted.Start(ctx); err != nil {
 		t.Fatalf("restart without retired key: %v", err)
 	}
-	if got := restarted.Current().AI.OpenRouterAPIKey; got != apiKey {
+	if got := openRouterCredential(restarted.Current().AI).Value; got != apiKey {
 		t.Fatalf("restarted key = %q, want %q", got, apiKey)
 	}
 }
@@ -511,7 +517,7 @@ func TestStore_UpdateRejectsCorruptRow(t *testing.T) {
 
 	store := New(pool, "test-settings-encryption-key-12345", "test-auth-secret", config.AIConfig{}, featureflags.Features{})
 	if _, err := store.Update(ctx, func(cur Settings) (Settings, error) {
-		cur.AI.OpenRouterModel = "openrouter/auto"
+		setOpenRouterModel(&cur.AI, stringPointer("openrouter/auto"))
 		return cur, nil
 	}, nil); err != nil {
 		t.Fatalf("Update(seed) error = %v", err)
@@ -545,9 +551,39 @@ func TestStore_UpdateRejectsCorruptRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(corrupt row) error = %v", err)
 	}
-	if got.AI != (AISettings{}) || len(got.Flags) != 0 {
+	if !reflect.DeepEqual(got.AI, AISettings{}) || len(got.Flags) != 0 {
 		t.Fatalf("Load(corrupt row) = %+v, want degraded zero Settings", got)
 	}
+}
+
+func setOpenRouterModel(ai *AISettings, model *string) {
+	if ai.Providers.APIKey == nil {
+		ai.Providers.APIKey = make(map[APIKeyProvider]APIKeyProviderOverride)
+	}
+	if model == nil {
+		delete(ai.Providers.APIKey, APIKeyProviderOpenRouter)
+		return
+	}
+	ai.Providers.APIKey[APIKeyProviderOpenRouter] = APIKeyProviderOverride{Model: model}
+}
+
+func openRouterModel(ai AISettings) string {
+	model := ai.Providers.APIKey[APIKeyProviderOpenRouter].Model
+	if model == nil {
+		return ""
+	}
+	return *model
+}
+
+func setOpenRouterCredential(ai *AISettings, credential CredentialOverride) {
+	if ai.Credentials == nil {
+		ai.Credentials = make(map[APIKeyProvider]CredentialOverride)
+	}
+	ai.Credentials[APIKeyProviderOpenRouter] = credential
+}
+
+func openRouterCredential(ai AISettings) CredentialOverride {
+	return ai.Credentials[APIKeyProviderOpenRouter]
 }
 
 func settingsTestPool(t *testing.T) (context.Context, *pgxpool.Pool) {

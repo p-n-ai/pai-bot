@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"reflect"
 	"slices"
 	"sync"
 	"unicode"
@@ -21,11 +22,14 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
-const openRouterAPIKeySecret = "openrouter_api_key"
+const legacyOpenRouterAPIKeySecret = "openrouter_api_key"
 
-var openRouterAPIKeyContext = credentialContext{
-	Provider: "openrouter",
-	Slot:     "api_key",
+func credentialSecretName(provider APIKeyProvider) string {
+	return "provider/" + string(provider) + "/api_key"
+}
+
+func apiKeyCredentialContext(provider APIKeyProvider) credentialContext {
+	return credentialContext{Provider: string(provider), Slot: "api_key"}
 }
 
 // ErrConfigEncryptionKey refuses secret writes until a dedicated,
@@ -175,15 +179,32 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 		return Settings{}, fmt.Errorf("decode runtime settings for update: %w", err)
 	}
 	cur.Revision = revision
-	decodedKey := cur.AI.OpenRouterAPIKey
-	reencryptKey := s.secretNeedsReencryption(prevSecrets[openRouterAPIKeySecret], decodedKey)
-	st, err := mutate(cur)
+	decodedKeys := make(map[APIKeyProvider]string, len(apiKeyProviders))
+	reencryptKeys := make(map[APIKeyProvider]bool, len(apiKeyProviders))
+	for _, provider := range apiKeyProviders {
+		credential := cur.AI.Credentials[provider]
+		decodedKeys[provider] = credential.Value
+		blob, legacy, blobErr := storedCredentialBlob(prevSecrets, provider)
+		if blobErr != nil {
+			return Settings{}, fmt.Errorf("decode runtime settings for update: %w", blobErr)
+		}
+		reencryptKeys[provider] = legacy || s.secretNeedsReencryption(provider, blob, credential.Value)
+	}
+	st, err := mutate(cloneSettingsForMutation(cur))
 	if err != nil {
 		return Settings{}, err
 	}
 	s.canonicalizeRedundantOverrides(&st)
-	_, hadStoredKey := prevSecrets[openRouterAPIKeySecret]
-	explicitStoredKeyClear := st.AI.OpenRouterAPIKeyOperation == SecretClear && hadStoredKey
+	explicitStoredKeyClear := false
+	for _, provider := range apiKeyProviders {
+		credential := st.AI.Credentials[provider]
+		blob, _, blobErr := storedCredentialBlob(prevSecrets, provider)
+		if blobErr != nil {
+			return Settings{}, fmt.Errorf("decode runtime settings for update: %w", blobErr)
+		}
+		explicitStoredKeyClear = explicitStoredKeyClear ||
+			(credential.Operation == SecretClear && blob != "")
+	}
 	if sameDesiredSettings(cur, st) && !explicitStoredKeyClear {
 		st.Revision = cur.Revision
 	} else {
@@ -196,25 +217,32 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 			return Settings{}, err
 		}
 	}
-	if err := saveSettingsRow(ctx, tx, s.writeEncryptionKey(), st, prevSecrets, decodedKey, reencryptKey); err != nil {
+	if err := saveSettingsRow(ctx, tx, s.writeEncryptionKey(), st, prevSecrets, decodedKeys, reencryptKeys); err != nil {
 		return Settings{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Settings{}, fmt.Errorf("commit runtime settings update: %w", err)
 	}
-	switch {
-	case st.AI.OpenRouterAPIKeyOperation == SecretClear:
-		st.AI.OpenRouterEnvelope = CredentialEnvelopeStatus{}
-	case st.AI.OpenRouterAPIKeyOperation == SecretReplace || reencryptKey:
-		st.AI.OpenRouterEnvelope = CredentialEnvelopeStatus{
-			Stored:    true,
-			Readable:  true,
-			Version:   "v1",
-			Algorithm: credentialEnvelopeAlgorithm,
-			KeyID:     credentialKeyID(s.writeEncryptionKey()),
+	for _, provider := range apiKeyProviders {
+		credential, ok := st.AI.Credentials[provider]
+		if !ok {
+			continue
 		}
+		switch {
+		case credential.Operation == SecretClear:
+			credential.Envelope = CredentialEnvelopeStatus{}
+		case credential.Operation == SecretReplace || reencryptKeys[provider]:
+			credential.Envelope = CredentialEnvelopeStatus{
+				Stored:    true,
+				Readable:  true,
+				Version:   "v1",
+				Algorithm: credentialEnvelopeAlgorithm,
+				KeyID:     credentialKeyID(s.writeEncryptionKey()),
+			}
+		}
+		credential.Operation = SecretPreserve
+		st.AI.Credentials[provider] = credential
 	}
-	st.AI.OpenRouterAPIKeyOperation = SecretPreserve
 	s.setCurrent(st)
 	if apply != nil {
 		apply()
@@ -223,26 +251,114 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 	return st, nil
 }
 
+func cloneSettingsForMutation(st Settings) Settings {
+	cloned := Settings{
+		AI: AISettings{
+			DefaultProvider: cloneStringPointer(st.AI.DefaultProvider),
+			Providers: ProviderOverrides{
+				APIKey: make(map[APIKeyProvider]APIKeyProviderOverride, len(st.AI.Providers.APIKey)),
+			},
+			Credentials: make(map[APIKeyProvider]CredentialOverride, len(st.AI.Credentials)),
+		},
+		Flags:    maps.Clone(st.Flags),
+		Revision: st.Revision,
+	}
+	for provider, override := range st.AI.Providers.APIKey {
+		cloned.AI.Providers.APIKey[provider] = APIKeyProviderOverride{
+			Model: cloneStringPointer(override.Model),
+		}
+	}
+	if st.AI.Providers.Ollama != nil {
+		cloned.AI.Providers.Ollama = &EnabledModelOverride{
+			Enabled: cloneBoolPointer(st.AI.Providers.Ollama.Enabled),
+			Model:   cloneStringPointer(st.AI.Providers.Ollama.Model),
+		}
+	}
+	if st.AI.Providers.ManagedCodex != nil {
+		cloned.AI.Providers.ManagedCodex = &ModelOverride{
+			Model: cloneStringPointer(st.AI.Providers.ManagedCodex.Model),
+		}
+	}
+	maps.Copy(cloned.AI.Credentials, st.AI.Credentials)
+	return cloned
+}
+
 // canonicalizeRedundantOverrides keeps the database as an override layer
 // rather than a copy of the boot environment. A later deployment can then
 // change the baseline without an equal historical override masking it.
 func (s *Store) canonicalizeRedundantOverrides(st *Settings) {
-	if st.AI.DefaultProvider == s.envAI.DefaultProvider {
-		st.AI.DefaultProvider = ""
+	if st.AI.DefaultProvider != nil && *st.AI.DefaultProvider == s.envAI.DefaultProvider {
+		st.AI.DefaultProvider = nil
 	}
-	if st.AI.OpenRouterModel == s.envAI.OpenRouter.Model {
-		st.AI.OpenRouterModel = ""
+	for provider, override := range st.AI.Providers.APIKey {
+		envModel, envKey := apiKeyConfig(s.envAI, provider)
+		if override.Model != nil && *override.Model == envModel {
+			override.Model = nil
+		}
+		if override.Model == nil {
+			delete(st.AI.Providers.APIKey, provider)
+		} else {
+			st.AI.Providers.APIKey[provider] = override
+		}
+		if credential, ok := st.AI.Credentials[provider]; ok &&
+			credential.Value != "" && credential.Value == envKey {
+			credential.Value = ""
+			credential.Operation = SecretClear
+			st.AI.Credentials[provider] = credential
+		}
 	}
-	if st.AI.OpenRouterAPIKey != "" &&
-		st.AI.OpenRouterAPIKey == s.envAI.OpenRouter.APIKey {
-		st.AI.OpenRouterAPIKey = ""
-		st.AI.OpenRouterAPIKeyOperation = SecretClear
+	canonicalizeEnabledModelOverride(&st.AI.Providers.Ollama, s.envAI.Ollama.Enabled, s.envAI.Ollama.Model)
+	canonicalizeModelOverride(&st.AI.Providers.ManagedCodex, s.envAI.Codex.Model)
+	for provider, credential := range st.AI.Credentials {
+		if _, known := ParseAPIKeyProvider(string(provider)); !known {
+			delete(st.AI.Credentials, provider)
+			continue
+		}
+		_, envKey := apiKeyConfig(s.envAI, provider)
+		if credential.Value != "" && credential.Value == envKey {
+			credential.Value = ""
+			credential.Operation = SecretClear
+			st.AI.Credentials[provider] = credential
+		}
 	}
 	for name, value := range st.Flags {
 		if value == s.envFlags.Enabled(featureflags.Feature(name)) {
 			delete(st.Flags, name)
 		}
 	}
+}
+
+func canonicalizeModelOverride(override **ModelOverride, envModel string) {
+	if *override == nil {
+		return
+	}
+	value := **override
+	if value.Model != nil && *value.Model == envModel {
+		value.Model = nil
+	}
+	if value.Model == nil {
+		*override = nil
+		return
+	}
+	*override = &value
+}
+
+func canonicalizeEnabledModelOverride(override **EnabledModelOverride, envEnabled bool, envModel string) {
+	if *override == nil {
+		return
+	}
+	value := **override
+	if value.Enabled != nil && *value.Enabled == envEnabled {
+		value.Enabled = nil
+	}
+	if value.Model != nil && *value.Model == envModel {
+		value.Model = nil
+	}
+	if value.Enabled == nil && value.Model == nil {
+		*override = nil
+		return
+	}
+	*override = &value
 }
 
 // Load reads the settings row; a missing row yields zero Settings and a
@@ -301,7 +417,7 @@ func (s *Store) writeEncryptionKey() string {
 	return s.encryptionKey
 }
 
-func (s *Store) secretNeedsReencryption(blob, plaintext string) bool {
+func (s *Store) secretNeedsReencryption(provider APIKeyProvider, blob, plaintext string) bool {
 	key := s.writeEncryptionKey()
 	if blob == "" || plaintext == "" || key == "" {
 		return false
@@ -311,7 +427,7 @@ func (s *Store) secretNeedsReencryption(blob, plaintext string) bool {
 		s.previousEncryptionKeys,
 		s.legacyKeys(),
 		blob,
-		openRouterAPIKeyContext,
+		apiKeyCredentialContext(provider),
 	)
 	return err != nil || decrypted.NeedsRewrite
 }
@@ -326,7 +442,7 @@ func decodeSettingsRow(
 	aiJSON, flagsJSON, secretsJSON []byte,
 ) (Settings, map[string]string, error) {
 	var st Settings
-	if err := json.Unmarshal(aiJSON, &st.AI); err != nil {
+	if err := decodeAISettings(aiJSON, &st.AI); err != nil {
 		return Settings{}, nil, fmt.Errorf("decode ai column: %w", err)
 	}
 	if err := json.Unmarshal(flagsJSON, &st.Flags); err != nil {
@@ -337,29 +453,92 @@ func decodeSettingsRow(
 		return Settings{}, nil, fmt.Errorf("decode secrets column: %w", err)
 	}
 	pruneUnknownFlags(st.Flags)
-	if blob := secrets[openRouterAPIKeySecret]; blob != "" {
-		st.AI.OpenRouterEnvelope = credentialEnvelopeMetadata(blob)
+	for _, provider := range apiKeyProviders {
+		blob, _, err := storedCredentialBlob(secrets, provider)
+		if err != nil {
+			return Settings{}, nil, err
+		}
+		if blob == "" {
+			continue
+		}
+		credential := CredentialOverride{Envelope: credentialEnvelopeMetadata(blob)}
 		decrypted, err := decryptCredential(
 			activeKey,
 			previousKeys,
 			legacyKeys,
 			blob,
-			openRouterAPIKeyContext,
+			apiKeyCredentialContext(provider),
 		)
 		if err != nil {
-			slog.Warn("runtime settings: dropping undecryptable openrouter api key", "error", err)
+			slog.Warn("runtime settings: dropping undecryptable provider credential", "provider", provider, "error", err)
 		} else {
-			st.AI.OpenRouterAPIKey = decrypted.Plaintext
-			st.AI.OpenRouterEnvelope.Readable = true
-			st.AI.OpenRouterEnvelope.KeyID = decrypted.KeyID
-			st.AI.OpenRouterEnvelope.MigrationNeeded = decrypted.NeedsRewrite
+			credential.Value = decrypted.Plaintext
+			credential.Envelope.Readable = true
+			credential.Envelope.KeyID = decrypted.KeyID
+			credential.Envelope.MigrationNeeded = decrypted.NeedsRewrite
 			if decrypted.Legacy {
-				st.AI.OpenRouterEnvelope.Version = "legacy"
-				st.AI.OpenRouterEnvelope.Algorithm = ""
+				credential.Envelope.Version = "legacy"
+				credential.Envelope.Algorithm = ""
 			}
 		}
+		if st.AI.Credentials == nil {
+			st.AI.Credentials = make(map[APIKeyProvider]CredentialOverride)
+		}
+		st.AI.Credentials[provider] = credential
 	}
 	return st, secrets, nil
+}
+
+func decodeAISettings(data []byte, target *AISettings) error {
+	var wire struct {
+		DefaultProvider *string            `json:"default_provider"`
+		Providers       *ProviderOverrides `json:"providers"`
+		OpenRouterModel *string            `json:"openrouter_model"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.DefaultProvider != nil && *wire.DefaultProvider != "" {
+		target.DefaultProvider = cloneStringPointer(wire.DefaultProvider)
+	}
+	if wire.Providers != nil {
+		target.Providers = *wire.Providers
+	}
+	for provider, override := range target.Providers.APIKey {
+		if _, ok := ParseAPIKeyProvider(string(provider)); !ok {
+			return fmt.Errorf("unknown API-key provider %q", provider)
+		}
+		if override.Model != nil && *override.Model == "" {
+			return fmt.Errorf("empty model override for provider %q", provider)
+		}
+	}
+	if wire.OpenRouterModel != nil && *wire.OpenRouterModel != "" {
+		current, exists := target.Providers.APIKey[APIKeyProviderOpenRouter]
+		if exists && current.Model != nil {
+			return errors.New("ambiguous canonical and legacy OpenRouter model overrides")
+		}
+		if target.Providers.APIKey == nil {
+			target.Providers.APIKey = make(map[APIKeyProvider]APIKeyProviderOverride)
+		}
+		current.Model = cloneStringPointer(wire.OpenRouterModel)
+		target.Providers.APIKey[APIKeyProviderOpenRouter] = current
+	}
+	return nil
+}
+
+func storedCredentialBlob(secrets map[string]string, provider APIKeyProvider) (blob string, legacy bool, err error) {
+	canonical := secrets[credentialSecretName(provider)]
+	if provider != APIKeyProviderOpenRouter {
+		return canonical, false, nil
+	}
+	old := secrets[legacyOpenRouterAPIKeySecret]
+	if canonical != "" && old != "" {
+		return "", false, errors.New("ambiguous canonical and legacy OpenRouter credentials")
+	}
+	if canonical != "" {
+		return canonical, false, nil
+	}
+	return old, old != "", nil
 }
 
 // degradeSettingsRow never fails: a corrupted row degrades to zero Settings so
@@ -396,42 +575,47 @@ func pruneUnknownFlags(flags map[string]bool) {
 	}
 }
 
-// mergeSecrets returns the secrets map to persist: prev with only the
-// openrouter key entry changed when the mutated key differs from decodedKey.
+// mergeSecrets returns prev with only known credential slots changed.
 func mergeSecrets(
 	secret string,
 	prev map[string]string,
-	decodedKey, key string,
-	operation SecretUpdateOperation,
-	forceReencrypt bool,
+	decodedKeys map[APIKeyProvider]string,
+	credentials map[APIKeyProvider]CredentialOverride,
+	forceReencrypt map[APIKeyProvider]bool,
 ) (map[string]string, error) {
 	secrets := make(map[string]string, len(prev))
 	maps.Copy(secrets, prev)
-	if operation == SecretClear {
-		delete(secrets, openRouterAPIKeySecret)
-		return secrets, nil
-	}
-	switch key {
-	case decodedKey:
-		if forceReencrypt {
-			break
+	for _, provider := range apiKeyProviders {
+		credential := credentials[provider]
+		canonicalName := credentialSecretName(provider)
+		if credential.Operation == SecretClear {
+			delete(secrets, canonicalName)
+			if provider == APIKeyProviderOpenRouter {
+				delete(secrets, legacyOpenRouterAPIKeySecret)
+			}
+			continue
 		}
-		// Unchanged (including "" after an undecryptable blob was dropped at
-		// decode): keep the stored blob byte-for-byte so reverting
-		// PAI_AUTH_SECRET can still recover the key.
-		return secrets, nil
-	case "":
-		delete(secrets, openRouterAPIKeySecret)
-		return secrets, nil
+		key := credential.Value
+		if key == decodedKeys[provider] && !forceReencrypt[provider] {
+			continue
+		}
+		if key == "" {
+			// An unreadable stored blob decodes to an empty value. Preserve it
+			// unless the caller explicitly clears the slot.
+			continue
+		}
+		if countNonWhitespace(secret) < 32 {
+			return nil, ErrConfigEncryptionKey
+		}
+		blob, err := encryptCredential(secret, key, apiKeyCredentialContext(provider))
+		if err != nil {
+			return nil, fmt.Errorf("encrypt %s api key: %w", provider, err)
+		}
+		secrets[canonicalName] = blob
+		if provider == APIKeyProviderOpenRouter {
+			delete(secrets, legacyOpenRouterAPIKeySecret)
+		}
 	}
-	if countNonWhitespace(secret) < 32 {
-		return nil, ErrConfigEncryptionKey
-	}
-	blob, err := encryptCredential(secret, key, openRouterAPIKeyContext)
-	if err != nil {
-		return nil, fmt.Errorf("encrypt openrouter api key: %w", err)
-	}
-	secrets[openRouterAPIKeySecret] = blob
 	return secrets, nil
 }
 
@@ -446,15 +630,32 @@ func countNonWhitespace(value string) int {
 }
 
 func sameDesiredSettings(left, right Settings) bool {
-	return left.AI.DefaultProvider == right.AI.DefaultProvider &&
-		left.AI.OpenRouterModel == right.AI.OpenRouterModel &&
-		left.AI.OpenRouterAPIKey == right.AI.OpenRouterAPIKey &&
+	return reflect.DeepEqual(left.AI.DefaultProvider, right.AI.DefaultProvider) &&
+		reflect.DeepEqual(left.AI.Providers, right.AI.Providers) &&
+		equalCredentialValues(left.AI.Credentials, right.AI.Credentials) &&
 		maps.Equal(left.Flags, right.Flags)
 }
 
-// saveSettingsRow upserts the settings row; prevSecrets and decodedKey come
+func equalCredentialValues(left, right map[APIKeyProvider]CredentialOverride) bool {
+	for _, provider := range apiKeyProviders {
+		if left[provider].Value != right[provider].Value {
+			return false
+		}
+	}
+	return true
+}
+
+// saveSettingsRow upserts the settings row; prevSecrets and decoded keys come
 // from the strict decode of the locked row (see mergeSecrets).
-func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings, prevSecrets map[string]string, decodedKey string, forceReencrypt bool) error {
+func saveSettingsRow(
+	ctx context.Context,
+	tx pgx.Tx,
+	secret string,
+	st Settings,
+	prevSecrets map[string]string,
+	decodedKeys map[APIKeyProvider]string,
+	forceReencrypt map[APIKeyProvider]bool,
+) error {
 	aiJSON, err := json.Marshal(st.AI)
 	if err != nil {
 		return fmt.Errorf("marshal ai settings: %w", err)
@@ -470,9 +671,8 @@ func saveSettingsRow(ctx context.Context, tx pgx.Tx, secret string, st Settings,
 	secrets, err := mergeSecrets(
 		secret,
 		prevSecrets,
-		decodedKey,
-		st.AI.OpenRouterAPIKey,
-		st.AI.OpenRouterAPIKeyOperation,
+		decodedKeys,
+		st.AI.Credentials,
 		forceReencrypt,
 	)
 	if err != nil {

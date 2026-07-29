@@ -150,7 +150,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		t.Fatalf("Issue() error = %v", err)
 	}
 
-	body := `{"defaultProvider":"ollama","openrouterModel":"unused-test-model"}`
+	body := `{"defaultProvider":{"type":"ollama"}}`
 	for _, tt := range []struct {
 		name  string
 		token string
@@ -199,18 +199,22 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	if strings.Contains(rec.Body.String(), openRouterKey) || strings.Contains(rec.Body.String(), "integration-secret") {
 		t.Fatalf("PUT response leaked API key: %q", rec.Body.String())
 	}
-	var response aiSettingsPayload
+	var response aiSettingsTestPayload
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode PUT response: %v", err)
 	}
-	if response.DefaultProvider != "ollama" || !response.OpenRouterKey.Set || response.OpenRouterKey.Last4 != "9876" {
+	openRouter := integrationAPIKeyProvider(t, response, settings.APIKeyProviderOpenRouter)
+	if response.DefaultProvider.Effective == nil ||
+		response.DefaultProvider.Effective.Type != settings.ProviderKindOllama ||
+		!openRouter.Credential.Effective.Set ||
+		openRouter.Credential.Effective.Last4 != "9876" {
 		t.Fatalf("PUT response = %#v, want ollama and redacted key ending 9876", response)
 	}
 	if response.Revision == 0 || response.AppliedRevision != response.Revision || response.Drift {
 		t.Fatalf("PUT revision state = desired %d applied %d drift %v, want synchronously applied revision",
 			response.Revision, response.AppliedRevision, response.Drift)
 	}
-	if keyHealth := response.Health.OpenRouterKey; !keyHealth.Stored || !keyHealth.Readable ||
+	if keyHealth := openRouter.Credential.Health; !keyHealth.Stored || !keyHealth.Readable ||
 		keyHealth.Version != "v1" || keyHealth.Algorithm != "a256gcm" ||
 		keyHealth.KeyID == "" || keyHealth.MigrationNeeded {
 		t.Fatalf("credential health = %+v, want readable current envelope metadata", keyHealth)
@@ -223,12 +227,12 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	}{
 		{
 			name: "stale revision",
-			body: `{"expectedRevision":0,"openrouterModel":"stale/model"}`,
+			body: `{"expectedRevision":0,"provider":{"type":"api_key","name":"openrouter","model":"stale/model"}}`,
 			want: http.StatusConflict,
 		},
 		{
 			name: "unknown provider",
-			body: `{"expectedRevision":` + fmt.Sprint(response.Revision) + `,"defaultProvider":"unknown-provider"}`,
+			body: `{"expectedRevision":` + fmt.Sprint(response.Revision) + `,"defaultProvider":{"type":"api_key","name":"unknown-provider"}}`,
 			want: http.StatusBadRequest,
 		},
 	} {
@@ -266,7 +270,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	if err := json.Unmarshal([]byte(rawSecrets), &persistedSecrets); err != nil {
 		t.Fatalf("decode persisted secrets: %v", err)
 	}
-	migratedOpenRouterBlob := persistedSecrets["openrouter_api_key"]
+	migratedOpenRouterBlob := persistedSecrets["provider/openrouter/api_key"]
 	if !strings.HasPrefix(migratedOpenRouterBlob, "pai:v1:a256gcm:") {
 		t.Fatalf("migrated OpenRouter credential has unexpected envelope")
 	}
@@ -313,7 +317,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	if err := restartedStore.Start(ctx); err != nil {
 		t.Fatalf("restarted settings.Store.Start() error = %v", err)
 	}
-	if got := restartedStore.Current().AI.OpenRouterAPIKey; got != openRouterKey {
+	if got := restartedStore.Current().AI.Credentials[settings.APIKeyProviderOpenRouter].Value; got != openRouterKey {
 		t.Fatalf("restarted store API key = %q, want decrypted original", got)
 	}
 	restartedRouter := airouter.Setup(settings.MergeAI(envAI, restartedStore.Current()))
@@ -366,7 +370,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		http.MethodPut,
 		"/api/admin/ai/settings",
 		strings.NewReader(
-			`{"expectedRevision":`+fmt.Sprint(response.Revision)+`,"openrouterApiKey":null}`,
+			`{"expectedRevision":`+fmt.Sprint(response.Revision)+`,"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
 		),
 	)
 	resetReq.Header.Set("Authorization", "Bearer "+token)
@@ -375,19 +379,20 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 	if resetRec.Code != http.StatusOK {
 		t.Fatalf("reset PUT status = %d, want %d (body %q)", resetRec.Code, http.StatusOK, resetRec.Body.String())
 	}
-	var resetResponse aiSettingsPayload
+	var resetResponse aiSettingsTestPayload
 	if err := json.Unmarshal(resetRec.Body.Bytes(), &resetResponse); err != nil {
 		t.Fatalf("decode reset response: %v", err)
 	}
-	if resetResponse.Sources.OpenRouterKey != "env" ||
-		!resetResponse.Effective.OpenRouterKey.Set ||
-		resetResponse.Effective.OpenRouterKey.Last4 != "2468" ||
-		resetResponse.Override.OpenRouterKey.Set {
+	resetOpenRouter := integrationAPIKeyProvider(t, resetResponse, settings.APIKeyProviderOpenRouter)
+	if resetOpenRouter.Credential.Source != "env" ||
+		!resetOpenRouter.Credential.Effective.Set ||
+		resetOpenRouter.Credential.Effective.Last4 != "2468" ||
+		resetOpenRouter.Credential.Override.Set {
 		t.Fatalf("reset response = %#v, want environment credential fallback", resetResponse)
 	}
 	var storedOpenRouterKey, storedUnknownSecret *string
 	if err := pool.QueryRow(ctx, `
-		SELECT secrets->>'openrouter_api_key', secrets->>$1
+		SELECT secrets->>'provider/openrouter/api_key', secrets->>$1
 		FROM runtime_settings
 		WHERE id = 1
 	`, unknownSecretName).Scan(&storedOpenRouterKey, &storedUnknownSecret); err != nil {
@@ -426,6 +431,33 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 			t.Fatalf("logs leaked sensitive runtime settings material")
 		}
 	}
+}
+
+func integrationAPIKeyProvider(
+	t *testing.T,
+	payload aiSettingsTestPayload,
+	name settings.APIKeyProvider,
+) aiAPIKeyProviderProjection {
+	t.Helper()
+	for _, raw := range payload.Providers {
+		var header struct {
+			Type settings.ProviderKind `json:"type"`
+			Name string                `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &header); err != nil {
+			t.Fatalf("decode provider discriminator: %v", err)
+		}
+		if header.Type != settings.ProviderKindAPIKey || header.Name != string(name) {
+			continue
+		}
+		var provider aiAPIKeyProviderProjection
+		if err := json.Unmarshal(raw, &provider); err != nil {
+			t.Fatalf("decode API-key provider %q: %v", name, err)
+		}
+		return provider
+	}
+	t.Fatalf("API-key provider %q missing from response", name)
+	return aiAPIKeyProviderProjection{}
 }
 
 func assertCredentialFailureResponsesAreSafe(
@@ -507,12 +539,13 @@ func assertCredentialFailureResponsesAreSafe(
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET unreadable credential status = %d, want %d", rec.Code, http.StatusOK)
 			}
-			var got aiSettingsPayload
+			var got aiSettingsTestPayload
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 				t.Fatalf("decode unreadable credential response: %v", err)
 			}
-			if !got.Health.OpenRouterKey.Stored || got.Health.OpenRouterKey.Readable {
-				t.Fatalf("credential health = %+v, want stored and unreadable", got.Health.OpenRouterKey)
+			openRouter := integrationAPIKeyProvider(t, got, settings.APIKeyProviderOpenRouter)
+			if !openRouter.Credential.Health.Stored || openRouter.Credential.Health.Readable {
+				t.Fatalf("credential health = %+v, want stored and unreadable", openRouter.Credential.Health)
 			}
 			for _, sensitive := range []string{tt.blob, unknownSecretValue, token} {
 				if strings.Contains(rec.Body.String(), sensitive) {

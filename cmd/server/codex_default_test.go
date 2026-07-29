@@ -58,10 +58,16 @@ func (m *memoryRuntimeSettingsUpdater) Update(
 }
 
 func TestMakeCodexDefaultPreservesOtherSettingsAndApplies(t *testing.T) {
+	defaultProvider := "openrouter"
+	model := "existing-model"
 	store := &memoryRuntimeSettingsUpdater{current: settings.Settings{
 		AI: settings.AISettings{
-			DefaultProvider: "openrouter",
-			OpenRouterModel: "existing-model",
+			DefaultProvider: &defaultProvider,
+			Providers: settings.ProviderOverrides{
+				APIKey: map[settings.APIKeyProvider]settings.APIKeyProviderOverride{
+					settings.APIKeyProviderOpenRouter: {Model: &model},
+				},
+			},
 		},
 		Flags: map[string]bool{"turn_hooks": true},
 	}}
@@ -73,14 +79,16 @@ func TestMakeCodexDefaultPreservesOtherSettingsAndApplies(t *testing.T) {
 		t.Fatalf("makeCodexDefault() error = %v", err)
 	}
 
-	if store.updates != 1 || store.current.AI.DefaultProvider != "codex" {
+	if store.updates != 1 || store.current.AI.DefaultProvider == nil ||
+		*store.current.AI.DefaultProvider != "codex" {
 		t.Fatalf("updates/settings = %d/%#v", store.updates, store.current)
 	}
-	if store.current.AI.OpenRouterModel != "existing-model" ||
+	if got := store.current.AI.Providers.APIKey[settings.APIKeyProviderOpenRouter].Model; got == nil ||
+		*got != "existing-model" ||
 		!store.current.Flags["turn_hooks"] {
 		t.Fatalf("unrelated settings changed: %#v", store.current)
 	}
-	if applied.AI.DefaultProvider != "codex" {
+	if applied.AI.DefaultProvider == nil || *applied.AI.DefaultProvider != "codex" {
 		t.Fatalf("applied settings = %#v, want codex default", applied)
 	}
 }
@@ -113,10 +121,11 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 	}
 
 	order := router.ProviderOrder()
-	if store.current.AI.DefaultProvider != "codex" ||
+	if store.current.AI.DefaultProvider == nil ||
+		*store.current.AI.DefaultProvider != "codex" ||
 		len(order) != 1 ||
 		order[0] != "codex" {
-		t.Fatalf("default/order = %q/%v, want codex first", store.current.AI.DefaultProvider, order)
+		t.Fatalf("default/order = %v/%v, want codex first", store.current.AI.DefaultProvider, order)
 	}
 }
 

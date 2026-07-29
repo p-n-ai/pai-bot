@@ -33,12 +33,28 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 	if aiSettings.Get == nil || aiSettings.Put == nil {
 		t.Fatalf("/api/admin/ai/settings = %#v, want GET and PUT", aiSettings)
 	}
-	updateSchema, ok := doc.Components.Schemas["aiSettingsUpdateRequestDoc"]
-	if !ok {
-		t.Fatal("missing aiSettingsUpdateRequestDoc schema")
-	}
+	updateSchema := aiSettings.Put.RequestBody.Content["application/json"].Schema
 	if len(updateSchema.Required) != 0 {
-		t.Fatalf("aiSettingsUpdateRequestDoc required = %v, want no required fields", updateSchema.Required)
+		t.Fatalf("AI settings update required = %v, want no required fields", updateSchema.Required)
+	}
+	provider := updateSchema.Properties["provider"]
+	if provider == nil || len(provider.OneOf) != 3 ||
+		provider.Discriminator == nil || provider.Discriminator.PropertyName != "type" {
+		t.Fatalf("AI settings provider schema = %#v, want three discriminated variants", provider)
+	}
+	for _, variant := range provider.OneOf {
+		if variant.AdditionalProperties != false {
+			t.Fatalf("provider variant allows unknown fields: %#v", variant)
+		}
+	}
+	selector := updateSchema.Properties["defaultProvider"]
+	if selector == nil || len(selector.OneOf) != 4 {
+		t.Fatalf("defaultProvider schema = %#v, want three selectors plus null", selector)
+	}
+	responseSchema := doc.Components.Schemas["aiSettingsResponseDoc"]
+	providers := responseSchema.Properties["providers"]
+	if providers == nil || providers.Items == nil || len(providers.Items.OneOf) != 3 {
+		t.Fatalf("AI settings response providers = %#v, want closed three-variant projection", providers)
 	}
 
 	sessionSchema, ok := doc.Components.Schemas["Session"]
