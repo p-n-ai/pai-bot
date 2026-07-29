@@ -147,6 +147,19 @@ class CIWorkflowTests(unittest.TestCase):
         )
         self.assertLess(server_login, server_pull)
 
+    def test_postgres_smoke_test_provides_compose_env_file(self) -> None:
+        workflow = source(".github/workflows/ci.yml")
+        postgres_job = workflow.split("\n  postgres:\n", maxsplit=1)[1]
+        postgres_job = postgres_job.split("\n  once:\n", maxsplit=1)[0]
+
+        create_env = postgres_job.index("      - name: Create Compose environment file")
+        verify = postgres_job.index("      - name: Verify PostgreSQL retrieval image")
+        cleanup = postgres_job.index("      - name: Stop PostgreSQL retrieval image")
+
+        self.assertIn("        run: touch .env", postgres_job)
+        self.assertLess(create_env, verify)
+        self.assertLess(create_env, cleanup)
+
     def test_react_doctor_pr_filter_cannot_leave_required_check_pending(self) -> None:
         workflow = source(".github/workflows/react-doctor.yml")
         pull_request_trigger = workflow.split("  pull_request:\n", maxsplit=1)[1]

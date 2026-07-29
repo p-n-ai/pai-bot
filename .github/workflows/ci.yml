@@ -374,6 +374,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create Compose environment file
+        run: touch .env
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Build PostgreSQL retrieval image
