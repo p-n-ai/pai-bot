@@ -138,11 +138,27 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
 
     def test_remote_rollback_restores_matching_environment(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
-        rollback_at = deploy.index('if [ "$APP_HEALTH" != "healthy" ]; then')
+        rollback_at = deploy.index("rollback_release()")
         restore_at = deploy.index("Restored previous environment")
         restart_at = deploy.index("up -d app admin")
         self.assertLess(rollback_at, restore_at)
         self.assertLess(restore_at, restart_at)
+        self.assertIn("--format='{{.Image}}'", deploy)
+        self.assertNotIn("--format='{{.Config.Image}}'", deploy)
+        health_failure = deploy.split(
+            'if [ "$APP_HEALTH" != "healthy" ]; then', maxsplit=1
+        )[1]
+        self.assertIn("rollback_release", health_failure)
+
+    def test_remote_smoke_checks_are_read_only_and_blocking(self) -> None:
+        deploy = source("scripts/deploy-remote.sh")
+        self.assertNotIn('smoke "/create_group"', deploy)
+        self.assertIn('smoke "/help"', deploy)
+        smoke_failure = deploy.split(
+            'if [ "$SMOKE_FAIL" -gt 0 ]; then', maxsplit=1
+        )[1]
+        self.assertIn("rollback_release", smoke_failure)
+        self.assertIn("exit 1", smoke_failure)
 
 
 if __name__ == "__main__":
