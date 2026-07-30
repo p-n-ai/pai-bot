@@ -103,6 +103,22 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         self.assertIn('mv "$env_tmp" .env', workflow)
         self.assertNotIn("> .env", workflow)
 
+    def test_github_masks_ecr_token_before_same_job_handoff(self) -> None:
+        workflow = source(".github/workflows/deploy.yml")
+        push_images, deploy = workflow.split("\n  deploy:\n", maxsplit=1)
+
+        self.assertNotIn("ecr-token:", push_images)
+        self.assertNotIn("needs.push-images.outputs.ecr-token", workflow)
+        self.assertIn("      id-token: write", deploy)
+        self.assertEqual(workflow.count("Configure AWS credentials (OIDC)"), 2)
+        mask_at = deploy.index('echo "::add-mask::$token"')
+        output_at = deploy.index('echo "token=$token" >> "$GITHUB_OUTPUT"')
+        handoff_at = deploy.index(
+            "ECR_TOKEN: ${{ steps.ecr-token.outputs.token }}"
+        )
+        self.assertLess(mask_at, output_at)
+        self.assertLess(output_at, handoff_at)
+
     def test_compose_blocks_app_on_shared_secret_check(self) -> None:
         compose = source("docker-compose.prod.yml")
         self.assertIn("config-check:", compose)
