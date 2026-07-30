@@ -60,29 +60,6 @@ jobs:
         if: steps.artifact.outputs.exists != 'true'
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
 
-      - name: Enforce immutable candidate repositories
-        if: steps.artifact.outputs.exists != 'true'
-        run: |
-          for repository in pai-bot/app pai-bot/admin; do
-            mutability=$(aws ecr describe-repositories \
-              --repository-names "$repository" \
-              --query 'repositories[0].imageTagMutability' \
-              --output text)
-            if [ "$mutability" != "IMMUTABLE" ]; then
-              aws ecr put-image-tag-mutability \
-                --repository-name "$repository" \
-                --image-tag-mutability IMMUTABLE > /dev/null
-              mutability=$(aws ecr describe-repositories \
-                --repository-names "$repository" \
-                --query 'repositories[0].imageTagMutability' \
-                --output text)
-            fi
-            if [ "$mutability" != "IMMUTABLE" ]; then
-              echo "$repository did not transition to immutable ECR tags" >&2
-              exit 1
-            fi
-          done
-
       - name: Login to GHCR
         if: steps.artifact.outputs.exists != 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -139,28 +116,36 @@ jobs:
         id: existing
         if: steps.artifact.outputs.exists != 'true'
         env:
+          REGISTRY: ${{ secrets.ECR_REGISTRY }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          app_digest=$(aws ecr describe-images \
-            --repository-name pai-bot/app \
-            --image-ids imageTag="$SHA" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text 2>/dev/null || true)
-          admin_digest=$(aws ecr describe-images \
-            --repository-name pai-bot/admin \
-            --image-ids imageTag="$SHA" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text 2>/dev/null || true)
-          if [[ "$app_digest" == sha256:* ]]; then
-            echo "app_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "app_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [[ "$admin_digest" == sha256:* ]]; then
-            echo "admin_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "admin_exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          image_exists() {
+            local name="$1"
+            local image="$2"
+            local output
+            local digest
+            if output=$(docker buildx imagetools inspect "$image" 2>&1); then
+              digest=$(printf '%s\n' "$output" |
+                awk '$1 == "Digest:" { print $2; exit }')
+              if [[ "$digest" != sha256:* ]]; then
+                echo "registry returned an invalid digest for $image" >&2
+                return 1
+              fi
+              echo "${name}_exists=true" >> "$GITHUB_OUTPUT"
+              return
+            fi
+            case "$output" in
+              *"manifest unknown"*|*"not found"*)
+                echo "${name}_exists=false" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "registry inspection failed for $image" >&2
+                return 1
+                ;;
+            esac
+          }
+          image_exists app "$REGISTRY/pai-bot/app:$SHA"
+          image_exists admin "$REGISTRY/pai-bot/admin:$SHA"
 
       - name: Build and push SHA-addressed app image
         if: >-
@@ -191,18 +176,15 @@ jobs:
       - name: Resolve immutable image digests
         if: steps.artifact.outputs.exists != 'true'
         env:
+          REGISTRY: ${{ secrets.ECR_REGISTRY }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          app_digest=$(aws ecr describe-images \
-            --repository-name pai-bot/app \
-            --image-ids imageTag="$SHA" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text)
-          admin_digest=$(aws ecr describe-images \
-            --repository-name pai-bot/admin \
-            --image-ids imageTag="$SHA" \
-            --query 'imageDetails[0].imageDigest' \
-            --output text)
+          resolve_digest() {
+            docker buildx imagetools inspect "$1" 2> /dev/null |
+              awk '$1 == "Digest:" { print $2; exit }'
+          }
+          app_digest=$(resolve_digest "$REGISTRY/pai-bot/app:$SHA")
+          admin_digest=$(resolve_digest "$REGISTRY/pai-bot/admin:$SHA")
           if [[ "$app_digest" != sha256:* || "$admin_digest" != sha256:* ]]; then
             echo "candidate image pair is incomplete after construction" >&2
             exit 1
