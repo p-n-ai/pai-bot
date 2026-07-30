@@ -3,7 +3,9 @@
 Single EC2 instance running Docker Compose in `ap-southeast-5` (Malaysia).
 Cost: ~$20-25/mo.
 
-The server only needs Docker + docker compose. All AWS operations (ECR push, secrets) happen in GitHub Actions CI. This makes the server portable to any VPS.
+The server only needs Docker + docker compose. GitHub Actions owns registry
+operations and release orchestration, then writes runtime configuration to the
+server over SSH. This keeps the server portable to any VPS.
 
 ## Prerequisites
 
@@ -34,30 +36,49 @@ ls /opt/pai-bot
 docker info
 ```
 
-After the EC2 instance is provisioned, set up GitHub Actions secrets:
-- `DEPLOY_HOST` — public IP from terraform output
-- `DEPLOY_USER` — `ubuntu`
-- `DEPLOY_KEY` — contents of `terraform/pai-bot-key.pem`
-- `DEPLOY_DIR` — `/opt/pai-bot`
+After the EC2 instance is provisioned, configure these as repository or
+organization secrets so the Nightly workflow can access them:
+
 - `AWS_ROLE_ARN` — GitHub Actions OIDC role ARN
 - `AWS_REGION` — `ap-southeast-5`
 - `ECR_REGISTRY` — `<account>.dkr.ecr.ap-southeast-5.amazonaws.com`
 
-Secrets are stored in AWS Secrets Manager (`pai-bot/production-env`).
+Configure deploy-only values as repository secrets or in the GitHub
+`production` environment:
 
-## How Deploys Work
+- `DEPLOY_HOST` — public IP from terraform output
+- `DEPLOY_USER` — `ubuntu`
+- `DEPLOY_KEY` — contents of `terraform/pai-bot-key.pem`
+- `DEPLOY_DIR` — `/opt/pai-bot`
 
-1. CI runs tests (Go + admin lint/test)
-2. CI builds Docker images and pushes to ECR with git SHA tags
-3. CI fetches secrets from Secrets Manager, writes `.env` via SSH
-4. CI copies compose files + migrations via SCP
-5. Server runs `scripts/deploy-remote.sh`: ECR pull → migrate → rollout → health check
+Configure the production runtime values consumed by
+`.github/workflows/deploy.yml` in the same deployment settings. See
+[Nightly candidates and stable releases](../docs/releases.md) for the complete
+release contract and [Runtime AI settings](../docs/operations/runtime-ai-settings.md)
+for production secret requirements.
 
-The server never needs AWS CLI — CI generates a short-lived ECR token and passes it via SSH.
+## How Releases Work
+
+1. CI validates a push to `main`.
+2. The Nightly workflow builds or reuses SHA-addressed images and records their
+   immutable digests in a candidate artifact.
+3. A maintainer manually dispatches the Stable workflow with a successful
+   candidate run ID and semantic version.
+4. Stable verifies candidate provenance, image availability, and production
+   secrets, then copies deployment files and writes `.env` over SSH.
+5. The server runs `scripts/deploy-remote.sh`: backup → digest pull → migration
+   → rollout → health and smoke checks.
+6. GitHub publishes the semantic tag and Release only after deployment
+   succeeds.
+
+The server never needs AWS CLI. GitHub Actions generates a short-lived ECR
+token and passes it to the deployment script. A merge to `main` does not deploy
+production.
 
 ## Caddy (HTTPS)
 
-Caddy runs in Docker and handles TLS automatically when `DOMAIN` is set in Secrets Manager. No nginx, no certbot.
+Caddy runs in Docker and handles TLS automatically when the `DOMAIN` GitHub
+secret is set. No nginx, no certbot.
 
 ## Deploy to any VPS
 

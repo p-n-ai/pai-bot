@@ -1,8 +1,8 @@
 # P&AI Bot — Single EC2 + Docker Compose deployment
 # Region: ap-southeast-5 (Malaysia)
 #
-# The server only needs Docker + docker compose. All AWS operations
-# (ECR push, Secrets Manager read) happen in GitHub Actions CI.
+# The server only needs Docker + docker compose. Registry operations and
+# controlled release orchestration happen in GitHub Actions.
 #
 # Usage:
 #   cd terraform
