@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,6 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
-	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
@@ -44,6 +44,9 @@ func main() {
 	var historyJSONPath string
 	var dumpJSONPath string
 	var dumpTurnLimit int
+	var selectedProvider string
+	var interactive bool
+	var candidateDirectory string
 
 	flag.StringVar(&userID, "user-id", "terminal-user", "stable user id for the terminal session")
 	flag.StringVar(&language, "lang", "", "preferred language override (en, ms, zh)")
@@ -58,6 +61,9 @@ func main() {
 	flag.StringVar(&historyJSONPath, "history-json", "", "write local terminal conversation history to a JSON file when the session ends")
 	flag.StringVar(&dumpJSONPath, "dump-json", "", "write local terminal conversation history plus model-facing AI request/response traces to a JSON file when the session ends")
 	flag.IntVar(&dumpTurnLimit, "turn-limit", 0, "limit exported conversation turns and model calls to the latest N items; 0 exports everything")
+	flag.StringVar(&selectedProvider, "provider", "", "use only this AI provider (for example, codex); disables provider fallback")
+	flag.BoolVar(&interactive, "interactive", false, "enable queue, interruption, character, and candidate reload controls")
+	flag.StringVar(&candidateDirectory, "candidate", "", "directory containing an optional candidate.yaml conversation candidate")
 	flag.Parse()
 
 	if wsURL != "" {
@@ -74,6 +80,27 @@ func main() {
 		}
 		return
 	}
+	if interactive {
+		if !memory {
+			fmt.Fprintln(os.Stderr, "--interactive requires --memory")
+			os.Exit(1)
+		}
+		if strings.ToLower(strings.TrimSpace(selectedProvider)) != "codex" {
+			fmt.Fprintln(os.Stderr, "--interactive requires --provider codex")
+			os.Exit(1)
+		}
+		if multi {
+			fmt.Fprintln(os.Stderr, "--interactive cannot be combined with --multi")
+			os.Exit(1)
+		}
+		if strings.TrimSpace(dumpJSONPath) != "" {
+			fmt.Fprintln(os.Stderr, "--interactive does not support --dump-json because candidate prompts must not be exported")
+			os.Exit(1)
+		}
+	}
+
+	sessionCtx, stopSession := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stopSession()
 
 	logLevel := slog.LevelError
 	if verbose {
@@ -89,14 +116,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+	if interactive {
+		if err := cfg.Validate(); err != nil {
+			fmt.Fprintf(os.Stderr, "validate interactive config: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	if !cfg.HasAIProvider() {
 		fmt.Fprintln(os.Stderr, "at least one AI provider must be configured")
 		os.Exit(1)
 	}
 
-	router := airouter.Setup(cfg.AI)
-	if !router.HasProvider() {
-		fmt.Fprintln(os.Stderr, "no AI providers configured")
+	router, err := buildTerminalAIRouter(sessionCtx, cfg.AI, selectedProvider, os.Stderr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "configure AI provider: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -106,7 +139,7 @@ func main() {
 		slog.Warn("curriculum not loaded", "path", cfg.CurriculumPath, "error", err)
 	}
 
-	state, cleanup, err := terminalchat.BuildState(context.Background(), cfg.Database, terminalchat.StateOptions{
+	state, cleanup, err := terminalchat.BuildState(sessionCtx, cfg.Database, terminalchat.StateOptions{
 		Memory:  memory,
 		Channel: channel,
 	}, terminalchat.StateDeps{})
@@ -169,30 +202,71 @@ func main() {
 		engineCfg.Streaks = progress.NewMemoryStreakTracker()
 		engineCfg.XP = progress.NewMemoryXPTracker()
 	}
-	engine := agent.NewEngine(engineCfg)
-
-	processor := terminalchat.Processor(engine)
 	var history *conversationHistory
 	if strings.TrimSpace(historyJSONPath) != "" || strings.TrimSpace(dumpJSONPath) != "" {
 		history = newConversationHistory(userID, channel)
-		processor = &historyProcessor{inner: processor, history: history}
 	}
 	if history != nil && strings.TrimSpace(dumpJSONPath) != "" {
 		router.SetTraceFunc(history.appendAITrace)
 	}
 
 	var runErr error
-	if multi {
-		runErr = terminalchat.RunMulti(context.Background(), os.Stdin, os.Stdout, processor, terminalchat.MultiConfig{
-			UserCount:  userCount,
-			UserPrefix: userID,
-			Channel:    channel,
-		})
-	} else {
-		runErr = terminalchat.Run(context.Background(), os.Stdin, os.Stdout, processor, terminalchat.Config{
+	if interactive {
+		factory := func(candidate terminalchat.Candidate) (terminalchat.Processor, error) {
+			localCfg := engineCfg
+			localCfg.Store = agent.NewMemoryStore()
+			localCfg.EventLogger = agent.NewMemoryEventLogger()
+			localCfg.Goals = agent.NewMemoryGoalStore()
+			localCfg.Challenges = agent.NewMemoryChallengeStore()
+			localCfg.TenantID = ""
+			localCfg.TutorPromptExtension = candidate.Prompt
+			localCfg.TurnHookNotice = nil
+			if progressSideEffects {
+				localCfg.Tracker = progress.NewMemoryTracker()
+				localCfg.Streaks = progress.NewMemoryStreakTracker()
+				localCfg.XP = progress.NewMemoryXPTracker()
+			}
+			if lang := strings.TrimSpace(language); lang != "" {
+				if err := localCfg.Store.SetUserPreferredLanguage(userID, lang); err != nil {
+					return nil, fmt.Errorf("set preferred language: %w", err)
+				}
+			}
+			processor := terminalchat.Processor(agent.NewEngine(localCfg))
+			if history != nil {
+				processor = &historyProcessor{inner: processor, history: history}
+			}
+			return processor, nil
+		}
+		session, err := newInteractiveTerminalSession(
+			terminalchat.NewCandidateSource(candidateDirectory),
+			selectedProvider,
+			factory,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "build interactive session: %v\n", err)
+			os.Exit(1)
+		}
+		runErr = terminalchat.RunInteractive(sessionCtx, os.Stdin, os.Stdout, session, terminalchat.InteractiveConfig{
 			UserID:  userID,
 			Channel: channel,
 		})
+	} else {
+		processor := terminalchat.Processor(agent.NewEngine(engineCfg))
+		if history != nil {
+			processor = &historyProcessor{inner: processor, history: history}
+		}
+		if multi {
+			runErr = terminalchat.RunMulti(sessionCtx, os.Stdin, os.Stdout, processor, terminalchat.MultiConfig{
+				UserCount:  userCount,
+				UserPrefix: userID,
+				Channel:    channel,
+			})
+		} else {
+			runErr = terminalchat.Run(sessionCtx, os.Stdin, os.Stdout, processor, terminalchat.Config{
+				UserID:  userID,
+				Channel: channel,
+			})
+		}
 	}
 	if history != nil {
 		for _, path := range []string{historyJSONPath, dumpJSONPath} {

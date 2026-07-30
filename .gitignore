@@ -68,3 +68,4 @@ output/
 # Local agent working artifacts (never commit)
 .humanlayer/
 .agents/
+.codex/chat-codex-candidate/

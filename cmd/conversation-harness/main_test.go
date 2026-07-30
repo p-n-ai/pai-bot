@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"reflect"
 	"strings"
@@ -239,6 +240,174 @@ conversations:
 	}
 }
 
+func TestLoadFixtureRejectsMultipleDocuments(t *testing.T) {
+	path := t.TempDir() + "/fixture.yaml"
+	fixture := `version: 2
+provider: mock
+conversations:
+  - id: NAT01
+    title: First document
+    turns:
+      - user: hello
+---
+version: 2
+provider: mock
+conversations: []
+`
+	if err := os.WriteFile(path, []byte(fixture), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := loadFixture(path)
+	if err == nil {
+		t.Fatal("loadFixture() should reject multiple YAML documents")
+	}
+	if !strings.Contains(err.Error(), "multiple YAML documents are not supported") {
+		t.Fatalf("loadFixture() error = %q, want multiple-document detail", err)
+	}
+}
+
+func TestValidateFixtureRejectsInvalidContracts(t *testing.T) {
+	validConversation := func(id string) conversationSpec {
+		return conversationSpec{
+			ID:    id,
+			Title: "Valid conversation",
+			Turns: []turnSpec{{User: "hello"}},
+		}
+	}
+
+	for _, test := range []struct {
+		name    string
+		fixture fixtureFile
+		want    string
+	}{
+		{
+			name: "duplicate character after trimming",
+			fixture: fixtureFile{
+				Version:    2,
+				Characters: []characterSpec{{ID: "aina"}, {ID: " aina "}},
+			},
+			want: `duplicate character id "aina"`,
+		},
+		{
+			name: "duplicate conversation",
+			fixture: fixtureFile{
+				Version:       2,
+				Conversations: []conversationSpec{validConversation("NAT01"), validConversation("NAT01")},
+			},
+			want: `duplicate conversation id "NAT01"`,
+		},
+		{
+			name: "unsupported expected status",
+			fixture: fixtureFile{
+				Version: 2,
+				Conversations: []conversationSpec{{
+					ID:    "NAT01",
+					Title: "Invalid status",
+					Turns: []turnSpec{{User: "hello", ExpectStatus: "waiting"}},
+				}},
+			},
+			want: `unsupported expect_status "waiting"`,
+		},
+		{
+			name: "out-of-range turn check",
+			fixture: fixtureFile{
+				Version: 2,
+				Conversations: []conversationSpec{{
+					ID:     "NAT01",
+					Title:  "Invalid turn reference",
+					Turns:  []turnSpec{{User: "hello"}},
+					Checks: behaviorChecks{ForbidSectionLabelsOnTurn: []int{2}},
+				}},
+			},
+			want: "out-of-range turn 2",
+		},
+		{
+			name:    "unsupported version",
+			fixture: fixtureFile{Version: 3},
+			want:    "version = 3, want 1 or 2",
+		},
+		{
+			name: "unsupported delivery",
+			fixture: fixtureFile{
+				Version: 2,
+				Conversations: []conversationSpec{{
+					ID:    "NAT01",
+					Title: "Invalid delivery",
+					Turns: []turnSpec{{User: "hello", Delivery: "later"}},
+				}},
+			},
+			want: `unsupported delivery "later"`,
+		},
+		{
+			name: "unsupported language check",
+			fixture: fixtureFile{
+				Version: 2,
+				Conversations: []conversationSpec{{
+					ID:     "NAT01",
+					Title:  "Invalid language check",
+					Turns:  []turnSpec{{User: "hello"}},
+					Checks: behaviorChecks{ExpectedLanguage: "fr"},
+				}},
+			},
+			want: `unsupported expected_language "fr"`,
+		},
+		{
+			name: "negative response limit",
+			fixture: fixtureFile{
+				Version: 2,
+				Conversations: []conversationSpec{{
+					ID:     "NAT01",
+					Title:  "Invalid response limit",
+					Turns:  []turnSpec{{User: "hello"}},
+					Checks: behaviorChecks{MaxResponseChars: -1},
+				}},
+			},
+			want: "max_response_chars must not be negative",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateFixture(&test.fixture)
+			if err == nil {
+				t.Fatal("validateFixture() should reject an invalid contract")
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validateFixture() error = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestRunConversationAcceptsExpectedFailedTurn(t *testing.T) {
+	processErr := errors.New("expected processor failure")
+	result := runConversation(
+		func(context.Context, chat.InboundMessage) (string, error) {
+			return "unsafe partial response", processErr
+		},
+		conversationSpec{
+			ID:    "NAT01",
+			Title: "Expected failure",
+			Turns: []turnSpec{{
+				User:         "trigger failure",
+				ExpectStatus: conversationharness.StatusFailed,
+			}},
+		},
+		testTurnTimeout,
+		false,
+		false,
+	)
+
+	if !result.Passed || len(result.Failures) != 0 {
+		t.Fatalf("runConversation() result = %#v, want expected failure to pass", result)
+	}
+	if result.Delivered != 0 || result.Interrupted != 0 {
+		t.Fatalf("delivered/interrupted = %d/%d, want 0/0", result.Delivered, result.Interrupted)
+	}
+	if len(result.Outcomes) != 1 || result.Outcomes[0].Status != conversationharness.StatusFailed {
+		t.Fatalf("outcomes = %#v, want one failed turn", result.Outcomes)
+	}
+}
+
 func TestLoadFixtureParsesTurnDelay(t *testing.T) {
 	path := t.TempDir() + "/fixture.yaml"
 	fixture := `version: 2
@@ -319,6 +488,46 @@ conversations:
 	}
 	if loaded.Version != 1 || len(loaded.Conversations) != 1 {
 		t.Fatalf("loaded fixture = %#v, want one version 1 conversation", loaded)
+	}
+}
+
+func TestCaseResultJSONContainsOnlyStructuralOutcomes(t *testing.T) {
+	const learnerText = "learner-private-text"
+	const modelText = "model-private-response"
+
+	result := runConversation(
+		func(context.Context, chat.InboundMessage) (string, error) {
+			return modelText, nil
+		},
+		conversationSpec{
+			ID:    "NAT01",
+			Title: "Safe automation output",
+			Turns: []turnSpec{{User: learnerText}},
+		},
+		testTurnTimeout,
+		false,
+		false,
+	)
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	output := string(encoded)
+	for _, privateText := range []string{learnerText, modelText} {
+		if strings.Contains(output, privateText) {
+			t.Fatalf("JSON output exposed private conversation content %q: %s", privateText, output)
+		}
+	}
+	for _, structuralField := range []string{
+		`"delivered":1`,
+		`"turn":1`,
+		`"delivery":"wait"`,
+		`"status":"delivered"`,
+	} {
+		if !strings.Contains(output, structuralField) {
+			t.Fatalf("JSON output = %s, want structural field %s", output, structuralField)
+		}
 	}
 }
 

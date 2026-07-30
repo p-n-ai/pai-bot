@@ -270,14 +270,15 @@ func (c *coordinator) finishCurrent(result processResult) {
 }
 
 func (c *coordinator) stop() {
-	for _, index := range c.pending {
-		c.outcomes[index] = Outcome{Status: StatusFailed, Err: c.ctx.Err()}
-	}
 	c.pending = nil
-	if c.current == nil {
-		return
+	if c.current != nil {
+		c.current.cancel()
+		result := <-c.current.done
+		c.finishCurrent(result)
 	}
-	c.current.cancel()
-	result := <-c.current.done
-	c.finishCurrent(result)
+	for index, outcome := range c.outcomes {
+		if outcome.Status == "" {
+			c.outcomes[index] = Outcome{Status: StatusFailed, Err: c.ctx.Err()}
+		}
+	}
 }

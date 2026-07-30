@@ -268,3 +268,37 @@ func TestPrepareRejectsUnconfiguredPreferredProvider(t *testing.T) {
 		t.Fatalf("prepared fallback providers = %v, want [openrouter]", got)
 	}
 }
+
+func TestPrepareProviderRegistersOnlySelectedProvider(t *testing.T) {
+	cfg := config.AIConfig{
+		OpenAI: config.OpenAIConfig{APIKey: "fallback-key"},
+		Codex: config.CodexConfig{
+			Enabled: true,
+			Model:   "gpt-test",
+		},
+	}
+
+	plan, err := PrepareProviderWithCodexAuth(" CODEX ", cfg, stubCodexAuth{})
+	if err != nil {
+		t.Fatalf("PrepareProviderWithCodexAuth() error = %v", err)
+	}
+	router := ai.NewRouter()
+	plan.Apply(router)
+	if got := router.ProviderOrder(); !reflect.DeepEqual(got, []string{"codex"}) {
+		t.Fatalf("ProviderOrder() = %v, want [codex] without fallback", got)
+	}
+}
+
+func TestPrepareProviderRejectsUnavailableSelection(t *testing.T) {
+	cfg := config.AIConfig{
+		OpenAI: config.OpenAIConfig{APIKey: "fallback-key"},
+		Codex:  config.CodexConfig{Enabled: true},
+	}
+
+	if _, err := PrepareProviderWithCodexAuth("codex", cfg, nil); err == nil {
+		t.Fatal("PrepareProviderWithCodexAuth() error = nil, want unavailable Codex")
+	}
+	if _, err := PrepareProviderWithCodexAuth("unknown", cfg, nil); err == nil {
+		t.Fatal("PrepareProviderWithCodexAuth() error = nil, want unsupported provider")
+	}
+}

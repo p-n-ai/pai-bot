@@ -77,6 +77,7 @@ type EngineConfig struct {
 	FocusedPages          *focusedpage.Service
 	FocusedPageEnabled    func(chat.InboundMessage) bool
 	TurnDeliverer         TurnDeliverer
+	TutorPromptExtension  string
 }
 
 // Engine is the core conversation processor.
@@ -110,6 +111,7 @@ type Engine struct {
 	focusedPageEnabled    func(chat.InboundMessage) bool
 	turnLocks             keyedTurnLocks
 	turnDeliverer         TurnDeliverer
+	tutorPromptExtension  string
 }
 
 // NewEngine creates a new agent engine.
@@ -199,6 +201,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		focusedPages:          cfg.FocusedPages,
 		focusedPageEnabled:    focusedPageEnabled,
 		turnDeliverer:         cfg.TurnDeliverer,
+		tutorPromptExtension:  strings.TrimSpace(cfg.TutorPromptExtension),
 	}
 }
 
@@ -1477,6 +1480,10 @@ EVIDENCE AND CITATIONS:
 If an image is attached, analyze it first, then answer. If image text is unclear, state what is unclear and ask for a clearer retake. If the student asks a follow-up about an earlier image but did not reply to that image or reattach it, ask them to reply directly to the image message.
 
 When writing maths, use plain-text only (example: 6x = 30, x = 5). Do not use LaTeX delimiters like \[ \], \( \), or $$. Do not format replies using Markdown headings, bold, italic, code blocks, or Markdown lists. Use plain chat text with simple line breaks only.`
+
+	if e.tutorPromptExtension != "" {
+		base += "\n\nLOCAL CONVERSATION TEST CANDIDATE:\n" + e.tutorPromptExtension
+	}
 
 	// Inject adaptive explanation depth based on mastery level.
 	if e.tracker != nil {
