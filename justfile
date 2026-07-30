@@ -312,6 +312,9 @@ chat-terminal:
 conversation-harness:
   go run ./cmd/conversation-harness
 
+conversation-harness-verify:
+  ./scripts/verify-conversation-harness.sh
+
 nudge-terminal:
   docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id "${USER_ID:-}"
 

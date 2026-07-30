@@ -1,5 +1,14 @@
-version: 1
+version: 2
 provider: openai
+characters:
+  - id: aina-impatient
+    first_name: Aina
+    username: aina
+    language: en
+  - id: faris-terse
+    first_name: Faris
+    username: faris
+    language: ms
 conversations:
   - id: G01
     title: Teacher slide and OSS guidance are fused with citations
@@ -221,3 +230,70 @@ conversations:
       forbid_section_labels_on_turn: [1]
       max_response_lines: 5
       max_response_chars: 420
+
+  - id: Q12
+    title: Back-to-back learner messages stay ordered
+    tags: [queue, short-replies, naturalness]
+    character: aina-impatient
+    turns:
+      - user: "Can you help me understand 3x + 2 = 11?"
+        expect_status: delivered
+      - user: "Start with what 3x means."
+        delivery: queue
+        expect_status: delivered
+      - user: "Keep it short please."
+        delivery: queue
+        expect_status: delivered
+        checks:
+          forbid_section_labels_on_turn: [3]
+          max_response_lines: 5
+          max_response_chars: 320
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      forbid_section_labels_on_turn: [2, 3]
+      expected_language: en_or_mixed
+
+  - id: Q13
+    title: Learner interruption suppresses the stale reply
+    tags: [interruptions, cancellation, naturalness]
+    character: aina-impatient
+    turns:
+      - user: "Give me a detailed explanation of every step in 4x + 8 = 20."
+        expect_status: interrupted
+      - user: "Actually wait—skip that. Just tell me what 4x means."
+        delivery: interrupt
+        expect_status: delivered
+        checks:
+          forbid_section_labels_on_turn: [2]
+          max_response_lines: 5
+          max_response_chars: 320
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      expected_language: en_or_mixed
+
+  - id: Q14
+    title: Terse follow-ups retain context without over-answering
+    tags: [short-replies, continuity, bm, naturalness]
+    character: faris-terse
+    turns:
+      - user: "Saya tak faham kenapa 2x bermaksud dua kali x."
+      - user: "hah?"
+        checks:
+          forbid_section_labels_on_turn: [2]
+          max_response_lines: 4
+          max_response_chars: 260
+      - user: "kenapa?"
+        checks:
+          forbid_section_labels_on_turn: [3]
+          max_response_lines: 4
+          max_response_chars: 260
+    checks:
+      require_non_empty_replies: true
+      forbid_fallback_message: true
+      forbid_markdown_and_latex: true
+      forbid_section_labels_on_turn: [2, 3]
+      expected_language: bm_or_mixed

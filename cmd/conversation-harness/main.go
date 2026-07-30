@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/conversationharness"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
@@ -39,20 +41,57 @@ const (
 type fixtureFile struct {
 	Version       int                `yaml:"version"`
 	Provider      string             `yaml:"provider"`
+	Characters    []characterSpec    `yaml:"characters"`
 	Conversations []conversationSpec `yaml:"conversations"`
 }
 
+type characterSpec struct {
+	ID        string `yaml:"id"`
+	FirstName string `yaml:"first_name"`
+	Username  string `yaml:"username"`
+	Language  string `yaml:"language"`
+}
+
 type conversationSpec struct {
-	ID       string         `yaml:"id"`
-	Title    string         `yaml:"title"`
-	Tags     []string       `yaml:"tags"`
-	Evidence []evidenceSpec `yaml:"evidence"`
-	Turns    []turnSpec     `yaml:"turns"`
-	Checks   behaviorChecks `yaml:"checks"`
+	ID                string         `yaml:"id"`
+	Title             string         `yaml:"title"`
+	Tags              []string       `yaml:"tags"`
+	CharacterID       string         `yaml:"character"`
+	Evidence          []evidenceSpec `yaml:"evidence"`
+	Turns             []turnSpec     `yaml:"turns"`
+	Checks            behaviorChecks `yaml:"checks"`
+	resolvedCharacter characterSpec
 }
 
 type turnSpec struct {
-	User string `yaml:"user"`
+	User         string                       `yaml:"user"`
+	Delivery     conversationharness.Delivery `yaml:"delivery"`
+	After        durationSpec                 `yaml:"after"`
+	ExpectStatus conversationharness.Status   `yaml:"expect_status"`
+	Checks       behaviorChecks               `yaml:"checks"`
+}
+
+type durationSpec struct {
+	time.Duration
+}
+
+func (d *durationSpec) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.ScalarNode {
+		return fmt.Errorf("duration must be a string")
+	}
+	if strings.TrimSpace(node.Value) == "" {
+		d.Duration = 0
+		return nil
+	}
+	parsed, err := time.ParseDuration(node.Value)
+	if err != nil {
+		return fmt.Errorf("parse duration %q: %w", node.Value, err)
+	}
+	if parsed < 0 {
+		return fmt.Errorf("duration must not be negative")
+	}
+	d.Duration = parsed
+	return nil
 }
 
 type evidenceSpec struct {
@@ -84,12 +123,22 @@ type behaviorChecks struct {
 }
 
 type caseResult struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Tags     []string `json:"tags,omitempty"`
-	Passed   bool     `json:"passed"`
-	Turns    int      `json:"turns"`
-	Failures []string `json:"failures,omitempty"`
+	ID          string              `json:"id"`
+	Title       string              `json:"title"`
+	Tags        []string            `json:"tags,omitempty"`
+	Passed      bool                `json:"passed"`
+	Turns       int                 `json:"turns"`
+	Delivered   int                 `json:"delivered"`
+	Interrupted int                 `json:"interrupted,omitempty"`
+	Outcomes    []turnOutcomeResult `json:"outcomes"`
+	Failures    []string            `json:"failures,omitempty"`
+}
+
+type turnOutcomeResult struct {
+	Turn       int                          `json:"turn"`
+	Delivery   conversationharness.Delivery `json:"delivery"`
+	Status     conversationharness.Status   `json:"status"`
+	DurationMS int64                        `json:"duration_ms"`
 }
 
 type requestDumpRecord struct {
@@ -190,7 +239,7 @@ func main() {
 
 	results := make([]caseResult, 0, len(conversations))
 	for _, conv := range conversations {
-		result := runConversation(engine, conv, timeout, showResponses, !requestOnly)
+		result := runConversation(engine.ProcessMessage, conv, timeout, showResponses, !requestOnly)
 		results = append(results, result)
 		if jsonl {
 			_ = json.NewEncoder(os.Stdout).Encode(result)
@@ -275,18 +324,155 @@ func validateRequestOnlyMode(requestOnly bool, dumpRequestsPath string) error {
 }
 
 func loadFixture(path string) (fixtureFile, error) {
-	b, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return fixtureFile{}, err
 	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	decoder.KnownFields(true)
 	var fixture fixtureFile
-	if err := yaml.Unmarshal(b, &fixture); err != nil {
+	if err := decoder.Decode(&fixture); err != nil {
 		return fixtureFile{}, err
 	}
-	if fixture.Version != 1 {
-		return fixtureFile{}, fmt.Errorf("version = %d, want 1", fixture.Version)
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fixtureFile{}, fmt.Errorf("multiple YAML documents are not supported")
+		}
+		return fixtureFile{}, err
+	}
+	if err := validateFixture(&fixture); err != nil {
+		return fixtureFile{}, err
 	}
 	return fixture, nil
+}
+
+func validateFixture(fixture *fixtureFile) error {
+	if fixture == nil {
+		return fmt.Errorf("fixture is required")
+	}
+	if fixture.Version != 1 && fixture.Version != 2 {
+		return fmt.Errorf("version = %d, want 1 or 2", fixture.Version)
+	}
+	characters := make(map[string]characterSpec, len(fixture.Characters))
+	for index, character := range fixture.Characters {
+		character.ID = strings.TrimSpace(character.ID)
+		character.FirstName = strings.TrimSpace(character.FirstName)
+		character.Username = strings.TrimSpace(character.Username)
+		character.Language = strings.TrimSpace(character.Language)
+		if character.ID == "" {
+			return fmt.Errorf("character %d: id is required", index+1)
+		}
+		if _, exists := characters[character.ID]; exists {
+			return fmt.Errorf("duplicate character id %q", character.ID)
+		}
+		fixture.Characters[index] = character
+		characters[character.ID] = character
+	}
+
+	conversationIDs := make(map[string]struct{}, len(fixture.Conversations))
+	for conversationIndex := range fixture.Conversations {
+		conversation := &fixture.Conversations[conversationIndex]
+		conversation.ID = strings.TrimSpace(conversation.ID)
+		if conversation.ID == "" {
+			return fmt.Errorf("conversation %d: id is required", conversationIndex+1)
+		}
+		if _, exists := conversationIDs[conversation.ID]; exists {
+			return fmt.Errorf("duplicate conversation id %q", conversation.ID)
+		}
+		conversationIDs[conversation.ID] = struct{}{}
+		if strings.TrimSpace(conversation.Title) == "" {
+			return fmt.Errorf("conversation %s: title is required", conversation.ID)
+		}
+		if len(conversation.Turns) == 0 {
+			return fmt.Errorf("conversation %s: at least one turn is required", conversation.ID)
+		}
+		if err := validateBehaviorChecks(
+			fmt.Sprintf("conversation %s checks", conversation.ID),
+			conversation.Checks,
+			len(conversation.Turns),
+		); err != nil {
+			return err
+		}
+		conversation.CharacterID = strings.TrimSpace(conversation.CharacterID)
+		if conversation.CharacterID != "" {
+			character, exists := characters[conversation.CharacterID]
+			if !exists {
+				return fmt.Errorf("conversation %s: unknown character %q", conversation.ID, conversation.CharacterID)
+			}
+			conversation.resolvedCharacter = character
+		}
+		for turnIndex, turn := range conversation.Turns {
+			if strings.TrimSpace(turn.User) == "" {
+				return fmt.Errorf("conversation %s turn %d: user text is required", conversation.ID, turnIndex+1)
+			}
+			switch normalizedDelivery(turn.Delivery) {
+			case conversationharness.DeliveryWait, conversationharness.DeliveryQueue, conversationharness.DeliveryInterrupt:
+			default:
+				return fmt.Errorf(
+					"conversation %s turn %d: unsupported delivery %q",
+					conversation.ID,
+					turnIndex+1,
+					turn.Delivery,
+				)
+			}
+			switch turn.ExpectStatus {
+			case "", conversationharness.StatusDelivered, conversationharness.StatusInterrupted, conversationharness.StatusFailed:
+			default:
+				return fmt.Errorf(
+					"conversation %s turn %d: unsupported expect_status %q",
+					conversation.ID,
+					turnIndex+1,
+					turn.ExpectStatus,
+				)
+			}
+			if err := validateBehaviorChecks(
+				fmt.Sprintf("conversation %s turn %d checks", conversation.ID, turnIndex+1),
+				turn.Checks,
+				len(conversation.Turns),
+			); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateBehaviorChecks(label string, checks behaviorChecks, turnCount int) error {
+	switch checks.ExpectedLanguage {
+	case "", "bm_or_mixed", "en_or_mixed":
+	default:
+		return fmt.Errorf("%s: unsupported expected_language %q", label, checks.ExpectedLanguage)
+	}
+	if checks.MaxResponseLines < 0 {
+		return fmt.Errorf("%s: max_response_lines must not be negative", label)
+	}
+	if checks.MaxResponseChars < 0 {
+		return fmt.Errorf("%s: max_response_chars must not be negative", label)
+	}
+	for _, entry := range []struct {
+		name  string
+		turns []int
+	}{
+		{name: "forbid_final_answer_on_turn", turns: checks.ForbidFinalAnswerOnTurn},
+		{name: "forbid_section_labels_on_turn", turns: checks.ForbidSectionLabelsOnTurn},
+	} {
+		for _, turn := range entry.turns {
+			if turn < 1 || turn > turnCount {
+				return fmt.Errorf("%s: %s contains out-of-range turn %d", label, entry.name, turn)
+			}
+		}
+	}
+	return nil
+}
+
+func normalizedDelivery(delivery conversationharness.Delivery) conversationharness.Delivery {
+	if delivery == "" {
+		return conversationharness.DeliveryWait
+	}
+	return delivery
 }
 
 func buildEngine(memory bool, mockResponse string, progressSideEffects bool, traceFunc func(ai.CompletionTrace), evidenceRetriever retrieval.TutorEvidenceRetriever) (*agent.Engine, func(), error) {
@@ -427,43 +613,120 @@ func selectConversations(conversations []conversationSpec, caseID, tag string, m
 	return selected
 }
 
-func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.Duration, showResponses bool, runChecks bool) caseResult {
+func runConversation(
+	process conversationharness.Processor,
+	conv conversationSpec,
+	timeout time.Duration,
+	showResponses bool,
+	runChecks bool,
+) caseResult {
 	userID := "harness-" + strings.ToLower(conv.ID) + "-" + fmt.Sprint(time.Now().UnixNano())
 	responses := make([]string, 0, len(conv.Turns))
 	failures := []string{}
-
-	for i, turn := range conv.Turns {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		resp, err := engine.ProcessMessage(ctx, chat.InboundMessage{
-			Channel: "harness",
-			UserID:  userID,
-			Text:    turn.User,
+	turns := make([]conversationharness.Turn, 0, len(conv.Turns))
+	for _, turn := range conv.Turns {
+		turns = append(turns, conversationharness.Turn{
+			Delivery: normalizedDelivery(turn.Delivery),
+			After:    turn.After.Duration,
+			Timeout:  timeout,
+			Message: chat.InboundMessage{
+				Channel:   "harness",
+				UserID:    userID,
+				Text:      turn.User,
+				FirstName: conv.resolvedCharacter.FirstName,
+				Username:  conv.resolvedCharacter.Username,
+				Language:  conv.resolvedCharacter.Language,
+			},
 		})
-		cancel()
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("turn %d: ProcessMessage error: %v", i+1, err))
+	}
+	outcomes, err := conversationharness.Run(
+		context.Background(),
+		process,
+		turns,
+	)
+	if err != nil {
+		failures = append(failures, fmt.Sprintf("conversation runner error: %v", err))
+	}
+
+	delivered := 0
+	interrupted := 0
+	turnOutcomes := make([]turnOutcomeResult, 0, len(outcomes))
+	for i, outcome := range outcomes {
+		turn := conv.Turns[i]
+		turnOutcomes = append(turnOutcomes, turnOutcomeResult{
+			Turn:       i + 1,
+			Delivery:   normalizedDelivery(turn.Delivery),
+			Status:     outcome.Status,
+			DurationMS: outcome.Duration.Milliseconds(),
+		})
+		expectedStatus := turn.ExpectStatus
+		if expectedStatus == "" {
+			expectedStatus = conversationharness.StatusDelivered
+		}
+		if outcome.Status != expectedStatus {
+			failures = append(failures, fmt.Sprintf(
+				"turn %d: status %q, want %q",
+				i+1,
+				outcome.Status,
+				expectedStatus,
+			))
+		}
+		switch outcome.Status {
+		case conversationharness.StatusInterrupted:
+			interrupted++
+		case conversationharness.StatusFailed:
+			if expectedStatus != conversationharness.StatusFailed {
+				failures = append(failures, fmt.Sprintf("turn %d: ProcessMessage error: %v", i+1, outcome.Err))
+			}
+		case conversationharness.StatusDelivered:
+			delivered++
+			responses = append(responses, outcome.Response)
+		}
+		if showResponses {
+			fmt.Printf(
+				"\n[%s turn %d, %s]\n%s: %s\n",
+				conv.ID,
+				i+1,
+				outcome.Status,
+				characterLabel(conv.resolvedCharacter),
+				turn.User,
+			)
+			if outcome.Status == conversationharness.StatusDelivered {
+				fmt.Printf("Assistant: %s\n", outcome.Response)
+			}
+		}
+		if outcome.Status != conversationharness.StatusDelivered || !runChecks {
 			continue
 		}
-		responses = append(responses, resp)
-		if showResponses {
-			fmt.Printf("\n[%s turn %d]\nUser: %s\nAssistant: %s\n", conv.ID, i+1, turn.User, resp)
-		}
-		if runChecks {
-			failures = append(failures, checkTurn(i+1, resp, conv.Checks)...)
-		}
+		failures = append(failures, checkTurn(i+1, outcome.Response, conv.Checks)...)
+		failures = append(failures, checkTurn(i+1, outcome.Response, turn.Checks)...)
+		failures = append(failures, checkConversation(turn.Checks, []string{outcome.Response})...)
 	}
 	if runChecks {
 		failures = append(failures, checkConversation(conv.Checks, responses)...)
 	}
 
 	return caseResult{
-		ID:       conv.ID,
-		Title:    conv.Title,
-		Tags:     conv.Tags,
-		Passed:   len(failures) == 0,
-		Turns:    len(conv.Turns),
-		Failures: failures,
+		ID:          conv.ID,
+		Title:       conv.Title,
+		Tags:        conv.Tags,
+		Passed:      len(failures) == 0,
+		Turns:       len(conv.Turns),
+		Delivered:   delivered,
+		Interrupted: interrupted,
+		Outcomes:    turnOutcomes,
+		Failures:    failures,
 	}
+}
+
+func characterLabel(character characterSpec) string {
+	if character.FirstName != "" {
+		return character.FirstName
+	}
+	if character.Username != "" {
+		return character.Username
+	}
+	return "User"
 }
 
 func checkTurn(turn int, resp string, checks behaviorChecks) []string {
