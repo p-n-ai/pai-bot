@@ -142,7 +142,7 @@ esac
 postgres_repository=${POSTGRES_IMAGE%@*}
 postgres_release_image=$(
   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-    config --no-env-resolution --variables |
+    config --variables |
     awk '$1 == "POSTGRES_IMAGE" { print $3; exit }'
 )
 case "$postgres_release_image" in

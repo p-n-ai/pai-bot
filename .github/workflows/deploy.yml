@@ -168,7 +168,7 @@ jobs:
           [ -n "$digest" ] || digest="$RECORDED_DIGEST"
           if [ -z "$digest" ]; then
             base_image=$(
-              docker compose config --no-env-resolution --variables |
+              docker compose config --variables |
                 awk '$1 == "POSTGRES_IMAGE" { print $3; exit }'
             )
             for candidate in \

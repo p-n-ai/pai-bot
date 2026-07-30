@@ -239,28 +239,35 @@ class CIWorkflowTests(unittest.TestCase):
                 "POSTGRES_PASSWORD": "pai",
             }
         )
-        result = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                "docker-compose.yml",
-                "-f",
-                "docker-compose.prod.yml",
-                "-f",
-                ".github/compose.e2e.yml",
-                "config",
-                "--no-env-resolution",
-                "--format",
-                "json",
-            ],
-            cwd=ROOT,
-            env=env,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        env_path = ROOT / ".env"
+        created_env = not env_path.exists()
+        if created_env:
+            env_path.touch(mode=0o600)
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    "docker-compose.yml",
+                    "-f",
+                    "docker-compose.prod.yml",
+                    "-f",
+                    ".github/compose.e2e.yml",
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        finally:
+            if created_env:
+                env_path.unlink()
+        self.assertEqual(result.returncode, 0, result.stderr)
         services = json.loads(result.stdout)["services"]
 
         self.assertNotIn("build", services["postgres"])
@@ -371,7 +378,7 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertLess(semantic_fallback, validation)
         self.assertLess(validation, output)
         self.assertIn("Invalid PostgreSQL image digest", resolve)
-        self.assertIn("docker compose config --no-env-resolution --variables", resolve)
+        self.assertIn("docker compose config --variables", resolve)
         self.assertIn("ghcr.io/p-n-ai/pai-postgres:deployed", resolve)
         self.assertNotIn("pggraph-1.0.0-pgvector-0.8.5", workflow)
 
@@ -437,7 +444,7 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertIn('"$postgres_repository:deployed"', script)
         self.assertIn('"$postgres_release_image"', script)
         self.assertIn(
-            "config --no-env-resolution --variables",
+            "config --variables",
             script,
         )
 
