@@ -4,6 +4,7 @@
 package releaseworkflow
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -117,11 +118,15 @@ func validGate(document workflowDocument) error {
 	}
 	expected := []string{
 		"changes",
+		"config",
 		"admin-spa",
+		"react-doctor",
 		"admin-spa-e2e",
 		"go",
 		"go-lint",
 		"docker",
+		"admin-docker",
+		"postgres-image",
 		"once",
 		"api-compatibility",
 	}
@@ -185,6 +190,10 @@ func requirePinnedActions(t *testing.T, document workflowDocument) {
 		}
 		steps, ok := job["steps"].([]any)
 		if !ok {
+			uses, reusable := job["uses"].(string)
+			if reusable && strings.HasPrefix(uses, "./") {
+				continue
+			}
 			t.Fatalf("job %s has malformed steps", jobName)
 		}
 		for _, rawStep := range steps {
@@ -256,6 +265,12 @@ func TestCIGateAndAPICompatibilityContracts(t *testing.T) {
 	requireContains(t, source,
 		"github.event.pull_request.base.sha",
 		"go run ./cmd/openapi",
+		"go run ./cmd/apiroutes -root ../base/internal/server",
+		"go run ./cmd/apiroutes -root internal/server",
+		`select(.method == "POST" and .path == "/api/auth/refresh")`,
+		`del(.paths["/api/auth/refresh"])`,
+		"-base ../base-api-routes.json",
+		"-head ../head-api-routes.json",
 		"oasdiff breaking --fail-on ERR",
 		`all(.[]; .result == "success" or .result == "skipped")`,
 	)
@@ -287,19 +302,256 @@ func TestNightlyCandidateContracts(t *testing.T) {
 		"github.event.workflow_run.head_sha",
 		"Reuse completed candidate artifact",
 		"this rerun is a no-op",
-		"Require immutable candidate repositories",
+		"Enforce immutable candidate repositories",
+		"aws ecr put-image-tag-mutability",
+		"--image-tag-mutability IMMUTABLE",
 		`[ "$mutability" != "IMMUTABLE" ]`,
 		"Reuse existing SHA-addressed application images",
 		"steps.existing.outputs.app_exists != 'true'",
 		"steps.existing.outputs.admin_exists != 'true'",
 		"candidate image pair is incomplete after construction",
+		"Resolve PostgreSQL candidate",
 		"app_image:",
 		"admin_image:",
+		"postgres_image:",
 		"nightly-candidate-${{ github.event.workflow_run.head_sha }}",
 		"retention-days: 30",
 	)
 	if strings.Contains(source, "environment: production") {
 		t.Fatal("nightly workflow must not deploy to production")
+	}
+}
+
+func TestNightlyEnforcesImmutableCandidateRepositories(t *testing.T) {
+	_, document := repositoryWorkflow(t, ".github/workflows/nightly.yml")
+	enforce := workflowStepRun(t, document, "candidate", "Enforce immutable candidate repositories")
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "aws"), `#!/bin/bash
+repository=""
+for ((index = 1; index <= $#; index++)); do
+  argument=${!index}
+  if [ "$argument" = "--repository-names" ] || [ "$argument" = "--repository-name" ]; then
+    next=$((index + 1))
+    repository=${!next}
+  fi
+done
+state_file="$FAKE_ECR_STATE/${repository//\//_}"
+if [ "$1 $2" = "ecr describe-repositories" ]; then
+  if [ -f "$state_file" ]; then echo IMMUTABLE; else echo MUTABLE; fi
+  exit 0
+fi
+if [ "$1 $2" = "ecr put-image-tag-mutability" ]; then
+  echo "$repository" >> "$FAKE_ECR_LOG"
+  if [ "${FAKE_ECR_REFUSE:-false}" != "true" ]; then touch "$state_file"; fi
+  exit 0
+fi
+exit 1
+`)
+
+	stateDir := filepath.Join(bin, "state")
+	if err := os.Mkdir(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(bin, "ecr.log")
+	environment := []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"FAKE_ECR_STATE=" + stateDir,
+		"FAKE_ECR_LOG=" + logPath,
+	}
+	if err := runBash(t, enforce, environment...); err != nil {
+		t.Fatal(err)
+	}
+	requireContains(t, string(mustReadFile(t, logPath)),
+		"pai-bot/app",
+		"pai-bot/admin",
+	)
+
+	refusedStateDir := filepath.Join(bin, "refused-state")
+	if err := os.Mkdir(refusedStateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := runBash(t, enforce,
+		"PATH="+bin+":"+os.Getenv("PATH"),
+		"FAKE_ECR_STATE="+refusedStateDir,
+		"FAKE_ECR_LOG="+logPath,
+		"FAKE_ECR_REFUSE=true",
+	); err == nil {
+		t.Fatal("nightly accepted repositories that remained mutable")
+	}
+}
+
+func TestNightlyCandidateConstructionScripts(t *testing.T) {
+	_, document := repositoryWorkflow(t, ".github/workflows/nightly.yml")
+	reuse := workflowStepRun(t, document, "candidate", "Reuse existing SHA-addressed application images")
+	resolveApplications := workflowStepRun(t, document, "candidate", "Resolve immutable image digests")
+	resolvePostgreSQL := workflowStepRun(t, document, "candidate", "Resolve PostgreSQL candidate")
+	record := workflowStepRun(t, document, "candidate", "Record candidate provenance")
+
+	workDir := t.TempDir()
+	bin := filepath.Join(workDir, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExecutable(t, filepath.Join(bin, "aws"), `#!/bin/bash
+repository=""
+for ((index = 1; index <= $#; index++)); do
+  if [ "${!index}" = "--repository-name" ]; then
+    next=$((index + 1))
+    repository=${!next}
+  fi
+done
+case "$repository" in
+  pai-bot/app) digest="sha256:$FAKE_APP_DIGEST" ;;
+  pai-bot/admin) digest="sha256:$FAKE_ADMIN_DIGEST" ;;
+  *) exit 1 ;;
+esac
+if [ "${FAKE_INVALID_APPLICATION:-}" = "$repository" ]; then echo None; else echo "$digest"; fi
+`)
+	writeExecutable(t, filepath.Join(bin, "docker"), `#!/bin/bash
+args="$*"
+if [ "$1 $2 $3" = "buildx imagetools inspect" ]; then
+  target=$4
+  if [ "$target" = "ghcr.io/p-n-ai/pai-postgres:$SHA" ]; then
+    if [ "${FAKE_POSTGRES_MODE:-fallback}" = "existing" ] || [ -f "$FAKE_POSTGRES_STATE" ]; then
+      echo "Digest: sha256:$FAKE_POSTGRES_DIGEST"
+      exit 0
+    fi
+    exit 1
+  fi
+  if [ "$target" = "ghcr.io/p-n-ai/pai-postgres:deployed" ] &&
+     [ "${FAKE_POSTGRES_MODE:-fallback}" = "fallback" ]; then
+    echo "Digest: sha256:$FAKE_POSTGRES_DIGEST"
+    exit 0
+  fi
+  exit 1
+fi
+if [ "$1 $2 $3" = "buildx imagetools create" ]; then
+  echo "$args" >> "$FAKE_POSTGRES_LOG"
+  touch "$FAKE_POSTGRES_STATE"
+  exit 0
+fi
+if [ "$1 $2 $3" = "compose config --variables" ]; then
+  echo "POSTGRES_IMAGE string ghcr.io/p-n-ai/pai-postgres:base"
+  exit 0
+fi
+exit 1
+`)
+
+	sha := strings.Repeat("a", 40)
+	appDigest := strings.Repeat("1", 64)
+	adminDigest := strings.Repeat("2", 64)
+	postgresDigest := strings.Repeat("3", 64)
+	commonEnvironment := []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"SHA=" + sha,
+		"FAKE_APP_DIGEST=" + appDigest,
+		"FAKE_ADMIN_DIGEST=" + adminDigest,
+		"FAKE_POSTGRES_DIGEST=" + postgresDigest,
+	}
+
+	reuseOutput := filepath.Join(workDir, "reuse-output")
+	if err := runBash(t, reuse, append(commonEnvironment, "GITHUB_OUTPUT="+reuseOutput)...); err != nil {
+		t.Fatal(err)
+	}
+	if output := string(mustReadFile(t, reuseOutput)); output != "app_exists=true\nadmin_exists=true\n" {
+		t.Fatalf("existing image outputs = %q", output)
+	}
+
+	applicationEnvironment := filepath.Join(workDir, "application-environment")
+	if err := runBash(
+		t,
+		resolveApplications,
+		append(commonEnvironment, "GITHUB_ENV="+applicationEnvironment)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	requireContains(t, string(mustReadFile(t, applicationEnvironment)),
+		"APP_DIGEST=sha256:"+appDigest,
+		"ADMIN_DIGEST=sha256:"+adminDigest,
+	)
+	if err := runBash(
+		t,
+		resolveApplications,
+		append(commonEnvironment,
+			"GITHUB_ENV="+filepath.Join(workDir, "invalid-application-environment"),
+			"FAKE_INVALID_APPLICATION=pai-bot/app",
+		)...,
+	); err == nil {
+		t.Fatal("nightly accepted an invalid application digest")
+	}
+
+	postgresEnvironment := filepath.Join(workDir, "postgres-environment")
+	postgresState := filepath.Join(workDir, "postgres-created")
+	postgresLog := filepath.Join(workDir, "postgres.log")
+	if err := runBash(
+		t,
+		resolvePostgreSQL,
+		append(commonEnvironment,
+			"GITHUB_ENV="+postgresEnvironment,
+			"FAKE_POSTGRES_STATE="+postgresState,
+			"FAKE_POSTGRES_LOG="+postgresLog,
+		)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if output := string(mustReadFile(t, postgresEnvironment)); output !=
+		"POSTGRES_IMAGE=ghcr.io/p-n-ai/pai-postgres@sha256:"+postgresDigest+"\n" {
+		t.Fatalf("PostgreSQL environment = %q", output)
+	}
+	requireContains(t, string(mustReadFile(t, postgresLog)),
+		"imagetools create --tag ghcr.io/p-n-ai/pai-postgres:"+sha+
+			" ghcr.io/p-n-ai/pai-postgres:deployed",
+	)
+	if err := runBash(
+		t,
+		resolvePostgreSQL,
+		append(commonEnvironment,
+			"GITHUB_ENV="+filepath.Join(workDir, "invalid-postgres-environment"),
+			"FAKE_POSTGRES_STATE="+filepath.Join(workDir, "missing-postgres-state"),
+			"FAKE_POSTGRES_LOG="+postgresLog,
+			"FAKE_POSTGRES_MODE=missing",
+		)...,
+	); err == nil {
+		t.Fatal("nightly accepted a missing PostgreSQL source image")
+	}
+
+	candidateDir := filepath.Join(workDir, "candidate")
+	if err := os.Mkdir(candidateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := runBash(t, "cd \"$TEST_WORKDIR\"\n"+record,
+		"TEST_WORKDIR="+candidateDir,
+		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
+		"GITHUB_RUN_ID=101",
+		"REGISTRY=registry.example",
+		"SHA="+sha,
+		"SOURCE_RUN_ID=202",
+		"APP_DIGEST=sha256:"+appDigest,
+		"ADMIN_DIGEST=sha256:"+adminDigest,
+		"POSTGRES_IMAGE=ghcr.io/p-n-ai/pai-postgres@sha256:"+postgresDigest,
+	); err != nil {
+		t.Fatal(err)
+	}
+	var candidate struct {
+		Repository    string `json:"repository"`
+		SHA           string `json:"sha"`
+		NightlyRunID  int64  `json:"nightly_run_id"`
+		SourceRunID   int64  `json:"source_run_id"`
+		AppImage      string `json:"app_image"`
+		AdminImage    string `json:"admin_image"`
+		PostgresImage string `json:"postgres_image"`
+	}
+	if err := json.Unmarshal(mustReadFile(t, filepath.Join(candidateDir, "candidate.json")), &candidate); err != nil {
+		t.Fatal(err)
+	}
+	if candidate.Repository != "p-n-ai/pai-bot" ||
+		candidate.SHA != sha ||
+		candidate.NightlyRunID != 101 ||
+		candidate.SourceRunID != 202 ||
+		candidate.AppImage != "registry.example/pai-bot/app@sha256:"+appDigest ||
+		candidate.AdminImage != "registry.example/pai-bot/admin@sha256:"+adminDigest ||
+		candidate.PostgresImage != "ghcr.io/p-n-ai/pai-postgres@sha256:"+postgresDigest {
+		t.Fatalf("candidate provenance = %#v", candidate)
 	}
 }
 
@@ -363,6 +615,7 @@ echo "$FAKE_ARTIFACT_COUNT"
 
 func TestStablePromotionContracts(t *testing.T) {
 	source, document := repositoryWorkflow(t, ".github/workflows/stable.yml")
+	deploySource, deployDocument := repositoryWorkflow(t, ".github/workflows/deploy.yml")
 	on, err := workflowMap(document, "on")
 	if err != nil {
 		t.Fatal(err)
@@ -374,33 +627,72 @@ func TestStablePromotionContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	requirePinnedActions(t, document)
+	requirePinnedActions(t, deployDocument)
+	stableDeploy, err := workflowJob(document, "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stableDeployPermissions, ok := stringMap(stableDeploy["permissions"])
+	if !ok {
+		t.Fatal("stable deploy job permissions are missing")
+	}
+	calledDeploy, err := workflowJob(deployDocument, "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calledDeployPermissions, ok := stringMap(calledDeploy["permissions"])
+	if !ok {
+		t.Fatal("called deploy job permissions are missing")
+	}
+	for permission, expected := range map[string]string{
+		"contents": "read",
+		"id-token": "write",
+		"packages": "write",
+	} {
+		if stableDeployPermissions[permission] != expected {
+			t.Errorf("stable deploy %s permission = %v, want %s", permission, stableDeployPermissions[permission], expected)
+		}
+		if calledDeployPermissions[permission] != expected {
+			t.Errorf("called deploy %s permission = %v, want %s", permission, calledDeployPermissions[permission], expected)
+		}
+	}
 	requireContains(t, source,
 		`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`,
+		`[ "$GITHUB_REF" != "refs/heads/main" ]`,
 		".head_branch == \"main\"",
 		".head_sha == $sha",
 		"nightly-candidate-$sha",
-		"aws ecr batch-get-image",
-		"Generate server registry login",
-		"environment: production",
-		"TAG: ${{ needs.candidate.outputs.sha }}",
-		"APP_DIGEST: ${{ needs.candidate.outputs.app_digest }}",
-		"ADMIN_DIGEST: ${{ needs.candidate.outputs.admin_digest }}",
-		"scripts/preflight-conversation-identities.sql",
+		"postgres_image",
+		"uses: ./.github/workflows/deploy.yml",
+		"sha: ${{ needs.candidate.outputs.sha }}",
+		"app_digest: ${{ needs.candidate.outputs.app_digest }}",
+		"admin_digest: ${{ needs.candidate.outputs.admin_digest }}",
+		"postgres_image: ${{ needs.candidate.outputs.postgres_image }}",
 		`if gh release view "$VERSION"`,
 		`gh release create "$VERSION" --verify-tag`,
 	)
-	if strings.Contains(source, "docker build") ||
-		strings.Contains(source, "docker/build-push-action") {
+	requireContains(t, deploySource,
+		"aws ecr batch-get-image",
+		"environment: production",
+		"Generate masked ECR token for server",
+		"TAG: ${{ inputs.sha }}",
+		"APP_DIGEST: ${{ inputs.app_digest }}",
+		"ADMIN_DIGEST: ${{ inputs.admin_digest }}",
+		"POSTGRES_IMAGE: ${{ inputs.postgres_image }}",
+		"scripts/preflight-conversation-identities.sql",
+	)
+	if strings.Contains(source+deploySource, "docker build") ||
+		strings.Contains(source+deploySource, "docker/build-push-action") {
 		t.Fatal("stable promotion must not rebuild candidate images")
 	}
-	if strings.Contains(source, "ecr-token:") {
+	if strings.Contains(deploySource, "ecr-token:") {
 		t.Fatal("stable promotion must not transport ECR credentials through job outputs")
 	}
-	if strings.Contains(source, "ECR_TOKEN: ${{ env.ECR_TOKEN }}") {
+	if strings.Contains(deploySource, "ECR_TOKEN: ${{ env.ECR_TOKEN }}") {
 		t.Fatal("deploy must inherit the masked ECR token from GITHUB_ENV")
 	}
-	login := strings.Index(source, "- name: Generate server registry login")
-	deploy := strings.Index(source, "- name: Deploy")
+	login := strings.Index(deploySource, "- name: Generate masked ECR token for server")
+	deploy := strings.Index(deploySource, "- name: Deploy")
 	if login < 0 || deploy < 0 || login > deploy {
 		t.Fatal("server registry login must be generated immediately before deployment")
 	}
@@ -419,6 +711,7 @@ func TestStableVersionAndPublicationAreRetrySafe(t *testing.T) {
 	_, document := repositoryWorkflow(t, ".github/workflows/stable.yml")
 	validate := workflowStepRun(t, document, "candidate", "Validate version and candidate run")
 	if err := runBash(t, validate,
+		"GITHUB_REF=refs/heads/main",
 		"RUN_ID=1",
 		"VERSION=v01.2.3",
 		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
@@ -494,6 +787,197 @@ exit 0
 	}
 }
 
+func TestStableCandidateArtifactIsDownloadedIntoItsNamedDirectory(t *testing.T) {
+	_, document := repositoryWorkflow(t, ".github/workflows/stable.yml")
+	download := workflowStepRun(t, document, "candidate", "Download candidate provenance")
+	verify := workflowStepRun(t, document, "candidate", "Verify candidate provenance")
+	verify = strings.ReplaceAll(
+		verify,
+		"${{ secrets.ECR_REGISTRY }}",
+		"registry.example",
+	)
+
+	workDir := t.TempDir()
+	bin := filepath.Join(workDir, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExecutable(t, filepath.Join(bin, "git"), "#!/bin/bash\nexit 0\n")
+	writeExecutable(t, filepath.Join(bin, "gh"), `#!/bin/bash
+if [ "$1" = "api" ] && [[ "$2" == *"/artifacts?per_page=100" ]]; then
+  case "${FAKE_ARTIFACT_MODE:-single}" in
+    zero) printf '{"artifacts":[]}\n' ;;
+    expired) printf '{"artifacts":[{"name":"nightly-candidate-%s","expired":true}]}\n' "$FAKE_CANDIDATE_SHA" ;;
+    multiple) printf '{"artifacts":[{"name":"nightly-candidate-%s","expired":false},{"name":"nightly-candidate-%s","expired":false}]}\n' "$FAKE_CANDIDATE_SHA" "$FAKE_SECOND_SHA" ;;
+    *) printf '{"artifacts":[{"name":"nightly-candidate-%s","expired":false}]}\n' "$FAKE_CANDIDATE_SHA" ;;
+  esac
+  exit 0
+fi
+if [ "$1" = "api" ] && [[ "$2" == *"/actions/runs/22" ]]; then
+  printf '{"name":"CI","event":"push","head_branch":"main","head_sha":"%s","conclusion":"success"}\n' "$FAKE_CANDIDATE_SHA"
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "download" ]; then
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dir)
+        artifact_dir=$2
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  mkdir -p "$artifact_dir"
+  printf '{"repository":"p-n-ai/pai-bot","nightly_run_id":11,"source_run_id":22,"sha":"%s","app_image":"registry.example/pai-bot/app@sha256:%s","admin_image":"registry.example/pai-bot/admin@sha256:%s","postgres_image":"ghcr.io/p-n-ai/pai-postgres@sha256:%s"}\n' \
+    "$FAKE_CANDIDATE_SHA" "$FAKE_APP_DIGEST" "$FAKE_ADMIN_DIGEST" "$FAKE_POSTGRES_DIGEST" \
+    > "$artifact_dir/candidate.json"
+  exit 0
+fi
+exit 1
+`)
+
+	sha := strings.Repeat("a", 40)
+	appDigest := strings.Repeat("1", 64)
+	adminDigest := strings.Repeat("2", 64)
+	postgresDigest := strings.Repeat("3", 64)
+	downloadOutput := filepath.Join(workDir, "download-output")
+	commonEnvironment := []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"FAKE_CANDIDATE_SHA=" + sha,
+		"FAKE_SECOND_SHA=" + strings.Repeat("b", 40),
+		"FAKE_APP_DIGEST=" + appDigest,
+		"FAKE_ADMIN_DIGEST=" + adminDigest,
+		"FAKE_POSTGRES_DIGEST=" + postgresDigest,
+		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
+		"RUN_ID=11",
+	}
+	if err := runBash(
+		t,
+		"cd \"$TEST_WORKDIR\"\n"+download,
+		append(commonEnvironment,
+			"TEST_WORKDIR="+workDir,
+			"GITHUB_OUTPUT="+downloadOutput,
+		)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	artifactName := "nightly-candidate-" + sha
+	if output := string(mustReadFile(t, downloadOutput)); output != "artifact_name="+artifactName+"\n" {
+		t.Fatalf("download GITHUB_OUTPUT = %q", output)
+	}
+	for _, mode := range []string{"zero", "expired", "multiple"} {
+		t.Run("reject_"+mode+"_artifacts", func(t *testing.T) {
+			if err := runBash(
+				t,
+				"cd \"$TEST_WORKDIR\"\n"+download,
+				append(commonEnvironment,
+					"TEST_WORKDIR="+workDir,
+					"GITHUB_OUTPUT="+filepath.Join(workDir, mode+"-output"),
+					"FAKE_ARTIFACT_MODE="+mode,
+				)...,
+			); err == nil {
+				t.Fatalf("download accepted %s candidate artifacts", mode)
+			}
+		})
+	}
+
+	verifyOutput := filepath.Join(workDir, "verify-output")
+	if err := runBash(
+		t,
+		"cd \"$TEST_WORKDIR\"\n"+verify,
+		append(commonEnvironment,
+			"TEST_WORKDIR="+workDir,
+			"ARTIFACT_NAME="+artifactName,
+			"VERSION=v1.2.3",
+			"GITHUB_OUTPUT="+verifyOutput,
+		)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	requireContains(t, string(mustReadFile(t, verifyOutput)),
+		"sha="+sha,
+		"app_digest=sha256:"+appDigest,
+		"admin_digest=sha256:"+adminDigest,
+		"postgres_image=ghcr.io/p-n-ai/pai-postgres@sha256:"+postgresDigest,
+	)
+
+	manifestPath := filepath.Join(workDir, "candidate", artifactName, "candidate.json")
+	validManifest := string(mustReadFile(t, manifestPath))
+	for _, test := range []struct {
+		name string
+		from string
+		to   string
+	}{
+		{
+			name: "repository",
+			from: `"repository":"p-n-ai/pai-bot"`,
+			to:   `"repository":"other/repository"`,
+		},
+		{
+			name: "nightly run",
+			from: `"nightly_run_id":11`,
+			to:   `"nightly_run_id":12`,
+		},
+		{
+			name: "artifact SHA",
+			from: `"sha":"` + sha + `"`,
+			to:   `"sha":"` + strings.Repeat("b", 40) + `"`,
+		},
+		{
+			name: "source CI",
+			from: `"source_run_id":22`,
+			to:   `"source_run_id":23`,
+		},
+		{
+			name: "app digest",
+			from: `"app_image":"registry.example/pai-bot/app@sha256:` + appDigest + `"`,
+			to:   `"app_image":"registry.example/pai-bot/app@latest"`,
+		},
+		{
+			name: "admin digest",
+			from: `"admin_image":"registry.example/pai-bot/admin@sha256:` + adminDigest + `"`,
+			to:   `"admin_image":"registry.example/pai-bot/admin@latest"`,
+		},
+		{
+			name: "PostgreSQL digest",
+			from: `"postgres_image":"ghcr.io/p-n-ai/pai-postgres@sha256:` + postgresDigest + `"`,
+			to:   `"postgres_image":"ghcr.io/p-n-ai/pai-postgres:latest"`,
+		},
+	} {
+		t.Run("reject_"+test.name, func(t *testing.T) {
+			invalidManifest := strings.Replace(validManifest, test.from, test.to, 1)
+			if invalidManifest == validManifest {
+				t.Fatalf("test mutation %q did not change manifest", test.name)
+			}
+			if err := os.WriteFile(manifestPath, []byte(invalidManifest), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := os.WriteFile(manifestPath, []byte(validManifest), 0o600); err != nil {
+					t.Error(err)
+				}
+			})
+			if err := runBash(
+				t,
+				"cd \"$TEST_WORKDIR\"\n"+verify,
+				append(commonEnvironment,
+					"TEST_WORKDIR="+workDir,
+					"ARTIFACT_NAME="+artifactName,
+					"VERSION=v1.2.3",
+					"GITHUB_OUTPUT="+filepath.Join(workDir, "invalid-"+strings.ReplaceAll(test.name, " ", "-")),
+				)...,
+			); err == nil {
+				t.Fatalf("verification accepted invalid %s", test.name)
+			}
+			if err := os.WriteFile(manifestPath, []byte(validManifest), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func mustReadFile(t *testing.T, path string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -508,6 +992,8 @@ type fakeDeployOptions struct {
 	smokeFails           bool
 	gooseFails           bool
 	adminHTTPFails       bool
+	aiStatusFails        bool
+	appLookupFails       bool
 	missingPreviousAdmin bool
 }
 
@@ -522,7 +1008,14 @@ func runFakeDeploy(
 	}
 	if err := os.WriteFile(
 		filepath.Join(deployDir, ".env"),
-		[]byte("LEARN_DATABASE_URL=postgres://pai:test@postgres:5432/pai\n"),
+		[]byte("LEARN_DATABASE_URL=postgres://pai:test@postgres:5432/pai\nPAI_TEST_RELEASE=candidate\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(deployDir, ".env.rollback"),
+		[]byte("LEARN_DATABASE_URL=postgres://pai:test@postgres:5432/pai\nPAI_TEST_RELEASE=previous\n"),
 		0o600,
 	); err != nil {
 		t.Fatal(err)
@@ -555,6 +1048,7 @@ if [ "$1" = "compose" ] && [[ "$args" == *" ps -q app"* ]]; then
   count=$(cat "$count_file" 2>/dev/null || echo 0)
   count=$((count + 1))
   echo "$count" > "$count_file"
+  if [ "$count" -gt 1 ] && [ "$FAKE_APP_LOOKUP_FAIL" = "true" ]; then exit 9; fi
   if [ "$count" -eq 1 ]; then echo old-app; else echo new-app; fi
   exit 0
 fi
@@ -586,7 +1080,19 @@ if [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
   case "${@: -1}" in
     *"/app@"*) echo sha256:newapp ;;
     *"/admin@"*) echo sha256:newadmin ;;
+    ghcr.io/p-n-ai/pai-postgres@*) echo sha256:newpostgres ;;
   esac
+  exit 0
+fi
+if [ "$1" = "compose" ] && [[ "$args" == *"pg_dump"* ]]; then
+  echo fake-backup
+  exit 0
+fi
+if [ "$1" = "compose" ] && [[ "$args" == *"pg_restore --list"* ]]; then
+  exit 0
+fi
+if [ "$1" = "compose" ] && [[ "$args" == *"config --variables"* ]]; then
+  echo "POSTGRES_IMAGE string ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5"
   exit 0
 fi
 if [ "$1" = "compose" ] && [[ "$args" == *"exec -T postgres psql"*"-Atqc"* ]]; then
@@ -601,6 +1107,18 @@ if [ "$1" = "compose" ] && [[ "$args" == *"exec -T admin wget"* ]]; then
   if [ "$FAKE_ADMIN_HTTP_FAIL" = "true" ]; then exit 8; fi
   exit 0
 fi
+if [ "$1" = "compose" ] && [[ "$args" == *"http://localhost:8080/health/status"* ]]; then
+  if [ "$FAKE_AI_STATUS_FAIL" = "true" ]; then
+    echo '{"status":"degraded","components":[{"id":"application","status":"operational"},{"id":"ai_provider","status":"unavailable"}]}'
+  else
+    echo '{"status":"ok","components":[{"id":"application","status":"operational"},{"id":"ai_provider","status":"operational"}]}'
+  fi
+  exit 0
+fi
+if [ "$1" = "compose" ] && [[ "$args" == *"up -d --force-recreate app admin"* ]]; then
+  grep '^PAI_TEST_RELEASE=' .env >> "$FAKE_DOCKER_LOG"
+  exit 0
+fi
 if [ "$1" = "compose" ] && [[ "$args" == *"/pai-terminal-chat"* ]]; then
   if [ "$FAKE_SMOKE_FAIL" = "true" ] && [[ "$args" == *"/foobar"* ]]; then
     echo "unexpected"
@@ -608,7 +1126,7 @@ if [ "$1" = "compose" ] && [[ "$args" == *"/pai-terminal-chat"* ]]; then
   fi
   case "$args" in
     *"/progress"*) echo "Progress XP" ;;
-    *"/create_group"*) echo "Test Deploy" ;;
+    *"/help"*) echo "available commands" ;;
     *"/foobar"*) echo "Unknown" ;;
     *) echo "/learn" ;;
   esac
@@ -626,6 +1144,9 @@ exit 0
 		"PATH="+bin+":"+os.Getenv("PATH"),
 		"DEPLOY_DIR="+deployDir,
 		"ECR_TOKEN=test-token",
+		"GHCR_TOKEN=test-ghcr-token",
+		"GHCR_USER=test-user",
+		"POSTGRES_IMAGE=ghcr.io/p-n-ai/pai-postgres@sha256:"+strings.Repeat("3", 64),
 		"REGISTRY=registry.example",
 		"TAG="+strings.Repeat("a", 40),
 		"APP_DIGEST=sha256:"+strings.Repeat("1", 64),
@@ -634,6 +1155,8 @@ exit 0
 		fmt.Sprintf("FAKE_SMOKE_FAIL=%t", options.smokeFails),
 		fmt.Sprintf("FAKE_GOOSE_FAIL=%t", options.gooseFails),
 		fmt.Sprintf("FAKE_ADMIN_HTTP_FAIL=%t", options.adminHTTPFails),
+		fmt.Sprintf("FAKE_AI_STATUS_FAIL=%t", options.aiStatusFails),
+		fmt.Sprintf("FAKE_APP_LOOKUP_FAIL=%t", options.appLookupFails),
 		fmt.Sprintf("FAKE_MISSING_PREVIOUS_ADMIN=%t", options.missingPreviousAdmin),
 		"FAKE_DOCKER_LOG="+logPath,
 		"FAKE_DOCKER_STATE="+stateDir,
@@ -666,6 +1189,7 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"tag sha256:oldapp pai-bot:latest",
 		"tag sha256:oldadmin pai-admin:latest",
 		"up -d --force-recreate app admin",
+		"PAI_TEST_RELEASE=previous",
 	)
 
 	output, log, err = runFakeDeploy(t, fakeDeployOptions{
@@ -680,6 +1204,37 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"tag sha256:oldapp pai-bot:latest",
 		"tag sha256:oldadmin pai-admin:latest",
 	)
+
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:     "healthy",
+		aiStatusFails: true,
+	})
+	if err == nil {
+		t.Fatal("deployment with an unavailable AI provider succeeded")
+	}
+	requireContains(t, output,
+		"AI response health check failed",
+		"Rollback restored app sha256:oldapp and admin sha256:oldadmin",
+	)
+	requireContains(t, log,
+		"tag sha256:oldapp pai-bot:latest",
+		"tag sha256:oldadmin pai-admin:latest",
+	)
+
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:      "healthy",
+		appLookupFails: true,
+	})
+	if err == nil {
+		t.Fatal("deployment succeeded after an app container lookup failed")
+	}
+	requireContains(t, output,
+		"deployment command failed with status 9",
+		"Rollback restored app sha256:oldapp and admin sha256:oldadmin",
+	)
+	if rollbackCount := strings.Count(log, "up -d --force-recreate app admin"); rollbackCount != 1 {
+		t.Fatalf("rollback restarted app/admin %d times, want exactly once", rollbackCount)
+	}
 
 	output, log, err = runFakeDeploy(t, fakeDeployOptions{
 		appHealth:  "healthy",
@@ -737,6 +1292,9 @@ func TestRemoteDeploymentContracts(t *testing.T) {
 		"PREV_ADMIN_ID=",
 		"trap unexpected_failure ERR",
 		`ROLLBACK_ARMED=false`,
+		`run --rm config-check`,
+		`pg_dump "$DB_URL" --format=custom`,
+		`docker compose -f docker-compose.yml -f docker-compose.prod.yml pull postgres dragonfly`,
 		`docker image prune -f || echo "WARNING: post-deploy image cleanup failed"`,
 		"--format='{{.Image}}'",
 		`docker tag "$PREV_APP_ID" pai-bot:latest`,
@@ -747,7 +1305,11 @@ func TestRemoteDeploymentContracts(t *testing.T) {
 		`if [ "$RUNNING_APP_ID" != "$EXPECTED_APP_ID" ]`,
 		`if [ "$RUNNING_ADMIN_ID" != "$EXPECTED_ADMIN_ID" ]`,
 		`fail_release "$SMOKE_FAIL bot smoke test(s) failed"`,
+		`smoke "/help"`,
 	)
+	if strings.Contains(source, `smoke "/create_group"`) {
+		t.Fatal("production smoke tests must not mutate application state")
+	}
 	if strings.Contains(source, ".Config.Image") {
 		t.Fatal("rollback must not capture a mutable image reference")
 	}

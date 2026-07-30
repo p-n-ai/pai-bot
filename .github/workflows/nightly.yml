@@ -60,7 +60,7 @@ jobs:
         if: steps.artifact.outputs.exists != 'true'
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
 
-      - name: Require immutable candidate repositories
+      - name: Enforce immutable candidate repositories
         if: steps.artifact.outputs.exists != 'true'
         run: |
           for repository in pai-bot/app pai-bot/admin; do
@@ -69,7 +69,16 @@ jobs:
               --query 'repositories[0].imageTagMutability' \
               --output text)
             if [ "$mutability" != "IMMUTABLE" ]; then
-              echo "$repository must use immutable ECR tags, got $mutability" >&2
+              aws ecr put-image-tag-mutability \
+                --repository-name "$repository" \
+                --image-tag-mutability IMMUTABLE > /dev/null
+              mutability=$(aws ecr describe-repositories \
+                --repository-names "$repository" \
+                --query 'repositories[0].imageTagMutability' \
+                --output text)
+            fi
+            if [ "$mutability" != "IMMUTABLE" ]; then
+              echo "$repository did not transition to immutable ECR tags" >&2
               exit 1
             fi
           done

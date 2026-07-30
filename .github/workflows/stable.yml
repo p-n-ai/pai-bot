@@ -60,33 +60,51 @@ jobs:
           ' <<<"$run" >/dev/null
 
       - name: Download candidate provenance
+        id: download
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ inputs.candidate_run_id }}
         run: |
-          mkdir candidate
-          gh run download "$RUN_ID" --pattern 'nightly-candidate-*' --dir candidate
+          artifacts=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100")
+          mapfile -t artifact_names < <(
+            jq -r '
+              .artifacts[] |
+              select(.expired == false) |
+              .name |
+              select(test("^nightly-candidate-[0-9a-f]{40}$"))
+            ' <<<"$artifacts"
+          )
+          if [ "${#artifact_names[@]}" -ne 1 ]; then
+            echo "expected exactly one unexpired nightly candidate artifact" >&2
+            exit 1
+          fi
+          artifact_name=${artifact_names[0]}
+          artifact_dir="candidate/$artifact_name"
+          mkdir -p "$artifact_dir"
+          gh run download "$RUN_ID" --name "$artifact_name" --dir "$artifact_dir"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
       - name: Verify candidate provenance
         id: verify
         env:
+          ARTIFACT_NAME: ${{ steps.download.outputs.artifact_name }}
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ inputs.candidate_run_id }}
           VERSION: ${{ inputs.version }}
         run: |
-          mapfile -t manifests < <(find candidate -name candidate.json -type f)
-          if [ "${#manifests[@]}" -ne 1 ]; then
-            echo "expected exactly one candidate manifest" >&2
+          manifest="candidate/$ARTIFACT_NAME/candidate.json"
+          if [ ! -f "$manifest" ]; then
+            echo "candidate artifact does not contain candidate.json" >&2
             exit 1
           fi
-          manifest=${manifests[0]}
           jq -e \
             --arg repository "$GITHUB_REPOSITORY" \
             --argjson nightly_run_id "$RUN_ID" \
             '.repository == $repository and .nightly_run_id == $nightly_run_id' \
             "$manifest" >/dev/null
           sha=$(jq -er '.sha | select(test("^[0-9a-f]{40}$"))' "$manifest")
-          if [ "$(basename "$(dirname "$manifest")")" != "nightly-candidate-$sha" ]; then
+          if [ "$ARTIFACT_NAME" != "nightly-candidate-$sha" ]; then
             echo "candidate artifact name does not match its SHA" >&2
             exit 1
           fi
@@ -123,6 +141,10 @@ jobs:
 
   deploy:
     needs: candidate
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/deploy.yml
     with:
       sha: ${{ needs.candidate.outputs.sha }}

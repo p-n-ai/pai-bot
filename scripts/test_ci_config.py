@@ -25,29 +25,51 @@ def named_step(workflow: str, name: str) -> str:
 
 
 class CIWorkflowTests(unittest.TestCase):
-    def test_deploy_is_reusable_and_does_not_repeat_ci_tests(self) -> None:
+    def test_deploy_accepts_only_verified_candidate_inputs(self) -> None:
         workflow = source(".github/workflows/deploy.yml")
+        stable = source(".github/workflows/stable.yml")
 
         self.assertIn("  workflow_call:", workflow)
         self.assertNotIn("  push:\n", workflow)
+        self.assertNotIn("  workflow_dispatch:\n", workflow)
         self.assertNotIn("\n  test:\n", workflow)
         self.assertNotIn("pnpm test:e2e", workflow)
         self.assertNotIn("go test ./...", workflow)
-        self.assertNotIn("inputs.deployable", workflow)
+        self.assertNotIn("docker/build-push-action", workflow)
+        for candidate_input in (
+            "sha",
+            "app_digest",
+            "admin_digest",
+            "postgres_image",
+        ):
+            with self.subTest(candidate_input=candidate_input):
+                self.assertIn(f"      {candidate_input}:\n", workflow)
+        stable_deploy = stable.split("\n  deploy:\n", maxsplit=1)[1].split(
+            "\n  publish:\n", maxsplit=1
+        )[0]
+        for permission in (
+            "      contents: read\n",
+            "      id-token: write\n",
+            "      packages: write\n",
+        ):
+            with self.subTest(permission=permission.strip()):
+                self.assertIn(permission, stable_deploy)
 
-    def test_main_deploy_waits_for_exact_sha_ci_jobs(self) -> None:
+    def test_main_candidate_waits_for_one_exact_sha_ci_gate(self) -> None:
         workflow = source(".github/workflows/ci.yml")
+        nightly = source(".github/workflows/nightly.yml")
 
-        self.assertIn("  production-deploy:", workflow)
-        self.assertIn("      always() &&", workflow)
-        self.assertIn("    uses: ./.github/workflows/deploy.yml", workflow)
+        self.assertNotIn("  production-deploy:", workflow)
+        self.assertIn("  gate:\n", workflow)
+        self.assertIn("    name: Required CI gate", workflow)
+        self.assertIn("    workflows: [CI]", nightly)
         self.assertIn(
-            "admin_changed: ${{ needs.changes.outputs.admin_image == 'true' }}",
-            workflow,
+            "github.event.workflow_run.conclusion == 'success'",
+            nightly,
         )
         self.assertIn(
-            "app_changed: ${{ needs.changes.outputs.app_image == 'true' }}",
-            workflow,
+            "github.event.workflow_run.head_branch == 'main'",
+            nightly,
         )
         for job in (
             "changes",
@@ -65,53 +87,54 @@ class CIWorkflowTests(unittest.TestCase):
                 self.assertIn(f"      - {job}\n", workflow)
 
     def test_routine_postgres_publish_is_change_gated(self) -> None:
-        workflow = source(".github/workflows/deploy.yml")
-
-        self.assertIn("inputs.postgres_changed", workflow)
-        self.assertIn(
-            "          POSTGRES_ACTION: ${{ steps.record-postgres.outputs.action }}",
-            workflow,
-        )
-        self.assertNotIn("needs.changes.outputs.postgres", workflow)
-
         ci_workflow = source(".github/workflows/ci.yml")
+        nightly = source(".github/workflows/nightly.yml")
+        publish_job = ci_workflow.split(
+            "\n  postgres-image:\n", maxsplit=1
+        )[1].split("\n  admin-spa-e2e:\n", maxsplit=1)[0]
+
         self.assertIn(
-            "postgres_changed: ${{ needs.changes.outputs.postgres_image == 'true' }}",
-            ci_workflow,
+            "needs.changes.outputs.postgres_image == 'true'",
+            publish_job,
         )
+        self.assertIn("push: true", publish_job)
+        self.assertIn(
+            "tags: ghcr.io/p-n-ai/pai-postgres:${{ github.sha }}",
+            publish_job,
+        )
+        self.assertIn(
+            'deployment_tag="ghcr.io/p-n-ai/pai-postgres:$SHA"',
+            nightly,
+        )
+        self.assertNotIn("Dockerfile.postgres", nightly)
 
     def test_postgres_deployment_uses_an_immutable_digest(self) -> None:
+        nightly = source(".github/workflows/nightly.yml")
+        stable = source(".github/workflows/stable.yml")
         deploy_workflow = source(".github/workflows/deploy.yml")
+
         self.assertIn(
-            "inputs.postgres_changed ||",
+            'echo "POSTGRES_IMAGE=ghcr.io/p-n-ai/pai-postgres@$digest"',
+            nightly,
+        )
+        self.assertIn(
+            "--arg postgres_image \"$POSTGRES_IMAGE\"",
+            nightly,
+        )
+        self.assertIn(
+            "postgres_image: $postgres_image",
+            nightly,
+        )
+        self.assertIn(
+            "postgres_image: ${{ needs.candidate.outputs.postgres_image }}",
+            stable,
+        )
+        self.assertIn(
+            "POSTGRES_IMAGE: ${{ inputs.postgres_image }}",
             deploy_workflow,
         )
         self.assertIn(
-            "inputs.rebuild_postgres",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "DEPLOYMENT_TAG: ghcr.io/p-n-ai/pai-postgres:${{ github.sha }}",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "steps.recorded-postgres.outputs.exists != 'true'",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "      - name: Resolve immutable PostgreSQL image",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "      - name: Record PostgreSQL image for deployment SHA",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "POSTGRES_IMAGE: ${{ needs.push-images.outputs.postgres-image }}",
-            deploy_workflow,
-        )
-        self.assertIn(
-            "image=ghcr.io/p-n-ai/pai-postgres@$digest",
+            'run: docker manifest inspect "$POSTGRES_IMAGE"',
             deploy_workflow,
         )
 
@@ -124,9 +147,12 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertIn("  config:\n", workflow)
         self.assertIn("      - 'scripts/*.py'", workflow)
         self.assertIn("python3 -m unittest discover", workflow)
+        gate = workflow.split("\n  gate:\n", maxsplit=1)[1]
+        self.assertIn("      - config\n", gate)
+        self.assertIn("RESULTS: ${{ toJSON(needs) }}", gate)
         self.assertIn(
-            "(needs.config.result == 'success' || needs.config.result == 'skipped')",
-            workflow,
+            'all(.[]; .result == "success" or .result == "skipped")',
+            gate,
         )
 
     def test_private_postgres_image_pulls_are_authenticated(self) -> None:
@@ -142,7 +168,7 @@ class CIWorkflowTests(unittest.TestCase):
         deploy_workflow = source(".github/workflows/deploy.yml")
         self.assertIn(
             "envs: DEPLOY_DIR,ECR_TOKEN,GHCR_TOKEN,GHCR_USER,"
-            "POSTGRES_IMAGE,REGISTRY,TAG",
+            "POSTGRES_IMAGE,REGISTRY,TAG,APP_DIGEST,ADMIN_DIGEST",
             deploy_workflow,
         )
         self.assertIn("GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}", deploy_workflow)
@@ -217,9 +243,8 @@ class CIWorkflowTests(unittest.TestCase):
             e2e,
         )
         self.assertIn(
-            "(needs.admin-spa-e2e.result == 'success' || "
-            "needs.admin-spa-e2e.result == 'skipped')",
-            workflow,
+            "      - admin-spa-e2e\n",
+            workflow.split("\n  gate:\n", maxsplit=1)[1],
         )
         start = named_step(workflow, "Start PostgreSQL and Dragonfly")
         self.assertIn("-f docker-compose.prod.yml", start)
@@ -298,103 +323,79 @@ class CIWorkflowTests(unittest.TestCase):
             {6379},
         )
 
-    def test_manual_production_deploys_require_main(self) -> None:
-        workflow = source(".github/workflows/deploy.yml")
-        guard = named_step(workflow, "Require main for manual production deploy")
-        first_build = workflow.index("      - name: Build and push app image")
+    def test_manual_stable_releases_require_main(self) -> None:
+        workflow = source(".github/workflows/stable.yml")
+        guard = named_step(workflow, "Validate version and candidate run")
 
-        self.assertIn("github.event_name == 'workflow_dispatch' &&", guard)
-        self.assertIn("github.ref != 'refs/heads/main'", guard)
+        self.assertIn('[ "$GITHUB_REF" != "refs/heads/main" ]', guard)
         self.assertIn("exit 1", guard)
-        self.assertLess(workflow.index(guard), first_build)
+        self.assertLess(
+            workflow.index("Validate version and candidate run"),
+            workflow.index("uses: ./.github/workflows/deploy.yml"),
+        )
 
-    def test_react_doctor_pr_filter_cannot_leave_required_check_pending(self) -> None:
-        workflow = source(".github/workflows/react-doctor.yml")
-        pull_request_trigger = workflow.split("  pull_request:\n", maxsplit=1)[1]
-        pull_request_trigger = pull_request_trigger.split("\n  push:\n", maxsplit=1)[0]
+    def test_react_doctor_is_observed_by_required_gate(self) -> None:
+        workflow = source(".github/workflows/ci.yml")
+        doctor = workflow.split("\n  react-doctor:\n", maxsplit=1)[1]
+        doctor = doctor.split("\n  postgres-image:\n", maxsplit=1)[0]
+        gate = workflow.split("\n  gate:\n", maxsplit=1)[1]
 
-        self.assertNotIn("paths:", pull_request_trigger)
-        self.assertIn("  changes:\n", workflow)
-        self.assertIn("uses: dorny/paths-filter@v3", workflow)
-        self.assertIn("  react-doctor:\n", workflow)
-        self.assertIn("      always() &&", workflow)
-        self.assertIn("needs.changes.outputs.admin_spa == 'true'", workflow)
+        self.assertIn("needs.changes.outputs.admin_spa == 'true'", doctor)
+        self.assertIn("uses: millionco/react-doctor@v2", doctor)
+        self.assertIn("      - react-doctor\n", gate)
+        self.assertFalse((ROOT / ".github/workflows/react-doctor.yml").exists())
 
-    def test_app_and_admin_builds_are_mutually_exclusive_with_promotion(
+    def test_app_and_admin_candidate_builds_resume_existing_sha_images(
         self,
     ) -> None:
-        workflow = source(".github/workflows/deploy.yml")
+        workflow = source(".github/workflows/nightly.yml")
 
         for image in ("app", "admin"):
             with self.subTest(image=image):
-                build = named_step(workflow, f"Build and push {image} image")
-                promote = named_step(
+                build = named_step(
                     workflow,
-                    f"Promote deployed {image} image to deployment SHA",
+                    f"Build and push SHA-addressed {image} image",
                 )
 
                 self.assertIn(
-                    "github.event_name == 'workflow_dispatch' ||",
+                    "steps.artifact.outputs.exists != 'true'",
                     build,
                 )
-                self.assertIn(f"inputs.{image}_changed", build)
-                self.assertIn("uses: docker/build-push-action@v6", build)
+                self.assertIn(
+                    f"steps.existing.outputs.{image}_exists != 'true'",
+                    build,
+                )
+                self.assertIn("uses: docker/build-push-action@", build)
                 self.assertIn("push: true", build)
-                self.assertIn(f"scope=deploy-{image}", build)
+                self.assertIn(
+                    "${{ github.event.workflow_run.head_sha }}",
+                    build,
+                )
+                self.assertIn(f"scope=nightly-{image}", build)
                 self.assertNotIn(f"/pai-bot/{image}:latest", build)
 
-                self.assertIn(
-                    "github.event_name != 'workflow_dispatch' &&",
-                    promote,
-                )
-                self.assertIn(f"inputs.{image}_changed == false", promote)
-                self.assertIn("docker buildx imagetools create", promote)
-                self.assertIn(
-                    f"/pai-bot/{image}:${{{{ github.sha }}}}",
-                    promote,
-                )
-                self.assertIn(f"/pai-bot/{image}:deployed", promote)
-                self.assertIn(f"/pai-bot/{image}:latest", promote)
-                self.assertIn('source="$DEPLOYED_IMAGE"', promote)
-                self.assertIn('source="$LEGACY_IMAGE"', promote)
-
     def test_postgres_reuse_and_rebuild_paths_fail_closed(self) -> None:
-        workflow = source(".github/workflows/deploy.yml")
-        recorded = named_step(workflow, "Resolve recorded PostgreSQL image")
-        build = named_step(workflow, "Build and push PostgreSQL retrieval image")
-        resolve = named_step(workflow, "Resolve immutable PostgreSQL image")
+        workflow = source(".github/workflows/nightly.yml")
+        resolve = named_step(workflow, "Resolve PostgreSQL candidate")
 
-        self.assertIn('case "$digest" in', recorded)
-        self.assertIn("Invalid recorded PostgreSQL image digest", recorded)
-        self.assertIn("exit 1", recorded)
-
-        self.assertIn(
-            "steps.recorded-postgres.outputs.exists != 'true'",
-            build,
+        recorded = resolve.index('resolve_digest "$deployment_tag"')
+        semantic_fallback = resolve.index(
+            "ghcr.io/p-n-ai/pai-postgres:deployed"
         )
-        self.assertIn("inputs.postgres_changed ||", build)
-        self.assertIn(
-            "github.event_name == 'workflow_dispatch' &&",
-            build,
+        immutable_tag = resolve.index("docker buildx imagetools create")
+        validation = resolve.index(
+            'if [[ "$digest" != sha256:* ]]; then',
+            immutable_tag,
         )
-        self.assertIn("inputs.rebuild_postgres", build)
-        self.assertIn("scope=deploy-postgres", build)
-
-        built = resolve.index('digest="$BUILT_DIGEST"')
-        recorded_fallback = resolve.index('digest="$RECORDED_DIGEST"')
-        semantic_fallback = resolve.index("docker buildx imagetools inspect")
-        validation = resolve.index('case "$digest" in')
         output = resolve.index(
-            'echo "image=ghcr.io/p-n-ai/pai-postgres@$digest"'
+            'echo "POSTGRES_IMAGE=ghcr.io/p-n-ai/pai-postgres@$digest"'
         )
-        self.assertLess(built, recorded_fallback)
-        self.assertLess(recorded_fallback, semantic_fallback)
-        self.assertLess(semantic_fallback, validation)
+        self.assertLess(recorded, semantic_fallback)
+        self.assertLess(semantic_fallback, immutable_tag)
+        self.assertLess(immutable_tag, validation)
         self.assertLess(validation, output)
-        self.assertIn("Invalid PostgreSQL image digest", resolve)
+        self.assertIn("no immutable PostgreSQL source image is available", resolve)
         self.assertIn("docker compose config --variables", resolve)
-        self.assertIn("ghcr.io/p-n-ai/pai-postgres:deployed", resolve)
-        self.assertNotIn("pggraph-1.0.0-pgvector-0.8.5", workflow)
 
     def test_production_postgres_is_pulled_by_digest_without_a_local_build(
         self,
@@ -409,11 +410,11 @@ class CIWorkflowTests(unittest.TestCase):
         deploy = named_step(workflow, "Deploy")
         self.assertIn(
             "envs: DEPLOY_DIR,ECR_TOKEN,GHCR_TOKEN,GHCR_USER,"
-            "POSTGRES_IMAGE,REGISTRY,TAG",
+            "POSTGRES_IMAGE,REGISTRY,TAG,APP_DIGEST,ADMIN_DIGEST",
             deploy,
         )
         self.assertIn(
-            "POSTGRES_IMAGE: ${{ needs.push-images.outputs.postgres-image }}",
+            "POSTGRES_IMAGE: ${{ inputs.postgres_image }}",
             deploy,
         )
 
@@ -437,23 +438,20 @@ class CIWorkflowTests(unittest.TestCase):
             script,
         )
 
-    def test_successful_deploy_records_stable_image_aliases(self) -> None:
+    def test_successful_deploy_records_only_postgres_compatibility_aliases(
+        self,
+    ) -> None:
         script = source("scripts/deploy-remote.sh")
         smoke_result = script.index('if [ "$SMOKE_FAIL" -gt 0 ]; then')
         record = script.index(
-            'echo "--- Recording successfully deployed image aliases ---"'
+            'echo "--- Recording successfully deployed PostgreSQL aliases ---"'
         )
         success = script.index('echo "Deploy successful (image: $TAG)"')
 
         self.assertLess(smoke_result, record)
         self.assertLess(record, success)
-        self.assertIn("for component in app admin; do", script)
-        self.assertIn("for alias in deployed latest; do", script)
-        self.assertIn(
-            'source_image="$REGISTRY/pai-bot/$component:$TAG"',
-            script,
-        )
-        self.assertIn('docker push "$alias_image"', script)
+        self.assertNotIn('"/pai-bot/app:deployed"', script)
+        self.assertNotIn('"/pai-bot/admin:deployed"', script)
         self.assertIn('postgres_repository=${POSTGRES_IMAGE%@*}', script)
         self.assertIn('"$postgres_repository:deployed"', script)
         self.assertIn('"$postgres_release_image"', script)
@@ -495,41 +493,9 @@ class CIWorkflowTests(unittest.TestCase):
             with self.subTest(ignored=ignored):
                 self.assertIn(f"{ignored}\n", dockerignore)
 
-    def test_image_metrics_distinguish_rebuild_promotion_and_reuse(self) -> None:
-        workflow = source(".github/workflows/deploy.yml")
+    def test_candidate_image_builds_use_shared_caches(self) -> None:
+        workflow = source(".github/workflows/nightly.yml")
         ci_workflow = source(".github/workflows/ci.yml")
-        metrics = named_step(workflow, "Record image-build metrics")
-        postgres_record = named_step(
-            workflow,
-            "Record PostgreSQL image for deployment SHA",
-        )
-
-        self.assertIn("admin_action=rebuilt", metrics)
-        self.assertIn("admin_action=promoted", metrics)
-        self.assertIn("app_action=rebuilt", metrics)
-        self.assertIn("app_action=promoted", metrics)
-        self.assertIn('echo "| App | $app_action |"', metrics)
-        self.assertIn('echo "| Admin | $admin_action |"', metrics)
-        self.assertIn('echo "| PostgreSQL | $POSTGRES_ACTION |"', metrics)
-        self.assertIn("### Orchestration optimization baseline", metrics)
-        self.assertIn(
-            "Duplicate deployment test suites | 1 | 0 | 100%",
-            metrics,
-        )
-        self.assertIn(
-            "Routine unconditional production image builds | 4 | 0 | 100%",
-            metrics,
-        )
-        self.assertIn(
-            "Uncached heavy image-build paths | 6/8 | 0/8 | 100%",
-            metrics,
-        )
-        self.assertIn(
-            "Fixed structural score for this change: 100% "
-            "(target: at least 80%)",
-            metrics,
-        )
-        self.assertIn("without a 30-day measurement window", metrics)
 
         for step_name in (
             "Build and publish PostgreSQL candidate",
@@ -537,9 +503,8 @@ class CIWorkflowTests(unittest.TestCase):
             "Build Docker image",
             "Build admin Docker image",
             "Build ONCE image",
-            "Build and push app image",
-            "Build and push admin image",
-            "Build and push PostgreSQL retrieval image",
+            "Build and push SHA-addressed app image",
+            "Build and push SHA-addressed admin image",
         ):
             with self.subTest(step=step_name):
                 source_workflow = (
@@ -556,10 +521,6 @@ class CIWorkflowTests(unittest.TestCase):
                 build = named_step(source_workflow, step_name)
                 self.assertIn("cache-from: type=gha", build)
                 self.assertIn("cache-to: type=gha,mode=max", build)
-
-        self.assertIn("action=reused", postgres_record)
-        self.assertIn("action=rebuilt", postgres_record)
-        self.assertIn("action=promoted", postgres_record)
 
 
 if __name__ == "__main__":

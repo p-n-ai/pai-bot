@@ -319,17 +319,6 @@ func Build() (*Document, error) {
 			responseText("501", "Auth service is not implemented."),
 		),
 	})
-	doc.Paths["/api/auth/refresh"] = route("POST", Operation{
-		Summary:     "Refresh an access token",
-		Tags:        []string{"Auth"},
-		RequestBody: jsonBody(registry.refFor(refreshTokenRequest{})),
-		Responses: mergeResponses(
-			responseJSON("200", "Token refresh succeeded.", registry.refFor(auth.Session{})),
-			responseText("400", "Request body is invalid."),
-			responseText("401", "Refresh token is invalid."),
-			responseText("501", "Auth service is not implemented."),
-		),
-	})
 	doc.Paths["/api/auth/switch-tenant"] = route("POST", Operation{
 		Summary:     "Switch the active tenant for a session",
 		Tags:        []string{"Auth"},

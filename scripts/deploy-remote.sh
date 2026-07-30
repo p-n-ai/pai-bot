@@ -60,6 +60,9 @@ fail_release() {
 
 unexpected_failure() {
   local status=$?
+  if [ "$BASH_SUBSHELL" -gt 0 ]; then
+    return "$status"
+  fi
   trap - ERR
   echo "ERROR: deployment command failed with status $status"
   if [ "$ROLLBACK_ARMED" = "true" ]; then

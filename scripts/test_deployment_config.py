@@ -105,16 +105,18 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
 
     def test_github_masks_ecr_token_before_same_job_handoff(self) -> None:
         workflow = source(".github/workflows/deploy.yml")
-        push_images, deploy = workflow.split("\n  deploy:\n", maxsplit=1)
+        deploy = workflow.split("\n  deploy:\n", maxsplit=1)[1]
 
-        self.assertNotIn("ecr-token:", push_images)
-        self.assertNotIn("needs.push-images.outputs.ecr-token", workflow)
+        self.assertNotIn("ecr-token:", workflow)
+        self.assertNotIn("outputs.ecr-token", workflow)
         self.assertIn("      id-token: write", deploy)
-        self.assertEqual(workflow.count("Configure AWS credentials (OIDC)"), 2)
-        mask_at = deploy.index('echo "::add-mask::$token"')
-        output_at = deploy.index('echo "token=$token" >> "$GITHUB_OUTPUT"')
+        self.assertEqual(workflow.count("Configure AWS credentials"), 1)
+        mask_at = deploy.index('echo "::add-mask::$ecr_token"')
+        output_at = deploy.index(
+            'echo "ECR_TOKEN=$ecr_token" >> "$GITHUB_ENV"'
+        )
         handoff_at = deploy.index(
-            "ECR_TOKEN: ${{ steps.ecr-token.outputs.token }}"
+            "envs: DEPLOY_DIR,ECR_TOKEN,GHCR_TOKEN"
         )
         self.assertLess(mask_at, output_at)
         self.assertLess(output_at, handoff_at)
@@ -140,7 +142,7 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         deploy = source("scripts/deploy-remote.sh")
         rollback_at = deploy.index("rollback_release()")
         restore_at = deploy.index("Restored previous environment")
-        restart_at = deploy.index("up -d app admin")
+        restart_at = deploy.index("up -d --force-recreate app admin")
         self.assertLess(rollback_at, restore_at)
         self.assertLess(restore_at, restart_at)
         self.assertIn("--format='{{.Image}}'", deploy)
@@ -148,7 +150,11 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         health_failure = deploy.split(
             'if [ "$APP_HEALTH" != "healthy" ]; then', maxsplit=1
         )[1]
-        self.assertIn("rollback_release", health_failure)
+        self.assertIn('fail_release "app did not become healthy"', health_failure)
+        fail_release = deploy.split("fail_release() {", maxsplit=1)[1].split(
+            "\n}", maxsplit=1
+        )[0]
+        self.assertIn("rollback_release", fail_release)
 
     def test_remote_smoke_checks_are_read_only_and_blocking(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
@@ -157,8 +163,7 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         smoke_failure = deploy.split(
             'if [ "$SMOKE_FAIL" -gt 0 ]; then', maxsplit=1
         )[1]
-        self.assertIn("rollback_release", smoke_failure)
-        self.assertIn("exit 1", smoke_failure)
+        self.assertIn("fail_release", smoke_failure)
 
     def test_remote_deploy_checks_ai_response_before_success(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
@@ -167,7 +172,7 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
             'echo "--- Health check: application and AI provider status ---"'
         )
         success_at = deploy.index(
-            'echo "--- Recording successfully deployed image aliases ---"'
+            'echo "--- Recording successfully deployed PostgreSQL aliases ---"'
         )
         self.assertLess(app_health_at, ai_health_at)
         self.assertLess(ai_health_at, success_at)
@@ -179,11 +184,10 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
     def test_remote_deploy_rolls_back_when_ai_response_is_unhealthy(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
         ai_failure = deploy.split(
-            'echo "ERROR: AI response health check failed — rolling back"',
+            'if [ "$STATUS_RESPONSE" != "$STATUS_EXPECTED" ]; then',
             maxsplit=1,
         )[1]
-        self.assertIn("rollback_release", ai_failure)
-        self.assertIn("exit 1", ai_failure)
+        self.assertIn('fail_release "AI response health check failed"', ai_failure)
 
 
 if __name__ == "__main__":

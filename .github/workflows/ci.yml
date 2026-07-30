@@ -161,6 +161,21 @@ jobs:
         working-directory: admin-spa
         run: pnpm check
 
+  react-doctor:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.admin_spa == 'true'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: millionco/react-doctor@v2
+
   postgres-image:
     name: Publish PostgreSQL candidate
     runs-on: ubuntu-latest
@@ -508,8 +523,25 @@ jobs:
             mkdir -p base/cmd/openapi
             cp head/cmd/openapi/main.go base/cmd/openapi/main.go
           fi
+          (cd head && go run ./cmd/apiroutes -root ../base/internal/server) > base-api-routes.json
+          (cd head && go run ./cmd/apiroutes -root internal/server) > head-api-routes.json
           (cd base && go run ./cmd/openapi) > base-openapi.json
           (cd head && go run ./cmd/openapi) > head-openapi.json
+          if ! jq -e '
+            .[] |
+            select(.method == "POST" and .path == "/api/auth/refresh")
+          ' base-api-routes.json > /dev/null; then
+            jq 'del(.paths["/api/auth/refresh"])' \
+              base-openapi.json > base-openapi.normalized.json
+            mv base-openapi.normalized.json base-openapi.json
+          fi
+
+      - name: Reject removed runtime API routes
+        run: >-
+          cd head &&
+          go run ./cmd/apiroutes
+          -base ../base-api-routes.json
+          -head ../head-api-routes.json
 
       - name: Reject breaking API changes
         run: oasdiff breaking --fail-on ERR --format githubactions base-openapi.json head-openapi.json
@@ -522,6 +554,7 @@ jobs:
       - changes
       - config
       - admin-spa
+      - react-doctor
       - admin-spa-e2e
       - go
       - go-lint
