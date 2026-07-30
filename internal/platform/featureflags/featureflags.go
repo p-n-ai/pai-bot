@@ -28,8 +28,8 @@ const (
 	AgentCore Feature = "agent_core"
 	// PublicHealth exposes the public status and external liveness routes.
 	PublicHealth Feature = "public_health"
-	// AIHealth exposes the authenticated /health/ai provider check.
-	AIHealth Feature = "ai_health"
+	// legacyAIHealth keeps current deployments bootable while the retired flag is removed from PAI_FEATURES.
+	legacyAIHealth Feature = "ai_health"
 )
 
 // Spec describes a known feature flag.
@@ -61,11 +61,6 @@ var registry = map[Feature]Spec{
 		Status:         UnderDevelopment,
 		DefaultEnabled: false,
 	},
-	AIHealth: {
-		Feature:        AIHealth,
-		Status:         UnderDevelopment,
-		DefaultEnabled: false,
-	},
 }
 
 // Parse builds an effective feature set from comma-separated overrides.
@@ -82,6 +77,13 @@ func Parse(value string) (Features, error) {
 			continue
 		}
 		feature := Feature(name)
+		if feature == legacyAIHealth {
+			if _, ok := seen[feature]; ok {
+				return Features{}, fmt.Errorf("duplicate feature flag override %q", name)
+			}
+			seen[feature] = struct{}{}
+			continue
+		}
 		if _, ok := registry[feature]; !ok {
 			return Features{}, fmt.Errorf("unknown feature flag %q", name)
 		}

@@ -415,7 +415,7 @@ func TestStoreCanonicalizesOverridesEqualToEnvironment(t *testing.T) {
 				APIKeyProviderOpenRouter: {Value: env.OpenRouter.APIKey, Operation: SecretReplace},
 			},
 		},
-		Flags: map[string]bool{"turn_hooks": false, "ai_health": true, "agent_core": false},
+		Flags: map[string]bool{"turn_hooks": false, "agent_core": false},
 	}
 	store.canonicalizeRedundantOverrides(&st)
 	if st.AI.DefaultProvider != nil || len(st.AI.Providers.APIKey) != 0 {

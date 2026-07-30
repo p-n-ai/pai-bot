@@ -25,17 +25,16 @@ func handlePublicStatus(w http.ResponseWriter, r *http.Request, opts TopMuxOptio
 		},
 	}
 
-	if opts.AIHealthEnabled != nil && opts.AIHealthEnabled() && opts.AIHealthCheck != nil {
-		aiStatus := "operational"
-		if err := opts.AIHealthCheck(r.Context()); err != nil {
-			aiStatus = "unavailable"
-			response.Status = "degraded"
-		}
-		response.Components = append(
-			response.Components,
-			publicStatusComponent{ID: "ai", Status: aiStatus},
-		)
+	aiStatus := "unavailable"
+	if opts.AIHealthCheck != nil && opts.AIHealthCheck(r.Context()) == nil {
+		aiStatus = "operational"
+	} else {
+		response.Status = "degraded"
 	}
+	response.Components = append(
+		response.Components,
+		publicStatusComponent{ID: "ai_provider", Status: aiStatus},
+	)
 
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, response)

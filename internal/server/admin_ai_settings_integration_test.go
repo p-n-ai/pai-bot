@@ -136,10 +136,9 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		false,
 	)
 	topMux := NewTopMux(TopMuxOptions{
-		APIHandler:      handler,
-		AIHealthEnabled: func() bool { return true },
-		AIHealthToken:   "integration-health-token",
-		AIHealthCheck:   NewAIHealthCheck(router),
+		APIHandler:          handler,
+		PublicHealthEnabled: func() bool { return true },
+		AIHealthCheck:       NewAIHealthCheck(router),
 	})
 	token, err := auth.NewTokenManager(jwtSecret, time.Hour).Issue(auth.TokenClaims{
 		Subject:  "admin-1",
@@ -348,10 +347,9 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		false,
 	)
 	restartedTopMux := NewTopMux(TopMuxOptions{
-		APIHandler:      restartedHandler,
-		AIHealthEnabled: func() bool { return true },
-		AIHealthToken:   "integration-health-token",
-		AIHealthCheck:   NewAIHealthCheck(restartedRouter),
+		APIHandler:          restartedHandler,
+		PublicHealthEnabled: func() bool { return true },
+		AIHealthCheck:       NewAIHealthCheck(restartedRouter),
 	})
 
 	restartedGet := httptest.NewRequest(http.MethodGet, "/api/admin/ai/settings", nil)
@@ -596,12 +594,12 @@ func assertLocalCompletion(t *testing.T, ctx context.Context, router *ai.Router)
 
 func assertAIHealthOK(t *testing.T, handler http.Handler) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/health/ai", nil)
-	req.Header.Set("Authorization", "Bearer integration-health-token")
+	req := httptest.NewRequest(http.MethodGet, "/health/status", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != `{"status":"ok"}` {
-		t.Fatalf("AI health = %d %q, want redacted ok", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK ||
+		rec.Body.String() != "{\"status\":\"ok\",\"components\":[{\"id\":\"application\",\"status\":\"operational\"},{\"id\":\"ai_provider\",\"status\":\"operational\"}]}\n" {
+		t.Fatalf("AI provider status = %d %q, want redacted operational", rec.Code, rec.Body.String())
 	}
 }
 

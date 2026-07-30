@@ -19,10 +19,6 @@
 		reverse_proxy app:8080
 	}
 
-	handle /health/ai {
-		reverse_proxy app:8080
-	}
-
 	handle /ws/* {
 		reverse_proxy app:8080
 	}

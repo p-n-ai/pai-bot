@@ -8,7 +8,10 @@ describe('readPublicStatus', () => {
       new Response(
         JSON.stringify({
           status: 'ok',
-          components: [{ id: 'application', status: 'operational' }],
+          components: [
+            { id: 'application', status: 'operational' },
+            { id: 'ai_provider', status: 'operational' },
+          ],
         }),
         {
           status: 200,
@@ -19,7 +22,10 @@ describe('readPublicStatus', () => {
 
     await expect(readPublicStatus(fetcher)).resolves.toEqual({
       status: 'ok',
-      components: [{ id: 'application', status: 'operational' }],
+      components: [
+        { id: 'application', status: 'operational' },
+        { id: 'ai_provider', status: 'operational' },
+      ],
     })
     expect(fetcher).toHaveBeenCalledWith('/health/status', {
       cache: 'no-store',
