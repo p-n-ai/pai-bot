@@ -5,15 +5,21 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
 func main() {
+	os.Exit(run(os.Stdout, os.Stderr))
+}
+
+func run(stdout, stderr io.Writer) int {
 	if err := config.ValidateProductionSecretEnvironment(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
-	fmt.Println("Production secrets are valid")
+	fmt.Fprintln(stdout, "Production secrets are valid")
+	return 0
 }

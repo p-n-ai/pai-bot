@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -13,15 +14,24 @@ import (
 )
 
 func main() {
-	out := flag.String("out", "", "new env fragment path (required; existing paths are refused)")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("init-secrets", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	out := flags.String("out", "", "new env fragment path (required; existing paths are refused)")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
 	if strings.TrimSpace(*out) == "" {
-		fmt.Fprintln(os.Stderr, "-out is required")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "-out is required")
+		return 2
 	}
 	if err := config.WriteNewSecretEnvFile(*out); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
-	fmt.Printf("Created private secret env file %s\n", *out)
+	fmt.Fprintf(stdout, "Created private secret env file %s\n", *out)
+	return 0
 }

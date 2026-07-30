@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import pathlib
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 
@@ -15,6 +20,70 @@ def source(path: str) -> str:
 
 
 class ProductionSecretDeploymentTests(unittest.TestCase):
+    def test_compose_resolves_secret_gate_and_runtime_environment(self) -> None:
+        docker = shutil.which("docker")
+        if docker is None:
+            self.skipTest("docker is not installed")
+        if subprocess.run(
+            [docker, "compose", "version"],
+            capture_output=True,
+            check=False,
+            text=True,
+        ).returncode != 0:
+            self.skipTest("docker compose is not installed")
+
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "POSTGRES_PASSWORD": "test-postgres-password",
+                "PAI_AUTH_SECRET": "test-auth-secret-with-enough-variety",
+                "PAI_CONFIG_ENCRYPTION_KEY": "test-config-encryption-key-12345",
+                "PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS": "[]",
+                "PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD": "test-bootstrap-password",
+            }
+        )
+        with tempfile.TemporaryDirectory() as project_directory:
+            pathlib.Path(project_directory, ".env").write_text("")
+            result = subprocess.run(
+                [
+                    docker,
+                    "compose",
+                    "--project-directory",
+                    project_directory,
+                    "-f",
+                    str(ROOT / "docker-compose.yml"),
+                    "-f",
+                    str(ROOT / "docker-compose.prod.yml"),
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        compose = json.loads(result.stdout)
+        services = compose["services"]
+        self.assertEqual(
+            services["config-check"]["entrypoint"],
+            ["/pai-validate-production-secrets"],
+        )
+        self.assertEqual(
+            services["app"]["depends_on"]["config-check"]["condition"],
+            "service_completed_successfully",
+        )
+        self.assertEqual(
+            services["app"]["environment"]["PAI_CONFIG_ENCRYPTION_KEY"],
+            environment["PAI_CONFIG_ENCRYPTION_KEY"],
+        )
+        self.assertEqual(
+            services["app"]["environment"]["PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS"],
+            "[]",
+        )
+
     def test_github_validates_before_copy_and_replaces_env_atomically(self) -> None:
         workflow = source(".github/workflows/deploy.yml")
         validate_at = workflow.index("go run ./cmd/validate-production-secrets")
