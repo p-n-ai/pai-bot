@@ -225,6 +225,15 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertIn("-f docker-compose.prod.yml", start)
         self.assertIn("-f .github/compose.e2e.yml", start)
         self.assertIn("POSTGRES_PASSWORD: pai", start)
+        for name in (
+            "PAI_AUTH_SECRET",
+            "PAI_CONFIG_ENCRYPTION_KEY",
+            "PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS",
+            "PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL",
+            "PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD",
+        ):
+            with self.subTest(environment=name):
+                self.assertIn(f"{name}:", start)
 
     def test_e2e_compose_merge_preserves_production_runtime_and_test_ports(
         self,
@@ -237,6 +246,11 @@ class CIWorkflowTests(unittest.TestCase):
                     + ("a" * 64)
                 ),
                 "POSTGRES_PASSWORD": "pai",
+                "PAI_AUTH_SECRET": "test-auth-secret-with-enough-variety",
+                "PAI_CONFIG_ENCRYPTION_KEY": "test-config-encryption-key-12345",
+                "PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS": "[]",
+                "PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD": "test-bootstrap-password",
             }
         )
         env_path = ROOT / ".env"

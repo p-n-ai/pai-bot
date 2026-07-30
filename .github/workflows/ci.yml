@@ -281,6 +281,11 @@ jobs:
       - name: Start PostgreSQL and Dragonfly
         env:
           POSTGRES_PASSWORD: pai
+          PAI_AUTH_SECRET: ci-test-auth-secret-with-enough-variety
+          PAI_CONFIG_ENCRYPTION_KEY: ci-test-config-encryption-key-12345
+          PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS: "[]"
+          PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+          PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: ci-test-bootstrap-password
         run: >-
           docker compose
           -f docker-compose.yml
