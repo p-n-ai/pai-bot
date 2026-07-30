@@ -5,9 +5,16 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
+}
 
 func TestRunAcceptsValidProductionSecrets(t *testing.T) {
 	setProductionSecretEnvironment(t)
@@ -31,6 +38,18 @@ func TestRunRejectsInvalidProductionSecrets(t *testing.T) {
 	}
 	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "PAI_CONFIG_ENCRYPTION_KEY") {
 		t.Fatalf("stdout/stderr = %q/%q, want safe validation error", stdout.String(), stderr.String())
+	}
+}
+
+func TestRunFailsWhenSuccessOutputCannotBeWritten(t *testing.T) {
+	setProductionSecretEnvironment(t)
+	var stderr bytes.Buffer
+
+	if code := run(failingWriter{}, &stderr); code != 1 {
+		t.Fatalf("run() code = %d, want 1", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }
 

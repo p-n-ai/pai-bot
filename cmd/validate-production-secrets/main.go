@@ -17,9 +17,13 @@ func main() {
 
 func run(stdout, stderr io.Writer) int {
 	if err := config.ValidateProductionSecretEnvironment(); err != nil {
-		fmt.Fprintln(stderr, err)
+		if _, writeErr := fmt.Fprintln(stderr, err); writeErr != nil {
+			return 1
+		}
 		return 1
 	}
-	fmt.Fprintln(stdout, "Production secrets are valid")
+	if _, err := fmt.Fprintln(stdout, "Production secrets are valid"); err != nil {
+		return 1
+	}
 	return 0
 }

@@ -25,13 +25,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if strings.TrimSpace(*out) == "" {
-		fmt.Fprintln(stderr, "-out is required")
+		if _, err := fmt.Fprintln(stderr, "-out is required"); err != nil {
+			return 1
+		}
 		return 2
 	}
 	if err := config.WriteNewSecretEnvFile(*out); err != nil {
-		fmt.Fprintln(stderr, err)
+		if _, writeErr := fmt.Fprintln(stderr, err); writeErr != nil {
+			return 1
+		}
 		return 1
 	}
-	fmt.Fprintf(stdout, "Created private secret env file %s\n", *out)
+	if _, err := fmt.Fprintf(stdout, "Created private secret env file %s\n", *out); err != nil {
+		return 1
+	}
 	return 0
 }

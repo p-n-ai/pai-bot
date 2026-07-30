@@ -5,11 +5,18 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
+}
 
 func TestRunRequiresOutputPath(t *testing.T) {
 	var stdout, stderr bytes.Buffer
@@ -57,5 +64,17 @@ func TestRunRefusesExistingOutputPath(t *testing.T) {
 	}
 	if string(raw) != "keep-me\n" || stdout.Len() != 0 || stderr.Len() == 0 {
 		t.Fatalf("file/stdout/stderr = %q/%q/%q, want preserved file and safe error", raw, stdout.String(), stderr.String())
+	}
+}
+
+func TestRunFailsWhenSuccessOutputCannotBeWritten(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "production-secrets.env")
+	var stderr bytes.Buffer
+
+	if code := run([]string{"-out", path}, failingWriter{}, &stderr); code != 1 {
+		t.Fatalf("run() code = %d, want 1", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }
