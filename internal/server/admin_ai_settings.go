@@ -204,7 +204,7 @@ type parsedAISettingsUpdate struct {
 	DefaultProvider  optionalProviderSelector
 	Provider         providerPatch
 	Flags            optionalFlags
-	ExpectedRevision *int64
+	ExpectedRevision int64
 }
 
 type optionalProviderSelector struct {
@@ -263,14 +263,14 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, prepareSettings set
 
 		var badReq error
 		saved, err := store.Update(r.Context(), func(cur settings.Settings) (settings.Settings, error) {
-			if body.ExpectedRevision != nil && *body.ExpectedRevision != cur.Revision {
+			if body.ExpectedRevision != cur.Revision {
 				return settings.Settings{}, settings.ErrRevisionConflict
 			}
 			next, err := applyAISettingsUpdate(cur, body)
 			merged := store.MergedAI(next)
-			if err == nil && body.DefaultProvider.Present && body.DefaultProvider.Value != nil &&
-				!airouter.CanRegister(providerSelectorName(*body.DefaultProvider.Value), merged, codexAvailable(deviceAuth)) {
-				err = fmt.Errorf("provider %q has no usable configuration", providerSelectorName(*body.DefaultProvider.Value))
+			if err == nil && merged.DefaultProvider != "" &&
+				!airouter.CanRegister(merged.DefaultProvider, merged, codexAvailable(deviceAuth)) {
+				err = fmt.Errorf("default provider %q has no usable configuration", merged.DefaultProvider)
 			}
 			if err == nil && providerPatchCanRemoveProvider(body.Provider) &&
 				!anyProviderRegistrable(merged, codexAvailable(deviceAuth)) {
@@ -291,7 +291,8 @@ func handleAdminUpdateAISettings(store runtimeSettingsStore, prepareSettings set
 				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
-			if errors.Is(err, settings.ErrConfigEncryptionKey) {
+			if errors.Is(err, settings.ErrConfigEncryptionKey) ||
+				errors.Is(err, settings.ErrCredentialTooLarge) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -367,9 +368,12 @@ func decodeStrictJSONBytes(data []byte, target any) error {
 }
 
 func parseAISettingsUpdate(wire aiSettingsUpdateWire) (parsedAISettingsUpdate, error) {
+	if wire.ExpectedRevision == nil {
+		return parsedAISettingsUpdate{}, errors.New("expectedRevision is required")
+	}
 	result := parsedAISettingsUpdate{
 		Flags:            wire.Flags,
-		ExpectedRevision: wire.ExpectedRevision,
+		ExpectedRevision: *wire.ExpectedRevision,
 	}
 	if wire.DefaultProvider.Present {
 		result.DefaultProvider.Present = true

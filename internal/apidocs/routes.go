@@ -158,6 +158,7 @@ func aiSettingsSchemas(registry *schemaRegistry) (request, response *Schema) {
 	request = &Schema{
 		Type:                 "object",
 		AdditionalProperties: false,
+		Required:             []string{"expectedRevision"},
 		Properties: map[string]*Schema{
 			"expectedRevision": {Type: "integer"},
 			"defaultProvider":  nullableSelector,
@@ -197,33 +198,35 @@ func aiProviderSelectorSchema() *Schema {
 }
 
 func aiProviderPatchSchema() *Schema {
-	return &Schema{
-		OneOf: []*Schema{
-			closedObjectSchema(
-				map[string]*Schema{
-					"type":   {Type: "string", Enum: []any{"api_key"}},
-					"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
-					"model":  nullableStringSchema(),
-					"apiKey": nullableStringSchema(),
-				},
-				"type", "name",
-			),
-			closedObjectSchema(
-				map[string]*Schema{
-					"type":    {Type: "string", Enum: []any{"ollama"}},
-					"enabled": {OneOf: []*Schema{{Type: "boolean"}, {Type: "null"}}},
-					"model":   nullableStringSchema(),
-				},
-				"type",
-			),
-			closedObjectSchema(
-				map[string]*Schema{
-					"type":  {Type: "string", Enum: []any{"managed_codex"}},
-					"model": nullableStringSchema(),
-				},
-				"type",
-			),
+	apiKey := closedObjectSchema(
+		map[string]*Schema{
+			"type":   {Type: "string", Enum: []any{"api_key"}},
+			"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
+			"model":  nullableStringSchema(),
+			"apiKey": nullableStringSchema(),
 		},
+		"type", "name",
+	)
+	apiKey.MinProperties = 3
+	ollama := closedObjectSchema(
+		map[string]*Schema{
+			"type":    {Type: "string", Enum: []any{"ollama"}},
+			"enabled": {OneOf: []*Schema{{Type: "boolean"}, {Type: "null"}}},
+			"model":   nullableStringSchema(),
+		},
+		"type",
+	)
+	ollama.MinProperties = 2
+	managedCodex := closedObjectSchema(
+		map[string]*Schema{
+			"type":  {Type: "string", Enum: []any{"managed_codex"}},
+			"model": nullableStringSchema(),
+		},
+		"type",
+	)
+	managedCodex.MinProperties = 2
+	return &Schema{
+		OneOf:         []*Schema{apiKey, ollama, managedCodex},
 		Discriminator: &Discriminator{PropertyName: "type"},
 	}
 }

@@ -42,6 +42,29 @@ func TestCredentialEnvelopeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCredentialEnvelopeEnforcesWritableSizeBoundary(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	atLimit := strings.Repeat("x", maxCredentialPlaintextBytes)
+	encoded, err := encryptCredential(secret, atLimit, ctx)
+	if err != nil {
+		t.Fatalf("encryptCredential(at limit) error = %v", err)
+	}
+	got, err := decryptCredential(secret, nil, nil, encoded, ctx)
+	if err != nil || got.Plaintext != atLimit {
+		t.Fatalf("decryptCredential(at limit) = %d bytes, %v; want roundtrip", len(got.Plaintext), err)
+	}
+
+	if _, err := encryptCredential(
+		secret,
+		strings.Repeat("x", maxCredentialPlaintextBytes+1),
+		ctx,
+	); !errors.Is(err, ErrCredentialTooLarge) {
+		t.Fatalf("encryptCredential(over limit) error = %v, want ErrCredentialTooLarge", err)
+	}
+}
+
 func TestCredentialEnvelopeBindsContextAndKeyID(t *testing.T) {
 	const secret = "credential-envelope-test-secret-12345"
 	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}

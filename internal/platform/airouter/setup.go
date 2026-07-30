@@ -74,6 +74,9 @@ func PrepareWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexAppServerClient
 			continue
 		}
 		if !ok {
+			if name == preferred {
+				preferredErr = fmt.Errorf("provider %q is not registrable", name)
+			}
 			continue
 		}
 		regs = append(regs, reg)

@@ -387,28 +387,79 @@ describe('AISettingsPanel', () => {
     expect(updateAISettings).not.toHaveBeenCalled()
   })
 
-  it('keeps cross-section pending state owned by each request', async () => {
+  it('serializes cross-section saves against the latest confirmed revision', async () => {
     const flagSave = deferred<AISettings>()
-    const modelSave = deferred<AISettings>()
-    updateAISettings.mockImplementation((input) =>
-      'flags' in input ? flagSave.promise : modelSave.promise,
-    )
+    const revision4 = {
+      ...aiSettingsFixture,
+      revision: 4,
+      appliedRevision: 4,
+    } as unknown as AISettings
+    const revision5 = {
+      ...aiSettingsFixture,
+      revision: 5,
+      appliedRevision: 5,
+    } as unknown as AISettings
+    updateAISettings
+      .mockImplementationOnce(() => flagSave.promise)
+      .mockResolvedValueOnce(revision5)
     render(<AISettingsPanel />)
     fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
     const section = providerSection('OpenRouter provider')
     fireEvent.click(within(section).getByRole('button', { name: 'Save model' }))
 
+    await act(async () => Promise.resolve())
+    expect(updateAISettings).toHaveBeenCalledTimes(1)
     await act(async () => {
-      modelSave.resolve(aiSettingsFixture as unknown as AISettings)
-      await modelSave.promise
-      flagSave.resolve(aiSettingsFixture as unknown as AISettings)
+      flagSave.resolve(revision4)
       await flagSave.promise
+    })
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenNthCalledWith(2, {
+        expectedRevision: 4,
+        provider: {
+          type: 'api_key',
+          name: 'openrouter',
+          model: 'baseline-model',
+        },
+      })
     })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Disable' })).toBeEnabled()
       expect(
         within(section).getByRole('button', { name: 'Save model' }),
       ).toBeEnabled()
+    })
+  })
+
+  it('refreshes the revision after a conflict before the next save', async () => {
+    const revision7 = {
+      ...aiSettingsFixture,
+      revision: 7,
+      appliedRevision: 7,
+    } as unknown as AISettings
+    const revision8 = {
+      ...aiSettingsFixture,
+      revision: 8,
+      appliedRevision: 8,
+    } as unknown as AISettings
+    getAISettings
+      .mockResolvedValueOnce(aiSettingsFixture)
+      .mockResolvedValueOnce(revision7)
+    updateAISettings
+      .mockRejectedValueOnce(new AdminAPIError('revision conflict', 409))
+      .mockResolvedValueOnce(revision8)
+
+    render(<AISettingsPanel />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
+    expect(await screen.findByText('revision conflict')).toBeInTheDocument()
+    await waitFor(() => expect(getAISettings).toHaveBeenCalledTimes(2))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenNthCalledWith(2, {
+        expectedRevision: 7,
+        flags: { turn_hooks: false },
+      })
     })
   })
 })

@@ -251,3 +251,20 @@ func TestPrepareRejectsUnbuildablePreferredProviderWithoutMutatingRouter(t *test
 		t.Fatalf("router order after failed prepare = %v, want unchanged %v", got, before)
 	}
 }
+
+func TestPrepareRejectsUnconfiguredPreferredProvider(t *testing.T) {
+	cfg := config.AIConfig{
+		DefaultProvider: "openai",
+		OpenRouter:      config.OpenRouterConfig{APIKey: "fallback-key"},
+	}
+
+	plan, err := PrepareWithCodexAuth(cfg, nil)
+	if err == nil {
+		t.Fatal("PrepareWithCodexAuth() error = nil, want unconfigured preferred provider")
+	}
+	router := ai.NewRouter()
+	plan.Apply(router)
+	if got := router.ProviderOrder(); !reflect.DeepEqual(got, []string{"openrouter"}) {
+		t.Fatalf("prepared fallback providers = %v, want [openrouter]", got)
+	}
+}

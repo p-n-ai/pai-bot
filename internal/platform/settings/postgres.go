@@ -231,7 +231,8 @@ func (s *Store) Update(ctx context.Context, mutate func(Settings) (Settings, err
 		switch {
 		case credential.Operation == SecretClear:
 			credential.Envelope = CredentialEnvelopeStatus{}
-		case credential.Operation == SecretReplace || reencryptKeys[provider]:
+		case credential.Operation == SecretReplace ||
+			(reencryptKeys[provider] && credential.Value != ""):
 			credential.Envelope = CredentialEnvelopeStatus{
 				Stored:    true,
 				Readable:  true,

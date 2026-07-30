@@ -97,6 +97,7 @@ type Schema struct {
 	Discriminator        *Discriminator     `json:"discriminator,omitempty"`
 	Properties           map[string]*Schema `json:"properties,omitempty"`
 	Items                *Schema            `json:"items,omitempty"`
+	MinProperties        int                `json:"minProperties,omitempty"`
 	Required             []string           `json:"required,omitempty"`
 	AdditionalProperties any                `json:"additionalProperties,omitempty"`
 }

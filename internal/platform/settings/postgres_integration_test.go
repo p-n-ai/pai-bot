@@ -170,6 +170,10 @@ func TestStore_UpdatePreservesUndecryptableKeyBlob(t *testing.T) {
 	if after != before {
 		t.Fatalf("secrets column changed:\nbefore %s\nafter  %s", before, after)
 	}
+	credentialHealth := openRouterCredential(s2.Current().AI).Envelope
+	if !credentialHealth.Stored || credentialHealth.Readable {
+		t.Fatalf("credential health = %+v, want stored and unreadable", credentialHealth)
+	}
 
 	got, err := s1.Load(ctx)
 	if err != nil {

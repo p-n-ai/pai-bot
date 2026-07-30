@@ -34,8 +34,8 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 		t.Fatalf("/api/admin/ai/settings = %#v, want GET and PUT", aiSettings)
 	}
 	updateSchema := aiSettings.Put.RequestBody.Content["application/json"].Schema
-	if len(updateSchema.Required) != 0 {
-		t.Fatalf("AI settings update required = %v, want no required fields", updateSchema.Required)
+	if len(updateSchema.Required) != 1 || updateSchema.Required[0] != "expectedRevision" {
+		t.Fatalf("AI settings update required = %v, want expectedRevision", updateSchema.Required)
 	}
 	provider := updateSchema.Properties["provider"]
 	if provider == nil || len(provider.OneOf) != 3 ||
@@ -45,6 +45,11 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 	for _, variant := range provider.OneOf {
 		if variant.AdditionalProperties != false {
 			t.Fatalf("provider variant allows unknown fields: %#v", variant)
+		}
+	}
+	for index, want := range []int{3, 2, 2} {
+		if provider.OneOf[index].MinProperties != want {
+			t.Fatalf("provider variant %d minProperties = %d, want %d", index, provider.OneOf[index].MinProperties, want)
 		}
 	}
 	selector := updateSchema.Properties["defaultProvider"]

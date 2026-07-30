@@ -248,6 +248,37 @@ func TestAdminAISettingsGetReturnsClosedRedactedProviderProjections(t *testing.T
 	decodeProviderProjection(t, payload, settings.ProviderKindManagedCodex, "")
 }
 
+func TestAdminAISettingsGetReportsUnreadableStoredCredential(t *testing.T) {
+	store := &memorySettingsStore{
+		envAI: config.AIConfig{
+			DefaultProvider: "openrouter",
+			OpenRouter:      config.OpenRouterConfig{APIKey: "sk-or-env-9876"},
+		},
+		current: settings.Settings{AI: settings.AISettings{
+			Credentials: map[settings.APIKeyProvider]settings.CredentialOverride{
+				settings.APIKeyProviderOpenRouter: {
+					Envelope: settings.CredentialEnvelopeStatus{Stored: true},
+				},
+			},
+		}},
+	}
+	handler := newAISettingsHandler(store, nil)
+
+	payload := decodeAISettingsPayload(t, doAISettingsRequest(
+		t, handler, http.MethodGet, mustIssueAdminToken(t), "",
+	))
+	openRouter := decodeProviderProjection(t, payload, settings.ProviderKindAPIKey, "openrouter")
+	credential := openRouter["credential"].(map[string]any)
+	effective := credential["effective"].(map[string]any)
+	health := credential["health"].(map[string]any)
+	readiness := openRouter["readiness"].(map[string]any)
+	if effective["set"] != false || credential["source"] != settings.SourceDB ||
+		health["stored"] != true || health["readable"] != false ||
+		readiness["registrable"] != false {
+		t.Fatalf("unreadable credential projection = %#v, readiness = %#v", credential, readiness)
+	}
+}
+
 func TestAdminAISettingsPutAppliesEachClosedVariant(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -259,6 +290,7 @@ func TestAdminAISettingsPutAppliesEachClosedVariant(t *testing.T) {
 			name: "api_key",
 			env:  config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "env-openai"}},
 			body: `{
+				"expectedRevision":0,
 				"defaultProvider":{"type":"api_key","name":"openrouter"},
 				"provider":{"type":"api_key","name":"openrouter","model":"db/model","apiKey":"sk-or-db-1234"}
 			}`,
@@ -279,6 +311,7 @@ func TestAdminAISettingsPutAppliesEachClosedVariant(t *testing.T) {
 			name: "ollama",
 			env:  config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "env-openai"}},
 			body: `{
+				"expectedRevision":0,
 				"defaultProvider":{"type":"ollama"},
 				"provider":{"type":"ollama","enabled":true,"model":"qwen:test"}
 			}`,
@@ -297,7 +330,7 @@ func TestAdminAISettingsPutAppliesEachClosedVariant(t *testing.T) {
 				OpenAI: config.OpenAIConfig{APIKey: "env-openai"},
 				Codex:  config.CodexConfig{Enabled: true},
 			},
-			body: `{"provider":{"type":"managed_codex","model":"gpt-5-codex"}}`,
+			body: `{"expectedRevision":0,"provider":{"type":"managed_codex","model":"gpt-5-codex"}}`,
 			check: func(t *testing.T, st settings.Settings) {
 				if st.AI.Providers.ManagedCodex == nil ||
 					st.AI.Providers.ManagedCodex.Model == nil ||
@@ -358,7 +391,11 @@ func TestAdminAISettingsPutRejectsInvalidAndCrossVariantFields(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			store := &memorySettingsStore{}
 			handler := newAISettingsHandler(store, nil)
-			rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), test.body)
+			body := `{"expectedRevision":0,` + strings.TrimPrefix(test.body, "{")
+			if test.name == "trailing JSON" {
+				body = `{"expectedRevision":0} {}`
+			}
+			rec := doAISettingsRequest(t, handler, http.MethodPut, mustIssueAdminToken(t), body)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400 (body %q)", rec.Code, rec.Body.String())
 			}
@@ -394,7 +431,7 @@ func TestAdminAISettingsPutOmissionLeavesStateAndNullResetsOverrides(t *testing.
 
 	decodeAISettingsPayload(t, doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"provider":{"type":"ollama","model":"new-ollama"}}`,
+		`{"expectedRevision":0,"provider":{"type":"ollama","model":"new-ollama"}}`,
 	))
 	if store.current.AI.Providers.Ollama.Enabled == nil ||
 		!*store.current.AI.Providers.Ollama.Enabled ||
@@ -406,6 +443,7 @@ func TestAdminAISettingsPutOmissionLeavesStateAndNullResetsOverrides(t *testing.
 	decodeAISettingsPayload(t, doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
 		`{
+			"expectedRevision":1,
 			"defaultProvider":null,
 			"provider":{"type":"api_key","name":"openrouter","model":null,"apiKey":null}
 		}`,
@@ -432,7 +470,7 @@ func TestAdminAISettingsPutNullKeyFallsBackToEnvironment(t *testing.T) {
 	handler := newAISettingsHandler(store, nil)
 	payload := decodeAISettingsPayload(t, doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
+		`{"expectedRevision":0,"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
 	))
 	openRouter := decodeProviderProjection(t, payload, settings.ProviderKindAPIKey, "openrouter")
 	credential := openRouter["credential"].(map[string]any)
@@ -450,7 +488,7 @@ func TestAdminAISettingsPutRejectsRemovingLastProvider(t *testing.T) {
 	handler := newAISettingsHandler(store, nil)
 	rec := doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
+		`{"expectedRevision":0,"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
 	)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no AI providers") {
 		t.Fatalf("status/body = %d/%q, want no-provider 400", rec.Code, rec.Body.String())
@@ -460,10 +498,38 @@ func TestAdminAISettingsPutRejectsRemovingLastProvider(t *testing.T) {
 	}
 }
 
+func TestAdminAISettingsPutRejectsRemovingCurrentDefaultWithFallback(t *testing.T) {
+	store := &memorySettingsStore{
+		envAI: config.AIConfig{
+			DefaultProvider: "openai",
+			OpenAI:          config.OpenAIConfig{APIKey: "env-openai"},
+		},
+		current: settings.Settings{
+			AI: settings.AISettings{
+				DefaultProvider: stringPointer("openrouter"),
+				Credentials:     apiKeyCredential("sk-or-db-1234"),
+			},
+			Revision: 2,
+		},
+	}
+	handler := newAISettingsHandler(store, nil)
+	rec := doAISettingsRequest(
+		t, handler, http.MethodPut, mustIssueAdminToken(t),
+		`{"expectedRevision":2,"provider":{"type":"api_key","name":"openrouter","apiKey":null}}`,
+	)
+	if rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), `default provider "openrouter"`) {
+		t.Fatalf("status/body = %d/%q, want unusable-default 400", rec.Code, rec.Body.String())
+	}
+	if store.saves != 0 {
+		t.Fatalf("saves = %d, want 0", store.saves)
+	}
+}
+
 func TestAdminAISettingsPutRejectsUnavailableDefaultSelector(t *testing.T) {
 	for _, body := range []string{
-		`{"defaultProvider":{"type":"api_key","name":"anthropic"}}`,
-		`{"defaultProvider":{"type":"managed_codex"}}`,
+		`{"expectedRevision":0,"defaultProvider":{"type":"api_key","name":"anthropic"}}`,
+		`{"expectedRevision":0,"defaultProvider":{"type":"managed_codex"}}`,
 	} {
 		store := &memorySettingsStore{envAI: config.AIConfig{Codex: config.CodexConfig{Enabled: true}}}
 		handler := newAISettingsHandler(store, nil)
@@ -489,6 +555,17 @@ func TestAdminAISettingsPutRevisionAndFlagSemantics(t *testing.T) {
 	}
 	handler := newAISettingsHandler(store, nil)
 
+	missing := doAISettingsRequest(
+		t, handler, http.MethodPut, mustIssueAdminToken(t),
+		`{"flags":{"turn_hooks":null}}`,
+	)
+	if missing.Code != http.StatusBadRequest ||
+		!strings.Contains(missing.Body.String(), "expectedRevision") ||
+		store.saves != 0 {
+		t.Fatalf("missing revision status/body/saves = %d/%q/%d, want 400/required/0",
+			missing.Code, missing.Body.String(), store.saves)
+	}
+
 	stale := doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
 		`{"expectedRevision":3,"flags":{"turn_hooks":null}}`,
@@ -508,7 +585,7 @@ func TestAdminAISettingsPutRevisionAndFlagSemantics(t *testing.T) {
 
 	unknown := doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"flags":{"warp_drive":null}}`,
+		`{"expectedRevision":5,"flags":{"warp_drive":null}}`,
 	)
 	if unknown.Code != http.StatusBadRequest {
 		t.Fatalf("unknown flag status = %d, want 400", unknown.Code)
@@ -531,21 +608,40 @@ func (f *failingSettingsStore) Update(
 	return settings.Settings{}, f.saveErr
 }
 
-func TestAdminAISettingsPutMapsMissingConfigEncryptionKeyTo400(t *testing.T) {
-	store := &failingSettingsStore{
-		memorySettingsStore: memorySettingsStore{
-			envAI: config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "env-openai"}},
+func TestAdminAISettingsPutMapsCredentialPersistenceErrorsTo400(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		err     error
+		message string
+	}{
+		{
+			name:    "missing encryption key",
+			err:     settings.ErrConfigEncryptionKey,
+			message: "PAI_CONFIG_ENCRYPTION_KEY",
 		},
-		saveErr: settings.ErrConfigEncryptionKey,
-	}
-	handler := newAISettingsHandler(store, nil)
-	rec := doAISettingsRequest(
-		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"provider":{"type":"api_key","name":"openrouter","apiKey":"sk-or-new-key"}}`,
-	)
-	if rec.Code != http.StatusBadRequest ||
-		!strings.Contains(rec.Body.String(), "PAI_CONFIG_ENCRYPTION_KEY") {
-		t.Fatalf("status/body = %d/%q", rec.Code, rec.Body.String())
+		{
+			name:    "credential too large",
+			err:     settings.ErrCredentialTooLarge,
+			message: "4 KiB",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := &failingSettingsStore{
+				memorySettingsStore: memorySettingsStore{
+					envAI: config.AIConfig{OpenAI: config.OpenAIConfig{APIKey: "env-openai"}},
+				},
+				saveErr: test.err,
+			}
+			handler := newAISettingsHandler(store, nil)
+			rec := doAISettingsRequest(
+				t, handler, http.MethodPut, mustIssueAdminToken(t),
+				`{"expectedRevision":0,"provider":{"type":"api_key","name":"openrouter","apiKey":"sk-or-new-key"}}`,
+			)
+			if rec.Code != http.StatusBadRequest ||
+				!strings.Contains(rec.Body.String(), test.message) {
+				t.Fatalf("status/body = %d/%q", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 
@@ -565,7 +661,7 @@ func TestAdminAISettingsAuthorization(t *testing.T) {
 		handler,
 		http.MethodPut,
 		mustIssuePlatformAdminToken(t),
-		`{"defaultProvider":{"type":"api_key","name":"openrouter"}}`,
+		`{"expectedRevision":0,"defaultProvider":{"type":"api_key","name":"openrouter"}}`,
 	))
 }
 
@@ -641,7 +737,7 @@ func TestAdminAISettingsStoreFailureDoesNotExposeCause(t *testing.T) {
 	handler := newAISettingsHandler(store, nil)
 	rec := doAISettingsRequest(
 		t, handler, http.MethodPut, mustIssueAdminToken(t),
-		`{"provider":{"type":"ollama","model":"qwen"}}`,
+		`{"expectedRevision":0,"provider":{"type":"ollama","model":"qwen"}}`,
 	)
 	if rec.Code != http.StatusInternalServerError ||
 		strings.Contains(rec.Body.String(), "sensitive credential") {

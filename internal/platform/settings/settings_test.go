@@ -77,6 +77,43 @@ func TestReconcileAIResetFallsBackToEnvironment(t *testing.T) {
 	if len(got.Override.Providers) != 0 || got.Override.DefaultProvider != nil {
 		t.Fatalf("override = %+v, want empty sparse override", got.Override)
 	}
+
+	reset := ReconcileAI(envAIConfig(), AISettings{
+		Credentials: map[APIKeyProvider]CredentialOverride{
+			APIKeyProviderOpenRouter: {
+				Operation: SecretClear,
+				Envelope:  CredentialEnvelopeStatus{Stored: true},
+			},
+		},
+	})
+	if reset.Config.OpenRouter.APIKey != "env-key" ||
+		reset.ProviderSources["openrouter"].Credential != SourceEnv {
+		t.Fatalf("explicit clear = %+v, want environment credential", reset.Config.OpenRouter)
+	}
+}
+
+func TestReconcileAIUnreadableStoredCredentialDoesNotFallBackToEnvironment(t *testing.T) {
+	st := AISettings{
+		Credentials: map[APIKeyProvider]CredentialOverride{
+			APIKeyProviderOpenRouter: {
+				Envelope: CredentialEnvelopeStatus{Stored: true},
+			},
+		},
+	}
+
+	got := ReconcileAI(envAIConfig(), st)
+	if got.Config.OpenRouter.APIKey != "" {
+		t.Fatal("unreadable stored credential fell back to the environment")
+	}
+	if got.ProviderSources["openrouter"].Credential != SourceDB {
+		t.Fatalf("credential source = %q, want db", got.ProviderSources["openrouter"].Credential)
+	}
+	if got.Effective.Providers["openrouter"].Credential.Set {
+		t.Fatal("unreadable stored credential reported as effective")
+	}
+	if !got.Override.Providers["openrouter"].Credential.Set {
+		t.Fatal("unreadable stored credential did not retain database ownership")
+	}
 }
 
 func TestEffectiveFlagsUseSameProjection(t *testing.T) {

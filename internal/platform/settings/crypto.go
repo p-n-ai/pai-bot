@@ -20,7 +20,14 @@ import (
 const (
 	credentialEnvelopeAlgorithm = "a256gcm"
 	credentialEnvelopePrefix    = "pai:v1:" + credentialEnvelopeAlgorithm + ":"
+	maxCredentialPlaintextBytes = 4 * 1024
+	maxCredentialEnvelopeBytes  = 8 * 1024
+	maxCredentialPayloadBytes   = 6 * 1024
 )
+
+// ErrCredentialTooLarge rejects provider credentials that cannot remain
+// readable within the bounded persisted envelope format.
+var ErrCredentialTooLarge = errors.New("provider credential exceeds the 4 KiB limit")
 
 var (
 	errMalformedCredentialEnvelope    = errors.New("malformed credential envelope")
@@ -93,6 +100,9 @@ func credentialAAD(ctx credentialContext, keyID string) []byte {
 
 // encryptCredential seals plaintext in the current versioned envelope.
 func encryptCredential(secret, plaintext string, ctx credentialContext) (string, error) {
+	if len(plaintext) > maxCredentialPlaintextBytes {
+		return "", ErrCredentialTooLarge
+	}
 	gcm, err := gcmFor(secret)
 	if err != nil {
 		return "", err
@@ -144,7 +154,7 @@ func decryptVersionedCredential(
 	encoded string,
 	ctx credentialContext,
 ) (credentialDecryption, error) {
-	if len(encoded) > 8*1024 {
+	if len(encoded) > maxCredentialEnvelopeBytes {
 		return credentialDecryption{}, errMalformedCredentialEnvelope
 	}
 	prefix, rest, ok := strings.Cut(encoded, ":")
@@ -184,7 +194,7 @@ func decryptVersionedCredential(
 	if err != nil {
 		return credentialDecryption{}, errMalformedCredentialEnvelope
 	}
-	if len(raw) > 6*1024 {
+	if len(raw) > maxCredentialPayloadBytes {
 		return credentialDecryption{}, errMalformedCredentialEnvelope
 	}
 	gcm, err := gcmFor(secret)

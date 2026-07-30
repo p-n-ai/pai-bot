@@ -45,6 +45,7 @@ type PanelState =
 
 type SubmitStatus = ReturnType<typeof useSubmitStatus>
 type SubmitSection = 'provider' | 'model' | 'key' | 'enabled' | 'flags'
+type SettingsMutation = Omit<UpdateAISettingsInput, 'expectedRevision'>
 type CodexState =
   | { status: 'loading' }
   | { status: 'unavailable' }
@@ -70,20 +71,25 @@ export function AISettingsPanel() {
     status: 'loading',
   })
   const [isStartingCodex, setIsStartingCodex] = useState(false)
-  const requestSeq = useRef(0)
+  const nextRequestID = useRef(0)
   const sectionSeq = useRef<Record<string, number>>({})
+  const settingsRef = useRef<AISettings | null>(null)
+  const mutationQueue = useRef(Promise.resolve())
   const providerSubmit = useSubmitStatus('')
   const modelSubmit = useSubmitStatus('')
   const keySubmit = useSubmitStatus('')
   const enabledSubmit = useSubmitStatus('')
   const flagsSubmit = useSubmitStatus('')
 
+  const acceptSettings = useCallback((settings: AISettings) => {
+    settingsRef.current = settings
+    setState({ status: 'ready', settings })
+    setModelInputs(providerModels(settings.providers))
+  }, [])
+
   useEffect(() => {
     getAISettings()
-      .then((settings) => {
-        setState({ status: 'ready', settings })
-        setModelInputs(providerModels(settings.providers))
-      })
+      .then(acceptSettings)
       .catch((caught: unknown) => {
         setState({
           status: 'error',
@@ -93,7 +99,7 @@ export function AISettingsPanel() {
               : 'AI settings could not be loaded.',
         })
       })
-  }, [])
+  }, [acceptSettings])
 
   const loadCodexStatus = useCallback(() => {
     return getCodexAuthStatus()
@@ -148,34 +154,46 @@ export function AISettingsPanel() {
   const submitSettings = useCallback(
     (
       section: SubmitSection,
-      input: UpdateAISettingsInput,
+      input: SettingsMutation,
       submit: SubmitStatus,
       fallbackMessage: string,
       onSaved?: (next: AISettings) => void,
     ) => {
-      const seq = ++requestSeq.current
+      const seq = ++nextRequestID.current
       sectionSeq.current[section] = seq
       submit.beginSubmit()
-      const revision =
-        state.status === 'ready' ? state.settings.revision : undefined
-      updateAISettings({ ...input, expectedRevision: revision })
-        .then((next) => {
-          if (seq !== requestSeq.current) return
-          setState({ status: 'ready', settings: next })
-          setModelInputs(providerModels(next.providers))
-          onSaved?.(next)
-        })
-        .catch((caught: unknown) => {
+      mutationQueue.current = mutationQueue.current.then(async () => {
+        try {
+          const current = settingsRef.current
+          if (!current) {
+            throw new Error('AI settings are not loaded.')
+          }
+          const next = await updateAISettings({
+            ...input,
+            expectedRevision: current.revision,
+          })
+          acceptSettings(next)
+          if (seq === sectionSeq.current[section]) {
+            onSaved?.(next)
+          }
+        } catch (caught: unknown) {
+          if (caught instanceof AdminAPIError && caught.status === 409) {
+            try {
+              acceptSettings(await getAISettings())
+            } catch {
+              // Keep the conflict as the actionable error; retrying will reload.
+            }
+          }
           if (seq !== sectionSeq.current[section]) return
           submit.setError(
             caught instanceof Error ? caught.message : fallbackMessage,
           )
-        })
-        .finally(() => {
+        } finally {
           if (seq === sectionSeq.current[section]) submit.finishSubmit()
-        })
+        }
+      })
     },
-    [state],
+    [acceptSettings],
   )
 
   const setDefaultProvider = useCallback(

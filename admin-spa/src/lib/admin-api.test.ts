@@ -365,6 +365,7 @@ describe('admin dashboard API', () => {
     await expect(
       updateAISettings(
         {
+          expectedRevision: 3,
           defaultProvider: { type: 'api_key', name: 'openrouter' },
           provider: {
             type: 'api_key',
@@ -384,6 +385,7 @@ describe('admin dashboard API', () => {
     expect(fetcher).toHaveBeenNthCalledWith(2, '/api/admin/ai/settings', {
       method: 'PUT',
       body: JSON.stringify({
+        expectedRevision: 3,
         defaultProvider: { type: 'api_key', name: 'openrouter' },
         provider: {
           type: 'api_key',

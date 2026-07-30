@@ -254,13 +254,16 @@ func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
 			override.Model = cloneStringPointer(providerOverride.Model)
 		}
 		if credential, ok := st.Credentials[provider]; ok {
+			if credential.Envelope.Stored && credential.Operation != SecretClear {
+				key = ""
+				keySource = SourceDB
+				override.Credential.Set = true
+				result.CredentialEnvelopes[name] = credential.Envelope
+			}
 			if credential.Value != "" {
 				key = credential.Value
 				keySource = SourceDB
 				override.Credential = SecretView{Set: true, Last4: KeyLast4(credential.Value)}
-			}
-			if credential.Envelope.Stored {
-				result.CredentialEnvelopes[name] = credential.Envelope
 			}
 		}
 		setAPIKeyConfig(&result.Config, provider, model, key)

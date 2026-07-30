@@ -167,7 +167,7 @@ export type ProviderPatch =
 export interface UpdateAISettingsInput {
   defaultProvider?: ProviderSelector | null
   provider?: ProviderPatch
-  expectedRevision?: number
+  expectedRevision: number
   // null deletes the DB override so the value falls back to env/default.
   flags?: Record<string, boolean | null>
 }

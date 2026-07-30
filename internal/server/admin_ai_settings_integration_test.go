@@ -150,7 +150,7 @@ func TestAdminAISettingsPutAppliesToLiveRouterAndSurvivesRestart(t *testing.T) {
 		t.Fatalf("Issue() error = %v", err)
 	}
 
-	body := `{"defaultProvider":{"type":"ollama"}}`
+	body := `{"expectedRevision":0,"defaultProvider":{"type":"ollama"}}`
 	for _, tt := range []struct {
 		name  string
 		token string
