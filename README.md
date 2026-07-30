@@ -411,6 +411,11 @@ Note: the submodule wiring is currently a bootstrap stub for upcoming curriculum
 
 ## Deployment
 
+Repository maintainers use the controlled
+[nightly candidate and stable release flow](docs/releases.md). A successful
+merge creates a candidate after `main` CI passes; it does not deploy
+production.
+
 ### Option 1: Single Server (Docker Compose)
 
 For a single school or small deployment. Runs on any VPS with 2GB+ RAM.
