@@ -54,7 +54,6 @@ class CIWorkflowTests(unittest.TestCase):
             "go-lint",
             "docker",
             "admin-docker",
-            "postgres",
             "once",
         ):
             with self.subTest(job=job):
@@ -128,7 +127,9 @@ class CIWorkflowTests(unittest.TestCase):
     def test_private_postgres_image_pulls_are_authenticated(self) -> None:
         ci_workflow = source(".github/workflows/ci.yml")
         ci_login = ci_workflow.index("      - name: Log in to GHCR")
-        ci_pull = ci_workflow.index("          docker compose pull postgres dragonfly")
+        ci_pull = ci_workflow.index(
+            "      - name: Pull published PostgreSQL retrieval image"
+        )
 
         self.assertLess(ci_login, ci_pull)
         self.assertIn("      packages: read", ci_workflow)
@@ -154,18 +155,39 @@ class CIWorkflowTests(unittest.TestCase):
         )
         self.assertLess(server_login, server_pull)
 
-    def test_postgres_smoke_test_provides_compose_env_file(self) -> None:
+    def test_changed_postgres_image_runs_inside_backend_e2e(self) -> None:
         workflow = source(".github/workflows/ci.yml")
-        postgres_job = workflow.split("\n  postgres:\n", maxsplit=1)[1]
-        postgres_job = postgres_job.split("\n  once:\n", maxsplit=1)[0]
+        e2e = workflow.split("\n  admin-spa-e2e:\n", maxsplit=1)[1]
+        e2e = e2e.split("\n  go:\n", maxsplit=1)[0]
 
-        create_env = postgres_job.index("      - name: Create Compose environment file")
-        verify = postgres_job.index("      - name: Verify PostgreSQL retrieval image")
-        cleanup = postgres_job.index("      - name: Stop PostgreSQL retrieval image")
+        build = named_step(workflow, "Build changed PostgreSQL retrieval image")
+        pull = named_step(workflow, "Pull published PostgreSQL retrieval image")
+        start = named_step(workflow, "Start PostgreSQL and Dragonfly")
 
-        self.assertIn("        run: touch .env", postgres_job)
-        self.assertLess(create_env, verify)
-        self.assertLess(create_env, cleanup)
+        self.assertIn(
+            "if: needs.changes.outputs.postgres_image == 'true'",
+            build,
+        )
+        self.assertIn("uses: docker/build-push-action@v6", build)
+        self.assertIn("load: true", build)
+        self.assertIn("scope=ci-postgres", build)
+        self.assertIn(
+            "if: needs.changes.outputs.postgres_image != 'true'",
+            pull,
+        )
+        self.assertLess(e2e.index(build), e2e.index(start))
+        self.assertLess(e2e.index(pull), e2e.index(start))
+        self.assertNotIn("\n  postgres:\n", workflow)
+
+    def test_manual_production_deploys_require_main(self) -> None:
+        workflow = source(".github/workflows/deploy.yml")
+        guard = named_step(workflow, "Require main for manual production deploy")
+        first_build = workflow.index("      - name: Build and push app image")
+
+        self.assertIn("github.event_name == 'workflow_dispatch' &&", guard)
+        self.assertIn("github.ref != 'refs/heads/main'", guard)
+        self.assertIn("exit 1", guard)
+        self.assertLess(workflow.index(guard), first_build)
 
     def test_react_doctor_pr_filter_cannot_leave_required_check_pending(self) -> None:
         workflow = source(".github/workflows/react-doctor.yml")

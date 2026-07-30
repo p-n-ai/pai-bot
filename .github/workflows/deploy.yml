@@ -39,6 +39,14 @@ jobs:
       ecr-token: ${{ steps.ecr-token.outputs.token }}
       postgres-image: ${{ steps.postgres-image.outputs.image }}
     steps:
+      - name: Require main for manual production deploy
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.ref != 'refs/heads/main'
+        run: |
+          echo "Manual production deployments must run from main." >&2
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           submodules: true
