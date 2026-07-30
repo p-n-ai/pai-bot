@@ -26,4 +26,5 @@ P&AI Bot has been deployed!
 IMPORTANT: Make sure you have configured:
   - At least one AI provider API key (unless devMode is enabled)
   - A Telegram bot token (unless devMode is enabled)
-  - A strong PAI_AUTH_SECRET (do NOT use the default in production)
+  - A private auth secret and an independent configuration-encryption key
+  - A private bootstrap-admin password

@@ -104,7 +104,7 @@ if [ -f .env ]; then
       PAI_AUTH_SECRET)
         [ "$value" = "change-me-in-production" ] && continue
         ;;
-      LEARN_*|PAI_AUTH_*) ;;
+      LEARN_*|PAI_AUTH_*|PAI_CONFIG_ENCRYPTION_KEY) ;;
       *) continue ;;
     esac
     [ -n "$value" ] && once_args+=(--env "$key=$value")

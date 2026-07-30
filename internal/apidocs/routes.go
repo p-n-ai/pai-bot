@@ -5,6 +5,7 @@ package apidocs
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/auth"
@@ -36,27 +37,220 @@ type aiSettingsKeyStatusDoc struct {
 	Last4 string `json:"last4"`
 }
 
-type aiSettingsSourcesDoc struct {
-	DefaultProvider string            `json:"defaultProvider"`
-	OpenRouterModel string            `json:"openrouterModel"`
-	OpenRouterKey   string            `json:"openrouterKey"`
-	Flags           map[string]string `json:"flags"`
+type aiDefaultProviderProjectionDoc struct {
+	Baseline  any    `json:"baseline"`
+	Override  any    `json:"override"`
+	Effective any    `json:"effective"`
+	Source    string `json:"source"`
+}
+
+type aiStringProjectionDoc struct {
+	Baseline  *string `json:"baseline"`
+	Override  *string `json:"override"`
+	Effective *string `json:"effective"`
+	Source    string  `json:"source"`
+}
+
+type aiBoolProjectionDoc struct {
+	Baseline  bool   `json:"baseline"`
+	Override  *bool  `json:"override"`
+	Effective bool   `json:"effective"`
+	Source    string `json:"source"`
+}
+
+type aiFlagsProjectionDoc struct {
+	Baseline  map[string]bool   `json:"baseline"`
+	Override  map[string]bool   `json:"override"`
+	Effective map[string]bool   `json:"effective"`
+	Sources   map[string]string `json:"sources"`
+}
+
+type aiProviderReadinessDoc struct {
+	Supported   bool   `json:"supported"`
+	Configured  bool   `json:"configured"`
+	Registrable bool   `json:"registrable"`
+	Effective   bool   `json:"effective"`
+	ManagedBy   string `json:"managedBy"`
+}
+
+type aiCredentialHealthDoc struct {
+	Stored          bool   `json:"stored"`
+	Readable        bool   `json:"readable"`
+	Version         string `json:"version"`
+	Algorithm       string `json:"algorithm"`
+	KeyID           string `json:"keyId"`
+	MigrationNeeded bool   `json:"migrationNeeded"`
+}
+
+type aiCredentialProjectionDoc struct {
+	Baseline  aiSettingsKeyStatusDoc `json:"baseline"`
+	Override  aiSettingsKeyStatusDoc `json:"override"`
+	Effective aiSettingsKeyStatusDoc `json:"effective"`
+	Source    string                 `json:"source"`
+	Health    aiCredentialHealthDoc  `json:"health"`
+}
+
+type aiAPIKeyProviderProjectionDoc struct {
+	Type       string                    `json:"type"`
+	Name       string                    `json:"name"`
+	Model      aiStringProjectionDoc     `json:"model"`
+	Credential aiCredentialProjectionDoc `json:"credential"`
+	Readiness  aiProviderReadinessDoc    `json:"readiness"`
+}
+
+type aiOllamaProviderProjectionDoc struct {
+	Type      string                 `json:"type"`
+	Enabled   aiBoolProjectionDoc    `json:"enabled"`
+	Model     aiStringProjectionDoc  `json:"model"`
+	Readiness aiProviderReadinessDoc `json:"readiness"`
+}
+
+type aiManagedCodexProviderProjectionDoc struct {
+	Type      string                 `json:"type"`
+	Enabled   aiBoolProjectionDoc    `json:"enabled"`
+	Model     aiStringProjectionDoc  `json:"model"`
+	Readiness aiProviderReadinessDoc `json:"readiness"`
 }
 
 type aiSettingsResponseDoc struct {
-	DefaultProvider    string                 `json:"defaultProvider"`
-	OpenRouterModel    string                 `json:"openrouterModel"`
-	OpenRouterKey      aiSettingsKeyStatusDoc `json:"openrouterKey"`
-	Flags              map[string]bool        `json:"flags"`
-	Sources            aiSettingsSourcesDoc   `json:"sources"`
-	AvailableProviders []string               `json:"availableProviders"`
+	DefaultProvider aiDefaultProviderProjectionDoc `json:"defaultProvider"`
+	Providers       []any                          `json:"providers"`
+	Flags           aiFlagsProjectionDoc           `json:"flags"`
+	Revision        int64                          `json:"revision"`
+	AppliedRevision int64                          `json:"appliedRevision"`
+	Drift           bool                           `json:"drift"`
 }
 
-type aiSettingsUpdateRequestDoc struct {
-	DefaultProvider  *string          `json:"defaultProvider,omitempty"`
-	OpenRouterModel  *string          `json:"openrouterModel,omitempty"`
-	OpenRouterAPIKey *string          `json:"openrouterApiKey,omitempty"`
-	Flags            map[string]*bool `json:"flags,omitempty"`
+func aiSettingsSchemas(registry *schemaRegistry) (request, response *Schema) {
+	selector := aiProviderSelectorSchema()
+	nullableSelector := &Schema{OneOf: append(
+		append([]*Schema(nil), selector.OneOf...),
+		&Schema{Type: "null"},
+	)}
+
+	apiKeyProjection := registry.refFor(aiAPIKeyProviderProjectionDoc{})
+	ollamaProjection := registry.refFor(aiOllamaProviderProjectionDoc{})
+	managedCodexProjection := registry.refFor(aiManagedCodexProviderProjectionDoc{})
+	setSchemaPropertyEnum(registry, aiAPIKeyProviderProjectionDoc{}, "type", "api_key")
+	setSchemaPropertyEnum(registry, aiOllamaProviderProjectionDoc{}, "type", "ollama")
+	setSchemaPropertyEnum(registry, aiManagedCodexProviderProjectionDoc{}, "type", "managed_codex")
+
+	response = registry.refFor(aiSettingsResponseDoc{})
+	responseSchema := registry.schemas[schemaName(indirectType(reflect.TypeOf(aiSettingsResponseDoc{})))]
+	responseSchema.Properties["providers"] = &Schema{
+		Type: "array",
+		Items: &Schema{
+			OneOf:         []*Schema{apiKeyProjection, ollamaProjection, managedCodexProjection},
+			Discriminator: &Discriminator{PropertyName: "type"},
+		},
+	}
+	defaultProjection := registry.schemas[schemaName(indirectType(reflect.TypeOf(aiDefaultProviderProjectionDoc{})))]
+	for _, field := range []string{"baseline", "override", "effective"} {
+		defaultProjection.Properties[field] = nullableSelector
+	}
+	stringProjection := registry.schemas[schemaName(indirectType(reflect.TypeOf(aiStringProjectionDoc{})))]
+	for _, field := range []string{"baseline", "override", "effective"} {
+		stringProjection.Properties[field] = nullableStringSchema()
+	}
+	boolProjection := registry.schemas[schemaName(indirectType(reflect.TypeOf(aiBoolProjectionDoc{})))]
+	boolProjection.Properties["override"] = &Schema{OneOf: []*Schema{{Type: "boolean"}, {Type: "null"}}}
+
+	request = &Schema{
+		Type:                 "object",
+		AdditionalProperties: false,
+		Required:             []string{"expectedRevision"},
+		Properties: map[string]*Schema{
+			"expectedRevision": {Type: "integer"},
+			"defaultProvider":  nullableSelector,
+			"provider":         aiProviderPatchSchema(),
+			"flags": {
+				Type: "object",
+				AdditionalProperties: &Schema{
+					OneOf: []*Schema{{Type: "boolean"}, {Type: "null"}},
+				},
+			},
+		},
+	}
+	return request, response
+}
+
+func aiProviderSelectorSchema() *Schema {
+	return &Schema{
+		OneOf: []*Schema{
+			closedObjectSchema(
+				map[string]*Schema{
+					"type": {Type: "string", Enum: []any{"api_key"}},
+					"name": {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
+				},
+				"type", "name",
+			),
+			closedObjectSchema(
+				map[string]*Schema{"type": {Type: "string", Enum: []any{"ollama"}}},
+				"type",
+			),
+			closedObjectSchema(
+				map[string]*Schema{"type": {Type: "string", Enum: []any{"managed_codex"}}},
+				"type",
+			),
+		},
+		Discriminator: &Discriminator{PropertyName: "type"},
+	}
+}
+
+func aiProviderPatchSchema() *Schema {
+	apiKey := closedObjectSchema(
+		map[string]*Schema{
+			"type":   {Type: "string", Enum: []any{"api_key"}},
+			"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
+			"model":  nullableStringSchema(),
+			"apiKey": nullableStringSchema(),
+		},
+		"type", "name",
+	)
+	apiKey.MinProperties = 3
+	ollama := closedObjectSchema(
+		map[string]*Schema{
+			"type":    {Type: "string", Enum: []any{"ollama"}},
+			"enabled": {OneOf: []*Schema{{Type: "boolean"}, {Type: "null"}}},
+			"model":   nullableStringSchema(),
+		},
+		"type",
+	)
+	ollama.MinProperties = 2
+	managedCodex := closedObjectSchema(
+		map[string]*Schema{
+			"type":  {Type: "string", Enum: []any{"managed_codex"}},
+			"model": nullableStringSchema(),
+		},
+		"type",
+	)
+	managedCodex.MinProperties = 2
+	return &Schema{
+		OneOf:         []*Schema{apiKey, ollama, managedCodex},
+		Discriminator: &Discriminator{PropertyName: "type"},
+	}
+}
+
+func closedObjectSchema(properties map[string]*Schema, required ...string) *Schema {
+	return &Schema{
+		Type:                 "object",
+		Properties:           properties,
+		Required:             required,
+		AdditionalProperties: false,
+	}
+}
+
+func nullableStringSchema() *Schema {
+	return &Schema{OneOf: []*Schema{{Type: "string"}, {Type: "null"}}}
+}
+
+func setSchemaPropertyEnum(registry *schemaRegistry, value any, property string, enum ...string) {
+	component := registry.schemas[schemaName(indirectType(reflect.TypeOf(value)))]
+	values := make([]any, len(enum))
+	for i, value := range enum {
+		values[i] = value
+	}
+	component.Properties[property] = &Schema{Type: "string", Enum: values}
 }
 
 type healthResponse struct {
@@ -269,27 +463,29 @@ func Build() (*Document, error) {
 			protectedErrors(),
 		),
 	})
+	aiSettingsRequestSchema, aiSettingsResponseSchema := aiSettingsSchemas(registry)
 	doc.Paths["/api/admin/ai/settings"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Get effective AI settings for admins and platform admins",
-			Description: "Returns defaultProvider, openrouterModel, masked openrouterKey status, flags, per-field sources, and availableProviders. The API key itself is never returned. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Description: "Returns closed api_key, ollama, and managed_codex provider projections with redacted baseline, override, effective, source, readiness, envelope-health, and desired/applied revision state. API keys and ciphertext are never returned. In multi-tenant mode, only platform_admin may access this endpoint.",
 			Tags:        []string{"Admin"},
 			Security:    protected,
 			Responses: mergeResponses(
-				responseJSON("200", "Effective AI settings view.", registry.refFor(aiSettingsResponseDoc{})),
+				responseJSON("200", "Effective AI settings view.", aiSettingsResponseSchema),
 				protectedErrors(),
 			),
 		},
 		Put: &Operation{
 			Summary:     "Update AI settings for admins and platform admins",
-			Description: "Partially updates defaultProvider, openrouterModel, openrouterApiKey, and flags, then returns the effective AI settings view. A null flag deletes the DB override; an empty openrouterApiKey clears the stored key; unknown fields are rejected with 400. In multi-tenant mode, only platform_admin may access this endpoint.",
+			Description: "Partially updates a closed provider variant and/or the default provider selector. Omission leaves state unchanged; null on a mutable field deletes its database override and restores environment control; empty strings, unknown fields, and cross-provider fields are rejected. Ollama URL and managed Codex authentication remain environment-owned. expectedRevision rejects stale writes with 409. In multi-tenant mode, only platform_admin may access this endpoint.",
 			Tags:        []string{"Admin"},
 			Security:    protected,
-			RequestBody: jsonBody(registry.refFor(aiSettingsUpdateRequestDoc{})),
+			RequestBody: jsonBody(aiSettingsRequestSchema),
 			Responses: mergeResponses(
-				responseJSON("200", "Updated effective AI settings view.", registry.refFor(aiSettingsResponseDoc{})),
+				responseJSON("200", "Updated effective AI settings view.", aiSettingsResponseSchema),
 				protectedErrors(),
-				responseText("400", "Request body is invalid, contains an unknown field, or would leave AI providers unusable."),
+				responseText("400", "Request body is invalid, contains an illegal variant field or empty value, or would leave AI providers unusable."),
+				responseText("409", "Expected revision does not match the current runtime settings revision."),
 			),
 		},
 	}

@@ -419,7 +419,9 @@ For a single school or small deployment. Runs on any VPS with 2GB+ RAM.
 git clone https://github.com/p-n-ai/pai-bot.git
 cd pai-bot
 ./scripts/setup.sh     # Interactive setup wizard
-docker compose up -d   # Start everything
+# Set private PAI_AUTH_SECRET, PAI_CONFIG_ENCRYPTION_KEY, and
+# PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD in .env, then:
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 **Cost:** ~$20/month on any VPS provider. Supports 100-500 students.
@@ -428,13 +430,25 @@ docker compose up -d   # Start everything
 
 For districts, states, or national deployments. A Helm chart is available at `deploy/helm/pai/`.
 
+Create a private, untracked `values.production.yaml`; don't pass secrets through
+command-line `--set` arguments.
+
+```yaml
+secrets:
+  authSecret: "<private auth secret>"
+  configEncryptionKey: "<independent 32+ character key>"
+  bootstrapAdminPassword: "<private bootstrap password>"
+  telegramBotToken: "<telegram token>"
+  ai:
+    openaiApiKey: "<provider key>"
+ingress:
+  enabled: true
+  host: learn.yourschool.edu.my
+```
+
 ```bash
-helm install pai deploy/helm/pai \
-  --set secrets.telegramBotToken=YOUR_TOKEN \
-  --set secrets.ai.openaiApiKey=YOUR_KEY \
-  --set secrets.authSecret=$(openssl rand -hex 16) \
-  --set ingress.enabled=true \
-  --set ingress.host=learn.yourschool.edu.my
+chmod 600 values.production.yaml
+helm install pai deploy/helm/pai -f values.production.yaml
 ```
 
 **Scales:** Horizontally to millions of students. Each school gets a namespace with isolated data.
@@ -454,7 +468,12 @@ P&AI is designed to run on any cloud without lock-in:
 
 ## Configuration Reference
 
-Configuration is environment-driven. Core app variables use `LEARN_`; auth variables use `PAI_AUTH_` only. See [`.env.example`](.env.example) for the complete list.
+Environment variables define the immutable deployment baseline. Platform
+administrators can override the supported AI runtime fields in Admin; resetting
+an override returns control to the current environment value without rewriting
+the process environment or `.env` files. Core app variables use `LEARN_`; auth
+variables use `PAI_AUTH_` only. See [`.env.example`](.env.example) for the
+complete baseline list.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -498,11 +517,28 @@ Configuration is environment-driven. Core app variables use `LEARN_`; auth varia
 | `LEARN_AI_OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `LEARN_AI_OLLAMA_MODEL` | No | — | Default Ollama model when request model is not set |
 | `LEARN_AI_PERSONALIZED_NUDGES_ENABLED` | No | `true` | Let AI personalize proactive nudge messages; falls back to template text on failure |
-| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret; signs JWTs and derives the AES-256-GCM key for API keys stored via admin AI settings. Rotating it makes stored keys undecryptable (rotate back to recover, or re-enter via the admin UI); storing keys is refused while it is the default value |
+| `PAI_AUTH_SECRET` | No | `change-me-in-production` | Root auth secret used for JWTs and focused-page capabilities; use a private value in production |
+| `PAI_CONFIG_ENCRYPTION_KEY` | No | — | Active independent high-entropy root used for versioned encryption of API keys stored through admin settings |
+| `PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS` | No | `[]` | JSON array of up to eight retired encryption roots retained while stored credentials and backups are migrated. `PAI_AUTH_SECRET` remains a read-only candidate only for legacy unversioned ciphertext |
 | `LEARN_SERVER_PORT` | No | `8080` | HTTP server port |
 | `LEARN_TENANT_MODE` | No | `single` | `single` or `multi` tenant mode |
 
 Outside development mode, configure at least one external chat adapter and one AI provider.
+See [Runtime AI settings](docs/operations/runtime-ai-settings.md) for the
+env/override reconciliation contract and the safe encryption-key rotation
+sequence.
+
+Generate independent auth and configuration-encryption roots in a new private
+file with:
+
+```bash
+go run ./cmd/init-secrets -out /path/to/pai-bot-secrets.env
+```
+
+Before a production rollout, run `go run
+./cmd/validate-production-secrets`. The production Compose overlay and Helm
+chart also block startup or rendering when required secrets are missing, use
+public defaults, reuse a root, or contain an invalid retired-key list.
 
 ### First-Boot Tenant Flow
 

@@ -60,14 +60,14 @@ func NewWeeklyParentReportSource(admin *adminapi.Service) weeklyParentReportSour
 func NewBootstrapRetrievalService(loader *curriculum.Loader) *retrieval.Service {
 	return newBootstrapRetrievalService(loader)
 }
-func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
-	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant)
+func NewHandlerWithAdminProvider(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, prepareSettings settings.PrepareApply, multiTenant bool) http.Handler {
+	return newHandlerWithAdminProvider(adminProvider, joinSource, sender, retrievalService, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, prepareSettings, multiTenant)
 }
-func NewHandlerWithAdminProviderAndTeacherResources(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
-	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, teacherResources, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant, nil)
+func NewHandlerWithAdminProviderAndTeacherResources(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, prepareSettings settings.PrepareApply, multiTenant bool) http.Handler {
+	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, teacherResources, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, prepareSettings, multiTenant, nil)
 }
-func NewHandlerWithAdminProviderAndTeacherResourcesAndCodexAuth(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, applySettings func(settings.Settings), multiTenant bool, deviceAuth CodexDeviceAuth) http.Handler {
-	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, teacherResources, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant, deviceAuth)
+func NewHandlerWithAdminProviderAndTeacherResourcesAndCodexAuth(adminProvider AdminDataSourceProvider, joinSource JoinClassSource, sender MessageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc AuthService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore RuntimeSettingsStore, prepareSettings settings.PrepareApply, multiTenant bool, deviceAuth CodexDeviceAuth) http.Handler {
+	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, teacherResources, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, prepareSettings, multiTenant, deviceAuth)
 }
 func NewTenantAdminDataSourceProvider(newForTenant func(string) AdminDataSource, newForPlatform func() AdminDataSource, defaultTenantID func(context.Context) (string, error)) TenantAdminDataSourceProvider {
 	return tenantAdminDataSourceProvider{newForTenant: newForTenant, newForPlatform: newForPlatform, defaultTenantID: defaultTenantID}
@@ -517,11 +517,11 @@ func newHandlerWithRetrievalService(admin adminDataSource, sender messageSender,
 // live AI router. A nil settingsStore leaves the /api/admin/ai/settings routes
 // unregistered (tests, unwired deployments). multiTenant restricts those
 // routes to platform admins: the settings row is platform-global.
-func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool) http.Handler {
-	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, nil, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, applySettings, multiTenant, nil)
+func newHandlerWithAdminProvider(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, prepareSettings settings.PrepareApply, multiTenant bool) http.Handler {
+	return newHandlerWithAdminProviderAndTeacherResources(adminProvider, joinSource, sender, retrievalService, nil, authSvc, jwtSecret, accessTokenTTL, inviteBaseURL, settingsStore, prepareSettings, multiTenant, nil)
 }
 
-func newHandlerWithAdminProviderAndTeacherResources(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, applySettings func(settings.Settings), multiTenant bool, deviceAuth codexDeviceAuth) http.Handler {
+func newHandlerWithAdminProviderAndTeacherResources(adminProvider adminDataSourceProvider, joinSource joinClassSource, sender messageSender, retrievalService *retrieval.Service, teacherResources *retrieval.TeacherResourceService, authSvc authService, jwtSecret string, accessTokenTTL time.Duration, inviteBaseURL string, settingsStore runtimeSettingsStore, prepareSettings settings.PrepareApply, multiTenant bool, deviceAuth codexDeviceAuth) http.Handler {
 	mux := newMux(nil, sender)
 	manager := auth.NewTokenManager(jwtSecret, accessTokenTTL)
 	authenticated := authenticateRequests(authSvc, manager, time.Now)
@@ -580,8 +580,8 @@ func newHandlerWithAdminProviderAndTeacherResources(adminProvider adminDataSourc
 	mux.Handle("POST /api/admin/ai/budget-window", adminOnly(handleAdminUpsertTokenBudgetWindow(adminProvider)))
 	if settingsStore != nil {
 		settingsAdmin := chain(authenticated, auth.RequireRoles(settingsRoles...))
-		mux.Handle("GET /api/admin/ai/settings", settingsAdmin(handleAdminGetAISettings(settingsStore)))
-		mux.Handle("PUT /api/admin/ai/settings", settingsAdmin(handleAdminUpdateAISettings(settingsStore, applySettings)))
+		mux.Handle("GET /api/admin/ai/settings", settingsAdmin(handleAdminGetAISettings(settingsStore, deviceAuth)))
+		mux.Handle("PUT /api/admin/ai/settings", settingsAdmin(handleAdminUpdateAISettings(settingsStore, prepareSettings, deviceAuth)))
 		if deviceAuth != nil {
 			mux.Handle("GET /api/admin/ai/codex/auth", settingsAdmin(handleAdminGetCodexAuth(deviceAuth)))
 			mux.Handle("POST /api/admin/ai/codex/auth/device", settingsAdmin(handleAdminStartCodexAuth(deviceAuth)))

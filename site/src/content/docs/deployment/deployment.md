@@ -157,14 +157,10 @@ A Helm chart is available at `deploy/helm/pai/`. It deploys the full stack: Go a
 docker build -f deploy/docker/Dockerfile -t ghcr.io/p-n-ai/pai-bot:latest .
 docker build -f deploy/docker/Dockerfile.admin -t ghcr.io/p-n-ai/pai-admin:latest .
 
-# 2. Install with your values
-helm install pai deploy/helm/pai \
-  --set secrets.telegramBotToken=YOUR_TOKEN \
-  --set secrets.ai.openaiApiKey=YOUR_KEY \
-  --set secrets.authSecret=$(openssl rand -hex 16) \
-  --set ingress.enabled=true \
-  --set ingress.host=learn.yourschool.edu.my \
-  --set ingress.className=nginx
+# 2. Create a private, untracked values.production.yaml containing the
+# required auth, configuration-encryption, bootstrap-admin, and provider secrets.
+chmod 600 values.production.yaml
+helm install pai deploy/helm/pai -f values.production.yaml
 
 # 3. Check status
 kubectl get pods
@@ -230,7 +226,8 @@ Key values in `values.yaml`:
 |-------|---------|-------------|
 | `config.tenantMode` | `single` | `single` or `multi` tenant |
 | `config.devMode` | `false` | Skip Telegram/AI requirements |
-| `secrets.authSecret` | `change-me-in-production` | JWT signing secret |
+| `secrets.authSecret` | required in production | JWT signing secret |
+| `secrets.configEncryptionKey` | required in production | Independent 32+ character key for encrypted runtime settings |
 | `secrets.telegramBotToken` | `""` | Telegram bot token |
 | `secrets.ai.openaiApiKey` | `""` | OpenAI API key |
 | `postgres.enabled` | `true` | Use built-in PostgreSQL (set `false` for external DB) |

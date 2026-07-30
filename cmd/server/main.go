@@ -19,6 +19,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
@@ -47,19 +48,20 @@ type runtimeSettingsUpdater interface {
 	Update(
 		context.Context,
 		func(settings.Settings) (settings.Settings, error),
-		func(settings.Settings),
+		settings.PrepareApply,
 	) (settings.Settings, error)
 }
 
 func makeCodexDefault(
 	ctx context.Context,
 	store runtimeSettingsUpdater,
-	applySettings func(settings.Settings),
+	prepareSettings settings.PrepareApply,
 ) error {
 	_, err := store.Update(ctx, func(current settings.Settings) (settings.Settings, error) {
-		current.AI.DefaultProvider = "codex"
+		provider := "codex"
+		current.AI.DefaultProvider = &provider
 		return current, nil
-	}, applySettings)
+	}, prepareSettings)
 	return err
 }
 
@@ -124,7 +126,14 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			}
 
 			// Runtime settings overlay env config; admin saves re-apply live.
-			settingsStore := settings.New(db.Pool, cfg.Auth.JWTSecret, cfg.AI, cfg.FeatureFlags)
+			settingsStore := settings.NewWithPreviousKeys(
+				db.Pool,
+				cfg.Security.RuntimeSettingsEncryptionKey,
+				cfg.Security.PreviousSettingsEncryptionKeys,
+				cfg.Auth.JWTSecret,
+				cfg.AI,
+				cfg.FeatureFlags,
+			)
 			if err := settingsStore.Start(ctx); err != nil {
 				// Degrade to env-only config: a crash loop here would lock
 				// admins out of the very UI that repairs the stored settings.
@@ -136,7 +145,14 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 
 			// Initialize AI router with configured providers.
 			initialAI := settings.MergeAI(cfg.AI, settingsStore.Current())
-			router := airouter.SetupWithCodexAuth(initialAI, codexDeviceAuth)
+			router := ai.NewRouter()
+			initialPlan, initialPlanErr := airouter.PrepareWithCodexAuth(initialAI, codexDeviceAuth)
+			initialPlan.Apply(router)
+			if initialPlanErr == nil {
+				settingsStore.MarkApplied(settingsStore.Current().Revision)
+			} else {
+				slog.Warn("runtime settings could not be fully applied", "error", initialPlanErr)
+			}
 			aiHealthCheck := server.NewCachedHealthCheck(
 				server.NewAIHealthCheck(router),
 				time.Minute,
@@ -151,14 +167,18 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 					return nil, nil, errors.New("no AI providers configured")
 				}
 			}
-			applySettings := func(st settings.Settings) {
+			prepareSettings := func(st settings.Settings) (settings.PreparedApply, error) {
 				merged := settings.MergeAI(cfg.AI, st)
-				airouter.ApplyWithCodexAuth(router, merged, codexDeviceAuth)
+				plan, err := airouter.PrepareWithCodexAuth(merged, codexDeviceAuth)
+				if err != nil {
+					return nil, err
+				}
+				return func() { plan.Apply(router) }, nil
 			}
 			var adminCodexDeviceAuth server.CodexDeviceAuth
 			if cfg.AI.Codex.Enabled {
 				codexDeviceAuth.SetOnConnected(func(callbackCtx context.Context) error {
-					return makeCodexDefault(callbackCtx, settingsStore, applySettings)
+					return makeCodexDefault(callbackCtx, settingsStore, prepareSettings)
 				})
 				codexDeviceAuth.Initialize()
 				adminCodexDeviceAuth = codexDeviceAuth
@@ -535,7 +555,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				defaultAccessTokenTTL,
 				cfg.Email.BaseURL,
 				settingsStore,
-				applySettings,
+				prepareSettings,
 				cfg.Tenant.Mode == "multi",
 				adminCodexDeviceAuth,
 			)

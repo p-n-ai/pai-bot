@@ -20,7 +20,8 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 go build -o /pai-server ./cmd/server \
     && CGO_ENABLED=0 go build -o /pai-terminal-chat ./cmd/terminal-chat \
     && CGO_ENABLED=0 go build -o /pai-terminal-nudge ./cmd/terminal-nudge \
-    && CGO_ENABLED=0 go build -o /pai-seed ./cmd/seed
+    && CGO_ENABLED=0 go build -o /pai-seed ./cmd/seed \
+    && CGO_ENABLED=0 go build -o /pai-validate-production-secrets ./cmd/validate-production-secrets
 
 # Stage 2: Final image (~25MB)
 FROM alpine:3.20
@@ -31,6 +32,7 @@ COPY --from=builder /pai-server /pai-server
 COPY --from=builder /pai-terminal-chat /pai-terminal-chat
 COPY --from=builder /pai-terminal-nudge /pai-terminal-nudge
 COPY --from=builder /pai-seed /pai-seed
+COPY --from=builder /pai-validate-production-secrets /pai-validate-production-secrets
 COPY oss /oss
 COPY migrations /migrations
 COPY --from=codex-cli /codex /usr/local/bin/codex

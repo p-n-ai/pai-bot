@@ -31,6 +31,10 @@ Thumbs.db
 coverage.out
 coverage.html
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Vendor (optional — uncomment if not vendoring)
 # vendor/
 

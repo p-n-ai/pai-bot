@@ -5,64 +5,222 @@ package settings
 
 import (
 	"encoding/base64"
+	"errors"
+	"strings"
 	"testing"
+	"testing/quick"
 )
 
-func TestCryptoRoundtrip(t *testing.T) {
-	const secret = "auth-secret"
-	const plaintext = "sk-or-v1-abcdef123456"
+func TestCredentialEnvelopeRoundTrip(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
 
-	encoded, err := encryptString(secret, plaintext)
+	first, err := encryptCredential(secret, "sk-or-secret", ctx)
 	if err != nil {
-		t.Fatalf("encryptString() error = %v", err)
+		t.Fatalf("encryptCredential() error = %v", err)
 	}
-	if encoded == plaintext {
-		t.Fatal("ciphertext should not equal plaintext")
+	second, err := encryptCredential(secret, "sk-or-secret", ctx)
+	if err != nil {
+		t.Fatalf("encryptCredential(second) error = %v", err)
+	}
+	if first == second {
+		t.Fatal("envelopes must use independent random nonces")
+	}
+	if !strings.HasPrefix(first, credentialEnvelopePrefix+credentialKeyID(secret)+":") {
+		t.Fatalf("envelope = %q, want version and derived key ID", first)
+	}
+	if strings.Contains(first, "sk-or-secret") {
+		t.Fatal("envelope contains plaintext")
 	}
 
-	got, err := decryptString(secret, encoded)
+	got, err := decryptCredential(secret, nil, nil, first, ctx)
 	if err != nil {
-		t.Fatalf("decryptString() error = %v", err)
+		t.Fatalf("decryptCredential() error = %v", err)
 	}
-	if got != plaintext {
-		t.Fatalf("decryptString() = %q, want %q", got, plaintext)
+	if got.Plaintext != "sk-or-secret" || got.Legacy || got.NeedsRewrite {
+		t.Fatalf("decryptCredential() = %+v, want current v1 plaintext", got)
 	}
 }
 
-func TestCryptoTamperDetected(t *testing.T) {
-	const secret = "auth-secret"
+func TestCredentialEnvelopeEnforcesWritableSizeBoundary(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
 
-	encoded, err := encryptString(secret, "payload")
+	atLimit := strings.Repeat("x", maxCredentialPlaintextBytes)
+	encoded, err := encryptCredential(secret, atLimit, ctx)
 	if err != nil {
-		t.Fatalf("encryptString() error = %v", err)
+		t.Fatalf("encryptCredential(at limit) error = %v", err)
 	}
-	raw, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		t.Fatalf("decode blob: %v", err)
+	got, err := decryptCredential(secret, nil, nil, encoded, ctx)
+	if err != nil || got.Plaintext != atLimit {
+		t.Fatalf("decryptCredential(at limit) = %d bytes, %v; want roundtrip", len(got.Plaintext), err)
 	}
-	raw[len(raw)-1] ^= 0xff
-	tampered := base64.StdEncoding.EncodeToString(raw)
 
-	if _, err := decryptString(secret, tampered); err == nil {
-		t.Fatal("decryptString() should reject tampered ciphertext")
+	if _, err := encryptCredential(
+		secret,
+		strings.Repeat("x", maxCredentialPlaintextBytes+1),
+		ctx,
+	); !errors.Is(err, ErrCredentialTooLarge) {
+		t.Fatalf("encryptCredential(over limit) error = %v, want ErrCredentialTooLarge", err)
 	}
 }
 
-func TestCryptoWrongSecret(t *testing.T) {
-	encoded, err := encryptString("right-secret", "payload")
+func TestCredentialEnvelopeBindsContextAndKeyID(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+	encoded, err := encryptCredential(secret, "sk-or-secret", ctx)
 	if err != nil {
-		t.Fatalf("encryptString() error = %v", err)
+		t.Fatalf("encryptCredential() error = %v", err)
 	}
-	if _, err := decryptString("wrong-secret", encoded); err == nil {
-		t.Fatal("decryptString() should fail with the wrong secret")
+
+	for _, wrong := range []credentialContext{
+		{Provider: "openai", Slot: "api_key"},
+		{Provider: "openrouter", Slot: "refresh_token"},
+	} {
+		if _, err := decryptCredential(secret, nil, nil, encoded, wrong); !errors.Is(err, errCredentialAuthentication) {
+			t.Fatalf("decryptCredential(wrong context %+v) error = %v, want authentication failure", wrong, err)
+		}
+	}
+
+	parts := strings.Split(encoded, ":")
+	parts[3] = credentialKeyID("different-credential-key-secret-123")
+	tamperedKeyID := strings.Join(parts, ":")
+	if _, err := decryptCredential(secret, nil, nil, tamperedKeyID, ctx); !errors.Is(err, errUnknownCredentialKey) {
+		t.Fatalf("decryptCredential(tampered key ID) error = %v, want unknown key", err)
 	}
 }
 
-func TestCryptoBadBlob(t *testing.T) {
-	if _, err := decryptString("secret", "not-base64!!"); err == nil {
-		t.Fatal("decryptString() should reject invalid base64")
+func TestCredentialEnvelopeUsesRetiredKeyAndRequestsRewrite(t *testing.T) {
+	const (
+		active  = "active-credential-key-secret-123456"
+		retired = "retired-credential-key-secret-1234"
+	)
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+	encoded, err := encryptCredential(retired, "sk-or-retired", ctx)
+	if err != nil {
+		t.Fatalf("encryptCredential() error = %v", err)
 	}
-	if _, err := decryptString("secret", base64.StdEncoding.EncodeToString([]byte("tiny"))); err == nil {
-		t.Fatal("decryptString() should reject blobs shorter than the nonce")
+
+	got, err := decryptCredential(active, []string{retired}, nil, encoded, ctx)
+	if err != nil {
+		t.Fatalf("decryptCredential() error = %v", err)
+	}
+	if got.Plaintext != "sk-or-retired" || got.Legacy || !got.NeedsRewrite {
+		t.Fatalf("decryptCredential() = %+v, want retired-key rewrite", got)
+	}
+}
+
+func TestCredentialEnvelopeLegacyMigration(t *testing.T) {
+	const (
+		active = "active-credential-key-secret-123456"
+		legacy = "legacy-auth-secret"
+		// PR #224 format: base64(nonce || AES-GCM ciphertext || tag), with
+		// SHA-256(legacy secret) as the AES key and no AAD.
+		golden = "AAECAwQFBgcICQoLFTeOW4MVf/El53pxeKG9hlD6CmpEzj9uASAWLg=="
+	)
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	got, err := decryptCredential(active, nil, []string{legacy}, golden, ctx)
+	if err != nil {
+		t.Fatalf("decryptCredential() error = %v", err)
+	}
+	if got.Plaintext != "sk-or-legacy" || !got.Legacy || !got.NeedsRewrite {
+		t.Fatalf("decryptCredential() = %+v, want legacy rewrite", got)
+	}
+}
+
+func TestCredentialEnvelopeRejectsMalformedAndUnknownWithoutLegacyFallback(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+	tests := []struct {
+		name string
+		blob string
+		err  error
+	}{
+		{name: "unsupported version", blob: "pai:v2:a256gcm:kid:payload", err: errUnsupportedCredentialVersion},
+		{name: "unsupported algorithm", blob: "pai:v1:a128gcm:AAAAAAAAAAAAAAAAAAAAAA:payload", err: errUnsupportedCredentialAlgorithm},
+		{name: "unreleased four field shape", blob: "pai:v1:AAAAAAAAAAAAAAAAAAAAAA:payload", err: errUnsupportedCredentialAlgorithm},
+		{name: "missing fields", blob: "pai:v1:a256gcm:kid", err: errMalformedCredentialEnvelope},
+		{name: "invalid key id", blob: "pai:v1:a256gcm:bad kid:payload", err: errMalformedCredentialEnvelope},
+		{name: "unknown key", blob: "pai:v1:a256gcm:AAAAAAAAAAAAAAAAAAAAAA:payload", err: errUnknownCredentialKey},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := decryptCredential(secret, nil, []string{secret}, tt.blob, ctx)
+			if !errors.Is(err, tt.err) {
+				t.Fatalf("decryptCredential() error = %v, want %v", err, tt.err)
+			}
+		})
+	}
+}
+
+func TestCredentialEnvelopeRejectsCiphertextBitFlip(t *testing.T) {
+	const secret = "credential-envelope-test-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+	encoded, err := encryptCredential(secret, "sk-or-secret", ctx)
+	if err != nil {
+		t.Fatalf("encryptCredential() error = %v", err)
+	}
+	header, payload, ok := strings.Cut(encoded, credentialEnvelopePrefix+credentialKeyID(secret)+":")
+	if !ok || header != "" {
+		t.Fatal("encrypted credential has unexpected envelope header")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	raw[len(raw)-1] ^= 1
+	tampered := credentialEnvelopePrefix + credentialKeyID(secret) + ":" +
+		base64.RawURLEncoding.EncodeToString(raw)
+
+	if _, err := decryptCredential(secret, nil, nil, tampered, ctx); !errors.Is(err, errCredentialAuthentication) {
+		t.Fatalf("decryptCredential(bit flip) error = %v, want authentication failure", err)
+	}
+}
+
+func TestCredentialEnvelopeRoundTripProperty(t *testing.T) {
+	const secret = "credential-envelope-property-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	property := func(plaintext []byte) bool {
+		encoded, err := encryptCredential(secret, string(plaintext), ctx)
+		if err != nil {
+			return false
+		}
+		got, err := decryptCredential(secret, nil, nil, encoded, ctx)
+		return err == nil &&
+			got.Plaintext == string(plaintext) &&
+			got.KeyID == credentialKeyID(secret) &&
+			!got.Legacy &&
+			!got.NeedsRewrite
+	}
+	if err := quick.Check(property, &quick.Config{MaxCount: 200}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCredentialEnvelopeTamperProperty(t *testing.T) {
+	const secret = "credential-envelope-property-secret-12345"
+	ctx := credentialContext{Provider: "openrouter", Slot: "api_key"}
+
+	property := func(plaintext []byte, position uint16, mask byte) bool {
+		encoded, err := encryptCredential(secret, string(plaintext), ctx)
+		if err != nil {
+			return false
+		}
+		prefix := credentialEnvelopePrefix + credentialKeyID(secret) + ":"
+		payload := strings.TrimPrefix(encoded, prefix)
+		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil || len(raw) == 0 {
+			return false
+		}
+		mask |= 1
+		raw[int(position)%len(raw)] ^= mask
+		tampered := prefix + base64.RawURLEncoding.EncodeToString(raw)
+		_, err = decryptCredential(secret, nil, nil, tampered, ctx)
+		return errors.Is(err, errCredentialAuthentication)
+	}
+	if err := quick.Check(property, &quick.Config{MaxCount: 200}); err != nil {
+		t.Fatal(err)
 	}
 }

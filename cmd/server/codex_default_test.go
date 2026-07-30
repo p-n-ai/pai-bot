@@ -33,7 +33,7 @@ func (availableCodexAuth) Complete(
 func (m *memoryRuntimeSettingsUpdater) Update(
 	ctx context.Context,
 	mutate func(settings.Settings) (settings.Settings, error),
-	apply func(settings.Settings),
+	prepare settings.PrepareApply,
 ) (settings.Settings, error) {
 	if err := ctx.Err(); err != nil {
 		return settings.Settings{}, err
@@ -42,38 +42,53 @@ func (m *memoryRuntimeSettingsUpdater) Update(
 	if err != nil {
 		return settings.Settings{}, err
 	}
+	var apply settings.PreparedApply
+	if prepare != nil {
+		apply, err = prepare(next)
+		if err != nil {
+			return settings.Settings{}, err
+		}
+	}
 	m.current = next
 	m.updates++
 	if apply != nil {
-		apply(next)
+		apply()
 	}
 	return next, nil
 }
 
 func TestMakeCodexDefaultPreservesOtherSettingsAndApplies(t *testing.T) {
+	defaultProvider := "openrouter"
+	model := "existing-model"
 	store := &memoryRuntimeSettingsUpdater{current: settings.Settings{
 		AI: settings.AISettings{
-			DefaultProvider: "openrouter",
-			OpenRouterModel: "existing-model",
+			DefaultProvider: &defaultProvider,
+			Providers: settings.ProviderOverrides{
+				APIKey: map[settings.APIKeyProvider]settings.APIKeyProviderOverride{
+					settings.APIKeyProviderOpenRouter: {Model: &model},
+				},
+			},
 		},
 		Flags: map[string]bool{"turn_hooks": true},
 	}}
 	var applied settings.Settings
 
-	if err := makeCodexDefault(t.Context(), store, func(next settings.Settings) {
-		applied = next
+	if err := makeCodexDefault(t.Context(), store, func(next settings.Settings) (settings.PreparedApply, error) {
+		return func() { applied = next }, nil
 	}); err != nil {
 		t.Fatalf("makeCodexDefault() error = %v", err)
 	}
 
-	if store.updates != 1 || store.current.AI.DefaultProvider != "codex" {
+	if store.updates != 1 || store.current.AI.DefaultProvider == nil ||
+		*store.current.AI.DefaultProvider != "codex" {
 		t.Fatalf("updates/settings = %d/%#v", store.updates, store.current)
 	}
-	if store.current.AI.OpenRouterModel != "existing-model" ||
+	if got := store.current.AI.Providers.APIKey[settings.APIKeyProviderOpenRouter].Model; got == nil ||
+		*got != "existing-model" ||
 		!store.current.Flags["turn_hooks"] {
 		t.Fatalf("unrelated settings changed: %#v", store.current)
 	}
-	if applied.AI.DefaultProvider != "codex" {
+	if applied.AI.DefaultProvider == nil || *applied.AI.DefaultProvider != "codex" {
 		t.Fatalf("applied settings = %#v, want codex default", applied)
 	}
 }
@@ -94,22 +109,23 @@ func TestSuccessfulDeviceAuthRegistersCodexAsDefaultWithoutEnvToggle(t *testing.
 	}
 	store := &memoryRuntimeSettingsUpdater{}
 
-	err := makeCodexDefault(t.Context(), store, func(next settings.Settings) {
-		airouter.ApplyWithCodexAuth(
-			router,
-			settings.MergeAI(aiConfig, next),
-			codexAuth,
-		)
+	err := makeCodexDefault(t.Context(), store, func(next settings.Settings) (settings.PreparedApply, error) {
+		plan, err := airouter.PrepareWithCodexAuth(settings.MergeAI(aiConfig, next), codexAuth)
+		if err != nil {
+			return nil, err
+		}
+		return func() { plan.Apply(router) }, nil
 	})
 	if err != nil {
 		t.Fatalf("makeCodexDefault() error = %v", err)
 	}
 
 	order := router.ProviderOrder()
-	if store.current.AI.DefaultProvider != "codex" ||
+	if store.current.AI.DefaultProvider == nil ||
+		*store.current.AI.DefaultProvider != "codex" ||
 		len(order) != 1 ||
 		order[0] != "codex" {
-		t.Fatalf("default/order = %q/%v, want codex first", store.current.AI.DefaultProvider, order)
+		t.Fatalf("default/order = %v/%v, want codex first", store.current.AI.DefaultProvider, order)
 	}
 }
 

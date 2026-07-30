@@ -65,6 +65,8 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_OLLAMA_URL",
 		"LEARN_AI_OLLAMA_MODEL",
 		"PAI_AUTH_SECRET",
+		"PAI_CONFIG_ENCRYPTION_KEY",
+		"PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS",
 		"PAI_AUTH_GOOGLE_CLIENT_ID",
 		"PAI_AUTH_GOOGLE_CLIENT_SECRET",
 		"PAI_AUTH_GOOGLE_ALLOWED_DOMAIN",
@@ -202,6 +204,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("LEARN_AI_CODEX_MODEL", "gpt-test")
 	t.Setenv("LEARN_AI_DEFAULT_PROVIDER", "openrouter")
 	t.Setenv("PAI_AUTH_SECRET", "super-secret")
+	t.Setenv("PAI_CONFIG_ENCRYPTION_KEY", "runtime-settings-encryption-key-123")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_ID", "google-client")
 	t.Setenv("PAI_AUTH_GOOGLE_CLIENT_SECRET", "google-secret")
 	t.Setenv("PAI_AUTH_GOOGLE_ALLOWED_DOMAIN", "pandai.org")
@@ -293,6 +296,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.Auth.JWTSecret != "super-secret" {
 		t.Errorf("Auth.JWTSecret = %q, want super-secret", cfg.Auth.JWTSecret)
+	}
+	if cfg.Security.RuntimeSettingsEncryptionKey != "runtime-settings-encryption-key-123" {
+		t.Error("Security.RuntimeSettingsEncryptionKey was not loaded")
 	}
 	if cfg.Auth.Google.ClientID != "google-client" {
 		t.Errorf("Auth.Google.ClientID = %q, want google-client", cfg.Auth.Google.ClientID)
@@ -684,6 +690,139 @@ func TestValidate_InvalidTenantMode(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should return error for invalid tenant mode")
+	}
+}
+
+func TestValidateConfigEncryptionKeyIsLongAndIndependent(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.Auth.JWTSecret = "shared-secret-value-that-is-long-enough"
+
+	base.Security.RuntimeSettingsEncryptionKey = "too-short"
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "at least 32") {
+		t.Fatalf("short encryption key error = %v", err)
+	}
+
+	base.Security.RuntimeSettingsEncryptionKey = base.Auth.JWTSecret
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("shared encryption key error = %v", err)
+	}
+
+	base.Security.RuntimeSettingsEncryptionKey = strings.Repeat("a", 32)
+	if err := base.Validate(); err == nil || !strings.Contains(err.Error(), "high-entropy") {
+		t.Fatalf("weak encryption key error = %v", err)
+	}
+
+	base.Security.RuntimeSettingsEncryptionKey = "independent-runtime-settings-key-123"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("independent encryption key error = %v", err)
+	}
+}
+
+func TestLoadPreviousConfigEncryptionKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", `["previous-settings-encryption-key-one","previous-settings-encryption-key-two"]`)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.Security.PreviousSettingsEncryptionKeys) != 2 ||
+		cfg.Security.PreviousSettingsEncryptionKeys[0] != "previous-settings-encryption-key-one" {
+		t.Fatalf("PreviousSettingsEncryptionKeys = %#v", cfg.Security.PreviousSettingsEncryptionKeys)
+	}
+}
+
+func TestLoadRejectsMalformedPreviousConfigEncryptionKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", `not-json`)
+
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "JSON array") {
+		t.Fatalf("Load() error = %v, want safe JSON-array error", err)
+	}
+}
+
+func TestValidatePreviousConfigEncryptionKeys(t *testing.T) {
+	base := Config{Runtime: RuntimeConfig{DevMode: true}, Tenant: TenantConfig{Mode: "single"}}
+	base.Auth.JWTSecret = "auth-secret-value-that-is-long-enough"
+	base.Security.RuntimeSettingsEncryptionKey = "active-settings-encryption-key-1234"
+
+	tests := []struct {
+		name string
+		keys []string
+	}{
+		{name: "short", keys: []string{"short"}},
+		{name: "active reused", keys: []string{base.Security.RuntimeSettingsEncryptionKey}},
+		{name: "auth reused", keys: []string{base.Auth.JWTSecret}},
+		{name: "duplicate", keys: []string{"previous-settings-encryption-key-123", "previous-settings-encryption-key-123"}},
+		{name: "weak", keys: []string{strings.Repeat("a", 32)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			cfg.Security.PreviousSettingsEncryptionKeys = tt.keys
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() should reject invalid previous encryption keys")
+			}
+		})
+	}
+
+	base.Security.PreviousSettingsEncryptionKeys = []string{"previous-settings-encryption-key-123"}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("Validate() valid previous key error = %v", err)
+	}
+}
+
+func TestValidateProductionSecretsRejectsUnsafeDeploymentValues(t *testing.T) {
+	validAuth := "auth-secret-value-with-enough-variety"
+	validActive := "active-settings-encryption-key-1234"
+	validBootstrap := "private-bootstrap-password"
+	previous := "previous-settings-encryption-key-123"
+
+	tests := []struct {
+		name      string
+		auth      string
+		active    string
+		previous  []string
+		bootstrap string
+	}{
+		{name: "missing auth", active: validActive, bootstrap: validBootstrap},
+		{name: "default auth", auth: DefaultAuthSecret, active: validActive, bootstrap: validBootstrap},
+		{name: "missing active", auth: validAuth, bootstrap: validBootstrap},
+		{name: "weak active", auth: validAuth, active: strings.Repeat("a", 32), bootstrap: validBootstrap},
+		{name: "active reuses auth", auth: validAuth, active: validAuth, bootstrap: validBootstrap},
+		{name: "duplicate previous", auth: validAuth, active: validActive, previous: []string{previous, previous}, bootstrap: validBootstrap},
+		{name: "previous reuses auth", auth: validAuth, active: validActive, previous: []string{validAuth}, bootstrap: validBootstrap},
+		{name: "missing bootstrap", auth: validAuth, active: validActive},
+		{name: "default bootstrap", auth: validAuth, active: validActive, bootstrap: "demo-password"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateProductionSecrets(tt.auth, tt.active, tt.previous, tt.bootstrap); err == nil {
+				t.Fatal("ValidateProductionSecrets() error = nil, want unsafe deployment rejection")
+			}
+		})
+	}
+
+	if err := ValidateProductionSecrets(
+		validAuth,
+		validActive,
+		[]string{previous},
+		validBootstrap,
+	); err != nil {
+		t.Fatalf("ValidateProductionSecrets() error = %v", err)
+	}
+}
+
+func TestValidateProductionSecretEnvironmentParsesPreviousKeys(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PAI_AUTH_SECRET", "auth-secret-value-with-enough-variety")
+	t.Setenv("PAI_CONFIG_ENCRYPTION_KEY", "active-settings-encryption-key-1234")
+	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "private-bootstrap-password")
+	t.Setenv("PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS", "not-json")
+
+	if err := ValidateProductionSecretEnvironment(); err == nil ||
+		!strings.Contains(err.Error(), "JSON array") {
+		t.Fatalf("ValidateProductionSecretEnvironment() error = %v", err)
 	}
 }
 

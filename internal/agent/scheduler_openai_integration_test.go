@@ -79,8 +79,18 @@ func TestSchedulerOpenAILiveNudge(t *testing.T) {
 		MasteryScore: 0.58,
 		NextReviewAt: now.Add(-56 * time.Hour),
 	}
+	learnerID, err := progress.NewLearnerID("live-nudge-user")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	msg := scheduler.buildNudgeMessage(ctx, "live-nudge-user", item, now)
+	msg := scheduler.buildNudgeMessage(
+		ctx,
+		ScheduledRecipient{Channel: "telegram", UserID: "live-nudge-user"},
+		learnerID,
+		item,
+		now,
+	)
 	if strings.TrimSpace(msg) == "" {
 		t.Fatal("buildNudgeMessage() returned empty output")
 	}

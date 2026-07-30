@@ -47,7 +47,20 @@ func TestParseTurnHooksFeature(t *testing.T) {
 			if got := features.Enabled(TurnHooks); got != tt.enabled {
 				t.Fatalf("turn_hooks enabled = %v, want %v", got, tt.enabled)
 			}
+			if got, ok := features.Override(TurnHooks); !ok || got != tt.enabled {
+				t.Fatalf("turn_hooks override = %v, %v; want %v, true", got, ok, tt.enabled)
+			}
 		})
+	}
+}
+
+func TestParseEmptyFeatureSetHasNoExplicitOverride(t *testing.T) {
+	features, err := Parse("")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got, ok := features.Override(TurnHooks); ok {
+		t.Fatalf("turn_hooks override = %v, true; want absent", got)
 	}
 }
 
@@ -106,6 +119,9 @@ func TestWithOverrides(t *testing.T) {
 	if !on.Enabled(TurnHooks) {
 		t.Fatal("turn_hooks should be enabled after override")
 	}
+	if got, ok := on.Override(TurnHooks); !ok || !got {
+		t.Fatalf("turn_hooks override = %v, %v; want true, true", got, ok)
+	}
 	if base.Enabled(TurnHooks) {
 		t.Fatal("WithOverrides must not mutate the receiver")
 	}
@@ -116,6 +132,9 @@ func TestWithOverrides(t *testing.T) {
 	}
 	if off.Enabled(TurnHooks) {
 		t.Fatal("turn_hooks should be disabled after override")
+	}
+	if got, ok := off.Override(TurnHooks); !ok || got {
+		t.Fatalf("turn_hooks override = %v, %v; want false, true", got, ok)
 	}
 
 	if _, err := base.WithOverrides(map[string]bool{"unknown_flag": true}); err == nil {
