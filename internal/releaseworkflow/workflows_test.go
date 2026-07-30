@@ -303,6 +303,64 @@ func TestNightlyCandidateContracts(t *testing.T) {
 	}
 }
 
+func TestNightlyCandidateArtifactReuseIsRetrySafe(t *testing.T) {
+	_, document := repositoryWorkflow(t, ".github/workflows/nightly.yml")
+	reuse := workflowStepRun(t, document, "candidate", "Reuse completed candidate artifact")
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "gh"), `#!/bin/bash
+expected_path="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts"
+expected_filter="[.artifacts[] | select(.name == \"nightly-candidate-$SHA\" and .expired == false)] | length"
+if [ "$#" -ne 4 ] ||
+  [ "$1" != "api" ] ||
+  [ "$2" != "$expected_path" ] ||
+  [ "$3" != "--jq" ] ||
+  [ "$4" != "$expected_filter" ]; then
+  echo "unexpected gh invocation: $*" >&2
+  exit 64
+fi
+echo "$FAKE_ARTIFACT_COUNT"
+`)
+
+	for _, test := range []struct {
+		name       string
+		count      string
+		wantOutput string
+		wantError  string
+	}{
+		{name: "new candidate", count: "0", wantOutput: "exists=false\n"},
+		{name: "completed candidate", count: "1", wantOutput: "exists=true\n"},
+		{
+			name:      "ambiguous candidate",
+			count:     "2",
+			wantError: "multiple candidate artifacts already exist",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			outputPath := filepath.Join(t.TempDir(), "github-output")
+			err := runBash(t, reuse,
+				"PATH="+bin+":"+os.Getenv("PATH"),
+				"FAKE_ARTIFACT_COUNT="+test.count,
+				"GITHUB_OUTPUT="+outputPath,
+				"GITHUB_REPOSITORY=p-n-ai/pai-bot",
+				"GITHUB_RUN_ID=123",
+				"SHA="+strings.Repeat("a", 40),
+			)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("run error = %v, want %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output := string(mustReadFile(t, outputPath)); output != test.wantOutput {
+				t.Fatalf("GITHUB_OUTPUT = %q, want %q", output, test.wantOutput)
+			}
+		})
+	}
+}
+
 func TestStablePromotionContracts(t *testing.T) {
 	source, document := repositoryWorkflow(t, ".github/workflows/stable.yml")
 	on, err := workflowMap(document, "on")
@@ -389,7 +447,6 @@ exit 0
 	if err := runBash(t, publish,
 		"PATH="+bin+":"+os.Getenv("PATH"),
 		"FAKE_GH_LOG="+logPath,
-		"FAKE_TAG_SHA="+sha,
 		"FAKE_RELEASE_EXISTS=1",
 		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
 		"SHA="+sha,
@@ -398,6 +455,26 @@ exit 0
 		t.Fatal(err)
 	}
 	log := string(mustReadFile(t, logPath))
+	requireContains(t, log,
+		"api repos/p-n-ai/pai-bot/git/refs --method POST -f ref=refs/tags/v1.2.3 -f sha="+sha,
+		"release create v1.2.3 --verify-tag --generate-notes",
+	)
+
+	if err := os.WriteFile(logPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runBash(t, publish,
+		"PATH="+bin+":"+os.Getenv("PATH"),
+		"FAKE_GH_LOG="+logPath,
+		"FAKE_TAG_SHA="+sha,
+		"FAKE_RELEASE_EXISTS=1",
+		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
+		"SHA="+sha,
+		"VERSION=v1.2.3",
+	); err != nil {
+		t.Fatal(err)
+	}
+	log = string(mustReadFile(t, logPath))
 	if strings.Contains(log, "--method POST") {
 		t.Fatal("retry attempted to recreate an existing matching tag")
 	}
@@ -426,11 +503,17 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return data
 }
 
+type fakeDeployOptions struct {
+	appHealth            string
+	smokeFails           bool
+	gooseFails           bool
+	adminHTTPFails       bool
+	missingPreviousAdmin bool
+}
+
 func runFakeDeploy(
 	t *testing.T,
-	appHealth string,
-	smokeFails bool,
-	gooseFails bool,
+	options fakeDeployOptions,
 ) (string, string, error) {
 	t.Helper()
 	deployDir := t.TempDir()
@@ -480,7 +563,11 @@ if [ "$1" = "compose" ] && [[ "$args" == *" ps -q admin"* ]]; then
   count=$(cat "$count_file" 2>/dev/null || echo 0)
   count=$((count + 1))
   echo "$count" > "$count_file"
-  if [ "$count" -eq 1 ]; then echo old-admin; else echo new-admin; fi
+  if [ "$count" -eq 1 ]; then
+    if [ "$FAKE_MISSING_PREVIOUS_ADMIN" != "true" ]; then echo old-admin; fi
+  else
+    echo new-admin
+  fi
   exit 0
 fi
 if [ "$1" = "inspect" ]; then
@@ -508,6 +595,10 @@ if [ "$1" = "compose" ] && [[ "$args" == *"exec -T postgres psql"*"-Atqc"* ]]; t
 fi
 if [ "$1" = "compose" ] && [[ "$args" == *"--profile tools run --rm goose"* ]]; then
   if [ "$FAKE_GOOSE_FAIL" = "true" ]; then exit 7; fi
+  exit 0
+fi
+if [ "$1" = "compose" ] && [[ "$args" == *"exec -T admin wget"* ]]; then
+  if [ "$FAKE_ADMIN_HTTP_FAIL" = "true" ]; then exit 8; fi
   exit 0
 fi
 if [ "$1" = "compose" ] && [[ "$args" == *"/pai-terminal-chat"* ]]; then
@@ -539,9 +630,11 @@ exit 0
 		"TAG="+strings.Repeat("a", 40),
 		"APP_DIGEST=sha256:"+strings.Repeat("1", 64),
 		"ADMIN_DIGEST=sha256:"+strings.Repeat("2", 64),
-		"FAKE_APP_HEALTH="+appHealth,
-		fmt.Sprintf("FAKE_SMOKE_FAIL=%t", smokeFails),
-		fmt.Sprintf("FAKE_GOOSE_FAIL=%t", gooseFails),
+		"FAKE_APP_HEALTH="+options.appHealth,
+		fmt.Sprintf("FAKE_SMOKE_FAIL=%t", options.smokeFails),
+		fmt.Sprintf("FAKE_GOOSE_FAIL=%t", options.gooseFails),
+		fmt.Sprintf("FAKE_ADMIN_HTTP_FAIL=%t", options.adminHTTPFails),
+		fmt.Sprintf("FAKE_MISSING_PREVIOUS_ADMIN=%t", options.missingPreviousAdmin),
 		"FAKE_DOCKER_LOG="+logPath,
 		"FAKE_DOCKER_STATE="+stateDir,
 	)
@@ -551,7 +644,7 @@ exit 0
 }
 
 func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
-	output, log, err := runFakeDeploy(t, "healthy", false, false)
+	output, log, err := runFakeDeploy(t, fakeDeployOptions{appHealth: "healthy"})
 	if err != nil {
 		t.Fatalf("healthy deploy failed: %v\n%s", err, output)
 	}
@@ -564,7 +657,7 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"Deploy successful",
 	)
 
-	output, log, err = runFakeDeploy(t, "unhealthy", false, false)
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{appHealth: "unhealthy"})
 	if err == nil {
 		t.Fatal("unhealthy candidate deployment succeeded")
 	}
@@ -575,7 +668,10 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"up -d --force-recreate app admin",
 	)
 
-	output, log, err = runFakeDeploy(t, "healthy", true, false)
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:  "healthy",
+		smokeFails: true,
+	})
 	if err == nil {
 		t.Fatal("deployment with a failed bot smoke test succeeded")
 	}
@@ -585,7 +681,10 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"tag sha256:oldadmin pai-admin:latest",
 	)
 
-	output, log, err = runFakeDeploy(t, "healthy", false, true)
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:  "healthy",
+		gooseFails: true,
+	})
 	if err == nil {
 		t.Fatal("deployment succeeded after a migration command failed")
 	}
@@ -597,6 +696,38 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 		"tag sha256:oldapp pai-bot:latest",
 		"tag sha256:oldadmin pai-admin:latest",
 	)
+
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:      "healthy",
+		adminHTTPFails: true,
+	})
+	if err == nil {
+		t.Fatal("deployment with a failed admin HTTP check succeeded")
+	}
+	requireContains(t, output,
+		"admin HTTP check failed",
+		"Rollback restored app sha256:oldapp and admin sha256:oldadmin",
+	)
+	requireContains(t, log,
+		"tag sha256:oldapp pai-bot:latest",
+		"tag sha256:oldadmin pai-admin:latest",
+	)
+
+	output, log, err = runFakeDeploy(t, fakeDeployOptions{
+		appHealth:            "healthy",
+		adminHTTPFails:       true,
+		missingPreviousAdmin: true,
+	})
+	if err == nil {
+		t.Fatal("deployment with no complete rollback pair succeeded")
+	}
+	requireContains(t, output,
+		"admin HTTP check failed",
+		"Rollback unavailable: no complete previous application image pair",
+	)
+	if strings.Contains(log, "up -d --force-recreate") {
+		t.Fatal("rollback restarted services without a complete previous image pair")
+	}
 }
 
 func TestRemoteDeploymentContracts(t *testing.T) {
