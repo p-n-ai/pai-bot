@@ -108,3 +108,45 @@ func TestPublicStatusChecksProviderWithoutSeparateConfiguration(t *testing.T) {
 		t.Fatalf("provider health calls = %d, want 1", checkCalls)
 	}
 }
+
+func TestDisabledPublicStatusDoesNotCheckProvider(t *testing.T) {
+	checkCalls := 0
+	handler := NewTopMux(TopMuxOptions{
+		PublicHealthEnabled: func() bool { return false },
+		AIHealthCheck: func(context.Context) error {
+			checkCalls++
+			return nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health/status", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("disabled public status = %d, want 404", rec.Code)
+	}
+	if checkCalls != 0 {
+		t.Fatalf("disabled provider health calls = %d, want 0", checkCalls)
+	}
+}
+
+func TestLegacyAIHealthEndpointStaysRemoved(t *testing.T) {
+	checkCalls := 0
+	handler := NewTopMux(TopMuxOptions{
+		PublicHealthEnabled: func() bool { return true },
+		AIHealthCheck: func(context.Context) error {
+			checkCalls++
+			return nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("legacy AI health status = %d, want 404", rec.Code)
+	}
+	if checkCalls != 0 {
+		t.Fatalf("legacy AI health provider calls = %d, want 0", checkCalls)
+	}
+}

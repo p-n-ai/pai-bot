@@ -21,10 +21,35 @@ describe('readPublicStatusSnapshot', () => {
     })
   })
 
+  it('parses provider degradation without marking the application unavailable', () => {
+    expect(
+      readPublicStatusSnapshot({
+        status: 'degraded',
+        components: [
+          { id: 'application', status: 'operational' },
+          { id: 'ai_provider', status: 'unavailable' },
+        ],
+      }),
+    ).toEqual({
+      status: 'degraded',
+      components: [
+        { id: 'application', status: 'operational' },
+        { id: 'ai_provider', status: 'unavailable' },
+      ],
+    })
+  })
+
   it.each([
     {
       status: 'ok',
       components: [{ id: 'ai_provider', status: 'operational' }],
+    },
+    {
+      status: 'ok',
+      components: [
+        { id: 'application', status: 'operational' },
+        { id: 'ai', status: 'operational' },
+      ],
     },
     {
       status: 'ok',

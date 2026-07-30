@@ -185,6 +185,26 @@ class ProbeTests(unittest.TestCase):
                     check="status",
                 )
 
+    def test_status_check_does_not_expose_unexpected_response_detail(self) -> None:
+        secret = b"private-provider-detail"
+        body = (
+            b'{"status":"degraded","components":['
+            b'{"id":"application","status":"operational"},'
+            b'{"id":"ai_provider","status":"unavailable"}],'
+            b'"detail":"' + secret + b'"}'
+        )
+        with serve(body=body) as target:
+            with self.assertRaisesRegex(
+                uptime_probe.ProbeError, "wrong status contract"
+            ) as raised:
+                uptime_probe.probe(
+                    target,
+                    timeout=1,
+                    allow_http=True,
+                    check="status",
+                )
+        self.assertNotIn(secret.decode(), str(raised.exception))
+
     def test_requires_https_outside_local_tests(self) -> None:
         with self.assertRaisesRegex(uptime_probe.ProbeError, "must use HTTPS"):
             uptime_probe.health_url("http://example.com")
