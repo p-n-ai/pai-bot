@@ -32,7 +32,6 @@ jobs:
       id-token: write
       packages: write
     outputs:
-      ecr-token: ${{ steps.ecr-token.outputs.token }}
       postgres-image: ${{ steps.postgres-image.outputs.image }}
     steps:
       - name: Require main for manual production deploy
@@ -249,18 +248,13 @@ jobs:
             echo "Build duration and combined runner time are available from this run's job and step timings."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Generate ECR token for server
-        id: ecr-token
-        run: |
-          TOKEN=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
   deploy:
     runs-on: ubuntu-latest
     needs: push-images
     environment: production
     permissions:
       contents: read
+      id-token: write
       packages: write
 
     steps:
@@ -269,6 +263,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Validate production secrets
         run: go run ./cmd/validate-production-secrets
@@ -403,6 +403,15 @@ jobs:
           FEATURES: ${{ vars.PAI_FEATURES }}
           AI_HEALTH_TOKEN: ${{ secrets.PAI_AI_HEALTH_TOKEN }}
 
+      - name: Generate masked ECR token for server
+        id: ecr-token
+        run: |
+          token=$(aws ecr get-login-password --region "$AWS_REGION")
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
       - name: Deploy
         uses: appleboy/ssh-action@v1
         with:
@@ -418,7 +427,7 @@ jobs:
               "$DEPLOY_DIR/scripts/deploy-remote.sh"
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          ECR_TOKEN: ${{ needs.push-images.outputs.ecr-token }}
+          ECR_TOKEN: ${{ steps.ecr-token.outputs.token }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
           POSTGRES_IMAGE: ${{ needs.push-images.outputs.postgres-image }}
