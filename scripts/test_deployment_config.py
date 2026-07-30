@@ -89,9 +89,17 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         validate_at = workflow.index("go run ./cmd/validate-production-secrets")
         copy_at = workflow.index("- name: Copy files to server")
         self.assertLess(validate_at, copy_at)
+        self.assertEqual(
+            workflow.count(
+                "${{ secrets.PAI_AUTH_SECRET || "
+                "secrets.LEARN_AUTH_JWT_SECRET }}"
+            ),
+            2,
+        )
         self.assertIn('umask 077', workflow)
         self.assertIn('env_tmp="$(mktemp .env.tmp.XXXXXX)"', workflow)
         self.assertIn('> "$env_tmp"', workflow)
+        self.assertIn('mv "$rollback_tmp" .env.rollback', workflow)
         self.assertIn('mv "$env_tmp" .env', workflow)
         self.assertNotIn("> .env", workflow)
 
@@ -104,8 +112,21 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
     def test_remote_deploy_validates_before_migrations(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
         validate_at = deploy.index("run --rm config-check")
+        backup_at = deploy.index('echo "--- Creating pre-migration database backup ---"')
         migrate_at = deploy.index('echo "--- Running migrations ---"')
         self.assertLess(validate_at, migrate_at)
+        self.assertGreater(backup_at, migrate_at)
+        self.assertIn('pg_dump "$DB_URL" --format=custom', deploy)
+        self.assertIn("pg_restore --list", deploy)
+        self.assertLess(backup_at, deploy.index("goose@v3.26.0"))
+
+    def test_remote_rollback_restores_matching_environment(self) -> None:
+        deploy = source("scripts/deploy-remote.sh")
+        rollback_at = deploy.index('if [ "$APP_HEALTH" != "healthy" ]; then')
+        restore_at = deploy.index("Restored previous environment")
+        restart_at = deploy.index("up -d app admin")
+        self.assertLess(rollback_at, restore_at)
+        self.assertLess(restore_at, restart_at)
 
 
 if __name__ == "__main__":

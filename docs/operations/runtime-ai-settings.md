@@ -109,8 +109,13 @@ any secret.
 The production Compose overlay runs the same check before the app starts, and
 the remote deployment runs it before migrations. The GitHub deployment
 validates before copying files and replaces the mode-`0600` server `.env`
-atomically. The Helm chart rejects the same unsafe value classes during
-rendering, before a workload is installed or upgraded.
+atomically. It prefers the canonical `PAI_AUTH_SECRET` GitHub secret and falls
+back to the existing `LEARN_AUTH_JWT_SECRET` secret during the secret-name
+migration so the auth root does not rotate accidentally. The remote deployment
+keeps the prior `.env` for rollback and creates a verified, mode-private
+database dump under the deployment `backups/` directory before migrations. The
+Helm chart rejects the same unsafe value classes during rendering, before a
+workload is installed or upgraded.
 
 ## Encryption key rotation
 

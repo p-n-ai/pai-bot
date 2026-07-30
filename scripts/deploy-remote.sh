@@ -7,13 +7,22 @@ set -euo pipefail
 
 cd "${DEPLOY_DIR:-/opt/pai-bot}"
 
+BACKUP_TMP=""
+cleanup() {
+  if [ -n "$BACKUP_TMP" ]; then
+    rm -f "$BACKUP_TMP"
+  fi
+  docker logout "$REGISTRY" >/dev/null 2>&1 || true
+  docker logout ghcr.io >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
 echo "--- Disabling host nginx if present ---"
 sudo systemctl stop nginx 2>/dev/null || true
 sudo systemctl disable nginx 2>/dev/null || true
 
 echo "--- ECR login ---"
 echo "$ECR_TOKEN" | docker login --username AWS --password-stdin "$REGISTRY"
-trap 'docker logout "$REGISTRY" >/dev/null 2>&1 || true; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 
 echo "--- Recording previous image for rollback ---"
 PREV_APP=$(docker inspect --format='{{.Config.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
@@ -43,6 +52,22 @@ sleep 3
 
 echo "--- Running migrations ---"
 DB_URL=$(grep LEARN_DATABASE_URL .env | cut -d= -f2-)
+echo "--- Creating pre-migration database backup ---"
+umask 077
+BACKUP_DIR="${DEPLOY_DIR:-/opt/pai-bot}/backups"
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+BACKUP_TMP=$(mktemp "$BACKUP_DIR/.pai-backup.XXXXXX")
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  pg_dump "$DB_URL" --format=custom > "$BACKUP_TMP"
+test -s "$BACKUP_TMP"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  pg_restore --list < "$BACKUP_TMP" > /dev/null
+BACKUP_PATH="$BACKUP_DIR/pai-$(date -u +%Y%m%dT%H%M%SZ)-${TAG:0:12}.dump"
+mv "$BACKUP_TMP" "$BACKUP_PATH"
+BACKUP_TMP=""
+echo "Database backup: $BACKUP_PATH"
+
 echo "--- Checking provider-qualified user identities ---"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
   psql "$DB_URL" -f - < scripts/preflight-conversation-identities.sql
@@ -70,9 +95,19 @@ done
 if [ "$APP_HEALTH" != "healthy" ]; then
   echo "ERROR: app not healthy — rolling back"
   if [ -n "$PREV_APP" ]; then
+    if [ -f .env.rollback ]; then
+      restore_tmp=$(mktemp .env.restore.XXXXXX)
+      cp .env.rollback "$restore_tmp"
+      chmod 600 "$restore_tmp"
+      mv "$restore_tmp" .env
+      echo "Restored previous environment"
+    fi
     docker tag "$PREV_APP" pai-bot:latest
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app
-    echo "Rolled back app to $PREV_APP"
+    if [ -n "$PREV_ADMIN" ]; then
+      docker tag "$PREV_ADMIN" pai-admin:latest
+    fi
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app admin
+    echo "Rolled back app to $PREV_APP and admin to ${PREV_ADMIN:-unchanged}"
   fi
   docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 app
   exit 1

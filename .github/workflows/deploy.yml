@@ -273,7 +273,7 @@ jobs:
       - name: Validate production secrets
         run: go run ./cmd/validate-production-secrets
         env:
-          PAI_AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET }}
+          PAI_AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET || secrets.LEARN_AUTH_JWT_SECRET }}
           PAI_CONFIG_ENCRYPTION_KEY: ${{ secrets.PAI_CONFIG_ENCRYPTION_KEY }}
           PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS: ${{ secrets.PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS }}
           PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD }}
@@ -312,7 +312,7 @@ jobs:
             esac
             umask 077
             env_tmp="$(mktemp .env.tmp.XXXXXX)"
-            trap 'rm -f "$env_tmp"' EXIT
+            trap 'rm -f "$env_tmp" "${rollback_tmp:-}"' EXIT
             printf '%s\n' \
               "LEARN_SERVER_PORT=8080" \
               "LEARN_DATABASE_URL=postgres://pai:${PG_PASS}@postgres:5432/pai?sslmode=disable" \
@@ -369,13 +369,19 @@ jobs:
               cp deploy/caddy/Caddyfile.http deploy/caddy/Caddyfile
             fi
             chmod 600 "$env_tmp"
+            if [ -f .env ]; then
+              rollback_tmp="$(mktemp .env.rollback.tmp.XXXXXX)"
+              cp .env "$rollback_tmp"
+              chmod 600 "$rollback_tmp"
+              mv "$rollback_tmp" .env.rollback
+            fi
             mv "$env_tmp" .env
             trap - EXIT
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           PG_PASS: ${{ secrets.POSTGRES_PASSWORD }}
           TG_TOKEN: ${{ secrets.LEARN_TELEGRAM_BOT_TOKEN }}
-          AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET }}
+          AUTH_SECRET: ${{ secrets.PAI_AUTH_SECRET || secrets.LEARN_AUTH_JWT_SECRET }}
           CONFIG_ENCRYPTION_KEY: ${{ secrets.PAI_CONFIG_ENCRYPTION_KEY }}
           PREVIOUS_CONFIG_ENCRYPTION_KEYS: ${{ secrets.PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS }}
           BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.PAI_AUTH_BOOTSTRAP_ADMIN_EMAIL }}
