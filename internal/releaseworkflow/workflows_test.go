@@ -302,11 +302,8 @@ func TestNightlyCandidateContracts(t *testing.T) {
 		"github.event.workflow_run.head_sha",
 		"Reuse completed candidate artifact",
 		"this rerun is a no-op",
-		"Enforce immutable candidate repositories",
-		"aws ecr put-image-tag-mutability",
-		"--image-tag-mutability IMMUTABLE",
-		`[ "$mutability" != "IMMUTABLE" ]`,
 		"Reuse existing SHA-addressed application images",
+		`docker buildx imagetools inspect "$1"`,
 		"steps.existing.outputs.app_exists != 'true'",
 		"steps.existing.outputs.admin_exists != 'true'",
 		"candidate image pair is incomplete after construction",
@@ -322,61 +319,16 @@ func TestNightlyCandidateContracts(t *testing.T) {
 	}
 }
 
-func TestNightlyEnforcesImmutableCandidateRepositories(t *testing.T) {
-	_, document := repositoryWorkflow(t, ".github/workflows/nightly.yml")
-	enforce := workflowStepRun(t, document, "candidate", "Enforce immutable candidate repositories")
-	bin := t.TempDir()
-	writeExecutable(t, filepath.Join(bin, "aws"), `#!/bin/bash
-repository=""
-for ((index = 1; index <= $#; index++)); do
-  argument=${!index}
-  if [ "$argument" = "--repository-names" ] || [ "$argument" = "--repository-name" ]; then
-    next=$((index + 1))
-    repository=${!next}
-  fi
-done
-state_file="$FAKE_ECR_STATE/${repository//\//_}"
-if [ "$1 $2" = "ecr describe-repositories" ]; then
-  if [ -f "$state_file" ]; then echo IMMUTABLE; else echo MUTABLE; fi
-  exit 0
-fi
-if [ "$1 $2" = "ecr put-image-tag-mutability" ]; then
-  echo "$repository" >> "$FAKE_ECR_LOG"
-  if [ "${FAKE_ECR_REFUSE:-false}" != "true" ]; then touch "$state_file"; fi
-  exit 0
-fi
-exit 1
-`)
-
-	stateDir := filepath.Join(bin, "state")
-	if err := os.Mkdir(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logPath := filepath.Join(bin, "ecr.log")
-	environment := []string{
-		"PATH=" + bin + ":" + os.Getenv("PATH"),
-		"FAKE_ECR_STATE=" + stateDir,
-		"FAKE_ECR_LOG=" + logPath,
-	}
-	if err := runBash(t, enforce, environment...); err != nil {
-		t.Fatal(err)
-	}
-	requireContains(t, string(mustReadFile(t, logPath)),
-		"pai-bot/app",
-		"pai-bot/admin",
-	)
-
-	refusedStateDir := filepath.Join(bin, "refused-state")
-	if err := os.Mkdir(refusedStateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := runBash(t, enforce,
-		"PATH="+bin+":"+os.Getenv("PATH"),
-		"FAKE_ECR_STATE="+refusedStateDir,
-		"FAKE_ECR_LOG="+logPath,
-		"FAKE_ECR_REFUSE=true",
-	); err == nil {
-		t.Fatal("nightly accepted repositories that remained mutable")
+func TestNightlyCandidateDoesNotRequireECRAdministration(t *testing.T) {
+	source, _ := repositoryWorkflow(t, ".github/workflows/nightly.yml")
+	for _, command := range []string{
+		"aws ecr describe-repositories",
+		"aws ecr put-image-tag-mutability",
+		"aws ecr describe-images",
+	} {
+		if strings.Contains(source, command) {
+			t.Fatalf("nightly candidate uses ECR administration command %q", command)
+		}
 	}
 }
 
@@ -392,25 +344,20 @@ func TestNightlyCandidateConstructionScripts(t *testing.T) {
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeExecutable(t, filepath.Join(bin, "aws"), `#!/bin/bash
-repository=""
-for ((index = 1; index <= $#; index++)); do
-  if [ "${!index}" = "--repository-name" ]; then
-    next=$((index + 1))
-    repository=${!next}
-  fi
-done
-case "$repository" in
-  pai-bot/app) digest="sha256:$FAKE_APP_DIGEST" ;;
-  pai-bot/admin) digest="sha256:$FAKE_ADMIN_DIGEST" ;;
-  *) exit 1 ;;
-esac
-if [ "${FAKE_INVALID_APPLICATION:-}" = "$repository" ]; then echo None; else echo "$digest"; fi
-`)
 	writeExecutable(t, filepath.Join(bin, "docker"), `#!/bin/bash
 args="$*"
 if [ "$1 $2 $3" = "buildx imagetools inspect" ]; then
   target=$4
+  if [ "$target" = "$REGISTRY/pai-bot/app:$SHA" ]; then
+    if [ "${FAKE_APP_INSPECTION:-present}" = "missing" ]; then echo "manifest unknown" >&2; exit 1; fi
+    if [ "${FAKE_APP_INSPECTION:-present}" = "error" ]; then echo "unauthorized" >&2; exit 1; fi
+    if [ "${FAKE_INVALID_APPLICATION:-}" = "pai-bot/app" ]; then echo "Digest: invalid"; else echo "Digest: sha256:$FAKE_APP_DIGEST"; fi
+    exit 0
+  fi
+  if [ "$target" = "$REGISTRY/pai-bot/admin:$SHA" ]; then
+    if [ "${FAKE_INVALID_APPLICATION:-}" = "pai-bot/admin" ]; then echo "Digest: invalid"; else echo "Digest: sha256:$FAKE_ADMIN_DIGEST"; fi
+    exit 0
+  fi
   if [ "$target" = "ghcr.io/p-n-ai/pai-postgres:$SHA" ]; then
     if [ "${FAKE_POSTGRES_MODE:-fallback}" = "existing" ] || [ -f "$FAKE_POSTGRES_STATE" ]; then
       echo "Digest: sha256:$FAKE_POSTGRES_DIGEST"
@@ -443,6 +390,7 @@ exit 1
 	postgresDigest := strings.Repeat("3", 64)
 	commonEnvironment := []string{
 		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"REGISTRY=registry.example",
 		"SHA=" + sha,
 		"FAKE_APP_DIGEST=" + appDigest,
 		"FAKE_ADMIN_DIGEST=" + adminDigest,
@@ -455,6 +403,22 @@ exit 1
 	}
 	if output := string(mustReadFile(t, reuseOutput)); output != "app_exists=true\nadmin_exists=true\n" {
 		t.Fatalf("existing image outputs = %q", output)
+	}
+	missingOutput := filepath.Join(workDir, "missing-output")
+	if err := runBash(t, reuse, append(commonEnvironment,
+		"GITHUB_OUTPUT="+missingOutput,
+		"FAKE_APP_INSPECTION=missing",
+	)...); err != nil {
+		t.Fatal(err)
+	}
+	if output := string(mustReadFile(t, missingOutput)); output != "app_exists=false\nadmin_exists=true\n" {
+		t.Fatalf("missing image outputs = %q", output)
+	}
+	if err := runBash(t, reuse, append(commonEnvironment,
+		"GITHUB_OUTPUT="+filepath.Join(workDir, "error-output"),
+		"FAKE_APP_INSPECTION=error",
+	)...); err == nil {
+		t.Fatal("nightly treated a registry inspection error as a missing image")
 	}
 
 	applicationEnvironment := filepath.Join(workDir, "application-environment")
