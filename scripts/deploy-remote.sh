@@ -25,10 +25,30 @@ echo "--- ECR login ---"
 echo "$ECR_TOKEN" | docker login --username AWS --password-stdin "$REGISTRY"
 
 echo "--- Recording previous image for rollback ---"
-PREV_APP=$(docker inspect --format='{{.Config.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
-PREV_ADMIN=$(docker inspect --format='{{.Config.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q admin 2>/dev/null)" 2>/dev/null || echo "")
+PREV_APP=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
+PREV_ADMIN=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q admin 2>/dev/null)" 2>/dev/null || echo "")
 echo "Previous app: ${PREV_APP:-none}"
 echo "Previous admin: ${PREV_ADMIN:-none}"
+
+rollback_release() {
+  if [ -z "$PREV_APP" ]; then
+    echo "No previous app image is available for rollback" >&2
+    return
+  fi
+  if [ -f .env.rollback ]; then
+    restore_tmp=$(mktemp .env.restore.XXXXXX)
+    cp .env.rollback "$restore_tmp"
+    chmod 600 "$restore_tmp"
+    mv "$restore_tmp" .env
+    echo "Restored previous environment"
+  fi
+  docker tag "$PREV_APP" pai-bot:latest
+  if [ -n "$PREV_ADMIN" ]; then
+    docker tag "$PREV_ADMIN" pai-admin:latest
+  fi
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app admin
+  echo "Rolled back app to $PREV_APP and admin to ${PREV_ADMIN:-unchanged}"
+}
 
 echo "--- Reclaiming unused Docker storage ---"
 docker image prune -af
@@ -94,21 +114,7 @@ done
 
 if [ "$APP_HEALTH" != "healthy" ]; then
   echo "ERROR: app not healthy — rolling back"
-  if [ -n "$PREV_APP" ]; then
-    if [ -f .env.rollback ]; then
-      restore_tmp=$(mktemp .env.restore.XXXXXX)
-      cp .env.rollback "$restore_tmp"
-      chmod 600 "$restore_tmp"
-      mv "$restore_tmp" .env
-      echo "Restored previous environment"
-    fi
-    docker tag "$PREV_APP" pai-bot:latest
-    if [ -n "$PREV_ADMIN" ]; then
-      docker tag "$PREV_ADMIN" pai-admin:latest
-    fi
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app admin
-    echo "Rolled back app to $PREV_APP and admin to ${PREV_ADMIN:-unchanged}"
-  fi
+  rollback_release
   docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 app
   exit 1
 fi
@@ -155,12 +161,14 @@ smoke() {
 
 smoke "/learn usage"         "/learn"                    "/learn"
 smoke "/progress"            "/progress"                 "Progress|XP"
-smoke "/create_group"        "/create_group Test Deploy" "Test Deploy"
+smoke "/help"                "/help"                     "available commands|arahan yang tersedia|可用的指令"
 smoke "unknown cmd"          "/foobar"                   "diketahui|Unknown"
 
 echo "  Smoke: $SMOKE_PASS passed, $SMOKE_FAIL failed"
 if [ "$SMOKE_FAIL" -gt 0 ]; then
-  echo "WARNING: $SMOKE_FAIL smoke test(s) failed — deploy succeeded but bot may have issues"
+  echo "ERROR: $SMOKE_FAIL smoke test(s) failed — rolling back"
+  rollback_release
+  exit 1
 fi
 
 echo "--- Recording successfully deployed image aliases ---"
