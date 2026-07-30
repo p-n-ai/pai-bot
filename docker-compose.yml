@@ -1,5 +1,6 @@
 services:
   postgres:
+    image: ${POSTGRES_IMAGE:-ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5}
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.postgres

@@ -1,7 +1,13 @@
 .git
 .github
 .claude
+.agents
+.codex
 .docker-local
+.env
+.env.*
+.idea
+.vscode
 .gocache
 .golangci-cache
 .gomodcache
@@ -11,5 +17,9 @@ admin-spa/dist
 admin-spa/coverage
 admin-spa/*.tsbuildinfo
 dist
+docs
+docs-archived
+site
+terraform
 tmp
 *.log

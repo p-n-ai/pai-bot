@@ -2,6 +2,7 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 services:
   postgres:
+    build: !reset null
     ports: !reset []
     environment:
       POSTGRES_USER: pai

@@ -1,6 +1,6 @@
 #!/bin/bash
 # deploy-remote.sh — Runs ON the server via SSH.
-# Expects env vars: ECR_TOKEN, REGISTRY, TAG
+# Expects env vars: ECR_TOKEN, GHCR_TOKEN, GHCR_USER, POSTGRES_IMAGE, REGISTRY, TAG
 # Expects DEPLOY_DIR env var or defaults to /opt/pai-bot.
 # No AWS CLI required — only Docker + docker compose.
 set -euo pipefail
@@ -13,6 +13,7 @@ sudo systemctl disable nginx 2>/dev/null || true
 
 echo "--- ECR login ---"
 echo "$ECR_TOKEN" | docker login --username AWS --password-stdin "$REGISTRY"
+trap 'docker logout "$REGISTRY" >/dev/null 2>&1 || true; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 
 echo "--- Recording previous image for rollback ---"
 PREV_APP=$(docker inspect --format='{{.Config.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
@@ -31,7 +32,9 @@ docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
 docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
 
 echo "--- Ensuring infra services ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build postgres
+printf '%s' "$GHCR_TOKEN" | docker login --username "$GHCR_USER" --password-stdin ghcr.io
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull postgres dragonfly
+docker logout ghcr.io >/dev/null 2>&1 || true
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres dragonfly
 sleep 3
 
@@ -121,6 +124,42 @@ echo "  Smoke: $SMOKE_PASS passed, $SMOKE_FAIL failed"
 if [ "$SMOKE_FAIL" -gt 0 ]; then
   echo "WARNING: $SMOKE_FAIL smoke test(s) failed — deploy succeeded but bot may have issues"
 fi
+
+echo "--- Recording successfully deployed image aliases ---"
+for component in app admin; do
+  source_image="$REGISTRY/pai-bot/$component:$TAG"
+  for alias in deployed latest; do
+    alias_image="$REGISTRY/pai-bot/$component:$alias"
+    docker tag "$source_image" "$alias_image"
+    docker push "$alias_image"
+  done
+done
+
+case "$POSTGRES_IMAGE" in
+  ghcr.io/p-n-ai/pai-postgres@sha256:*) ;;
+  *) echo "Invalid PostgreSQL deployment image: $POSTGRES_IMAGE" >&2; exit 1 ;;
+esac
+postgres_repository=${POSTGRES_IMAGE%@*}
+postgres_release_image=$(
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    config --variables |
+    awk '$1 == "POSTGRES_IMAGE" { print $3; exit }'
+)
+case "$postgres_release_image" in
+  "$postgres_repository":*) ;;
+  *) echo "Invalid PostgreSQL release image: $postgres_release_image" >&2; exit 1 ;;
+esac
+
+printf '%s' "$GHCR_TOKEN" | docker login --username "$GHCR_USER" --password-stdin ghcr.io
+postgres_image_id=$(docker image inspect --format '{{.Id}}' "$POSTGRES_IMAGE")
+for alias_image in \
+  "$postgres_repository:deployed" \
+  "$postgres_release_image"
+do
+  docker tag "$postgres_image_id" "$alias_image"
+  docker push "$alias_image"
+done
+docker logout ghcr.io >/dev/null 2>&1 || true
 
 echo ""
 echo "Deploy successful (image: $TAG)"
