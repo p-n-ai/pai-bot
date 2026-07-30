@@ -9,7 +9,33 @@ import (
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 )
+
+func TestBuildSystemPromptIncludesLocalConversationCandidateOnlyWhenConfigured(t *testing.T) {
+	const candidate = "Match a terse learner with one short reply."
+	withCandidate := NewEngine(EngineConfig{TutorPromptExtension: candidate})
+	prompt := withCandidate.buildSystemPrompt(
+		chat.InboundMessage{UserID: "learner"},
+		&Conversation{UserID: "learner"},
+		nil,
+		"",
+	)
+	if !strings.Contains(prompt, "LOCAL CONVERSATION TEST CANDIDATE:\n"+candidate) {
+		t.Fatalf("system prompt missing candidate block")
+	}
+
+	withoutCandidate := NewEngine(EngineConfig{})
+	defaultPrompt := withoutCandidate.buildSystemPrompt(
+		chat.InboundMessage{UserID: "learner"},
+		&Conversation{UserID: "learner"},
+		nil,
+		"",
+	)
+	if strings.Contains(defaultPrompt, "LOCAL CONVERSATION TEST CANDIDATE:") {
+		t.Fatal("default system prompt unexpectedly contains a local candidate block")
+	}
+}
 
 func TestBuildPromptMessagesFromTurn_UsesQuotedSummaryAndExplicitCurrentUser(t *testing.T) {
 	engine := NewEngine(EngineConfig{})
