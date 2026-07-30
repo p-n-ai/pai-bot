@@ -2,7 +2,6 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 services:
   postgres:
-    image: ${POSTGRES_IMAGE:-ghcr.io/p-n-ai/pai-postgres:pggraph-1.0.0-pgvector-0.8.5}
     build: !reset null
     ports: !reset []
     environment:
