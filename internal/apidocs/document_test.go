@@ -6,6 +6,8 @@ package apidocs
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/apicontract"
 )
 
 func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
@@ -85,6 +87,40 @@ func TestBuild_GeneratesExplicitSchemas(t *testing.T) {
 	}
 	if classProgress.Properties["students"].Type != "array" {
 		t.Fatalf("ClassProgress.students type = %#v", classProgress.Properties["students"])
+	}
+}
+
+func TestDocumentedAPIRoutesExistInRuntimeRegistrations(t *testing.T) {
+	doc, err := Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, err := apicontract.Collect("../server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeRoutes := make(map[apicontract.Route]struct{}, len(routes))
+	for _, route := range routes {
+		runtimeRoutes[route] = struct{}{}
+	}
+
+	for path, item := range doc.Paths {
+		if path == "/healthz" || path == "/readyz" {
+			continue
+		}
+		for method, operation := range map[string]*Operation{
+			"GET":  item.Get,
+			"POST": item.Post,
+			"PUT":  item.Put,
+		} {
+			if operation == nil {
+				continue
+			}
+			route := apicontract.Route{Method: method, Path: path}
+			if _, exists := runtimeRoutes[route]; !exists {
+				t.Errorf("documented route is not registered at runtime: %s %s", method, path)
+			}
+		}
 	}
 }
 

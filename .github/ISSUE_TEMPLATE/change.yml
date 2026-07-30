@@ -1,0 +1,42 @@
+name: Product or engineering change
+description: Propose a change with its compatibility and release risk.
+title: ""
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What observable result should change?
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API compatibility
+      description: Describe public API additions, removals, or compatibility requirements.
+      placeholder: No API change.
+    validations:
+      required: true
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration risk
+      description: Describe schema or data changes, rollout ordering, and rollback safety.
+      placeholder: No migration.
+    validations:
+      required: true
+  - type: textarea
+    id: release
+    attributes:
+      label: Release risk
+      description: Describe deployment, configuration, candidate promotion, and rollback concerns.
+      placeholder: No release risk.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List externally observable checks that prove completion.
+    validations:
+      required: true

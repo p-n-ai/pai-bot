@@ -1,13 +1,16 @@
 #!/bin/bash
 # deploy-remote.sh — Runs ON the server via SSH.
-# Expects env vars: ECR_TOKEN, GHCR_TOKEN, GHCR_USER, POSTGRES_IMAGE, REGISTRY, TAG
+# Expects env vars: ECR_TOKEN, GHCR_TOKEN, GHCR_USER, POSTGRES_IMAGE, REGISTRY,
+# TAG, APP_DIGEST, ADMIN_DIGEST.
 # Expects DEPLOY_DIR env var or defaults to /opt/pai-bot.
 # No AWS CLI required — only Docker + docker compose.
-set -euo pipefail
+set -eEuo pipefail
 
 cd "${DEPLOY_DIR:-/opt/pai-bot}"
 
 BACKUP_TMP=""
+ROLLBACK_ARMED=false
+
 cleanup() {
   if [ -n "$BACKUP_TMP" ]; then
     rm -f "$BACKUP_TMP"
@@ -15,7 +18,61 @@ cleanup() {
   docker logout "$REGISTRY" >/dev/null 2>&1 || true
   docker logout ghcr.io >/dev/null 2>&1 || true
 }
+
+rollback_release() {
+  trap - ERR
+  set +e
+  echo "--- Rolling back application images and environment ---"
+  if [ -z "${PREV_APP_ID:-}" ] || [ -z "${PREV_ADMIN_ID:-}" ]; then
+    echo "Rollback unavailable: no complete previous application image pair"
+    return
+  fi
+
+  local rollback_ok=true
+  if [ -f .env.rollback ]; then
+    restore_tmp=$(mktemp .env.restore.XXXXXX)
+    cp .env.rollback "$restore_tmp" || rollback_ok=false
+    chmod 600 "$restore_tmp" || rollback_ok=false
+    mv "$restore_tmp" .env || rollback_ok=false
+    if [ "$rollback_ok" = "true" ]; then
+      echo "Restored previous environment"
+    fi
+  fi
+  docker tag "$PREV_APP_ID" pai-bot:latest || rollback_ok=false
+  docker tag "$PREV_ADMIN_ID" pai-admin:latest || rollback_ok=false
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    up -d --force-recreate app admin || rollback_ok=false
+  if [ "$rollback_ok" = "true" ]; then
+    echo "Rollback restored app $PREV_APP_ID and admin $PREV_ADMIN_ID"
+  else
+    echo "ERROR: rollback did not fully restore the previous release"
+  fi
+}
+
+fail_release() {
+  trap - ERR
+  echo "ERROR: $1"
+  rollback_release
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+    logs --tail=50 app admin
+  exit 1
+}
+
+unexpected_failure() {
+  local status=$?
+  if [ "$BASH_SUBSHELL" -gt 0 ]; then
+    return "$status"
+  fi
+  trap - ERR
+  echo "ERROR: deployment command failed with status $status"
+  if [ "$ROLLBACK_ARMED" = "true" ]; then
+    rollback_release
+  fi
+  exit "$status"
+}
+
 trap cleanup EXIT
+trap unexpected_failure ERR
 
 echo "--- Disabling host nginx if present ---"
 sudo systemctl stop nginx 2>/dev/null || true
@@ -24,41 +81,24 @@ sudo systemctl disable nginx 2>/dev/null || true
 echo "--- ECR login ---"
 echo "$ECR_TOKEN" | docker login --username AWS --password-stdin "$REGISTRY"
 
-echo "--- Recording previous image for rollback ---"
-PREV_APP=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
-PREV_ADMIN=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q admin 2>/dev/null)" 2>/dev/null || echo "")
-echo "Previous app: ${PREV_APP:-none}"
-echo "Previous admin: ${PREV_ADMIN:-none}"
-
-rollback_release() {
-  if [ -z "$PREV_APP" ]; then
-    echo "No previous app image is available for rollback" >&2
-    return
-  fi
-  if [ -f .env.rollback ]; then
-    restore_tmp=$(mktemp .env.restore.XXXXXX)
-    cp .env.rollback "$restore_tmp"
-    chmod 600 "$restore_tmp"
-    mv "$restore_tmp" .env
-    echo "Restored previous environment"
-  fi
-  docker tag "$PREV_APP" pai-bot:latest
-  if [ -n "$PREV_ADMIN" ]; then
-    docker tag "$PREV_ADMIN" pai-admin:latest
-  fi
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app admin
-  echo "Rolled back app to $PREV_APP and admin to ${PREV_ADMIN:-unchanged}"
-}
+echo "--- Recording previous images for rollback ---"
+PREV_APP_ID=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app 2>/dev/null)" 2>/dev/null || echo "")
+PREV_ADMIN_ID=$(docker inspect --format='{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q admin 2>/dev/null)" 2>/dev/null || echo "")
+echo "Previous app image ID: ${PREV_APP_ID:-none}"
+echo "Previous admin image ID: ${PREV_ADMIN_ID:-none}"
 
 echo "--- Reclaiming unused Docker storage ---"
 docker image prune -af
 docker builder prune -af
 
-echo "--- Pulling images ---"
-docker pull "$REGISTRY/pai-bot/app:$TAG"
-docker pull "$REGISTRY/pai-bot/admin:$TAG"
-docker tag "$REGISTRY/pai-bot/app:$TAG" pai-bot:latest
-docker tag "$REGISTRY/pai-bot/admin:$TAG" pai-admin:latest
+echo "--- Pulling candidate images ---"
+docker pull "$REGISTRY/pai-bot/app@$APP_DIGEST"
+docker pull "$REGISTRY/pai-bot/admin@$ADMIN_DIGEST"
+EXPECTED_APP_ID=$(docker image inspect --format '{{.Id}}' "$REGISTRY/pai-bot/app@$APP_DIGEST")
+EXPECTED_ADMIN_ID=$(docker image inspect --format '{{.Id}}' "$REGISTRY/pai-bot/admin@$ADMIN_DIGEST")
+ROLLBACK_ARMED=true
+docker tag "$EXPECTED_APP_ID" pai-bot:latest
+docker tag "$EXPECTED_ADMIN_ID" pai-admin:latest
 
 echo "--- Validating production secrets ---"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm config-check
@@ -89,8 +129,19 @@ BACKUP_TMP=""
 echo "Database backup: $BACKUP_PATH"
 
 echo "--- Checking provider-qualified user identities ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
-  psql "$DB_URL" -f - < scripts/preflight-conversation-identities.sql
+if ! USERS_TABLE_EXISTS=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T postgres psql "$DB_URL" -Atqc \
+  "SELECT to_regclass('public.users') IS NOT NULL"); then
+  fail_release "could not inspect the production schema"
+fi
+if [ "$USERS_TABLE_EXISTS" = "t" ]; then
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+    psql "$DB_URL" -f - < scripts/preflight-conversation-identities.sql
+elif [ "$USERS_TABLE_EXISTS" = "f" ]; then
+  echo "Fresh database: identity preflight will be enforced by the migration itself"
+else
+  fail_release "unexpected users-table probe result: $USERS_TABLE_EXISTS"
+fi
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile tools run --rm goose \
   go run github.com/pressly/goose/v3/cmd/goose@v3.26.0 \
   -dir /app/migrations postgres "$DB_URL" up -allow-missing
@@ -103,7 +154,7 @@ echo "--- Health check: app container ---"
 APP_CONTAINER=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q app)
 APP_HEALTH=""
 for i in $(seq 1 30); do
-  APP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$APP_CONTAINER")
+  APP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$APP_CONTAINER" 2>/dev/null || echo "missing")
   if [ "$APP_HEALTH" = "healthy" ]; then
     echo "App healthy after attempt $i"
     break
@@ -113,24 +164,26 @@ for i in $(seq 1 30); do
 done
 
 if [ "$APP_HEALTH" != "healthy" ]; then
-  echo "ERROR: app not healthy — rolling back"
-  rollback_release
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 app
-  exit 1
+  fail_release "app did not become healthy"
+fi
+
+RUNNING_APP_ID=$(docker inspect --format '{{.Image}}' "$APP_CONTAINER")
+if [ "$RUNNING_APP_ID" != "$EXPECTED_APP_ID" ]; then
+  fail_release "app image $RUNNING_APP_ID does not match candidate $EXPECTED_APP_ID"
 fi
 
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
 echo "--- Health check: app endpoint ---"
-$COMPOSE exec -T app curl -sf http://localhost:8080/healthz > /dev/null
+if ! $COMPOSE exec -T app curl -sf http://localhost:8080/healthz > /dev/null; then
+  fail_release "app endpoint health check failed"
+fi
 
 echo "--- Health check: application and AI provider status ---"
 STATUS_EXPECTED='{"status":"ok","components":[{"id":"application","status":"operational"},{"id":"ai_provider","status":"operational"}]}'
 STATUS_RESPONSE=$($COMPOSE exec -T app curl -fsS --max-time 15 http://localhost:8080/health/status) || STATUS_RESPONSE=""
 if [ "$STATUS_RESPONSE" != "$STATUS_EXPECTED" ]; then
-  echo "ERROR: AI response health check failed — rolling back"
-  rollback_release
-  exit 1
+  fail_release "AI response health check failed"
 fi
 
 echo "--- Health check: Caddy ingress ---"
@@ -142,14 +195,22 @@ fi
 
 echo "--- Health check: admin container ---"
 ADMIN_CONTAINER=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml ps -q admin 2>/dev/null || echo "")
-if [ -n "$ADMIN_CONTAINER" ]; then
-  ADMIN_STATUS=$(docker inspect --format '{{.State.Status}}' "$ADMIN_CONTAINER" 2>/dev/null || echo "unknown")
-  if [ "$ADMIN_STATUS" = "running" ]; then
-    echo "Admin container running"
-  else
-    echo "WARNING: Admin container status: $ADMIN_STATUS"
-  fi
+if [ -z "$ADMIN_CONTAINER" ]; then
+  fail_release "admin container is missing"
 fi
+ADMIN_STATUS=$(docker inspect --format '{{.State.Status}}' "$ADMIN_CONTAINER" 2>/dev/null || echo "unknown")
+if [ "$ADMIN_STATUS" != "running" ]; then
+  fail_release "admin container status is $ADMIN_STATUS"
+fi
+RUNNING_ADMIN_ID=$(docker inspect --format '{{.Image}}' "$ADMIN_CONTAINER")
+if [ "$RUNNING_ADMIN_ID" != "$EXPECTED_ADMIN_ID" ]; then
+  fail_release "admin image $RUNNING_ADMIN_ID does not match candidate $EXPECTED_ADMIN_ID"
+fi
+if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T admin wget -qO- http://localhost:3000/ > /dev/null; then
+  fail_release "admin HTTP check failed"
+fi
+echo "Admin container is running the candidate image"
 
 echo "--- Smoke test: bot commands ---"
 SMOKE_PASS=0
@@ -158,7 +219,7 @@ SMOKE_FAIL=0
 smoke() {
   local name="$1" input="$2" expect="$3"
   output=$($COMPOSE exec -T -e LEARN_DEV_MODE=true app \
-    sh -c "printf '$input\n' | timeout 30 /pai-terminal-chat --memory" 2>&1)
+    sh -c "printf '$input\n' | timeout 30 /pai-terminal-chat --memory" 2>&1 || true)
   if echo "$output" | grep -qiE "$expect"; then
     echo "  PASS: $name"
     SMOKE_PASS=$((SMOKE_PASS + 1))
@@ -169,28 +230,17 @@ smoke() {
   fi
 }
 
-smoke "/learn usage"         "/learn"                    "/learn"
-smoke "/progress"            "/progress"                 "Progress|XP"
-smoke "/help"                "/help"                     "available commands|arahan yang tersedia|可用的指令"
-smoke "unknown cmd"          "/foobar"                   "diketahui|Unknown"
+smoke "/learn usage" "/learn" "/learn"
+smoke "/progress" "/progress" "Progress|XP"
+smoke "/help" "/help" "available commands|arahan yang tersedia|可用的指令"
+smoke "unknown cmd" "/foobar" "diketahui|Unknown"
 
 echo "  Smoke: $SMOKE_PASS passed, $SMOKE_FAIL failed"
 if [ "$SMOKE_FAIL" -gt 0 ]; then
-  echo "ERROR: $SMOKE_FAIL smoke test(s) failed — rolling back"
-  rollback_release
-  exit 1
+  fail_release "$SMOKE_FAIL bot smoke test(s) failed"
 fi
 
-echo "--- Recording successfully deployed image aliases ---"
-for component in app admin; do
-  source_image="$REGISTRY/pai-bot/$component:$TAG"
-  for alias in deployed latest; do
-    alias_image="$REGISTRY/pai-bot/$component:$alias"
-    docker tag "$source_image" "$alias_image"
-    docker push "$alias_image"
-  done
-done
-
+echo "--- Recording successfully deployed PostgreSQL aliases ---"
 case "$POSTGRES_IMAGE" in
   ghcr.io/p-n-ai/pai-postgres@sha256:*) ;;
   *) echo "Invalid PostgreSQL deployment image: $POSTGRES_IMAGE" >&2; exit 1 ;;
@@ -217,7 +267,9 @@ do
 done
 docker logout ghcr.io >/dev/null 2>&1 || true
 
+ROLLBACK_ARMED=false
+trap - ERR
+docker image prune -f || echo "WARNING: post-deploy image cleanup failed"
+$COMPOSE ps || echo "WARNING: post-deploy status report failed"
 echo ""
 echo "Deploy successful (image: $TAG)"
-docker image prune -f
-$COMPOSE ps

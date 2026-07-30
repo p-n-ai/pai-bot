@@ -161,6 +161,21 @@ jobs:
         working-directory: admin-spa
         run: pnpm check
 
+  react-doctor:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.admin_spa == 'true'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: millionco/react-doctor@v2
+
   postgres-image:
     name: Publish PostgreSQL candidate
     runs-on: ubuntu-latest
@@ -478,26 +493,68 @@ jobs:
           cache-from: type=gha,scope=ci-once
           cache-to: type=gha,mode=max,scope=ci-once
 
-  production-deploy:
-    name: Production deploy
-    if: >-
-      always() &&
-      github.event_name == 'push' &&
-      needs.changes.outputs.deployable == 'true' &&
-      needs.changes.result == 'success' &&
-      (needs.config.result == 'success' || needs.config.result == 'skipped') &&
-      (needs.admin-spa.result == 'success' || needs.admin-spa.result == 'skipped') &&
-      (needs.admin-spa-e2e.result == 'success' || needs.admin-spa-e2e.result == 'skipped') &&
-      (needs.go.result == 'success' || needs.go.result == 'skipped') &&
-      (needs.go-lint.result == 'success' || needs.go-lint.result == 'skipped') &&
-      (needs.docker.result == 'success' || needs.docker.result == 'skipped') &&
-      (needs.admin-docker.result == 'success' || needs.admin-docker.result == 'skipped') &&
-      (needs.postgres-image.result == 'success' || needs.postgres-image.result == 'skipped') &&
-      (needs.once.result == 'success' || needs.once.result == 'skipped')
+  api-compatibility:
+    name: API compatibility
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check out proposed API
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+      - name: Check out base API
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: head/go.sum
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@v1.26.1
+
+      - name: Generate API contracts
+        run: |
+          if [ ! -f base/cmd/openapi/main.go ]; then
+            mkdir -p base/cmd/openapi
+            cp head/cmd/openapi/main.go base/cmd/openapi/main.go
+          fi
+          (cd head && go run ./cmd/apiroutes -root ../base/internal/server) > base-api-routes.json
+          (cd head && go run ./cmd/apiroutes -root internal/server) > head-api-routes.json
+          (cd base && go run ./cmd/openapi) > base-openapi.json
+          (cd head && go run ./cmd/openapi) > head-openapi.json
+          if ! jq -e '
+            .[] |
+            select(.method == "POST" and .path == "/api/auth/refresh")
+          ' base-api-routes.json > /dev/null; then
+            jq 'del(.paths["/api/auth/refresh"])' \
+              base-openapi.json > base-openapi.normalized.json
+            mv base-openapi.normalized.json base-openapi.json
+          fi
+
+      - name: Reject removed runtime API routes
+        run: >-
+          cd head &&
+          go run ./cmd/apiroutes
+          -base ../base-api-routes.json
+          -head ../head-api-routes.json
+
+      - name: Reject breaking API changes
+        run: oasdiff breaking --fail-on ERR --format githubactions base-openapi.json head-openapi.json
+
+  gate:
+    name: Required CI gate
+    runs-on: ubuntu-latest
+    if: always()
     needs:
       - changes
       - config
       - admin-spa
+      - react-doctor
       - admin-spa-e2e
       - go
       - go-lint
@@ -505,13 +562,10 @@ jobs:
       - admin-docker
       - postgres-image
       - once
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    uses: ./.github/workflows/deploy.yml
-    with:
-      admin_changed: ${{ needs.changes.outputs.admin_image == 'true' }}
-      app_changed: ${{ needs.changes.outputs.app_image == 'true' }}
-      postgres_changed: ${{ needs.changes.outputs.postgres_image == 'true' }}
-    secrets: inherit
+      - api-compatibility
+    steps:
+      - name: Require every applicable check
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$RESULTS"
