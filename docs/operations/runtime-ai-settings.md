@@ -171,10 +171,11 @@ traffic, builds the router from the same effective configuration, and marks that
 revision applied. If drift is reported, stop making further edits and inspect
 the server startup or provider-construction error before retrying.
 
-`/health/ai` exercises the production completion router and returns only
-`ok` or `unavailable`; it never returns provider errors or configuration
-material. The authenticated Admin AI settings response is the diagnostic
-surface for source and revision state.
+`/health/status` exercises the primary provider through the production
+completion path and reports it only as `operational` or `unavailable`; it never
+returns provider names, errors, or configuration material. The authenticated
+Admin AI settings response is the diagnostic surface for source and revision
+state.
 
 Runtime edits are intentionally process-local. One process serializes commit
 and live apply order, but there is no cross-instance invalidation. In a

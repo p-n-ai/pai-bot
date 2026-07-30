@@ -119,8 +119,19 @@ if [ "$APP_HEALTH" != "healthy" ]; then
   exit 1
 fi
 
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+
 echo "--- Health check: app endpoint ---"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app curl -sf http://localhost:8080/healthz > /dev/null
+$COMPOSE exec -T app curl -sf http://localhost:8080/healthz > /dev/null
+
+echo "--- Health check: application and AI provider status ---"
+STATUS_EXPECTED='{"status":"ok","components":[{"id":"application","status":"operational"},{"id":"ai_provider","status":"operational"}]}'
+STATUS_RESPONSE=$($COMPOSE exec -T app curl -fsS --max-time 15 http://localhost:8080/health/status) || STATUS_RESPONSE=""
+if [ "$STATUS_RESPONSE" != "$STATUS_EXPECTED" ]; then
+  echo "ERROR: AI response health check failed — rolling back"
+  rollback_release
+  exit 1
+fi
 
 echo "--- Health check: Caddy ingress ---"
 if curl -sf --max-time 10 http://localhost/healthz > /dev/null 2>&1; then
@@ -141,7 +152,6 @@ if [ -n "$ADMIN_CONTAINER" ]; then
 fi
 
 echo "--- Smoke test: bot commands ---"
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 SMOKE_PASS=0
 SMOKE_FAIL=0
 

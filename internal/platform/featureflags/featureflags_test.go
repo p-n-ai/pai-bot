@@ -19,9 +19,6 @@ func TestParseEmptyFeatureSet(t *testing.T) {
 	if features.Enabled(PublicHealth) {
 		t.Fatal("public_health should default to disabled")
 	}
-	if features.Enabled(AIHealth) {
-		t.Fatal("ai_health should default to disabled")
-	}
 	if features.Enabled(Feature("missing")) {
 		t.Fatal("missing feature should not be enabled")
 	}
@@ -84,13 +81,19 @@ func TestParsePublicHealthFeature(t *testing.T) {
 	}
 }
 
-func TestParseAIHealthFeature(t *testing.T) {
-	features, err := Parse("ai_health")
+func TestParseAcceptsLegacyAIHealthFeatureWithoutExposingIt(t *testing.T) {
+	features, err := Parse("public_health,ai_health")
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if !features.Enabled(AIHealth) {
-		t.Fatal("ai_health should be enabled")
+	if !features.Enabled(PublicHealth) {
+		t.Fatal("legacy ai_health compatibility changed public_health")
+	}
+	if features.Enabled(legacyAIHealth) {
+		t.Fatal("legacy ai_health should not affect runtime behavior")
+	}
+	if _, ok := features.Override(legacyAIHealth); ok {
+		t.Fatal("legacy ai_health should not be exposed as an override")
 	}
 }
 
@@ -159,7 +162,7 @@ func TestDefaults(t *testing.T) {
 	if enabled, ok := defaults["public_health"]; !ok || enabled {
 		t.Fatalf("Defaults()[public_health] = %v, %v; want false, present", enabled, ok)
 	}
-	if enabled, ok := defaults["ai_health"]; !ok || enabled {
-		t.Fatalf("Defaults()[ai_health] = %v, %v; want false, present", enabled, ok)
+	if _, ok := defaults["ai_health"]; ok {
+		t.Fatal("Defaults() should not expose legacy ai_health")
 	}
 }

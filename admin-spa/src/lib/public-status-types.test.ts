@@ -9,14 +9,14 @@ describe('readPublicStatusSnapshot', () => {
         status: 'ok',
         components: [
           { id: 'application', status: 'operational' },
-          { id: 'ai', status: 'operational' },
+          { id: 'ai_provider', status: 'operational' },
         ],
       }),
     ).toEqual({
       status: 'ok',
       components: [
         { id: 'application', status: 'operational' },
-        { id: 'ai', status: 'operational' },
+        { id: 'ai_provider', status: 'operational' },
       ],
     })
   })
@@ -24,7 +24,7 @@ describe('readPublicStatusSnapshot', () => {
   it.each([
     {
       status: 'ok',
-      components: [{ id: 'ai', status: 'operational' }],
+      components: [{ id: 'ai_provider', status: 'operational' }],
     },
     {
       status: 'ok',
@@ -35,11 +35,17 @@ describe('readPublicStatusSnapshot', () => {
     },
     {
       status: 'ok',
-      components: [{ id: 'application', status: 'unavailable' }],
+      components: [
+        { id: 'application', status: 'unavailable' },
+        { id: 'ai_provider', status: 'operational' },
+      ],
     },
     {
       status: 'degraded',
-      components: [{ id: 'application', status: 'operational' }],
+      components: [
+        { id: 'application', status: 'operational' },
+        { id: 'ai_provider', status: 'operational' },
+      ],
     },
   ])('rejects an invalid or contradictory response', (payload) => {
     expect(readPublicStatusSnapshot(payload)).toBeNull()

@@ -1,7 +1,10 @@
 import { Schema } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
-export const PublicServiceIDSchema = Schema.Literals(['application', 'ai'])
+export const PublicServiceIDSchema = Schema.Literals([
+  'application',
+  'ai_provider',
+])
 export const PublicServiceStateSchema = Schema.Literals([
   'operational',
   'unavailable',
@@ -38,6 +41,7 @@ export function readPublicStatusSnapshot(
   const componentIDs = value.components.map((component) => component.id)
   if (
     componentIDs.filter((id) => id === 'application').length !== 1 ||
+    componentIDs.filter((id) => id === 'ai_provider').length !== 1 ||
     new Set(componentIDs).size !== componentIDs.length
   ) {
     return null

@@ -18,13 +18,9 @@ class ResponseHandler(http.server.BaseHTTPRequestHandler):
     body = b'{"status":"ok"}'
     delay = 0.0
     redirect_to = ""
-    expected_token = ""
 
     def do_GET(self) -> None:
-        if self.path not in {"/health/api", "/health/ai"}:
-            self.send_error(404)
-            return
-        if self.path == "/health/ai" and self.headers.get("Authorization") != f"Bearer {self.expected_token}":
+        if self.path not in {"/health/api", "/health/status"}:
             self.send_error(404)
             return
         time.sleep(self.delay)
@@ -51,7 +47,6 @@ def serve(
     body: bytes = b'{"status":"ok"}',
     delay: float = 0.0,
     redirect_to: str = "",
-    expected_token: str = "",
 ):
     handler = type(
         "ConfiguredResponseHandler",
@@ -62,7 +57,6 @@ def serve(
             "body": body,
             "delay": delay,
             "redirect_to": redirect_to,
-            "expected_token": expected_token,
         },
     )
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -141,29 +135,54 @@ class ProbeTests(unittest.TestCase):
                     deliberate_failure=True,
                 )
 
-    def test_ai_health_uses_authenticated_ai_path(self) -> None:
-        with serve(expected_token="monitor-secret") as target:
+    def test_status_check_accepts_operational_ai_provider(self) -> None:
+        body = (
+            b'{"status":"ok","components":['
+            b'{"id":"application","status":"operational"},'
+            b'{"id":"ai_provider","status":"operational"}]}'
+        )
+        with serve(body=body) as target:
             self.assertEqual(
                 uptime_probe.probe(
                     target,
                     timeout=1,
                     allow_http=True,
-                    check="ai",
-                    token="monitor-secret",
+                    check="status",
                 ),
-                f"{target}/health/ai",
+                f"{target}/health/status",
             )
 
-    def test_ai_health_requires_token(self) -> None:
-        with serve(expected_token="monitor-secret") as target:
+    def test_status_check_rejects_unavailable_ai_provider(self) -> None:
+        body = (
+            b'{"status":"degraded","components":['
+            b'{"id":"application","status":"operational"},'
+            b'{"id":"ai_provider","status":"unavailable"}]}'
+        )
+        with serve(body=body) as target:
             with self.assertRaisesRegex(
-                uptime_probe.ProbeError, "AI health token is required"
+                uptime_probe.ProbeError, "AI provider is unavailable"
             ):
                 uptime_probe.probe(
                     target,
                     timeout=1,
                     allow_http=True,
-                    check="ai",
+                    check="status",
+                )
+
+    def test_status_check_requires_ai_provider_component(self) -> None:
+        body = (
+            b'{"status":"ok","components":['
+            b'{"id":"application","status":"operational"}]}'
+        )
+        with serve(body=body) as target:
+            with self.assertRaisesRegex(
+                uptime_probe.ProbeError, "wrong status contract"
+            ):
+                uptime_probe.probe(
+                    target,
+                    timeout=1,
+                    allow_http=True,
+                    check="status",
                 )
 
     def test_requires_https_outside_local_tests(self) -> None:

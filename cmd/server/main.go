@@ -582,10 +582,6 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				PublicHealthEnabled: func() bool {
 					return flagsProvider().Enabled(featureflags.PublicHealth)
 				},
-				AIHealthEnabled: func() bool {
-					return flagsProvider().Enabled(featureflags.AIHealth)
-				},
-				AIHealthToken: cfg.Runtime.AIHealthToken,
 				AIHealthCheck: aiHealthCheck,
 			})
 

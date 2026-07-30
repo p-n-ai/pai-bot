@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 import urllib.parse
@@ -44,10 +43,10 @@ def health_url(target: str, *, check: str = "app", allow_http: bool = False) -> 
         "/api/",
         "/health",
         "/health/api",
-        "/health/ai",
+        "/health/status",
     }:
         raise ProbeError("target must be an origin, API base URL, or health URL")
-    path = "/health/ai" if check == "ai" else "/health/api"
+    path = "/health/status" if check == "status" else "/health/api"
     return urllib.parse.urlunsplit(
         (parsed.scheme, parsed.netloc, path, "", "")
     )
@@ -60,7 +59,6 @@ def probe(
     allow_http: bool = False,
     deliberate_failure: bool = False,
     check: str = "app",
-    token: str = "",
 ) -> str:
     """Probe the target and return its normalized URL when healthy."""
     url = health_url(target, check=check, allow_http=allow_http)
@@ -68,10 +66,6 @@ def probe(
         "Accept": "application/json",
         "User-Agent": "pai-uptime-monitor/1",
     }
-    if check == "ai":
-        if not token:
-            raise ProbeError("AI health token is required")
-        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
         url,
         headers=headers,
@@ -106,7 +100,26 @@ def probe(
         payload = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise ProbeError("health endpoint returned invalid JSON") from None
-    if payload != {"status": "ok"}:
+    if check == "status" and payload == {
+        "status": "degraded",
+        "components": [
+            {"id": "application", "status": "operational"},
+            {"id": "ai_provider", "status": "unavailable"},
+        ],
+    }:
+        raise ProbeError("AI provider is unavailable")
+    expected_payload = (
+        {
+            "status": "ok",
+            "components": [
+                {"id": "application", "status": "operational"},
+                {"id": "ai_provider", "status": "operational"},
+            ],
+        }
+        if check == "status"
+        else {"status": "ok"}
+    )
+    if payload != expected_payload:
         raise ProbeError("health endpoint returned the wrong status contract")
     if deliberate_failure:
         raise ProbeError("deliberate verification failure after healthy response")
@@ -120,7 +133,7 @@ def parse_args() -> argparse.Namespace:
         "target",
         help="Public HTTPS origin, API base, or health URL",
     )
-    parser.add_argument("--check", choices=("app", "ai"), default="app")
+    parser.add_argument("--check", choices=("app", "status"), default="app")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument(
         "--allow-http",
@@ -148,7 +161,6 @@ def main() -> int:
             allow_http=args.allow_http,
             deliberate_failure=args.deliberate_failure,
             check=args.check,
-            token=os.environ.get("PAI_AI_HEALTH_TOKEN", ""),
         )
     except ProbeError as error:
         print(f"uptime probe failed: {error}", file=sys.stderr)

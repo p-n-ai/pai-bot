@@ -160,6 +160,31 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         self.assertIn("rollback_release", smoke_failure)
         self.assertIn("exit 1", smoke_failure)
 
+    def test_remote_deploy_checks_ai_response_before_success(self) -> None:
+        deploy = source("scripts/deploy-remote.sh")
+        app_health_at = deploy.index('echo "--- Health check: app endpoint ---"')
+        ai_health_at = deploy.index(
+            'echo "--- Health check: application and AI provider status ---"'
+        )
+        success_at = deploy.index(
+            'echo "--- Recording successfully deployed image aliases ---"'
+        )
+        self.assertLess(app_health_at, ai_health_at)
+        self.assertLess(ai_health_at, success_at)
+        self.assertIn("http://localhost:8080/health/status", deploy)
+        self.assertIn('"id":"ai_provider","status":"operational"', deploy)
+        self.assertNotIn("PAI_AI_HEALTH_TOKEN", deploy)
+        self.assertIn("--max-time 15", deploy)
+
+    def test_remote_deploy_rolls_back_when_ai_response_is_unhealthy(self) -> None:
+        deploy = source("scripts/deploy-remote.sh")
+        ai_failure = deploy.split(
+            'echo "ERROR: AI response health check failed — rolling back"',
+            maxsplit=1,
+        )[1]
+        self.assertIn("rollback_release", ai_failure)
+        self.assertIn("exit 1", ai_failure)
+
 
 if __name__ == "__main__":
     unittest.main()

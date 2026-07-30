@@ -21,9 +21,9 @@ const componentCopy = {
     name: 'Application API',
     description: 'Core application and chat services',
   },
-  ai: {
-    name: 'AI services',
-    description: 'Model routing and provider availability',
+  ai_provider: {
+    name: 'AI provider',
+    description: 'Primary provider response health',
   },
 } as const
 
@@ -120,7 +120,7 @@ export function PublicStatusPage() {
         <footer className='mt-14 text-[13px] leading-5 text-[oklch(0.49_0.018_255)]'>
           <a
             className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
-            href='/health/api'
+            href='/health/status'
           >
             JSON status
           </a>
@@ -179,7 +179,10 @@ function statusPresentation(viewState: StatusViewState): {
     return {
       headline: 'Checking system status',
       summary: 'Reading the latest availability from P&AI services.',
-      components: [{ id: 'application', status: 'checking' }],
+      components: [
+        { id: 'application', status: 'checking' },
+        { id: 'ai_provider', status: 'checking' },
+      ],
       liveLabel: 'Checking status',
       tone: 'neutral',
     }
@@ -190,7 +193,10 @@ function statusPresentation(viewState: StatusViewState): {
       headline: 'Status currently unavailable',
       summary:
         'The status service could not be reached. This does not necessarily mean the application is down.',
-      components: [{ id: 'application', status: 'unknown' }],
+      components: [
+        { id: 'application', status: 'unknown' },
+        { id: 'ai_provider', status: 'unknown' },
+      ],
       liveLabel: 'Status unavailable',
       tone: 'neutral',
     }

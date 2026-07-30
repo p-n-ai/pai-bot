@@ -43,3 +43,30 @@ func TestAIHealthCheckUsesCompletionPath(t *testing.T) {
 		})
 	}
 }
+
+func TestAIHealthCheckSendsBoundedDeterministicProbe(t *testing.T) {
+	provider := &ai.MockProvider{Response: "OK"}
+	router := ai.NewRouter()
+	router.Register("provider", provider)
+
+	if err := NewAIHealthCheck(router)(context.Background()); err != nil {
+		t.Fatalf("NewAIHealthCheck() error = %v", err)
+	}
+	if provider.LastRequest == nil {
+		t.Fatal("AI health check did not send a completion request")
+	}
+	request := provider.LastRequest
+	if len(request.Messages) != 1 ||
+		request.Messages[0].Role != "user" ||
+		request.Messages[0].Content != "Reply with only OK." {
+		t.Fatalf("AI health request messages = %#v", request.Messages)
+	}
+	if request.MaxTokens != 8 || request.Temperature != 0 || request.Task != ai.TaskAnalysis {
+		t.Fatalf(
+			"AI health request maxTokens=%d temperature=%v task=%v",
+			request.MaxTokens,
+			request.Temperature,
+			request.Task,
+		)
+	}
+}

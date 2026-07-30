@@ -54,13 +54,6 @@ spec:
                 name: {{ include "pai.fullname" . }}-app
                 port:
                   name: http
-          - path: /health/ai
-            pathType: Exact
-            backend:
-              service:
-                name: {{ include "pai.fullname" . }}-app
-                port:
-                  name: http
           - path: /readyz
             pathType: Exact
             backend:

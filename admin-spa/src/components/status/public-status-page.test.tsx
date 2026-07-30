@@ -24,7 +24,7 @@ it('shows the application and AI availability without requiring admin auth', asy
     status: 'ok',
     components: [
       { id: 'application', status: 'operational' },
-      { id: 'ai', status: 'operational' },
+      { id: 'ai_provider', status: 'operational' },
     ],
   })
 
@@ -37,11 +37,14 @@ it('shows the application and AI availability without requiring admin auth', asy
     }),
   ).toBeInTheDocument()
   expect(screen.getByText('Application API')).toBeInTheDocument()
-  expect(screen.getByText('AI services')).toBeInTheDocument()
+  expect(screen.getByText('AI provider')).toBeInTheDocument()
+  expect(
+    screen.getByText('Primary provider response health'),
+  ).toBeInTheDocument()
   expect(screen.getAllByText('Operational')).toHaveLength(2)
   expect(screen.getByRole('link', { name: 'JSON status' })).toHaveAttribute(
     'href',
-    '/health/api',
+    '/health/status',
   )
 })
 
@@ -56,6 +59,29 @@ it('does not claim an outage when the status service cannot be reached', async (
       name: 'Status currently unavailable',
     }),
   ).toBeInTheDocument()
-  expect(screen.getByText('Unknown')).toBeInTheDocument()
+  expect(screen.getAllByText('Unknown')).toHaveLength(2)
   expect(screen.queryByText('private detail')).not.toBeInTheDocument()
+})
+
+it('shows provider degradation separately from the application', async () => {
+  readPublicStatus.mockResolvedValue({
+    status: 'degraded',
+    components: [
+      { id: 'application', status: 'operational' },
+      { id: 'ai_provider', status: 'unavailable' },
+    ],
+  })
+
+  render(<PublicStatusPage />)
+
+  expect(
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Some systems unavailable',
+    }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Application API')).toBeInTheDocument()
+  expect(screen.getByText('AI provider')).toBeInTheDocument()
+  expect(screen.getByText('Operational')).toBeInTheDocument()
+  expect(screen.getByText('Unavailable')).toBeInTheDocument()
 })

@@ -111,8 +111,6 @@ secrets:
   # -- Retired encryption roots retained during credential rotation.
   # Values are serialized to PAI_CONFIG_PREVIOUS_ENCRYPTION_KEYS as JSON.
   previousConfigEncryptionKeys: []
-  # -- Bearer token for the feature-gated /health/ai monitor.
-  aiHealthToken: ""
   # -- Telegram bot token (required unless devMode)
   telegramBotToken: ""
   # -- AI provider keys (at least one required unless devMode)
