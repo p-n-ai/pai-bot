@@ -102,6 +102,8 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         self.assertIn('mv "$rollback_tmp" .env.rollback', workflow)
         self.assertIn('mv "$env_tmp" .env', workflow)
         self.assertNotIn("> .env", workflow)
+        self.assertIn('"LEARN_AI_DEFAULT_PROVIDER=codex"', workflow)
+        self.assertIn('"LEARN_AI_OPENAI_API_KEY=${OPENAI_KEY}"', workflow)
 
     def test_github_masks_ecr_token_before_same_job_handoff(self) -> None:
         workflow = source(".github/workflows/deploy.yml")
