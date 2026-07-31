@@ -8,6 +8,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/big"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -1078,17 +1080,22 @@ func isDeterministicallyGradeable(answerType string) bool {
 	}
 }
 
+var plainNumberPattern = regexp.MustCompile(`^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$`)
+
 func gradeDeterministicAnswer(canonical, presentation AssessmentQuestion, answer string) bool {
 	actual := normalizeDeterministicAnswer(answer)
 	if actual == "" {
 		return false
 	}
-	expected := normalizeDeterministicAnswer(canonical.Answer.Value)
-	if expected != "" && actual == expected {
+	expectedValue := canonical.Answer.Value
+	expected := normalizeDeterministicAnswer(expectedValue)
+	if expected != "" && deterministicAnswersEqual(canonical.Answer.Type, answer, expectedValue) {
 		return true
 	}
-	localizedExpected := normalizeDeterministicAnswer(presentation.Answer.Value)
-	if localizedExpected != "" && actual == localizedExpected {
+	localizedExpectedValue := presentation.Answer.Value
+	localizedExpected := normalizeDeterministicAnswer(localizedExpectedValue)
+	if localizedExpected != "" &&
+		deterministicAnswersEqual(canonical.Answer.Type, answer, localizedExpectedValue) {
 		return true
 	}
 	if canonical.Answer.Type != "multiple_choice" {
@@ -1101,6 +1108,27 @@ func gradeDeterministicAnswer(canonical, presentation AssessmentQuestion, answer
 		}
 	}
 	return false
+}
+
+func deterministicAnswersEqual(answerType, actual, expected string) bool {
+	if normalizeDeterministicAnswer(actual) == normalizeDeterministicAnswer(expected) {
+		return true
+	}
+	if answerType != "exact" {
+		return false
+	}
+	actualNumber, actualOK := parsePlainNumber(actual)
+	expectedNumber, expectedOK := parsePlainNumber(expected)
+	return actualOK && expectedOK && actualNumber.Cmp(expectedNumber) == 0
+}
+
+func parsePlainNumber(value string) (*big.Rat, bool) {
+	value = strings.TrimSpace(value)
+	if !plainNumberPattern.MatchString(value) {
+		return nil, false
+	}
+	number, ok := new(big.Rat).SetString(value)
+	return number, ok
 }
 
 func correctOptionID(question AssessmentQuestion) string {

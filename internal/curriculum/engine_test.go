@@ -1005,6 +1005,54 @@ func TestEngineRecordAttemptGradesSourceQuestionAndUpdatesMastery(t *testing.T) 
 	}
 }
 
+func TestEngineRecordAttemptComparesExactNumericAnswersByValue(t *testing.T) {
+	root := setupCurriculumEngineFixture(t)
+	assessmentPath := fixtureTopicPath(root, "MT1-05.assessments.yaml")
+	replaceFixtureText(t, assessmentPath, `value: "10"`, `value: "249.00"`)
+
+	loader, err := curriculum.NewLoader(root)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	tracker := progress.NewMemoryTracker()
+	learnerID, err := progress.NewLearnerID("numeric-answer-learner")
+	if err != nil {
+		t.Fatalf("NewLearnerID() error = %v", err)
+	}
+	engine, err := curriculum.NewEngine(curriculum.EngineConfig{Loader: loader, Progress: tracker})
+	if err != nil {
+		t.Fatalf("NewEngine() error = %v", err)
+	}
+
+	equivalent, err := engine.RecordAttempt(context.Background(), curriculum.AttemptInput{
+		AttemptID:  "numeric-equivalent",
+		LearnerID:  learnerID,
+		TopicID:    "MT1-05",
+		QuestionID: "Q4",
+		Answer:     "249",
+	})
+	if err != nil {
+		t.Fatalf("RecordAttempt(equivalent) error = %v", err)
+	}
+	if !equivalent.Correct {
+		t.Fatalf("RecordAttempt(249) = %#v, want equivalent to 249.00", equivalent)
+	}
+
+	different, err := engine.RecordAttempt(context.Background(), curriculum.AttemptInput{
+		AttemptID:  "numeric-different",
+		LearnerID:  learnerID,
+		TopicID:    "MT1-05",
+		QuestionID: "Q4",
+		Answer:     "249.01",
+	})
+	if err != nil {
+		t.Fatalf("RecordAttempt(different) error = %v", err)
+	}
+	if different.Correct {
+		t.Fatalf("RecordAttempt(249.01) = %#v, want different from 249.00", different)
+	}
+}
+
 func TestEngineRecordAttemptTreatsWrongAnswerAsNegativeEvidence(t *testing.T) {
 	root := setupCurriculumEngineFixture(t)
 	loader, err := curriculum.NewLoader(root)
