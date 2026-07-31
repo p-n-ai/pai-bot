@@ -5,6 +5,7 @@ package chat
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,19 @@ type wsInboundMsg struct {
 	UserID     string `json:"user_id,omitempty"`
 	DeliveryID string `json:"delivery_id,omitempty"`
 	Text       string `json:"text,omitempty"`
+}
+
+func webSocketDeliveryID(channel, userID, externalID string, msg wsInboundMsg) string {
+	if deliveryID := strings.TrimSpace(msg.DeliveryID); deliveryID != "" {
+		return deliveryID
+	}
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		channel,
+		userID,
+		externalID,
+		msg.Text,
+	}, "\x00")))
+	return fmt.Sprintf("websocket:v1:%x", digest)
 }
 
 // wsOutboundMsg is the JSON envelope the server sends over the WebSocket.
@@ -353,7 +367,7 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 				InternalUserID:  claims.Subject,
 				IdentityChannel: claims.Channel,
 				ExternalID:      externalID,
-				DeliveryID:      msg.DeliveryID,
+				DeliveryID:      webSocketDeliveryID(channel, userID, externalID, msg),
 				Text:            msg.Text,
 			})
 		}
