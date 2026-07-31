@@ -693,6 +693,7 @@ if [ "$1" = "api" ] && [[ "$2" == */git/ref/tags/* ]]; then
     echo "$FAKE_TAG_SHA"
     exit 0
   fi
+  echo '{"message":"Not Found","status":"404"}'
   exit 1
 fi
 if [ "$1" = "release" ] && [ "$2" = "view" ]; then
