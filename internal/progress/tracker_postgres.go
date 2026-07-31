@@ -334,15 +334,33 @@ func (p *PostgresTracker) GetMasterySnapshot(ctx context.Context, learnerID Lear
 			WHERE tenant_id = $1::uuid
 			  AND user_id = $2::uuid
 			GROUP BY syllabus_id, topic_id
+		),
+		latest_evidence AS (
+			SELECT DISTINCT ON (syllabus_id, topic_id)
+				syllabus_id, topic_id, source_kind, source_id, score
+			FROM learning_attempts
+			WHERE tenant_id = $1::uuid
+			  AND user_id = $2::uuid
+			ORDER BY syllabus_id, topic_id, created_at DESC, attempt_id DESC
+		),
+		topic_keys AS (
+			SELECT syllabus_id, topic_id FROM progress_items
+			UNION
+			SELECT syllabus_id, topic_id FROM evidence_counts
 		)
 		SELECT
-			COALESCE(progress_items.syllabus_id, evidence_counts.syllabus_id),
-			COALESCE(progress_items.topic_id, evidence_counts.topic_id),
+			topic_keys.syllabus_id,
+			topic_keys.topic_id,
 			COALESCE(progress_items.mastery_score, 0),
 			progress_items.topic_id IS NOT NULL,
-			COALESCE(evidence_counts.evidence_count, 0)
-		FROM progress_items
-		FULL OUTER JOIN evidence_counts USING (syllabus_id, topic_id)
+			COALESCE(evidence_counts.evidence_count, 0),
+			latest_evidence.source_kind,
+			latest_evidence.source_id,
+			latest_evidence.score
+		FROM topic_keys
+		LEFT JOIN progress_items USING (syllabus_id, topic_id)
+		LEFT JOIN evidence_counts USING (syllabus_id, topic_id)
+		LEFT JOIN latest_evidence USING (syllabus_id, topic_id)
 		ORDER BY 1, 2`,
 		p.tenantID, learnerID.String(),
 	)
@@ -354,14 +372,26 @@ func (p *PostgresTracker) GetMasterySnapshot(ctx context.Context, learnerID Lear
 	var snapshot []MasterySnapshotItem
 	for rows.Next() {
 		var item MasterySnapshotItem
+		var latestSourceKind, latestSourceID *string
+		var latestScore *float64
 		if err := rows.Scan(
 			&item.SyllabusID,
 			&item.TopicID,
 			&item.MasteryScore,
 			&item.MasteryKnown,
 			&item.EvidenceCount,
+			&latestSourceKind,
+			&latestSourceID,
+			&latestScore,
 		); err != nil {
 			return nil, err
+		}
+		if latestSourceKind != nil && latestSourceID != nil && latestScore != nil {
+			item.LatestEvidence = &MasteryEvidenceSummary{
+				SourceKind: *latestSourceKind,
+				SourceID:   *latestSourceID,
+				Score:      *latestScore,
+			}
 		}
 		snapshot = append(snapshot, item)
 	}

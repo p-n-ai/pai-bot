@@ -431,9 +431,10 @@ func attemptPayloadHash(topic Topic, question AssessmentQuestion, answer string)
 }
 
 type masteryObservation struct {
-	score         float64
-	known         bool
-	evidenceCount int
+	score          float64
+	known          bool
+	evidenceCount  int
+	latestEvidence *progress.MasteryEvidenceSummary
 }
 
 func (e *Engine) masteryObservations(ctx context.Context, learnerID progress.LearnerID) (map[string]masteryObservation, error) {
@@ -447,9 +448,10 @@ func (e *Engine) masteryObservations(ctx context.Context, learnerID progress.Lea
 	observations := make(map[string]masteryObservation, len(snapshot))
 	for _, item := range snapshot {
 		observations[masteryKey(item.SyllabusID, item.TopicID)] = masteryObservation{
-			score:         item.MasteryScore,
-			known:         item.MasteryKnown,
-			evidenceCount: item.EvidenceCount,
+			score:          item.MasteryScore,
+			known:          item.MasteryKnown,
+			evidenceCount:  item.EvidenceCount,
+			latestEvidence: item.LatestEvidence,
 		}
 	}
 	return observations, nil
@@ -464,7 +466,14 @@ func (e *Engine) planForTopic(topic Topic, objectiveID, locale string, mastery m
 		return TeachingPlan{}, err
 	}
 	selected := localizedTopic(e.loader, topic, locale)
-	objective, err := selectObjective(selected, objectiveID)
+	assessment, hasAssessment := e.loader.GetAssessment(topic.ID)
+	objective, question, hasQuestion, err := selectPlanTarget(
+		selected,
+		assessment,
+		hasAssessment,
+		objectiveID,
+		mastery.latestEvidence,
+	)
 	if err != nil {
 		return TeachingPlan{}, err
 	}
@@ -521,13 +530,11 @@ func (e *Engine) planForTopic(topic Topic, objectiveID, locale string, mastery m
 	}
 	e.addTeachingMaterials(&plan, topic, locale)
 
-	assessment, found := e.loader.GetAssessment(topic.ID)
-	if !found {
+	if !hasAssessment {
 		plan.Constraints = append(plan.Constraints, "no source assessment is available for this topic")
 		return plan, nil
 	}
-	question, found := selectGradeableQuestion(assessment, objective.ID)
-	if !found {
+	if !hasQuestion {
 		plan.Constraints = append(plan.Constraints, "no deterministic source assessment is available for this objective")
 		return plan, nil
 	}
@@ -988,13 +995,69 @@ func selectObjective(topic Topic, objectiveID string) (LearningObjective, error)
 	return LearningObjective{}, fmt.Errorf("topic %q has no objective %q", topic.ID, objectiveID)
 }
 
-func selectGradeableQuestion(assessment Assessment, objectiveID string) (AssessmentQuestion, bool) {
-	for _, question := range assessment.Questions {
-		if question.LearningObjective == objectiveID && isDeterministicallyGradeable(question.Answer.Type) {
-			return question, true
+func selectPlanTarget(
+	topic Topic,
+	assessment Assessment,
+	hasAssessment bool,
+	requestedObjectiveID string,
+	latest *progress.MasteryEvidenceSummary,
+) (LearningObjective, AssessmentQuestion, bool, error) {
+	requestedObjectiveID = strings.TrimSpace(requestedObjectiveID)
+	if requestedObjectiveID != "" {
+		objective, err := selectObjective(topic, requestedObjectiveID)
+		if err != nil {
+			return LearningObjective{}, AssessmentQuestion{}, false, err
+		}
+		if !hasAssessment {
+			return objective, AssessmentQuestion{}, false, nil
+		}
+		question, found := selectProgressedQuestion(assessment, objective.ID, latest)
+		return objective, question, found, nil
+	}
+
+	if hasAssessment {
+		question, found := selectProgressedQuestion(assessment, "", latest)
+		if found {
+			objective, err := selectObjective(topic, question.LearningObjective)
+			if err != nil {
+				return LearningObjective{}, AssessmentQuestion{}, false, err
+			}
+			return objective, question, true, nil
 		}
 	}
-	return AssessmentQuestion{}, false
+
+	objective, err := selectObjective(topic, "")
+	return objective, AssessmentQuestion{}, false, err
+}
+
+func selectProgressedQuestion(
+	assessment Assessment,
+	objectiveID string,
+	latest *progress.MasteryEvidenceSummary,
+) (AssessmentQuestion, bool) {
+	questions := make([]AssessmentQuestion, 0, len(assessment.Questions))
+	for _, question := range assessment.Questions {
+		if (objectiveID == "" || question.LearningObjective == objectiveID) &&
+			isDeterministicallyGradeable(question.Answer.Type) {
+			questions = append(questions, question)
+		}
+	}
+	if len(questions) == 0 {
+		return AssessmentQuestion{}, false
+	}
+	if latest == nil || latest.SourceKind != assessment.Source.Kind {
+		return questions[0], true
+	}
+	for index, question := range questions {
+		if question.ID != latest.SourceID {
+			continue
+		}
+		if latest.Score < 1 || index == len(questions)-1 {
+			return question, true
+		}
+		return questions[index+1], true
+	}
+	return questions[0], true
 }
 
 func assessmentQuestion(assessment Assessment, questionID string) (AssessmentQuestion, bool) {

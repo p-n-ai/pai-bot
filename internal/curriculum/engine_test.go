@@ -1365,6 +1365,58 @@ func TestEngineRecordAttemptPreservesExactAnswerOperators(t *testing.T) {
 	}
 }
 
+func TestEnginePlanTurnAdvancesAcrossGradeableObjectives(t *testing.T) {
+	root := setupCurriculumEngineFixture(t)
+	loader, err := curriculum.NewLoader(root)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	tracker := progress.NewMemoryTracker()
+	learnerID, err := progress.NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFixtureEvidence(t, tracker, learnerID, "prerequisite/Q1", "MT1-01", "Q1", 1)
+	engine, err := curriculum.NewEngine(curriculum.EngineConfig{Loader: loader, Progress: tracker})
+	if err != nil {
+		t.Fatalf("NewEngine() error = %v", err)
+	}
+
+	assertPlan := func(wantObjective, wantQuestion string) {
+		t.Helper()
+		plan, planErr := engine.PlanTurn(context.Background(), curriculum.PlanTurnInput{
+			LearnerID: learnerID,
+			TopicID:   "MT1-05",
+		})
+		if planErr != nil {
+			t.Fatalf("PlanTurn() error = %v", planErr)
+		}
+		if plan.Target.ObjectiveID != wantObjective || plan.Check == nil || plan.Check.QuestionID != wantQuestion {
+			t.Fatalf("plan target/check = %#v / %#v, want %s/%s", plan.Target, plan.Check, wantObjective, wantQuestion)
+		}
+	}
+	record := func(attemptID, questionID, answer string) {
+		t.Helper()
+		if _, recordErr := engine.RecordAttempt(context.Background(), curriculum.AttemptInput{
+			AttemptID:  attemptID,
+			LearnerID:  learnerID,
+			TopicID:    "MT1-05",
+			QuestionID: questionID,
+			Answer:     answer,
+		}); recordErr != nil {
+			t.Fatalf("RecordAttempt(%s) error = %v", questionID, recordErr)
+		}
+	}
+
+	assertPlan("5.1.1", "Q1")
+	record("turn-1/Q1", "Q1", "6")
+	assertPlan("5.1.1", "Q3")
+	record("turn-2/Q3", "Q3", "x = 2")
+	assertPlan("5.1.2", "Q4")
+	record("turn-3/Q4", "Q4", "11")
+	assertPlan("5.1.2", "Q4")
+}
+
 func setupCurriculumEngineFixture(t *testing.T) string {
 	t.Helper()
 
@@ -1453,10 +1505,18 @@ content_standards:
   - id: "5.1"
     text_en: Variables and algebraic expressions
 learning_objectives:
+  - id: "5.1.0"
+    content_standard_id: "5.1"
+    text_en: Recognize variables in expressions.
+    bloom: understand
   - id: "5.1.1"
     content_standard_id: "5.1"
     text_en: Use letters to represent unknown quantities.
     bloom: understand
+  - id: "5.1.2"
+    content_standard_id: "5.1"
+    text_en: Evaluate expressions after substitution.
+    bloom: apply
 prerequisites:
   required:
     - MT1-01
@@ -1501,6 +1561,14 @@ questions:
     answer:
       type: exact
       value: "x = 2"
+    marks: 1
+  - id: Q4
+    text: Evaluate 2y when y = 5.
+    difficulty: easy
+    learning_objective: "5.1.2"
+    answer:
+      type: exact
+      value: "10"
     marks: 1
 `)
 	writeFixtureFile(t, filepath.Join(topicsDir, "MT1-05.examples.yaml"), `

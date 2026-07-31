@@ -103,11 +103,19 @@ type MasteryEvidenceCount struct {
 // MasterySnapshotItem combines one topic's current score and durable evidence
 // count from the same read boundary.
 type MasterySnapshotItem struct {
-	SyllabusID    string
-	TopicID       string
-	MasteryScore  float64
-	MasteryKnown  bool
-	EvidenceCount int
+	SyllabusID     string
+	TopicID        string
+	MasteryScore   float64
+	MasteryKnown   bool
+	EvidenceCount  int
+	LatestEvidence *MasteryEvidenceSummary
+}
+
+// MasteryEvidenceSummary identifies the latest graded source for a topic.
+type MasteryEvidenceSummary struct {
+	SourceKind string
+	SourceID   string
+	Score      float64
 }
 
 // MasteryEvidenceStore atomically records evidence and reports its coverage.
@@ -137,14 +145,16 @@ func progressKey(userID, syllabusID, topicID string) string {
 
 // MemoryTracker is an in-memory implementation of Tracker for testing and development.
 type MemoryTracker struct {
-	mu       sync.RWMutex
-	items    map[string]*ProgressItem
-	evidence map[string]recordedMasteryEvidence
+	mu               sync.RWMutex
+	items            map[string]*ProgressItem
+	evidence         map[string]recordedMasteryEvidence
+	evidenceSequence uint64
 }
 
 type recordedMasteryEvidence struct {
 	evidence MasteryEvidence
 	result   MasteryEvidenceResult
+	sequence uint64
 }
 
 // NewMemoryTracker creates a new in-memory tracker.
@@ -243,7 +253,12 @@ func (m *MemoryTracker) RecordMasteryEvidence(ctx context.Context, evidence Mast
 		MasteryBefore: before,
 		MasteryAfter:  after,
 	}
-	m.evidence[key] = recordedMasteryEvidence{evidence: evidence, result: result}
+	m.evidenceSequence++
+	m.evidence[key] = recordedMasteryEvidence{
+		evidence: evidence,
+		result:   result,
+		sequence: m.evidenceSequence,
+	}
 	return result, nil
 }
 
@@ -295,6 +310,7 @@ func (m *MemoryTracker) GetMasterySnapshot(ctx context.Context, learnerID Learne
 	defer m.mu.RUnlock()
 
 	items := make(map[string]MasterySnapshotItem)
+	latestSequence := make(map[string]uint64)
 	for _, progressItem := range m.items {
 		if progressItem.UserID != learnerID.String() {
 			continue
@@ -316,6 +332,14 @@ func (m *MemoryTracker) GetMasterySnapshot(ctx context.Context, learnerID Learne
 		item.SyllabusID = recorded.evidence.SyllabusID
 		item.TopicID = recorded.evidence.TopicID
 		item.EvidenceCount++
+		if latestSequence[key] < recorded.sequence {
+			item.LatestEvidence = &MasteryEvidenceSummary{
+				SourceKind: recorded.evidence.SourceKind,
+				SourceID:   recorded.evidence.SourceID,
+				Score:      recorded.evidence.Score,
+			}
+			latestSequence[key] = recorded.sequence
+		}
 		items[key] = item
 	}
 

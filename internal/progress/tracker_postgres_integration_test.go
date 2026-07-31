@@ -87,7 +87,10 @@ func TestPostgresTracker_RecordMasteryEvidence(t *testing.T) {
 		evidenceTopic := byTopic["evidence-topic"]
 		if !evidenceTopic.MasteryKnown ||
 			!closeFloat(evidenceTopic.MasteryScore, transition.MasteryAfter) ||
-			evidenceTopic.EvidenceCount != 2 {
+			evidenceTopic.EvidenceCount != 2 ||
+			evidenceTopic.LatestEvidence == nil ||
+			evidenceTopic.LatestEvidence.SourceID != second.SourceID ||
+			!closeFloat(evidenceTopic.LatestEvidence.Score, second.Score) {
 			t.Fatalf(
 				"evidence topic snapshot = %#v, want score %v with 2 evidence records",
 				evidenceTopic,
@@ -97,7 +100,8 @@ func TestPostgresTracker_RecordMasteryEvidence(t *testing.T) {
 		progressOnly := byTopic["progress-only-topic"]
 		if !progressOnly.MasteryKnown ||
 			!closeFloat(progressOnly.MasteryScore, 0.4) ||
-			progressOnly.EvidenceCount != 0 {
+			progressOnly.EvidenceCount != 0 ||
+			progressOnly.LatestEvidence != nil {
 			t.Fatalf("progress-only snapshot = %#v, want known 0.4 score without evidence", progressOnly)
 		}
 	})

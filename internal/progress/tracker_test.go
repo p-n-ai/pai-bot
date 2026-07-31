@@ -111,6 +111,14 @@ func TestMemoryTracker_RecordMasteryEvidenceIsIdempotent(t *testing.T) {
 	if len(counts) != 1 || counts[0].SyllabusID != "syllabus" || counts[0].TopicID != "topic" || counts[0].Count != 1 {
 		t.Fatalf("evidence counts = %#v, want one distinct topic attempt", counts)
 	}
+	snapshot, err := tracker.GetMasterySnapshot(context.Background(), learnerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot) != 1 || snapshot[0].LatestEvidence == nil ||
+		snapshot[0].LatestEvidence.SourceID != "Q1" || snapshot[0].LatestEvidence.Score != 0 {
+		t.Fatalf("latest evidence = %#v, want wrong Q1 attempt", snapshot)
+	}
 }
 
 func TestMemoryTracker_RecordMasteryEvidenceRejectsAttemptIDCollision(t *testing.T) {

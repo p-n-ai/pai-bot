@@ -2744,7 +2744,7 @@ learning_objectives:
     content_standard_id: "1.1"
     text: Solve linear equations in one variable
     bloom: apply
-quality_level: 2
+quality_level: 3
 provenance: human
 `
 	if err := os.WriteFile(yamlPath, []byte(yamlData), 0o644); err != nil {
@@ -2809,6 +2809,21 @@ questions:
 `
 	if err := os.WriteFile(assessmentPath, []byte(assessment), 0o644); err != nil {
 		t.Fatalf("WriteFile(assessment) error = %v", err)
+	}
+	examplesPath := filepath.Join(topicsDir, "01-linear-equations.examples.yaml")
+	examples := `topic_id: F1-02
+provenance: human
+worked_examples:
+  - id: WE1
+    topic: Solving a linear equation
+    difficulty: easy
+    learning_objective: LO1
+    scenario: Solve x + 3 = 7.
+    working: Subtract 3 from both sides to get x = 4.
+    misconception_alert: Changing only one side breaks the equality.
+`
+	if err := os.WriteFile(examplesPath, []byte(examples), 0o644); err != nil {
+		t.Fatalf("WriteFile(examples) error = %v", err)
 	}
 
 	loader, err := curriculum.NewLoader(dir)
