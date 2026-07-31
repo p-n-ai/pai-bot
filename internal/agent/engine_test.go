@@ -1269,23 +1269,30 @@ func TestEngine_ProcessMessage_SystemPromptCombinesGuardrailsForAdversarialBegin
 		"For a fresh unsolved problem",
 		"politely refuse to shortcut the thinking",
 		"Student mastery level: BEGINNER",
-		"TOPIC CONTEXT",
-		"F1-02",
 		"The latest user request overrides default pacing",
 		"Default to natural chat",
 		"replace legacy PT3 wording with UASA",
 		"Use UASA for Form 1-3 exam references",
-		"TEACHING NOTES (use as guidance):",
 	}
 	for _, want := range checks {
 		if !contains(systemPrompt, want) {
 			t.Fatalf("system prompt missing %q\n%s", want, systemPrompt)
 		}
 	}
-	if !contains(systemPrompt, "Undo addition or subtraction before you undo multiplication or division.") &&
-		!contains(systemPrompt, "Treat the equation like a balance.") &&
-		!contains(systemPrompt, "Always substitute the final value back into the original equation to verify it.") {
-		t.Fatalf("system prompt missing grounded teaching-note content\n%s", systemPrompt)
+	evidenceFound := false
+	for _, message := range capturedRequests[0].Messages {
+		if message.Role != "user" || !contains(message.Content, "SOURCE EVIDENCE") || !contains(message.Content, "F1-02") {
+			continue
+		}
+		if contains(message.Content, "Undo addition or subtraction before you undo multiplication or division.") ||
+			contains(message.Content, "Treat the equation like a balance.") ||
+			contains(message.Content, "Always substitute the final value back into the original equation to verify it.") {
+			evidenceFound = true
+			break
+		}
+	}
+	if !evidenceFound {
+		t.Fatalf("request missing quoted curriculum evidence: %#v", capturedRequests[0].Messages)
 	}
 }
 
@@ -1307,15 +1314,10 @@ func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testi
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "F1-02") {
-		t.Fatalf("expected topic ID in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "Treat the equation like a balance") {
-		t.Fatalf("expected teaching notes in system prompt, got: %s", systemPrompt)
+	if !hasMessageContaining(mockAI.LastRequest.Messages, "user", "SOURCE EVIDENCE") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "F1-02") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "Treat the equation like a balance") {
+		t.Fatalf("expected quoted curriculum evidence, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1337,9 +1339,8 @@ func TestEngine_ProcessMessage_NoCurriculumContextWhenNoTopicMatch(t *testing.T)
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("did not expect TOPIC CONTEXT in system prompt when no topic matches, got: %s", systemPrompt)
+	if hasMessageContaining(mockAI.LastRequest.Messages, "user", "origin=oss_curriculum") {
+		t.Fatalf("did not expect curriculum evidence when no topic matches, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1370,9 +1371,8 @@ func TestEngine_ProcessMessage_DoesNotReuseActiveTopicForExplicitOffTopicFollowU
 		t.Fatalf("ProcessMessage() second turn error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("did not expect TOPIC CONTEXT for explicit off-topic follow-up, got: %s", systemPrompt)
+	if hasMessageContaining(mockAI.LastRequest.Messages, "user", "origin=oss_curriculum") {
+		t.Fatalf("did not expect curriculum evidence for explicit off-topic follow-up, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1413,15 +1413,10 @@ func TestEngine_ProcessMessage_UsesConfiguredContextResolver(t *testing.T) {
 		t.Fatalf("resolver.lastText = %q, want %q", resolver.lastText, "hello there")
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "X-01") {
-		t.Fatalf("expected resolver topic ID in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "scale analogy") {
-		t.Fatalf("expected resolver notes in system prompt, got: %s", systemPrompt)
+	if !hasMessageContaining(mockAI.LastRequest.Messages, "user", "SOURCE EVIDENCE") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "X-01") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "scale analogy") {
+		t.Fatalf("expected resolver evidence as quoted user data, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -2632,22 +2627,6 @@ questions:
 	if err := os.WriteFile(assessmentPath, []byte(assessment), 0o644); err != nil {
 		t.Fatalf("WriteFile(assessment) error = %v", err)
 	}
-	examplesPath := filepath.Join(topicsDir, "01-linear-equations.examples.yaml")
-	examples := `topic_id: F1-02
-provenance: human
-worked_examples:
-  - id: WE1
-    topic: Solving a linear equation
-    difficulty: easy
-    learning_objective: LO1
-    scenario: Solve x + 3 = 7.
-    working: Subtract 3 from both sides to get x = 4.
-    misconception_alert: Changing only one side breaks the equality.
-`
-	if err := os.WriteFile(examplesPath, []byte(examples), 0o644); err != nil {
-		t.Fatalf("WriteFile(examples) error = %v", err)
-	}
-
 	loader, err := curriculum.NewLoader(dir)
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)

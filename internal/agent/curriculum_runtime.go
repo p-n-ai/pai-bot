@@ -35,14 +35,19 @@ type curriculumSourceEvidence struct {
 	Content    string
 }
 
-func curriculumAttemptID(msg chat.InboundMessage) (string, bool) {
+func curriculumAttemptID(msg chat.InboundMessage, conversationID, topicID, questionID string) (string, bool) {
 	deliveryID := strings.TrimSpace(msg.DeliveryID)
 	channel := strings.TrimSpace(msg.Channel)
 	if deliveryID == "" || channel == "" {
 		return "", false
 	}
-	digest := sha256.Sum256([]byte(deliveryID))
-	return fmt.Sprintf("chat:v1:%s:%x", channel, digest), true
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		deliveryID,
+		strings.TrimSpace(conversationID),
+		strings.TrimSpace(topicID),
+		strings.TrimSpace(questionID),
+	}, "\x00")))
+	return fmt.Sprintf("chat:v2:%s:%x", channel, digest), true
 }
 
 func renderPlannedCheck(check *curriculum.PlannedCheck) string {

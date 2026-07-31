@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -17,6 +18,42 @@ type recordingCurriculumRuntime struct {
 	attempts []curriculum.AttemptInput
 	result   curriculum.AttemptResult
 	err      error
+}
+
+type failCurriculumStateStore struct {
+	*MemoryStore
+	failures int
+}
+
+func (s *failCurriculumStateStore) SetConversationCurriculumState(
+	conversationID string,
+	state ConversationCurriculumState,
+) error {
+	if s.failures > 0 {
+		s.failures--
+		return errors.New("curriculum state unavailable")
+	}
+	return s.MemoryStore.SetConversationCurriculumState(conversationID, state)
+}
+
+type replayCurriculumRuntime struct {
+	attempts []curriculum.AttemptInput
+}
+
+func (r *replayCurriculumRuntime) PlanTurn(context.Context, curriculum.PlanTurnInput) (curriculum.TeachingPlan, error) {
+	return curriculum.TeachingPlan{}, nil
+}
+
+func (r *replayCurriculumRuntime) RecordAttempt(_ context.Context, input curriculum.AttemptInput) (curriculum.AttemptResult, error) {
+	r.attempts = append(r.attempts, input)
+	return curriculum.AttemptResult{
+		Applied:       len(r.attempts) == 1,
+		Correct:       true,
+		Score:         1,
+		MasteryBefore: 0.2,
+		MasteryAfter:  0.6,
+		Evidence:      curriculum.EvidenceRef{QuestionID: input.QuestionID},
+	}, nil
 }
 
 func (r *recordingCurriculumRuntime) PlanTurn(context.Context, curriculum.PlanTurnInput) (curriculum.TeachingPlan, error) {
@@ -157,6 +194,80 @@ func TestCurriculumAttemptWithoutDeliveryIDDoesNotMutate(t *testing.T) {
 	if persisted.CurriculumState.ActiveQuestionID != "question-1" ||
 		persisted.CurriculumState.LastAttempt != nil {
 		t.Fatalf("CurriculumState mutated: %#v", persisted.CurriculumState)
+	}
+}
+
+func TestCurriculumAttemptReplayRepairsFailedConversationState(t *testing.T) {
+	store := &failCurriculumStateStore{MemoryStore: NewMemoryStore(), failures: 1}
+	identity, err := NewLearnerIdentity("telegram", "student-repair")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationID, err := store.CreateConversationForThread(identity, "", Conversation{
+		State: "teaching",
+		CurriculumState: &ConversationCurriculumState{
+			ActiveTopicID:    "topic-1",
+			ActiveQuestionID: "question-1",
+			ActiveAnswerType: "exact",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &replayCurriculumRuntime{}
+	engine := NewEngine(EngineConfig{Store: store, CurriculumRuntime: runtime})
+	message := chat.InboundMessage{
+		Channel:         "telegram",
+		IdentityChannel: "telegram",
+		UserID:          "student-repair",
+		ExternalID:      "student-repair",
+		DeliveryID:      "message-1",
+		Text:            "answer: 4",
+	}
+	conversation, err := store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, handled := engine.maybeHandleCurriculumAttempt(t.Context(), message, conversation); !handled {
+		t.Fatal("first attempt was not handled")
+	}
+
+	conversation, err = store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, handled := engine.maybeHandleCurriculumAttempt(t.Context(), message, conversation)
+	if !handled || response == "" {
+		t.Fatalf("repair response = %q, handled = %v", response, handled)
+	}
+	if len(runtime.attempts) != 2 || runtime.attempts[0].AttemptID != runtime.attempts[1].AttemptID {
+		t.Fatalf("attempts = %#v, want one stable idempotency key", runtime.attempts)
+	}
+	persisted, err := store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.CurriculumState == nil || persisted.CurriculumState.ActiveQuestionID != "" ||
+		persisted.CurriculumState.LastAttempt == nil || !persisted.CurriculumState.LastAttempt.Correct {
+		t.Fatalf("repaired curriculum state = %#v", persisted.CurriculumState)
+	}
+}
+
+func TestCurriculumAttemptIDScopesDeliveryToQuestion(t *testing.T) {
+	message := chat.InboundMessage{Channel: "telegram", DeliveryID: "message-1"}
+	first, ok := curriculumAttemptID(message, "conversation-1", "topic-1", "question-1")
+	if !ok {
+		t.Fatal("curriculumAttemptID() did not accept a delivery ID")
+	}
+	for _, scope := range [][3]string{
+		{"conversation-2", "topic-1", "question-1"},
+		{"conversation-1", "topic-2", "question-1"},
+		{"conversation-1", "topic-1", "question-2"},
+	} {
+		got, _ := curriculumAttemptID(message, scope[0], scope[1], scope[2])
+		if got == first {
+			t.Fatalf("curriculumAttemptID() collision for scope %#v", scope)
+		}
 	}
 }
 

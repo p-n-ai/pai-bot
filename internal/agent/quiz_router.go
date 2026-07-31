@@ -332,7 +332,12 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 		(answeredQuestion.AnswerType == "exact" || answeredQuestion.AnswerType == "multiple_choice")
 	if e.curriculumRuntime != nil && isGradeableSource {
 		var hasAttemptID bool
-		sourceAttemptID, hasAttemptID = curriculumAttemptID(msg)
+		sourceAttemptID, hasAttemptID = curriculumAttemptID(
+			msg,
+			conv.ID,
+			state.TopicID,
+			answeredQuestion.ID,
+		)
 		if !hasAttemptID {
 			return curriculumAttemptNeedsDeliveryID(e.messageLocale(msg, conv)), true
 		}
@@ -361,14 +366,6 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 				return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
 			}
 		} else {
-			if !attemptResult.Applied {
-				if conv.CurriculumState != nil &&
-					conv.CurriculumState.LastAttempt != nil &&
-					conv.CurriculumState.LastAttempt.AttemptID == sourceAttemptID {
-					return conv.CurriculumState.LastAttempt.Response, true
-				}
-				return curriculumAttemptAlreadyRecorded(e.messageLocale(msg, conv)), true
-			}
 			result = session.ApplyGrade(answerText, attemptResult.Correct)
 			sourceAttemptResult = &attemptResult
 		}

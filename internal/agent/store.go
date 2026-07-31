@@ -43,6 +43,8 @@ type ConversationQuizState struct {
 // redelivered learner message cannot apply mastery twice.
 type ConversationCurriculumAttempt struct {
 	AttemptID     string  `json:"attempt_id"`
+	TopicID       string  `json:"topic_id,omitempty"`
+	QuestionID    string  `json:"question_id,omitempty"`
 	LearnerAnswer string  `json:"learner_answer"`
 	Applied       bool    `json:"applied"`
 	Correct       bool    `json:"correct"`
@@ -899,6 +901,8 @@ func normalizeConversationCurriculumState(state ConversationCurriculumState) (Co
 
 func normalizeConversationCurriculumAttempt(attempt ConversationCurriculumAttempt) (ConversationCurriculumAttempt, error) {
 	attempt.AttemptID = strings.TrimSpace(attempt.AttemptID)
+	attempt.TopicID = strings.TrimSpace(attempt.TopicID)
+	attempt.QuestionID = strings.TrimSpace(attempt.QuestionID)
 	if attempt.AttemptID == "" {
 		return ConversationCurriculumAttempt{}, fmt.Errorf("curriculum attempt_id is required")
 	}

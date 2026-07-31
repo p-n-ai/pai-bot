@@ -6,8 +6,6 @@ package agent
 import (
 	"fmt"
 	"strings"
-
-	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
 func appendProfilePackets(packets []contextPacket, profile learnerProfile) []contextPacket {
@@ -182,25 +180,6 @@ type goalSystemData struct {
 	SyllabusID     string
 	TargetMastery  float64
 	CurrentMastery float64
-}
-
-type curriculumTopicData struct {
-	ID         string
-	Name       string
-	SyllabusID string
-	SubjectID  string
-}
-
-func curriculumTopicContext(topic *curriculum.Topic) curriculumTopicData {
-	if topic == nil {
-		return curriculumTopicData{}
-	}
-	return curriculumTopicData{
-		ID:         topic.ID,
-		Name:       topic.Name,
-		SyllabusID: topic.SyllabusID,
-		SubjectID:  topic.SubjectID,
-	}
 }
 
 func goalSystemContext(goals []*Goal) []goalSystemData {

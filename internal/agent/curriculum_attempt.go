@@ -26,10 +26,23 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 	}
 
 	state := *conv.CurriculumState
-	attemptID, hasAttemptID := curriculumAttemptID(msg)
-	if hasAttemptID && state.LastAttempt != nil && state.LastAttempt.AttemptID == attemptID {
-		return state.LastAttempt.Response, true
+	if state.LastAttempt != nil {
+		replayID, hasReplayID := curriculumAttemptID(
+			msg,
+			conv.ID,
+			state.LastAttempt.TopicID,
+			state.LastAttempt.QuestionID,
+		)
+		if hasReplayID && state.LastAttempt.AttemptID == replayID {
+			return state.LastAttempt.Response, true
+		}
 	}
+	attemptID, hasAttemptID := curriculumAttemptID(
+		msg,
+		conv.ID,
+		state.ActiveTopicID,
+		state.ActiveQuestionID,
+	)
 	answer, isAnswer := e.curriculumAttemptAnswer(msg, state)
 	if state.ActiveQuestionID == "" || !isAnswer {
 		return "", false
@@ -69,14 +82,12 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 		}
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
 	}
-	if !result.Applied {
-		return curriculumAttemptAlreadyRecorded(e.messageLocale(msg, conv)), true
-	}
-
 	response := renderCurriculumAttemptResponse(e.messageLocale(msg, conv), result.Correct)
 	questionID := state.ActiveQuestionID
 	attempt := ConversationCurriculumAttempt{
 		AttemptID:     attemptID,
+		TopicID:       state.ActiveTopicID,
+		QuestionID:    questionID,
 		LearnerAnswer: answer,
 		Response:      response,
 		Applied:       true,
@@ -218,9 +229,11 @@ func (e *Engine) persistQuizCurriculumAttempt(
 ) error {
 	attempt := ConversationCurriculumAttempt{
 		AttemptID:     attemptID,
+		TopicID:       quizState.TopicID,
+		QuestionID:    question.ID,
 		LearnerAnswer: msg.Text,
 		Response:      response,
-		Applied:       result.Applied,
+		Applied:       true,
 		Correct:       result.Correct,
 		Score:         result.Score,
 		MasteryBefore: result.MasteryBefore,
@@ -325,11 +338,4 @@ func curriculumAttemptNeedsDeliveryID(locale string) string {
 		return "Saya tak dapat merekod jawapan ini dengan selamat. Hantar semula sekali lagi."
 	}
 	return "I couldn’t record that answer safely. Please send it once more."
-}
-
-func curriculumAttemptAlreadyRecorded(locale string) string {
-	if strings.HasPrefix(strings.ToLower(locale), "ms") {
-		return "Jawapan itu sudah direkodkan."
-	}
-	return "That answer was already recorded."
 }
