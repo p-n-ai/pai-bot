@@ -49,6 +49,7 @@ var (
 		"why": {}, "how": {}, "move": {}, "other": {}, "side": {}, "next": {}, "then": {}, "stuck": {},
 		"confused": {}, "again": {}, "step": {}, "first": {}, "only": {}, "semak": {}, "kenapa": {},
 		"macam": {}, "mana": {}, "lepas": {}, "selepas": {}, "faham": {}, "tak": {}, "lagi": {},
+		"teach": {}, "explain": {}, "that": {}, "this": {}, "briefly": {}, "short": {},
 	}
 	stemOverrides = map[string]string{
 		"equation": "equation", "equations": "equation",

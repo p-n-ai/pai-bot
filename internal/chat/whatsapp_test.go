@@ -249,8 +249,11 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 	if got.FirstName != "Alya" {
 		t.Fatalf("FirstName = %q, want Alya", got.FirstName)
 	}
-	if got.ExternalID != "wamid.abc" {
-		t.Fatalf("ExternalID = %q, want wamid.abc", got.ExternalID)
+	if got.ExternalID != "60123456789" {
+		t.Fatalf("ExternalID = %q, want stable WhatsApp sender", got.ExternalID)
+	}
+	if got.MessageID != "wamid.abc" || got.DeliveryID != "wamid.abc" {
+		t.Fatalf("message identity = %q/%q, want WhatsApp delivery wamid.abc", got.MessageID, got.DeliveryID)
 	}
 }
 

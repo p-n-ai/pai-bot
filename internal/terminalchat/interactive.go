@@ -125,15 +125,20 @@ func RunInteractive(
 	var candidateNotified bool
 	var candidateError string
 	ctxDone := ctx.Done()
+	sessionID := time.Now().UnixNano()
+	turnNumber := 0
 
 	startTurn := func(text string) {
+		turnNumber++
+		deliveryID := fmt.Sprintf("terminal:%d:%d", sessionID, turnNumber)
 		turnCtx, cancel := context.WithCancel(ctx)
 		done := make(chan interactiveResult, 1)
 		go func() {
 			result, err := session.ProcessTurn(turnCtx, chat.InboundMessage{
-				Channel: channel,
-				UserID:  userID,
-				Text:    text,
+				Channel:    channel,
+				UserID:     userID,
+				DeliveryID: deliveryID,
+				Text:       text,
 			})
 			done <- interactiveResult{result: result, err: err}
 		}()

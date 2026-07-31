@@ -41,6 +41,7 @@ type agentTurn struct {
 	Conversation       *Conversation
 	Topic              *curriculum.Topic
 	TeachingNotes      string
+	CurriculumPlan     *curriculum.TeachingPlan
 	Packets            []contextPacket
 	Prompt             promptManifest
 	Model              modelResult
@@ -63,6 +64,7 @@ const (
 	contextKindConversation        contextKind = "conversation"
 	contextKindConversationSummary contextKind = "conversation_summary"
 	contextKindCurriculum          contextKind = "curriculum"
+	contextKindCurriculumPlan      contextKind = "curriculum_plan"
 	contextKindProgress            contextKind = "progress"
 	contextKindGoal                contextKind = "goal"
 	contextKindStreak              contextKind = "streak"

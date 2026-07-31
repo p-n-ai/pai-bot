@@ -181,6 +181,97 @@ func TestPostgresStore_IsolatesActiveConversationsByThread(t *testing.T) {
 	}
 }
 
+func TestPostgresStore_CurriculumStateRoundTripsThroughMetadata(t *testing.T) {
+	ctx := context.Background()
+	pool, _ := startSchedulerPostgres(t, ctx)
+
+	store, err := NewPostgresStore(ctx, pool)
+	if err != nil {
+		t.Fatalf("NewPostgresStore() error = %v", err)
+	}
+	conversationID, err := store.CreateConversation(Conversation{
+		UserID:  "curriculum-state-postgres-user",
+		State:   "quiz_active",
+		TopicID: "legacy-topic",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := store.UpdateConversationQuizState(conversationID, "quiz_active", ConversationQuizState{
+		TopicID:   "legacy-topic",
+		Intensity: "mixed",
+		GeneratedQuestions: []QuizQuestion{{
+			ID:   "legacy-question",
+			Text: "Legacy quiz question",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateConversationQuizState() error = %v", err)
+	}
+	if err := store.SetConversationCurriculumState(conversationID, ConversationCurriculumState{
+		GoalTopicID:       "goal-topic",
+		ActiveTopicID:     "active-topic",
+		ActiveObjectiveID: "objective-1",
+		ActiveQuestionID:  "question-1",
+		RunID:             "run-1",
+	}); err != nil {
+		t.Fatalf("SetConversationCurriculumState() error = %v", err)
+	}
+	if err := store.UpdateConversationCurriculumAttempt(conversationID, ConversationCurriculumAttempt{
+		AttemptID:     "chat:v1:telegram:delivery-1",
+		LearnerAnswer: "A",
+		Applied:       true,
+		Correct:       true,
+		Score:         1,
+		Response:      "Tepat. Kita teruskan.",
+	}); err != nil {
+		t.Fatalf("UpdateConversationCurriculumAttempt() error = %v", err)
+	}
+	if err := store.ClearConversationQuizState(conversationID, "teaching"); err != nil {
+		t.Fatalf("ClearConversationQuizState() error = %v", err)
+	}
+
+	got, err := store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatalf("GetConversation() error = %v", err)
+	}
+	if got.QuizState != nil || got.TopicID != "legacy-topic" {
+		t.Fatalf("legacy state = quiz %#v, topic %q; want cleared quiz and unchanged topic", got.QuizState, got.TopicID)
+	}
+	if got.CurriculumState == nil || got.CurriculumState.LastAttempt == nil {
+		t.Fatalf("CurriculumState = %#v, want persisted plan and attempt", got.CurriculumState)
+	}
+	if got.CurriculumState.LastAttempt.AttemptID != "chat:v1:telegram:delivery-1" ||
+		!got.CurriculumState.LastAttempt.Applied ||
+		!got.CurriculumState.LastAttempt.Correct ||
+		got.CurriculumState.LastAttempt.Response != "Tepat. Kita teruskan." {
+		t.Fatalf("LastAttempt = %#v, want applied correct attempt", got.CurriculumState.LastAttempt)
+	}
+
+	var metadataHasCurriculumState bool
+	if err := pool.QueryRow(ctx,
+		`SELECT metadata ? 'curriculum_state'
+		 FROM conversations
+		 WHERE id = $1::uuid`,
+		conversationID,
+	).Scan(&metadataHasCurriculumState); err != nil {
+		t.Fatalf("query curriculum metadata: %v", err)
+	}
+	if !metadataHasCurriculumState {
+		t.Fatal("metadata curriculum_state key = false, want true")
+	}
+
+	if err := store.ClearConversationCurriculumState(conversationID); err != nil {
+		t.Fatalf("ClearConversationCurriculumState() error = %v", err)
+	}
+	got, err = store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatalf("GetConversation(after clear) error = %v", err)
+	}
+	if got.CurriculumState != nil {
+		t.Fatalf("CurriculumState = %#v, want nil after clear", got.CurriculumState)
+	}
+}
+
 func TestPostgresGroupStore_DeliveryIncludesLatestActiveThreadRoute(t *testing.T) {
 	ctx := context.Background()
 	pool, tenantID := startSchedulerPostgres(t, ctx)

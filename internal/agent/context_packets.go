@@ -137,6 +137,9 @@ func contextSources(packets []contextPacket) []contextSource {
 			sources[len(sources)-1].Title = evidence.SourceTitle
 			sources[len(sources)-1].Filename = evidence.Filename
 			sources[len(sources)-1].Locator = evidenceLocator(evidence)
+		} else if evidence, ok := packet.Data.(curriculumSourceEvidence); ok {
+			sources[len(sources)-1].Filename = evidence.SourcePath
+			sources[len(sources)-1].Locator = evidence.Revision
 		}
 	}
 	return sources

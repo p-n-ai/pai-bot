@@ -201,6 +201,22 @@ func main() {
 		engineCfg.Tracker = state.Tracker
 		engineCfg.Streaks = progress.NewMemoryStreakTracker()
 		engineCfg.XP = progress.NewMemoryXPTracker()
+		if loader != nil {
+			curriculumProgress, ok := state.Tracker.(curriculum.ProgressStore)
+			if !ok {
+				fmt.Fprintln(os.Stderr, "initialize curriculum runtime: progress tracker does not support mastery evidence")
+				os.Exit(1)
+			}
+			curriculumRuntime, runtimeErr := curriculum.NewEngine(curriculum.EngineConfig{
+				Loader:   loader,
+				Progress: curriculumProgress,
+			})
+			if runtimeErr != nil {
+				fmt.Fprintf(os.Stderr, "initialize curriculum runtime: %v\n", runtimeErr)
+				os.Exit(1)
+			}
+			engineCfg.CurriculumRuntime = curriculumRuntime
+		}
 	}
 	var history *conversationHistory
 	if strings.TrimSpace(historyJSONPath) != "" || strings.TrimSpace(dumpJSONPath) != "" {
@@ -225,6 +241,20 @@ func main() {
 				localCfg.Tracker = progress.NewMemoryTracker()
 				localCfg.Streaks = progress.NewMemoryStreakTracker()
 				localCfg.XP = progress.NewMemoryXPTracker()
+				if loader != nil {
+					curriculumProgress, ok := localCfg.Tracker.(curriculum.ProgressStore)
+					if !ok {
+						return nil, fmt.Errorf("initialize curriculum runtime: progress tracker does not support mastery evidence")
+					}
+					curriculumRuntime, runtimeErr := curriculum.NewEngine(curriculum.EngineConfig{
+						Loader:   loader,
+						Progress: curriculumProgress,
+					})
+					if runtimeErr != nil {
+						return nil, fmt.Errorf("initialize curriculum runtime: %w", runtimeErr)
+					}
+					localCfg.CurriculumRuntime = curriculumRuntime
+				}
 			}
 			if lang := strings.TrimSpace(language); lang != "" {
 				if err := localCfg.Store.SetUserPreferredLanguage(userID, lang); err != nil {
@@ -450,9 +480,10 @@ func normalizedTurnLimit(limit int) int {
 
 // wsInboundMsg mirrors the WebSocket protocol envelope for outgoing client messages.
 type wsInboundMsg struct {
-	Type   string `json:"type"`
-	UserID string `json:"user_id,omitempty"`
-	Text   string `json:"text,omitempty"`
+	Type       string `json:"type"`
+	UserID     string `json:"user_id,omitempty"`
+	DeliveryID string `json:"delivery_id,omitempty"`
+	Text       string `json:"text,omitempty"`
 }
 
 // wsOutboundMsg mirrors the WebSocket protocol envelope for incoming server messages.
@@ -541,6 +572,7 @@ func runWSClient(serverURL, userID string) error {
 	// Read stdin and send messages.
 	fmt.Print("You: ")
 	scanner := bufio.NewScanner(os.Stdin)
+	turnNumber := 0
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 		if text == "" {
@@ -548,7 +580,12 @@ func runWSClient(serverURL, userID string) error {
 			continue
 		}
 
-		msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: text})
+		turnNumber++
+		msg, _ := json.Marshal(wsInboundMsg{
+			Type:       "message",
+			DeliveryID: fmt.Sprintf("terminal-ws:%d:%d", time.Now().UnixNano(), turnNumber),
+			Text:       text,
+		})
 		if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 			return fmt.Errorf("sending message: %w", err)
 		}
@@ -579,7 +616,11 @@ func runWSClientOnceTo(serverURL, userID, text string, out io.Writer) error {
 		return err
 	}
 
-	msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: strings.TrimSpace(text)})
+	msg, _ := json.Marshal(wsInboundMsg{
+		Type:       "message",
+		DeliveryID: fmt.Sprintf("terminal-ws-once:%d", time.Now().UnixNano()),
+		Text:       strings.TrimSpace(text),
+	})
 	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}

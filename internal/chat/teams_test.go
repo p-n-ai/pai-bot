@@ -63,6 +63,9 @@ func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T)
 	if got.Channel != "teams" || got.UserID != "user-1" {
 		t.Fatalf("identity = channel:%q user:%q, want teams user-1", got.Channel, got.UserID)
 	}
+	if got.ExternalID != "user-1" {
+		t.Fatalf("ExternalID = %q, want stable Teams author user-1", got.ExternalID)
+	}
 	const wantThread = "teams:MTk6YWJjQHRocmVhZC50YWN2Mg:aHR0cHM6Ly9zbWJhLnRyYWZmaWNtYW5hZ2VyLm5ldC90ZWFtcy8"
 	if got.ThreadID != wantThread {
 		t.Fatalf("ThreadID = %q, want encoded Teams continuation", got.ThreadID)

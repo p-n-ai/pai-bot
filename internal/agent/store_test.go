@@ -5,6 +5,7 @@ package agent_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
@@ -476,6 +477,98 @@ func TestConversationStore_UpdateConversationQuizState_PreservesPausedQuizOutsid
 	}
 	if got.QuizState.RunState != "paused" || got.QuizState.SuspendedBy != "side_question" {
 		t.Fatalf("QuizState = %#v, want paused side-question state", got.QuizState)
+	}
+}
+
+func TestConversationStore_CurriculumStatePersistsReplayEvidenceAfterQuizClear(t *testing.T) {
+	store := agent.NewMemoryStore()
+	id, err := store.CreateConversation(agent.Conversation{
+		UserID:  "u-curriculum-state",
+		State:   "quiz_active",
+		TopicID: "legacy-topic",
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := store.UpdateConversationQuizState(id, "quiz_active", agent.ConversationQuizState{
+		TopicID:   "legacy-topic",
+		Intensity: "mixed",
+		GeneratedQuestions: []agent.QuizQuestion{{
+			ID:   "legacy-question",
+			Text: "Legacy quiz question",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateConversationQuizState() error = %v", err)
+	}
+
+	state := agent.ConversationCurriculumState{
+		GoalTopicID:       "goal-topic",
+		ActiveTopicID:     "prerequisite-topic",
+		ActiveObjectiveID: "objective-1",
+		ActiveQuestionID:  "question-1",
+		RunID:             "run-1",
+	}
+	if err := store.SetConversationCurriculumState(id, state); err != nil {
+		t.Fatalf("SetConversationCurriculumState() error = %v", err)
+	}
+	if err := store.UpdateConversationCurriculumAttempt(id, agent.ConversationCurriculumAttempt{
+		AttemptID:     "chat:v1:telegram:delivery-1",
+		LearnerAnswer: "B",
+		Applied:       true,
+		Correct:       false,
+		Score:         0,
+		Response:      "Belum tepat—cuba semak langkah pertama.",
+	}); err != nil {
+		t.Fatalf("UpdateConversationCurriculumAttempt() error = %v", err)
+	}
+	if err := store.ClearConversationQuizState(id, "teaching"); err != nil {
+		t.Fatalf("ClearConversationQuizState() error = %v", err)
+	}
+
+	got, err := store.GetConversation(id)
+	if err != nil {
+		t.Fatalf("GetConversation() error = %v", err)
+	}
+	if got.TopicID != "legacy-topic" {
+		t.Fatalf("legacy TopicID = %q, want unchanged", got.TopicID)
+	}
+	if got.QuizState != nil {
+		t.Fatalf("QuizState = %#v, want nil", got.QuizState)
+	}
+	if got.CurriculumState == nil {
+		t.Fatal("CurriculumState = nil, want persisted state")
+	}
+	want := &agent.ConversationCurriculumState{
+		GoalTopicID:       "goal-topic",
+		ActiveTopicID:     "prerequisite-topic",
+		ActiveObjectiveID: "objective-1",
+		ActiveQuestionID:  "question-1",
+		RunID:             "run-1",
+		LastAttempt: &agent.ConversationCurriculumAttempt{
+			AttemptID:     "chat:v1:telegram:delivery-1",
+			LearnerAnswer: "B",
+			Applied:       true,
+			Correct:       false,
+			Score:         0,
+			Response:      "Belum tepat—cuba semak langkah pertama.",
+		},
+	}
+	if !reflect.DeepEqual(got.CurriculumState, want) {
+		t.Fatalf("CurriculumState = %#v, want %#v", got.CurriculumState, want)
+	}
+
+	if err := store.ClearConversationCurriculumState(id); err != nil {
+		t.Fatalf("ClearConversationCurriculumState() error = %v", err)
+	}
+	got, err = store.GetConversation(id)
+	if err != nil {
+		t.Fatalf("GetConversation(after clear) error = %v", err)
+	}
+	if got.CurriculumState != nil {
+		t.Fatalf("CurriculumState = %#v, want nil after clear", got.CurriculumState)
+	}
+	if got.TopicID != "legacy-topic" {
+		t.Fatalf("legacy TopicID after clear = %q, want unchanged", got.TopicID)
 	}
 }
 

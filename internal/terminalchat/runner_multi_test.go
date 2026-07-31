@@ -43,6 +43,10 @@ func TestRunMulti_RoutesMessagesToDifferentUsers(t *testing.T) {
 	if processor.messages[1].Text != "hello from user 2" {
 		t.Errorf("second Text = %q, want 'hello from user 2'", processor.messages[1].Text)
 	}
+	if processor.messages[0].DeliveryID == "" ||
+		processor.messages[0].DeliveryID == processor.messages[1].DeliveryID {
+		t.Fatalf("delivery IDs must be present and unique: %#v", processor.messages)
+	}
 
 	rendered := output.String()
 	if !strings.Contains(rendered, "[player-1] P&AI> reply to 1") {

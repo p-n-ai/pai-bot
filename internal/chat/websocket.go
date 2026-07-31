@@ -21,9 +21,10 @@ import (
 
 // wsInboundMsg is the JSON envelope clients send over the WebSocket.
 type wsInboundMsg struct {
-	Type   string `json:"type"`
-	UserID string `json:"user_id,omitempty"`
-	Text   string `json:"text,omitempty"`
+	Type       string `json:"type"`
+	UserID     string `json:"user_id,omitempty"`
+	DeliveryID string `json:"delivery_id,omitempty"`
+	Text       string `json:"text,omitempty"`
 }
 
 // wsOutboundMsg is the JSON envelope the server sends over the WebSocket.
@@ -287,6 +288,11 @@ func (ws *WSChannel) readAuth(ctx context.Context, conn *websocket.Conn) (string
 
 // readLoop reads messages from the client and dispatches them to the handler.
 func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID string, claims auth.TokenClaims) {
+	externalID := claims.ExternalID
+	if externalID == "" {
+		externalID = userID
+	}
+
 	for {
 		select {
 		case <-ws.stop:
@@ -346,7 +352,8 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 				TenantID:        claims.TenantID,
 				InternalUserID:  claims.Subject,
 				IdentityChannel: claims.Channel,
-				ExternalID:      claims.ExternalID,
+				ExternalID:      externalID,
+				DeliveryID:      msg.DeliveryID,
 				Text:            msg.Text,
 			})
 		}

@@ -63,6 +63,10 @@ func TestRun_ForwardsConversationAndPrintsReplies(t *testing.T) {
 	if processor.messages[0].Text != "hello bot" {
 		t.Fatalf("first Text = %q, want hello bot", processor.messages[0].Text)
 	}
+	if processor.messages[0].DeliveryID == "" ||
+		processor.messages[0].DeliveryID == processor.messages[1].DeliveryID {
+		t.Fatalf("delivery IDs must be present and unique: %#v", processor.messages)
+	}
 
 	rendered := output.String()
 	if !strings.Contains(rendered, "Terminal chat ready") {

@@ -119,7 +119,7 @@ func TestCurriculumContextResolver_ResolveQuery_UsesActiveTopicForFollowUp(t *te
 	resolver := agent.NewCurriculumContextResolver(loader)
 
 	topic, notes := resolver.ResolveQuery(agent.ContextQuery{
-		Text:                "why move it to the other side again?",
+		Text:                "Teach that step again, briefly.",
 		ConversationTopicID: "F1-02",
 	})
 	if topic == nil {

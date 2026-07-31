@@ -109,7 +109,16 @@ func (s *QuizSession) SubmitAnswer(answer string) QuizAnswerResult {
 		return QuizAnswerResult{}
 	}
 
-	correct := gradeQuizAnswer(question, answer)
+	return s.ApplyGrade(answer, gradeQuizAnswer(question, answer))
+}
+
+// ApplyGrade applies an authoritative grade and advances on a correct answer.
+func (s *QuizSession) ApplyGrade(answer string, correct bool) QuizAnswerResult {
+	question, ok := s.NextQuestion()
+	if !ok {
+		return QuizAnswerResult{}
+	}
+
 	result := QuizAnswerResult{
 		Correct:          correct,
 		ExpectedAnswer:   question.Answer,

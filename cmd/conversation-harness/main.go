@@ -346,6 +346,22 @@ func buildEngine(memory bool, mockResponse string, progressSideEffects bool, tra
 	}
 	if progressSideEffects {
 		engineCfg.Tracker = state.Tracker
+		if loader != nil {
+			curriculumProgress, ok := state.Tracker.(curriculum.ProgressStore)
+			if !ok {
+				cleanup()
+				return nil, nil, fmt.Errorf("initialize curriculum runtime: progress tracker does not support mastery evidence")
+			}
+			curriculumRuntime, runtimeErr := curriculum.NewEngine(curriculum.EngineConfig{
+				Loader:   loader,
+				Progress: curriculumProgress,
+			})
+			if runtimeErr != nil {
+				cleanup()
+				return nil, nil, fmt.Errorf("initialize curriculum runtime: %w", runtimeErr)
+			}
+			engineCfg.CurriculumRuntime = curriculumRuntime
+		}
 	}
 	engine := agent.NewEngine(engineCfg)
 	return engine, cleanup, nil
@@ -435,9 +451,10 @@ func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.D
 	for i, turn := range conv.Turns {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		resp, err := engine.ProcessMessage(ctx, chat.InboundMessage{
-			Channel: "harness",
-			UserID:  userID,
-			Text:    turn.User,
+			Channel:    "harness",
+			UserID:     userID,
+			DeliveryID: fmt.Sprintf("harness:%s:%d", userID, i+1),
+			Text:       turn.User,
 		})
 		cancel()
 		if err != nil {

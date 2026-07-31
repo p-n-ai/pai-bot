@@ -10,6 +10,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
@@ -62,6 +63,8 @@ func RunMulti(ctx context.Context, in io.Reader, out io.Writer, processor Proces
 	}
 
 	scanner := bufio.NewScanner(in)
+	sessionID := time.Now().UnixNano()
+	turnNumber := 0
 
 	var userList strings.Builder
 	for i, id := range userIDs {
@@ -99,10 +102,12 @@ func RunMulti(ctx context.Context, in io.Reader, out io.Writer, processor Proces
 		userIdx, text := parseMultiInput(raw, userCount)
 		userID := userIDs[userIdx]
 
+		turnNumber++
 		result, err := processor.ProcessTurn(ctx, chat.InboundMessage{
-			Channel: channel,
-			UserID:  userID,
-			Text:    text,
+			Channel:    channel,
+			UserID:     userID,
+			DeliveryID: fmt.Sprintf("terminal:%d:%d", sessionID, turnNumber),
+			Text:       text,
 		})
 		if err != nil {
 			if _, writeErr := fmt.Fprintf(out, "[%s] Error: %v\n", userID, err); writeErr != nil {

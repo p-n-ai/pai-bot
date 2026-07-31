@@ -41,8 +41,15 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 
 	raw := strings.Join(args, " ")
 
-	// Resolve topic from text via lexical retrieval.
-	topic, _ := e.resolveCurriculumContext(msg.UserID, "", raw)
+	var topic *curriculum.Topic
+	if e.curriculumLoader != nil {
+		if exact, found := e.curriculumLoader.GetTopic(strings.TrimSpace(raw)); found {
+			topic = &exact
+		}
+	}
+	if topic == nil {
+		topic, _ = e.resolveCurriculumContext(msg.UserID, "", raw)
+	}
 	if topic != nil && !topic.IsAITeachingReady() {
 		topic = nil
 	}
@@ -67,6 +74,10 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 
 	if err := e.store.UpdateConversationTopicID(conv.ID, topic.ID); err != nil {
 		slog.Error("failed to set topic on conversation", "conversation_id", conv.ID, "topic_id", topic.ID, "error", err)
+		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
+	}
+	if err := e.retirePendingCurriculumCheck(conv, topic.ID, "learn:"+topic.ID); err != nil {
+		slog.Error("retire pending curriculum check for /learn", "conversation_id", conv.ID, "error", err)
 		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
 	}
 

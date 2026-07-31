@@ -147,7 +147,7 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 				inbound := InboundMessage{
 					Channel:    "whatsapp",
 					UserID:     msg.From,
-					ExternalID: msg.ID,
+					ExternalID: msg.From,
 					ThreadID:   msg.From,
 					MessageID:  msg.ID,
 					DeliveryID: msg.ID,

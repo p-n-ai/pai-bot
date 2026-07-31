@@ -43,6 +43,19 @@ func TestQuizSession_SubmitAnswer_ExactAdvances(t *testing.T) {
 	}
 }
 
+func TestQuizSession_ApplyGradeUsesAuthoritativeResult(t *testing.T) {
+	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{{
+		ID:         "Q1",
+		AnswerType: "exact",
+		Answer:     "expected",
+	}})
+
+	result := session.ApplyGrade("different", true)
+	if !result.Correct || session.CurrentIndex != 1 || session.CorrectAnswers != 1 {
+		t.Fatalf("ApplyGrade() = %#v, session = %#v", result, session)
+	}
+}
+
 func TestQuizSession_SubmitAnswer_FreeTextContainsExpectedValue(t *testing.T) {
 	session := NewQuizSession("user-1", "F1-01", []QuizQuestion{
 		{

@@ -61,7 +61,7 @@ func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) (llm
 }
 
 func (e *Engine) teachingTools() []agentcore.Tool {
-	if e.curriculumLoader == nil {
+	if e.curriculumLoader == nil || e.curriculumRuntime != nil {
 		return nil
 	}
 	return []agentcore.Tool{curriculumLookupTool{loader: e.curriculumLoader}}
