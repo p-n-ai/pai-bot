@@ -292,7 +292,7 @@ func loadFixture(path string) (fixtureFile, error) {
 	if err != nil {
 		return fixtureFile{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	decoder := yaml.NewDecoder(file)
 	decoder.KnownFields(true)
