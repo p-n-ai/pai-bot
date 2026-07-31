@@ -51,13 +51,13 @@ func (topic *Topic) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&decoded); err != nil {
 		return err
 	}
-	nested := decoded.rawTopic.Teaching.EngagementHooks
+	nested := decoded.Teaching.EngagementHooks
 	if len(decoded.EngagementHooks) > 0 && len(nested) > 0 &&
 		!slices.Equal(decoded.EngagementHooks, nested) {
 		return fmt.Errorf("root and teaching engagement_hooks conflict")
 	}
 	if len(decoded.EngagementHooks) > 0 {
-		decoded.rawTopic.Teaching.EngagementHooks = slices.Clone(decoded.EngagementHooks)
+		decoded.Teaching.EngagementHooks = slices.Clone(decoded.EngagementHooks)
 	}
 	*topic = Topic(decoded.rawTopic)
 	var presence struct {
