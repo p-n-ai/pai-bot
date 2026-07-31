@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
@@ -29,7 +30,8 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 	if hasAttemptID && state.LastAttempt != nil && state.LastAttempt.AttemptID == attemptID {
 		return state.LastAttempt.Response, true
 	}
-	if state.ActiveQuestionID == "" || !e.isCurriculumAttemptAnswer(msg, state) {
+	answer, isAnswer := e.curriculumAttemptAnswer(msg, state)
+	if state.ActiveQuestionID == "" || !isAnswer {
 		return "", false
 	}
 	if !hasAttemptID {
@@ -50,7 +52,7 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 		LearnerID:  learnerID,
 		TopicID:    state.ActiveTopicID,
 		QuestionID: state.ActiveQuestionID,
-		Answer:     msg.Text,
+		Answer:     answer,
 		Locale:     e.messageLocale(msg, conv),
 	})
 	if err != nil {
@@ -75,7 +77,7 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 	questionID := state.ActiveQuestionID
 	attempt := ConversationCurriculumAttempt{
 		AttemptID:     attemptID,
-		LearnerAnswer: msg.Text,
+		LearnerAnswer: answer,
 		Response:      response,
 		Applied:       true,
 		Correct:       result.Correct,
@@ -154,33 +156,36 @@ func (e *Engine) retirePendingCurriculumCheck(conv *Conversation, topicID, runID
 	})
 }
 
-func (e *Engine) isCurriculumAttemptAnswer(msg chat.InboundMessage, state ConversationCurriculumState) bool {
+func (e *Engine) curriculumAttemptAnswer(msg chat.InboundMessage, state ConversationCurriculumState) (string, bool) {
 	if classifyActiveQuizTurn(msg.Text) != quizTurnActionAnswer {
-		return false
+		return "", false
 	}
 	answer := strings.TrimSpace(msg.Text)
 	if answer == "" {
-		return false
+		return "", false
 	}
 	if topic, _ := e.resolveCurriculumContext(msg.UserID, "", answer); topic != nil && topic.ID != state.ActiveTopicID {
-		return false
+		return "", false
+	}
+	if explicitAnswer, explicit := stripCurriculumAnswerPrefix(answer); explicit {
+		return explicitAnswer, explicitAnswer != ""
 	}
 
 	switch state.ActiveAnswerType {
 	case "multiple_choice":
 		for _, option := range state.ActiveOptions {
 			if strings.EqualFold(answer, option.ID) || strings.EqualFold(answer, option.Text) {
-				return true
+				return answer, true
 			}
 		}
 		if len(state.ActiveOptions) > 0 {
-			return false
+			return "", false
 		}
-		return isPlausibleExactCurriculumAnswer(answer)
+		return answer, isPlausibleExactCurriculumAnswer(answer)
 	case "exact":
-		return isPlausibleExactCurriculumAnswer(answer)
+		return answer, isPlausibleExactCurriculumAnswer(answer)
 	default:
-		return false
+		return "", false
 	}
 }
 
@@ -188,13 +193,18 @@ func isPlausibleExactCurriculumAnswer(answer string) bool {
 	if strings.Contains(answer, "?") || len(strings.Fields(answer)) > 16 {
 		return false
 	}
-	for _, token := range tokenizeRetrievalText(answer) {
-		switch token {
-		case "hello", "hi", "hey", "thanks", "thank", "learn", "teach", "explain", "please", "later", "skip":
-			return false
+	_, err := strconv.ParseFloat(strings.TrimSpace(answer), 64)
+	return err == nil
+}
+
+func stripCurriculumAnswerPrefix(answer string) (string, bool) {
+	lower := strings.ToLower(answer)
+	for _, prefix := range []string{"answer:", "jawapan:", "jawab:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return strings.TrimSpace(answer[len(prefix):]), true
 		}
 	}
-	return true
+	return answer, false
 }
 
 func (e *Engine) persistQuizCurriculumAttempt(

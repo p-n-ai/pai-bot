@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestCurriculumAttemptRecordsOnceAndReplaysExactResponse(t *testing.T) {
 		UserID:          "student-1",
 		ExternalID:      "student-1",
 		DeliveryID:      "telegram-message-42",
-		Text:            "B",
+		Text:            "answer: B",
 		IdentityChannel: "telegram",
 	}
 
@@ -185,18 +186,91 @@ func TestCurriculumAttemptIgnoresCasualText(t *testing.T) {
 	runtime := &recordingCurriculumRuntime{}
 	engine := NewEngine(EngineConfig{Store: store, CurriculumRuntime: runtime})
 
-	response, handled := engine.maybeHandleCurriculumAttempt(t.Context(), chat.InboundMessage{
-		Channel:    "telegram",
-		UserID:     "student-3",
-		ExternalID: "student-3",
-		DeliveryID: "message-1",
-		Text:       "thanks",
-	}, conv)
-	if handled || response != "" {
-		t.Fatalf("casual text response = %q, handled = %v", response, handled)
+	for index, text := range []string{
+		"thanks",
+		"ok",
+		"okay",
+		"got it",
+		"good morning",
+		"continue",
+		"I feel overwhelmed by this",
+		"sorry",
+		"oops",
+		"wait",
+		"lol",
+		"bruh",
+		"you = awesome",
+		"mood = tired",
+	} {
+		response, handled := engine.maybeHandleCurriculumAttempt(t.Context(), chat.InboundMessage{
+			Channel:    "telegram",
+			UserID:     "student-3",
+			ExternalID: "student-3",
+			DeliveryID: fmt.Sprintf("message-%d", index+1),
+			Text:       text,
+		}, conv)
+		if handled || response != "" {
+			t.Fatalf("casual text %q response = %q, handled = %v", text, response, handled)
+		}
 	}
 	if len(runtime.attempts) != 0 {
 		t.Fatalf("RecordAttempt calls = %d, want 0", len(runtime.attempts))
+	}
+}
+
+func TestCurriculumAttemptAcceptsExplicitTextAnswer(t *testing.T) {
+	store := NewMemoryStore()
+	identity, err := NewLearnerIdentity("telegram", "student-explicit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationID, err := store.CreateConversationForThread(identity, "", Conversation{
+		State: "teaching",
+		CurriculumState: &ConversationCurriculumState{
+			GoalTopicID:      "topic-1",
+			ActiveTopicID:    "topic-1",
+			ActiveQuestionID: "question-1",
+			ActiveAnswerType: "exact",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conv, err := store.GetConversation(conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &recordingCurriculumRuntime{result: curriculum.AttemptResult{
+		Applied: true,
+		Evidence: curriculum.EvidenceRef{
+			QuestionID: "question-1",
+		},
+	}}
+	engine := NewEngine(EngineConfig{Store: store, CurriculumRuntime: runtime})
+
+	_, handled := engine.maybeHandleCurriculumAttempt(t.Context(), chat.InboundMessage{
+		Channel:    "telegram",
+		UserID:     "student-explicit",
+		ExternalID: "student-explicit",
+		DeliveryID: "message-explicit",
+		Text:       "answer: Kuala Lumpur",
+	}, conv)
+	if !handled {
+		t.Fatal("explicit text answer was not handled")
+	}
+	if len(runtime.attempts) != 1 || runtime.attempts[0].Answer != "Kuala Lumpur" {
+		t.Fatalf("RecordAttempt inputs = %#v, want stripped explicit answer", runtime.attempts)
+	}
+}
+
+func TestEnsurePlannedCheckExplainsExplicitTextAnswer(t *testing.T) {
+	check := &curriculum.PlannedCheck{
+		Question:   "Name the capital.",
+		AnswerType: "exact",
+	}
+	got := ensurePlannedCheck("Name the capital.", check)
+	if !strings.Contains(got, "Reply with answer:") {
+		t.Fatalf("ensurePlannedCheck() = %q, want explicit answer instruction", got)
 	}
 }
 

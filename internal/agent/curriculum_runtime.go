@@ -54,6 +54,10 @@ func renderPlannedCheck(check *curriculum.PlannedCheck) string {
 	for _, option := range check.Options {
 		fmt.Fprintf(&builder, "\n%s. %s", option.ID, option.Text)
 	}
+	if instruction := plannedCheckAnswerInstruction(check); instruction != "" {
+		builder.WriteString("\n")
+		builder.WriteString(instruction)
+	}
 	return builder.String()
 }
 
@@ -65,12 +69,26 @@ func ensurePlannedCheck(response string, check *curriculum.PlannedCheck) string 
 	question := strings.ToLower(strings.Join(strings.Fields(check.Question), " "))
 	normalizedResponse := strings.ToLower(strings.Join(strings.Fields(response), " "))
 	if question != "" && strings.Contains(normalizedResponse, question) {
-		return response
+		instruction := plannedCheckAnswerInstruction(check)
+		if instruction == "" || strings.Contains(normalizedResponse, strings.ToLower(instruction)) {
+			return response
+		}
+		return strings.TrimSpace(response) + "\n" + instruction
 	}
 	if strings.TrimSpace(response) == "" {
 		return rendered
 	}
 	return strings.TrimSpace(response) + "\n\n" + rendered
+}
+
+func plannedCheckAnswerInstruction(check *curriculum.PlannedCheck) string {
+	if check == nil || len(check.Options) > 0 {
+		return ""
+	}
+	if check.AnswerType != "exact" && check.AnswerType != "multiple_choice" {
+		return ""
+	}
+	return "Reply with answer: followed by your response."
 }
 
 func curriculumPlanContextPackets(goalTopicID string, plan curriculum.TeachingPlan) []contextPacket {
