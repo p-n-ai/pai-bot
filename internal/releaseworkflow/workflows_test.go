@@ -956,6 +956,7 @@ type fakeDeployOptions struct {
 	smokeFails           bool
 	gooseFails           bool
 	adminHTTPFails       bool
+	adminHTTPFailures    int
 	aiStatusFails        bool
 	appLookupFails       bool
 	missingPreviousAdmin bool
@@ -1068,7 +1069,11 @@ if [ "$1" = "compose" ] && [[ "$args" == *"--profile tools run --rm goose"* ]]; 
   exit 0
 fi
 if [ "$1" = "compose" ] && [[ "$args" == *"exec -T admin wget"* ]]; then
-  if [ "$FAKE_ADMIN_HTTP_FAIL" = "true" ]; then exit 8; fi
+  count_file="$FAKE_DOCKER_STATE/admin-http"
+  count=$(cat "$count_file" 2>/dev/null || echo 0)
+  count=$((count + 1))
+  echo "$count" > "$count_file"
+  if [ "$FAKE_ADMIN_HTTP_FAIL" = "true" ] || [ "$count" -le "$FAKE_ADMIN_HTTP_FAILURES" ]; then exit 8; fi
   exit 0
 fi
 if [ "$1" = "compose" ] && [[ "$args" == *"http://localhost:8080/health/status"* ]]; then
@@ -1119,6 +1124,7 @@ exit 0
 		fmt.Sprintf("FAKE_SMOKE_FAIL=%t", options.smokeFails),
 		fmt.Sprintf("FAKE_GOOSE_FAIL=%t", options.gooseFails),
 		fmt.Sprintf("FAKE_ADMIN_HTTP_FAIL=%t", options.adminHTTPFails),
+		fmt.Sprintf("FAKE_ADMIN_HTTP_FAILURES=%d", options.adminHTTPFailures),
 		fmt.Sprintf("FAKE_AI_STATUS_FAIL=%t", options.aiStatusFails),
 		fmt.Sprintf("FAKE_APP_LOOKUP_FAIL=%t", options.appLookupFails),
 		fmt.Sprintf("FAKE_MISSING_PREVIOUS_ADMIN=%t", options.missingPreviousAdmin),
@@ -1246,6 +1252,20 @@ func TestRemoteDeploymentFreshInstallAndRollbackBehavior(t *testing.T) {
 	)
 	if strings.Contains(log, "up -d --force-recreate") {
 		t.Fatal("rollback restarted services without a complete previous image pair")
+	}
+}
+
+func TestRemoteDeploymentRetriesAdminHTTPReadiness(t *testing.T) {
+	output, log, err := runFakeDeploy(t, fakeDeployOptions{
+		appHealth:         "healthy",
+		adminHTTPFailures: 2,
+	})
+	if err != nil {
+		t.Fatalf("deployment after transient admin HTTP failures: %v\n%s", err, output)
+	}
+	requireContains(t, output, "Admin HTTP ready after attempt 3", "Deploy successful")
+	if attempts := strings.Count(log, "exec -T admin wget"); attempts != 3 {
+		t.Fatalf("admin HTTP attempts = %d, want 3", attempts)
 	}
 }
 

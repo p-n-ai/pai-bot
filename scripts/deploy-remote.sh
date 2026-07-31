@@ -206,8 +206,17 @@ RUNNING_ADMIN_ID=$(docker inspect --format '{{.Image}}' "$ADMIN_CONTAINER")
 if [ "$RUNNING_ADMIN_ID" != "$EXPECTED_ADMIN_ID" ]; then
   fail_release "admin image $RUNNING_ADMIN_ID does not match candidate $EXPECTED_ADMIN_ID"
 fi
-if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  exec -T admin wget -qO- http://localhost:3000/ > /dev/null; then
+ADMIN_HTTP_READY=false
+for i in $(seq 1 30); do
+  if $COMPOSE exec -T admin wget -qO- http://localhost:3000/ > /dev/null; then
+    ADMIN_HTTP_READY=true
+    echo "Admin HTTP ready after attempt $i"
+    break
+  fi
+  echo "Attempt $i/30: admin HTTP not ready"
+  sleep 1
+done
+if [ "$ADMIN_HTTP_READY" != "true" ]; then
   fail_release "admin HTTP check failed"
 fi
 echo "Admin container is running the candidate image"
