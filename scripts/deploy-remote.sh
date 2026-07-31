@@ -208,7 +208,7 @@ if [ "$RUNNING_ADMIN_ID" != "$EXPECTED_ADMIN_ID" ]; then
 fi
 ADMIN_HTTP_READY=false
 for i in $(seq 1 30); do
-  if $COMPOSE exec -T admin wget -qO- http://localhost:3000/ > /dev/null; then
+  if $COMPOSE exec -T admin wget -qO- http://127.0.0.1:3000/ > /dev/null; then
     ADMIN_HTTP_READY=true
     echo "Admin HTTP ready after attempt $i"
     break
