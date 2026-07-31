@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/i18n"
 	"github.com/p-n-ai/pai-bot/internal/platform/airouter"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
@@ -39,20 +41,31 @@ const (
 type fixtureFile struct {
 	Version       int                `yaml:"version"`
 	Provider      string             `yaml:"provider"`
+	Characters    []characterSpec    `yaml:"characters"`
 	Conversations []conversationSpec `yaml:"conversations"`
 }
 
+type characterSpec struct {
+	ID        string `yaml:"id"`
+	FirstName string `yaml:"first_name"`
+	Username  string `yaml:"username"`
+	Language  string `yaml:"language"`
+}
+
 type conversationSpec struct {
-	ID       string         `yaml:"id"`
-	Title    string         `yaml:"title"`
-	Tags     []string       `yaml:"tags"`
-	Evidence []evidenceSpec `yaml:"evidence"`
-	Turns    []turnSpec     `yaml:"turns"`
-	Checks   behaviorChecks `yaml:"checks"`
+	ID          string         `yaml:"id"`
+	Title       string         `yaml:"title"`
+	CharacterID string         `yaml:"character"`
+	Character   characterSpec  `yaml:"-"`
+	Tags        []string       `yaml:"tags"`
+	Evidence    []evidenceSpec `yaml:"evidence"`
+	Turns       []turnSpec     `yaml:"turns"`
+	Checks      behaviorChecks `yaml:"checks"`
 }
 
 type turnSpec struct {
-	User string `yaml:"user"`
+	User   string         `yaml:"user"`
+	Checks behaviorChecks `yaml:"checks"`
 }
 
 type evidenceSpec struct {
@@ -275,18 +288,140 @@ func validateRequestOnlyMode(requestOnly bool, dumpRequestsPath string) error {
 }
 
 func loadFixture(path string) (fixtureFile, error) {
-	b, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return fixtureFile{}, err
 	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	decoder.KnownFields(true)
 	var fixture fixtureFile
-	if err := yaml.Unmarshal(b, &fixture); err != nil {
+	if err := decoder.Decode(&fixture); err != nil {
 		return fixtureFile{}, err
 	}
-	if fixture.Version != 1 {
-		return fixtureFile{}, fmt.Errorf("version = %d, want 1", fixture.Version)
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fixtureFile{}, fmt.Errorf("fixture must contain exactly one YAML document")
+		}
+		return fixtureFile{}, err
+	}
+	if err := normalizeFixture(&fixture); err != nil {
+		return fixtureFile{}, err
 	}
 	return fixture, nil
+}
+
+func normalizeFixture(fixture *fixtureFile) error {
+	if fixture.Version != 1 {
+		return fmt.Errorf("version = %d, want 1", fixture.Version)
+	}
+
+	charactersByID := make(map[string]characterSpec, len(fixture.Characters))
+	for i := range fixture.Characters {
+		character := &fixture.Characters[i]
+		character.ID = strings.TrimSpace(character.ID)
+		character.FirstName = strings.TrimSpace(character.FirstName)
+		character.Username = strings.TrimSpace(character.Username)
+		character.Language = strings.TrimSpace(character.Language)
+		if character.ID == "" {
+			return fmt.Errorf("characters[%d].id is required", i)
+		}
+		if character.Language != "" {
+			normalized := i18n.NormalizeLocale(character.Language)
+			if normalized == "" {
+				return fmt.Errorf("character %q has unsupported language %q", character.ID, character.Language)
+			}
+			character.Language = normalized
+		}
+		if _, exists := charactersByID[character.ID]; exists {
+			return fmt.Errorf("duplicate character id %q", character.ID)
+		}
+		charactersByID[character.ID] = *character
+	}
+
+	conversationIDs := make(map[string]struct{}, len(fixture.Conversations))
+	for i := range fixture.Conversations {
+		conversation := &fixture.Conversations[i]
+		conversation.ID = strings.TrimSpace(conversation.ID)
+		conversation.Title = strings.TrimSpace(conversation.Title)
+		conversation.CharacterID = strings.TrimSpace(conversation.CharacterID)
+
+		if conversation.ID == "" {
+			return fmt.Errorf("conversations[%d].id is required", i)
+		}
+		if _, exists := conversationIDs[conversation.ID]; exists {
+			return fmt.Errorf("duplicate conversation id %q", conversation.ID)
+		}
+		conversationIDs[conversation.ID] = struct{}{}
+		if conversation.Title == "" {
+			return fmt.Errorf("conversation %q title is required", conversation.ID)
+		}
+		if conversation.CharacterID != "" {
+			character, exists := charactersByID[conversation.CharacterID]
+			if !exists {
+				return fmt.Errorf("conversation %q references unknown character %q", conversation.ID, conversation.CharacterID)
+			}
+			conversation.Character = character
+		}
+		if len(conversation.Turns) == 0 {
+			return fmt.Errorf("conversation %q requires at least one turn", conversation.ID)
+		}
+		if err := normalizeBehaviorChecks(&conversation.Checks, len(conversation.Turns), fmt.Sprintf("conversation %q checks", conversation.ID)); err != nil {
+			return err
+		}
+		for j := range conversation.Turns {
+			turn := &conversation.Turns[j]
+			turn.User = strings.TrimSpace(turn.User)
+			if turn.User == "" {
+				return fmt.Errorf("conversation %q turn %d user text is required", conversation.ID, j+1)
+			}
+			if err := normalizeBehaviorChecks(&turn.Checks, len(conversation.Turns), fmt.Sprintf("conversation %q turn %d checks", conversation.ID, j+1)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func normalizeBehaviorChecks(checks *behaviorChecks, turnCount int, location string) error {
+	checks.ExpectedLanguage = strings.TrimSpace(checks.ExpectedLanguage)
+	normalizeStrings(checks.RequireResponsePhrases)
+	normalizeStrings(checks.ForbidResponsePhrases)
+	switch checks.ExpectedLanguage {
+	case "", "bm_or_mixed", "en_or_mixed":
+	default:
+		return fmt.Errorf("%s expected_language %q is unsupported", location, checks.ExpectedLanguage)
+	}
+	if checks.MaxResponseLines < 0 {
+		return fmt.Errorf("%s max_response_lines must be non-negative", location)
+	}
+	if checks.MaxResponseChars < 0 {
+		return fmt.Errorf("%s max_response_chars must be non-negative", location)
+	}
+	if err := validateTurnReferences(checks.ForbidFinalAnswerOnTurn, turnCount, location, "forbid_final_answer_on_turn"); err != nil {
+		return err
+	}
+	if err := validateTurnReferences(checks.ForbidSectionLabelsOnTurn, turnCount, location, "forbid_section_labels_on_turn"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateTurnReferences(turns []int, turnCount int, location, field string) error {
+	for _, turn := range turns {
+		if turn < 1 || turn > turnCount {
+			return fmt.Errorf("%s %s contains turn %d outside 1..%d", location, field, turn, turnCount)
+		}
+	}
+	return nil
+}
+
+func normalizeStrings(values []string) {
+	for i := range values {
+		values[i] = strings.TrimSpace(values[i])
+	}
 }
 
 func buildEngine(memory bool, mockResponse string, progressSideEffects bool, traceFunc func(ai.CompletionTrace), evidenceRetriever retrieval.TutorEvidenceRetriever) (*agent.Engine, func(), error) {
@@ -443,7 +578,11 @@ func selectConversations(conversations []conversationSpec, caseID, tag string, m
 	return selected
 }
 
-func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.Duration, showResponses bool, runChecks bool) caseResult {
+type conversationProcessor interface {
+	ProcessMessage(context.Context, chat.InboundMessage) (string, error)
+}
+
+func runConversation(engine conversationProcessor, conv conversationSpec, timeout time.Duration, showResponses bool, runChecks bool) caseResult {
 	userID := "harness-" + strings.ToLower(conv.ID) + "-" + fmt.Sprint(time.Now().UnixNano())
 	responses := make([]string, 0, len(conv.Turns))
 	failures := []string{}
@@ -455,6 +594,9 @@ func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.D
 			UserID:     userID,
 			DeliveryID: fmt.Sprintf("harness:%s:%d", userID, i+1),
 			Text:       turn.User,
+			FirstName:  conv.Character.FirstName,
+			Username:   conv.Character.Username,
+			Language:   conv.Character.Language,
 		})
 		cancel()
 		if err != nil {
@@ -466,6 +608,10 @@ func runConversation(engine *agent.Engine, conv conversationSpec, timeout time.D
 			fmt.Printf("\n[%s turn %d]\nUser: %s\nAssistant: %s\n", conv.ID, i+1, turn.User, resp)
 		}
 		if runChecks {
+			failures = append(failures, checkTurn(i+1, resp, turn.Checks)...)
+			for _, failure := range checkConversation(turn.Checks, responses[len(responses)-1:]) {
+				failures = append(failures, fmt.Sprintf("turn %d: %s", i+1, failure))
+			}
 			failures = append(failures, checkTurn(i+1, resp, conv.Checks)...)
 		}
 	}

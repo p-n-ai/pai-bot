@@ -8,9 +8,12 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
 )
 
@@ -179,6 +182,71 @@ func TestHarnessEvidenceRetrieverRejectsUnscopedLearner(t *testing.T) {
 	}
 }
 
+func TestRunConversationPropagatesCharacterOnEveryTurn(t *testing.T) {
+	processor := &recordingConversationProcessor{responses: []string{"first reply", "second reply"}}
+	conv := conversationSpec{
+		ID: "PERSONA",
+		Character: characterSpec{
+			ID:        "faris-terse",
+			FirstName: "Faris",
+			Username:  "faris",
+			Language:  "ms",
+		},
+		Turns: []turnSpec{{User: "first turn"}, {User: "second turn"}},
+	}
+
+	result := runConversation(processor, conv, time.Second, false, false)
+	if !result.Passed {
+		t.Fatalf("runConversation() failures = %v", result.Failures)
+	}
+	if len(processor.messages) != 2 {
+		t.Fatalf("ProcessMessage() calls = %d, want 2", len(processor.messages))
+	}
+	for i, msg := range processor.messages {
+		if msg.FirstName != "Faris" || msg.Username != "faris" || msg.Language != "ms" {
+			t.Errorf("turn %d persona = (%q, %q, %q), want (Faris, faris, ms)", i+1, msg.FirstName, msg.Username, msg.Language)
+		}
+	}
+	if processor.messages[0].UserID == "" || processor.messages[0].UserID != processor.messages[1].UserID {
+		t.Errorf("learner IDs = %q and %q, want one non-empty conversation learner ID", processor.messages[0].UserID, processor.messages[1].UserID)
+	}
+	if processor.messages[0].DeliveryID == processor.messages[1].DeliveryID {
+		t.Errorf("delivery IDs are not unique: %q", processor.messages[0].DeliveryID)
+	}
+}
+
+func TestRunConversationAppliesTurnLocalResponseLimitOnlyToDeclaredTurn(t *testing.T) {
+	conv := conversationSpec{
+		ID: "TURN-CHECK",
+		Turns: []turnSpec{
+			{User: "first turn"},
+			{User: "second turn", Checks: behaviorChecks{MaxResponseChars: 4}},
+		},
+	}
+
+	processor := &recordingConversationProcessor{responses: []string{"long first response", "tiny"}}
+	if result := runConversation(processor, conv, time.Second, false, true); !result.Passed {
+		t.Fatalf("turn-local limit affected another turn: %v", result.Failures)
+	}
+
+	processor = &recordingConversationProcessor{responses: []string{"long first response", "large"}}
+	result := runConversation(processor, conv, time.Second, false, true)
+	want := []string{"turn 2: response has 5 chars, max 4"}
+	if !reflect.DeepEqual(result.Failures, want) {
+		t.Fatalf("runConversation() failures = %v, want %v", result.Failures, want)
+	}
+}
+
+type recordingConversationProcessor struct {
+	responses []string
+	messages  []chat.InboundMessage
+}
+
+func (p *recordingConversationProcessor) ProcessMessage(_ context.Context, msg chat.InboundMessage) (string, error) {
+	p.messages = append(p.messages, msg)
+	return p.responses[len(p.messages)-1], nil
+}
+
 func engineTrackerIsNil(engine any) bool {
 	field := reflect.ValueOf(engine).Elem().FieldByName("tracker")
 	return field.IsNil()
@@ -187,4 +255,108 @@ func engineTrackerIsNil(engine any) bool {
 func engineCurriculumRuntimeIsNil(engine any) bool {
 	field := reflect.ValueOf(engine).Elem().FieldByName("curriculumRuntime")
 	return field.IsNil()
+}
+
+const validFixtureYAML = `version: 1
+characters:
+  - id: " teacher "
+    first_name: " Ada "
+    username: " ada-teacher "
+    language: " BM-my "
+conversations:
+  - id: " CASE-1 "
+    title: " Linear equations "
+    character: " teacher "
+    turns:
+      - user: " learner question "
+        checks:
+          expected_language: " en_or_mixed "
+          max_response_lines: 3
+    checks:
+      require_response_phrases: [" explain "]
+      forbid_final_answer_on_turn: [1]
+      max_response_chars: 200
+`
+
+func TestLoadFixtureNormalizesAndResolvesCharacter(t *testing.T) {
+	fixture, err := loadFixture(writeFixture(t, validFixtureYAML))
+	if err != nil {
+		t.Fatalf("loadFixture() error = %v", err)
+	}
+
+	wantCharacter := characterSpec{ID: "teacher", FirstName: "Ada", Username: "ada-teacher", Language: "ms"}
+	if len(fixture.Characters) != 1 || !reflect.DeepEqual(fixture.Characters[0], wantCharacter) {
+		t.Fatalf("Characters = %#v, want %#v", fixture.Characters, wantCharacter)
+	}
+	conversation := fixture.Conversations[0]
+	if conversation.ID != "CASE-1" || conversation.Title != "Linear equations" || conversation.CharacterID != "teacher" {
+		t.Fatalf("conversation identifiers were not normalized: %#v", conversation)
+	}
+	if !reflect.DeepEqual(conversation.Character, wantCharacter) {
+		t.Fatalf("resolved Character = %#v, want %#v", conversation.Character, wantCharacter)
+	}
+
+	if conversation.Turns[0].User != "learner question" || conversation.Turns[0].Checks.ExpectedLanguage != "en_or_mixed" {
+		t.Fatalf("turn was not normalized: %#v", conversation.Turns[0])
+	}
+	if conversation.Checks.RequireResponsePhrases[0] != "explain" {
+		t.Fatalf("conversation checks were not normalized: %#v", conversation.Checks)
+	}
+}
+
+func TestLoadFixtureRejectsInvalidYAMLContracts(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{name: "unknown field", yaml: validFixtureYAML + "typo: true\n", want: "field typo not found"},
+		{name: "multiple documents", yaml: validFixtureYAML + "---\nversion: 1\n", want: "exactly one YAML document"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := loadFixture(writeFixture(t, test.yaml))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("loadFixture() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestLoadFixtureRejectsInvalidSemantics(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{name: "unsupported version", yaml: strings.Replace(validFixtureYAML, "version: 1", "version: 2", 1), want: "want 1"},
+
+		{name: "duplicate character id", yaml: strings.Replace(validFixtureYAML, "conversations:\n", "  - id: teacher\n    first_name: Other\n    username: other\n    language: en\nconversations:\n", 1), want: `duplicate character id "teacher"`},
+
+		{name: "unknown character", yaml: strings.Replace(validFixtureYAML, `    character: " teacher "`, `    character: missing`, 1), want: `unknown character "missing"`},
+		{name: "unsupported character language", yaml: strings.Replace(validFixtureYAML, `    language: " BM-my "`, `    language: klingon`, 1), want: `unsupported language "klingon"`},
+
+		{name: "missing learner text", yaml: strings.Replace(validFixtureYAML, `      - user: " learner question "`, `      - user: "   "`, 1), want: "user text is required"},
+		{name: "unsupported language", yaml: strings.Replace(validFixtureYAML, `expected_language: " en_or_mixed "`, `expected_language: klingon`, 1), want: "expected_language"},
+		{name: "negative turn limit", yaml: strings.Replace(validFixtureYAML, "max_response_lines: 3", "max_response_lines: -1", 1), want: "max_response_lines must be non-negative"},
+
+		{name: "out of range conversation turn reference", yaml: strings.Replace(validFixtureYAML, "forbid_final_answer_on_turn: [1]", "forbid_final_answer_on_turn: [2]", 1), want: "outside 1..1"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := loadFixture(writeFixture(t, test.yaml))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("loadFixture() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
+func writeFixture(t *testing.T, contents string) string {
+	t.Helper()
+	path := t.TempDir() + "/fixture.yaml"
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
 }
