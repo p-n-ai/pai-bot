@@ -169,7 +169,7 @@ jobs:
           SHA: ${{ needs.candidate.outputs.sha }}
           VERSION: ${{ inputs.version }}
         run: |
-          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha 2>/dev/null || true)
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha 2>/dev/null) || tag_sha=""
           if [ -z "$tag_sha" ]; then
             gh api "repos/$GITHUB_REPOSITORY/git/refs" \
               --method POST \
