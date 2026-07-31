@@ -1,0 +1,772 @@
+#!/usr/bin/env python3
+"""Run one bounded, changed-file validation plan for coding agents.
+
+Configuration lives in .codex/agent-check.json. Commands are argv arrays and
+run without a shell. The special token {files} expands to the matching changed
+files as separate arguments.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import hashlib
+import json
+import os
+import shlex
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any, Sequence
+
+RESULT_PREFIX = "AGENT_CHECK_RESULT "
+DEFAULT_CONFIG = ".codex/agent-check.json"
+DEFAULT_CACHE_DIR = ".codex/cache/agent-check"
+DEFAULT_BUDGET_SECONDS = 120
+DEFAULT_MAX_OUTPUT_CHARS = 16_000
+DEFAULT_MAX_CHANGED_FILES = 200
+DEFAULT_GIT_TIMEOUT_SECONDS = 10
+DEFAULT_TEST_POLICY_COMMAND = "scripts/test-policy"
+
+
+class AgentCheckError(RuntimeError):
+    pass
+
+
+class AgentCheckTimeout(AgentCheckError):
+    pass
+
+
+def bounded_timeout(deadline: float | None, cap_seconds: float) -> float:
+    if deadline is None:
+        return cap_seconds
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise AgentCheckTimeout("global validation budget exhausted during repository inspection")
+    return min(cap_seconds, remaining)
+
+
+def git(
+    root: Path,
+    *args: str,
+    check: bool = True,
+    deadline: float | None = None,
+) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=bounded_timeout(deadline, DEFAULT_GIT_TIMEOUT_SECONDS),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AgentCheckTimeout(f"git {' '.join(args)} exceeded the validation budget") from exc
+    if check and completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise AgentCheckError(f"git {' '.join(args)} failed: {detail}")
+    return completed.stdout
+
+
+def repository_root() -> Path:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=DEFAULT_GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AgentCheckTimeout("Git repository discovery timed out") from exc
+    if completed.returncode != 0:
+        raise AgentCheckError("agent-check must run inside a Git repository")
+    return Path(completed.stdout.strip()).resolve()
+
+
+
+def load_config(path: Path) -> tuple[dict[str, Any], bytes]:
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise AgentCheckError(
+            f"missing {path}; copy and customize one of the recipes in recipes/"
+        ) from exc
+
+    try:
+        config = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AgentCheckError(f"invalid JSON in {path}: {exc}") from exc
+
+    if not isinstance(config, dict) or config.get("version") != 1:
+        raise AgentCheckError(f"{path} must be an object with version: 1")
+    if not isinstance(config.get("checks"), list):
+        raise AgentCheckError(f"{path} must contain a checks array")
+    return config, raw
+
+
+def _nul_lines(value: str) -> list[str]:
+    return [part for part in value.split("\0") if part]
+
+
+def run_test_policy(
+    root: Path,
+    base: str | None,
+    deadline: float | None = None,
+) -> dict[str, Any]:
+    script = root / DEFAULT_TEST_POLICY_COMMAND
+    if not script.is_file():
+        raise AgentCheckError(f"missing {DEFAULT_TEST_POLICY_COMMAND}")
+
+    command = [sys.executable, str(script), "check", "--json"]
+    if base:
+        command.extend(["--base", base])
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=bounded_timeout(deadline, DEFAULT_GIT_TIMEOUT_SECONDS),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AgentCheckTimeout("test-authoring policy check exceeded the validation budget") from exc
+
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no output"
+        raise AgentCheckError(f"test-policy returned invalid JSON: {detail}") from exc
+    if not isinstance(result, dict):
+        raise AgentCheckError("test-policy must return a JSON object")
+    if completed.returncode == 2 or "configuration_error" in result:
+        raise AgentCheckError(str(result.get("configuration_error", "test-policy configuration error")))
+    if completed.returncode not in {0, 1}:
+        raise AgentCheckError(f"test-policy exited with unexpected status {completed.returncode}")
+    if not isinstance(result.get("ok"), bool):
+        raise AgentCheckError("test-policy result must contain boolean ok")
+    return result
+
+
+def changed_files(
+    root: Path,
+    base: str | None,
+    deadline: float | None = None,
+) -> list[str]:
+    paths: set[str] = set()
+
+    if base:
+        merge_base = git(root, "merge-base", base, "HEAD", deadline=deadline).strip()
+        paths.update(
+            _nul_lines(
+                git(
+                    root,
+                    "diff",
+                    "--name-only",
+                    "--diff-filter=ACDMRTUXB",
+                    "-z",
+                    f"{merge_base}..HEAD",
+                    deadline=deadline,
+                )
+            )
+        )
+
+    # Worktree + index changes relative to the current commit.
+    head_exists = bool(
+        git(root, "rev-parse", "--verify", "HEAD", check=False, deadline=deadline).strip()
+    )
+
+    if head_exists:
+        paths.update(
+            _nul_lines(
+                git(
+                    root,
+                    "diff",
+                    "--name-only",
+                    "--diff-filter=ACDMRTUXB",
+                    "-z",
+                    "HEAD",
+                    "--",
+                    deadline=deadline,
+                )
+            )
+        )
+    else:
+        paths.update(_nul_lines(git(root, "ls-files", "-z", deadline=deadline)))
+
+    paths.update(
+        _nul_lines(
+            git(
+                root,
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "-z",
+                deadline=deadline,
+            )
+        )
+    )
+
+    return sorted(path.replace("\\", "/") for path in paths)
+
+
+def glob_matches(path: str, pattern: str) -> bool:
+    """Match git-style paths, including zero-directory uses of **/."""
+
+    variants = {pattern}
+    pending = [pattern]
+    while pending:
+        current = pending.pop()
+        marker = "**/"
+        index = current.find(marker)
+        if index >= 0:
+            collapsed = current[:index] + current[index + len(marker):]
+            if collapsed not in variants:
+                variants.add(collapsed)
+                pending.append(collapsed)
+    return any(fnmatch.fnmatchcase(path, candidate) for candidate in variants)
+
+
+def matches(path: str, includes: Sequence[str], excludes: Sequence[str]) -> bool:
+    included = not includes or any(glob_matches(path, pattern) for pattern in includes)
+    excluded = any(glob_matches(path, pattern) for pattern in excludes)
+    return included and not excluded
+
+
+def select_checks(
+    config: dict[str, Any],
+    files: Sequence[str],
+    root: Path | None = None,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+
+    for index, raw_check in enumerate(config["checks"]):
+        if not isinstance(raw_check, dict):
+            raise AgentCheckError(f"checks[{index}] must be an object")
+
+        name = raw_check.get("name")
+        command = raw_check.get("command")
+        if not isinstance(name, str) or not name.strip():
+            raise AgentCheckError(f"checks[{index}].name must be a non-empty string")
+        if not isinstance(command, list) or not command or not all(isinstance(v, str) for v in command):
+            raise AgentCheckError(f"checks[{index}].command must be a non-empty string array")
+
+        includes = raw_check.get("include", [])
+        excludes = raw_check.get("exclude", [])
+        if not isinstance(includes, list) or not all(isinstance(v, str) for v in includes):
+            raise AgentCheckError(f"checks[{index}].include must be a string array")
+        if not isinstance(excludes, list) or not all(isinstance(v, str) for v in excludes):
+            raise AgentCheckError(f"checks[{index}].exclude must be a string array")
+
+        relevant = [path for path in files if matches(path, includes, excludes)]
+        if not relevant:
+            continue
+
+        max_files = raw_check.get("max_files")
+        if max_files is not None:
+            if not isinstance(max_files, int) or max_files < 1:
+                raise AgentCheckError(f"checks[{index}].max_files must be a positive integer")
+            if len(relevant) > max_files:
+                selected.append(
+                    {
+                        "name": name,
+                        "files": relevant,
+                        "selection_error": (
+                            f"{name} matched {len(relevant)} files, above max_files={max_files}; "
+                            "leave broad validation to CI"
+                        ),
+                    }
+                )
+                continue
+
+        allow_deleted = raw_check.get("allow_deleted", False)
+        if not isinstance(allow_deleted, bool):
+            raise AgentCheckError(f"checks[{index}].allow_deleted must be a boolean")
+        deleted = []
+        if root is not None:
+            deleted = [
+                path
+                for path in relevant
+                if not (root / path).exists() and not (root / path).is_symlink()
+            ]
+        if deleted and not allow_deleted:
+            preview = ", ".join(deleted[:5])
+            suffix = "" if len(deleted) <= 5 else f" (+{len(deleted) - 5} more)"
+            selected.append(
+                {
+                    "name": name,
+                    "files": relevant,
+                    "selection_error": (
+                        f"{name} matched deleted files ({preview}{suffix}); "
+                        "related-test selection may be incomplete, so leave validation to CI"
+                    ),
+                }
+            )
+            continue
+
+        selected.append({**raw_check, "name": name, "files": relevant})
+
+    return selected
+
+
+def _hash_file(
+    digest: "hashlib._Hash",
+    root: Path,
+    relative: str,
+    deadline: float | None = None,
+) -> None:
+    bounded_timeout(deadline, DEFAULT_GIT_TIMEOUT_SECONDS)
+    digest.update(relative.encode("utf-8", errors="surrogateescape"))
+    digest.update(b"\0")
+    path = root / relative
+
+    if not path.exists() and not path.is_symlink():
+        digest.update(b"<deleted>\0")
+        return
+
+    if path.is_symlink():
+        digest.update(b"<symlink>")
+        digest.update(os.readlink(path).encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        return
+
+    if not path.is_file():
+        digest.update(b"<non-file>\0")
+        return
+
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            bounded_timeout(deadline, DEFAULT_GIT_TIMEOUT_SECONDS)
+            digest.update(chunk)
+    digest.update(b"\0")
+
+
+def fingerprint(
+    root: Path,
+    config_bytes: bytes,
+    files: Sequence[str],
+    checks: Sequence[dict[str, Any]],
+    policy_result: dict[str, Any],
+    base: str | None,
+    deadline: float | None = None,
+) -> str:
+    digest = hashlib.sha256()
+    digest.update(b"codex-lean-guardrails:agent-check:v2\0")
+    digest.update(config_bytes)
+    digest.update(b"\0")
+    digest.update((base or "").encode())
+    digest.update(b"\0")
+    digest.update(git(root, "rev-parse", "--verify", "HEAD", check=False, deadline=deadline).strip().encode())
+    digest.update(b"\0")
+
+    # Hash the runner and authoring policy so behavior changes invalidate cache entries.
+    for implementation_path in (
+        str(Path(__file__).resolve().relative_to(root)).replace("\\", "/"),
+        DEFAULT_TEST_POLICY_COMMAND,
+        ".codex/test-policy.json",
+        ".codex/hooks/test_policy.py",
+    ):
+        _hash_file(digest, root, implementation_path, deadline)
+
+    digest.update(json.dumps(policy_result, sort_keys=True, separators=(",", ":")).encode())
+    digest.update(b"\0")
+
+    for path in files:
+        _hash_file(digest, root, path, deadline)
+
+    serializable_checks = [
+        {key: value for key, value in check.items() if key != "selection_error"}
+        for check in checks
+    ]
+    digest.update(json.dumps(serializable_checks, sort_keys=True, separators=(",", ":")).encode())
+    return digest.hexdigest()
+
+
+def expand_command(command: Sequence[str], files: Sequence[str]) -> list[str]:
+    expanded: list[str] = []
+    for value in command:
+        if value == "{files}":
+            expanded.extend(files)
+        elif "{files}" in value:
+            raise AgentCheckError("{files} must be a standalone command-array element")
+        else:
+            expanded.append(value)
+    return expanded
+
+
+def kill_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if process.poll() is None:
+                process.kill()
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def run_command(
+    argv: Sequence[str],
+    cwd: Path,
+    env_overrides: dict[str, str],
+    timeout_seconds: float,
+) -> tuple[int, str, bool, float]:
+    env = os.environ.copy()
+    env.update(env_overrides)
+    kwargs: dict[str, Any] = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+    else:
+        kwargs["start_new_session"] = True
+
+    started = time.monotonic()
+    try:
+        process = subprocess.Popen(
+            list(argv),
+            cwd=str(cwd),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **kwargs,
+        )
+    except FileNotFoundError as exc:
+        return 127, f"command not found: {argv[0]} ({exc})\n", False, time.monotonic() - started
+
+    try:
+        remaining = timeout_seconds - (time.monotonic() - started)
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(list(argv), timeout_seconds)
+        output, _ = process.communicate(timeout=remaining)
+        return process.returncode, output, False, time.monotonic() - started
+    except subprocess.TimeoutExpired:
+        kill_process_tree(process)
+        output, _ = process.communicate()
+        return 124, output, True, time.monotonic() - started
+
+
+def cache_path(root: Path, config: dict[str, Any], key: str) -> Path:
+    configured = config.get("cache_dir", DEFAULT_CACHE_DIR)
+    if not isinstance(configured, str) or not configured:
+        raise AgentCheckError("cache_dir must be a non-empty string")
+    path = (root / configured).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise AgentCheckError("cache_dir must stay inside the repository") from exc
+    return path / f"{key}.json"
+
+
+def read_cache(path: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def write_cache(path: Path, result: dict[str, Any], max_entries: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+    entries = sorted(path.parent.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+    for old in entries[max_entries:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def emit(result: dict[str, Any], json_only: bool) -> None:
+    encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
+    if json_only:
+        print(encoded)
+    else:
+        print(f"{RESULT_PREFIX}{encoded}")
+
+
+def exit_code_for(result: dict[str, Any]) -> int:
+    status = result.get("status")
+    if status in {"pass", "skipped"}:
+        return 0
+    if status == "timeout":
+        return 124
+    if status == "configuration_error":
+        return 2
+    return 1
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("scope", choices=["changed"], help="only changed-file validation is supported")
+    parser.add_argument("--base", help="also include committed changes since merge-base with this ref")
+    parser.add_argument("--no-cache", action="store_true", help="ignore prior result cache")
+    parser.add_argument("--json", action="store_true", help="emit only the final JSON result on stdout")
+    parser.add_argument("--config", default=DEFAULT_CONFIG, help="config path relative to repository root")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    started = time.monotonic()
+
+    try:
+        root = repository_root()
+        config_path = (root / args.config).resolve()
+        try:
+            config_path.relative_to(root)
+        except ValueError as exc:
+            raise AgentCheckError("config path must stay inside the repository") from exc
+        config, config_bytes = load_config(config_path)
+        budget = config.get("budget_seconds", DEFAULT_BUDGET_SECONDS)
+        if not isinstance(budget, (int, float)) or budget <= 0:
+            raise AgentCheckError("budget_seconds must be a positive number")
+        deadline = started + float(budget)
+
+        files = changed_files(root, args.base, deadline)
+
+        max_changed_files = config.get("max_changed_files", DEFAULT_MAX_CHANGED_FILES)
+        if not isinstance(max_changed_files, int) or max_changed_files < 1:
+            raise AgentCheckError("max_changed_files must be a positive integer")
+
+        if not files:
+            result = {
+                "status": "skipped",
+                "scope": "changed",
+                "cached": False,
+                "changed_files": 0,
+                "checks_run": 0,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "reason": "no changed files",
+            }
+            if not args.json:
+                print("agent-check: no changed files")
+            emit(result, args.json)
+            return 0
+
+        if len(files) > max_changed_files:
+            result = {
+                "status": "fail",
+                "scope": "changed",
+                "cached": False,
+                "changed_files": len(files),
+                "checks_run": 0,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "reason": (
+                    f"{len(files)} changed files exceed max_changed_files={max_changed_files}; "
+                    "leave broad validation to CI"
+                ),
+            }
+            if not args.json:
+                print(f"agent-check: {result['reason']}")
+            emit(result, args.json)
+            return 1
+
+        policy_result = run_test_policy(root, args.base, deadline)
+        if not policy_result["ok"]:
+            violations = policy_result.get("violations", [])
+            reason = "; ".join(str(item) for item in violations) or "test-authoring policy failed"
+            result = {
+                "status": "fail",
+                "scope": "changed",
+                "cached": False,
+                "changed_files": len(files),
+                "checks_run": 0,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "reason": reason,
+                "test_policy": policy_result,
+            }
+            if not args.json:
+                print(f"agent-check: test-authoring policy failed: {reason}")
+            emit(result, args.json)
+            return 1
+
+        checks = select_checks(config, files, root)
+
+        if not checks:
+            result = {
+                "status": "skipped",
+                "scope": "changed",
+                "cached": False,
+                "changed_files": len(files),
+                "checks_run": 0,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "reason": "no configured check matched the changed files",
+                "test_policy": policy_result,
+            }
+            if not args.json:
+                print("agent-check: no configured check matched the changed files")
+            emit(result, args.json)
+            return 0
+
+        key = fingerprint(root, config_bytes, files, checks, policy_result, args.base, deadline)
+        path = cache_path(root, config, key)
+        cache_enabled = bool(config.get("cache", True)) and not args.no_cache
+
+        if cache_enabled:
+            cached = read_cache(path)
+            if cached is not None:
+                cached_duration = cached.get("duration_seconds")
+                cached = {
+                    **cached,
+                    "cached": True,
+                    "cached_result_duration_seconds": cached_duration,
+                    "duration_seconds": round(time.monotonic() - started, 3),
+                }
+                if not args.json:
+                    print(f"agent-check: cached {cached.get('status', 'result')} for identical repository state")
+                emit(cached, args.json)
+                return exit_code_for(cached)
+
+        max_output = config.get("max_output_chars", DEFAULT_MAX_OUTPUT_CHARS)
+        if not isinstance(max_output, int) or max_output < 1000:
+            raise AgentCheckError("max_output_chars must be an integer >= 1000")
+
+        results: list[dict[str, Any]] = []
+        overall_status = "pass"
+
+        if not args.json:
+            print(f"agent-check: {len(checks)} selected check(s), {budget:g}s total budget")
+
+        for index, check in enumerate(checks, start=1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                overall_status = "timeout"
+                results.append({"name": check["name"], "status": "timeout", "reason": "global budget exhausted"})
+                break
+
+            if "selection_error" in check:
+                overall_status = "fail"
+                results.append({"name": check["name"], "status": "fail", "reason": check["selection_error"]})
+                if not args.json:
+                    print(f"[{index}/{len(checks)}] {check['name']}: blocked - {check['selection_error']}")
+                break
+
+            command = expand_command(check["command"], check["files"])
+            if not command:
+                raise AgentCheckError(f"check {check['name']} expanded to an empty command")
+
+            configured_timeout = check.get("timeout_seconds", remaining)
+            if not isinstance(configured_timeout, (int, float)) or configured_timeout <= 0:
+                raise AgentCheckError(f"check {check['name']} timeout_seconds must be positive")
+            timeout = min(float(configured_timeout), remaining)
+
+            cwd_value = check.get("cwd", ".")
+            if not isinstance(cwd_value, str):
+                raise AgentCheckError(f"check {check['name']} cwd must be a string")
+            cwd = (root / cwd_value).resolve()
+            try:
+                cwd.relative_to(root)
+            except ValueError as exc:
+                raise AgentCheckError(f"check {check['name']} cwd must stay inside the repository") from exc
+            if not cwd.is_dir():
+                raise AgentCheckError(f"check {check['name']} cwd does not exist or is not a directory")
+
+            raw_env = check.get("env", {})
+            if not isinstance(raw_env, dict) or not all(
+                isinstance(key_name, str) and isinstance(value, str)
+                for key_name, value in raw_env.items()
+            ):
+                raise AgentCheckError(f"check {check['name']} env must be a string-to-string object")
+
+            if not args.json:
+                print(f"[{index}/{len(checks)}] {check['name']}")
+                print(f"$ {shlex.join(command)}")
+
+            code, output, timed_out, duration = run_command(command, cwd, raw_env, timeout)
+            if output and not args.json:
+                print(output, end="" if output.endswith("\n") else "\n")
+
+            status = "timeout" if timed_out else ("pass" if code == 0 else "fail")
+            results.append(
+                {
+                    "name": check["name"],
+                    "status": status,
+                    "exit_code": code,
+                    "duration_seconds": round(duration, 3),
+                    "files": len(check["files"]),
+                    "command": command,
+                    "output_tail": output[-max_output:],
+                }
+            )
+
+            if status != "pass":
+                overall_status = status
+                break
+
+        result = {
+            "status": overall_status,
+            "scope": "changed",
+            "cached": False,
+            "changed_files": len(files),
+            "checks_run": len(results),
+            "duration_seconds": round(time.monotonic() - started, 3),
+            "fingerprint": key,
+            "test_policy": policy_result,
+            "results": results,
+        }
+
+        cache_failures = bool(config.get("cache_failures", True))
+        should_cache = cache_enabled and (overall_status == "pass" or cache_failures)
+        if should_cache:
+            max_entries = config.get("max_cache_entries", 50)
+            if not isinstance(max_entries, int) or max_entries < 1:
+                raise AgentCheckError("max_cache_entries must be a positive integer")
+            write_cache(path, result, max_entries)
+
+        emit(result, args.json)
+        return exit_code_for(result)
+
+    except AgentCheckTimeout as exc:
+        result = {
+            "status": "timeout",
+            "scope": "changed",
+            "cached": False,
+            "duration_seconds": round(time.monotonic() - started, 3),
+            "reason": str(exc),
+        }
+        if not args.json:
+            print(f"agent-check: {exc}", file=sys.stderr)
+        emit(result, args.json)
+        return 124
+
+    except AgentCheckError as exc:
+        result = {
+            "status": "configuration_error",
+            "scope": "changed",
+            "cached": False,
+            "duration_seconds": round(time.monotonic() - started, 3),
+            "reason": str(exc),
+        }
+        if not args.json:
+            print(f"agent-check: {exc}", file=sys.stderr)
+        emit(result, args.json)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

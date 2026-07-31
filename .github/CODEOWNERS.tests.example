@@ -1,0 +1,92 @@
+# Replace @your-org/test-owners before copying this file to .github/CODEOWNERS.
+# Enable "Require review from Code Owners" in a ruleset or branch protection.
+
+# Test suites and conventional test filenames.
+/tests/                                  @your-org/test-owners
+/test/                                   @your-org/test-owners
+/spec/                                   @your-org/test-owners
+/specs/                                  @your-org/test-owners
+**/tests/                                @your-org/test-owners
+**/test/                                 @your-org/test-owners
+**/spec/                                 @your-org/test-owners
+**/specs/                                @your-org/test-owners
+**/__tests__/                            @your-org/test-owners
+*_test.*                                 @your-org/test-owners
+*_tests.*                                @your-org/test-owners
+*.test.*                                 @your-org/test-owners
+*.tests.*                                @your-org/test-owners
+*.spec.*                                 @your-org/test-owners
+*Test.java                               @your-org/test-owners
+*Tests.java                              @your-org/test-owners
+*Test.kt                                 @your-org/test-owners
+*Tests.kt                                @your-org/test-owners
+*Test.cs                                 @your-org/test-owners
+*Tests.cs                                @your-org/test-owners
+*.feature                                @your-org/test-owners
+*.bats                                   @your-org/test-owners
+
+# Test runner configuration, setup, and shared helpers.
+**/jest.config.*                         @your-org/test-owners
+**/vitest.config.*                       @your-org/test-owners
+**/playwright.config.*                   @your-org/test-owners
+**/cypress.config.*                      @your-org/test-owners
+**/karma.conf.*                          @your-org/test-owners
+**/wdio.conf.*                           @your-org/test-owners
+**/pytest.ini                            @your-org/test-owners
+**/tox.ini                               @your-org/test-owners
+**/noxfile.py                            @your-org/test-owners
+**/conftest.py                           @your-org/test-owners
+**/setupTests.*                          @your-org/test-owners
+**/setup-tests.*                         @your-org/test-owners
+**/tests/setup.*                         @your-org/test-owners
+**/test/setup.*                          @your-org/test-owners
+**/tests/helpers/                        @your-org/test-owners
+**/tests/support/                        @your-org/test-owners
+**/test/helpers/                         @your-org/test-owners
+**/test/support/                         @your-org/test-owners
+**/test-utils/                           @your-org/test-owners
+**/test_utils/                           @your-org/test-owners
+**/test-helpers/                         @your-org/test-owners
+**/test_helpers/                         @your-org/test-owners
+
+# Higher-cost test layers.
+/e2e/                                    @your-org/test-owners
+/integration/                            @your-org/test-owners
+/system/                                 @your-org/test-owners
+/acceptance/                             @your-org/test-owners
+**/e2e/                                  @your-org/test-owners
+**/integration/                          @your-org/test-owners
+**/integration-tests/                    @your-org/test-owners
+**/system/                               @your-org/test-owners
+**/system-tests/                         @your-org/test-owners
+**/acceptance/                           @your-org/test-owners
+**/acceptance-tests/                     @your-org/test-owners
+*.e2e.*                                  @your-org/test-owners
+*.integration.*                          @your-org/test-owners
+
+# Snapshots, fixtures, golden files, and test data.
+**/__snapshots__/                        @your-org/test-owners
+**/snapshots/                            @your-org/test-owners
+*.snap                                   @your-org/test-owners
+*.snapshot                               @your-org/test-owners
+**/fixture/                              @your-org/test-owners
+**/fixtures/                             @your-org/test-owners
+**/golden/                               @your-org/test-owners
+**/goldens/                              @your-org/test-owners
+*.golden                                 @your-org/test-owners
+**/testdata/                             @your-org/test-owners
+**/test-data/                            @your-org/test-owners
+
+# Policy, execution, and review controls.
+/AGENTS.md                               @your-org/test-owners
+/.codex/agent-check.json                 @your-org/test-owners
+/.codex/hooks.json                       @your-org/test-owners
+/.codex/test-policy.json                 @your-org/test-owners
+/.codex/hooks/test_policy.py             @your-org/test-owners
+/.codex/hooks/test_guard.py              @your-org/test-owners
+/scripts/agent-check                     @your-org/test-owners
+/scripts/test-policy                     @your-org/test-owners
+/scripts/test-policy-ci                  @your-org/test-owners
+/scripts/doctor                          @your-org/test-owners
+/.github/workflows/codex-test-policy.yml @your-org/test-owners
+/.github/CODEOWNERS                      @your-org/test-owners

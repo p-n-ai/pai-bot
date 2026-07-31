@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+files=()
+for file in "$@"; do
+  case "$file" in
+    admin-spa/*)
+      files+=("${file#admin-spa/}")
+      ;;
+  esac
+done
+
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "PASS: no changed admin SPA sources"
+  exit 0
+fi
+
+cd "$repo_root/admin-spa"
+pnpm exec vitest related --run "${files[@]}"

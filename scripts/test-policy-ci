@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Run the test-authoring policy from the trusted base revision.
+
+The pull request working tree is data. The policy implementation, configuration,
+and protected-path list come from the target branch so a pull request cannot make
+its own policy check pass by weakening the checker it is changing.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+sys.dont_write_bytecode = True
+
+MAINTENANCE_OVERRIDE_ENV = "CODEX_ALLOW_GUARDRAIL_EDITS"
+PROFILE_ENV = "CODEX_TEST_PROFILE"
+BASE_ENV = "CODEX_TEST_BASE"
+
+# These files define or enforce the active policy. Changes require an explicit
+# maintainer-owned exception in addition to passing the ordinary test budget.
+PROTECTED_POLICY_PATHS = {
+    "AGENTS.md",
+    ".codex/agent-check.json",
+    ".codex/hooks.json",
+    ".codex/hooks/test_guard.py",
+    ".codex/hooks/test_policy.py",
+    ".codex/test-policy.json",
+    ".github/CODEOWNERS",
+    ".github/workflows/codex-test-policy.yml",
+    "scripts/agent-check",
+    "scripts/test-policy",
+    "scripts/test-policy-ci",
+}
+
+
+class TrustedPolicyError(RuntimeError):
+    """Raised when the trusted policy cannot be loaded or evaluated."""
+
+
+def run_git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=15,
+    )
+    if check and completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise TrustedPolicyError(f"git {' '.join(args)} failed: {detail or completed.returncode}")
+    return completed
+
+
+def repository_root(value: str | None) -> Path:
+    start = Path(value or Path.cwd()).expanduser().resolve()
+    completed = run_git(start, "rev-parse", "--show-toplevel")
+    return Path(completed.stdout.decode().strip()).resolve()
+
+
+def resolve_base(root: Path, requested: str) -> tuple[str, str]:
+    run_git(root, "rev-parse", "--verify", f"{requested}^{{commit}}")
+    merge_base = run_git(root, "merge-base", requested, "HEAD").stdout.decode().strip()
+    if not merge_base:
+        raise TrustedPolicyError(f"could not resolve merge base for {requested}")
+    return requested, merge_base
+
+
+def show_file(root: Path, ref: str, path: str) -> bytes:
+    completed = run_git(root, "show", f"{ref}:{path}", check=False)
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise TrustedPolicyError(
+            f"trusted base {ref} does not provide {path}: {detail or completed.returncode}"
+        )
+    return completed.stdout
+
+
+def changed_paths(root: Path, merge_base: str) -> tuple[str, ...]:
+    completed = run_git(
+        root,
+        "diff",
+        "--name-only",
+        "-z",
+        "--find-renames",
+        f"{merge_base}...HEAD",
+    )
+    values = completed.stdout.split(b"\0")
+    return tuple(
+        sorted(
+            {
+                value.decode("utf-8", errors="surrogateescape").replace("\\", "/")
+                for value in values
+                if value
+            }
+        )
+    )
+
+
+def load_module(path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location("trusted_codex_test_policy", path)
+    if spec is None or spec.loader is None:
+        raise TrustedPolicyError(f"could not load trusted policy module at {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def evaluate_trusted_policy(
+    root: Path,
+    base_ref: str,
+    *,
+    profile: str | None,
+) -> tuple[Any, str]:
+    with tempfile.TemporaryDirectory(prefix="codex-test-policy-") as directory:
+        trusted = Path(directory)
+        module_path = trusted / "test_policy.py"
+        config_path = trusted / "test-policy.json"
+        module_path.write_bytes(show_file(root, base_ref, ".codex/hooks/test_policy.py"))
+        config_path.write_bytes(show_file(root, base_ref, ".codex/test-policy.json"))
+
+        module = load_module(module_path)
+        # pathlib discards the left operand when the right operand is absolute,
+        # so the base module reads the trusted config without touching the PR tree.
+        module.POLICY_PATH = str(config_path.resolve())
+        report = module.evaluate_repository(root, base=base_ref, profile_name=profile)
+        return report, f"{base_ref}:.codex/test-policy.json"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", help="pull-request checkout to inspect (default: current repository)")
+    parser.add_argument(
+        "--base",
+        default=os.environ.get(BASE_ENV) or os.environ.get("GITHUB_BASE_SHA"),
+        help=f"trusted target-branch ref or SHA (default: {BASE_ENV}/GITHUB_BASE_SHA)",
+    )
+    parser.add_argument(
+        "--profile",
+        default=os.environ.get(PROFILE_ENV),
+        help=f"policy profile (default: {PROFILE_ENV} or policy default)",
+    )
+    parser.add_argument("--json", action="store_true", help="emit one JSON object")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if not args.base:
+        message = f"--base is required (or set {BASE_ENV}/GITHUB_BASE_SHA)"
+        if args.json:
+            print(json.dumps({"ok": False, "configuration_error": message}, separators=(",", ":")))
+        else:
+            print(f"trusted test-policy: {message}", file=sys.stderr)
+        return 2
+
+    try:
+        root = repository_root(args.root)
+        base_ref, merge_base = resolve_base(root, args.base)
+        paths = changed_paths(root, merge_base)
+        protected = tuple(path for path in paths if path in PROTECTED_POLICY_PATHS)
+        maintenance_allowed = os.environ.get(MAINTENANCE_OVERRIDE_ENV) == "1"
+        report, trusted_config = evaluate_trusted_policy(root, base_ref, profile=args.profile)
+
+        policy_data = report.as_dict()
+        ok = bool(report.ok) and (maintenance_allowed or not protected)
+        result: dict[str, Any] = {
+            **policy_data,
+            "ok": ok,
+            "trusted_policy_ref": base_ref,
+            "trusted_merge_base": merge_base,
+            "trusted_policy_config": trusted_config,
+            "protected_policy_changes": list(protected),
+            "maintenance_override": maintenance_allowed,
+        }
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "configuration_error": str(exc)}, separators=(",", ":")))
+        else:
+            print(f"trusted test-policy: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    else:
+        print(
+            f"trusted test-policy: {'pass' if ok else 'fail'} "
+            f"(profile={report.profile}, base={base_ref})"
+        )
+        if protected and not maintenance_allowed:
+            print("protected policy files changed without maintainer approval:")
+            for path in protected:
+                print(f"  - {path}")
+            print(
+                "apply the test-policy-maintenance label or set "
+                f"{MAINTENANCE_OVERRIDE_ENV}=1 in a maintainer-controlled workflow"
+            )
+        if not report.ok:
+            print(report.guidance())
+        elif getattr(report, "overridden", False):
+            print(report.guidance())
+
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

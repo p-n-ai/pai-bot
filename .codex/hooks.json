@@ -1,0 +1,44 @@
+{
+  "description": "Bound validation and keep agent-authored tests focused, reviewable, and cumulative-diff aware.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/test_guard.py\"",
+            "timeout": 8,
+            "statusMessage": "Checking validation and test-authoring policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/test_guard.py\"",
+            "timeout": 8,
+            "additionalContextLimit": 800,
+            "statusMessage": "Checking cumulative test diff"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/test_guard.py\"",
+            "timeout": 8,
+            "statusMessage": "Checking final test-authoring budget"
+          }
+        ]
+      }
+    ]
+  }
+}

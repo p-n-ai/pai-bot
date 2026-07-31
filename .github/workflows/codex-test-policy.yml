@@ -1,0 +1,43 @@
+name: codex-test-policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: codex-test-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-policy:
+    name: test-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      # Maintainer-applied labels select a broader reviewed policy. Mechanical
+      # limits and active-policy maintenance use separate exceptions.
+      CODEX_TEST_PROFILE: ${{ contains(github.event.pull_request.labels.*.name, 'test-policy-tests-only') && 'tests-only' || contains(github.event.pull_request.labels.*.name, 'test-policy-expanded') && 'expanded' || 'focused' }}
+      CODEX_ALLOW_BROAD_TEST_EDITS: ${{ contains(github.event.pull_request.labels.*.name, 'test-policy-exception') && '1' || '' }}
+      CODEX_ALLOW_GUARDRAIL_EDITS: ${{ contains(github.event.pull_request.labels.*.name, 'test-policy-maintenance') && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Check cumulative test-authoring diff with trusted base policy
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git cat-file -e "$BASE_SHA:scripts/test-policy-ci" 2>/dev/null; then
+            git show "$BASE_SHA:scripts/test-policy-ci" > "$RUNNER_TEMP/test-policy-ci"
+            chmod +x "$RUNNER_TEMP/test-policy-ci"
+            python "$RUNNER_TEMP/test-policy-ci" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
+          else
+            echo "::warning::Bootstrapping test-policy; the base branch has no trusted runner yet."
+            ./scripts/test-policy check --base "$BASE_SHA"
+          fi

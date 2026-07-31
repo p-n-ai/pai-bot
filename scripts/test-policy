@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Check the current Git diff against the repository test-authoring policy."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+
+def load_policy_module(root: Path):
+    path = root / ".codex/hooks/test_policy.py"
+    spec = importlib.util.spec_from_file_location("codex_test_policy", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["check", "explain"], nargs="?", default="check")
+    parser.add_argument("--base", help="compare the worktree/HEAD against the merge-base of this ref")
+    parser.add_argument("--profile", help="override the configured profile for this invocation")
+    parser.add_argument("--json", action="store_true", help="emit one JSON object")
+    parser.add_argument("--quiet", action="store_true", help="print only failures")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        bootstrap = load_policy_module(Path(__file__).resolve().parents[1])
+        root = bootstrap.repository_root(Path.cwd())
+        policy = load_policy_module(root)
+        if args.command == "explain":
+            details = policy.profile_details(root, args.profile)
+            if args.json:
+                print(json.dumps(details, sort_keys=True, separators=(",", ":")))
+            else:
+                print(f"test-policy profile: {details['profile']}")
+                for key, value in details["limits"].items():
+                    print(f"  {key}: {value}")
+                print("available profiles: " + ", ".join(details["available_profiles"]))
+            return 0
+
+        report = policy.evaluate_repository(root, base=args.base, profile_name=args.profile)
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "configuration_error": str(exc)}, separators=(",", ":")))
+        else:
+            print(f"test-policy: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(report.as_dict(), sort_keys=True, separators=(",", ":")))
+    elif not args.quiet or not report.ok:
+        print(report.guidance() if not report.ok else report.concise())
+    return 0 if report.ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

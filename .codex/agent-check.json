@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "budget_seconds": 120,
+  "max_changed_files": 200,
+  "cache": true,
+  "cache_failures": true,
+  "max_cache_entries": 50,
+  "max_output_chars": 16000,
+  "checks": [
+    {
+      "name": "changed Go packages",
+      "include": ["*.go", "cmd/**/*.go", "internal/**/*.go"],
+      "exclude": ["vendor/**", ".codex/cache/**"],
+      "command": ["./scripts/agent-check-go", "{files}"],
+      "timeout_seconds": 90,
+      "max_files": 80
+    },
+    {
+      "name": "related admin SPA tests",
+      "include": ["admin-spa/src/**/*.js", "admin-spa/src/**/*.jsx", "admin-spa/src/**/*.ts", "admin-spa/src/**/*.tsx"],
+      "exclude": ["admin-spa/src/**/*.d.ts", "admin-spa/node_modules/**", "admin-spa/dist/**", ".codex/cache/**"],
+      "command": ["./scripts/agent-check-admin", "{files}"],
+      "timeout_seconds": 90,
+      "max_files": 60
+    }
+  ]
+}

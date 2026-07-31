@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+package_file="$(mktemp)"
+trap 'rm -f "$package_file"' EXIT
+
+for file in "$@"; do
+  case "$file" in
+    *.go)
+      directory="${file%/*}"
+      [ "$directory" = "$file" ] && directory="."
+      while [ ! -d "$repo_root/$directory" ] && [ "$directory" != "." ]; do
+        directory="${directory%/*}"
+        [ -n "$directory" ] || directory="."
+      done
+      if [ "$directory" = "." ]; then
+        printf '.\n' >>"$package_file"
+      else
+        printf './%s\n' "$directory" >>"$package_file"
+      fi
+      ;;
+  esac
+done
+
+set --
+while IFS= read -r package; do
+  [ -n "$package" ] && set -- "$@" "$package"
+done < <(sort -u "$package_file")
+
+if [ "$#" -eq 0 ]; then
+  echo "PASS: no changed Go packages"
+  exit 0
+fi
+
+cache_root="${TMPDIR:-/tmp}/pai-bot-agent-check"
+mkdir -p "$cache_root/go-build"
+GOCACHE="$cache_root/go-build" go test "$@"

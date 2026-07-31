@@ -1,0 +1,424 @@
+#!/usr/bin/env python3
+"""Verify that the Codex validation and test-authoring guardrails are wired correctly."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+TEST_ENV_VARS = (
+    "CODEX_ALLOW_FULL_VALIDATION",
+    "CODEX_ALLOW_GUARDRAIL_EDITS",
+    "CODEX_ALLOW_BROAD_TEST_EDITS",
+    "CODEX_TEST_PROFILE",
+    "CODEX_TEST_BASE",
+)
+
+
+def repository_root() -> Path:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("run doctor inside a Git repository")
+    return Path(completed.stdout.strip()).resolve()
+
+
+def clean_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in TEST_ENV_VARS:
+        env.pop(key, None)
+    return env
+
+
+def hook_payload(root: Path, event: str, *, command: str = "", tool_name: str = "") -> str:
+    payload: dict[str, Any] = {
+        "session_id": "doctor",
+        "turn_id": "doctor",
+        "cwd": str(root),
+        "hook_event_name": event,
+        "permission_mode": "default",
+    }
+    if event in {"PreToolUse", "PostToolUse"}:
+        payload.update(
+            {
+                "tool_name": tool_name,
+                "tool_use_id": "doctor",
+                "tool_input": {"command": command},
+            }
+        )
+    if event == "Stop":
+        payload.update({"stop_hook_active": False, "last_assistant_message": "done"})
+    return json.dumps(payload)
+
+
+def run_hook(
+    hook: Path,
+    root: Path,
+    event: str,
+    *,
+    command: str = "",
+    tool_name: str = "",
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(hook)],
+        input=hook_payload(root, event, command=command, tool_name=tool_name),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=clean_env(),
+        check=False,
+    )
+
+
+def output_json(completed: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
+    try:
+        value = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def denied(completed: subprocess.CompletedProcess[str]) -> bool:
+    value = output_json(completed)
+    try:
+        return value["hookSpecificOutput"]["permissionDecision"] == "deny"  # type: ignore[index]
+    except (KeyError, TypeError):
+        return False
+
+
+def hook_commands(hooks: dict[str, Any], event: str) -> list[str]:
+    return [
+        handler.get("command", "")
+        for group in hooks.get("hooks", {}).get(event, [])
+        if isinstance(group, dict)
+        for handler in group.get("hooks", [])
+        if isinstance(handler, dict)
+    ]
+
+
+def hook_matchers(hooks: dict[str, Any], event: str) -> list[str]:
+    return [
+        group.get("matcher", "")
+        for group in hooks.get("hooks", {}).get(event, [])
+        if isinstance(group, dict)
+    ]
+
+
+def main() -> int:
+    root = repository_root()
+    errors: list[str] = []
+    warnings: list[str] = []
+    passes: list[str] = []
+
+    required = [
+        "AGENTS.md",
+        ".codex/hooks.json",
+        ".codex/hooks/test_guard.py",
+        ".codex/hooks/test_policy.py",
+        ".codex/agent-check.json",
+        ".codex/test-policy.json",
+        "scripts/agent-check",
+        "scripts/test-policy",
+        "scripts/test-policy-ci",
+    ]
+    for relative in required:
+        path = root / relative
+        if path.exists():
+            passes.append(f"found {relative}")
+        else:
+            errors.append(f"missing {relative}")
+
+    hooks_path = root / ".codex/hooks.json"
+    if hooks_path.exists():
+        try:
+            hooks: Any = json.loads(hooks_path.read_text(encoding="utf-8"))
+            pre_commands = hook_commands(hooks, "PreToolUse")
+            post_commands = hook_commands(hooks, "PostToolUse")
+            stop_commands = hook_commands(hooks, "Stop")
+            if any("test_guard.py" in command for command in pre_commands):
+                passes.append("PreToolUse registers test_guard.py")
+            else:
+                errors.append("PreToolUse does not register test_guard.py")
+            if any("Bash" in value and "apply_patch" in value for value in hook_matchers(hooks, "PreToolUse")):
+                passes.append("PreToolUse covers Bash and apply_patch")
+            else:
+                errors.append("PreToolUse matcher must cover Bash and apply_patch")
+            if any("test_guard.py" in command for command in post_commands):
+                passes.append("PostToolUse registers test_guard.py")
+            else:
+                errors.append("PostToolUse does not register test_guard.py")
+            if any(
+                "Bash" in value and "apply_patch" in value
+                for value in hook_matchers(hooks, "PostToolUse")
+            ):
+                passes.append("PostToolUse covers Bash and apply_patch")
+            else:
+                errors.append("PostToolUse matcher must cover Bash and apply_patch")
+            if any("test_guard.py" in command for command in stop_commands):
+                passes.append("Stop registers test_guard.py")
+            else:
+                errors.append("Stop does not register test_guard.py")
+        except (json.JSONDecodeError, AttributeError, TypeError) as exc:
+            errors.append(f"invalid .codex/hooks.json: {exc}")
+
+    pre_hook = root / ".codex/hooks/test_guard.py"
+    if pre_hook.exists():
+        raw_test = run_hook(pre_hook, root, "PreToolUse", command="pnpm test", tool_name="Bash")
+        if denied(raw_test):
+            passes.append("PreToolUse denies a raw test command")
+        else:
+            errors.append(f"PreToolUse did not deny a raw test command: {raw_test.stdout or raw_test.stderr}")
+
+        safe = run_hook(pre_hook, root, "PreToolUse", command="rg test src", tool_name="Bash")
+        if safe.returncode == 0 and not safe.stdout.strip():
+            passes.append("PreToolUse allows non-validation inspection")
+        else:
+            errors.append(f"PreToolUse unexpectedly blocked inspection: {safe.stdout or safe.stderr}")
+
+        wrapper = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command="./scripts/agent-check changed",
+            tool_name="Bash",
+        )
+        if wrapper.returncode == 0 and not wrapper.stdout.strip():
+            passes.append("PreToolUse allows the exact bounded wrapper")
+        else:
+            errors.append(f"PreToolUse unexpectedly blocked agent-check: {wrapper.stdout or wrapper.stderr}")
+
+        direct_test_write = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command="cat > tests/generated_test.py <<'EOF'\nassert True\nEOF",
+            tool_name="Bash",
+        )
+        if denied(direct_test_write):
+            passes.append("PreToolUse denies an obvious direct shell write to tests")
+        else:
+            errors.append("PreToolUse did not deny a direct shell write to tests")
+
+        protected_patch = """*** Begin Patch
+*** Update File: .codex/test-policy.json
+@@
+-  \"version\": 1,
++  \"version\": 2,
+*** End Patch
+"""
+        protected = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command=protected_patch,
+            tool_name="apply_patch",
+        )
+        if denied(protected):
+            passes.append("PreToolUse protects the test-policy configuration")
+        else:
+            errors.append("PreToolUse did not protect .codex/test-policy.json")
+
+        small_test_patch = """*** Begin Patch
+*** Add File: tests/test_regression.py
++def test_regression():
++    assert True
+*** End Patch
+"""
+        small = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command=small_test_patch,
+            tool_name="apply_patch",
+        )
+        small_value = output_json(small)
+        first_suite_block = (
+            denied(small)
+            and small_value is not None
+            and "baseline has no test suite"
+            in small_value.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        )
+        if small.returncode == 0 and (not small.stdout.strip() or first_suite_block):
+            passes.append("PreToolUse handles one focused regression-test patch")
+        else:
+            errors.append(f"PreToolUse unexpectedly rejected a focused test patch: {small.stdout or small.stderr}")
+
+        large_lines = "\n".join(f"+def test_case_{index}(): assert True" for index in range(20))
+        large_test_patch = (
+            "*** Begin Patch\n*** Add File: tests/test_matrix.py\n"
+            + large_lines
+            + "\n*** End Patch\n"
+        )
+        large = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command=large_test_patch,
+            tool_name="apply_patch",
+        )
+        if denied(large):
+            passes.append("PreToolUse rejects an oversized single test patch")
+        else:
+            errors.append("PreToolUse did not reject an oversized test patch")
+
+        infrastructure_patch = """*** Begin Patch
+*** Add File: vitest.config.ts
++export default { test: { globals: true } };
+*** End Patch
+"""
+        infrastructure = run_hook(
+            pre_hook,
+            root,
+            "PreToolUse",
+            command=infrastructure_patch,
+            tool_name="apply_patch",
+        )
+        if denied(infrastructure):
+            passes.append("PreToolUse rejects new test infrastructure in the focused profile")
+        else:
+            errors.append("PreToolUse did not reject new test infrastructure")
+
+    policy_cli = root / "scripts/test-policy"
+    if policy_cli.exists():
+        explain = subprocess.run(
+            [sys.executable, str(policy_cli), "explain", "--json"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=clean_env(),
+            check=False,
+        )
+        explain_value = output_json(explain)
+        if explain.returncode == 0 and explain_value is not None and "available_profiles" in explain_value:
+            passes.append("test-policy CLI explains the configured profiles")
+        else:
+            errors.append(f"test-policy explain failed: {explain.stdout or explain.stderr}")
+
+        completed = subprocess.run(
+            [sys.executable, str(policy_cli), "check", "--json"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=clean_env(),
+            check=False,
+        )
+        value = output_json(completed)
+        if completed.returncode in {0, 1} and value is not None and "ok" in value:
+            passes.append("test-policy CLI loads and evaluates the current diff")
+            if completed.returncode == 1:
+                warnings.append("the current worktree exceeds the focused test-authoring profile")
+        else:
+            errors.append(f"test-policy CLI failed: {completed.stdout or completed.stderr}")
+
+    trusted_policy_cli = root / "scripts/test-policy-ci"
+    if trusted_policy_cli.exists():
+        completed = subprocess.run(
+            [sys.executable, str(trusted_policy_cli), "--help"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            passes.append("trusted-base test-policy CI runner loads")
+        else:
+            errors.append(f"test-policy-ci failed to load: {completed.stderr}")
+
+    lifecycle_hook = root / ".codex/hooks/test_guard.py"
+    if lifecycle_hook.exists():
+        post = run_hook(lifecycle_hook, root, "PostToolUse", command="patch", tool_name="apply_patch")
+        stop = run_hook(lifecycle_hook, root, "Stop")
+        if post.returncode == 0 and (not post.stdout.strip() or output_json(post) is not None):
+            passes.append("PostToolUse cumulative test guard follows the hook protocol")
+        else:
+            errors.append(f"PostToolUse cumulative guard failed: {post.stdout or post.stderr}")
+        if stop.returncode == 0 and (not stop.stdout.strip() or output_json(stop) is not None):
+            passes.append("Stop cumulative test guard follows the hook protocol")
+        else:
+            errors.append(f"Stop cumulative guard failed: {stop.stdout or stop.stderr}")
+
+    agent_check = root / "scripts/agent-check"
+    if agent_check.exists():
+        completed = subprocess.run(
+            [sys.executable, str(agent_check), "--help"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            passes.append("agent-check CLI loads")
+        else:
+            errors.append(f"agent-check CLI failed to load: {completed.stderr}")
+
+    installed_workflow = root / ".github/workflows/codex-test-policy.yml"
+    repository_ci = root / ".github/workflows/ci.yml"
+    has_policy_ci = installed_workflow.exists() or (
+        repository_ci.exists()
+        and (
+            "scripts/test-policy-ci" in repository_ci.read_text(encoding="utf-8")
+            or "scripts/test-policy check" in repository_ci.read_text(encoding="utf-8")
+        )
+    )
+    if has_policy_ci:
+        passes.append("pull-request test-policy CI is present")
+    else:
+        warnings.append(
+            "pull-request test-policy CI is not present; local hooks alone are bypassable"
+        )
+
+    codeowners_candidates = (
+        root / ".github/CODEOWNERS.tests.example",
+        root / "templates/CODEOWNERS.tests.example",
+    )
+    if any(path.exists() for path in codeowners_candidates):
+        passes.append("CODEOWNERS test-ownership template is present")
+    else:
+        warnings.append("CODEOWNERS test-ownership template is not present")
+
+    if (root / ".git").is_file():
+        warnings.append(
+            "this checkout is a Git worktree (.git is a file); verify project-hook discovery with /hooks"
+        )
+
+    codex = subprocess.run(
+        ["sh", "-lc", "command -v codex >/dev/null 2>&1 && codex --version || true"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if codex:
+        passes.append(f"Codex found: {codex}")
+    else:
+        warnings.append("Codex executable not found; static and protocol checks still ran")
+
+    for item in passes:
+        print(f"PASS  {item}")
+    for item in warnings:
+        print(f"WARN  {item}")
+    for item in errors:
+        print(f"FAIL  {item}")
+
+    if errors:
+        print(f"\ndoctor: {len(errors)} failure(s), {len(warnings)} warning(s)")
+        return 1
+
+    print(f"\ndoctor: healthy with {len(warnings)} warning(s)")
+    print("next: restart Codex, review/trust hooks with /hooks, then use your existing global Codex configuration")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
