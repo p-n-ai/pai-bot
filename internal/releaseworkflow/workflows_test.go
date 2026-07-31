@@ -1286,6 +1286,7 @@ func TestRemoteDeploymentContracts(t *testing.T) {
 		`SELECT to_regclass('public.users') IS NOT NULL`,
 		`RUNNING_APP_ID=$(docker inspect --format '{{.Image}}' "$APP_CONTAINER")`,
 		`RUNNING_ADMIN_ID=$(docker inspect --format '{{.Image}}' "$ADMIN_CONTAINER")`,
+		`http://127.0.0.1:3000/`,
 		`if [ "$RUNNING_APP_ID" != "$EXPECTED_APP_ID" ]`,
 		`if [ "$RUNNING_ADMIN_ID" != "$EXPECTED_ADMIN_ID" ]`,
 		`fail_release "$SMOKE_FAIL bot smoke test(s) failed"`,
