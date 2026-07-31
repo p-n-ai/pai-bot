@@ -2703,17 +2703,49 @@ func createTestCurriculumLoader(t *testing.T) *curriculum.Loader {
 	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+	curriculumDir := filepath.Join(dir, "curricula", "malaysia", "kssm")
+	for name, content := range map[string]string{
+		"syllabus.yaml": `id: kssm-f1
+name: KSSM Form 1
+subjects:
+  - math
+`,
+		"subject.yaml": `id: math
+name: Mathematics
+syllabus_id: kssm-f1
+`,
+		"subject-grade.yaml": `id: math-f1
+name: Mathematics Form 1
+subject_id: math
+syllabus_id: kssm-f1
+grade_id: form-1
+topics:
+  - F1-02
+`,
+	} {
+		path := filepath.Join(curriculumDir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", path, err)
+		}
+	}
 
 	yamlPath := filepath.Join(topicsDir, "01-linear-equations.yaml")
 	yamlData := `id: F1-02
 name: Linear Equations
+subject_grade_id: math-f1
 subject_id: math
 syllabus_id: kssm-f1
 difficulty: beginner
+content_standards:
+  - id: "1.1"
+    text: Linear equations
 learning_objectives:
   - id: LO1
+    content_standard_id: "1.1"
     text: Solve linear equations in one variable
     bloom: apply
+quality_level: 2
+provenance: human
 `
 	if err := os.WriteFile(yamlPath, []byte(yamlData), 0o644); err != nil {
 		t.Fatalf("WriteFile(yaml) error = %v", err)

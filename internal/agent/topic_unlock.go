@@ -61,6 +61,13 @@ func (e *Engine) checkTopicUnlocks(identity LearnerIdentity, syllabusID string, 
 	}
 
 	unlocked := e.prereqGraph.UnlockableTopics(topic.ID, scores)
+	ready := unlocked[:0]
+	for _, candidate := range unlocked {
+		if candidate.IsAITeachingReady() {
+			ready = append(ready, candidate)
+		}
+	}
+	unlocked = ready
 	if len(unlocked) == 0 {
 		return
 	}
@@ -144,7 +151,29 @@ func buildPrereqGraph(loader *curriculum.Loader) *curriculum.PrereqGraph {
 	if loader == nil {
 		return nil
 	}
-	topics := loader.AllTopics()
+	allTopics := loader.AllTopics()
+	readyIDs := make(map[string]struct{}, len(allTopics))
+	for _, topic := range allTopics {
+		if topic.IsAITeachingReady() {
+			readyIDs[topic.ID] = struct{}{}
+		}
+	}
+	topics := make([]curriculum.Topic, 0, len(readyIDs))
+	for _, topic := range allTopics {
+		if _, ready := readyIDs[topic.ID]; !ready {
+			continue
+		}
+		allPrerequisitesReady := true
+		for _, prerequisiteID := range topic.Prerequisites.RequiredTopicIDs() {
+			if _, ready := readyIDs[prerequisiteID]; !ready {
+				allPrerequisitesReady = false
+				break
+			}
+		}
+		if allPrerequisitesReady {
+			topics = append(topics, topic)
+		}
+	}
 	if len(topics) == 0 {
 		return nil
 	}
@@ -156,7 +185,7 @@ func buildPrereqGraph(loader *curriculum.Loader) *curriculum.PrereqGraph {
 		if len(t.Prerequisites.Required) > 0 {
 			slog.Debug("topic prerequisites",
 				"topic_id", t.ID,
-				"requires", fmt.Sprintf("%v", t.Prerequisites.Required),
+				"requires", fmt.Sprintf("%v", t.Prerequisites.RequiredTopicIDs()),
 			)
 		}
 	}

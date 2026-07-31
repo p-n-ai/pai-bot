@@ -5,8 +5,6 @@ package agent_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -202,28 +200,5 @@ func TestAdaptiveDepth_NoTrackerIsUnknown(t *testing.T) {
 
 func createAdaptiveTestLoader(t *testing.T) *curriculum.Loader {
 	t.Helper()
-	dir := t.TempDir()
-
-	topicYAML := `id: F1-06
-name: "Persamaan Linear (Linear Equations)"
-subject_id: algebra
-syllabus_id: default
-keywords:
-  - persamaan linear
-  - linear equation
-`
-	if err := os.WriteFile(filepath.Join(dir, "F1-06.yaml"), []byte(topicYAML), 0o644); err != nil {
-		t.Fatalf("write topic: %v", err)
-	}
-
-	teachingMD := "# Persamaan Linear\nTeaching notes for linear equations."
-	if err := os.WriteFile(filepath.Join(dir, "F1-06.teaching.md"), []byte(teachingMD), 0o644); err != nil {
-		t.Fatalf("write teaching notes: %v", err)
-	}
-
-	loader, err := curriculum.NewLoader(dir)
-	if err != nil {
-		t.Fatalf("NewLoader: %v", err)
-	}
-	return loader
+	return createLearnTestLoader(t)
 }

@@ -302,17 +302,25 @@ func createChallengeFallbackCurriculumLoader(t *testing.T) *curriculum.Loader {
 	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+	writeChallengeCurriculumMetadata(t, dir)
 
 	yamlPath := filepath.Join(topicsDir, "01-linear-equations.yaml")
 	yamlData := `id: F1-02
 name: Linear Equations
+subject_grade_id: math-f1
 subject_id: math
 syllabus_id: kssm-f1
 difficulty: beginner
+content_standards:
+  - id: "1.1"
+    text: Linear equations
 learning_objectives:
   - id: LO1
+    content_standard_id: "1.1"
     text: Solve linear equations in one variable
     bloom: apply
+quality_level: 2
+provenance: human
 `
 	if err := os.WriteFile(yamlPath, []byte(yamlData), 0o644); err != nil {
 		t.Fatalf("WriteFile(yaml) error = %v", err)

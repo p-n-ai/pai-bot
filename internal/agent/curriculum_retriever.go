@@ -131,6 +131,9 @@ func newCurriculumRetriever(loader *curriculum.Loader, cfg curriculumRetrieverCo
 		r.buildIndex()
 	}
 	for _, topic := range loader.AllTopics() {
+		if !topic.IsAITeachingReady() {
+			continue
+		}
 		r.topics[topic.ID] = topic
 	}
 	return r
@@ -377,6 +380,9 @@ func (r *curriculumRetriever) scoredDocsFromSearchResults(results []retrieval.Se
 	followUp := looksLikeFollowUp(query.Text)
 	for _, result := range results {
 		doc := docFromDocument(result.Document)
+		if _, ready := r.topics[doc.TopicID]; !ready {
+			continue
+		}
 		score := result.Score
 		if usedFallback && targetForm != "" && doc.Form != "" && doc.Form != targetForm {
 			score -= formMismatchPenalty
@@ -432,15 +438,19 @@ func docFromDocument(document retrieval.Document) retrievalDoc {
 func (r *curriculumRetriever) buildIndex() {
 	fieldTotals := make(map[string]int)
 	for _, topic := range r.loader.AllTopics() {
+		if !topic.IsAITeachingReady() {
+			continue
+		}
 		r.topics[topic.ID] = topic
 		subject, _ := r.loader.GetSubject(topic.SubjectID)
+		subjectGrade, _ := r.loader.GetSubjectGrade(topic.SubjectGradeID)
 		syllabus, _ := r.loader.GetSyllabus(topic.SyllabusID)
-		form := inferTopicForm(topic, subject)
+		form := inferTopicForm(topic, subject, subjectGrade)
 
 		r.addDoc(newRetrievalDoc("topic:"+topic.ID, topic.ID, topic.SubjectID, topic.SyllabusID, form, "topic", map[string]string{
 			"title":      topic.Name,
 			"aliases":    strings.Join(topicAliases(topic), " "),
-			"subject":    joinNonEmpty(subject.Name, subject.NameEN, subject.GradeID),
+			"subject":    joinNonEmpty(subject.Name, subject.NameEN, subjectGrade.Name, subjectGrade.NameEN, subjectGrade.GradeID),
 			"syllabus":   syllabus.Name,
 			"objectives": strings.Join(topicObjectives(topic), " "),
 			"body":       joinNonEmpty(topic.OfficialRef, topic.Difficulty, topic.Tier, topic.Provenance),
@@ -451,7 +461,7 @@ func (r *curriculumRetriever) buildIndex() {
 				r.addDoc(newRetrievalDoc("note:"+topic.ID+":"+strconv.Itoa(i), topic.ID, topic.SubjectID, topic.SyllabusID, form, "teaching_note", map[string]string{
 					"title":      topic.Name,
 					"aliases":    strings.Join(topicAliases(topic), " "),
-					"subject":    joinNonEmpty(subject.Name, subject.NameEN, subject.GradeID),
+					"subject":    joinNonEmpty(subject.Name, subject.NameEN, subjectGrade.Name, subjectGrade.NameEN, subjectGrade.GradeID),
 					"syllabus":   syllabus.Name,
 					"heading":    section.Title,
 					"objectives": strings.Join(topicObjectives(topic), " "),
@@ -465,7 +475,7 @@ func (r *curriculumRetriever) buildIndex() {
 				r.addDoc(newRetrievalDoc("assessment:"+topic.ID+":"+strconv.Itoa(i), topic.ID, topic.SubjectID, topic.SyllabusID, form, "assessment", map[string]string{
 					"title":      topic.Name,
 					"aliases":    strings.Join(topicAliases(topic), " "),
-					"subject":    joinNonEmpty(subject.Name, subject.NameEN, subject.GradeID),
+					"subject":    joinNonEmpty(subject.Name, subject.NameEN, subjectGrade.Name, subjectGrade.NameEN, subjectGrade.GradeID),
 					"syllabus":   syllabus.Name,
 					"heading":    question.Text,
 					"objectives": strings.Join(topicObjectives(topic), " "),
@@ -869,7 +879,17 @@ func topicObjectives(topic curriculum.Topic) []string {
 	return objectives
 }
 
-func inferTopicForm(topic curriculum.Topic, subject curriculum.Subject) string {
+func inferTopicForm(topic curriculum.Topic, subject curriculum.Subject, subjectGrade curriculum.SubjectGrade) string {
+	for _, text := range []string{
+		subjectGrade.GradeID,
+		subjectGrade.Name,
+		subjectGrade.NameEN,
+		subjectGrade.ID,
+	} {
+		if form := detectFormInText(text); form != "" {
+			return form
+		}
+	}
 	if form := detectFormInText(subject.GradeID); form != "" {
 		return form
 	}
