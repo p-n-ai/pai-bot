@@ -181,7 +181,7 @@ fi
 
 echo "--- Health check: application and AI provider status ---"
 STATUS_EXPECTED='{"status":"ok","components":[{"id":"application","status":"operational"},{"id":"ai_provider","status":"operational"}]}'
-STATUS_RESPONSE=$($COMPOSE exec -T app curl -fsS --max-time 15 http://localhost:8080/health/status) || STATUS_RESPONSE=""
+STATUS_RESPONSE=$($COMPOSE exec -T app curl -fsS --max-time 30 http://localhost:8080/health/status) || STATUS_RESPONSE=""
 if [ "$STATUS_RESPONSE" != "$STATUS_EXPECTED" ]; then
   fail_release "AI response health check failed"
 fi

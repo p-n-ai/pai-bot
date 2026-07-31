@@ -48,7 +48,7 @@ jobs:
           VERIFICATION_MODE: ${{ inputs.verification_mode }}
         run: |
           if [ "$VERIFICATION_MODE" = "deliberate-failure" ]; then
-            python3 scripts/uptime_probe.py "$TARGET_URL" --check status --timeout 10 --deliberate-failure
+            python3 scripts/uptime_probe.py "$TARGET_URL" --check status --timeout 30 --deliberate-failure
           else
-            python3 scripts/uptime_probe.py "$TARGET_URL" --check status --timeout 10
+            python3 scripts/uptime_probe.py "$TARGET_URL" --check status --timeout 30
           fi

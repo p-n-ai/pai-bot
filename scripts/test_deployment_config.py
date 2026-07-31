@@ -181,7 +181,7 @@ class ProductionSecretDeploymentTests(unittest.TestCase):
         self.assertIn("http://localhost:8080/health/status", deploy)
         self.assertIn('"id":"ai_provider","status":"operational"', deploy)
         self.assertNotIn("PAI_AI_HEALTH_TOKEN", deploy)
-        self.assertIn("--max-time 15", deploy)
+        self.assertIn("--max-time 30", deploy)
 
     def test_remote_deploy_rolls_back_when_ai_response_is_unhealthy(self) -> None:
         deploy = source("scripts/deploy-remote.sh")
