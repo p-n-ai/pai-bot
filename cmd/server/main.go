@@ -156,7 +156,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			aiHealthCheck := server.NewCachedHealthCheck(
 				server.NewAIHealthCheck(router),
 				time.Minute,
-				5*time.Second,
+				20*time.Second,
 			)
 			if !router.HasProvider() {
 				if cfg.Runtime.DevMode {
