@@ -6,8 +6,6 @@ package agent
 import (
 	"fmt"
 	"strings"
-
-	"github.com/p-n-ai/pai-bot/internal/curriculum"
 )
 
 func appendProfilePackets(packets []contextPacket, profile learnerProfile) []contextPacket {
@@ -137,6 +135,9 @@ func contextSources(packets []contextPacket) []contextSource {
 			sources[len(sources)-1].Title = evidence.SourceTitle
 			sources[len(sources)-1].Filename = evidence.Filename
 			sources[len(sources)-1].Locator = evidenceLocator(evidence)
+		} else if evidence, ok := packet.Data.(curriculumSourceEvidence); ok {
+			sources[len(sources)-1].Filename = evidence.SourcePath
+			sources[len(sources)-1].Locator = evidence.Revision
 		}
 	}
 	return sources
@@ -179,25 +180,6 @@ type goalSystemData struct {
 	SyllabusID     string
 	TargetMastery  float64
 	CurrentMastery float64
-}
-
-type curriculumTopicData struct {
-	ID         string
-	Name       string
-	SyllabusID string
-	SubjectID  string
-}
-
-func curriculumTopicContext(topic *curriculum.Topic) curriculumTopicData {
-	if topic == nil {
-		return curriculumTopicData{}
-	}
-	return curriculumTopicData{
-		ID:         topic.ID,
-		Name:       topic.Name,
-		SyllabusID: topic.SyllabusID,
-		SubjectID:  topic.SubjectID,
-	}
 }
 
 func goalSystemContext(goals []*Goal) []goalSystemData {

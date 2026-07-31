@@ -10,9 +10,9 @@ import (
 func TestPrereqGraph_DependentsOf(t *testing.T) {
 	topics := []Topic{
 		{ID: "F1-05", Prerequisites: Prerequisites{}},
-		{ID: "F1-06", Prerequisites: Prerequisites{Required: []string{"F1-05"}}},
-		{ID: "F1-07", Prerequisites: Prerequisites{Required: []string{"F1-05", "F1-06"}}},
-		{ID: "F1-08", Prerequisites: Prerequisites{Required: []string{"F1-07"}}},
+		{ID: "F1-06", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}}}},
+		{ID: "F1-07", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}, {TopicID: "F1-06"}}}},
+		{ID: "F1-08", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-07"}}}},
 	}
 
 	g := NewPrereqGraph(topics)
@@ -51,8 +51,8 @@ func TestPrereqGraph_DependentsOf(t *testing.T) {
 func TestPrereqGraph_RequiredPrereqs(t *testing.T) {
 	topics := []Topic{
 		{ID: "F1-05", Prerequisites: Prerequisites{}},
-		{ID: "F1-06", Prerequisites: Prerequisites{Required: []string{"F1-05"}}},
-		{ID: "F1-07", Prerequisites: Prerequisites{Required: []string{"F1-05", "F1-06"}}},
+		{ID: "F1-06", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}}}},
+		{ID: "F1-07", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}, {TopicID: "F1-06"}}}},
 	}
 
 	g := NewPrereqGraph(topics)
@@ -71,9 +71,9 @@ func TestPrereqGraph_RequiredPrereqs(t *testing.T) {
 func TestPrereqGraph_UnlockableTopics(t *testing.T) {
 	topics := []Topic{
 		{ID: "F1-05", Name: "Algebra Basics", Prerequisites: Prerequisites{}},
-		{ID: "F1-06", Name: "Linear Equations", Prerequisites: Prerequisites{Required: []string{"F1-05"}}},
-		{ID: "F1-07", Name: "Inequalities", Prerequisites: Prerequisites{Required: []string{"F1-05", "F1-06"}}},
-		{ID: "F1-08", Name: "Simultaneous Eq", Prerequisites: Prerequisites{Required: []string{"F1-07"}}},
+		{ID: "F1-06", Name: "Linear Equations", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}}}},
+		{ID: "F1-07", Name: "Inequalities", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}, {TopicID: "F1-06"}}}},
+		{ID: "F1-08", Name: "Simultaneous Eq", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-07"}}}},
 	}
 
 	g := NewPrereqGraph(topics)
@@ -123,7 +123,7 @@ func TestPrereqGraph_UnlockableTopics_NoPrereqs(t *testing.T) {
 func TestPrereqGraph_UnlockableTopics_AlreadyMastered(t *testing.T) {
 	topics := []Topic{
 		{ID: "F1-05", Prerequisites: Prerequisites{}},
-		{ID: "F1-06", Prerequisites: Prerequisites{Required: []string{"F1-05"}}},
+		{ID: "F1-06", Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}}}},
 	}
 
 	g := NewPrereqGraph(topics)
@@ -136,5 +136,86 @@ func TestPrereqGraph_UnlockableTopics_AlreadyMastered(t *testing.T) {
 	unlocked := g.UnlockableTopics("F1-05", scores)
 	if len(unlocked) != 0 {
 		t.Errorf("expected no unlockable topics (already mastered), got %v", unlocked)
+	}
+}
+
+func TestPrereqGraph_UsesOSSAuthoredMasteryThresholds(t *testing.T) {
+	topics := []Topic{
+		{
+			ID:      "F1-05",
+			Mastery: MasteryCriteria{MinimumScore: 0.6},
+		},
+		{
+			ID:            "F1-06",
+			Mastery:       MasteryCriteria{MinimumScore: 0.9},
+			Prerequisites: Prerequisites{Required: []PrerequisiteRef{{TopicID: "F1-05"}}},
+		},
+	}
+
+	graph := NewPrereqGraph(topics)
+	unlocked := graph.UnlockableTopics("F1-05", map[string]float64{
+		"F1-05": 0.65,
+		"F1-06": 0.8,
+	})
+
+	if len(unlocked) != 1 || unlocked[0].ID != "F1-06" {
+		t.Fatalf("UnlockableTopics() = %v, want F1-06 from OSS-authored thresholds", unlocked)
+	}
+}
+
+func TestPrereqGraph_ZeroThresholdDoesNotTreatUnseenTopicAsAlreadyMastered(t *testing.T) {
+	topics := []Topic{
+		{
+			ID:      "F1-05",
+			Mastery: MasteryCriteria{MinimumScore: 0, minimumScoreSet: true},
+		},
+		{
+			ID:      "F1-06",
+			Mastery: MasteryCriteria{MinimumScore: 0, minimumScoreSet: true},
+			Prerequisites: Prerequisites{
+				Required: []PrerequisiteRef{{TopicID: "F1-05"}},
+			},
+		},
+	}
+
+	graph := NewPrereqGraph(topics)
+	unlocked := graph.UnlockableTopics("F1-05", map[string]float64{
+		"F1-05": 0,
+	})
+
+	if len(unlocked) != 1 || unlocked[0].ID != "F1-06" {
+		t.Fatalf("UnlockableTopics() = %v, want unseen F1-06 unlocked", unlocked)
+	}
+}
+
+func TestPrereqGraph_ZeroThresholdDoesNotTreatUnseenPrerequisiteAsSatisfied(t *testing.T) {
+	topics := []Topic{
+		{
+			ID:      "F1-05",
+			Mastery: MasteryCriteria{MinimumScore: 0.75},
+		},
+		{
+			ID:      "F1-06",
+			Mastery: MasteryCriteria{MinimumScore: 0, minimumScoreSet: true},
+		},
+		{
+			ID:      "F1-07",
+			Mastery: MasteryCriteria{MinimumScore: 0.75},
+			Prerequisites: Prerequisites{
+				Required: []PrerequisiteRef{
+					{TopicID: "F1-05"},
+					{TopicID: "F1-06"},
+				},
+			},
+		},
+	}
+
+	graph := NewPrereqGraph(topics)
+	unlocked := graph.UnlockableTopics("F1-05", map[string]float64{
+		"F1-05": 1,
+	})
+
+	if len(unlocked) != 0 {
+		t.Fatalf("UnlockableTopics() = %v, want unseen F1-06 to block F1-07", unlocked)
 	}
 }

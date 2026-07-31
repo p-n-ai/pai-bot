@@ -80,7 +80,7 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 
 	// Send a message.
 	ctx := context.Background()
-	msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: "hello world"})
+	msg := []byte(`{"type":"message","delivery_id":"delivery-1","text":"hello world"}`)
 	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 		t.Fatalf("write message: %v", err)
 	}
@@ -99,8 +99,51 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 	if received[0].UserID != "test-user-1" {
 		t.Errorf("expected user test-user-1, got %q", received[0].UserID)
 	}
+	if received[0].ExternalID != "test-user-1" {
+		t.Errorf("expected external ID test-user-1, got %q", received[0].ExternalID)
+	}
+	if received[0].DeliveryID != "delivery-1" {
+		t.Errorf("expected delivery ID delivery-1, got %q", received[0].DeliveryID)
+	}
 	if received[0].Text != "hello world" {
 		t.Errorf("expected text 'hello world', got %q", received[0].Text)
+	}
+}
+
+func TestWSChannel_DerivesStableDeliveryIDAcrossReconnect(t *testing.T) {
+	ws := NewWSChannel()
+	received := make(chan InboundMessage, 2)
+	_ = ws.Start(context.Background(), func(msg InboundMessage) {
+		received <- msg
+	})
+
+	srv := httptest.NewServer(ws.Handler())
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	payload := []byte(`{"type":"message","text":"249"}`)
+
+	send := func() InboundMessage {
+		conn := dialAndAuth(t, ws, wsURL, "legacy-user")
+		if err := conn.Write(t.Context(), websocket.MessageText, payload); err != nil {
+			t.Fatalf("write message: %v", err)
+		}
+		select {
+		case msg := <-received:
+			_ = conn.Close(websocket.StatusNormalClosure, "")
+			return msg
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for inbound message")
+			return InboundMessage{}
+		}
+	}
+
+	first := send()
+	replay := send()
+	if first.DeliveryID == "" {
+		t.Fatal("derived delivery ID is empty")
+	}
+	if replay.DeliveryID != first.DeliveryID {
+		t.Fatalf("delivery IDs = %q and %q, want stable replay identity", first.DeliveryID, replay.DeliveryID)
 	}
 }
 
@@ -541,7 +584,7 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	}
 
 	// Send a message and verify handler receives it.
-	msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: "hello from embed"})
+	msg := []byte(`{"type":"message","text":"hello from embed"}`)
 	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 		t.Fatalf("write message: %v", err)
 	}
@@ -564,6 +607,9 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	}
 	if received[0].IdentityChannel != "embed" || received[0].ExternalID != "guest-external-id" {
 		t.Errorf("authenticated identity = %q/%q", received[0].IdentityChannel, received[0].ExternalID)
+	}
+	if received[0].DeliveryID == "" {
+		t.Error("expected a server-derived delivery ID")
 	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)

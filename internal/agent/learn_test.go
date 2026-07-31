@@ -5,6 +5,7 @@ package agent_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,6 +90,33 @@ func TestLearnCommand_TopicNotFound(t *testing.T) {
 	}
 }
 
+func TestLearnCommand_RejectsTopicBelowAITeachingQuality(t *testing.T) {
+	loader := createLearnTestLoaderAtQuality(t, 2)
+	store := agent.NewMemoryStore()
+	engine := agent.NewEngine(agent.EngineConfig{
+		AIRouter:             ai.NewRouter(),
+		Store:                store,
+		CurriculumLoader:     loader,
+		DisableMultiLanguage: true,
+	})
+
+	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
+		Channel: "terminal",
+		UserID:  "user1",
+		Text:    "/learn persamaan linear",
+	})
+	if err != nil {
+		t.Fatalf("ProcessMessage: %v", err)
+	}
+	identity, err := agent.NewLearnerIdentity("terminal", "user1")
+	if err != nil {
+		t.Fatalf("NewLearnerIdentity: %v", err)
+	}
+	if conversation, found := store.GetActiveConversationFor(identity); found && conversation.TopicID != "" {
+		t.Fatalf("conversation.TopicID = %q after response %q, want unset", conversation.TopicID, resp)
+	}
+}
+
 func TestLearnCommand_SetsConversationTopicID(t *testing.T) {
 	provider := &echoProvider{}
 	router := ai.NewRouter()
@@ -142,24 +170,92 @@ func (p *echoProvider) Models() []ai.ModelInfo            { return nil }
 func (p *echoProvider) HealthCheck(context.Context) error { return nil }
 
 func createLearnTestLoader(t *testing.T) *curriculum.Loader {
+	return createLearnTestLoaderAtQuality(t, 3)
+}
+
+func createLearnTestLoaderAtQuality(t *testing.T, qualityLevel int) *curriculum.Loader {
 	t.Helper()
 	dir := t.TempDir()
-
-	topicYAML := `id: F1-06
-name: "Persamaan Linear (Linear Equations)"
+	curriculumDir := filepath.Join(dir, "curricula", "default")
+	topicsDir := filepath.Join(curriculumDir, "topics")
+	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	for name, content := range map[string]string{
+		"syllabus.yaml": `id: default
+name: Default
+subjects:
+  - algebra
+`,
+		"subject.yaml": `id: algebra
+name: Algebra
+syllabus_id: default
+`,
+		"subject-grade.yaml": `id: algebra-f1
+name: Algebra Form 1
 subject_id: algebra
 syllabus_id: default
-keywords:
-  - persamaan linear
-  - linear equation
-`
-	if err := os.WriteFile(filepath.Join(dir, "F1-06.yaml"), []byte(topicYAML), 0o644); err != nil {
+grade_id: form-1
+topics:
+  - F1-06
+`,
+	} {
+		path := filepath.Join(curriculumDir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write metadata %s: %v", name, err)
+		}
+	}
+
+	topicYAML := fmt.Sprintf(`id: F1-06
+name: "Persamaan Linear (Linear Equations)"
+subject_grade_id: algebra-f1
+subject_id: algebra
+syllabus_id: default
+difficulty: beginner
+content_standards:
+  - id: "1.1"
+    text: Linear equations
+learning_objectives:
+  - id: LO1
+    content_standard_id: "1.1"
+    text: Solve linear equations.
+    bloom: apply
+quality_level: %d
+provenance: human
+`, qualityLevel)
+	if err := os.WriteFile(filepath.Join(topicsDir, "F1-06.yaml"), []byte(topicYAML), 0o644); err != nil {
 		t.Fatalf("write topic: %v", err)
 	}
 
 	teachingMD := "# Persamaan Linear\nTeaching notes for linear equations."
-	if err := os.WriteFile(filepath.Join(dir, "F1-06.teaching.md"), []byte(teachingMD), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(topicsDir, "F1-06.teaching.md"), []byte(teachingMD), 0o644); err != nil {
 		t.Fatalf("write teaching notes: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(topicsDir, "F1-06.examples.yaml"), []byte(`
+topic_id: F1-06
+worked_examples:
+  - id: WE-01
+    topic: Solving linear equations
+    difficulty: easy
+    learning_objective: LO1
+    misconception_alert: Moving a term changes nothing.
+    scenario: Solve x plus 1 equals 2.
+    working: Subtract 1 from both sides.
+`), 0o644); err != nil {
+		t.Fatalf("write examples: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(topicsDir, "F1-06.assessments.yaml"), []byte(`
+topic_id: F1-06
+questions:
+  - id: Q1
+    text: Solve x plus 1 equals 2.
+    difficulty: easy
+    learning_objective: LO1
+    answer:
+      type: exact
+      value: "1"
+`), 0o644); err != nil {
+		t.Fatalf("write assessment: %v", err)
 	}
 
 	loader, err := curriculum.NewLoader(dir)

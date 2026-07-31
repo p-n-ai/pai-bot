@@ -120,17 +120,6 @@ func (e *Engine) progressLearnerID(identity LearnerIdentity) (progress.LearnerID
 	return progress.NewLearnerID(userUUID)
 }
 
-func (e *Engine) updateMastery(identity LearnerIdentity, syllabusID, topicID string, delta float64) error {
-	if tracker, ok := e.tracker.(progress.LearnerTracker); ok {
-		learnerID, err := e.progressLearnerID(identity)
-		if err != nil {
-			return err
-		}
-		return tracker.UpdateMasteryForLearner(learnerID, syllabusID, topicID, delta)
-	}
-	return e.tracker.UpdateMastery(identity.ExternalID(), syllabusID, topicID, delta)
-}
-
 func (e *Engine) getMastery(identity LearnerIdentity, syllabusID, topicID string) (float64, error) {
 	if tracker, ok := e.tracker.(progress.LearnerTracker); ok {
 		learnerID, err := e.progressLearnerID(identity)

@@ -26,7 +26,7 @@ const (
 // loadContextPackets gathers selected learner/runtime state for one tutor turn.
 // It returns trust-labeled packets directly, so prompt rendering and tracing do
 // not need a second context representation.
-func (e *Engine) loadContextPackets(ctx context.Context, turn *agentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string) []contextPacket {
+func (e *Engine) loadContextPackets(ctx context.Context, turn *agentTurn, msg chat.InboundMessage, conv *Conversation, topic *curriculum.Topic, teachingNotes string, goalTopicID string, plan *curriculum.TeachingPlan) []contextPacket {
 	var packets []contextPacket
 
 	profile := learnerProfile{}
@@ -72,23 +72,40 @@ func (e *Engine) loadContextPackets(ctx context.Context, turn *agentTurn, msg ch
 
 	if topic != nil {
 		packets = append(packets, newContextPacket(contextPacket{
-			ID:       "curriculum.topic",
-			Kind:     contextKindCurriculum,
-			Trust:    contextTrustSystemOwned,
-			Source:   "topic",
-			Data:     curriculumTopicContext(topic),
-			RenderAs: contextRenderSystemData,
+			ID:     "curriculum.topic",
+			Kind:   contextKindEvidence,
+			Trust:  contextTrustExternal,
+			Source: "topic",
+			Data: curriculumSourceEvidence{
+				Label:      "C0",
+				SourcePath: topic.Source.Path,
+				Revision:   topic.Source.Revision,
+				Content: fmt.Sprintf(
+					"Topic ID: %s\nTopic name: %s\nSyllabus ID: %s\nSubject ID: %s",
+					topic.ID,
+					topic.Name,
+					topic.SyllabusID,
+					topic.SubjectID,
+				),
+			},
+			RenderAs: contextRenderQuotedData,
 		}))
 	}
 	if teachingNotes != "" {
 		packets = append(packets, newContextPacket(contextPacket{
-			ID:       "curriculum.teaching_notes",
-			Kind:     contextKindCurriculum,
-			Trust:    contextTrustSystemOwned,
-			Source:   "teaching_notes",
-			Data:     teachingNotes,
-			RenderAs: contextRenderSystemData,
+			ID:     "curriculum.teaching_notes",
+			Kind:   contextKindEvidence,
+			Trust:  contextTrustExternal,
+			Source: "teaching_notes",
+			Data: curriculumSourceEvidence{
+				Label:   "C1",
+				Content: teachingNotes,
+			},
+			RenderAs: contextRenderQuotedData,
 		}))
+	}
+	if plan != nil {
+		packets = append(packets, curriculumPlanContextPackets(goalTopicID, *plan)...)
 	}
 
 	identity, identityErr := learnerIdentityForMessage(msg)
@@ -171,8 +188,9 @@ func (e *Engine) loadContextPackets(ctx context.Context, turn *agentTurn, msg ch
 		packets = appendImagePackets(packets, turn.ImageDataURL)
 	}
 	if e.evidenceRetriever != nil {
-		learnerID, err := e.store.ResolveUserUUID(msg.UserID)
-		if err != nil {
+		if identityErr != nil {
+			slog.Warn("resolve learner identity for grounded retrieval", "error", identityErr)
+		} else if learnerID, err := e.resolveUserUUID(identity); err != nil {
 			slog.Warn("resolve learner for grounded retrieval", "error", err)
 		} else {
 			evidence, retrieveErr := e.evidenceRetriever.Retrieve(ctx, retrieval.TutorEvidenceRequest{

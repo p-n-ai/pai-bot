@@ -42,9 +42,13 @@ func SeedCurriculum(service *Service, loader *curriculum.Loader) error {
 	var docs []UpsertDocumentInput
 
 	for _, topic := range loader.AllTopics() {
+		if !topic.IsAITeachingReady() {
+			continue
+		}
 		subject, _ := loader.GetSubject(topic.SubjectID)
+		subjectGrade, _ := loader.GetSubjectGrade(topic.SubjectGradeID)
 		syllabus, _ := loader.GetSyllabus(topic.SyllabusID)
-		form := inferTopicForm(topic, subject)
+		form := inferTopicForm(topic, subject, subjectGrade)
 
 		collectionID := topic.SubjectID
 		if collectionID == "" {
@@ -173,8 +177,18 @@ func splitTeachingNoteSections(markdown string) []noteSection {
 	return out
 }
 
-func inferTopicForm(topic curriculum.Topic, subject curriculum.Subject) string {
-	for _, text := range []string{subject.GradeID, subject.Name, topic.SubjectID, topic.SyllabusID} {
+func inferTopicForm(topic curriculum.Topic, subject curriculum.Subject, subjectGrade curriculum.SubjectGrade) string {
+	for _, text := range []string{
+		subjectGrade.GradeID,
+		subjectGrade.Name,
+		subjectGrade.NameEN,
+		subjectGrade.ID,
+		subject.GradeID,
+		subject.Name,
+		topic.SubjectGradeID,
+		topic.SubjectID,
+		topic.SyllabusID,
+	} {
 		match := formPattern.FindStringSubmatch(strings.ToLower(strings.TrimSpace(text)))
 		if len(match) == 2 {
 			return match[1]

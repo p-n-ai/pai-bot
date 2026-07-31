@@ -1,0 +1,33 @@
+{
+  "name": "pai-conversation-tester",
+  "version": "0.1.0+codex.20260730075027",
+  "description": "Run and evaluate live, multi-turn PaiBot conversations through the local Codex-backed chat CLI.",
+  "author": {
+    "name": "P&AI",
+    "url": "https://github.com/p-n-ai"
+  },
+  "homepage": "https://github.com/p-n-ai/pai-bot",
+  "repository": "https://github.com/p-n-ai/pai-bot",
+  "license": "Apache-2.0",
+  "keywords": [
+    "paibot",
+    "conversation-testing",
+    "tutor-evaluation"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PaiBot Conversation Tester",
+    "shortDescription": "Test live PaiBot tutor conversations.",
+    "longDescription": "Runs bounded, adaptive, multi-turn learner conversations through PaiBot's memory-only Codex-backed CLI and reports qualitative tutor behavior.",
+    "developerName": "P&AI",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Live conversation testing",
+      "Multi-turn tutor evaluation",
+      "Qualitative failure classification"
+    ],
+    "defaultPrompt": [
+      "Test a live PaiBot tutor conversation."
+    ]
+  }
+}

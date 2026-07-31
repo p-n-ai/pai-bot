@@ -282,6 +282,17 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			tracker := progress.NewPostgresTracker(db.Pool, store.TenantID())
 			streakTracker := progress.NewMemoryStreakTracker()
 			xpTracker := progress.NewMemoryXPTracker()
+			var curriculumRuntime agent.CurriculumRuntime
+			if loader != nil {
+				builtCurriculumRuntime, runtimeErr := curriculum.NewEngine(curriculum.EngineConfig{
+					Loader:   loader,
+					Progress: tracker,
+				})
+				if runtimeErr != nil {
+					return nil, nil, fmt.Errorf("initialize curriculum runtime: %w", runtimeErr)
+				}
+				curriculumRuntime = builtCurriculumRuntime
+			}
 			goalStore := agent.NewPostgresGoalStore(db.Pool, store.TenantID())
 			challengeStore := agent.NewPostgresChallengeStore(db.Pool, store.TenantID())
 			groupStore := agent.NewPostgresGroupStore(db.Pool)
@@ -290,6 +301,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				Store:                store,
 				EventLogger:          eventLogger,
 				CurriculumLoader:     loader,
+				CurriculumRuntime:    curriculumRuntime,
 				RetrievalService:     retrievalService,
 				EvidenceRetriever:    tutorEvidence,
 				DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
@@ -416,15 +428,28 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				if err != nil {
 					return nil, fmt.Errorf("initialize tenant conversation store: %w", err)
 				}
+				tenantTracker := progress.NewPostgresTracker(db.Pool, tenantID)
+				var tenantCurriculumRuntime agent.CurriculumRuntime
+				if loader != nil {
+					builtCurriculumRuntime, runtimeErr := curriculum.NewEngine(curriculum.EngineConfig{
+						Loader:   loader,
+						Progress: tenantTracker,
+					})
+					if runtimeErr != nil {
+						return nil, fmt.Errorf("initialize tenant curriculum runtime: %w", runtimeErr)
+					}
+					tenantCurriculumRuntime = builtCurriculumRuntime
+				}
 				tenantEngine := agent.NewEngine(agent.EngineConfig{
 					AIRouter:             router,
 					Store:                tenantStore,
 					EventLogger:          eventLogger,
 					CurriculumLoader:     loader,
+					CurriculumRuntime:    tenantCurriculumRuntime,
 					RetrievalService:     retrievalService,
 					EvidenceRetriever:    tutorEvidence,
 					DisableMultiLanguage: cfg.Runtime.DisableMultiLanguage,
-					Tracker:              progress.NewPostgresTracker(db.Pool, tenantID),
+					Tracker:              tenantTracker,
 					Streaks:              progress.NewMemoryStreakTracker(),
 					XP:                   progress.NewMemoryXPTracker(),
 					Goals:                agent.NewPostgresGoalStore(db.Pool, tenantID),

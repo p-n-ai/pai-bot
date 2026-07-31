@@ -662,13 +662,17 @@ Terminal chat workflow:
 
 ```bash
 just chat-terminal
+# Codex-only local chat, with device login when needed:
+just chat-codex
 # or:
 docker compose run --rm --entrypoint /pai-terminal-chat app --user-id demo-user --lang en
 # for an ephemeral local-only session:
 docker compose run --rm --entrypoint /pai-terminal-chat app --memory
 ```
 
-The terminal chat uses the same `agent.Engine` and AI router as the app. By default it uses PostgreSQL-backed conversation state for production parity; pass `--memory` for an ephemeral local-only session.
+The terminal chat uses the same `agent.Engine` and AI router as the app. By default it uses PostgreSQL-backed conversation state for production parity; pass `--memory` for an ephemeral local-only session. `just chat-codex` pins the session to the managed Codex provider with no fallback. It uses PaiBot's isolated Codex home, not personal `~/.codex` credentials, and prints the existing OpenAI device URL and one-time code if that home is not connected yet.
+
+`just chat-codex` also enables the interactive test controls `/status`, `/new`, `/reload`, `/character <id>`, and `/interrupt <message>`. Normal messages entered during a reply are queued FIFO. It watches `.codex/chat-codex-candidate/candidate.yaml`, but applies a valid candidate only after `/reload` starts a fresh in-memory session. `/status` identifies the active candidate only by `sha256:<hash>`.
 
 Terminal nudge workflow:
 

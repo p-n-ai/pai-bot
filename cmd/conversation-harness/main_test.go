@@ -24,9 +24,13 @@ func TestBuildEngineLeavesProgressOffByDefault(t *testing.T) {
 	if !engineTrackerIsNil(engine) {
 		t.Fatal("conversation harness should not enable mastery tracker by default")
 	}
+	if !engineCurriculumRuntimeIsNil(engine) {
+		t.Fatal("conversation harness should not enable curriculum mastery without --progress")
+	}
 }
 
 func TestBuildEngineCanEnableProgress(t *testing.T) {
+	t.Setenv("LEARN_CURRICULUM_PATH", "../../oss")
 	engine, cleanup, err := buildEngine(true, "mock tutor response", true, nil, nil)
 	if err != nil {
 		t.Fatalf("buildEngine() error = %v", err)
@@ -35,6 +39,9 @@ func TestBuildEngineCanEnableProgress(t *testing.T) {
 
 	if engineTrackerIsNil(engine) {
 		t.Fatal("conversation harness should enable mastery tracker when --progress is set")
+	}
+	if engineCurriculumRuntimeIsNil(engine) {
+		t.Fatal("conversation harness should enable curriculum runtime when --progress is set")
 	}
 }
 
@@ -174,5 +181,10 @@ func TestHarnessEvidenceRetrieverRejectsUnscopedLearner(t *testing.T) {
 
 func engineTrackerIsNil(engine any) bool {
 	field := reflect.ValueOf(engine).Elem().FieldByName("tracker")
+	return field.IsNil()
+}
+
+func engineCurriculumRuntimeIsNil(engine any) bool {
+	field := reflect.ValueOf(engine).Elem().FieldByName("curriculumRuntime")
 	return field.IsNil()
 }

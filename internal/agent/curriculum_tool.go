@@ -35,7 +35,7 @@ func (curriculumLookupTool) Definition() llm.Tool {
 func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
 	topicID, _ := call.Arguments["topic_id"].(string)
 	topic, ok := t.loader.GetTopic(topicID)
-	if !ok {
+	if !ok || !topic.IsAITeachingReady() {
 		return llm.ToolResultMessage{
 			Content:   []llm.UserContent{llm.TextContent{Text: "curriculum topic not found"}},
 			IsError:   true,
@@ -61,7 +61,7 @@ func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) (llm
 }
 
 func (e *Engine) teachingTools() []agentcore.Tool {
-	if e.curriculumLoader == nil {
+	if e.curriculumLoader == nil || e.curriculumRuntime != nil {
 		return nil
 	}
 	return []agentcore.Tool{curriculumLookupTool{loader: e.curriculumLoader}}

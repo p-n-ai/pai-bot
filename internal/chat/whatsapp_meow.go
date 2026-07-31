@@ -298,11 +298,12 @@ func (w *WhatsAppMeowChannel) handleMessage(msg *events.Message) {
 
 	// Use the full JID string (user@server) as the user ID so replies
 	// route correctly for both phone-number JIDs and LID JIDs.
+	senderID := msg.Info.Sender.ToNonAD().String()
 	inbound := InboundMessage{
 		Channel:    "whatsapp",
-		UserID:     msg.Info.Sender.ToNonAD().String(),
-		ExternalID: msg.Info.ID,
-		ThreadID:   msg.Info.Sender.ToNonAD().String(),
+		UserID:     senderID,
+		ExternalID: senderID,
+		ThreadID:   senderID,
 		MessageID:  msg.Info.ID,
 		DeliveryID: msg.Info.ID,
 		Text:       text,

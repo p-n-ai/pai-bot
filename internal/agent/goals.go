@@ -541,24 +541,24 @@ func (e *Engine) appendGoalToProgressReport(userID, report string) string {
 	return strings.TrimSpace(report) + "\n\n" + formatGoalList(goals, 5, "🎯 Active Goals")
 }
 
-func (e *Engine) syncGoalProgress(userID, syllabusID, topicID string) {
+func (e *Engine) syncGoalProgress(identity LearnerIdentity, syllabusID, topicID string) {
 	if e.goals == nil || e.tracker == nil {
 		return
 	}
-	mastery, err := e.tracker.GetMastery(userID, syllabusID, topicID)
+	mastery, err := e.getMastery(identity, syllabusID, topicID)
 	if err != nil {
-		slog.Warn("failed to read mastery for goal sync", "user_id", userID, "topic_id", topicID, "error", err)
+		slog.Warn("failed to read mastery for goal sync", "user_id", identity.ExternalID(), "topic_id", topicID, "error", err)
 		return
 	}
-	goals, err := e.goals.SyncGoalProgress(userID, syllabusID, topicID, mastery)
+	goals, err := e.goals.SyncGoalProgress(identity.ExternalID(), syllabusID, topicID, mastery)
 	if err != nil {
-		slog.Warn("failed to sync goal progress", "user_id", userID, "topic_id", topicID, "error", err)
+		slog.Warn("failed to sync goal progress", "user_id", identity.ExternalID(), "topic_id", topicID, "error", err)
 		return
 	}
 	for _, goal := range goals {
 		if goal != nil && goal.Status == "completed" {
 			e.logEventAsync(Event{
-				UserID:    userID,
+				UserID:    identity.ExternalID(),
 				EventType: "goal_completed",
 				Data: map[string]any{
 					"goal_id":         goal.ID,

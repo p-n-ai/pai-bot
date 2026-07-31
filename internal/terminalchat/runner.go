@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
@@ -42,6 +43,8 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, processor Processor, 
 	}
 
 	scanner := bufio.NewScanner(in)
+	sessionID := time.Now().UnixNano()
+	turnNumber := 0
 	if _, err := fmt.Fprintln(out, "Terminal chat ready. Type /exit to quit."); err != nil {
 		return err
 	}
@@ -68,10 +71,12 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, processor Processor, 
 			return nil
 		}
 
+		turnNumber++
 		result, err := processor.ProcessTurn(ctx, chat.InboundMessage{
-			Channel: channel,
-			UserID:  userID,
-			Text:    text,
+			Channel:    channel,
+			UserID:     userID,
+			DeliveryID: fmt.Sprintf("terminal:%d:%d", sessionID, turnNumber),
+			Text:       text,
 		})
 		if err != nil {
 			if _, writeErr := fmt.Fprintf(out, "Error: %v\n", err); writeErr != nil {

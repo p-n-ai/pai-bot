@@ -6,7 +6,6 @@ package agent_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -260,8 +259,6 @@ func TestEngine_ProcessMessage_QuizAnswerAdvancesWithoutAICall(t *testing.T) {
 	if mockAI.LastRequest != nil {
 		t.Fatal("AI should not be called for deterministic quiz grading")
 	}
-	time.Sleep(100 * time.Millisecond)
-
 	conv, found := store.GetActiveConversation("quiz-user-2")
 	if !found {
 		t.Fatal("expected active conversation")
@@ -279,8 +276,8 @@ func TestEngine_ProcessMessage_QuizAnswerAdvancesWithoutAICall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTotal() error = %v", err)
 	}
-	if totalXP != progress.XPQuizCorrect {
-		t.Fatalf("quiz XP total = %d, want %d", totalXP, progress.XPQuizCorrect)
+	if totalXP != 0 {
+		t.Fatalf("practice quiz XP total = %d, want 0 without curriculum runtime", totalXP)
 	}
 	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "quiz-user-2"))
 	if err != nil {
@@ -290,8 +287,8 @@ func TestEngine_ProcessMessage_QuizAnswerAdvancesWithoutAICall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}
-	if mastery <= 0 {
-		t.Fatalf("expected mastery > 0 after correct quiz answer, got %f", mastery)
+	if mastery != 0 {
+		t.Fatalf("mastery = %f, want 0 without source-backed curriculum runtime", mastery)
 	}
 }
 
@@ -335,8 +332,6 @@ func TestEngine_ProcessMessage_QuizWrongAnswerReturnsHint(t *testing.T) {
 	if mockAI.LastRequest != nil {
 		t.Fatal("AI should not be called for deterministic wrong-answer feedback")
 	}
-	time.Sleep(100 * time.Millisecond)
-
 	conv, found := store.GetActiveConversation("quiz-user-3")
 	if !found {
 		t.Fatal("expected active conversation")
@@ -365,8 +360,8 @@ func TestEngine_ProcessMessage_QuizWrongAnswerReturnsHint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}
-	if mastery <= 0 {
-		t.Fatalf("expected low-but-present mastery signal after wrong quiz answer, got %f", mastery)
+	if mastery != 0 {
+		t.Fatalf("mastery = %f, want 0 after wrong practice answer", mastery)
 	}
 }
 

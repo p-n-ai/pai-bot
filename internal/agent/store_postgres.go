@@ -639,12 +639,23 @@ func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 	if startedAt.IsZero() {
 		startedAt = time.Now()
 	}
+	if conv.CurriculumState != nil {
+		curriculumState, err := normalizeConversationCurriculumState(*conv.CurriculumState)
+		if err != nil {
+			return "", err
+		}
+		conv.CurriculumState = &curriculumState
+	}
+	metadata, err := json.Marshal(conversationMetadataFromConversation(conv))
+	if err != nil {
+		return "", fmt.Errorf("marshal conversation metadata: %w", err)
+	}
 
 	var id string
 	var dbStartedAt time.Time
 	err = s.pool.QueryRow(ctx,
-		`INSERT INTO conversations (user_id, tenant_id, thread_id, topic_id, state, started_at)
-		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
+		`INSERT INTO conversations (user_id, tenant_id, thread_id, topic_id, state, started_at, metadata)
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb)
 		 RETURNING id::text, started_at`,
 		userID,
 		s.tenantID,
@@ -652,6 +663,7 @@ func (s *PostgresStore) CreateConversation(conv Conversation) (string, error) {
 		nullIfEmpty(conv.TopicID),
 		state,
 		startedAt,
+		metadata,
 	).Scan(&id, &dbStartedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -1000,6 +1012,112 @@ func (s *PostgresStore) ClearConversationQuizState(conversationID, state string)
 	return nil
 }
 
+func (s *PostgresStore) SetConversationCurriculumState(conversationID string, curriculumState ConversationCurriculumState) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	normalized, err := normalizeConversationCurriculumState(curriculumState)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("marshal curriculum state: %w", err)
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{curriculum_state}', $2::jsonb, true)
+		 WHERE id = $1::uuid
+		   AND tenant_id = $3::uuid`,
+		conversationID,
+		payload,
+		s.tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("set curriculum state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	return nil
+}
+
+func (s *PostgresStore) UpdateConversationCurriculumAttempt(conversationID string, attempt ConversationCurriculumAttempt) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	normalized, err := normalizeConversationCurriculumAttempt(attempt)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("marshal curriculum attempt: %w", err)
+	}
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET metadata = jsonb_set(
+		       COALESCE(metadata, '{}'::jsonb),
+		       '{curriculum_state,last_attempt}',
+		       $2::jsonb,
+		       true
+		     )
+		 WHERE id = $1::uuid
+		   AND tenant_id = $3::uuid
+		   AND jsonb_typeof(metadata->'curriculum_state') = 'object'`,
+		conversationID,
+		payload,
+		s.tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("update curriculum attempt: %w", err)
+	}
+	if cmd.RowsAffected() != 0 {
+		return nil
+	}
+
+	var exists bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+		   SELECT 1
+		   FROM conversations
+		   WHERE id = $1::uuid
+		     AND tenant_id = $2::uuid
+		 )`,
+		conversationID,
+		s.tenantID,
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("check conversation after curriculum attempt update: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	return fmt.Errorf("curriculum state not set for conversation: %s", conversationID)
+}
+
+func (s *PostgresStore) ClearConversationCurriculumState(conversationID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	cmd, err := s.pool.Exec(ctx,
+		`UPDATE conversations
+		 SET metadata = COALESCE(metadata, '{}'::jsonb) - 'curriculum_state'
+		 WHERE id = $1::uuid
+		   AND tenant_id = $2::uuid`,
+		conversationID,
+		s.tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("clear curriculum state: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	return nil
+}
+
 func (s *PostgresStore) UpdateConversationChallengeState(conversationID, state string, challengeState ConversationChallengeState) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -1225,6 +1343,7 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 	conv.CompactedAt = metadata.CompactedAt
 	conv.PendingQuizTopicID = metadata.PendingQuizTopicID
 	conv.QuizState = metadata.QuizState
+	conv.CurriculumState = metadata.CurriculumState
 	conv.PendingGoal = metadata.PendingGoal
 	conv.ChallengeState = metadata.ChallengeState
 
@@ -1232,12 +1351,13 @@ func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string
 }
 
 type conversationMetadata struct {
-	Summary            string                      `json:"summary,omitempty"`
-	CompactedAt        int                         `json:"compacted_at,omitempty"`
-	PendingQuizTopicID string                      `json:"pending_quiz_topic_id,omitempty"`
-	QuizState          *ConversationQuizState      `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft           `json:"pending_goal,omitempty"`
-	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
+	Summary            string                       `json:"summary,omitempty"`
+	CompactedAt        int                          `json:"compacted_at,omitempty"`
+	PendingQuizTopicID string                       `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState       `json:"quiz_state,omitempty"`
+	CurriculumState    *ConversationCurriculumState `json:"curriculum_state,omitempty"`
+	PendingGoal        *PendingGoalDraft            `json:"pending_goal,omitempty"`
+	ChallengeState     *ConversationChallengeState  `json:"challenge_state,omitempty"`
 }
 
 func parseConversationMetadata(metadata []byte) conversationMetadata {
@@ -1248,7 +1368,27 @@ func parseConversationMetadata(metadata []byte) conversationMetadata {
 	if err := json.Unmarshal(metadata, &parsed); err != nil {
 		return conversationMetadata{}
 	}
+	if parsed.CurriculumState != nil {
+		normalized, err := normalizeConversationCurriculumState(*parsed.CurriculumState)
+		if err != nil {
+			parsed.CurriculumState = nil
+		} else {
+			parsed.CurriculumState = &normalized
+		}
+	}
 	return parsed
+}
+
+func conversationMetadataFromConversation(conv Conversation) conversationMetadata {
+	return conversationMetadata{
+		Summary:            conv.Summary,
+		CompactedAt:        conv.CompactedAt,
+		PendingQuizTopicID: conv.PendingQuizTopicID,
+		QuizState:          conv.QuizState,
+		CurriculumState:    conv.CurriculumState,
+		PendingGoal:        conv.PendingGoal,
+		ChallengeState:     conv.ChallengeState,
+	}
 }
 
 func nullIfZero(v int) any {

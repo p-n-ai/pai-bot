@@ -38,6 +38,40 @@ type ConversationQuizState struct {
 	GeneratedQuestions []QuizQuestion `json:"generated_questions,omitempty"`
 }
 
+// ConversationCurriculumAttempt is the persisted result of one source-backed
+// curriculum check. AttemptID remains after quiz UI state is cleared so a
+// redelivered learner message cannot apply mastery twice.
+type ConversationCurriculumAttempt struct {
+	AttemptID     string  `json:"attempt_id"`
+	TopicID       string  `json:"topic_id,omitempty"`
+	QuestionID    string  `json:"question_id,omitempty"`
+	LearnerAnswer string  `json:"learner_answer"`
+	Applied       bool    `json:"applied"`
+	Correct       bool    `json:"correct"`
+	Score         float64 `json:"score"`
+	MasteryBefore float64 `json:"mastery_before"`
+	MasteryAfter  float64 `json:"mastery_after"`
+	Response      string  `json:"response,omitempty"`
+}
+
+type ConversationCurriculumOption struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// ConversationCurriculumState is the curriculum engine's durable session
+// state. It is intentionally separate from legacy topic and quiz routing.
+type ConversationCurriculumState struct {
+	GoalTopicID       string                         `json:"goal_topic_id,omitempty"`
+	ActiveTopicID     string                         `json:"active_topic_id,omitempty"`
+	ActiveObjectiveID string                         `json:"active_objective_id,omitempty"`
+	ActiveQuestionID  string                         `json:"active_question_id,omitempty"`
+	ActiveAnswerType  string                         `json:"active_answer_type,omitempty"`
+	ActiveOptions     []ConversationCurriculumOption `json:"active_options,omitempty"`
+	RunID             string                         `json:"run_id,omitempty"`
+	LastAttempt       *ConversationCurriculumAttempt `json:"last_attempt,omitempty"`
+}
+
 // ConversationChallengeState is the persisted runtime state for an active challenge.
 type ConversationChallengeState struct {
 	ChallengeID   string                  `json:"challenge_id"`
@@ -70,21 +104,22 @@ type PendingGoalDraft struct {
 
 // Conversation represents a teaching conversation session.
 type Conversation struct {
-	ID                 string                      `json:"id"`
-	UserID             string                      `json:"user_id"`
-	Channel            string                      `json:"channel,omitempty"`
-	ThreadID           string                      `json:"thread_id,omitempty"`
-	TopicID            string                      `json:"topic_id,omitempty"`
-	State              string                      `json:"state"`
-	Messages           []StoredMessage             `json:"messages"`
-	Summary            string                      `json:"summary,omitempty"`
-	CompactedAt        int                         `json:"compacted_at,omitempty"` // number of messages included in Summary
-	PendingQuizTopicID string                      `json:"pending_quiz_topic_id,omitempty"`
-	QuizState          *ConversationQuizState      `json:"quiz_state,omitempty"`
-	PendingGoal        *PendingGoalDraft           `json:"pending_goal,omitempty"`
-	ChallengeState     *ConversationChallengeState `json:"challenge_state,omitempty"`
-	StartedAt          time.Time                   `json:"started_at"`
-	EndedAt            *time.Time                  `json:"ended_at,omitempty"`
+	ID                 string                       `json:"id"`
+	UserID             string                       `json:"user_id"`
+	Channel            string                       `json:"channel,omitempty"`
+	ThreadID           string                       `json:"thread_id,omitempty"`
+	TopicID            string                       `json:"topic_id,omitempty"`
+	State              string                       `json:"state"`
+	Messages           []StoredMessage              `json:"messages"`
+	Summary            string                       `json:"summary,omitempty"`
+	CompactedAt        int                          `json:"compacted_at,omitempty"` // number of messages included in Summary
+	PendingQuizTopicID string                       `json:"pending_quiz_topic_id,omitempty"`
+	QuizState          *ConversationQuizState       `json:"quiz_state,omitempty"`
+	CurriculumState    *ConversationCurriculumState `json:"curriculum_state,omitempty"`
+	PendingGoal        *PendingGoalDraft            `json:"pending_goal,omitempty"`
+	ChallengeState     *ConversationChallengeState  `json:"challenge_state,omitempty"`
+	StartedAt          time.Time                    `json:"started_at"`
+	EndedAt            *time.Time                   `json:"ended_at,omitempty"`
 }
 
 // LearnerIdentity identifies one learner within one chat provider.
@@ -146,6 +181,9 @@ type ConversationStore interface {
 	UpdateConversationPendingQuiz(conversationID, state, topicID string) error
 	UpdateConversationQuizState(conversationID, state string, quizState ConversationQuizState) error
 	ClearConversationQuizState(conversationID, state string) error
+	SetConversationCurriculumState(conversationID string, curriculumState ConversationCurriculumState) error
+	UpdateConversationCurriculumAttempt(conversationID string, attempt ConversationCurriculumAttempt) error
+	ClearConversationCurriculumState(conversationID string) error
 	SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error
 	ClearConversationPendingGoal(conversationID string) error
 	UpdateConversationChallengeState(conversationID, state string, challengeState ConversationChallengeState) error
@@ -231,6 +269,13 @@ func (s *MemoryStore) CreateConversationForThread(identity LearnerIdentity, thre
 	}
 	if conv.ThreadID != "" && conv.ThreadID != threadID {
 		return "", fmt.Errorf("conversation thread_id does not match requested thread")
+	}
+	if conv.CurriculumState != nil {
+		curriculumState, err := normalizeConversationCurriculumState(*conv.CurriculumState)
+		if err != nil {
+			return "", err
+		}
+		conv.CurriculumState = &curriculumState
 	}
 
 	s.mu.Lock()
@@ -681,6 +726,55 @@ func (s *MemoryStore) ClearConversationQuizState(conversationID, state string) e
 	return nil
 }
 
+func (s *MemoryStore) SetConversationCurriculumState(conversationID string, curriculumState ConversationCurriculumState) error {
+	normalized, err := normalizeConversationCurriculumState(curriculumState)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	conv.CurriculumState = &normalized
+	return nil
+}
+
+func (s *MemoryStore) UpdateConversationCurriculumAttempt(conversationID string, attempt ConversationCurriculumAttempt) error {
+	normalized, err := normalizeConversationCurriculumAttempt(attempt)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	if conv.CurriculumState == nil {
+		return fmt.Errorf("curriculum state not set for conversation: %s", conversationID)
+	}
+	conv.CurriculumState.LastAttempt = &normalized
+	return nil
+}
+
+func (s *MemoryStore) ClearConversationCurriculumState(conversationID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return fmt.Errorf("conversation not found: %s", conversationID)
+	}
+	conv.CurriculumState = nil
+	return nil
+}
+
 func (s *MemoryStore) SetConversationPendingGoal(conversationID string, goal PendingGoalDraft) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -779,4 +873,38 @@ func (s *MemoryStore) ensureUserLocked(identity LearnerIdentity) {
 	if _, ok := s.userUUID[identity]; !ok {
 		s.userUUID[identity] = generateID()
 	}
+}
+
+func normalizeConversationCurriculumState(state ConversationCurriculumState) (ConversationCurriculumState, error) {
+	state.GoalTopicID = strings.TrimSpace(state.GoalTopicID)
+	state.ActiveTopicID = strings.TrimSpace(state.ActiveTopicID)
+	state.ActiveObjectiveID = strings.TrimSpace(state.ActiveObjectiveID)
+	state.ActiveQuestionID = strings.TrimSpace(state.ActiveQuestionID)
+	state.ActiveAnswerType = strings.TrimSpace(state.ActiveAnswerType)
+	state.RunID = strings.TrimSpace(state.RunID)
+	for index := range state.ActiveOptions {
+		state.ActiveOptions[index].ID = strings.TrimSpace(state.ActiveOptions[index].ID)
+		state.ActiveOptions[index].Text = strings.TrimSpace(state.ActiveOptions[index].Text)
+	}
+	if state.GoalTopicID == "" && state.ActiveTopicID == "" {
+		return ConversationCurriculumState{}, fmt.Errorf("curriculum goal_topic_id or active_topic_id is required")
+	}
+	if state.LastAttempt != nil {
+		attempt, err := normalizeConversationCurriculumAttempt(*state.LastAttempt)
+		if err != nil {
+			return ConversationCurriculumState{}, err
+		}
+		state.LastAttempt = &attempt
+	}
+	return state, nil
+}
+
+func normalizeConversationCurriculumAttempt(attempt ConversationCurriculumAttempt) (ConversationCurriculumAttempt, error) {
+	attempt.AttemptID = strings.TrimSpace(attempt.AttemptID)
+	attempt.TopicID = strings.TrimSpace(attempt.TopicID)
+	attempt.QuestionID = strings.TrimSpace(attempt.QuestionID)
+	if attempt.AttemptID == "" {
+		return ConversationCurriculumAttempt{}, fmt.Errorf("curriculum attempt_id is required")
+	}
+	return attempt, nil
 }

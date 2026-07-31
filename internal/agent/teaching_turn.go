@@ -90,10 +90,25 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 			conv.TopicID = matchedTopic.ID
 		}
 	}
+	goalTopic := matchedTopic
+	goalTopicID := ""
+	if goalTopic != nil {
+		goalTopicID = goalTopic.ID
+	}
+	plan, activeTopic, err := e.planCurriculumTurn(ctx, msg, goalTopic)
+	if err != nil {
+		slog.Error("failed to plan curriculum turn", "conversation_id", conv.ID, "topic_id", goalTopicID, "error", err)
+		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
+	}
+	if plan != nil {
+		matchedTopic = activeTopic
+		teachingNotes = ""
+	}
 	turn.Conversation = conv
 	turn.Topic = matchedTopic
 	turn.TeachingNotes = teachingNotes
-	turn.Packets = e.loadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes)
+	turn.CurriculumPlan = plan
+	turn.Packets = e.loadContextPackets(ctx, turn, msg, conv, matchedTopic, teachingNotes, goalTopicID, plan)
 	if e.turnHooksEnabled() {
 		hookResult, err := e.runTurnHooks(ctx, turn)
 		if err != nil {
@@ -140,6 +155,13 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	// Telegram does not render LaTeX blocks; keep equations plain.
 	plainContent := postProcessTutorResponse(normalizeLegacyExamReferences(normalizeEquationFormatting(resp.Content)), msg.Text)
 	finalContent := plainContent
+	if plan != nil {
+		finalContent = ensurePlannedCheck(finalContent, plan.Check)
+		if err := e.persistCurriculumPlanState(conv, turn.ID, goalTopicID, *plan); err != nil {
+			slog.Error("persist curriculum plan state", "conversation_id", conv.ID, "error", err)
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), nil
+		}
+	}
 
 	// Record assistant response with token metadata.
 	assistantMessageID, err := e.store.AddMessage(conv.ID, StoredMessage{
@@ -169,7 +191,6 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 	e.logAgentTurnCompleted(turn, "completed")
 	identity, identityErr := learnerIdentityForMessage(msg)
 	if identityErr == nil {
-		e.assessMasteryAsync(identity, matchedTopic, userContent, plainContent)
 		e.recordActivityAsync(identity)
 	}
 

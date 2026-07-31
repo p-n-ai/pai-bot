@@ -3,8 +3,6 @@
 
 package curriculum
 
-const UnlockMasteryThreshold = 0.8
-
 // PrereqGraph is a reverse dependency graph for curriculum topics.
 // It maps each topic to the topics that depend on it (require it as a prerequisite).
 type PrereqGraph struct {
@@ -25,8 +23,8 @@ func NewPrereqGraph(topics []Topic) *PrereqGraph {
 	}
 	for _, t := range topics {
 		g.topics[t.ID] = t
-		g.prereqs[t.ID] = t.Prerequisites.Required
-		for _, req := range t.Prerequisites.Required {
+		g.prereqs[t.ID] = t.Prerequisites.RequiredTopicIDs()
+		for _, req := range g.prereqs[t.ID] {
 			g.dependents[req] = append(g.dependents[req], t.ID)
 		}
 	}
@@ -46,7 +44,7 @@ func (g *PrereqGraph) RequiredPrereqs(topicID string) []string {
 // UnlockableTopics returns topics that become newly unlockable after mastering
 // the given topic. A topic is unlockable when:
 // 1. It has required prerequisites (topics with no prereqs are always available)
-// 2. ALL of its required prerequisites have mastery ≥ UnlockMasteryThreshold
+// 2. ALL required prerequisites meet their OSS-authored mastery thresholds
 // 3. The topic itself is NOT already mastered (no re-notification)
 func (g *PrereqGraph) UnlockableTopics(masteredTopicID string, scores map[string]float64) []Topic {
 	deps := g.dependents[masteredTopicID]
@@ -63,14 +61,16 @@ func (g *PrereqGraph) UnlockableTopics(masteredTopicID string, scores map[string
 		}
 
 		// Skip if already mastered (don't re-notify).
-		if scores[depID] >= UnlockMasteryThreshold {
+		dependent := g.topics[depID]
+		if score, known := scores[depID]; known && score >= masteryThreshold(dependent) {
 			continue
 		}
 
 		// Check if ALL required prereqs are now mastered.
 		allMet := true
 		for _, req := range prereqs {
-			if scores[req] < UnlockMasteryThreshold {
+			score, known := scores[req]
+			if !known || score < masteryThreshold(g.topics[req]) {
 				allMet = false
 				break
 			}

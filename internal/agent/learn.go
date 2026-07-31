@@ -23,9 +23,15 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 		usage := i18n.S(locale, i18n.MsgLearnUsage)
 		if e.curriculumLoader != nil {
 			topics := e.curriculumLoader.AllTopics()
-			if len(topics) > 0 {
+			readyTopics := topics[:0]
+			for _, topic := range topics {
+				if topic.IsAITeachingReady() {
+					readyTopics = append(readyTopics, topic)
+				}
+			}
+			if len(readyTopics) > 0 {
 				usage += "\n\nTopik tersedia:"
-				for _, t := range topics {
+				for _, t := range readyTopics {
 					usage += "\n- " + t.Name + " (" + t.ID + ")"
 				}
 			}
@@ -35,8 +41,18 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 
 	raw := strings.Join(args, " ")
 
-	// Resolve topic from text via lexical retrieval.
-	topic, _ := e.resolveCurriculumContext(msg.UserID, "", raw)
+	var topic *curriculum.Topic
+	if e.curriculumLoader != nil {
+		if exact, found := e.curriculumLoader.GetTopic(strings.TrimSpace(raw)); found {
+			topic = &exact
+		}
+	}
+	if topic == nil {
+		topic, _ = e.resolveCurriculumContext(msg.UserID, "", raw)
+	}
+	if topic != nil && !topic.IsAITeachingReady() {
+		topic = nil
+	}
 
 	// Fallback: if lexical retrieval missed (e.g. typos), ask AI to fuzzy-match.
 	if topic == nil && e.curriculumLoader != nil && e.aiRouter != nil {
@@ -58,6 +74,10 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 
 	if err := e.store.UpdateConversationTopicID(conv.ID, topic.ID); err != nil {
 		slog.Error("failed to set topic on conversation", "conversation_id", conv.ID, "topic_id", topic.ID, "error", err)
+		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
+	}
+	if err := e.retirePendingCurriculumCheck(conv, topic.ID, "learn:"+topic.ID); err != nil {
+		slog.Error("retire pending curriculum check for /learn", "conversation_id", conv.ID, "error", err)
 		return i18n.S(locale, i18n.MsgTechnicalIssue), nil
 	}
 
@@ -107,6 +127,13 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 // typos) against the list of available topic IDs and names.
 func (e *Engine) aiMatchTopic(ctx context.Context, userInput string) *curriculum.Topic {
 	topics := e.curriculumLoader.AllTopics()
+	readyTopics := topics[:0]
+	for _, topic := range topics {
+		if topic.IsAITeachingReady() {
+			readyTopics = append(readyTopics, topic)
+		}
+	}
+	topics = readyTopics
 	if len(topics) == 0 {
 		return nil
 	}
@@ -161,7 +188,7 @@ Return JSON: {"topic_id": "<ID>"}`, userInput, topicList.String())
 	}
 
 	matched, ok := e.curriculumLoader.GetTopic(result.TopicID)
-	if !ok {
+	if !ok || !matched.IsAITeachingReady() {
 		slog.Warn("AI returned unknown topic ID", "topic_id", result.TopicID, "input", userInput)
 		return nil
 	}

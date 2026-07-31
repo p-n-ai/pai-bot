@@ -146,11 +146,14 @@ func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) 
 		if got.Channel != "discord" || got.UserID != "user123" {
 			t.Fatalf("identity = channel:%q user:%q, want discord user123", got.Channel, got.UserID)
 		}
+		if got.ExternalID != "user123" {
+			t.Fatalf("ExternalID = %q, want stable Discord author user123", got.ExternalID)
+		}
 		if got.ThreadID != "discord:guild789:channel456" {
 			t.Fatalf("ThreadID = %q, want Discord channel route", got.ThreadID)
 		}
-		if got.MessageID != "msg123" || got.Text != "Hello from Discord" {
-			t.Fatalf("message = id:%q text:%q, want normalized Discord message", got.MessageID, got.Text)
+		if got.MessageID != "msg123" || got.DeliveryID != "msg123" || got.Text != "Hello from Discord" {
+			t.Fatalf("message = id:%q delivery:%q text:%q, want normalized Discord message", got.MessageID, got.DeliveryID, got.Text)
 		}
 		if got.Username != "testuser" || got.FirstName != "Test User" {
 			t.Fatalf("author = username:%q name:%q, want Discord author", got.Username, got.FirstName)

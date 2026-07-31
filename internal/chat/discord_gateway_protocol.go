@@ -30,7 +30,7 @@ func (d *DiscordChannel) dispatchGatewayMessage(message discordGatewayData, hand
 	handler(InboundMessage{
 		Channel:    "discord",
 		UserID:     message.Author.ID,
-		ExternalID: message.ID,
+		ExternalID: message.Author.ID,
 		ThreadID:   "discord:" + guildID + ":" + message.ChannelID,
 		MessageID:  message.ID,
 		DeliveryID: message.ID,

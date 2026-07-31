@@ -4,6 +4,8 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -69,6 +71,19 @@ func TestPendingUnlocks_IsolatesSameExternalIDAcrossChannels(t *testing.T) {
 	}
 }
 
+func TestBuildPrereqGraphExcludesLowerQualityUnlockDestinations(t *testing.T) {
+	loader := newUnlockCurriculumLoader(t)
+	graph := buildPrereqGraph(loader)
+	if graph == nil {
+		t.Fatal("buildPrereqGraph() = nil, want graph for ready source topic")
+	}
+
+	unlocked := graph.UnlockableTopics("F1-01", map[string]float64{"F1-01": 1})
+	if len(unlocked) != 0 {
+		t.Fatalf("UnlockableTopics() = %#v, want lower-quality destination excluded", unlocked)
+	}
+}
+
 func TestFormatUnlockNotification(t *testing.T) {
 	topics := []curriculum.Topic{
 		{ID: "F1-06", Name: "Persamaan Linear"},
@@ -113,4 +128,102 @@ func TestFormatUnlockNotification_Chinese(t *testing.T) {
 	if !strings.Contains(msg, "线性方程") {
 		t.Errorf("expected Chinese topic name, got: %s", msg)
 	}
+}
+
+func newUnlockCurriculumLoader(t *testing.T) *curriculum.Loader {
+	t.Helper()
+	root := t.TempDir()
+	curriculumDir := filepath.Join(root, "curricula", "test")
+	topicsDir := filepath.Join(curriculumDir, "grade", "topics")
+	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(topics) error = %v", err)
+	}
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", path, err)
+		}
+	}
+	write(filepath.Join(curriculumDir, "syllabus.yaml"), `
+id: test-syllabus
+name: Test Syllabus
+subjects:
+  - test-math
+`)
+	write(filepath.Join(curriculumDir, "subject.yaml"), `
+id: test-math
+name: Test Mathematics
+syllabus_id: test-syllabus
+`)
+	write(filepath.Join(curriculumDir, "grade", "subject-grade.yaml"), `
+id: test-math-form-1
+name: Test Mathematics Form 1
+subject_id: test-math
+syllabus_id: test-syllabus
+topics:
+  - F1-01
+  - F1-02
+`)
+	write(filepath.Join(topicsDir, "F1-01.yaml"), `
+id: F1-01
+name: Ready Numbers
+subject_grade_id: test-math-form-1
+subject_id: test-math
+syllabus_id: test-syllabus
+content_standards:
+  - id: CS1
+    text: Numbers
+learning_objectives:
+  - id: LO1
+    content_standard_id: CS1
+    text: Compare numbers.
+quality_level: 3
+`)
+	write(filepath.Join(topicsDir, "F1-01.teaching.md"), "# Ready numbers\n")
+	write(filepath.Join(topicsDir, "F1-01.examples.yaml"), `
+topic_id: F1-01
+worked_examples:
+  - id: WE-01
+    topic: Comparing numbers
+    difficulty: easy
+    learning_objective: LO1
+    misconception_alert: The smaller number is larger.
+    scenario: Compare 2 and 1.
+    working: Locate both on a number line.
+`)
+	write(filepath.Join(topicsDir, "F1-01.assessments.yaml"), `
+topic_id: F1-01
+questions:
+  - id: Q1
+    text: Which is larger, 2 or 1?
+    difficulty: easy
+    learning_objective: LO1
+    answer:
+      type: exact
+      value: "2"
+`)
+	write(filepath.Join(topicsDir, "F1-02.yaml"), `
+id: F1-02
+name: Draft Algebra
+subject_grade_id: test-math-form-1
+subject_id: test-math
+syllabus_id: test-syllabus
+content_standards:
+  - id: CS2
+    text: Algebra
+learning_objectives:
+  - id: LO2
+    content_standard_id: CS2
+    text: Solve equations.
+prerequisites:
+  required:
+    - F1-01
+quality_level: 2
+`)
+
+	loader, err := curriculum.NewLoader(root)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	return loader
 }

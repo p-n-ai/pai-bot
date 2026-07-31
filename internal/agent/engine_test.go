@@ -1269,23 +1269,30 @@ func TestEngine_ProcessMessage_SystemPromptCombinesGuardrailsForAdversarialBegin
 		"For a fresh unsolved problem",
 		"politely refuse to shortcut the thinking",
 		"Student mastery level: BEGINNER",
-		"TOPIC CONTEXT",
-		"F1-02",
 		"The latest user request overrides default pacing",
 		"Default to natural chat",
 		"replace legacy PT3 wording with UASA",
 		"Use UASA for Form 1-3 exam references",
-		"TEACHING NOTES (use as guidance):",
 	}
 	for _, want := range checks {
 		if !contains(systemPrompt, want) {
 			t.Fatalf("system prompt missing %q\n%s", want, systemPrompt)
 		}
 	}
-	if !contains(systemPrompt, "Undo addition or subtraction before you undo multiplication or division.") &&
-		!contains(systemPrompt, "Treat the equation like a balance.") &&
-		!contains(systemPrompt, "Always substitute the final value back into the original equation to verify it.") {
-		t.Fatalf("system prompt missing grounded teaching-note content\n%s", systemPrompt)
+	evidenceFound := false
+	for _, message := range capturedRequests[0].Messages {
+		if message.Role != "user" || !contains(message.Content, "SOURCE EVIDENCE") || !contains(message.Content, "F1-02") {
+			continue
+		}
+		if contains(message.Content, "Undo addition or subtraction before you undo multiplication or division.") ||
+			contains(message.Content, "Treat the equation like a balance.") ||
+			contains(message.Content, "Always substitute the final value back into the original equation to verify it.") {
+			evidenceFound = true
+			break
+		}
+	}
+	if !evidenceFound {
+		t.Fatalf("request missing quoted curriculum evidence: %#v", capturedRequests[0].Messages)
 	}
 }
 
@@ -1307,15 +1314,10 @@ func TestEngine_ProcessMessage_InjectsCurriculumContextWhenTopicMatched(t *testi
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "F1-02") {
-		t.Fatalf("expected topic ID in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "Treat the equation like a balance") {
-		t.Fatalf("expected teaching notes in system prompt, got: %s", systemPrompt)
+	if !hasMessageContaining(mockAI.LastRequest.Messages, "user", "SOURCE EVIDENCE") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "F1-02") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "Treat the equation like a balance") {
+		t.Fatalf("expected quoted curriculum evidence, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1337,9 +1339,8 @@ func TestEngine_ProcessMessage_NoCurriculumContextWhenNoTopicMatch(t *testing.T)
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("did not expect TOPIC CONTEXT in system prompt when no topic matches, got: %s", systemPrompt)
+	if hasMessageContaining(mockAI.LastRequest.Messages, "user", "origin=oss_curriculum") {
+		t.Fatalf("did not expect curriculum evidence when no topic matches, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1370,9 +1371,8 @@ func TestEngine_ProcessMessage_DoesNotReuseActiveTopicForExplicitOffTopicFollowU
 		t.Fatalf("ProcessMessage() second turn error = %v", err)
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("did not expect TOPIC CONTEXT for explicit off-topic follow-up, got: %s", systemPrompt)
+	if hasMessageContaining(mockAI.LastRequest.Messages, "user", "origin=oss_curriculum") {
+		t.Fatalf("did not expect curriculum evidence for explicit off-topic follow-up, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1413,15 +1413,10 @@ func TestEngine_ProcessMessage_UsesConfiguredContextResolver(t *testing.T) {
 		t.Fatalf("resolver.lastText = %q, want %q", resolver.lastText, "hello there")
 	}
 
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("expected TOPIC CONTEXT in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "X-01") {
-		t.Fatalf("expected resolver topic ID in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "scale analogy") {
-		t.Fatalf("expected resolver notes in system prompt, got: %s", systemPrompt)
+	if !hasMessageContaining(mockAI.LastRequest.Messages, "user", "SOURCE EVIDENCE") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "X-01") ||
+		!hasMessageContaining(mockAI.LastRequest.Messages, "user", "scale analogy") {
+		t.Fatalf("expected resolver evidence as quoted user data, got: %#v", mockAI.LastRequest.Messages)
 	}
 }
 
@@ -1468,59 +1463,6 @@ func TestEngine_ProcessMessage_PersistsMatchedTopicForFollowUps(t *testing.T) {
 	}
 	if conv.TopicID != "F1-02" {
 		t.Fatalf("conv.TopicID after follow-up = %q, want F1-02", conv.TopicID)
-	}
-}
-
-// Regression: after a topic is set on the conversation (via /learn or a prior
-// lexical match), subsequent vague messages like "ok" or "what's next" should
-// not cause the bot to forget the topic. The stored topic must still be
-// injected into the system prompt as TOPIC CONTEXT.
-func TestEngine_ProcessMessage_InjectsStoredTopicContextForVagueFollowUp(t *testing.T) {
-	mockAI := ai.NewMockProvider("ok")
-	store := agent.NewMemoryStore()
-	loader := createTestCurriculumLoader(t)
-
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:         mockRouter(mockAI),
-		Store:            store,
-		CurriculumLoader: loader,
-	})
-
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "vague-user",
-		Text:    "/learn linear equations",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage(/learn) error = %v", err)
-	}
-
-	conv, ok := store.GetActiveConversation("vague-user")
-	if !ok {
-		t.Fatal("expected active conversation after /learn")
-	}
-	if conv.TopicID != "F1-02" {
-		t.Fatalf("conv.TopicID after /learn = %q, want F1-02", conv.TopicID)
-	}
-
-	_, err = engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "vague-user",
-		Text:    "ok",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage(ok) error = %v", err)
-	}
-
-	systemPrompt := mockAI.LastRequest.Messages[0].Content
-	if !contains(systemPrompt, "TOPIC CONTEXT") {
-		t.Fatalf("expected TOPIC CONTEXT in system prompt after vague reply, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "F1-02") {
-		t.Fatalf("expected stored topic ID F1-02 in system prompt, got: %s", systemPrompt)
-	}
-	if !contains(systemPrompt, "Treat the equation like a balance") {
-		t.Fatalf("expected stored teaching notes in system prompt, got: %s", systemPrompt)
 	}
 }
 
@@ -2213,7 +2155,7 @@ func TestEngine_ImageDataURL_NotPersistedInConversationHistory(t *testing.T) {
 	}
 }
 
-func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
+func TestEngine_ProcessMessage_DoesNotInferMasteryFromOrdinaryTeaching(t *testing.T) {
 	mockAI := ai.NewMockProvider("0.7")
 	store := agent.NewMemoryStore()
 	progressTracker := progress.NewMemoryTracker()
@@ -2244,9 +2186,6 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 		t.Fatalf("ProcessMessage() error = %v", err)
 	}
 
-	// assessMasteryAsync runs in a goroutine; give it time to complete.
-	time.Sleep(100 * time.Millisecond)
-
 	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "mastery-user"))
 	if err != nil {
 		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
@@ -2255,81 +2194,30 @@ func TestEngine_ProcessMessage_UpdatesMasteryWhenTopicMatched(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMastery() error = %v", err)
 	}
-	if score <= 0 {
-		t.Errorf("expected mastery score > 0 after topic-matched message, got %f", score)
-	}
-}
-
-func TestEngine_ProcessMessage_SM2FieldsComputedAfterMastery(t *testing.T) {
-	// Mock AI returns "0.8" for both the teaching response and the grading call.
-	mockAI := ai.NewMockProvider("0.8")
-	store := agent.NewMemoryStore()
-	progressTracker := progress.NewMemoryTracker()
-
-	resolver := &stubContextResolver{
-		topic: &curriculum.Topic{
-			ID:         "algebra-linear-eq",
-			Name:       "Linear Equations",
-			SyllabusID: "kssm-form1",
-			SubjectID:  "algebra",
-		},
-		notes: "Solve for x",
-	}
-
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:        mockRouter(mockAI),
-		ContextResolver: resolver,
-		Store:           store,
-		Tracker:         progressTracker,
-	})
-
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "sm2-user",
-		Text:    "Solve 3x = 9",
-	})
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-
-	time.Sleep(100 * time.Millisecond)
-
-	learnerID, err := store.ResolveUserUUIDFor(mustLearnerIdentity(t, "telegram", "sm2-user"))
-	if err != nil {
-		t.Fatalf("ResolveUserUUIDFor() error = %v", err)
-	}
-	items, err := progressTracker.GetAllProgress(learnerID)
-	if err != nil {
-		t.Fatalf("GetAllProgress() error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 progress item, got %d", len(items))
-	}
-
-	item := items[0]
-	if item.EaseFactor < 1.3 {
-		t.Errorf("EaseFactor should be >= 1.3, got %f", item.EaseFactor)
-	}
-	if item.IntervalDays < 1 {
-		t.Errorf("IntervalDays should be >= 1, got %d", item.IntervalDays)
-	}
-	if item.Repetitions < 1 {
-		t.Errorf("Repetitions should be >= 1, got %d", item.Repetitions)
-	}
-	if !item.NextReviewAt.After(item.LastStudied) {
-		t.Errorf("NextReviewAt (%v) should be after LastStudied (%v)", item.NextReviewAt, item.LastStudied)
-	}
-	if item.TopicID != "algebra-linear-eq" {
-		t.Errorf("expected TopicID 'algebra-linear-eq', got %q", item.TopicID)
-	}
-	if item.SyllabusID != "kssm-form1" {
-		t.Errorf("expected SyllabusID 'kssm-form1', got %q", item.SyllabusID)
+	if score != 0 {
+		t.Errorf("mastery score = %f, want 0 without source-backed assessment evidence", score)
 	}
 }
 
 func TestEngine_ProgressCommand_ShowsTopics(t *testing.T) {
 	mockAI := ai.NewMockProvider("0.8")
 	progressTracker := progress.NewMemoryTracker()
+	store := agent.NewMemoryStore()
+	identity := mustLearnerIdentity(t, "telegram", "progress-user")
+	if err := store.SetUserNameFor(identity, "Student"); err != nil {
+		t.Fatal(err)
+	}
+	userUUID, err := store.ResolveUserUUIDFor(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	learnerID, err := progress.NewLearnerID(userUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := progressTracker.UpdateMasteryForLearner(learnerID, "kssm-form1", "algebra-linear-eq", 0.8); err != nil {
+		t.Fatal(err)
+	}
 
 	resolver := &stubContextResolver{
 		topic: &curriculum.Topic{
@@ -2343,20 +2231,9 @@ func TestEngine_ProgressCommand_ShowsTopics(t *testing.T) {
 		AIRouter:        mockRouter(mockAI),
 		ContextResolver: resolver,
 		Tracker:         progressTracker,
+		Store:           store,
 	})
 
-	// First, send a message to create progress.
-	_, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "progress-user",
-		Text:    "Solve x + 1 = 3",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(100 * time.Millisecond)
-
-	// Now call /progress.
 	resp, err := engine.ProcessMessage(context.Background(), chat.InboundMessage{
 		Channel: "telegram",
 		UserID:  "progress-user",
@@ -2439,46 +2316,6 @@ func TestEngine_ProcessMessage_NoMasteryUpdateWithoutTopic(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Errorf("expected 0 progress items without topic match, got %d", len(items))
-	}
-}
-
-func TestEngine_ProcessMessage_MasteryAssessmentSurvivesTurnCancellation(t *testing.T) {
-	provider := &gradingContextProbeProvider{
-		gradingCtxErr: make(chan error, 1),
-	}
-	progressTracker := progress.NewMemoryTracker()
-	topic := &curriculum.Topic{
-		ID:         "F1-02",
-		Name:       "Linear Equations",
-		SyllabusID: "kssm-f1",
-	}
-	engine := agent.NewEngine(agent.EngineConfig{
-		AIRouter:        mockRouter(provider),
-		Tracker:         progressTracker,
-		ContextResolver: &stubContextResolver{topic: topic},
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	resp, err := engine.ProcessMessage(ctx, chat.InboundMessage{
-		Channel: "telegram",
-		UserID:  "mastery-cancel-user",
-		Text:    "Solve 3x - 5 = 16.",
-	})
-	cancel()
-	if err != nil {
-		t.Fatalf("ProcessMessage() error = %v", err)
-	}
-	if strings.TrimSpace(resp) == "" {
-		t.Fatal("expected non-empty tutor response")
-	}
-
-	select {
-	case err := <-provider.gradingCtxErr:
-		if err != nil {
-			t.Fatalf("grading context should not inherit canceled turn context, got %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for async mastery assessment")
 	}
 }
 
@@ -2647,41 +2484,6 @@ func (f *flakyProvider) HealthCheck(_ context.Context) error {
 	return nil
 }
 
-type gradingContextProbeProvider struct {
-	gradingCtxErr chan error
-}
-
-func (p *gradingContextProbeProvider) Complete(ctx context.Context, req ai.CompletionRequest) (ai.CompletionResponse, error) {
-	if req.Task == ai.TaskGrading {
-		time.Sleep(10 * time.Millisecond)
-		p.gradingCtxErr <- ctx.Err()
-		return ai.CompletionResponse{
-			Content:      "0.8",
-			Model:        "probe",
-			InputTokens:  1,
-			OutputTokens: 1,
-		}, nil
-	}
-	return ai.CompletionResponse{
-		Content:      "Try isolating the variable term first.",
-		Model:        "probe",
-		InputTokens:  1,
-		OutputTokens: 1,
-	}, nil
-}
-
-func (p *gradingContextProbeProvider) StreamComplete(context.Context, ai.CompletionRequest) (<-chan ai.StreamChunk, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (p *gradingContextProbeProvider) Models() []ai.ModelInfo {
-	return []ai.ModelInfo{{ID: "probe", Name: "Probe", MaxTokens: 1024}}
-}
-
-func (p *gradingContextProbeProvider) HealthCheck(context.Context) error {
-	return nil
-}
-
 type stubContextResolver struct {
 	topic    *curriculum.Topic
 	notes    string
@@ -2703,17 +2505,49 @@ func createTestCurriculumLoader(t *testing.T) *curriculum.Loader {
 	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+	curriculumDir := filepath.Join(dir, "curricula", "malaysia", "kssm")
+	for name, content := range map[string]string{
+		"syllabus.yaml": `id: kssm-f1
+name: KSSM Form 1
+subjects:
+  - math
+`,
+		"subject.yaml": `id: math
+name: Mathematics
+syllabus_id: kssm-f1
+`,
+		"subject-grade.yaml": `id: math-f1
+name: Mathematics Form 1
+subject_id: math
+syllabus_id: kssm-f1
+grade_id: form-1
+topics:
+  - F1-02
+`,
+	} {
+		path := filepath.Join(curriculumDir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", path, err)
+		}
+	}
 
 	yamlPath := filepath.Join(topicsDir, "01-linear-equations.yaml")
 	yamlData := `id: F1-02
 name: Linear Equations
+subject_grade_id: math-f1
 subject_id: math
 syllabus_id: kssm-f1
 difficulty: beginner
+content_standards:
+  - id: "1.1"
+    text: Linear equations
 learning_objectives:
   - id: LO1
+    content_standard_id: "1.1"
     text: Solve linear equations in one variable
     bloom: apply
+quality_level: 3
+provenance: human
 `
 	if err := os.WriteFile(yamlPath, []byte(yamlData), 0o644); err != nil {
 		t.Fatalf("WriteFile(yaml) error = %v", err)
@@ -2732,6 +2566,21 @@ Undo addition or subtraction before you undo multiplication or division.
 Always substitute the final value back into the original equation to verify it.`
 	if err := os.WriteFile(notesPath, []byte(notes), 0o644); err != nil {
 		t.Fatalf("WriteFile(notes) error = %v", err)
+	}
+
+	examplesPath := filepath.Join(topicsDir, "01-linear-equations.examples.yaml")
+	examples := `topic_id: F1-02
+worked_examples:
+  - id: WE-01
+    topic: Solving linear equations
+    difficulty: easy
+    learning_objective: LO1
+    scenario: Solve x + 3 = 7.
+    working: Subtract 3 from both sides to get x = 4.
+    misconception_alert: Changing sides without applying the same operation to both sides.
+`
+	if err := os.WriteFile(examplesPath, []byte(examples), 0o644); err != nil {
+		t.Fatalf("WriteFile(examples) error = %v", err)
 	}
 
 	assessmentPath := filepath.Join(topicsDir, "01-linear-equations.assessments.yaml")
@@ -2778,7 +2627,6 @@ questions:
 	if err := os.WriteFile(assessmentPath, []byte(assessment), 0o644); err != nil {
 		t.Fatalf("WriteFile(assessment) error = %v", err)
 	}
-
 	loader, err := curriculum.NewLoader(dir)
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)

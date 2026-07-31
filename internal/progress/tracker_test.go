@@ -4,6 +4,11 @@
 package progress
 
 import (
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 )
@@ -53,6 +58,244 @@ func TestLearnerTracker_IsolatesInternalLearnerIDs(t *testing.T) {
 func TestNewLearnerIDRejectsEmptyValue(t *testing.T) {
 	if _, err := NewLearnerID(" "); err == nil {
 		t.Fatal("NewLearnerID(empty) error = nil, want error")
+	}
+}
+
+func TestMemoryTracker_RecordMasteryEvidenceIsIdempotent(t *testing.T) {
+	tracker := NewMemoryTracker()
+	learnerID, err := NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tracker.UpdateMasteryForLearner(learnerID, "syllabus", "topic", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	evidence := MasteryEvidence{
+		AttemptID:      "message-42/Q1",
+		LearnerID:      learnerID,
+		SyllabusID:     "syllabus",
+		TopicID:        "topic",
+		SourceKind:     "oss_assessment",
+		SourceID:       "Q1",
+		SourceRevision: "sha256:fixture",
+		Score:          0,
+		PayloadHash:    sha256.Sum256([]byte("wrong answer")),
+	}
+
+	first, err := tracker.RecordMasteryEvidence(context.Background(), evidence)
+	if err != nil {
+		t.Fatalf("first RecordMasteryEvidence() error = %v", err)
+	}
+	replay, err := tracker.RecordMasteryEvidence(context.Background(), evidence)
+	if err != nil {
+		t.Fatalf("replayed RecordMasteryEvidence() error = %v", err)
+	}
+
+	if !first.Applied || replay.Applied {
+		t.Fatalf("applied flags = %v, %v, want true then false", first.Applied, replay.Applied)
+	}
+	if replay.MasteryBefore != first.MasteryBefore || replay.MasteryAfter != first.MasteryAfter {
+		t.Fatalf("replay result = %#v, want original %#v", replay, first)
+	}
+	score, err := tracker.GetMasteryForLearner(learnerID, "syllabus", "topic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if score != first.MasteryAfter {
+		t.Fatalf("mastery after replay = %v, want %v", score, first.MasteryAfter)
+	}
+	counts, err := tracker.GetMasteryEvidenceCounts(context.Background(), learnerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 1 || counts[0].SyllabusID != "syllabus" || counts[0].TopicID != "topic" || counts[0].Count != 1 {
+		t.Fatalf("evidence counts = %#v, want one distinct topic attempt", counts)
+	}
+	snapshot, err := tracker.GetMasterySnapshot(context.Background(), learnerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot) != 1 || snapshot[0].LatestEvidence == nil ||
+		snapshot[0].LatestEvidence.SourceID != "Q1" || snapshot[0].LatestEvidence.Score != 0 {
+		t.Fatalf("latest evidence = %#v, want wrong Q1 attempt", snapshot)
+	}
+}
+
+func TestMemoryTracker_RecordMasteryEvidenceRejectsAttemptIDCollision(t *testing.T) {
+	tracker := NewMemoryTracker()
+	learnerID, err := NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := MasteryEvidence{
+		AttemptID:      "message-42/Q1",
+		LearnerID:      learnerID,
+		SyllabusID:     "syllabus",
+		TopicID:        "topic",
+		SourceKind:     "oss_assessment",
+		SourceID:       "Q1",
+		SourceRevision: "sha256:fixture",
+		Score:          1,
+		PayloadHash:    sha256.Sum256([]byte("correct answer")),
+	}
+	if _, err := tracker.RecordMasteryEvidence(context.Background(), evidence); err != nil {
+		t.Fatal(err)
+	}
+	evidence.PayloadHash = sha256.Sum256([]byte("different answer"))
+
+	if _, err := tracker.RecordMasteryEvidence(context.Background(), evidence); !errors.Is(err, ErrMasteryEvidenceConflict) {
+		t.Fatalf("RecordMasteryEvidence() error = %v, want ErrMasteryEvidenceConflict", err)
+	}
+	score, err := tracker.GetMasteryForLearner(learnerID, "syllabus", "topic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if score != 1 {
+		t.Fatalf("mastery after collision = %v, want unchanged 1", score)
+	}
+}
+
+func TestMemoryTracker_RecordMasteryEvidenceRejectsSourceRevisionCollision(t *testing.T) {
+	tracker := NewMemoryTracker()
+	learnerID, err := NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := MasteryEvidence{
+		AttemptID:      "message-42/Q1",
+		LearnerID:      learnerID,
+		SyllabusID:     "syllabus",
+		TopicID:        "topic",
+		SourceKind:     "oss_assessment",
+		SourceID:       "Q1",
+		SourceRevision: "sha256:first",
+		Score:          1,
+		PayloadHash:    sha256.Sum256([]byte("correct answer")),
+	}
+	if _, err := tracker.RecordMasteryEvidence(context.Background(), evidence); err != nil {
+		t.Fatal(err)
+	}
+	evidence.SourceRevision = "sha256:changed"
+
+	if _, err := tracker.RecordMasteryEvidence(context.Background(), evidence); !errors.Is(err, ErrMasteryEvidenceConflict) {
+		t.Fatalf("RecordMasteryEvidence() error = %v, want ErrMasteryEvidenceConflict", err)
+	}
+}
+
+func TestMemoryTracker_GetMasterySnapshotStaysCoherentDuringEvidenceWrites(t *testing.T) {
+	tracker := NewMemoryTracker()
+	learnerID, err := NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const attempts = 500
+	expectedScores := make([]float64, attempts+1)
+	for attempt := 1; attempt <= attempts; attempt++ {
+		score := float64(attempt % 2)
+		if attempt == 1 {
+			expectedScores[attempt] = score
+			continue
+		}
+		expectedScores[attempt] = expectedScores[attempt-1]*0.7 + score*0.3
+	}
+
+	start := make(chan struct{})
+	writerDone := make(chan struct{})
+	writeErr := make(chan error, 1)
+	go func() {
+		defer close(writerDone)
+		<-start
+		for attempt := 1; attempt <= attempts; attempt++ {
+			attemptID := fmt.Sprintf("attempt-%d", attempt)
+			_, err := tracker.RecordMasteryEvidence(context.Background(), MasteryEvidence{
+				AttemptID:      attemptID,
+				LearnerID:      learnerID,
+				SyllabusID:     "syllabus",
+				TopicID:        "topic",
+				SourceKind:     "oss_assessment",
+				SourceID:       "question",
+				SourceRevision: "sha256:fixture",
+				Score:          float64(attempt % 2),
+				PayloadHash:    sha256.Sum256([]byte(attemptID)),
+			})
+			if err != nil {
+				writeErr <- err
+				return
+			}
+		}
+	}()
+
+	close(start)
+	for {
+		snapshot, err := tracker.GetMasterySnapshot(context.Background(), learnerID)
+		if err != nil {
+			t.Fatalf("GetMasterySnapshot() error = %v", err)
+		}
+		if len(snapshot) > 1 {
+			t.Fatalf("snapshot = %#v, want at most one topic", snapshot)
+		}
+		if len(snapshot) == 1 {
+			item := snapshot[0]
+			if !item.MasteryKnown {
+				t.Fatalf("snapshot item = %#v, recorded evidence must have known mastery", item)
+			}
+			if item.EvidenceCount < 1 || item.EvidenceCount > attempts {
+				t.Fatalf("snapshot evidence count = %d, want 1..%d", item.EvidenceCount, attempts)
+			}
+			wantScore := expectedScores[item.EvidenceCount]
+			if math.Abs(item.MasteryScore-wantScore) > 1e-12 {
+				t.Fatalf(
+					"snapshot mixed score %v with evidence count %d; want score %v",
+					item.MasteryScore,
+					item.EvidenceCount,
+					wantScore,
+				)
+			}
+		}
+
+		select {
+		case <-writerDone:
+			if len(writeErr) != 0 {
+				t.Fatal(<-writeErr)
+			}
+			final, err := tracker.GetMasterySnapshot(context.Background(), learnerID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(final) != 1 || final[0].EvidenceCount != attempts {
+				t.Fatalf("final snapshot = %#v, want %d attempts", final, attempts)
+			}
+			return
+		default:
+		}
+	}
+}
+
+func TestMemoryTracker_GetMasterySnapshotIncludesProgressWithoutEvidence(t *testing.T) {
+	tracker := NewMemoryTracker()
+	learnerID, err := NewLearnerID("learner-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tracker.UpdateMasteryForLearner(learnerID, "syllabus", "topic", 0.4); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := tracker.GetMasterySnapshot(context.Background(), learnerID)
+	if err != nil {
+		t.Fatalf("GetMasterySnapshot() error = %v", err)
+	}
+	if len(snapshot) != 1 {
+		t.Fatalf("snapshot = %#v, want one item", snapshot)
+	}
+	item := snapshot[0]
+	if item.SyllabusID != "syllabus" ||
+		item.TopicID != "topic" ||
+		item.MasteryScore != 0.4 ||
+		!item.MasteryKnown ||
+		item.EvidenceCount != 0 {
+		t.Fatalf("snapshot item = %#v, want known 0.4 mastery without evidence", item)
 	}
 }
 

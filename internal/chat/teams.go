@@ -338,7 +338,7 @@ func (a teamsActivity) inboundMessage() (InboundMessage, bool) {
 	return InboundMessage{
 		Channel:    "teams",
 		UserID:     authorID,
-		ExternalID: messageID,
+		ExternalID: authorID,
 		ThreadID:   "teams:" + encode([]byte(conversationID)) + ":" + encode([]byte(serviceURL)),
 		MessageID:  messageID,
 		DeliveryID: messageID,

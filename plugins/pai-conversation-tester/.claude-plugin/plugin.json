@@ -1,0 +1,15 @@
+{
+  "name": "pai-conversation-tester",
+  "version": "0.1.0",
+  "description": "Run and evaluate live, multi-turn PaiBot conversations through the local Codex-backed chat CLI.",
+  "author": {
+    "name": "P&AI"
+  },
+  "repository": "https://github.com/p-n-ai/pai-bot",
+  "license": "Apache-2.0",
+  "keywords": [
+    "paibot",
+    "conversation-testing",
+    "tutor-evaluation"
+  ]
+}

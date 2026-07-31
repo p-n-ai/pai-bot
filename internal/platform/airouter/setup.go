@@ -85,6 +85,28 @@ func PrepareWithCodexAuth(cfg config.AIConfig, codexAuth ai.CodexAppServerClient
 	return Plan{registrations: regs}, preferredErr
 }
 
+// PrepareProviderWithCodexAuth constructs a plan containing only the selected
+// provider. It is intended for operator tools that must never fall back to a
+// different configured provider.
+func PrepareProviderWithCodexAuth(
+	name string,
+	cfg config.AIConfig,
+	codexAuth ai.CodexAppServerClient,
+) (Plan, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if !knownProvider(name) {
+		return Plan{}, fmt.Errorf("unsupported AI provider %q", name)
+	}
+	registration, configured, err := buildProviderChecked(name, cfg, codexAuth)
+	if err != nil {
+		return Plan{}, fmt.Errorf("provider %q is not available: %w", name, err)
+	}
+	if !configured {
+		return Plan{}, fmt.Errorf("provider %q is not configured", name)
+	}
+	return Plan{registrations: []ai.ProviderRegistration{registration}}, nil
+}
+
 // WouldRegister reports whether Apply would register provider name under cfg.
 func WouldRegister(name string, cfg config.AIConfig) bool {
 	_, ok := buildProvider(name, cfg)
@@ -215,4 +237,13 @@ func providerOrder(preferred string) []string {
 		order = append(order, candidate)
 	}
 	return order
+}
+
+func knownProvider(name string) bool {
+	for _, candidate := range ProviderNames() {
+		if name == candidate {
+			return true
+		}
+	}
+	return false
 }

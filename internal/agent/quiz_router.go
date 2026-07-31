@@ -5,12 +5,14 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
 )
 
@@ -137,6 +139,12 @@ func (e *Engine) startQuizWithIntensity(msg chat.InboundMessage, conv *Conversat
 		slog.Error("failed to persist quiz state", "conversation_id", conv.ID, "error", err)
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
 	}
+	if conv.CurriculumState != nil {
+		if err := e.retirePendingCurriculumCheck(conv, topicID, "quiz:"+conv.ID); err != nil {
+			slog.Error("retire pending curriculum check for quiz", "conversation_id", conv.ID, "error", err)
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue)
+		}
+	}
 
 	question, _ := session.NextQuestion()
 	response := renderQuizQuestion(e.lookupTopicName(topicID), session, question)
@@ -247,8 +255,8 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 		return quizUnavailableText(e.messageLocale(msg, conv)), true
 	}
 
-	questions := filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity)
-	session := NewQuizSession(msg.UserID, state.TopicID, questions)
+	staticQuestions := filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity)
+	session := NewQuizSession(msg.UserID, state.TopicID, staticQuestions)
 	session.Intensity = state.Intensity
 	session.CurrentIndex = state.CurrentIndex
 	session.CorrectAnswers = state.CorrectAnswers
@@ -312,6 +320,58 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 		}
 		return renderQuizQuestion(e.lookupTopicName(state.TopicID), session, question), true
 	}
+	answeredQuestion := question
+
+	var (
+		result              QuizAnswerResult
+		sourceAttemptID     string
+		sourceAttemptResult *curriculum.AttemptResult
+	)
+	isSourceQuestion := state.CurrentIndex >= 0 && state.CurrentIndex < len(staticQuestions)
+	isGradeableSource := isSourceQuestion &&
+		(answeredQuestion.AnswerType == "exact" || answeredQuestion.AnswerType == "multiple_choice")
+	if e.curriculumRuntime != nil && isGradeableSource {
+		var hasAttemptID bool
+		sourceAttemptID, hasAttemptID = curriculumAttemptID(
+			msg,
+			conv.ID,
+			state.TopicID,
+			answeredQuestion.ID,
+		)
+		if !hasAttemptID {
+			return curriculumAttemptNeedsDeliveryID(e.messageLocale(msg, conv)), true
+		}
+		identity, identityErr := learnerIdentityForMessage(msg)
+		if identityErr != nil {
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+		}
+		learnerID, learnerErr := e.progressLearnerID(identity)
+		if learnerErr != nil {
+			slog.Error("resolve quiz attempt learner", "conversation_id", conv.ID, "error", learnerErr)
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+		}
+		attemptResult, attemptErr := e.curriculumRuntime.RecordAttempt(ctx, curriculum.AttemptInput{
+			AttemptID:  sourceAttemptID,
+			LearnerID:  learnerID,
+			TopicID:    state.TopicID,
+			QuestionID: answeredQuestion.ID,
+			Answer:     answerText,
+			Locale:     e.messageLocale(msg, conv),
+		})
+		if attemptErr != nil {
+			if errors.Is(attemptErr, curriculum.ErrAssessmentNotGradeable) {
+				result = session.SubmitAnswer(answerText)
+			} else {
+				slog.Error("record quiz curriculum attempt", "conversation_id", conv.ID, "error", attemptErr)
+				return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+			}
+		} else {
+			result = session.ApplyGrade(answerText, attemptResult.Correct)
+			sourceAttemptResult = &attemptResult
+		}
+	} else {
+		result = session.SubmitAnswer(answerText)
+	}
 
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
@@ -319,13 +379,14 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 	}); err != nil {
 		slog.Error("failed to store quiz answer", "conversation_id", conv.ID, "error", err)
 	}
-
-	result := session.SubmitAnswer(answerText)
-	if identity, err := learnerIdentityForMessage(msg); err == nil {
-		e.recordQuizOutcomeAsync(identity, state.TopicID, quizInputSource(msg), question, result.Correct)
-	}
 	if !result.Correct {
 		response := renderQuizRetry(e.messageLocale(msg, conv), result)
+		if sourceAttemptResult != nil {
+			if err := e.persistQuizCurriculumAttempt(msg, conv, state, answeredQuestion, sourceAttemptID, *sourceAttemptResult, response); err != nil {
+				slog.Error("persist quiz curriculum attempt", "conversation_id", conv.ID, "error", err)
+				return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+			}
+		}
 		if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 			Role:    "assistant",
 			Content: response,
@@ -356,7 +417,7 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 		CorrectAnswers: session.CorrectAnswers,
 		RunState:       defaultQuizRunState(),
 	}
-	staticCount := len(filterQuizQuestionsByIntensity(questionsFromAssessment(assessment), state.Intensity))
+	staticCount := len(staticQuestions)
 	if len(session.Questions) > staticCount {
 		nextState.GeneratedQuestions = session.Questions[staticCount:]
 	}
@@ -382,10 +443,16 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 			slog.Error("failed to update quiz state", "conversation_id", conv.ID, "error", err)
 			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
 		}
-		question, _ := session.NextQuestion()
-		response = renderQuizAdvance(e.lookupTopicName(state.TopicID), session, question, result)
+		nextQuestion, _ := session.NextQuestion()
+		response = renderQuizAdvance(e.lookupTopicName(state.TopicID), session, nextQuestion, result)
 	}
 
+	if sourceAttemptResult != nil {
+		if err := e.persistQuizCurriculumAttempt(msg, conv, state, answeredQuestion, sourceAttemptID, *sourceAttemptResult, response); err != nil {
+			slog.Error("persist quiz curriculum attempt", "conversation_id", conv.ID, "error", err)
+			return i18n.S(e.messageLocale(msg, conv), i18n.MsgTechnicalIssue), true
+		}
+	}
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "assistant",
 		Content: response,
