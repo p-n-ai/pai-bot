@@ -65,7 +65,7 @@ func TestGroundedPromptContractCoversConflictDiagnosisAndUnknownMastery(t *testi
 	prompt := engine.buildSystemPromptFromTurn(&agentTurn{InputText: "I got x = 4"})
 	for _, want := range []string{
 		"Identify the first misconception or missing prerequisite",
-		"worked example", "warm, calm classroom teacher",
+		"worked example", "positive, patient study companion",
 		"If supplied sources conflict", "OSS evidence is curriculum and syllabus authority",
 		"Student mastery level: UNKNOWN",
 	} {
