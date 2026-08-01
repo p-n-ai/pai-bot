@@ -13,7 +13,6 @@ cmd/
 ├── seed/                   # demo/token-budget seed modes
 ├── terminal-chat/          # local tutor CLI or WS client
 ├── terminal-nudge/         # one-shot due-review nudge check
-├── conversation-harness/   # YAML AI behavior harness
 └── analyticsxlsx/          # workbook export CLI
 ```
 
@@ -27,7 +26,6 @@ cmd/
 | Demo/auth/budget seed flags | `seed/main.go` |
 | Local tutor session | `terminal-chat/main.go`, `internal/terminalchat` |
 | Nudge debug CLI | `terminal-nudge/main.go`, `internal/terminalnudge` |
-| AI quality scripts | `conversation-harness/main.go` |
 | Analytics workbook CLI | `analyticsxlsx/main.go`, `internal/analyticsxlsx` |
 
 ## CONVENTIONS
