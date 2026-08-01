@@ -312,9 +312,6 @@ chat-terminal:
 chat-codex:
   LEARN_DEV_MODE=true LEARN_AI_CODEX_ENABLED=true LEARN_AI_DEFAULT_PROVIDER=codex go run ./cmd/terminal-chat --memory --provider codex --interactive --progress --candidate .codex/chat-codex-candidate
 
-conversation-harness:
-  go run ./cmd/conversation-harness
-
 nudge-terminal:
   docker compose run --rm --entrypoint /pai-terminal-nudge app --user-id "${USER_ID:-}"
 

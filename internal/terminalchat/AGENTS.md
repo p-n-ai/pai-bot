@@ -3,7 +3,7 @@
 **Generated:** 2026-06-03T13:57:00Z
 **Commit:** 08308df
 
-Local CLI chat state and runner used by `cmd/terminal-chat` and conversation harnesses.
+Local CLI chat state and runner used by `cmd/terminal-chat`.
 
 ## WHERE TO LOOK
 

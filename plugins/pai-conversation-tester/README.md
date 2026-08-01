@@ -1,6 +1,6 @@
 # PaiBot Conversation Tester
 
-Dual-host plugin for running the shared `pai-chat-codex` skill against PaiBot's local, memory-only conversation harness.
+Dual-host plugin for running the shared `pai-chat-codex` skill against PaiBot's local, memory-only conversation CLI.
 
 The skill launches `just chat-codex`, which pins PaiBot to the managed Codex provider with no fallback. The CLI accepts messages while a reply is running, exposes FIFO queue and interruption controls, and watches `.codex/chat-codex-candidate/` for prompt or character changes.
 
