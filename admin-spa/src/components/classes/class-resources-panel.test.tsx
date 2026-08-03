@@ -210,6 +210,7 @@ describe('ClassResourcesPanel', () => {
 
 const groups = [
   {
+    closed: false,
     id: 'class-1',
     join_code: 'ALG-1',
     member_count: 1,
@@ -217,6 +218,7 @@ const groups = [
     type: 'class',
   },
   {
+    closed: false,
     id: 'class-2',
     join_code: 'ALG-2',
     member_count: 1,

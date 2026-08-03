@@ -271,6 +271,7 @@ describe('ClassesContent', () => {
 })
 
 const classGroup = {
+  closed: false,
   id: 'class-1',
   join_code: 'ALG-F1A',
   member_count: 1,
