@@ -145,6 +145,116 @@ const errorDashboardState = {
 } as const
 
 describe('DashboardReady', () => {
+  it('selects active classes and keeps closed classes out of the dashboard scope', () => {
+    const onSelectClass = vi.fn()
+
+    render(
+      <DashboardPageView
+        classes={[
+          {
+            id: 'class-1',
+            name: 'Form 1 Algebra',
+            type: 'class',
+            join_code: 'ALG123',
+            member_count: 2,
+            closed: false,
+          },
+          {
+            id: 'class-closed',
+            name: 'Archived Algebra',
+            type: 'class',
+            join_code: 'OLD123',
+            member_count: 1,
+            closed: true,
+          },
+        ]}
+        nudgeMessage=''
+        onCloseStudent={vi.fn()}
+        onNudge={vi.fn()}
+        onSelectClass={onSelectClass}
+        onSelectStudent={vi.fn()}
+        selectedStudentID={undefined}
+        sendingStudentID=''
+        state={readyDashboardState}
+      />,
+    )
+
+    const selector = screen.getByLabelText('Class view')
+    expect(
+      within(selector).getByRole('option', { name: 'All learners' }),
+    ).toBeInTheDocument()
+    expect(
+      within(selector).getByRole('option', { name: 'Form 1 Algebra' }),
+    ).toBeInTheDocument()
+    expect(
+      within(selector).queryByRole('option', { name: 'Archived Algebra' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.change(selector, { target: { value: 'class-1' } })
+    expect(onSelectClass).toHaveBeenCalledWith('class-1')
+  })
+
+  it('renders weekly leaders and opens the existing learner detail action', () => {
+    const onSelectStudent = vi.fn()
+
+    render(
+      <DashboardPageView
+        leaderboardState={{
+          status: 'ready',
+          entries: [
+            {
+              user_id: 'student_2',
+              user_name: 'Hakim',
+              mastery_gain: 0.12,
+              rank: 1,
+            },
+            {
+              user_id: 'student_1',
+              user_name: 'Alya',
+              mastery_gain: -0.03,
+              rank: 2,
+            },
+          ],
+        }}
+        nudgeMessage=''
+        onCloseStudent={vi.fn()}
+        onNudge={vi.fn()}
+        onSelectStudent={onSelectStudent}
+        selectedStudentID={undefined}
+        sendingStudentID=''
+        state={readyDashboardState}
+      />,
+    )
+
+    expect(screen.getByText('+12 pts')).toBeInTheDocument()
+    expect(screen.getByText('-3 pts')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Hakim' }))
+    expect(onSelectStudent).toHaveBeenCalledWith('student_2')
+  })
+
+  it('keeps progress visible when leaderboard loading fails and retries locally', () => {
+    const onRetryLeaderboard = vi.fn()
+
+    render(
+      <DashboardPageView
+        leaderboardState={{ status: 'error', message: 'Leaderboard offline' }}
+        nudgeMessage=''
+        onCloseStudent={vi.fn()}
+        onNudge={vi.fn()}
+        onRetryLeaderboard={onRetryLeaderboard}
+        onSelectStudent={vi.fn()}
+        selectedStudentID={undefined}
+        sendingStudentID=''
+        state={readyDashboardState}
+      />,
+    )
+
+    expect(screen.getByText('Alya')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Leaderboard offline')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(onRetryLeaderboard).toHaveBeenCalledOnce()
+  })
+
   it('renders the source-admin dashboard page heading', () => {
     render(
       <DashboardPageView

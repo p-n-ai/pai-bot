@@ -9,10 +9,11 @@ export interface DashboardProgressResult {
 }
 
 export async function fetchDashboardProgress(
+  classID: string,
   fetcher: typeof fetch = fetch,
 ): Promise<DashboardProgressResult> {
   return {
-    progress: await getClassProgress('all-students', fetcher),
+    progress: await getClassProgress(classID, fetcher),
     source: 'live',
   }
 }
