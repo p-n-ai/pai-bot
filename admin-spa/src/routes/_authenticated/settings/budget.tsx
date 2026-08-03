@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { AdminPageSection } from '@/components/shared/admin-page-section'
-import { AIUsageBudgetSection } from '@/components/ai-usage/ai-usage-budget-section'
+import { AIUsageBudgetPage } from '@/components/ai-usage/ai-usage-budget-page'
 import { AIUsageLoadBoundary } from '@/components/ai-usage/ai-usage-load-boundary'
 import { useAuth } from '@/auth-provider'
 import { useAIUsageState } from '@/hooks/use-ai-usage-state'
@@ -17,9 +17,9 @@ function BudgetSettingsRoute() {
 
   return (
     <AdminPageSection
-      description='Set the token allowance window for the current school workspace and review the remaining budget before rollout decisions.'
-      eyebrow='School admin'
-      title='Token budget'
+      description='Control the school-wide token allowance and the dates it applies.'
+      eyebrow='School administration'
+      title='AI budget'
     >
       <AIUsageLoadBoundary
         errorTitle='Unable to load token budget'
@@ -29,7 +29,7 @@ function BudgetSettingsRoute() {
         state={state}
       >
         {({ onUsageSaved, usage }) => (
-          <AIUsageBudgetSection
+          <AIUsageBudgetPage
             canManageBudget={
               auth.session?.user.role === 'admin' ||
               auth.session?.user.role === 'platform_admin'

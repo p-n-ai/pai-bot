@@ -38,9 +38,21 @@ function EditableTokenBudget({
   usage: AIUsageSummary
 }) {
   const form = useTokenBudgetForm({ onSaved, usage })
+  const isConfigured = Boolean(usage.budget_limit_tokens)
 
   return (
-    <form className='budget-editor' onSubmit={form.handleSubmit}>
+    <form className='grid gap-6' onSubmit={form.handleSubmit}>
+      <div>
+        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+          Budget settings
+        </p>
+        <h3 className='text-2xl font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'>
+          {isConfigured ? 'Update budget' : 'Set a budget'}
+        </h3>
+        <p className='mt-2 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
+          Define one token allowance for the current school workspace.
+        </p>
+      </div>
       <BudgetFields
         budgetTokens={form.budgetTokens}
         periodEnd={form.periodEnd}
@@ -52,7 +64,10 @@ function EditableTokenBudget({
 
       <AuthErrorAlert message={form.error} title='Budget save failed.' />
 
-      <div className='flex justify-end'>
+      <div className='flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between'>
+        <p className='max-w-xs text-xs leading-5 text-[var(--admin-muted)]'>
+          Dates define the exact window used to measure this allowance.
+        </p>
         <Button disabled={form.isPending} type='submit'>
           {form.isPending ? 'Saving budget...' : 'Save token budget'}
         </Button>
@@ -146,15 +161,17 @@ function BudgetFields({
   setPeriodStart: (value: string) => void
 }) {
   return (
-    <div className='form-grid'>
-      <BudgetField
-        id='token-budget-limit'
-        label='Token limit'
-        min={1}
-        onChange={setBudgetTokens}
-        type='number'
-        value={budgetTokens}
-      />
+    <div className='grid gap-4 sm:grid-cols-2'>
+      <div className='sm:col-span-2'>
+        <BudgetField
+          id='token-budget-limit'
+          label='Token limit'
+          min={1}
+          onChange={setBudgetTokens}
+          type='number'
+          value={budgetTokens}
+        />
+      </div>
       <BudgetField
         id='token-budget-start'
         label='Start date'
