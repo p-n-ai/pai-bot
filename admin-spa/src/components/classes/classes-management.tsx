@@ -132,27 +132,38 @@ export function ClassesContent({
           </Button>
         </div>
       ) : null}
-      {state.groups.length > 0 || canInviteAdults ? (
-        <ClassActions
-          canCreateClass={state.groups.length > 0}
-          canInviteAdults={canInviteAdults}
-          onCreated={handleCreated}
-          onOpenAction={setOpenAction}
-          openAction={openAvailableAction}
-        />
-      ) : null}
-      <ClassSummaryStats summary={summary} />
       {state.groups.length === 0 ? (
-        <EmptyClasses onCreated={handleCreated} />
+        <>
+          <EmptyClasses onCreated={handleCreated} />
+          {canInviteAdults ? (
+            <ClassActions
+              canCreateClass={false}
+              canInviteAdults
+              onCreated={handleCreated}
+              onOpenAction={setOpenAction}
+              openAction={openAvailableAction}
+            />
+          ) : null}
+        </>
       ) : (
-        <div className='grid items-start gap-5 lg:grid-cols-[minmax(220px,0.34fr)_minmax(0,1fr)]'>
-          <ClassPicker
-            groups={state.groups}
-            onSelectClass={onSelectClass}
-            selectedClassID={selectedGroup?.id ?? ''}
+        <>
+          <ClassActions
+            canCreateClass
+            canInviteAdults={canInviteAdults}
+            onCreated={handleCreated}
+            onOpenAction={setOpenAction}
+            openAction={openAvailableAction}
           />
-          <SelectedClassPanel group={selectedGroup} groups={state.groups} />
-        </div>
+          <ClassSummaryStats summary={summary} />
+          <div className='grid items-start gap-5 lg:grid-cols-[minmax(220px,0.34fr)_minmax(0,1fr)]'>
+            <ClassPicker
+              groups={state.groups}
+              onSelectClass={onSelectClass}
+              selectedClassID={selectedGroup?.id ?? ''}
+            />
+            <SelectedClassPanel group={selectedGroup} groups={state.groups} />
+          </div>
+        </>
       )}
     </div>
   )
