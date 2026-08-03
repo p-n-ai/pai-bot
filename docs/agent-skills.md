@@ -17,7 +17,7 @@ At startup, pai-bot validates each `SKILL.md` and loads only its `name` and `des
 
 The configured directory is an operator-controlled trust boundary. Pai-bot does not download skills or execute bundled scripts. The experimental `allowed-tools` field is parsed for format compatibility but does not grant tools or override pai-bot's runtime policy.
 
-Set `metadata.activation: always` for trusted skills that must be added to every model-facing system prompt. This works with managed Codex and providers without native tool continuation. Other skills retain metadata-first, tool-driven activation.
+Set `metadata.activation: always` for trusted skills that must be added to every model-facing system prompt. This works with managed Codex and providers without native tool continuation. Other skills automatically use metadata-first, tool-driven activation when a native provider is available.
 
 In `just chat-codex`, `/reload` re-parses `LEARN_SKILLS_PATH` and starts a fresh memory session. An invalid skill rejects the reload and preserves the active session. The long-running server loads skills at startup and currently requires a restart to refresh them.
 

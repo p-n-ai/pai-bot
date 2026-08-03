@@ -133,15 +133,19 @@ func parse(path, directoryName string) (Skill, error) {
 }
 
 func splitDocument(contents string) (string, string, error) {
+	contents = strings.ReplaceAll(contents, "\r\n", "\n")
 	if !strings.HasPrefix(contents, "---\n") {
 		return "", "", errors.New("SKILL.md must start with YAML frontmatter")
 	}
 	remainder := strings.TrimPrefix(contents, "---\n")
 	end := strings.Index(remainder, "\n---\n")
-	if end < 0 {
-		return "", "", errors.New("SKILL.md frontmatter is not closed")
+	if end >= 0 {
+		return remainder[:end], remainder[end+5:], nil
 	}
-	return remainder[:end], remainder[end+5:], nil
+	if header, ok := strings.CutSuffix(remainder, "\n---"); ok {
+		return header, "", nil
+	}
+	return "", "", errors.New("SKILL.md frontmatter is not closed")
 }
 
 func validate(metadata frontmatter, directoryName string) error {
@@ -166,7 +170,7 @@ func readBoundedFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return "", err
@@ -241,6 +245,11 @@ func (r *Registry) hasOnDemandSkills() bool {
 		}
 	}
 	return false
+}
+
+// HasOnDemandSkills reports whether model-selected skill tools are needed.
+func (r *Registry) HasOnDemandSkills() bool {
+	return r != nil && r.hasOnDemandSkills()
 }
 
 func (r *Registry) skill(name string) (Skill, bool) {

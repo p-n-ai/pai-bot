@@ -82,6 +82,25 @@ func TestLoadRejectsInvalidSkills(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsPortableFrontmatterDelimiters(t *testing.T) {
+	tests := []struct {
+		name     string
+		contents string
+	}{
+		{name: "closing delimiter at EOF", contents: "---\nname: portable\ndescription: Portable skill.\n---"},
+		{name: "CRLF line endings", contents: "---\r\nname: portable\r\ndescription: Portable skill.\r\n---\r\nInstructions.\r\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixture(t, filepath.Join(root, "portable", skillFilename), tt.contents)
+			if _, err := Load(root); err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestReadResourceRejectsEscapes(t *testing.T) {
 	root := t.TempDir()
 	skillRoot := filepath.Join(root, "safe-skill")
