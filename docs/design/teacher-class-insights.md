@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add URL-scoped class selection and the existing weekly mastery-gain leaderboard to the teacher dashboard. Preserve the current all-learner view, keep progress usable when leaderboard loading fails, and make no backend, database, or authorization changes.
+Add URL-scoped class selection and the existing weekly mastery-gain leaderboard to the teacher dashboard. Preserve the current all-learner view, keep progress usable when leaderboard loading fails, and align the leaderboard's learner identifier with the existing progress and student-detail contract. Make no database or authorization changes.
 
 ## Context / Current State
 
@@ -33,7 +33,7 @@ The frontend has group and progress decoders but no leaderboard boundary contrac
 - Leaderboard scoring, ranking, window, or persistence changes.
 - Aggregate leaderboard behavior for `all-students`.
 - New state-management, query, or HTTP libraries.
-- Backend endpoint, migration, RBAC, or tenant-policy changes.
+- New backend endpoint, migration, RBAC, or tenant-policy changes.
 
 ## Invariants
 
@@ -42,10 +42,11 @@ The frontend has group and progress decoders but no leaderboard boundary contrac
 3. Changing class clears `student` because membership in the new class is not established.
 4. Only active classes appear as selectable concrete classes.
 5. Leaderboard rank and ordering are server-owned; the client does not recalculate either.
-6. `mastery_gain` is an average 0–1 mastery delta and is projected to signed percentage points for display.
-7. Leaderboard failure cannot replace successful progress with a page-level error.
-8. Client-selected IDs are routing inputs, not authorization. Server RBAC and tenant predicates remain authoritative.
-9. A response for an older selection cannot mutate the current selection's state.
+6. Leaderboard `user_id` uses the same external-or-internal identifier projection as class progress and student detail.
+7. `mastery_gain` is an average 0–1 mastery delta and is projected to signed percentage points for display.
+8. Leaderboard failure cannot replace successful progress with a page-level error.
+9. Client-selected IDs are routing inputs, not authorization. Server RBAC and tenant predicates remain authoritative.
+10. A response for an older selection cannot mutate the current selection's state.
 
 ## Design Constraints
 
@@ -311,7 +312,7 @@ interface ClassLeaderboardProps {
 | UI rendering | Dashboard components | Refined view props | Accessible DOM and callbacks | Parsing unknown input |
 | Authorization and tenancy | Existing Go handlers/service | Authenticated request and class ID | Tenant-scoped response/error | Client filters |
 
-No new backend adapter or persistence seam is required.
+The existing Go leaderboard projection changes one selected field from internal UUID to `COALESCE(NULLIF(u.external_id, ''), u.id::text)`, matching the established student-detail boundary. No new backend adapter or persistence seam is required.
 
 ## Call Stacks and Data Flow
 
@@ -469,6 +470,8 @@ Do not log response bodies, learner data, class names, or raw errors. Existing s
 | `admin-spa/src/components/dashboard/dashboard-page-view.tsx` | Render selector and independent top-level states |
 | `admin-spa/src/components/dashboard/dashboard-ready.tsx` | Compose leaderboard before heatmap and preserve student sheet |
 | `admin-spa/src/routes/_authenticated/-dashboard.test.tsx` | Prove user-visible selection, leaderboard, isolation, and drilldown behavior |
+| `internal/adminapi/groups.go` | Project canonical learner IDs from the existing leaderboard query |
+| `internal/adminapi/service_test.go` | Prove leaderboard query uses the canonical learner ID projection |
 
 ### Delete
 
