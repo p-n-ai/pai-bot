@@ -138,7 +138,10 @@ function DashboardRoute() {
   const handleSelectStudent = useCallback(
     (studentID: string) => {
       navigate({
-        search: (previous) => ({ ...previous, student: studentID }),
+        search: (previous) => ({
+          class: previous.class,
+          student: studentID,
+        }),
         to: '/dashboard',
       }).catch(() => {})
     },
@@ -165,7 +168,10 @@ function DashboardRoute() {
 
   const handleCloseStudent = useCallback(() => {
     navigate({
-      search: (previous) => ({ ...previous, student: undefined }),
+      search: (previous) => ({
+        class: previous.class,
+        student: undefined,
+      }),
       to: '/dashboard',
     }).catch(() => {})
   }, [navigate])

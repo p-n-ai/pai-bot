@@ -26,7 +26,7 @@ import {
 import { logout } from '@/lib/auth-client'
 import { getAdminUserInitials } from '@/lib/admin-user-label'
 
-const dashboardSearch = { student: undefined }
+const dashboardSearch = { class: undefined, student: undefined }
 
 /** Renders role-aware navigation and session controls for the admin workspace. */
 export function AdminSidebar() {
