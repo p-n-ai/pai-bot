@@ -1,7 +1,11 @@
 import { TrendingUpIcon } from 'lucide-react'
+import { useCallback } from 'react'
 
 import type { LeaderboardEntry } from '@/lib/leaderboard-types'
-import { AdminSurface, AdminSurfaceHeader } from '@/components/shared/admin-surface'
+import {
+  AdminSurface,
+  AdminSurfaceHeader,
+} from '@/components/shared/admin-surface'
 import { StatePanel } from '@/components/shared/state-panel'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,7 +15,10 @@ import { cn } from '@/lib/utils'
 export type LeaderboardState =
   | { readonly status: 'unavailable' }
   | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly entries: ReadonlyArray<LeaderboardEntry> }
+  | {
+      readonly status: 'ready'
+      readonly entries: ReadonlyArray<LeaderboardEntry>
+    }
   | { readonly status: 'error'; readonly message: string }
 
 export function ClassLeaderboard({
@@ -79,40 +86,65 @@ function LeaderboardContent({
 
   return (
     <ol className='divide-y divide-slate-200 dark:divide-white/10'>
-      {state.entries.map((entry) => {
-        const row = getLeaderboardRowView(entry)
-        return (
-          <li className='flex items-center gap-3 py-3' key={entry.user_id}>
-            <span className='w-9 text-sm font-semibold tabular-nums'>{row.rankLabel}</span>
-            <Button
-              className='h-auto flex-1 justify-start px-0 text-left'
-              onClick={() => onSelectStudent(row.studentID)}
-              type='button'
-              variant='link'
-            >
-              {row.studentName}
-            </Button>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-sm font-semibold tabular-nums',
-                row.gainTone === 'positive' && 'text-emerald-700 dark:text-emerald-300',
-                row.gainTone === 'negative' && 'text-rose-700 dark:text-rose-300',
-                row.gainTone === 'neutral' && 'text-slate-600 dark:text-slate-300',
-              )}
-            >
-              <TrendingUpIcon aria-hidden='true' className='size-4' />
-              {row.gainLabel}
-            </span>
-          </li>
-        )
-      })}
+      {state.entries.map((entry) => (
+        <LeaderboardRow
+          entry={entry}
+          key={entry.user_id}
+          onSelectStudent={onSelectStudent}
+        />
+      ))}
     </ol>
+  )
+}
+
+function LeaderboardRow({
+  entry,
+  onSelectStudent,
+}: {
+  entry: LeaderboardEntry
+  onSelectStudent: (studentID: string) => void
+}) {
+  const row = getLeaderboardRowView(entry)
+  const handleSelectStudent = useCallback(() => {
+    onSelectStudent(row.studentID)
+  }, [onSelectStudent, row.studentID])
+
+  return (
+    <li className='flex items-center gap-3 py-3'>
+      <span className='w-9 text-sm font-semibold tabular-nums'>
+        {row.rankLabel}
+      </span>
+      <Button
+        className='h-auto flex-1 justify-start px-0 text-left'
+        onClick={handleSelectStudent}
+        type='button'
+        variant='link'
+      >
+        {row.studentName}
+      </Button>
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 text-sm font-semibold tabular-nums',
+          row.gainTone === 'positive' &&
+            'text-emerald-700 dark:text-emerald-300',
+          row.gainTone === 'negative' && 'text-rose-700 dark:text-rose-300',
+          row.gainTone === 'neutral' && 'text-slate-600 dark:text-slate-300',
+        )}
+      >
+        <TrendingUpIcon aria-hidden='true' className='size-4' />
+        {row.gainLabel}
+      </span>
+    </li>
   )
 }
 
 function LeaderboardSkeleton() {
   return (
-    <div aria-label='Loading weekly progress leaders' className='space-y-3' role='status'>
+    <div
+      aria-label='Loading weekly progress leaders'
+      className='space-y-3'
+      role='status'
+    >
       {[0, 1, 2].map((key) => (
         <Skeleton className='h-10 w-full' key={key} />
       ))}

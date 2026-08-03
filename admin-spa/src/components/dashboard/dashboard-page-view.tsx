@@ -1,3 +1,6 @@
+import { useCallback } from 'react'
+import type { ChangeEvent } from 'react'
+
 import type { DashboardProgressResult } from '@/lib/dashboard-progress'
 import type { GroupRecord } from '@/lib/group-types'
 import type { LeaderboardState } from '@/components/dashboard/class-leaderboard'
@@ -17,6 +20,10 @@ const TABLE_HEADER_SKELETON_KEYS = [
   'action',
 ]
 const TABLE_ROW_SKELETON_KEYS = ['first', 'second', 'third', 'fourth']
+const EMPTY_CLASSES: ReadonlyArray<GroupRecord> = []
+const UNAVAILABLE_LEADERBOARD_STATE: LeaderboardState = {
+  status: 'unavailable',
+}
 
 export type DashboardState =
   | {
@@ -53,10 +60,10 @@ interface DashboardPageViewProps {
 }
 
 export function DashboardPageView({
-  classes = [],
+  classes = EMPTY_CLASSES,
   classesError = '',
   classesLoading = false,
-  leaderboardState = { status: 'unavailable' },
+  leaderboardState = UNAVAILABLE_LEADERBOARD_STATE,
   nudgeMessage,
   onCloseStudent,
   onNudge,
@@ -159,6 +166,13 @@ function ClassSelector({
   onSelectClass: (classID: string | undefined) => void
   selectedClassID: string | undefined
 }) {
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      onSelectClass(event.target.value || undefined)
+    },
+    [onSelectClass],
+  )
+
   return (
     <div className='mt-6 max-w-sm space-y-2'>
       <label className='text-sm font-medium' htmlFor='dashboard-class'>
@@ -168,7 +182,7 @@ function ClassSelector({
         className='w-full [&_select]:min-h-11'
         disabled={loading}
         id='dashboard-class'
-        onChange={(event) => onSelectClass(event.target.value || undefined)}
+        onChange={handleChange}
         value={selectedClassID ?? ''}
       >
         <NativeSelectOption value=''>All learners</NativeSelectOption>

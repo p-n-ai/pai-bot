@@ -144,30 +144,55 @@ const errorDashboardState = {
   error: 'Backend offline',
 } as const
 
+const selectableClasses = [
+  {
+    id: 'class-1',
+    name: 'Form 1 Algebra',
+    type: 'class',
+    join_code: 'ALG123',
+    member_count: 2,
+    closed: false,
+  },
+  {
+    id: 'class-closed',
+    name: 'Archived Algebra',
+    type: 'class',
+    join_code: 'OLD123',
+    member_count: 1,
+    closed: true,
+  },
+] as const
+
+const readyLeaderboardState = {
+  status: 'ready',
+  entries: [
+    {
+      user_id: 'student_2',
+      user_name: 'Hakim',
+      mastery_gain: 0.12,
+      rank: 1,
+    },
+    {
+      user_id: 'student_1',
+      user_name: 'Alya',
+      mastery_gain: -0.03,
+      rank: 2,
+    },
+  ],
+} as const
+
+const leaderboardErrorState = {
+  status: 'error',
+  message: 'Leaderboard offline',
+} as const
+
 describe('DashboardReady', () => {
   it('selects active classes and keeps closed classes out of the dashboard scope', () => {
     const onSelectClass = vi.fn()
 
     render(
       <DashboardPageView
-        classes={[
-          {
-            id: 'class-1',
-            name: 'Form 1 Algebra',
-            type: 'class',
-            join_code: 'ALG123',
-            member_count: 2,
-            closed: false,
-          },
-          {
-            id: 'class-closed',
-            name: 'Archived Algebra',
-            type: 'class',
-            join_code: 'OLD123',
-            member_count: 1,
-            closed: true,
-          },
-        ]}
+        classes={selectableClasses}
         nudgeMessage=''
         onCloseStudent={vi.fn()}
         onNudge={vi.fn()}
@@ -199,23 +224,7 @@ describe('DashboardReady', () => {
 
     render(
       <DashboardPageView
-        leaderboardState={{
-          status: 'ready',
-          entries: [
-            {
-              user_id: 'student_2',
-              user_name: 'Hakim',
-              mastery_gain: 0.12,
-              rank: 1,
-            },
-            {
-              user_id: 'student_1',
-              user_name: 'Alya',
-              mastery_gain: -0.03,
-              rank: 2,
-            },
-          ],
-        }}
+        leaderboardState={readyLeaderboardState}
         nudgeMessage=''
         onCloseStudent={vi.fn()}
         onNudge={vi.fn()}
@@ -237,7 +246,7 @@ describe('DashboardReady', () => {
 
     render(
       <DashboardPageView
-        leaderboardState={{ status: 'error', message: 'Leaderboard offline' }}
+        leaderboardState={leaderboardErrorState}
         nudgeMessage=''
         onCloseStudent={vi.fn()}
         onNudge={vi.fn()}

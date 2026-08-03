@@ -20,11 +20,14 @@ describe('dashboard progress', () => {
       },
       source: 'live',
     })
-    expect(fetcher).toHaveBeenCalledWith('/api/admin/classes/class-1/progress', {
-      credentials: 'include',
-      cache: 'no-store',
-      headers: {},
-    })
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/admin/classes/class-1/progress',
+      {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {},
+      },
+    )
   })
 
   it('normalizes empty backend progress slices', async () => {
