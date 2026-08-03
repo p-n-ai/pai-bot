@@ -53,24 +53,24 @@ export function AdminSidebar() {
   return (
     <Sidebar
       collapsible='offcanvas'
-      className='border-r border-[#e6e9ef] bg-white'
+      className='border-r-0 bg-[var(--admin-ink)] text-[var(--admin-nav-text)]'
     >
-      <SidebarHeader className='px-4 pt-4 pb-3'>
+      <SidebarHeader className='px-4 pt-5 pb-4'>
         <div className='flex min-h-11 items-center gap-2'>
           <Link
-            className='flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1 text-sm font-semibold text-[#101828] no-underline transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f8fafc] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 focus-visible:outline-none active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none'
+            className='flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1 text-sm font-semibold text-[var(--admin-nav-text)] no-underline transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none'
             onClick={handleCloseNavigation}
             preload='intent'
             search={dashboardSearch}
             to='/dashboard'
           >
-            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#101828] text-white shadow-[0_1px_2px_rgb(16_24_40/0.15),0_4px_12px_rgb(16_24_40/0.12)]'>
+            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_1px_oklch(0.925_0.175_115/0.2),0_8px_24px_oklch(0_0_0/0.18)]'>
               <SparklesIcon aria-hidden='true' className='size-[18px]' />
-              <span className='absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-[#53d3a0] ring-2 ring-[#101828]' />
+              <span className='absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-[var(--admin-ink)] ring-2 ring-[var(--admin-accent)]' />
             </span>
             <span className='min-w-0 leading-tight'>
               <span className='block truncate'>P&AI Bot</span>
-              <span className='mt-0.5 block truncate text-[10px] font-medium tracking-[0.08em] text-[#98a2b3] uppercase'>
+              <span className='mt-0.5 block truncate text-[10px] font-medium tracking-[0.1em] text-[var(--admin-nav-muted)] uppercase'>
                 Learning OS
               </span>
             </span>
@@ -78,7 +78,7 @@ export function AdminSidebar() {
           {isMobile && (
             <Button
               aria-label='Close navigation'
-              className='size-11 shrink-0 text-[#667085] focus-visible:ring-[#2f80ed]/35'
+              className='size-11 shrink-0 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0'
               onClick={handleCloseNavigation}
               size='icon'
               type='button'
@@ -90,11 +90,11 @@ export function AdminSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className='px-4'>
+      <SidebarContent className='px-3'>
         <nav aria-label='Admin navigation'>
           {visibleGroups.map((group) => (
-            <SidebarGroup className='px-0 py-1.5' key={group.label}>
-              <SidebarGroupLabel className='h-6 px-3 text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+            <SidebarGroup className='px-0 py-2' key={group.label}>
+              <SidebarGroupLabel className='h-7 px-3 text-[10px] font-semibold tracking-[0.14em] text-[var(--admin-nav-label)] uppercase'>
                 {group.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
@@ -114,22 +114,22 @@ export function AdminSidebar() {
         </nav>
       </SidebarContent>
 
-      <SidebarFooter className='mt-auto border-t border-[#eef0f3] px-4 py-4'>
-        <div className='flex items-center gap-3 rounded-2xl bg-[#f8fafc] p-2.5'>
-          <span className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#eaf2ff] text-xs font-semibold text-[#175cd3]'>
+      <SidebarFooter className='mt-auto border-t border-white/8 px-3 py-4'>
+        <div className='flex items-center gap-3 rounded-2xl border border-white/8 bg-white/5 p-2.5'>
+          <span className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-semibold text-[var(--admin-ink)]'>
             {getAdminUserInitials(user)}
           </span>
           <div className='min-w-0 flex-1'>
-            <p className='truncate text-sm font-medium text-[#101828]'>
+            <p className='truncate text-sm font-medium text-[var(--admin-nav-text)]'>
               {user?.name ?? 'Administrator'}
             </p>
-            <p className='truncate text-xs text-[#667085]'>
+            <p className='truncate text-xs text-[var(--admin-nav-muted)]'>
               {user?.tenant_name ?? formatRole(user?.role)}
             </p>
           </div>
           <Button
             aria-label='Log out'
-            className='size-11 text-[#667085] hover:bg-white hover:text-[#101828] focus-visible:ring-[#2f80ed]/35 md:size-8'
+            className='size-11 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0'
             onClick={handleLogout}
             size='icon-sm'
             type='button'
@@ -159,7 +159,7 @@ function AdminNavigationLink({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-11 gap-3 rounded-lg px-3 text-[#667085] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f4f7fb] hover:text-[#101828] focus-visible:ring-3 focus-visible:ring-[#2f80ed]/35 active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[#eaf2ff] data-active:font-semibold data-active:text-[#175cd3]'
+        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0 active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[var(--admin-accent)] data-active:font-semibold data-active:text-[var(--admin-ink)]'
         isActive={isActive}
       >
         <Link
@@ -171,11 +171,11 @@ function AdminNavigationLink({
         >
           <span
             aria-hidden='true'
-            className='absolute left-0 h-5 w-0.5 rounded-full bg-transparent group-data-[active=true]/menu-button:bg-[#2f80ed]'
+            className='absolute left-0 h-5 w-0.5 rounded-full bg-transparent'
           />
           <Icon
             aria-hidden='true'
-            className='text-[#98a2b3] group-data-[active=true]/menu-button:text-[#2f80ed]'
+            className='text-[var(--admin-nav-label)] group-data-[active=true]/menu-button:text-[var(--admin-ink)]'
             strokeWidth={1.5}
           />
           <span>{label}</span>

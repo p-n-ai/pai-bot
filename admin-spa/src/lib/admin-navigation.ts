@@ -4,7 +4,6 @@ import {
   CableIcon,
   DownloadIcon,
   GaugeIcon,
-  MessageCircleMoreIcon,
   Settings2Icon,
   UsersIcon,
   WalletCardsIcon,
@@ -62,11 +61,6 @@ const navigationGroups = [
         Icon: Settings2Icon,
         href: '/settings/ai',
         label: 'AI settings',
-      },
-      {
-        Icon: MessageCircleMoreIcon,
-        href: '/settings/whatsapp',
-        label: 'WhatsApp setup',
       },
       {
         Icon: CableIcon,
