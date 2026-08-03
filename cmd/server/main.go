@@ -19,6 +19,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/agentskills"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/chat"
@@ -245,6 +246,13 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				topics := loader.AllTopics()
 				slog.Info("curriculum ready", "topics", len(topics))
 			}
+			skillRegistry, err := agentskills.LoadOptional(cfg.SkillsPath)
+			if err != nil {
+				return nil, nil, fmt.Errorf("load agent skills: %w", err)
+			}
+			if skillRegistry != nil {
+				slog.Info("agent skills ready", "skills", skillRegistry.Len())
+			}
 			retrievalService := server.NewBootstrapRetrievalService(loader)
 			var retrievalEmbedder retrieval.Embedder
 			if strings.TrimSpace(cfg.Retrieval.EmbeddingBaseURL) != "" {
@@ -315,6 +323,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				DevMode:              cfg.Runtime.DevMode,
 				FeatureFlags:         flagsProvider,
 				FocusedPages:         focusedPageService,
+				Skills:               skillRegistry,
 				FocusedPageEnabled: func(msg chat.InboundMessage) bool {
 					return focusedPageChannelEnabled(cfg.Runtime.DevMode, msg)
 				},
@@ -459,6 +468,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 					DevMode:              cfg.Runtime.DevMode,
 					FeatureFlags:         flagsProvider,
 					FocusedPages:         focusedPageService,
+					Skills:               skillRegistry,
 					FocusedPageEnabled: func(msg chat.InboundMessage) bool {
 						return focusedPageChannelEnabled(cfg.Runtime.DevMode, msg)
 					},

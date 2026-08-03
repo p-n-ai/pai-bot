@@ -21,6 +21,8 @@ import (
 const createFocusedPageToolName = "create_focused_page"
 
 func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, messages []ai.Message, model string) (teachingCompletion, *focusedpage.Artifact, error) {
+	nativeSkillTools := e.skills.HasOnDemandSkills() && e.aiRouter.HasNativeProvider()
+	useAgentCore := e.featureFlags().Enabled(featureflags.AgentCore) || nativeSkillTools
 	focusedConfigured := e.focusedPages != nil && e.focusedPageEnabled(chat.InboundMessage{
 		Channel: turn.Channel,
 		UserID:  turn.UserID,
@@ -29,7 +31,7 @@ func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, mess
 		completion, err := e.completeTextTeachingTurn(ctx, messages, model)
 		return completion, nil, err
 	}
-	if !focusedConfigured && !e.featureFlags().Enabled(featureflags.AgentCore) {
+	if !focusedConfigured && !useAgentCore {
 		completion, err := e.completeTextTeachingTurn(ctx, messages, model)
 		return completion, nil, err
 	}
@@ -54,7 +56,7 @@ func (e *Engine) completeTeachingTurn(ctx context.Context, turn *agentTurn, mess
 		},
 	}
 	tools := []agentcore.Tool{tool}
-	if e.featureFlags().Enabled(featureflags.AgentCore) {
+	if useAgentCore {
 		tools = append(e.teachingTools(), tools...)
 	}
 	completion, err := e.completeNativeTeachingTurnWithTools(ctx, turn, model, tools)

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/agentskills"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/terminalchat"
 )
@@ -171,6 +172,59 @@ characters:
 	}
 }
 
+func TestInteractiveTerminalSessionReloadsSkillsAtomically(t *testing.T) {
+	directory := t.TempDir()
+	writeTerminalSessionFile(t, directory, `prompt: candidate
+default: aina
+characters:
+  - id: aina
+`)
+	skillsRoot := filepath.Join(t.TempDir(), "skills")
+	writeReloadSkill(t, skillsRoot, "Teach the old way.")
+
+	session, err := newInteractiveTerminalSession(
+		terminalchat.NewCandidateSource(directory),
+		"codex",
+		func(terminalchat.Candidate) (terminalchat.Processor, error) {
+			registry, err := agentskills.Load(skillsRoot)
+			if err != nil {
+				return nil, err
+			}
+			return &recordingTerminalProcessor{prompt: registry.AlwaysActivePrompt()}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("newInteractiveTerminalSession() error = %v", err)
+	}
+
+	invalidSkill := "---\nname: teacher\ndescription: Teaching guidance\nunknown: field\n---\nTeach the broken way."
+	if err := os.WriteFile(filepath.Join(skillsRoot, "teacher", "SKILL.md"), []byte(invalidSkill), 0o600); err != nil {
+		t.Fatalf("write invalid skill: %v", err)
+	}
+	if _, err := session.Reload(t.Context()); err == nil {
+		t.Fatal("Reload() error = nil, want invalid skill failure")
+	}
+	result, err := session.ProcessTurn(t.Context(), chat.InboundMessage{Text: "still old"})
+	if err != nil {
+		t.Fatalf("ProcessTurn() after failed reload error = %v", err)
+	}
+	if !strings.Contains(result.Text, "Teach the old way.") {
+		t.Fatalf("reply after failed reload = %q, want old skill", result.Text)
+	}
+
+	writeReloadSkill(t, skillsRoot, "Teach the new way.")
+	if _, err := session.Reload(t.Context()); err != nil {
+		t.Fatalf("Reload(valid) error = %v", err)
+	}
+	result, err = session.ProcessTurn(t.Context(), chat.InboundMessage{Text: "now new"})
+	if err != nil {
+		t.Fatalf("ProcessTurn() after reload error = %v", err)
+	}
+	if !strings.Contains(result.Text, "Teach the new way.") {
+		t.Fatalf("reply after valid reload = %q, want new skill", result.Text)
+	}
+}
+
 func TestInteractiveTerminalSessionCharacterFactoryFailureIsAtomic(t *testing.T) {
 	directory := t.TempDir()
 	writeTerminalSessionFile(t, directory, `prompt: candidate
@@ -225,5 +279,17 @@ func writeTerminalSessionFile(t *testing.T, directory, content string) {
 	const filename = "candidate.yaml"
 	if err := os.WriteFile(filepath.Join(directory, filename), []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", filename, err)
+	}
+}
+
+func writeReloadSkill(t *testing.T, root, instructions string) {
+	t.Helper()
+	directory := filepath.Join(root, "teacher")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatalf("create skill directory: %v", err)
+	}
+	contents := "---\nname: teacher\ndescription: Teaching guidance\nmetadata:\n  activation: always\n---\n" + instructions
+	if err := os.WriteFile(filepath.Join(directory, "SKILL.md"), []byte(contents), 0o600); err != nil {
+		t.Fatalf("write reload skill: %v", err)
 	}
 }

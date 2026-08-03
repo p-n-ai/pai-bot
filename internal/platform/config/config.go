@@ -52,6 +52,7 @@ type Config struct {
 	Embed          EmbedConfig
 	Retrieval      RetrievalConfig
 	CurriculumPath string
+	SkillsPath     string
 }
 
 // SecurityConfig holds process-level cryptographic roots with distinct purposes.
@@ -403,6 +404,7 @@ func Load() (*Config, error) {
 		},
 		FeatureFlags:   parsedFeatureFlags,
 		CurriculumPath: envStr("LEARN_CURRICULUM_PATH", "./oss"),
+		SkillsPath:     envStr("LEARN_SKILLS_PATH", "./skills"),
 	}
 
 	return cfg, nil

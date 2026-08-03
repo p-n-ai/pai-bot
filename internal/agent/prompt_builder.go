@@ -22,11 +22,23 @@ func (e *Engine) buildPromptMessagesFromTurn(turn *agentTurn) []ai.Message {
 	compiler := promptCompiler{engine: e}
 	messages, manifest, err := compiler.compile(turn)
 	if err == nil {
+		e.addAlwaysActiveSkills(messages)
 		turn.Prompt = manifest
 		return messages
 	}
 
-	return []ai.Message{{Role: "system", Content: e.buildSystemPromptFromTurn(turn)}, {Role: "user", Content: turn.UserContent}}
+	messages = []ai.Message{{Role: "system", Content: e.buildSystemPromptFromTurn(turn)}, {Role: "user", Content: turn.UserContent}}
+	e.addAlwaysActiveSkills(messages)
+	return messages
+}
+
+func (e *Engine) addAlwaysActiveSkills(messages []ai.Message) {
+	if len(messages) == 0 || messages[0].Role != "system" {
+		return
+	}
+	if instructions := e.skills.AlwaysActivePrompt(); instructions != "" {
+		messages[0].Content += "\n\n" + instructions
+	}
 }
 
 type promptCompiler struct {
