@@ -780,6 +780,9 @@ func handleAdminStudentDetail(adminProvider adminDataSourceProvider) http.Handle
 			writeAdminError(w, err)
 			return
 		}
+		if payload.Progress == nil {
+			payload.Progress = []adminapi.ProgressItem{}
+		}
 		writeJSON(w, http.StatusOK, payload)
 	}
 }

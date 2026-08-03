@@ -190,6 +190,27 @@ func TestAdminStudentDetailEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdminStudentDetailEndpointNormalizesEmptyProgress(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/empty", nil)
+	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+	rec := httptest.NewRecorder()
+
+	newHandler(stubAdminAPI{}, &chatGatewayStub{}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload struct {
+		Progress []adminapi.ProgressItem `json:"progress"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Progress == nil || len(payload.Progress) != 0 {
+		t.Fatalf("progress = %#v, want non-nil empty array", payload.Progress)
+	}
+}
+
 func TestAdminStudentConversationsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/students/stu_2/conversations", nil)
 	req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
@@ -1567,6 +1588,9 @@ func (stubAdminAPI) GetClassProgress(_ string) (adminapi.ClassProgress, error) {
 func (stubAdminAPI) GetStudentDetail(studentID string) (adminapi.StudentDetail, error) {
 	if studentID == "missing" {
 		return adminapi.StudentDetail{}, adminapi.ErrNotFound
+	}
+	if studentID == "empty" {
+		return adminapi.StudentDetail{Student: adminapi.Student{ID: studentID}}, nil
 	}
 	next := time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC)
 	last := time.Date(2026, 3, 9, 11, 20, 0, 0, time.UTC)

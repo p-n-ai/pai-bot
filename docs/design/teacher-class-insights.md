@@ -47,6 +47,7 @@ The frontend has group and progress decoders but no leaderboard boundary contrac
 8. Leaderboard failure cannot replace successful progress with a page-level error.
 9. Client-selected IDs are routing inputs, not authorization. Server RBAC and tenant predicates remain authoritative.
 10. A response for an older selection cannot mutate the current selection's state.
+11. Student detail serializes an empty progress collection as `[]`, never `null`, so leaderboard drilldown crosses the existing frontend decoder safely.
 
 ## Design Constraints
 
@@ -472,6 +473,8 @@ Do not log response bodies, learner data, class names, or raw errors. Existing s
 | `admin-spa/src/routes/_authenticated/-dashboard.test.tsx` | Prove user-visible selection, leaderboard, isolation, and drilldown behavior |
 | `internal/adminapi/groups.go` | Project canonical learner IDs from the existing leaderboard query |
 | `internal/adminapi/service_test.go` | Prove leaderboard query uses the canonical learner ID projection |
+| `internal/server/handler.go` | Normalize empty student-detail progress at the HTTP boundary |
+| `internal/server/handler_test.go` | Prove empty progress serializes as a non-null array |
 
 ### Delete
 
