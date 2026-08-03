@@ -197,11 +197,7 @@ function OnboardingReady({
   }
 
   return (
-    <form className='grid gap-4' onSubmit={submit}>
-      <StatePanel title={readOnboardingTitle(view)}>
-        {view.tenant_name}
-      </StatePanel>
-
+    <form className='mt-8 grid max-w-4xl gap-5' onSubmit={submit}>
       <OnboardingWizardFlow
         form={form}
         handleFormChange={onFormChange}
@@ -213,8 +209,4 @@ function OnboardingReady({
       <AuthErrorAlert message={error} title='Save failed.' />
     </form>
   )
-}
-
-function readOnboardingTitle(view: OnboardingView): string {
-  return view.onboarding ? 'Update classroom setup' : 'Create first class'
 }

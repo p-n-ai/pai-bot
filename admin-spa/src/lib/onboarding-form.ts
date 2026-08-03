@@ -5,7 +5,7 @@ export const defaultOnboardingClassName = 'Form 1 Mathematics'
 export const onboardingCurriculumOptions = [
   {
     label: 'KSSM Algebra',
-    note: 'Demo syllabus for the first onboarding slice.',
+    note: 'Start with foundational algebra skills for Form 1 learners.',
     syllabus_id: 'kssm-algebra',
   },
 ] as const
