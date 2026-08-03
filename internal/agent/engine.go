@@ -15,6 +15,7 @@ import (
 
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/agentskills"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
@@ -79,6 +80,7 @@ type EngineConfig struct {
 	FocusedPageEnabled    func(chat.InboundMessage) bool
 	TurnDeliverer         TurnDeliverer
 	TutorPromptExtension  string
+	Skills                *agentskills.Registry
 }
 
 // Engine is the core conversation processor.
@@ -114,6 +116,7 @@ type Engine struct {
 	turnLocks             keyedTurnLocks
 	turnDeliverer         TurnDeliverer
 	tutorPromptExtension  string
+	skills                *agentskills.Registry
 }
 
 // NewEngine creates a new agent engine.
@@ -205,6 +208,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		focusedPageEnabled:    focusedPageEnabled,
 		turnDeliverer:         cfg.TurnDeliverer,
 		tutorPromptExtension:  strings.TrimSpace(cfg.TutorPromptExtension),
+		skills:                cfg.Skills,
 	}
 }
 

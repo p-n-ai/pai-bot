@@ -29,6 +29,7 @@ func (e *Engine) completeNativeTeachingTurnWithTools(ctx context.Context, turn *
 	if err != nil {
 		return teachingCompletion{}, err
 	}
+	e.addSkillCatalog(&nativeContext)
 	model := ai.NewNativeModel(e.aiRouter, ai.NativeModelConfig{Task: ai.TaskTeaching, Model: modelID})
 	result, err := agentcore.Run(ctx, model, nativeContext, tools, agentcore.Config{
 		MaxModelCalls:  agentcore.DefaultMaxModelCalls,
@@ -64,4 +65,10 @@ func (e *Engine) completeNativeTeachingTurnWithTools(ctx context.Context, turn *
 		completion.Model = result.Final.Model
 	}
 	return completion, nil
+}
+
+func (e *Engine) addSkillCatalog(nativeContext *llm.Context) {
+	if catalog := e.skills.CatalogPrompt(); catalog != "" {
+		nativeContext.SystemPrompt += "\n\n" + catalog
+	}
 }

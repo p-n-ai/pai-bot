@@ -34,6 +34,7 @@ COPY --from=builder /pai-terminal-nudge /pai-terminal-nudge
 COPY --from=builder /pai-seed /pai-seed
 COPY --from=builder /pai-validate-production-secrets /pai-validate-production-secrets
 COPY oss /oss
+COPY skills /skills
 COPY migrations /migrations
 COPY --from=codex-cli /codex /usr/local/bin/codex
 RUN codex --version

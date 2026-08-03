@@ -80,6 +80,7 @@ func clearEnv(t *testing.T) {
 		"LEARN_LOG_LEVEL",
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
+		"LEARN_SKILLS_PATH",
 		"LEARN_DEV_MODE",
 		"PAI_FEATURES",
 		"LEARN_AI_PERSONALIZED_NUDGES_ENABLED",
@@ -145,6 +146,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.CurriculumPath != "./oss" {
 		t.Errorf("CurriculumPath = %q, want ./oss", cfg.CurriculumPath)
 	}
+	if cfg.SkillsPath != "./skills" {
+		t.Errorf("SkillsPath = %q, want ./skills", cfg.SkillsPath)
+	}
 	if !cfg.Runtime.AIPersonalizedNudgesEnabled {
 		t.Error("Runtime.AIPersonalizedNudgesEnabled should default to true")
 	}
@@ -201,6 +205,7 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD", "secret-bootstrap")
 	t.Setenv("LEARN_TENANT_MODE", "multi")
 	t.Setenv("LEARN_CURRICULUM_PATH", "/tmp/oss")
+	t.Setenv("LEARN_SKILLS_PATH", "/tmp/skills")
 	t.Setenv("LEARN_AI_PERSONALIZED_NUDGES_ENABLED", "false")
 	t.Setenv("PAI_FEATURES", "turn_hooks")
 
@@ -315,6 +320,9 @@ func TestLoad_FromEnv(t *testing.T) {
 	}
 	if cfg.CurriculumPath != "/tmp/oss" {
 		t.Errorf("CurriculumPath = %q, want /tmp/oss", cfg.CurriculumPath)
+	}
+	if cfg.SkillsPath != "/tmp/skills" {
+		t.Errorf("SkillsPath = %q, want /tmp/skills", cfg.SkillsPath)
 	}
 	if cfg.Runtime.AIPersonalizedNudgesEnabled {
 		t.Error("Runtime.AIPersonalizedNudgesEnabled should be false when configured")

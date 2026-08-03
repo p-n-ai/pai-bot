@@ -20,6 +20,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/agentskills"
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
@@ -138,6 +139,11 @@ func main() {
 	if err != nil {
 		slog.Warn("curriculum not loaded", "path", cfg.CurriculumPath, "error", err)
 	}
+	skillRegistry, err := agentskills.LoadOptional(cfg.SkillsPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load agent skills: %v\n", err)
+		os.Exit(1)
+	}
 
 	state, cleanup, err := terminalchat.BuildState(sessionCtx, cfg.Database, terminalchat.StateOptions{
 		Memory:  memory,
@@ -188,6 +194,7 @@ func main() {
 		DevMode:              cfg.Runtime.DevMode,
 		FeatureFlags:         func() featureflags.Features { return cfg.FeatureFlags },
 		FocusedPages:         focusedPageService,
+		Skills:               skillRegistry,
 		FocusedPageEnabled: func(msg chat.InboundMessage) bool {
 			return msg.Channel == "telegram"
 		},
@@ -230,6 +237,11 @@ func main() {
 	if interactive {
 		factory := func(candidate terminalchat.Candidate) (terminalchat.Processor, error) {
 			localCfg := engineCfg
+			reloadedSkills, err := agentskills.LoadOptional(cfg.SkillsPath)
+			if err != nil {
+				return nil, fmt.Errorf("reload agent skills: %w", err)
+			}
+			localCfg.Skills = reloadedSkills
 			localCfg.Store = agent.NewMemoryStore()
 			localCfg.EventLogger = agent.NewMemoryEventLogger()
 			localCfg.Goals = agent.NewMemoryGoalStore()
