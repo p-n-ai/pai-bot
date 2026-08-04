@@ -46,6 +46,12 @@ func TestHashPasswordRejectsEmpty(t *testing.T) {
 	}
 }
 
+func TestHashPasswordRejectsWeakPassword(t *testing.T) {
+	if _, err := HashPassword("short"); err != ErrWeakPassword {
+		t.Fatalf("HashPassword() error = %v, want %v", err, ErrWeakPassword)
+	}
+}
+
 func TestHashOpaqueToken(t *testing.T) {
 	const token = "invite-token-123"
 
