@@ -67,13 +67,23 @@ func parseDataURLImage(raw string) (normalizedImageInput, error) {
 	if !isSupportedImageMIMEType(parsedMediaType) {
 		return normalizedImageInput{}, fmt.Errorf("unsupported image MIME type %q", parsedMediaType)
 	}
-	if base64.StdEncoding.DecodedLen(len(payload)) > maxImageInputBytes {
+	decodedLen := base64.StdEncoding.DecodedLen(len(payload))
+	if strings.HasSuffix(payload, "=") {
+		decodedLen--
+	}
+	if strings.HasSuffix(payload, "==") {
+		decodedLen--
+	}
+	if decodedLen > maxImageInputBytes {
 		return normalizedImageInput{}, fmt.Errorf("image data exceeds %d bytes", maxImageInputBytes)
 	}
 
 	data, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
 		return normalizedImageInput{}, fmt.Errorf("decode image data URL: %w", err)
+	}
+	if len(data) > maxImageInputBytes {
+		return normalizedImageInput{}, fmt.Errorf("image data exceeds %d bytes", maxImageInputBytes)
 	}
 
 	return normalizedImageInput{

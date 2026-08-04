@@ -16,3 +16,16 @@ func TestNormalizeImageInputRejectsOversizedDataURL(t *testing.T) {
 		t.Fatalf("normalizeImageInput() error = %v, want oversized image rejection", err)
 	}
 }
+
+func TestNormalizeImageInputAcceptsExactLimitDataURL(t *testing.T) {
+	data := make([]byte, maxImageInputBytes)
+	payload := base64.StdEncoding.EncodeToString(data)
+
+	image, err := normalizeImageInput("data:image/png;base64," + payload)
+	if err != nil {
+		t.Fatalf("normalizeImageInput() error = %v, want exact-limit image accepted", err)
+	}
+	if len(image.Data) != maxImageInputBytes {
+		t.Fatalf("len(image.Data) = %d, want %d", len(image.Data), maxImageInputBytes)
+	}
+}

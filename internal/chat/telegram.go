@@ -249,8 +249,8 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 						return
 					}
 					go func() {
-						defer func() { <-t.imageSlots }()
 						dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
+						<-t.imageSlots
 						if err != nil {
 							slog.Warn("failed to fetch telegram image", "error", err)
 						} else {
