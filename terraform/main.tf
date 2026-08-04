@@ -7,7 +7,7 @@
 # Usage:
 #   cd terraform
 #   terraform init
-#   terraform plan -var="ssh_cidr_blocks=[\"YOUR_IP/32\"]"
+#   terraform plan -var="ssh_cidr_blocks=[\"YOUR_IP/32\"]" -var="ssh_public_key=$(cat ~/.ssh/pai-bot-deploy.pub)"
 #   terraform apply
 
 terraform {
@@ -17,10 +17,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
   }
 }
 
@@ -29,23 +25,10 @@ provider "aws" {
 }
 
 # --- SSH Key Pair ---
-# NOTE: This is convenient for bootstrapping but places the private key in
-# Terraform state. For production, consider importing an externally managed
-# key pair instead.
-
-resource "tls_private_key" "deploy" {
-  algorithm = "ED25519"
-}
 
 resource "aws_key_pair" "deploy" {
   key_name   = "${var.project}-key"
-  public_key = tls_private_key.deploy.public_key_openssh
-}
-
-resource "local_file" "private_key" {
-  content         = tls_private_key.deploy.private_key_openssh
-  filename        = "${path.module}/${var.project}-key.pem"
-  file_permission = "0600"
+  public_key = trimspace(var.ssh_public_key)
 }
 
 # --- Security Group ---

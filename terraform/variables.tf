@@ -27,6 +27,16 @@ variable "ssh_cidr_blocks" {
   type        = list(string)
 }
 
+variable "ssh_public_key" {
+  description = "Externally generated OpenSSH public key used for server access"
+  type        = string
+
+  validation {
+    condition     = can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) ", trimspace(var.ssh_public_key)))
+    error_message = "ssh_public_key must be a valid OpenSSH public key."
+  }
+}
+
 variable "app_dir" {
   description = "Application directory on the server"
   type        = string

@@ -10,7 +10,7 @@ output "public_ip" {
 
 output "ssh_command" {
   description = "SSH command to connect"
-  value       = "ssh -i terraform/${var.project}-key.pem ubuntu@${aws_instance.app.public_ip}"
+  value       = "ssh ubuntu@${aws_instance.app.public_ip}"
 }
 
 output "health_check_url" {

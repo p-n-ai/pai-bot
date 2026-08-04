@@ -16,18 +16,24 @@ server over SSH. This keeps the server portable to any VPS.
 
 ```bash
 cd terraform
+ssh-keygen -t ed25519 -f ~/.ssh/pai-bot-deploy
 terraform init
-terraform plan -var='ssh_cidr_blocks=["YOUR_IP/32"]'
-terraform apply -var='ssh_cidr_blocks=["YOUR_IP/32"]'
+terraform plan \\
+  -var='ssh_cidr_blocks=["YOUR_IP/32"]' \\
+  -var="ssh_public_key=$(cat ~/.ssh/pai-bot-deploy.pub)"
+terraform apply \\
+  -var='ssh_cidr_blocks=["YOUR_IP/32"]' \\
+  -var="ssh_public_key=$(cat ~/.ssh/pai-bot-deploy.pub)"
 ```
 
-**Important:** `ssh_cidr_blocks` has no default — you must set it to restrict SSH access.
+Both `ssh_cidr_blocks` and `ssh_public_key` are required. Generate and store
+the private key outside Terraform; only the public key enters Terraform state.
 
 ## First-Time Server Setup
 
 ```bash
 # SSH in (command from terraform output)
-ssh -i terraform/pai-bot-key.pem ubuntu@<PUBLIC_IP>
+ssh -i ~/.ssh/pai-bot-deploy ubuntu@<PUBLIC_IP>
 
 # Create app directory (done by user-data, but verify)
 ls /opt/pai-bot
@@ -48,7 +54,7 @@ Configure deploy-only values as repository secrets or in the GitHub
 
 - `DEPLOY_HOST` — public IP from terraform output
 - `DEPLOY_USER` — `ubuntu`
-- `DEPLOY_KEY` — contents of `terraform/pai-bot-key.pem`
+- `DEPLOY_KEY` — contents of the externally managed `~/.ssh/pai-bot-deploy`
 - `DEPLOY_DIR` — `/opt/pai-bot`
 
 Configure the production runtime values consumed by
