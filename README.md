@@ -499,6 +499,7 @@ complete baseline list.
 | `LEARN_WHATSAPP_ACCESS_TOKEN` | With Cloud API | — | Meta Cloud API access token |
 | `LEARN_WHATSAPP_PHONE_ID` | With Cloud API | — | Meta WhatsApp phone number ID |
 | `LEARN_WHATSAPP_VERIFY_TOKEN` | With Cloud API | — | Token used to verify the Cloud API webhook |
+| `LEARN_WHATSAPP_APP_SECRET` | With Cloud API | — | Meta app secret used to authenticate webhook POST bodies |
 | `LEARN_DATABASE_URL` | No | `postgres://pai:pai@localhost:5432/pai` | PostgreSQL connection string |
 | `LEARN_CACHE_URL` | No | `redis://localhost:6379` | Dragonfly/Redis connection |
 | `LEARN_AI_DEFAULT_PROVIDER` | No | — | Preferred provider to try first (`openai`, `anthropic`, `deepseek`, `google`, `ollama`, `openrouter`, `codex`) |

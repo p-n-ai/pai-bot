@@ -216,6 +216,7 @@ type WhatsAppConfig struct {
 	AccessToken string // Cloud API only
 	PhoneID     string // Cloud API only
 	VerifyToken string // Cloud API only
+	AppSecret   string // Cloud API only; authenticates webhook POST bodies
 	MeowDBPath  string // whatsmeow session DB path
 	QRToken     string // token to access /whatsapp/qr endpoint
 }
@@ -355,6 +356,7 @@ func Load() (*Config, error) {
 			AccessToken: envStr("LEARN_WHATSAPP_ACCESS_TOKEN", ""),
 			PhoneID:     envStr("LEARN_WHATSAPP_PHONE_ID", ""),
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
+			AppSecret:   envStr("LEARN_WHATSAPP_APP_SECRET", ""),
 			MeowDBPath:  envStr("LEARN_WHATSAPP_MEOW_DB", "file:whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"),
 			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
 		},

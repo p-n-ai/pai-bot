@@ -2,6 +2,9 @@ package chat
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,6 +13,8 @@ import (
 	"strings"
 	"testing"
 )
+
+const whatsappTestAppSecret = "whatsapp-test-app-secret"
 
 func TestWhatsAppChannel_SendMessage(t *testing.T) {
 	var gotBody map[string]any
@@ -202,6 +207,7 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 	ch := &WhatsAppChannel{
 		verifyToken: "tok",
 		phoneID:     "phone-123",
+		appSecret:   whatsappTestAppSecret,
 	}
 
 	var got InboundMessage
@@ -229,7 +235,7 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 		}]
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	req := newSignedWhatsAppRequest(payload)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -270,8 +276,25 @@ func TestWhatsAppWebhookRejectsOversizedPayload(t *testing.T) {
 	}
 }
 
+func TestWhatsAppWebhookRejectsUnsignedPayload(t *testing.T) {
+	ch := &WhatsAppChannel{phoneID: "phone-123", appSecret: whatsappTestAppSecret}
+	called := false
+	handler := ch.WebhookHandler(func(InboundMessage) { called = true })
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"entry":[]}`))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if called {
+		t.Fatal("unsigned webhook dispatched an inbound message")
+	}
+}
+
 func TestWhatsAppWebhookAllowsNilHandler(t *testing.T) {
-	ch := &WhatsAppChannel{phoneID: "phone-123"}
+	ch := &WhatsAppChannel{phoneID: "phone-123", appSecret: whatsappTestAppSecret}
 	handler := ch.WebhookHandler(nil)
 	payload := `{
 		"entry": [{
@@ -295,7 +318,7 @@ func TestWhatsAppWebhookAllowsNilHandler(t *testing.T) {
 		}
 	}()
 
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	req := newSignedWhatsAppRequest(payload)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -308,6 +331,7 @@ func TestWhatsAppWebhookIgnoresStatusUpdates(t *testing.T) {
 	ch := &WhatsAppChannel{
 		verifyToken: "tok",
 		phoneID:     "phone-123",
+		appSecret:   whatsappTestAppSecret,
 	}
 
 	called := false
@@ -329,7 +353,7 @@ func TestWhatsAppWebhookIgnoresStatusUpdates(t *testing.T) {
 		}]
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+	req := newSignedWhatsAppRequest(payload)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -340,4 +364,12 @@ func TestWhatsAppWebhookIgnoresStatusUpdates(t *testing.T) {
 	if called {
 		t.Fatal("handler should not be called for status updates")
 	}
+}
+
+func newSignedWhatsAppRequest(body string) *http.Request {
+	request := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	mac := hmac.New(sha256.New, []byte(whatsappTestAppSecret))
+	_, _ = mac.Write([]byte(body))
+	request.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	return request
 }

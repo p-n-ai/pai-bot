@@ -384,7 +384,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				switch cfg.WhatsApp.Backend {
 				case "cloudapi":
 					var waErr error
-					waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken)
+					waCloudChannel, waErr = chat.NewWhatsAppChannel(cfg.WhatsApp.AccessToken, cfg.WhatsApp.PhoneID, cfg.WhatsApp.VerifyToken, cfg.WhatsApp.AppSecret)
 					if waErr != nil {
 						return nil, nil, fmt.Errorf("create WhatsApp Cloud API channel: %w", waErr)
 					}

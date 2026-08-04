@@ -3,12 +3,16 @@ package chat
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -22,22 +26,27 @@ type WhatsAppChannel struct {
 	accessToken string
 	phoneID     string
 	verifyToken string
+	appSecret   string
 	baseURL     string
 	client      *http.Client
 }
 
 // NewWhatsAppChannel creates a WhatsApp channel adapter.
-func NewWhatsAppChannel(accessToken, phoneID, verifyToken string) (*WhatsAppChannel, error) {
+func NewWhatsAppChannel(accessToken, phoneID, verifyToken, appSecret string) (*WhatsAppChannel, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("whatsapp access token is required (LEARN_WHATSAPP_ACCESS_TOKEN)")
 	}
 	if phoneID == "" {
 		return nil, fmt.Errorf("whatsapp phone number ID is required (LEARN_WHATSAPP_PHONE_ID)")
 	}
+	if appSecret == "" {
+		return nil, fmt.Errorf("whatsapp app secret is required (LEARN_WHATSAPP_APP_SECRET)")
+	}
 	return &WhatsAppChannel{
 		accessToken: accessToken,
 		phoneID:     phoneID,
 		verifyToken: verifyToken,
+		appSecret:   appSecret,
 		baseURL:     defaultWhatsAppBaseURL,
 		client:      &http.Client{},
 	}, nil
@@ -116,6 +125,10 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
+	if !w.validInboundSignature(r.Header.Get("X-Hub-Signature-256"), body) {
+		http.Error(rw, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var payload waWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -162,6 +175,20 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 			}
 		}
 	}
+}
+
+func (w *WhatsAppChannel) validInboundSignature(header string, body []byte) bool {
+	const prefix = "sha256="
+	if w.appSecret == "" || !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	signature, err := hex.DecodeString(strings.TrimPrefix(header, prefix))
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(w.appSecret))
+	_, _ = mac.Write(body)
+	return hmac.Equal(signature, mac.Sum(nil))
 }
 
 func (w *WhatsAppChannel) postJSON(ctx context.Context, path string, body any) error {
