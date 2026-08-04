@@ -21,6 +21,8 @@ var supportedImageMIMETypes = map[string]struct{}{
 	"image/gif":  {},
 }
 
+const maxImageInputBytes = 8 << 20
+
 type normalizedImageInput struct {
 	MIMEType string
 	Data     []byte
@@ -65,6 +67,9 @@ func parseDataURLImage(raw string) (normalizedImageInput, error) {
 	if !isSupportedImageMIMEType(parsedMediaType) {
 		return normalizedImageInput{}, fmt.Errorf("unsupported image MIME type %q", parsedMediaType)
 	}
+	if base64.StdEncoding.DecodedLen(len(payload)) > maxImageInputBytes {
+		return normalizedImageInput{}, fmt.Errorf("image data exceeds %d bytes", maxImageInputBytes)
+	}
 
 	data, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
@@ -93,9 +98,15 @@ func fetchImageBytes(ctx context.Context, client *http.Client, rawURL string) (n
 		return normalizedImageInput{}, fmt.Errorf("fetch image %q: status %d", rawURL, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	if resp.ContentLength > maxImageInputBytes {
+		return normalizedImageInput{}, fmt.Errorf("image %q exceeds %d bytes", rawURL, maxImageInputBytes)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImageInputBytes+1))
 	if err != nil {
 		return normalizedImageInput{}, fmt.Errorf("read image %q: %w", rawURL, err)
+	}
+	if len(data) > maxImageInputBytes {
+		return normalizedImageInput{}, fmt.Errorf("image %q exceeds %d bytes", rawURL, maxImageInputBytes)
 	}
 	mimeType := normalizeImageMIMEType(resp.Header.Get("Content-Type"), data)
 	if !isSupportedImageMIMEType(mimeType) {

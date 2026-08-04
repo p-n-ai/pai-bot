@@ -22,6 +22,32 @@ func (f telegramRoundTripperFunc) RoundTrip(request *http.Request) (*http.Respon
 	return f(request)
 }
 
+func TestTelegramImageDownloadRejectsOversizedContentLength(t *testing.T) {
+	channel := &TelegramChannel{
+		token:   "test-token",
+		baseURL: "https://api.telegram.test/bottest-token",
+		client: &http.Client{Transport: telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			if strings.Contains(request.URL.Path, "/getFile") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"ok":true,"result":{"file_path":"photos/large.jpg"}}`)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          io.NopCloser(strings.NewReader("not-read")),
+				Header:        http.Header{"Content-Type": []string{"image/jpeg"}},
+				ContentLength: telegramMaxImageBytes + 1,
+			}, nil
+		})},
+	}
+
+	if _, err := channel.getImageDataURL(context.Background(), "file-id"); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("getImageDataURL() error = %v, want oversized image rejection", err)
+	}
+}
+
 func TestTelegramChannelTransportErrorDoesNotExposeToken(t *testing.T) {
 	channel, err := NewTelegramChannel("secret-test-token")
 	if err != nil {

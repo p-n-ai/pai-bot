@@ -19,16 +19,21 @@ import (
 	"time"
 )
 
-const telegramMaxMessageLen = 4096
+const (
+	telegramMaxMessageLen          = 4096
+	telegramMaxImageBytes    int64 = 8 << 20
+	telegramImageConcurrency       = 4
+)
 
 // TelegramChannel implements the Channel interface for Telegram Bot API.
 type TelegramChannel struct {
-	token    string
-	baseURL  string
-	client   *http.Client
-	offset   int
-	stop     chan struct{}
-	stopOnce sync.Once
+	token      string
+	baseURL    string
+	client     *http.Client
+	offset     int
+	stop       chan struct{}
+	stopOnce   sync.Once
+	imageSlots chan struct{}
 
 	devMode     bool
 	lifecycleMu sync.Mutex
@@ -46,7 +51,8 @@ func NewTelegramChannel(token string) (*TelegramChannel, error) {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		stop: make(chan struct{}),
+		stop:       make(chan struct{}),
+		imageSlots: make(chan struct{}, telegramImageConcurrency),
 	}, nil
 }
 
@@ -228,20 +234,32 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 				if !ok {
 					continue
 				}
-				if msg.HasImage && msg.ImageFileID != "" {
-					dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
-					if err != nil {
-						slog.Warn("failed to fetch telegram image", "error", err)
-					} else {
-						msg.ImageDataURL = dataURL
-					}
-				}
 				if msg.CallbackQueryID != "" {
 					if err := t.answerCallbackQuery(ctx, msg.CallbackQueryID); err != nil {
 						slog.Warn("failed to answer callback query", "error", err)
 					}
 				}
 
+				if msg.HasImage && msg.ImageFileID != "" {
+					select {
+					case t.imageSlots <- struct{}{}:
+					case <-ctx.Done():
+						return
+					case <-t.stop:
+						return
+					}
+					go func() {
+						defer func() { <-t.imageSlots }()
+						dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
+						if err != nil {
+							slog.Warn("failed to fetch telegram image", "error", err)
+						} else {
+							msg.ImageDataURL = dataURL
+						}
+						handler(msg)
+					}()
+					continue
+				}
 				go handler(msg)
 			}
 		}
@@ -525,13 +543,19 @@ func (t *TelegramChannel) getImageDataURL(ctx context.Context, fileID string) (s
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		return "", fmt.Errorf("telegram file download error %d: %s", resp.StatusCode, string(body))
 	}
 
-	content, err := io.ReadAll(resp.Body)
+	if resp.ContentLength > telegramMaxImageBytes {
+		return "", fmt.Errorf("telegram image exceeds %d bytes", telegramMaxImageBytes)
+	}
+	content, err := io.ReadAll(io.LimitReader(resp.Body, telegramMaxImageBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("read telegram file: %w", err)
+	}
+	if int64(len(content)) > telegramMaxImageBytes {
+		return "", fmt.Errorf("telegram image exceeds %d bytes", telegramMaxImageBytes)
 	}
 	if len(content) == 0 {
 		return "", fmt.Errorf("telegram file is empty")
