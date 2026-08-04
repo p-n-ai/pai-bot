@@ -125,7 +125,7 @@
       <p>Create a free account to keep your learning history and continue on any device.</p>
       <div class="upgrade-field"><label for="upgradeName">Name</label><input autocomplete="name" type="text" id="upgradeName" name="name" placeholder="Your name"></div>
       <div class="upgrade-field"><label for="upgradeEmail">Email</label><input autocomplete="email" type="email" id="upgradeEmail" name="email" placeholder="you@example.com"></div>
-      <div class="upgrade-field"><label for="upgradePassword">Password</label><input autocomplete="new-password" type="password" id="upgradePassword" name="password" placeholder="At least 8 characters"></div>
+      <div class="upgrade-field"><label for="upgradePassword">Password</label><input autocomplete="new-password" type="password" id="upgradePassword" name="password" placeholder="At least 12 characters"></div>
       <p aria-live="polite" class="upgrade-error" id="upgradeError"></p>
       <button class="upgrade-submit" id="upgradeSubmit" type="submit">Create Account</button>
     </form>
@@ -164,33 +164,33 @@
     en: {
       tutor: 'P&AI Tutor', guest: 'Guest', signUp: 'Sign Up', logIn: 'Log In', account: 'Account',
       saveProgress: 'Save your progress', saveDescription: 'Create a free account to keep your learning history and continue on any device.',
-      name: 'Name', email: 'Email', password: 'Password', yourName: 'Your name', passwordHint: 'At least 8 characters',
+      name: 'Name', email: 'Email', password: 'Password', yourName: 'Your name', passwordHint: 'At least 12 characters',
       createAccount: 'Create Account', welcome: 'Welcome back', loginDescription: 'Log in to continue your learning journey.',
       yourPassword: 'Your password', reconnecting: 'Reconnecting...', ask: 'Ask a question... (type / for commands)', send: 'Send',
       logout: 'Log out', closeAccount: 'Close account dialog', loggingIn: 'Logging in...', creating: 'Creating...', validEmail: 'Valid email is required',
-      passwordRequired: 'Password is required', nameRequired: 'Name is required', passwordLength: 'Password must be at least 8 characters',
+      passwordRequired: 'Password is required', nameRequired: 'Name is required', passwordLength: 'Password must be at least 12 characters',
       invalidLogin: 'Invalid email or password', networkError: 'Network error. Please try again.', connectError: 'Unable to connect. Please try again later.',
       accountCreated: 'Account created!', progressSaved: 'Your progress is now saved. You can log in anytime with your email and password.', genericError: 'Something went wrong'
     },
     ms: {
       tutor: 'Tutor P&AI', guest: 'Tetamu', signUp: 'Daftar', logIn: 'Log Masuk', account: 'Akaun',
       saveProgress: 'Simpan kemajuan anda', saveDescription: 'Cipta akaun percuma untuk menyimpan sejarah pembelajaran dan meneruskan pada mana-mana peranti.',
-      name: 'Nama', email: 'E-mel', password: 'Kata laluan', yourName: 'Nama anda', passwordHint: 'Sekurang-kurangnya 8 aksara',
+      name: 'Nama', email: 'E-mel', password: 'Kata laluan', yourName: 'Nama anda', passwordHint: 'Sekurang-kurangnya 12 aksara',
       createAccount: 'Cipta Akaun', welcome: 'Selamat kembali', loginDescription: 'Log masuk untuk meneruskan pembelajaran anda.',
       yourPassword: 'Kata laluan anda', reconnecting: 'Menyambung semula...', ask: 'Tanya soalan... (taip / untuk arahan)', send: 'Hantar',
       logout: 'Log keluar', closeAccount: 'Tutup dialog akaun', loggingIn: 'Sedang log masuk...', creating: 'Sedang mencipta...', validEmail: 'E-mel yang sah diperlukan',
-      passwordRequired: 'Kata laluan diperlukan', nameRequired: 'Nama diperlukan', passwordLength: 'Kata laluan mesti sekurang-kurangnya 8 aksara',
+      passwordRequired: 'Kata laluan diperlukan', nameRequired: 'Nama diperlukan', passwordLength: 'Kata laluan mesti sekurang-kurangnya 12 aksara',
       invalidLogin: 'E-mel atau kata laluan tidak sah', networkError: 'Ralat rangkaian. Sila cuba lagi.', connectError: 'Tidak dapat menyambung. Sila cuba lagi kemudian.',
       accountCreated: 'Akaun berjaya dicipta!', progressSaved: 'Kemajuan anda kini disimpan. Anda boleh log masuk pada bila-bila masa dengan e-mel dan kata laluan.', genericError: 'Sesuatu telah berlaku'
     },
     zh: {
       tutor: 'P&AI 导师', guest: '访客', signUp: '注册', logIn: '登录', account: '账户',
       saveProgress: '保存学习进度', saveDescription: '创建免费账户，以保存学习记录并在任何设备上继续学习。',
-      name: '姓名', email: '电子邮箱', password: '密码', yourName: '你的姓名', passwordHint: '至少 8 个字符',
+      name: '姓名', email: '电子邮箱', password: '密码', yourName: '你的姓名', passwordHint: '至少 12 个字符',
       createAccount: '创建账户', welcome: '欢迎回来', loginDescription: '登录以继续你的学习旅程。',
       yourPassword: '你的密码', reconnecting: '正在重新连接...', ask: '输入问题...（输入 / 查看指令）', send: '发送',
       logout: '退出登录', closeAccount: '关闭账户对话框', loggingIn: '正在登录...', creating: '正在创建...', validEmail: '请输入有效的电子邮箱',
-      passwordRequired: '请输入密码', nameRequired: '请输入姓名', passwordLength: '密码必须至少包含 8 个字符',
+      passwordRequired: '请输入密码', nameRequired: '请输入姓名', passwordLength: '密码必须至少包含 12 个字符',
       invalidLogin: '电子邮箱或密码无效', networkError: '网络错误，请重试。', connectError: '无法连接，请稍后重试。',
       accountCreated: '账户已创建！', progressSaved: '你的学习进度已保存。你可以随时使用电子邮箱和密码登录。', genericError: '出现错误'
     }
@@ -538,7 +538,7 @@
 
       if (!name) { upgradeErrorEl.textContent = copy.nameRequired; return; }
       if (!email || email.indexOf('@') === -1) { upgradeErrorEl.textContent = copy.validEmail; return; }
-      if (pw.length < 8) { upgradeErrorEl.textContent = copy.passwordLength; return; }
+      if (Array.from(pw).length < 12) { upgradeErrorEl.textContent = copy.passwordLength; return; }
 
       upgradeSubmitEl.disabled = true;
       upgradeSubmitEl.textContent = copy.creating;
