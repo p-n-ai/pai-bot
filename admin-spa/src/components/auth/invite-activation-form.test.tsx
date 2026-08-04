@@ -112,10 +112,7 @@ describe('InviteActivationForm', () => {
 
   it('rejects a password shorter than 12 characters', async () => {
     render(
-      <InviteActivationForm
-        onAuthenticated={vi.fn()}
-        token='invite-token'
-      />,
+      <InviteActivationForm onAuthenticated={vi.fn()} token='invite-token' />,
     )
 
     fireEvent.change(screen.getByLabelText('Full name'), {
