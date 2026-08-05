@@ -5,7 +5,6 @@ const pageLabels = [
   { prefix: '/settings/users', label: 'Staff access' },
   { prefix: '/settings/budget', label: 'AI budget' },
   { prefix: '/settings/ai', label: 'AI settings' },
-  { prefix: '/settings/whatsapp', label: 'WhatsApp setup' },
   { prefix: '/settings/embed', label: 'Website chat' },
   { prefix: '/students', label: 'Learner profile' },
   { prefix: '/parents', label: 'Family overview' },

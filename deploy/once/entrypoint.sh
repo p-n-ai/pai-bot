@@ -4,7 +4,7 @@ set -eu
 export PGDATA="${PGDATA:-/storage/postgres}"
 redis_data=/storage/redis
 
-mkdir -p "$PGDATA" "$redis_data" /storage/whatsmeow /run/postgresql
+mkdir -p "$PGDATA" "$redis_data" /run/postgresql
 chown -R postgres:postgres "$PGDATA" /run/postgresql
 chown -R redis:redis "$redis_data"
 
@@ -40,7 +40,6 @@ export LEARN_EMAIL_SMTP_ADDR="${LEARN_EMAIL_SMTP_ADDR:-${SMTP_ADDRESS:-}}"
 export LEARN_EMAIL_SMTP_USERNAME="${LEARN_EMAIL_SMTP_USERNAME:-${SMTP_USERNAME:-}}"
 export LEARN_EMAIL_SMTP_PASSWORD="${LEARN_EMAIL_SMTP_PASSWORD:-${SMTP_PASSWORD:-}}"
 export LEARN_EMAIL_FROM_ADDRESS="${LEARN_EMAIL_FROM_ADDRESS:-${MAILER_FROM_ADDRESS:-}}"
-export LEARN_WHATSAPP_MEOW_DB="${LEARN_WHATSAPP_MEOW_DB:-file:/storage/whatsmeow/whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)}"
 
 goose -dir /app/migrations postgres "$LEARN_DATABASE_URL" up -allow-missing
 if [ "${PAI_ONCE_SEED_DEMO:-false}" = "true" ]; then

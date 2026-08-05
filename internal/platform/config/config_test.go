@@ -77,13 +77,10 @@ func clearEnv(t *testing.T) {
 		"PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD",
 		"LEARN_TENANT_MODE",
 		"LEARN_WHATSAPP_ENABLED",
-		"LEARN_WHATSAPP_BACKEND",
 		"LEARN_WHATSAPP_ACCESS_TOKEN",
 		"LEARN_WHATSAPP_PHONE_ID",
 		"LEARN_WHATSAPP_VERIFY_TOKEN",
 		"LEARN_WHATSAPP_APP_SECRET",
-		"LEARN_WHATSAPP_MEOW_DB",
-		"LEARN_WHATSAPP_QR_TOKEN",
 		"LEARN_LOG_LEVEL",
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
@@ -1076,7 +1073,6 @@ func TestOllamaEnabledParsing(t *testing.T) {
 func TestValidateWhatsAppCredentials(t *testing.T) {
 	validCloud := WhatsAppConfig{
 		Enabled:     true,
-		Backend:     "cloudapi",
 		AccessToken: "access-token",
 		PhoneID:     "phone-id",
 		VerifyToken: "verify-token",
@@ -1087,9 +1083,7 @@ func TestValidateWhatsAppCredentials(t *testing.T) {
 		config  WhatsAppConfig
 		wantErr string
 	}{
-		{name: "meow", config: WhatsAppConfig{Enabled: true, Backend: "meow"}},
 		{name: "cloudapi", config: validCloud},
-		{name: "invalid backend", config: WhatsAppConfig{Enabled: true, Backend: "other"}, wantErr: "must be one of"},
 		{name: "missing access token", config: func() WhatsAppConfig { c := validCloud; c.AccessToken = ""; return c }(), wantErr: "are required"},
 		{name: "missing phone ID", config: func() WhatsAppConfig { c := validCloud; c.PhoneID = ""; return c }(), wantErr: "are required"},
 		{name: "missing verify token", config: func() WhatsAppConfig { c := validCloud; c.VerifyToken = ""; return c }(), wantErr: "are required"},

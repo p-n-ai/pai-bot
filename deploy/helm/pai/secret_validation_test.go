@@ -80,56 +80,39 @@ func TestProductionSecretValidation(t *testing.T) {
 	}
 }
 
-func TestWhatsAppBackendRendering(t *testing.T) {
+func TestWhatsAppCloudAPIRendering(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {
 		t.Skip("helm is not installed")
 	}
 
-	tests := []struct {
-		name       string
-		backendArg []string
-		want       string
-	}{
-		{
-			name: "default meow backend",
-			want: `LEARN_WHATSAPP_BACKEND: "meow"`,
-		},
-		{
-			name:       "cloud api backend",
-			backendArg: []string{
-				"--set-string", "secrets.whatsapp.backend=cloudapi",
-				"--set-string", "secrets.whatsapp.accessToken=access-token",
-				"--set-string", "secrets.whatsapp.phoneId=phone-id",
-				"--set-string", "secrets.whatsapp.verifyToken=verify-token",
-				"--set-string", "secrets.whatsapp.appSecret=app-secret",
-			},
-			want:       `LEARN_WHATSAPP_BACKEND: "cloudapi"`,
-		},
+	args := []string{
+		"template", "test", ".",
+		"--set-string", "secrets.authSecret=auth-secret-value-with-enough-variety",
+		"--set-string", "secrets.configEncryptionKey=active-settings-encryption-key-1234",
+		"--set-string", "secrets.bootstrapAdminPassword=private-bootstrap-password",
+		"--set", "secrets.whatsapp.enabled=true",
+		"--set-string", "secrets.whatsapp.accessToken=access-token",
+		"--set-string", "secrets.whatsapp.phoneId=phone-id",
+		"--set-string", "secrets.whatsapp.verifyToken=verify-token",
+		"--set-string", "secrets.whatsapp.appSecret=app-secret",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			args := []string{
-				"template", "test", ".",
-				"--set-string", "secrets.authSecret=auth-secret-value-with-enough-variety",
-				"--set-string", "secrets.configEncryptionKey=active-settings-encryption-key-1234",
-				"--set-string", "secrets.bootstrapAdminPassword=private-bootstrap-password",
-				"--set", "secrets.whatsapp.enabled=true",
-			}
-			args = append(args, tt.backendArg...)
-			output, err := exec.Command(helm, args...).CombinedOutput()
-			if err != nil {
-				t.Fatalf("helm template WhatsApp backend: %v\n%s", err, output)
-			}
-			if !strings.Contains(string(output), tt.want) {
-				t.Fatalf("helm template output does not contain %q", tt.want)
-			}
-		})
+	output, err := exec.Command(helm, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm template WhatsApp Cloud API: %v\n%s", err, output)
+	}
+	for _, want := range []string{
+		`LEARN_WHATSAPP_ENABLED: "true"`,
+		`LEARN_WHATSAPP_ACCESS_TOKEN: "access-token"`,
+		`LEARN_WHATSAPP_APP_SECRET: "app-secret"`,
+	} {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("helm template output does not contain %q", want)
+		}
 	}
 }
 
-func TestWhatsAppBackendValidation(t *testing.T) {
+func TestWhatsAppCloudAPIValidation(t *testing.T) {
 	helm, err := exec.LookPath("helm")
 	if err != nil {
 		t.Skip("helm is not installed")
@@ -147,15 +130,13 @@ func TestWhatsAppBackendValidation(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "invalid backend", args: []string{"--set-string", "secrets.whatsapp.backend=other"}, want: "backend must be one of"},
-		{name: "missing cloud credentials", args: []string{"--set-string", "secrets.whatsapp.backend=cloudapi"}, want: "are required for the cloudapi backend"},
+		{name: "missing cloud credentials", want: "are required when WhatsApp is enabled"},
 		{name: "whitespace app secret", args: []string{
-			"--set-string", "secrets.whatsapp.backend=cloudapi",
 			"--set-string", "secrets.whatsapp.accessToken=access-token",
 			"--set-string", "secrets.whatsapp.phoneId=phone-id",
 			"--set-string", "secrets.whatsapp.verifyToken=verify-token",
 			"--set-string", "secrets.whatsapp.appSecret=   ",
-		}, want: "are required for the cloudapi backend"},
+		}, want: "are required when WhatsApp is enabled"},
 	}
 
 	for _, tt := range tests {

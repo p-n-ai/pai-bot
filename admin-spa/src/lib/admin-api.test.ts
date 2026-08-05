@@ -4,7 +4,6 @@ import {
   addEmbedOrigin,
   createGroup,
   deleteTeacherResource,
-  disconnectWhatsApp,
   getAISettings,
   getAIUsage,
   getClassProgress,
@@ -17,7 +16,6 @@ import {
   getStudentConversations,
   getStudentDetail,
   getUserManagement,
-  getWhatsAppStatus,
   issueInvite,
   listGroups,
   listTeacherResources,
@@ -609,35 +607,6 @@ describe('admin dashboard API', () => {
       credentials: 'include',
       cache: 'no-store',
     })
-  })
-
-  it('reads and disconnects WhatsApp through admin endpoints', async () => {
-    const status = {
-      connected: false,
-      qr_image: 'data:image/png;base64,abc',
-    }
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(status)))
-      .mockResolvedValueOnce(new Response('{}'))
-
-    await expect(getWhatsAppStatus(fetcher)).resolves.toEqual(status)
-    await expect(disconnectWhatsApp(fetcher)).resolves.toBeUndefined()
-    expect(fetcher).toHaveBeenNthCalledWith(1, '/api/admin/whatsapp/status', {
-      credentials: 'include',
-      cache: 'no-store',
-      headers: {},
-    })
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/whatsapp/disconnect',
-      {
-        method: 'POST',
-        credentials: 'include',
-        cache: 'no-store',
-        headers: {},
-      },
-    )
   })
 
   it('manages embed config through tenant admin endpoints', async () => {

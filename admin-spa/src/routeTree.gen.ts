@@ -18,7 +18,6 @@ import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedStudentsIdRouteImport } from './routes/_authenticated/students/$id'
 import { Route as AuthenticatedSetupOnboardRouteImport } from './routes/_authenticated/setup/onboard'
-import { Route as AuthenticatedSettingsWhatsappRouteImport } from './routes/_authenticated/settings/whatsapp'
 import { Route as AuthenticatedSettingsUsersRouteImport } from './routes/_authenticated/settings/users'
 import { Route as AuthenticatedSettingsEmbedRouteImport } from './routes/_authenticated/settings/embed'
 import { Route as AuthenticatedSettingsBudgetRouteImport } from './routes/_authenticated/settings/budget'
@@ -73,12 +72,6 @@ const AuthenticatedSetupOnboardRoute =
   AuthenticatedSetupOnboardRouteImport.update({
     id: '/setup/onboard',
     path: '/setup/onboard',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSettingsWhatsappRoute =
-  AuthenticatedSettingsWhatsappRouteImport.update({
-    id: '/settings/whatsapp',
-    path: '/settings/whatsapp',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsUsersRoute =
@@ -149,7 +142,6 @@ export interface FileRoutesByFullPath {
   '/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
-  '/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -169,7 +161,6 @@ export interface FileRoutesByTo {
   '/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/settings/users': typeof AuthenticatedSettingsUsersRoute
-  '/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/students/$id': typeof AuthenticatedStudentsIdRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
@@ -191,7 +182,6 @@ export interface FileRoutesById {
   '/_authenticated/settings/budget': typeof AuthenticatedSettingsBudgetRoute
   '/_authenticated/settings/embed': typeof AuthenticatedSettingsEmbedRoute
   '/_authenticated/settings/users': typeof AuthenticatedSettingsUsersRoute
-  '/_authenticated/settings/whatsapp': typeof AuthenticatedSettingsWhatsappRoute
   '/_authenticated/setup/onboard': typeof AuthenticatedSetupOnboardRoute
   '/_authenticated/students/$id': typeof AuthenticatedStudentsIdRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -213,7 +203,6 @@ export interface FileRouteTypes {
     | '/settings/budget'
     | '/settings/embed'
     | '/settings/users'
-    | '/settings/whatsapp'
     | '/setup/onboard'
     | '/students/$id'
     | '/dashboard/'
@@ -233,7 +222,6 @@ export interface FileRouteTypes {
     | '/settings/budget'
     | '/settings/embed'
     | '/settings/users'
-    | '/settings/whatsapp'
     | '/setup/onboard'
     | '/students/$id'
     | '/dashboard'
@@ -254,7 +242,6 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/budget'
     | '/_authenticated/settings/embed'
     | '/_authenticated/settings/users'
-    | '/_authenticated/settings/whatsapp'
     | '/_authenticated/setup/onboard'
     | '/_authenticated/students/$id'
     | '/_authenticated/dashboard/'
@@ -331,13 +318,6 @@ declare module '@tanstack/react-router' {
       path: '/setup/onboard'
       fullPath: '/setup/onboard'
       preLoaderRoute: typeof AuthenticatedSetupOnboardRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings/whatsapp': {
-      id: '/_authenticated/settings/whatsapp'
-      path: '/settings/whatsapp'
-      fullPath: '/settings/whatsapp'
-      preLoaderRoute: typeof AuthenticatedSettingsWhatsappRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/users': {
@@ -417,7 +397,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsBudgetRoute: typeof AuthenticatedSettingsBudgetRoute
   AuthenticatedSettingsEmbedRoute: typeof AuthenticatedSettingsEmbedRoute
   AuthenticatedSettingsUsersRoute: typeof AuthenticatedSettingsUsersRoute
-  AuthenticatedSettingsWhatsappRoute: typeof AuthenticatedSettingsWhatsappRoute
   AuthenticatedSetupOnboardRoute: typeof AuthenticatedSetupOnboardRoute
   AuthenticatedStudentsIdRoute: typeof AuthenticatedStudentsIdRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
@@ -435,7 +414,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsBudgetRoute: AuthenticatedSettingsBudgetRoute,
   AuthenticatedSettingsEmbedRoute: AuthenticatedSettingsEmbedRoute,
   AuthenticatedSettingsUsersRoute: AuthenticatedSettingsUsersRoute,
-  AuthenticatedSettingsWhatsappRoute: AuthenticatedSettingsWhatsappRoute,
   AuthenticatedSetupOnboardRoute: AuthenticatedSetupOnboardRoute,
   AuthenticatedStudentsIdRoute: AuthenticatedStudentsIdRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
