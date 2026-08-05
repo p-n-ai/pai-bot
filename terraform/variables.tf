@@ -37,6 +37,17 @@ variable "ssh_public_key" {
   }
 }
 
+variable "ssh_private_key_path" {
+  description = "Local private key path used in the SSH command output"
+  type        = string
+  default     = "~/.ssh/pai-bot-deploy"
+
+  validation {
+    condition     = trimspace(var.ssh_private_key_path) != ""
+    error_message = "ssh_private_key_path must not be empty."
+  }
+}
+
 variable "app_dir" {
   description = "Application directory on the server"
   type        = string

@@ -10,7 +10,7 @@ output "public_ip" {
 
 output "ssh_command" {
   description = "SSH command to connect"
-  value       = "ssh ubuntu@${aws_instance.app.public_ip}"
+  value       = "ssh -i ${var.ssh_private_key_path} ubuntu@${aws_instance.app.public_ip}"
 }
 
 output "health_check_url" {

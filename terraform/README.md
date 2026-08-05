@@ -9,10 +9,10 @@ server over SSH. This keeps the server portable to any VPS.
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.7
 - AWS CLI configured with access to ap-southeast-5
 
-## Deploy Infrastructure
+## New Deployment
 
 ```bash
 cd terraform
@@ -28,6 +28,57 @@ terraform apply \\
 
 Both `ssh_cidr_blocks` and `ssh_public_key` are required. Generate and store
 the private key outside Terraform; only the public key enters Terraform state.
+
+## Existing Deployment Migration
+
+Do not generate a replacement key before this migration. Reuse the private key
+that matches the public key on the running server.
+
+```bash
+cd terraform
+install -m 0600 pai-bot-key.pem ~/.ssh/pai-bot-deploy
+ssh-keygen -y -f ~/.ssh/pai-bot-deploy > ~/.ssh/pai-bot-deploy.pub
+ssh -i ~/.ssh/pai-bot-deploy ubuntu@<PUBLIC_IP>
+terraform init -upgrade
+terraform plan \
+  -var='ssh_cidr_blocks=["YOUR_IP/32"]' \
+  -var="ssh_public_key=$(cat ~/.ssh/pai-bot-deploy.pub)"
+```
+
+Check the plan before you apply it. It must not replace the EC2 instance. If it
+replaces the AWS key pair, proceed only when the successful SSH check proves
+that the supplied private key already opens the server. The two `removed`
+blocks remove the generated key resources from Terraform state without
+deleting the existing private-key file.
+
+Apply the same variables only after the plan is safe:
+
+```bash
+terraform apply \
+  -var='ssh_cidr_blocks=["YOUR_IP/32"]' \
+  -var="ssh_public_key=$(cat ~/.ssh/pai-bot-deploy.pub)"
+```
+
+Keep the old key until the copied key works in a separate SSH session. Old
+Terraform state versions can still contain the private key. Protect that state
+history, and rotate the key after this migration.
+
+## Rotate an Existing Key
+
+AWS key-pair replacement does not change `authorized_keys` on a running EC2
+instance. Add and test the new public key before you change Terraform.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/pai-bot-next
+cat ~/.ssh/pai-bot-next.pub | \
+  ssh -i ~/.ssh/pai-bot-deploy ubuntu@<PUBLIC_IP> \
+  'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys'
+ssh -i ~/.ssh/pai-bot-next ubuntu@<PUBLIC_IP>
+```
+
+Keep that second SSH session open. Then run `terraform plan` with the new
+public key and `-var='ssh_private_key_path=~/.ssh/pai-bot-next'`. Update the
+`DEPLOY_KEY` secret before you remove the old key.
 
 ## First-Time Server Setup
 

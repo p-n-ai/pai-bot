@@ -11,7 +11,7 @@
 #   terraform apply
 
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.7"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -25,6 +25,22 @@ provider "aws" {
 }
 
 # --- SSH Key Pair ---
+
+removed {
+  from = tls_private_key.deploy
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = local_file.private_key
+
+  lifecycle {
+    destroy = false
+  }
+}
 
 resource "aws_key_pair" "deploy" {
   key_name   = "${var.project}-key"
