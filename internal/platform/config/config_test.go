@@ -788,6 +788,7 @@ func TestValidateProductionSecretsRejectsUnsafeDeploymentValues(t *testing.T) {
 		{name: "previous reuses auth", auth: validAuth, active: validActive, previous: []string{validAuth}, bootstrap: validBootstrap},
 		{name: "missing bootstrap", auth: validAuth, active: validActive},
 		{name: "default bootstrap", auth: validAuth, active: validActive, bootstrap: "demo-password"},
+		{name: "short bootstrap", auth: validAuth, active: validActive, bootstrap: "private-123"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

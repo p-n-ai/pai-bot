@@ -175,6 +175,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: millionco/react-doctor@v2
+        with:
+          directory: admin-spa
 
   postgres-image:
     name: Publish PostgreSQL candidate

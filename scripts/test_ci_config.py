@@ -342,6 +342,8 @@ class CIWorkflowTests(unittest.TestCase):
 
         self.assertIn("needs.changes.outputs.admin_spa == 'true'", doctor)
         self.assertIn("uses: millionco/react-doctor@v2", doctor)
+        self.assertIn("fetch-depth: 0", doctor)
+        self.assertIn("directory: admin-spa", doctor)
         self.assertIn("      - react-doctor\n", gate)
         self.assertFalse((ROOT / ".github/workflows/react-doctor.yml").exists())
 

@@ -18,6 +18,8 @@ interface InviteActivationFormProps {
   onAuthenticated: (session: AuthSession) => void
 }
 
+const minimumPasswordLength = 12
+
 export function InviteActivationForm({
   onAuthenticated,
   token,
@@ -202,6 +204,11 @@ function useInviteActivationSubmit({
         return
       }
 
+      if (Array.from(password).length < minimumPasswordLength) {
+        setError('Password must be at least 12 characters.')
+        return
+      }
+
       beginSubmit()
 
       acceptInvite({
@@ -271,7 +278,7 @@ function InviteActivationFields({
           className='m-0 text-sm text-muted-foreground'
           id={passwordDescriptionID}
         >
-          Use a strong password for future sign-ins.
+          Use at least 12 characters for future sign-ins.
         </p>
         <Input
           aria-describedby={passwordDescriptionID}

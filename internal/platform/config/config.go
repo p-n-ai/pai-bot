@@ -18,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
@@ -670,8 +671,8 @@ func ValidateRuntimeSettingsKeys(active, auth string, previous []string) error {
 
 // ValidateProductionSecrets rejects deployment credentials that are missing,
 // public defaults, or invalid runtime-settings encryption roots.
-func ValidateProductionSecrets(auth, active string, previous []string, bootstrapAdminPassword string) error {
-	if auth == "" || auth == DefaultAuthSecret {
+func ValidateProductionSecrets(authSecret, active string, previous []string, bootstrapAdminPassword string) error {
+	if authSecret == "" || authSecret == DefaultAuthSecret {
 		return fmt.Errorf("PAI_AUTH_SECRET must be a private value")
 	}
 	if active == "" {
@@ -680,7 +681,10 @@ func ValidateProductionSecrets(auth, active string, previous []string, bootstrap
 	if bootstrapAdminPassword == "" || bootstrapAdminPassword == "demo-password" {
 		return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD must be a private value")
 	}
-	return ValidateRuntimeSettingsKeys(active, auth, previous)
+	if err := auth.ValidatePassword(bootstrapAdminPassword); err != nil {
+		return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD does not meet the password policy: %w", err)
+	}
+	return ValidateRuntimeSettingsKeys(active, authSecret, previous)
 }
 
 // ValidateProductionSecretEnvironment parses and validates only the secrets
