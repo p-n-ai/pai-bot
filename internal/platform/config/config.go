@@ -209,17 +209,13 @@ type EmailConfig struct {
 	BaseURL      string
 }
 
-// WhatsAppConfig holds WhatsApp settings.
-// Backend selects the adapter: "cloudapi" (Meta Cloud API) or "meow" (whatsmeow, default).
+// WhatsAppConfig holds WhatsApp Cloud API settings.
 type WhatsAppConfig struct {
 	Enabled     bool
-	Backend     string // "cloudapi" or "meow"
-	AccessToken string // Cloud API only
-	PhoneID     string // Cloud API only
-	VerifyToken string // Cloud API only
-	AppSecret   string // Cloud API only; authenticates webhook POST bodies
-	MeowDBPath  string // whatsmeow session DB path
-	QRToken     string // token to access /whatsapp/qr endpoint
+	AccessToken string
+	PhoneID     string
+	VerifyToken string
+	AppSecret   string // authenticates webhook POST bodies
 }
 
 // AuthConfig holds authentication settings.
@@ -353,13 +349,10 @@ func Load() (*Config, error) {
 		},
 		WhatsApp: WhatsAppConfig{
 			Enabled:     envBool("LEARN_WHATSAPP_ENABLED", false),
-			Backend:     envStr("LEARN_WHATSAPP_BACKEND", "meow"),
 			AccessToken: envStr("LEARN_WHATSAPP_ACCESS_TOKEN", ""),
 			PhoneID:     envStr("LEARN_WHATSAPP_PHONE_ID", ""),
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
 			AppSecret:   envStr("LEARN_WHATSAPP_APP_SECRET", ""),
-			MeowDBPath:  envStr("LEARN_WHATSAPP_MEOW_DB", "file:whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"),
-			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
 		},
 		Slack: SlackConfig{
 			Enabled:       envBool("LEARN_SLACK_ENABLED", false),
@@ -525,17 +518,11 @@ func (c *Config) validateChatAdapterCredentials() error {
 	}
 
 	if c.WhatsApp.Enabled {
-		switch c.WhatsApp.Backend {
-		case "meow":
-		case "cloudapi":
-			if strings.TrimSpace(c.WhatsApp.AccessToken) == "" ||
-				strings.TrimSpace(c.WhatsApp.PhoneID) == "" ||
-				strings.TrimSpace(c.WhatsApp.VerifyToken) == "" ||
-				strings.TrimSpace(c.WhatsApp.AppSecret) == "" {
-				return fmt.Errorf("LEARN_WHATSAPP_ACCESS_TOKEN, LEARN_WHATSAPP_PHONE_ID, LEARN_WHATSAPP_VERIFY_TOKEN, and LEARN_WHATSAPP_APP_SECRET are required for the cloudapi backend")
-			}
-		default:
-			return fmt.Errorf("LEARN_WHATSAPP_BACKEND must be one of: meow, cloudapi")
+		if strings.TrimSpace(c.WhatsApp.AccessToken) == "" ||
+			strings.TrimSpace(c.WhatsApp.PhoneID) == "" ||
+			strings.TrimSpace(c.WhatsApp.VerifyToken) == "" ||
+			strings.TrimSpace(c.WhatsApp.AppSecret) == "" {
+			return fmt.Errorf("LEARN_WHATSAPP_ACCESS_TOKEN, LEARN_WHATSAPP_PHONE_ID, LEARN_WHATSAPP_VERIFY_TOKEN, and LEARN_WHATSAPP_APP_SECRET are required when WhatsApp is enabled")
 		}
 	}
 

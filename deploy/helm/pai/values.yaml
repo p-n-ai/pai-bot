@@ -154,7 +154,6 @@ secrets:
   # -- WhatsApp (optional)
   whatsapp:
     enabled: false
-    backend: meow
     accessToken: ""
     phoneId: ""
     verifyToken: ""

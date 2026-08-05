@@ -379,33 +379,19 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 
 			// WhatsApp channel (behind feature flag).
 			var waCloudChannel *chat.WhatsAppChannel
-			var waMeowChannel *chat.WhatsAppMeowChannel
 			if cfg.WhatsApp.Enabled {
-				switch cfg.WhatsApp.Backend {
-				case "cloudapi":
-					var waErr error
-					waCloudChannel, waErr = chat.NewWhatsAppChannel(chat.WhatsAppCloudConfig{
-						AccessToken: cfg.WhatsApp.AccessToken,
-						PhoneID:     cfg.WhatsApp.PhoneID,
-						VerifyToken: cfg.WhatsApp.VerifyToken,
-						AppSecret:   cfg.WhatsApp.AppSecret,
-					})
-					if waErr != nil {
-						return nil, nil, fmt.Errorf("create WhatsApp Cloud API channel: %w", waErr)
-					}
-					gw.Register("whatsapp", waCloudChannel)
-					slog.Info("whatsapp backend: Cloud API")
-				case "meow":
-					var waErr error
-					waMeowChannel, waErr = chat.NewWhatsAppMeowChannel(cfg.WhatsApp.MeowDBPath)
-					if waErr != nil {
-						return nil, nil, fmt.Errorf("create WhatsApp meow channel: %w", waErr)
-					}
-					gw.Register("whatsapp", waMeowChannel)
-					slog.Info("whatsapp backend: whatsmeow")
-				default:
-					return nil, nil, fmt.Errorf("unsupported WhatsApp backend %q", cfg.WhatsApp.Backend)
+				var waErr error
+				waCloudChannel, waErr = chat.NewWhatsAppChannel(chat.WhatsAppCloudConfig{
+					AccessToken: cfg.WhatsApp.AccessToken,
+					PhoneID:     cfg.WhatsApp.PhoneID,
+					VerifyToken: cfg.WhatsApp.VerifyToken,
+					AppSecret:   cfg.WhatsApp.AppSecret,
+				})
+				if waErr != nil {
+					return nil, nil, fmt.Errorf("create WhatsApp Cloud API channel: %w", waErr)
 				}
+				gw.Register("whatsapp", waCloudChannel)
+				slog.Info("whatsapp backend: Cloud API")
 			} else {
 				slog.Info("whatsapp channel disabled; set LEARN_WHATSAPP_ENABLED=true to enable")
 			}
@@ -614,7 +600,6 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				EmbedBaseURL:          cfg.Embed.BaseURL,
 				EmbedTokenTTL:         defaultEmbedTokenTTL,
 				WACloudChannel:        waCloudChannel,
-				WAMeowChannel:         waMeowChannel,
 				ChatWebhooks:          chatWebhooks,
 				InboundHandler:        handleInbound,
 				AuthService:           authService,

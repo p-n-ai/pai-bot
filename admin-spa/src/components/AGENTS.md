@@ -17,7 +17,7 @@ components/
 ├── onboarding/   # setup wizard
 ├── classes/      # class management
 ├── users/        # user management
-├── settings/     # embed/WhatsApp settings
+├── settings/     # embed and AI settings
 └── export/       # export panel
 ```
 
@@ -32,7 +32,7 @@ components/
 | AI usage charts/tables     | `ai-usage/`          |
 | Onboarding wizard          | `onboarding/`        |
 | Classes/users management   | `classes/`, `users/` |
-| Embed/AI/WhatsApp settings | `settings/`          |
+| Embed/AI settings          | `settings/`          |
 | Export workflows           | `export/`            |
 
 ## CONVENTIONS

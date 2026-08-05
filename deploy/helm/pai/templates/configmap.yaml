@@ -32,5 +32,4 @@ data:
   {{- end }}
   {{- if .Values.secrets.whatsapp.enabled }}
   LEARN_WHATSAPP_ENABLED: "true"
-  LEARN_WHATSAPP_BACKEND: {{ .Values.secrets.whatsapp.backend | quote }}
   {{- end }}
