@@ -235,7 +235,7 @@ func handleEmbedUpgradeGuest(store chat.EmbedConfigStore, guests EmbedGuestServi
 		if !decodeEmbedJSON(w, r, &request) {
 			return
 		}
-		if strings.TrimSpace(request.Name) == "" || !strings.Contains(request.Email, "@") || auth.ValidatePassword(request.Password) != nil {
+		if strings.TrimSpace(request.Name) == "" || !strings.Contains(request.Email, "@") || auth.ValidatePassword(strings.TrimSpace(request.Password)) != nil {
 			http.Error(w, "name, valid email, and password of at least 12 characters are required", http.StatusBadRequest)
 			return
 		}
