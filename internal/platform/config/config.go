@@ -524,6 +524,21 @@ func (c *Config) validateChatAdapterCredentials() error {
 		return fmt.Errorf("LEARN_TEAMS_APP_ID and LEARN_TEAMS_APP_PASSWORD must be configured together")
 	}
 
+	if c.WhatsApp.Enabled {
+		switch c.WhatsApp.Backend {
+		case "meow":
+		case "cloudapi":
+			if strings.TrimSpace(c.WhatsApp.AccessToken) == "" ||
+				strings.TrimSpace(c.WhatsApp.PhoneID) == "" ||
+				strings.TrimSpace(c.WhatsApp.VerifyToken) == "" ||
+				strings.TrimSpace(c.WhatsApp.AppSecret) == "" {
+				return fmt.Errorf("LEARN_WHATSAPP_ACCESS_TOKEN, LEARN_WHATSAPP_PHONE_ID, LEARN_WHATSAPP_VERIFY_TOKEN, and LEARN_WHATSAPP_APP_SECRET are required for the cloudapi backend")
+			}
+		default:
+			return fmt.Errorf("LEARN_WHATSAPP_BACKEND must be one of: meow, cloudapi")
+		}
+	}
+
 	return nil
 }
 

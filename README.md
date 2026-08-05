@@ -107,6 +107,10 @@ The production image also supports Codex through the admin AI settings.
 
 Read the [environment variable reference](.env.example) for every provider and channel option.
 
+WhatsApp Cloud API requires `LEARN_WHATSAPP_ACCESS_TOKEN`, `LEARN_WHATSAPP_PHONE_ID`,
+`LEARN_WHATSAPP_VERIFY_TOKEN`, and `LEARN_WHATSAPP_APP_SECRET`. The app secret authenticates
+POST bodies through `X-Hub-Signature-256`. Invalid normal-size requests return 401. Oversized requests return 413.
+
 Stop or remove the local application with:
 
 ```bash

@@ -97,7 +97,13 @@ func TestWhatsAppBackendRendering(t *testing.T) {
 		},
 		{
 			name:       "cloud api backend",
-			backendArg: []string{"--set-string", "secrets.whatsapp.backend=cloudapi"},
+			backendArg: []string{
+				"--set-string", "secrets.whatsapp.backend=cloudapi",
+				"--set-string", "secrets.whatsapp.accessToken=access-token",
+				"--set-string", "secrets.whatsapp.phoneId=phone-id",
+				"--set-string", "secrets.whatsapp.verifyToken=verify-token",
+				"--set-string", "secrets.whatsapp.appSecret=app-secret",
+			},
 			want:       `LEARN_WHATSAPP_BACKEND: "cloudapi"`,
 		},
 	}
@@ -118,6 +124,48 @@ func TestWhatsAppBackendRendering(t *testing.T) {
 			}
 			if !strings.Contains(string(output), tt.want) {
 				t.Fatalf("helm template output does not contain %q", tt.want)
+			}
+		})
+	}
+}
+
+func TestWhatsAppBackendValidation(t *testing.T) {
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not installed")
+	}
+
+	base := []string{
+		"template", "test", ".",
+		"--set-string", "secrets.authSecret=auth-secret-value-with-enough-variety",
+		"--set-string", "secrets.configEncryptionKey=active-settings-encryption-key-1234",
+		"--set-string", "secrets.bootstrapAdminPassword=private-bootstrap-password",
+		"--set", "secrets.whatsapp.enabled=true",
+	}
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "invalid backend", args: []string{"--set-string", "secrets.whatsapp.backend=other"}, want: "backend must be one of"},
+		{name: "missing cloud credentials", args: []string{"--set-string", "secrets.whatsapp.backend=cloudapi"}, want: "are required for the cloudapi backend"},
+		{name: "whitespace app secret", args: []string{
+			"--set-string", "secrets.whatsapp.backend=cloudapi",
+			"--set-string", "secrets.whatsapp.accessToken=access-token",
+			"--set-string", "secrets.whatsapp.phoneId=phone-id",
+			"--set-string", "secrets.whatsapp.verifyToken=verify-token",
+			"--set-string", "secrets.whatsapp.appSecret=   ",
+		}, want: "are required for the cloudapi backend"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, err := exec.Command(helm, append(append([]string(nil), base...), tt.args...)...).CombinedOutput()
+			if err == nil {
+				t.Fatal("helm template succeeded with invalid WhatsApp configuration")
+			}
+			if !strings.Contains(string(output), tt.want) {
+				t.Fatalf("helm template output = %q, want %q", output, tt.want)
 			}
 		})
 	}

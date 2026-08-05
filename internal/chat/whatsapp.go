@@ -31,22 +31,33 @@ type WhatsAppChannel struct {
 	client      *http.Client
 }
 
+// WhatsAppCloudConfig contains the credentials for a WhatsApp Cloud API channel.
+type WhatsAppCloudConfig struct {
+	AccessToken string
+	PhoneID     string
+	VerifyToken string
+	AppSecret   string
+}
+
 // NewWhatsAppChannel creates a WhatsApp channel adapter.
-func NewWhatsAppChannel(accessToken, phoneID, verifyToken, appSecret string) (*WhatsAppChannel, error) {
-	if accessToken == "" {
+func NewWhatsAppChannel(cfg WhatsAppCloudConfig) (*WhatsAppChannel, error) {
+	if strings.TrimSpace(cfg.AccessToken) == "" {
 		return nil, fmt.Errorf("whatsapp access token is required (LEARN_WHATSAPP_ACCESS_TOKEN)")
 	}
-	if phoneID == "" {
+	if strings.TrimSpace(cfg.PhoneID) == "" {
 		return nil, fmt.Errorf("whatsapp phone number ID is required (LEARN_WHATSAPP_PHONE_ID)")
 	}
-	if appSecret == "" {
+	if strings.TrimSpace(cfg.VerifyToken) == "" {
+		return nil, fmt.Errorf("whatsapp verify token is required (LEARN_WHATSAPP_VERIFY_TOKEN)")
+	}
+	if strings.TrimSpace(cfg.AppSecret) == "" {
 		return nil, fmt.Errorf("whatsapp app secret is required (LEARN_WHATSAPP_APP_SECRET)")
 	}
 	return &WhatsAppChannel{
-		accessToken: accessToken,
-		phoneID:     phoneID,
-		verifyToken: verifyToken,
-		appSecret:   appSecret,
+		accessToken: cfg.AccessToken,
+		phoneID:     cfg.PhoneID,
+		verifyToken: cfg.VerifyToken,
+		appSecret:   cfg.AppSecret,
 		baseURL:     defaultWhatsAppBaseURL,
 		client:      &http.Client{},
 	}, nil
