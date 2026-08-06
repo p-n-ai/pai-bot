@@ -157,6 +157,7 @@ secrets:
     accessToken: ""
     phoneId: ""
     verifyToken: ""
+    appSecret: ""
   # -- Bootstrap admin
   bootstrapAdminEmail: "platform-admin@example.com"
   bootstrapAdminPassword: ""

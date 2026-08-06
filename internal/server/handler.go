@@ -86,7 +86,6 @@ type TopMuxOptions struct {
 	EmbedBaseURL          string
 	EmbedTokenTTL         time.Duration
 	WACloudChannel        *chat.WhatsAppChannel
-	WAMeowChannel         *chat.WhatsAppMeowChannel
 	InboundHandler        func(chat.InboundMessage)
 	AuthService           AuthService
 	JWTSecret             string
@@ -144,36 +143,37 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 	embedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
 	embedAuthLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
 	topMux.Handle("/api/embed/", withSecurityHeaders(withCORS(withAPIRateLimit(embedMux, time.Now, embedLimiter, embedAuthLimiter))))
-	waAuth := chain(
+	adminAuth := chain(
 		authenticateRequests(opts.AuthService, manager, time.Now),
 		auth.RequireRoles(auth.RoleAdmin, auth.RolePlatformAdmin),
 	)
 	if opts.EmbedConfigStore != nil {
 		embedAdminMux := http.NewServeMux()
-		embedAdminMux.Handle("GET /api/admin/embed/config", waAuth(handleAdminGetEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
-		embedAdminMux.Handle("PUT /api/admin/embed/config", waAuth(handleAdminUpdateEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
-		embedAdminMux.Handle("POST /api/admin/embed/origins", waAuth(handleAdminAddEmbedOrigin(opts.EmbedConfigStore)))
-		embedAdminMux.Handle("DELETE /api/admin/embed/origins", waAuth(handleAdminDeleteEmbedOrigin(opts.EmbedConfigStore)))
+		embedAdminMux.Handle("GET /api/admin/embed/config", adminAuth(handleAdminGetEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
+		embedAdminMux.Handle("PUT /api/admin/embed/config", adminAuth(handleAdminUpdateEmbedConfig(opts.EmbedConfigStore, opts.EmbedBaseURL)))
+		embedAdminMux.Handle("POST /api/admin/embed/origins", adminAuth(handleAdminAddEmbedOrigin(opts.EmbedConfigStore)))
+		embedAdminMux.Handle("DELETE /api/admin/embed/origins", adminAuth(handleAdminDeleteEmbedOrigin(opts.EmbedConfigStore)))
 		adminEmbedLimiter := newFixedWindowLimiter(defaultAPIRateLimitPerMinute, time.Minute)
 		adminEmbedAuthLimiter := newFixedWindowLimiter(defaultAuthRateLimitPerMinute, time.Minute)
 		topMux.Handle("/api/admin/embed/", withSecurityHeaders(withCORS(withAPIRateLimit(embedAdminMux, time.Now, adminEmbedLimiter, adminEmbedAuthLimiter))))
 	}
-	if opts.WAMeowChannel != nil {
-		waStatusHandler := withCORS(waAuth(opts.WAMeowChannel.StatusHandler()))
-		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
-		waDisconnectHandler := withCORS(waAuth(opts.WAMeowChannel.DisconnectHandler()))
-		topMux.Handle("POST /api/admin/whatsapp/disconnect", waDisconnectHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waDisconnectHandler)
-	} else {
-		waStatusHandler := withCORS(waAuth(handleWhatsAppDisabledStatus()))
-		topMux.Handle("GET /api/admin/whatsapp/status", waStatusHandler)
-		topMux.Handle("OPTIONS /api/admin/whatsapp/status", waStatusHandler)
-	}
+	waGoneHandler := withCORS(adminAuth(handleWhatsAppMeowGone()))
+	topMux.Handle("GET /api/admin/whatsapp/status", waGoneHandler)
+	topMux.Handle("OPTIONS /api/admin/whatsapp/status", waGoneHandler)
+	topMux.Handle("POST /api/admin/whatsapp/disconnect", waGoneHandler)
+	topMux.Handle("OPTIONS /api/admin/whatsapp/disconnect", waGoneHandler)
 	if opts.APIHandler != nil {
 		topMux.Handle("/", opts.APIHandler)
 	}
 	return topMux
+}
+
+func handleWhatsAppMeowGone() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusGone, map[string]string{
+			"error": "WhatsApp device linking is no longer supported; configure the Cloud API instead",
+		})
+	})
 }
 
 func validChatWebhookName(name string) bool {
@@ -186,15 +186,6 @@ func validChatWebhookName(name string) bool {
 		}
 	}
 	return true
-}
-
-func handleWhatsAppDisabledStatus() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"connected": false,
-			"enabled":   false,
-		})
-	})
 }
 
 type adminDataSource interface {
