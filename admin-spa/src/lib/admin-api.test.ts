@@ -10,6 +10,7 @@ import {
   getCodexAuthStatus,
   getEmbedConfig,
   getGroupDetail,
+  getGroupLeaderboard,
   getJoinClass,
   getOnboarding,
   getParentSummary,
@@ -179,6 +180,7 @@ describe('admin dashboard API', () => {
         type: 'class',
         join_code: 'ABC123',
         member_count: 4,
+        closed: false,
       },
     ]
     const fetcher = vi.fn().mockResolvedValue(
@@ -196,6 +198,31 @@ describe('admin dashboard API', () => {
     })
   })
 
+  it('reads the encoded class leaderboard and rejects malformed entries', async () => {
+    const entries = [
+      { user_id: 'student_2', user_name: 'Hakim', mastery_gain: 0.12, rank: 1 },
+      { user_id: 'student_1', user_name: 'Alya', mastery_gain: 0.08, rank: 2 },
+    ]
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(entries)))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ ...entries[0], rank: 'first' }])),
+      )
+
+    await expect(getGroupLeaderboard('class/1', fetcher)).resolves.toEqual(
+      entries,
+    )
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/groups/class%2F1/leaderboard',
+      { credentials: 'include', cache: 'no-store', headers: {} },
+    )
+    await expect(getGroupLeaderboard('class/1', fetcher)).rejects.toThrow(
+      'Invalid group leaderboard response',
+    )
+  })
+
   it('creates class groups with JSON body and cookie credentials', async () => {
     const group = {
       id: 'class_1',
@@ -203,6 +230,7 @@ describe('admin dashboard API', () => {
       type: 'class',
       join_code: 'ABC123',
       member_count: 0,
+      closed: false,
     }
     const fetcher = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(group), {
@@ -245,6 +273,7 @@ describe('admin dashboard API', () => {
       type: 'class',
       join_code: 'ABC123',
       member_count: 1,
+      closed: false,
       members: [
         {
           id: 'student_1',

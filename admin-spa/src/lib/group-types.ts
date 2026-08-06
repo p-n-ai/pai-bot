@@ -11,6 +11,7 @@ export const GroupRecordSchema = Schema.Struct({
   cadence: Schema.optionalKey(Schema.String),
   join_code: Schema.String,
   member_count: Schema.Number,
+  closed: Schema.Boolean,
   created_at: Schema.optionalKey(Schema.String),
   updated_at: Schema.optionalKey(Schema.String),
 })

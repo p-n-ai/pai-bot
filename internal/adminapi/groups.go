@@ -419,7 +419,7 @@ func (s *Service) buildGroupLeaderboardQuery(groupID string) (string, []any) {
 			LEFT JOIN baseline_scores bs ON bs.user_id = cs.user_id AND bs.topic_id = cs.topic_id
 			GROUP BY cs.user_id
 		)
-		SELECT g.user_id::text, u.name, g.avg_gain,
+		SELECT COALESCE(NULLIF(u.external_id, ''), u.id::text), u.name, g.avg_gain,
 		       ROW_NUMBER() OVER (ORDER BY g.avg_gain DESC) AS rank
 		FROM gains g
 		JOIN users u ON u.id = g.user_id

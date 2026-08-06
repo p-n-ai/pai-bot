@@ -180,6 +180,7 @@ func TestBuildGroupLeaderboardQueryUsesJoinedMemberSet(t *testing.T) {
 		"AND lp.tenant_id = m.tenant_id",
 		"JOIN mastery_snapshots ms",
 		"AND ms.tenant_id = m.tenant_id",
+		"COALESCE(NULLIF(u.external_id, ''), u.id::text)",
 		"($2::uuid IS NULL OR g.tenant_id = $2::uuid)",
 	} {
 		if !strings.Contains(query, want) {

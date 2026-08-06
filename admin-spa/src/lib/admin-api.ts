@@ -3,6 +3,7 @@ import { readAISettings } from './ai-settings-types'
 import { readCodexAuthStatus } from './codex-auth-types'
 import { isAIUsageSummary } from './ai-usage-types'
 import { isGroupDetail, isGroupRecord } from './group-types'
+import { readLeaderboardEntries } from './leaderboard-types'
 import { isInviteRecord, isUserManagementView } from './user-management-types'
 import { isJoinClassView } from './join-types'
 import { isOnboardingView, isSubmitOnboardingResult } from './onboarding-types'
@@ -19,6 +20,7 @@ import type {
   UpsertTokenBudgetWindowInput,
 } from './ai-usage-types'
 import type { CreateGroupInput, GroupDetail, GroupRecord } from './group-types'
+import type { LeaderboardEntry } from './leaderboard-types'
 import type { JoinClassView } from './join-types'
 import type {
   OnboardingView,
@@ -98,6 +100,24 @@ export async function getGroupDetail(
   }
 
   return payload
+}
+
+/** Fetches and decodes the server-ranked seven-day leaderboard for one class. */
+export async function getGroupLeaderboard(
+  classID: string,
+  fetcher: typeof fetch = fetch,
+): Promise<ReadonlyArray<LeaderboardEntry>> {
+  const payload = await fetchJSON(
+    `/api/admin/groups/${encodeURIComponent(classID)}/leaderboard`,
+    fetcher,
+  )
+  const entries = readLeaderboardEntries(payload)
+
+  if (!entries) {
+    throw new APIContractError('Invalid group leaderboard response')
+  }
+
+  return entries
 }
 
 export async function createGroup(

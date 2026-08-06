@@ -48,9 +48,11 @@ describe('Effect boundary contracts', () => {
       type: 'class',
       join_code: 'ABC123',
       member_count: 1,
+      closed: false,
     }
 
     expect(isGroupRecord(group)).toBe(true)
+    expect(isGroupRecord({ ...group, closed: undefined })).toBe(false)
     expect(isGroupDetail(group)).toBe(false)
     expect(
       isGroupDetail({
