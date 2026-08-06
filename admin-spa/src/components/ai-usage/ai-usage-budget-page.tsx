@@ -201,15 +201,12 @@ function getBudgetSnapshot(
     return { status: 'empty' }
   }
 
-  const reportedRemaining = readNonNegativeNumber(
-    usage.budget_remaining_tokens,
-  )
+  const reportedRemaining = readNonNegativeNumber(usage.budget_remaining_tokens)
   const remaining =
     reportedRemaining === null ? null : Math.min(limit, reportedRemaining)
   const recordedUsed = readNonNegativeNumber(usage.budget_used_tokens)
   const used =
-    recordedUsed ??
-    (remaining === null ? null : Math.max(0, limit - remaining))
+    recordedUsed ?? (remaining === null ? null : Math.max(0, limit - remaining))
 
   return {
     limit,
@@ -224,6 +221,8 @@ function getBudgetSnapshot(
   }
 }
 
-function readNonNegativeNumber(value: number | null | undefined): number | null {
+function readNonNegativeNumber(
+  value: number | null | undefined,
+): number | null {
   return typeof value === 'number' ? Math.max(0, value) : null
 }

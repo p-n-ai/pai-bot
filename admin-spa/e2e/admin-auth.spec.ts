@@ -8,7 +8,7 @@ const hasBackendAuth = Boolean(adminEmail && adminPassword)
 const protectedRoutes = [
   { path: '/dashboard', heading: 'Today' },
   { path: '/dashboard/classes', heading: 'Classes' },
-  { path: '/settings/users', heading: 'User and invite management' },
+  { path: '/settings/users', heading: 'Staff access' },
   { path: '/export', heading: 'Data export' },
 ] as const
 

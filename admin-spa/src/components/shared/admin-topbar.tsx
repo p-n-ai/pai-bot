@@ -18,7 +18,7 @@ export function AdminTopbar() {
       <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
         <SidebarTrigger
           aria-label='Open navigation'
-          className='size-11 shrink-0 text-[var(--admin-ink-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0 md:hidden'
+          className='size-11 shrink-0 text-[var(--admin-ink-soft)] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current md:hidden'
         />
         <div className='min-w-0 leading-tight'>
           <p className='truncate text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase sm:text-[11px]'>

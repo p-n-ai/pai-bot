@@ -455,10 +455,7 @@ function EmbedSetupGuide({
           : 3
   const steps = [
     ['Add host origin', 'Enter the site URL.'],
-    [
-      'Configure appearance',
-      'Set color, language, and position.',
-    ],
+    ['Configure appearance', 'Set color, language, and position.'],
     ['Enable the widget', 'Turn it on and save.'],
     ['Install the snippet', 'Copy it into your site.'],
     ['Verify chat', 'Send a test message.'],
@@ -486,7 +483,7 @@ function EmbedSetupGuide({
           return (
             <li
               aria-current={current ? 'step' : undefined}
-              className='relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 pb-7 last:pb-0 lg:block lg:pb-0 lg:pe-5'
+              className='relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 pb-7 last:pb-0 lg:block lg:pe-5 lg:pb-0'
               key={title}
             >
               {index < steps.length - 1 && (
@@ -688,7 +685,7 @@ function PublishedState({ config }: { config: EmbedConfig }) {
         </p>
         <p className='m-0 text-xs text-[var(--admin-muted)]'>{detail}</p>
       </div>
-      <p className='ms-auto m-0 text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+      <p className='m-0 ms-auto text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
         Saved state
       </p>
     </div>

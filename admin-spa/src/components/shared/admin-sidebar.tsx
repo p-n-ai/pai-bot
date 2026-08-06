@@ -78,7 +78,7 @@ export function AdminSidebar() {
           {isMobile && (
             <Button
               aria-label='Close navigation'
-              className='size-11 shrink-0 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0'
+              className='size-11 shrink-0 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
               onClick={handleCloseNavigation}
               size='icon'
               type='button'
@@ -129,7 +129,7 @@ export function AdminSidebar() {
           </div>
           <Button
             aria-label='Log out'
-            className='size-11 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0'
+            className='size-11 text-[var(--admin-nav-muted)] hover:bg-white/8 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
             onClick={handleLogout}
             size='icon-sm'
             type='button'
@@ -159,7 +159,7 @@ function AdminNavigationLink({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0 active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[var(--admin-accent)] data-active:font-semibold data-active:text-[var(--admin-ink)]'
+        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[var(--admin-accent)] data-active:font-semibold data-active:text-[var(--admin-ink)]'
         isActive={isActive}
       >
         <Link
