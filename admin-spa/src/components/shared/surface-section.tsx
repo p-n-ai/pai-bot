@@ -11,13 +11,15 @@ export function SurfaceSection({
 }) {
   return (
     <section
-      className='grid gap-6 rounded-lg border border-border bg-card p-6'
+      className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_14px_40px_oklch(0.25_0.015_150/0.045)] sm:p-7'
       aria-label={title}
     >
       <div className='flex items-start justify-between gap-3'>
         <div>
-          <h2 className='text-xl leading-tight font-semibold'>{title}</h2>
-          <p className='mt-1 text-sm leading-6 text-muted-foreground'>
+          <h2 className='text-xl leading-tight font-semibold tracking-[-0.025em] text-balance text-[var(--admin-ink)]'>
+            {title}
+          </h2>
+          <p className='mt-1.5 max-w-2xl text-sm leading-6 text-pretty text-[var(--admin-muted)]'>
             {description}
           </p>
         </div>

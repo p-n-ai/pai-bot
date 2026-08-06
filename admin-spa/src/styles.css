@@ -96,6 +96,27 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+.admin-workspace {
+  --admin-canvas: oklch(0.955 0.01 90);
+  --admin-surface: oklch(0.995 0.006 90);
+  --admin-surface-muted: oklch(0.968 0.009 90);
+  --admin-line: oklch(0.87 0.012 85);
+  --admin-ink: oklch(0.225 0.018 150);
+  --admin-ink-hover: oklch(0.31 0.024 150);
+  --admin-ink-soft: oklch(0.445 0.018 150);
+  --admin-muted: oklch(0.52 0.012 150);
+  --admin-accent: oklch(0.925 0.175 115);
+  --admin-accent-muted: oklch(0.68 0.08 115);
+  --admin-nav-text: oklch(0.935 0.01 145);
+  --admin-nav-muted: oklch(0.67 0.012 150);
+  --admin-nav-label: oklch(0.62 0.014 150);
+}
+
+.admin-workspace ::selection {
+  color: var(--admin-ink);
+  background: var(--admin-accent);
+}
+
 * {
   box-sizing: border-box;
 }

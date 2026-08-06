@@ -14,26 +14,26 @@ export function AdminTopbar() {
   const pageLabel = getAdminPageLabel(pathname)
 
   return (
-    <header className='sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-[#e6e9ef]/90 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:px-10'>
+    <header className='sticky top-3 z-20 mx-3 mt-3 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--admin-line)] bg-[color:var(--admin-surface)]/90 px-3 shadow-[0_8px_30px_oklch(0.25_0.015_150/0.06)] backdrop-blur-xl sm:mx-5 sm:px-5 lg:mx-7 lg:px-6'>
       <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
         <SidebarTrigger
           aria-label='Open navigation'
-          className='size-11 shrink-0 text-[#475467] focus-visible:ring-[#2f80ed]/35 md:hidden'
+          className='size-11 shrink-0 text-[var(--admin-ink-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current focus-visible:ring-0 md:hidden'
         />
         <div className='min-w-0 leading-tight'>
-          <p className='truncate text-[11px] font-medium text-[#98a2b3] sm:text-xs'>
+          <p className='truncate text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase sm:text-[11px]'>
             {user?.tenant_name ?? 'School workspace'}
           </p>
-          <p className='truncate text-sm font-semibold text-[#101828] sm:text-[15px]'>
+          <p className='truncate text-sm font-semibold text-[var(--admin-ink)] sm:text-[15px]'>
             {pageLabel}
           </p>
         </div>
       </div>
-      <div className='flex min-h-9 min-w-0 items-center gap-2 rounded-full bg-white py-1 pr-2.5 pl-1 shadow-[0_0_0_1px_rgb(16_24_40/0.08),0_1px_2px_rgb(16_24_40/0.04)]'>
-        <span className='flex size-7 shrink-0 items-center justify-center rounded-full bg-[#eaf2ff] text-[10px] font-semibold text-[#175cd3]'>
+      <div className='flex min-h-10 min-w-0 items-center gap-2 rounded-full border border-[var(--admin-line)] bg-[var(--admin-surface-muted)] py-1 pr-3 pl-1'>
+        <span className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-ink)] text-[10px] font-semibold text-[var(--admin-accent)]'>
           {getAdminUserInitials(user)}
         </span>
-        <span className='hidden max-w-40 truncate text-xs font-medium text-[#475467] sm:block'>
+        <span className='hidden max-w-40 truncate text-xs font-medium text-[var(--admin-ink-soft)] sm:block'>
           {user?.name ?? 'Administrator'}
         </span>
       </div>

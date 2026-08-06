@@ -14,16 +14,16 @@ export const Route = createFileRoute('/_authenticated')({
 
 function AuthenticatedLayout() {
   return (
-    <SidebarProvider className='min-h-svh w-full bg-[#f7f8fa] text-[#101828]'>
+    <SidebarProvider className='admin-workspace min-h-svh w-full bg-[var(--admin-canvas)] text-[var(--admin-ink)] [--sidebar:var(--admin-ink)] [--sidebar-foreground:var(--admin-nav-text)]'>
       <a
-        className='fixed top-3 left-3 z-50 -translate-y-20 rounded-lg bg-[#101828] px-4 py-3 text-sm font-semibold text-white shadow-[0_1px_2px_rgb(16_24_40/0.18),0_8px_20px_rgb(16_24_40/0.16)] transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus:translate-y-0 focus:ring-3 focus:ring-[#2f80ed]/40 focus:outline-none'
+        className='fixed top-3 left-3 z-50 -translate-y-20 rounded-full bg-[var(--admin-ink)] px-4 py-3 text-sm font-semibold text-[var(--admin-surface)] shadow-lg transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
         href='#admin-content'
       >
         Skip to content
       </a>
       <AdminSidebar />
       <SidebarInset
-        className='min-h-svh min-w-0 flex-1 bg-[#f7f8fa]'
+        className='relative min-h-svh min-w-0 flex-1 overflow-x-hidden bg-transparent'
         id='admin-content'
         tabIndex={-1}
       >
