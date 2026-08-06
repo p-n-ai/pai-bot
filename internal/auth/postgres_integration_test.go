@@ -33,7 +33,7 @@ func TestPostgresService_AcceptInviteLoginSessionAndLogout(t *testing.T) {
 	pair, err := svc.AcceptInvite(ctx, AcceptInviteRequest{
 		Token:    "invite-token",
 		Name:     "Teacher One",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("AcceptInvite() error = %v", err)
@@ -50,7 +50,7 @@ func TestPostgresService_AcceptInviteLoginSessionAndLogout(t *testing.T) {
 	loginPair, err := svc.Login(ctx, LoginRequest{
 		TenantID: tenantID,
 		Email:    "teacher@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
@@ -85,7 +85,7 @@ func TestPostgresService_LoginRejectsInvalidPassword(t *testing.T) {
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	userID := seedPasswordUser(t, ctx, pool, tenantID, "parent@example.com", RoleParent, "secret-123")
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "parent@example.com", RoleParent, "secret-12345")
 
 	_, err := svc.Login(ctx, LoginRequest{
 		TenantID: tenantID,
@@ -106,11 +106,11 @@ func TestPostgresService_AuthenticatePasswordDoesNotCreateBrowserSession(t *test
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	userID := seedPasswordUser(t, ctx, pool, tenantID, "student@example.com", RoleStudent, "secret-123")
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "student@example.com", RoleStudent, "secret-12345")
 	user, err := svc.AuthenticatePassword(ctx, LoginRequest{
 		TenantID: tenantID,
 		Email:    "student@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("AuthenticatePassword() error = %v", err)
@@ -274,7 +274,7 @@ func TestPostgresService_ReissueInviteRotatesToken(t *testing.T) {
 	if _, err := svc.AcceptInvite(ctx, AcceptInviteRequest{
 		Token:    firstInvite.Token,
 		Name:     "Teacher New",
-		Password: "secret-123",
+		Password: "secret-12345",
 	}); err != ErrInvalidInvite {
 		t.Fatalf("AcceptInvite(old token) error = %v, want ErrInvalidInvite", err)
 	}
@@ -289,12 +289,12 @@ func TestPostgresService_LoginReturnsTenantChoicesWhenEmailExistsAcrossTenants(t
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
 
-	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
-	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-12345")
+	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-12345")
 
 	pair, err := svc.Login(ctx, LoginRequest{
 		Email:    "shared@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
@@ -309,7 +309,7 @@ func TestPostgresService_LoginReturnsTenantChoicesWhenEmailExistsAcrossTenants(t
 	pair, err = svc.Login(ctx, LoginRequest{
 		TenantID: secondTenantID,
 		Email:    "shared@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login(with tenant) error = %v", err)
@@ -328,19 +328,19 @@ func TestPostgresService_SwitchTenantReissuesSessionWithoutLogout(t *testing.T) 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
 
-	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
-	secondUserID := seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-12345")
+	secondUserID := seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "secret-12345")
 
 	loginPair, err := svc.Login(ctx, LoginRequest{
 		TenantID: defaultTenantID,
 		Email:    "shared@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	switchedPair, err := svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-123")
+	switchedPair, err := svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-12345")
 	if err != nil {
 		t.Fatalf("SwitchTenant() error = %v", err)
 	}
@@ -367,19 +367,19 @@ func TestPostgresService_SwitchTenantRequiresTargetTenantPassword(t *testing.T) 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
 
-	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@example.com", RoleTeacher, "secret-12345")
 	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@example.com", RoleTeacher, "different-secret")
 
 	loginPair, err := svc.Login(ctx, LoginRequest{
 		TenantID: defaultTenantID,
 		Email:    "shared@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
 
-	_, err = svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-123")
+	_, err = svc.SwitchTenant(ctx, loginPair.Token, secondTenantID, "secret-12345")
 	if err != ErrInvalidCredentials {
 		t.Fatalf("SwitchTenant() error = %v, want ErrInvalidCredentials", err)
 	}
@@ -434,11 +434,11 @@ func TestPostgresService_PlatformAdminLoginWithoutTenant(t *testing.T) {
 	now := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC)
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
-	userID := seedGlobalPasswordUser(t, ctx, pool, "platform-admin@example.com", RolePlatformAdmin, "secret-123")
+	userID := seedGlobalPasswordUser(t, ctx, pool, "platform-admin@example.com", RolePlatformAdmin, "secret-12345")
 
 	pair, err := svc.Login(ctx, LoginRequest{
 		Email:    "platform-admin@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
@@ -470,12 +470,12 @@ func TestPostgresService_SessionRefreshesOnlyNearExpiry(t *testing.T) {
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	seedPasswordUser(t, ctx, pool, tenantID, "teacher@example.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, tenantID, "teacher@example.com", RoleTeacher, "secret-12345")
 
 	farSession, err := svc.Login(ctx, LoginRequest{
 		TenantID: tenantID,
 		Email:    "teacher@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login(far) error = %v", err)
@@ -495,7 +495,7 @@ func TestPostgresService_SessionRefreshesOnlyNearExpiry(t *testing.T) {
 	nearSession, err := svc.Login(ctx, LoginRequest{
 		TenantID: tenantID,
 		Email:    "teacher@example.com",
-		Password: "secret-123",
+		Password: "secret-12345",
 	})
 	if err != nil {
 		t.Fatalf("Login(near) error = %v", err)

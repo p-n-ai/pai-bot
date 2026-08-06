@@ -341,7 +341,7 @@ func (s *PostgresService) AcceptInvite(ctx context.Context, req AcceptInviteRequ
 
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
-		if errors.Is(err, ErrEmptyPassword) {
+		if errors.Is(err, ErrEmptyPassword) || errors.Is(err, ErrWeakPassword) {
 			return Session{}, ErrInvalidInvite
 		}
 		return Session{}, fmt.Errorf("hash password: %w", err)

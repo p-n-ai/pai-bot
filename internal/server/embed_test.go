@@ -71,7 +71,8 @@ func (s *embedConfigStoreStub) FindTenantBySlugAndOrigin(_ context.Context, slug
 }
 
 type embedGuestsStub struct {
-	parentOrigin string
+	parentOrigin  string
+	upgradeCalled bool
 }
 
 func (s *embedGuestsStub) IssueGuestToken(_ context.Context, tenantID, origin, fingerprint string) (string, string, error) {
@@ -81,6 +82,7 @@ func (s *embedGuestsStub) IssueGuestToken(_ context.Context, tenantID, origin, f
 
 func (s *embedGuestsStub) UpgradeGuest(_ context.Context, userID, tenantID, parentOrigin, name, email, password string) (string, error) {
 	s.parentOrigin = parentOrigin
+	s.upgradeCalled = true
 	return "student-token", nil
 }
 
@@ -281,6 +283,39 @@ func TestEmbedGuestAuthBindsValidatedParentOrigin(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized body status = %d, want 413", response.Code)
+	}
+}
+
+func TestEmbedGuestUpgradeRejectsPasswordThatBecomesShortAfterTrimming(t *testing.T) {
+	const secret = "embed-upgrade-secret"
+	store := &embedConfigStoreStub{
+		configs: map[string]chat.EmbedConfig{},
+		tenantByOrigin: map[string]string{
+			"https://school.example": "tenant-a",
+		},
+	}
+	guests := &embedGuestsStub{}
+	handler := NewTopMux(TopMuxOptions{
+		EmbedConfigStore:  store,
+		EmbedGuestService: guests,
+		JWTSecret:         secret,
+		AccessTokenTTL:    time.Hour,
+	})
+	token := issueEmbedTestToken(t, secret, auth.RoleGuest, "tenant-a", "https://school.example")
+	request := httptest.NewRequest(http.MethodPost, "https://api.example/api/embed/auth/upgrade", strings.NewReader(
+		`{"name":"Student","email":"student@example.com","password":" 12345678901"}`,
+	))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Origin", "https://api.example")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", response.Code, response.Body.String())
+	}
+	if guests.upgradeCalled {
+		t.Fatal("UpgradeGuest() was called for a password that becomes too short after trimming")
 	}
 }
 

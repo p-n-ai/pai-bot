@@ -65,12 +65,6 @@ describe('admin SPA RBAC', () => {
     expect(canAccessPath(teacher, '/settings/budget')).toBe(false)
   })
 
-  it('limits WhatsApp setup to admin roles', () => {
-    expect(canAccessPath(admin, '/settings/whatsapp')).toBe(true)
-    expect(canAccessPath(platformAdmin, '/settings/whatsapp')).toBe(true)
-    expect(canAccessPath(teacher, '/settings/whatsapp')).toBe(false)
-  })
-
   it('limits embed setup to admin roles', () => {
     expect(canAccessPath(admin, '/settings/embed')).toBe(true)
     expect(canAccessPath(platformAdmin, '/settings/embed')).toBe(true)

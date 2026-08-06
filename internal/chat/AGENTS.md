@@ -11,7 +11,7 @@ Channel adapters for Telegram, WhatsApp, WebSocket, and embeddable chat plus com
 |------|----------|
 | Slash command list/autocomplete | `commands.go` |
 | Telegram inbound/outbound | `telegram.go`, `telegram_*_test.go` |
-| WhatsApp runtime | `whatsapp.go`, `whatsapp_meow.go`, `whatsapp_test.go` |
+| WhatsApp Cloud API runtime | `whatsapp.go`, `whatsapp_test.go` |
 | WebSocket chat | `websocket.go`, `websocket_test.go` |
 | Embeddable widget API | `embed_handler.go`, `embed_config.go`, `embed_ratelimit.go` |
 | Message formatting/keyboards | `formatting.go`, `inline_keyboard.go`, `reply_keyboard.go` |

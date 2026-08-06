@@ -31,7 +31,7 @@ func TestPostgresService_GoogleLoginAutoLinksSingleVerifiedEmail(t *testing.T) {
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@gmail.com", RoleTeacher, "secret-123")
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@gmail.com", RoleTeacher, "secret-12345")
 	google := newGoogleOIDCTestServer(t)
 	defer google.Close()
 
@@ -92,7 +92,7 @@ func TestPostgresService_GoogleLinkAllowsDifferentEmail(t *testing.T) {
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-123")
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-12345")
 	google := newGoogleOIDCTestServer(t)
 	defer google.Close()
 
@@ -165,7 +165,7 @@ func TestPostgresService_GoogleLinkReplacesExistingGoogleIdentity(t *testing.T) 
 	svc := newPostgresService(pool, 7*24*time.Hour, func() time.Time { return now })
 
 	tenantID := loadDefaultTenantID(t, ctx, pool)
-	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-123")
+	userID := seedPasswordUser(t, ctx, pool, tenantID, "teacher@yahoo.com", RoleTeacher, "secret-12345")
 	google := newGoogleOIDCTestServer(t)
 	defer google.Close()
 
@@ -310,8 +310,8 @@ func TestPostgresService_GoogleLoginReturnsTenantChoicesWhenEmailMatchesMultiple
 
 	defaultTenantID := loadDefaultTenantID(t, ctx, pool)
 	secondTenantID := seedTenant(t, ctx, pool, "school-b", "School B")
-	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@gmail.com", RoleTeacher, "secret-123")
-	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@gmail.com", RoleTeacher, "secret-123")
+	seedPasswordUser(t, ctx, pool, defaultTenantID, "shared@gmail.com", RoleTeacher, "secret-12345")
+	seedPasswordUser(t, ctx, pool, secondTenantID, "shared@gmail.com", RoleTeacher, "secret-12345")
 
 	svc.ConfigureGoogleOAuth(GoogleOAuthProviderConfig{
 		ClientID:              "google-client",

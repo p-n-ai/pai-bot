@@ -86,6 +86,8 @@ func TestHandleChatPage_ValidTenant(t *testing.T) {
 		`role="dialog"`,
 		`aria-modal="true"`,
 		`label for="upgradeEmail"`,
+		"At least 12 characters",
+		"Array.from(pw).length < 12",
 		"panelSignupEl.innerHTML",
 		"window.crypto.getRandomValues(bytes)",
 	} {
