@@ -14,9 +14,9 @@ export const Route = createFileRoute('/_authenticated')({
 
 function AuthenticatedLayout() {
   return (
-    <SidebarProvider className='admin-workspace min-h-svh w-full bg-[var(--admin-canvas)] text-[var(--admin-ink)] [--sidebar:var(--admin-ink)] [--sidebar-foreground:var(--admin-nav-text)]'>
+    <SidebarProvider className='admin-workspace min-h-svh w-full bg-[var(--admin-canvas)] text-[var(--admin-ink)] [--sidebar-foreground:var(--admin-nav-text)] [--sidebar:var(--admin-ink)]'>
       <a
-        className='fixed top-3 left-3 z-50 -translate-y-20 rounded-full bg-[var(--admin-ink)] px-4 py-3 text-sm font-semibold text-[var(--admin-surface)] shadow-lg transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
+        className='fixed top-3 left-3 z-50 -translate-y-20 rounded-full bg-[var(--admin-ink)] px-4 py-3 text-sm font-semibold text-[var(--admin-surface)] shadow-lg transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current motion-reduce:transition-none'
         href='#admin-content'
       >
         Skip to content
