@@ -11,8 +11,8 @@ function ExportRoute() {
   return (
     <AdminPageSection
       description='Download tenant-scoped student, conversation, and progress datasets for reporting, migration, and audit workflows.'
-      eyebrow='Administration'
-      title='Data export'
+      eyebrow='School administration'
+      title='Download records'
     >
       <ExportPanel />
     </AdminPageSection>
