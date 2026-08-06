@@ -2447,6 +2447,30 @@ func TestRetrievalSourceEndpoints_CreateListAndDelete(t *testing.T) {
 	}
 }
 
+func TestWhatsAppMeowRoutesAreGone(t *testing.T) {
+	handler := NewTopMux(TopMuxOptions{
+		AuthService:    &stubAuthService{},
+		JWTSecret:      "change-me-in-production",
+		AccessTokenTTL: time.Hour,
+	})
+
+	for _, test := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/admin/whatsapp/status"},
+		{method: http.MethodPost, path: "/api/admin/whatsapp/disconnect"},
+	} {
+		req := httptest.NewRequest(test.method, test.path, nil)
+		req.Header.Set("Authorization", "Bearer "+mustIssueAdminToken(t))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusGone {
+			t.Fatalf("%s %s status = %d, want %d", test.method, test.path, rec.Code, http.StatusGone)
+		}
+	}
+}
+
 func mustIssueAdminToken(t *testing.T) string {
 	t.Helper()
 	return mustIssueToken(t, auth.RoleAdmin)
