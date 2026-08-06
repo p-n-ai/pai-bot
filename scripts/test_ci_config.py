@@ -86,6 +86,19 @@ class CIWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 self.assertIn(f"      - {job}\n", workflow)
 
+    def test_go_test_job_installs_helm(self) -> None:
+        workflow = source(".github/workflows/ci.yml")
+        backend_filter = workflow.split("            backend:\n", maxsplit=1)[1].split(
+            "            compose_runtime:\n", maxsplit=1
+        )[0]
+        go_job = workflow.split("\n  go:\n", maxsplit=1)[1].split(
+            "\n  go-lint:\n", maxsplit=1
+        )[0]
+
+        self.assertIn("- 'deploy/helm/**'", backend_filter)
+        self.assertIn("uses: azure/setup-helm@v4", go_job)
+        self.assertIn("if: matrix.check == 'test'", go_job)
+
     def test_routine_postgres_publish_is_change_gated(self) -> None:
         ci_workflow = source(".github/workflows/ci.yml")
         nightly = source(".github/workflows/nightly.yml")
@@ -342,6 +355,8 @@ class CIWorkflowTests(unittest.TestCase):
 
         self.assertIn("needs.changes.outputs.admin_spa == 'true'", doctor)
         self.assertIn("uses: millionco/react-doctor@v2", doctor)
+        self.assertIn("fetch-depth: 0", doctor)
+        self.assertIn("directory: admin-spa", doctor)
         self.assertIn("      - react-doctor\n", gate)
         self.assertFalse((ROOT / ".github/workflows/react-doctor.yml").exists())
 

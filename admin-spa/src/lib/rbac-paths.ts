@@ -7,7 +7,6 @@ import type { AuthUser } from './auth-types'
 
 const elevatedPrefixes = ['/dashboard', '/settings', '/students', '/parents']
 const setupSettingsPrefixes = [
-  '/settings/whatsapp',
   '/settings/users',
   '/settings/budget',
   '/settings/embed',

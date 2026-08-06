@@ -18,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
 
@@ -208,16 +209,13 @@ type EmailConfig struct {
 	BaseURL      string
 }
 
-// WhatsAppConfig holds WhatsApp settings.
-// Backend selects the adapter: "cloudapi" (Meta Cloud API) or "meow" (whatsmeow, default).
+// WhatsAppConfig holds WhatsApp Cloud API settings.
 type WhatsAppConfig struct {
 	Enabled     bool
-	Backend     string // "cloudapi" or "meow"
-	AccessToken string // Cloud API only
-	PhoneID     string // Cloud API only
-	VerifyToken string // Cloud API only
-	MeowDBPath  string // whatsmeow session DB path
-	QRToken     string // token to access /whatsapp/qr endpoint
+	AccessToken string
+	PhoneID     string
+	VerifyToken string
+	AppSecret   string // authenticates webhook POST bodies
 }
 
 // AuthConfig holds authentication settings.
@@ -351,12 +349,10 @@ func Load() (*Config, error) {
 		},
 		WhatsApp: WhatsAppConfig{
 			Enabled:     envBool("LEARN_WHATSAPP_ENABLED", false),
-			Backend:     envStr("LEARN_WHATSAPP_BACKEND", "meow"),
 			AccessToken: envStr("LEARN_WHATSAPP_ACCESS_TOKEN", ""),
 			PhoneID:     envStr("LEARN_WHATSAPP_PHONE_ID", ""),
 			VerifyToken: envStr("LEARN_WHATSAPP_VERIFY_TOKEN", ""),
-			MeowDBPath:  envStr("LEARN_WHATSAPP_MEOW_DB", "file:whatsmeow.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"),
-			QRToken:     envStr("LEARN_WHATSAPP_QR_TOKEN", ""),
+			AppSecret:   envStr("LEARN_WHATSAPP_APP_SECRET", ""),
 		},
 		Slack: SlackConfig{
 			Enabled:       envBool("LEARN_SLACK_ENABLED", false),
@@ -521,6 +517,15 @@ func (c *Config) validateChatAdapterCredentials() error {
 		return fmt.Errorf("LEARN_TEAMS_APP_ID and LEARN_TEAMS_APP_PASSWORD must be configured together")
 	}
 
+	if c.WhatsApp.Enabled {
+		if strings.TrimSpace(c.WhatsApp.AccessToken) == "" ||
+			strings.TrimSpace(c.WhatsApp.PhoneID) == "" ||
+			strings.TrimSpace(c.WhatsApp.VerifyToken) == "" ||
+			strings.TrimSpace(c.WhatsApp.AppSecret) == "" {
+			return fmt.Errorf("LEARN_WHATSAPP_ACCESS_TOKEN, LEARN_WHATSAPP_PHONE_ID, LEARN_WHATSAPP_VERIFY_TOKEN, and LEARN_WHATSAPP_APP_SECRET are required when WhatsApp is enabled")
+		}
+	}
+
 	return nil
 }
 
@@ -668,8 +673,8 @@ func ValidateRuntimeSettingsKeys(active, auth string, previous []string) error {
 
 // ValidateProductionSecrets rejects deployment credentials that are missing,
 // public defaults, or invalid runtime-settings encryption roots.
-func ValidateProductionSecrets(auth, active string, previous []string, bootstrapAdminPassword string) error {
-	if auth == "" || auth == DefaultAuthSecret {
+func ValidateProductionSecrets(authSecret, active string, previous []string, bootstrapAdminPassword string) error {
+	if authSecret == "" || authSecret == DefaultAuthSecret {
 		return fmt.Errorf("PAI_AUTH_SECRET must be a private value")
 	}
 	if active == "" {
@@ -678,7 +683,10 @@ func ValidateProductionSecrets(auth, active string, previous []string, bootstrap
 	if bootstrapAdminPassword == "" || bootstrapAdminPassword == "demo-password" {
 		return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD must be a private value")
 	}
-	return ValidateRuntimeSettingsKeys(active, auth, previous)
+	if err := auth.ValidatePassword(bootstrapAdminPassword); err != nil {
+		return fmt.Errorf("PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD does not meet the password policy: %w", err)
+	}
+	return ValidateRuntimeSettingsKeys(active, authSecret, previous)
 }
 
 // ValidateProductionSecretEnvironment parses and validates only the secrets
