@@ -9,7 +9,7 @@ const protectedRoutes = [
   { path: '/dashboard', heading: 'Today' },
   { path: '/dashboard/classes', heading: 'Classes' },
   { path: '/settings/users', heading: 'Staff access' },
-  { path: '/export', heading: 'Data export' },
+  { path: '/export', heading: 'Download records' },
 ] as const
 
 test.describe('admin public auth flows', () => {
