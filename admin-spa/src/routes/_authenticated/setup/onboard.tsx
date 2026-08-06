@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_authenticated/setup/onboard')({
 function OnboardingRoute() {
   return (
     <AdminPageSection
-      description='Create the first class and persist the starting classroom setup.'
+      description='Choose a syllabus, create your first class, and set up its tutor.'
       eyebrow='Setup'
       title='Set up your first class'
     >

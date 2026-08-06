@@ -122,24 +122,29 @@ function OnboardingStepper({
   )
 
   return (
-    <div className='grid gap-3'>
-      <div
-        aria-label='Setup progress'
-        aria-valuemax={100}
-        aria-valuemin={0}
-        aria-valuenow={progressValue}
-        className='h-2 overflow-hidden rounded-full bg-muted'
-        role='progressbar'
-      >
-        <span
-          className={cn(
-            'block h-full rounded-full bg-foreground',
-            getProgressWidthClass(progressValue),
-          )}
-        />
+    <div className='grid gap-4'>
+      <div className='flex items-center justify-between gap-4'>
+        <p className='text-xs font-semibold tracking-[0.14em] text-[var(--admin-muted)] uppercase'>
+          Step {stepIndex + 1} of {onboardingSteps.length}
+        </p>
+        <div
+          aria-label='Setup progress'
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={progressValue}
+          className='h-1.5 w-32 overflow-hidden rounded-full bg-[var(--admin-line)] sm:w-44'
+          role='progressbar'
+        >
+          <span
+            className={cn(
+              'block h-full rounded-full bg-[var(--admin-accent)] transition-[width] duration-200 motion-reduce:transition-none',
+              getProgressWidthClass(progressValue),
+            )}
+          />
+        </div>
       </div>
       <div
-        className='grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2 border-b border-border pb-2.5'
+        className='grid grid-cols-2 gap-2 sm:grid-cols-4'
         aria-label='Setup steps'
       >
         {onboardingSteps.map((step, index) => (
@@ -147,6 +152,7 @@ function OnboardingStepper({
             handleStepIndexChange={handleStepIndexChange}
             index={index}
             isActive={index === stepIndex}
+            isComplete={index < stepIndex}
             key={step.id}
             title={step.title}
           />
@@ -160,11 +166,13 @@ function OnboardingStepButton({
   handleStepIndexChange,
   index,
   isActive,
+  isComplete,
   title,
 }: {
   handleStepIndexChange: (stepIndex: number) => void
   index: number
   isActive: boolean
+  isComplete: boolean
   title: string
 }) {
   const handleClick = useCallback(() => {
@@ -175,13 +183,23 @@ function OnboardingStepButton({
     <button
       aria-current={isActive ? 'step' : undefined}
       className={cn(
-        'border-b-2 border-transparent bg-transparent px-0 py-2 text-left text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-        isActive && 'border-foreground text-foreground',
+        'flex min-h-12 items-center gap-2.5 rounded-xl border border-transparent bg-transparent px-3 py-2 text-left text-sm font-medium text-[var(--admin-muted)] transition-[background-color,border-color,color,transform] duration-150 hover:bg-[var(--admin-surface-muted)] hover:text-[var(--admin-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none',
+        isActive &&
+          'border-[var(--admin-ink)] bg-[var(--admin-ink)] text-[var(--admin-surface)]',
       )}
       onClick={handleClick}
       type='button'
     >
-      {title}
+      <span
+        aria-hidden='true'
+        className={cn(
+          'flex size-6 shrink-0 items-center justify-center rounded-full border border-current text-[11px] tabular-nums',
+          isActive && 'border-[var(--admin-accent)] text-[var(--admin-accent)]',
+        )}
+      >
+        {isComplete ? <CheckIcon className='size-3.5' /> : index + 1}
+      </span>
+      <span>{title}</span>
     </button>
   )
 }
@@ -411,16 +429,16 @@ function OnboardingStepLayout({
   title: string
 }) {
   return (
-    <section className='grid gap-5 min-[780px]:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] min-[780px]:items-start'>
+    <section className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_14px_40px_oklch(0.25_0.015_150/0.045)] sm:p-7'>
       <div>
-        <h2 className='text-2xl leading-tight font-semibold tracking-normal text-foreground'>
+        <h2 className='text-2xl leading-tight font-semibold tracking-[-0.025em] text-balance text-[var(--admin-ink)]'>
           {title}
         </h2>
-        <p className='mt-2 max-w-md text-sm leading-6 text-muted-foreground'>
+        <p className='mt-2 max-w-xl text-sm leading-6 text-pretty text-[var(--admin-muted)]'>
           {description}
         </p>
       </div>
-      <div className='grid gap-3.5 rounded-lg border border-border p-4'>
+      <div className='grid gap-4 rounded-xl bg-[var(--admin-surface-muted)] p-4 sm:p-5'>
         {children}
       </div>
     </section>
@@ -443,15 +461,19 @@ function OnboardingWizardActions({
   stepIndex: number
 }) {
   return (
-    <div className='flex items-center justify-between gap-3 border-t border-border pt-3.5'>
-      <Button
-        disabled={stepIndex === 0 || isPending}
-        onClick={handleBack}
-        type='button'
-        variant='ghost'
-      >
-        Back
-      </Button>
+    <div className='flex min-h-11 items-center justify-between gap-3'>
+      {stepIndex > 0 ? (
+        <Button
+          disabled={isPending}
+          onClick={handleBack}
+          type='button'
+          variant='ghost'
+        >
+          Back
+        </Button>
+      ) : (
+        <span aria-hidden='true' />
+      )}
       <ForwardAction
         canAdvance={canAdvance}
         canSubmit={canSubmit}
