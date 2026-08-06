@@ -12,7 +12,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var ErrEmptyPassword = errors.New("password is required")
+const MinimumPasswordLength = 12
+
+var (
+	ErrEmptyPassword = errors.New("password is required")
+	ErrWeakPassword  = errors.New("password must be at least 12 characters")
+)
 
 // NormalizeIdentifier trims whitespace and lowercases login identifiers such as email.
 func NormalizeIdentifier(identifier string) string {
@@ -21,8 +26,8 @@ func NormalizeIdentifier(identifier string) string {
 
 // HashPassword hashes a plaintext password with bcrypt.
 func HashPassword(password string) (string, error) {
-	if strings.TrimSpace(password) == "" {
-		return "", ErrEmptyPassword
+	if err := ValidatePassword(password); err != nil {
+		return "", err
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -30,6 +35,17 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(hashed), nil
+}
+
+// ValidatePassword enforces the durable password-account policy.
+func ValidatePassword(password string) error {
+	if strings.TrimSpace(password) == "" {
+		return ErrEmptyPassword
+	}
+	if len([]rune(password)) < MinimumPasswordLength {
+		return ErrWeakPassword
+	}
+	return nil
 }
 
 // ComparePassword verifies a plaintext password against a bcrypt hash.

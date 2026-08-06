@@ -77,6 +77,10 @@ func clearEnv(t *testing.T) {
 		"PAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD",
 		"LEARN_TENANT_MODE",
 		"LEARN_WHATSAPP_ENABLED",
+		"LEARN_WHATSAPP_ACCESS_TOKEN",
+		"LEARN_WHATSAPP_PHONE_ID",
+		"LEARN_WHATSAPP_VERIFY_TOKEN",
+		"LEARN_WHATSAPP_APP_SECRET",
 		"LEARN_LOG_LEVEL",
 		"LEARN_LOG_FORMAT",
 		"LEARN_CURRICULUM_PATH",
@@ -788,6 +792,7 @@ func TestValidateProductionSecretsRejectsUnsafeDeploymentValues(t *testing.T) {
 		{name: "previous reuses auth", auth: validAuth, active: validActive, previous: []string{validAuth}, bootstrap: validBootstrap},
 		{name: "missing bootstrap", auth: validAuth, active: validActive},
 		{name: "default bootstrap", auth: validAuth, active: validActive, bootstrap: "demo-password"},
+		{name: "short bootstrap", auth: validAuth, active: validActive, bootstrap: "private-123"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1060,6 +1065,40 @@ func TestOllamaEnabledParsing(t *testing.T) {
 			}
 			if cfg.AI.Ollama.Enabled != tt.want {
 				t.Errorf("AI.Ollama.Enabled = %v, want %v", cfg.AI.Ollama.Enabled, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateWhatsAppCredentials(t *testing.T) {
+	validCloud := WhatsAppConfig{
+		Enabled:     true,
+		AccessToken: "access-token",
+		PhoneID:     "phone-id",
+		VerifyToken: "verify-token",
+		AppSecret:   "app-secret",
+	}
+	tests := []struct {
+		name    string
+		config  WhatsAppConfig
+		wantErr string
+	}{
+		{name: "cloudapi", config: validCloud},
+		{name: "missing access token", config: func() WhatsAppConfig { c := validCloud; c.AccessToken = ""; return c }(), wantErr: "are required"},
+		{name: "missing phone ID", config: func() WhatsAppConfig { c := validCloud; c.PhoneID = ""; return c }(), wantErr: "are required"},
+		{name: "missing verify token", config: func() WhatsAppConfig { c := validCloud; c.VerifyToken = ""; return c }(), wantErr: "are required"},
+		{name: "whitespace app secret", config: func() WhatsAppConfig { c := validCloud; c.AppSecret = "   "; return c }(), wantErr: "are required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{WhatsApp: tt.config}
+			err := cfg.validateChatAdapterCredentials()
+			if tt.wantErr == "" && err != nil {
+				t.Fatalf("validateChatAdapterCredentials() error = %v", err)
+			}
+			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("validateChatAdapterCredentials() error = %v, want error containing %q", err, tt.wantErr)
 			}
 		})
 	}

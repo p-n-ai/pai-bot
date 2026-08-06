@@ -106,7 +106,26 @@ describe('InviteActivationForm', () => {
       screen.getByText('Go straight to the right admin view.'),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveAccessibleDescription(
-      'Use a strong password for future sign-ins.',
+      'Use at least 12 characters for future sign-ins.',
     )
+  })
+
+  it('rejects a password shorter than 12 characters', async () => {
+    render(
+      <InviteActivationForm onAuthenticated={vi.fn()} token='invite-token' />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Full name'), {
+      target: { value: 'Parent One' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'short-pass' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invite' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Password must be at least 12 characters.',
+    )
+    expect(acceptInvite).not.toHaveBeenCalled()
   })
 })
