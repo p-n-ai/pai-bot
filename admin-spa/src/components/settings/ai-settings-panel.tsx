@@ -1090,13 +1090,15 @@ function SettingsSection({
   return (
     <section
       aria-label={label}
-      className='grid gap-5 rounded-lg border border-border bg-card p-6'
+      className='grid gap-5 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)] sm:p-7'
     >
       <header>
-        <h2 className='m-0 text-lg leading-tight font-semibold text-foreground'>
+        <h2 className='m-0 text-lg leading-tight font-semibold tracking-[-0.02em] text-foreground'>
           {title}
         </h2>
-        <p className='mt-1 mb-0 text-sm text-muted-foreground'>{description}</p>
+        <p className='mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground'>
+          {description}
+        </p>
       </header>
       {children}
     </section>

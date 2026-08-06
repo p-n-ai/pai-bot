@@ -17,8 +17,12 @@ export function AIUsageOverviewStats({ view }: { view: AIUsageView }) {
       />
       <StatItem
         label='Budget'
-        note={view.budgetWindowLabel}
-        value={view.budgetLabel}
+        note={
+          view.budgetUnit === 'none'
+            ? 'No usage guardrail'
+            : view.budgetWindowLabel
+        }
+        value={view.budgetUnit === 'none' ? 'Not set' : view.budgetLabel}
       />
       <StatItem
         label='Per learner'
@@ -30,6 +34,10 @@ export function AIUsageOverviewStats({ view }: { view: AIUsageView }) {
 }
 
 function getTopProviderNote(view: AIUsageView): string {
+  if (view.topProvider?.provider === 'unknown') {
+    return 'Provider not reported'
+  }
+
   return view.topProvider
     ? `${view.topProvider.provider} top source`
     : 'No provider activity yet'
