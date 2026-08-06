@@ -148,6 +148,16 @@ export function EmbedConfigPanel() {
       }),
     [config?.public_embed_base_url, tenantSlug, theme],
   )
+  const savedTheme = useMemo(
+    () => readEmbedTheme(config?.theme_config ?? {}),
+    [config?.theme_config],
+  )
+  const hasConfigurationChanges =
+    config !== null &&
+    (enabled !== config.enabled ||
+      theme.color !== savedTheme.color ||
+      theme.language !== savedTheme.language ||
+      theme.position !== savedTheme.position)
 
   const copySnippet = useCallback(async () => {
     setCopyError('')
@@ -219,96 +229,149 @@ export function EmbedConfigPanel() {
   }
 
   return (
-    <div className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]'>
-      <EmbedSetupGuide />
-      <div className='grid gap-5'>
-        <section
-          aria-labelledby='embed-configuration-title'
-          className='grid gap-5 rounded-lg border border-border bg-card p-6'
-        >
-          <header>
-            <h2
-              className='m-0 text-2xl leading-tight'
-              id='embed-configuration-title'
-            >
-              Widget configuration
-            </h2>
-            <p className='mt-2 mb-0 text-muted-foreground'>
-              Control availability and presentation for approved host sites.
-            </p>
-          </header>
+    <div className='mt-8 grid gap-8'>
+      <EmbedSetupGuide
+        config={config}
+        copied={copied}
+        hasConfigurationChanges={hasConfigurationChanges}
+      />
 
-          <div className='flex items-center justify-between gap-4 rounded-md border p-4'>
-            <div>
-              <Label htmlFor='embed-enabled'>Enable widget</Label>
-              <p className='mt-1 mb-0 text-sm text-muted-foreground'>
-                Guest sessions remain limited to allowed origins.
+      <section
+        aria-label='Website chat workspace'
+        className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_24px_80px_-52px_oklch(0.22_0.02_150/0.65)] ring-1 ring-[var(--admin-line)]'
+      >
+        <div className='grid lg:grid-cols-[minmax(21rem,0.9fr)_minmax(25rem,1.1fr)]'>
+          <WidgetPreview theme={theme} />
+          <section
+            aria-labelledby='embed-configuration-title'
+            className='grid content-center gap-7 p-6 sm:p-8 lg:p-10'
+          >
+            <header>
+              <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+                Configuration
               </p>
-            </div>
-            <Switch
-              checked={enabled}
-              disabled={saving}
-              id='embed-enabled'
-              onCheckedChange={handleEnabledChange}
-            />
-          </div>
+              <h2
+                className='m-0 text-2xl leading-tight font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'
+                id='embed-configuration-title'
+              >
+                Widget configuration
+              </h2>
+              <p className='mt-2 mb-0 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
+                Set the widget appearance, placement, and availability for
+                approved host sites.
+              </p>
+            </header>
 
-          <div className='grid gap-4 sm:grid-cols-3'>
-            <div className='grid gap-2'>
-              <Label htmlFor='embed-color'>Theme color</Label>
-              <Input
-                id='embed-color'
-                onChange={handleColorChange}
-                type='color'
-                value={theme.color}
+            <PublishedState config={config} />
+
+            <div className='flex items-center justify-between gap-5 rounded-2xl bg-[var(--admin-surface-muted)] p-4 sm:p-5'>
+              <div>
+                <Label htmlFor='embed-enabled'>Enable widget</Label>
+                <p className='mt-1 mb-0 text-sm leading-5 text-[var(--admin-muted)]'>
+                  Guest sessions remain limited to allowed origins.
+                </p>
+              </div>
+              <Switch
+                checked={enabled}
+                disabled={saving}
+                id='embed-enabled'
+                onCheckedChange={handleEnabledChange}
               />
             </div>
-            <div className='grid gap-2'>
-              <Label htmlFor='embed-language'>Language</Label>
-              <NativeSelect
-                className='w-full'
-                id='embed-language'
-                onChange={handleLanguageChange}
-                value={theme.language}
-              >
-                <NativeSelectOption value='en'>English</NativeSelectOption>
-                <NativeSelectOption value='ms'>
-                  Bahasa Melayu
-                </NativeSelectOption>
-                <NativeSelectOption value='zh'>中文</NativeSelectOption>
-              </NativeSelect>
-            </div>
-            <div className='grid gap-2'>
-              <Label htmlFor='embed-position'>Position</Label>
-              <NativeSelect
-                className='w-full'
-                id='embed-position'
-                onChange={handlePositionChange}
-                value={theme.position}
-              >
-                <NativeSelectOption value='bottom-right'>
-                  Bottom right
-                </NativeSelectOption>
-                <NativeSelectOption value='bottom-left'>
-                  Bottom left
-                </NativeSelectOption>
-              </NativeSelect>
-            </div>
-          </div>
-          <Button disabled={saving} onClick={save} type='button'>
-            {saving ? 'Saving…' : 'Save configuration'}
-          </Button>
-          <AuthErrorAlert
-            message={errorScope === 'configuration' ? error : ''}
-            title='Update failed.'
-          />
-          {saveSuccess && (
-            <p className='text-sm font-medium text-emerald-700' role='status'>
-              {saveSuccess}
-            </p>
-          )}
-        </section>
 
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <div className='grid gap-2 sm:col-span-2'>
+                <Label htmlFor='embed-color'>Theme color</Label>
+                <div className='flex h-12 items-center gap-3 rounded-xl border border-input px-2.5'>
+                  <Input
+                    className='size-8 shrink-0 cursor-pointer rounded-lg border-0 p-0 shadow-none focus-visible:ring-2'
+                    id='embed-color'
+                    onChange={handleColorChange}
+                    type='color'
+                    value={theme.color}
+                  />
+                  <span className='font-mono text-sm font-medium text-[var(--admin-ink)] uppercase'>
+                    {theme.color}
+                  </span>
+                  <span className='ms-auto text-xs text-[var(--admin-muted)]'>
+                    Widget accent
+                  </span>
+                </div>
+              </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='embed-language'>Language</Label>
+                <NativeSelect
+                  className='w-full'
+                  id='embed-language'
+                  onChange={handleLanguageChange}
+                  value={theme.language}
+                >
+                  <NativeSelectOption value='en'>English</NativeSelectOption>
+                  <NativeSelectOption value='ms'>
+                    Bahasa Melayu
+                  </NativeSelectOption>
+                  <NativeSelectOption value='zh'>中文</NativeSelectOption>
+                </NativeSelect>
+              </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='embed-position'>Position</Label>
+                <NativeSelect
+                  className='w-full'
+                  id='embed-position'
+                  onChange={handlePositionChange}
+                  value={theme.position}
+                >
+                  <NativeSelectOption value='bottom-right'>
+                    Bottom right
+                  </NativeSelectOption>
+                  <NativeSelectOption value='bottom-left'>
+                    Bottom left
+                  </NativeSelectOption>
+                </NativeSelect>
+              </div>
+            </div>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-line)] pt-5'>
+              <p
+                aria-live='polite'
+                className={`m-0 flex items-center gap-2 text-sm font-medium ${hasConfigurationChanges ? 'text-amber-700' : 'text-[var(--admin-muted)]'}`}
+              >
+                <span
+                  aria-hidden='true'
+                  className={`size-2 rounded-full ${hasConfigurationChanges ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                />
+                {hasConfigurationChanges
+                  ? 'Unsaved changes'
+                  : 'All changes saved'}
+              </p>
+              <Button
+                className='w-fit'
+                disabled={saving || !hasConfigurationChanges}
+                onClick={save}
+                type='button'
+              >
+                {saving ? 'Saving…' : 'Save configuration'}
+              </Button>
+              <AuthErrorAlert
+                message={errorScope === 'configuration' ? error : ''}
+                title='Update failed.'
+              />
+              {saveSuccess && (
+                <p
+                  className='w-full text-sm font-medium text-emerald-700'
+                  role='status'
+                >
+                  {saveSuccess}
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section
+        aria-label='Website chat deployment'
+        className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
+      >
         <OriginsSection
           config={config}
           disabled={saving}
@@ -321,13 +384,19 @@ export function EmbedConfigPanel() {
 
         <section
           aria-labelledby='install-snippet-title'
-          className='grid gap-4 rounded-lg border border-border bg-card p-6'
+          className='grid content-start gap-5 p-6 sm:p-8 lg:p-10'
         >
           <header>
-            <h2 className='m-0 text-2xl' id='install-snippet-title'>
+            <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+              Deployment
+            </p>
+            <h2
+              className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
+              id='install-snippet-title'
+            >
               Install snippet
             </h2>
-            <p className='mt-2 mb-0 text-muted-foreground'>
+            <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
               Add this before the closing body tag on an approved site.
             </p>
           </header>
@@ -337,10 +406,11 @@ export function EmbedConfigPanel() {
             </StatePanel>
           ) : (
             <>
-              <pre className='overflow-x-auto rounded-md bg-muted p-4 text-xs'>
+              <pre className='max-h-44 overflow-auto rounded-2xl bg-[var(--admin-ink)] p-4 text-xs leading-5 text-[var(--admin-nav-text)]'>
                 <code>{snippet}</code>
               </pre>
               <Button
+                className='w-fit'
                 disabled={!tenantSlug}
                 onClick={copySnippet}
                 type='button'
@@ -357,97 +427,126 @@ export function EmbedConfigPanel() {
             </>
           )}
         </section>
-      </div>
+      </section>
 
-      <WidgetPreview enabled={enabled} theme={theme} />
+      <EmbedTroubleshooting />
     </div>
   )
 }
 
-function EmbedSetupGuide() {
+function EmbedSetupGuide({
+  config,
+  copied,
+  hasConfigurationChanges,
+}: {
+  config: EmbedConfig
+  copied: boolean
+  hasConfigurationChanges: boolean
+}) {
+  const hasApprovedOrigin = config.allowed_origins.length > 0
+  const currentStep = !hasApprovedOrigin
+    ? 0
+    : hasConfigurationChanges
+      ? 1
+      : !config.enabled
+        ? 2
+        : copied
+          ? 4
+          : 3
+  const steps = [
+    ['Add host origin', 'Enter the site URL.'],
+    [
+      'Configure appearance',
+      'Set color, language, and position.',
+    ],
+    ['Enable the widget', 'Turn it on and save.'],
+    ['Install the snippet', 'Copy it into your site.'],
+    ['Verify chat', 'Send a test message.'],
+  ] as const
+
   return (
-    <AdminSurface
-      className='xl:col-span-2'
-      contentClassName='grid gap-5 p-5 sm:p-6'
-    >
+    <AdminSurface contentClassName='grid gap-7 p-6 sm:p-8'>
       <AdminSurfaceHeader
-        description='Follow these steps in order to publish the chat on your site.'
+        description={`Step ${currentStep + 1} of ${steps.length}. Finish the current task before moving on.`}
         title='Setup guide'
       />
       <ol
         aria-label='Embed setup steps'
-        className='grid list-none gap-3 p-0 sm:grid-cols-2 xl:grid-cols-5'
+        className='m-0 grid list-none p-0 lg:grid-cols-5'
       >
-        {[
-          [
-            'Add host origin',
-            'Enter the exact HTTP or HTTPS origin of your site.',
-          ],
-          [
-            'Configure appearance',
-            'Choose the widget color, language, and corner position.',
-          ],
-          [
-            'Enable the widget',
-            'Turn on the widget, then save the configuration.',
-          ],
-          [
-            'Install the snippet',
-            'Copy the snippet and paste it before your site’s closing body tag.',
-          ],
-          [
-            'Verify chat',
-            'Reload your site, open the chat, and send a test message.',
-          ],
-        ].map(([title, description], index) => (
-          <li
-            className='flex gap-3 rounded-lg border bg-muted/35 p-4'
-            key={title}
-          >
-            <span
-              aria-hidden='true'
-              className='flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground'
+        {steps.map(([title, description], index) => {
+          const completed = index < currentStep
+          const current = index === currentStep
+          const stateLabel = completed
+            ? 'Complete'
+            : current
+              ? 'Current step'
+              : 'Upcoming'
+
+          return (
+            <li
+              aria-current={current ? 'step' : undefined}
+              className='relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 pb-7 last:pb-0 lg:block lg:pb-0 lg:pe-5'
+              key={title}
             >
-              {index + 1}
-            </span>
-            <div className='min-w-0'>
-              <h3 className='text-sm font-semibold'>
-                <span className='sr-only'>Step {index + 1}: </span>
-                {title}
-              </h3>
-              <p className='mt-1 text-sm text-muted-foreground'>
-                {description}
-              </p>
-            </div>
-          </li>
-        ))}
+              {index < steps.length - 1 && (
+                <span
+                  aria-hidden='true'
+                  className={`absolute top-10 bottom-0 left-[1.21875rem] w-px lg:top-5 lg:right-0 lg:bottom-auto lg:left-10 lg:h-px lg:w-auto ${completed ? 'bg-[var(--admin-ink)]' : 'bg-[var(--admin-line)]'}`}
+                />
+              )}
+              <span
+                aria-hidden='true'
+                className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${completed ? 'bg-[var(--admin-ink)] text-[var(--admin-surface)]' : current ? 'bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_4px_var(--admin-surface-muted)]' : 'bg-[var(--admin-surface-muted)] text-[var(--admin-muted)] ring-1 ring-[var(--admin-line)]'}`}
+              >
+                {completed ? <Check className='size-4' /> : index + 1}
+              </span>
+              <div className='min-w-0 lg:mt-4'>
+                <p
+                  className={`m-0 text-[0.625rem] font-semibold tracking-[0.12em] uppercase ${current ? 'text-[var(--admin-ink)]' : 'text-[var(--admin-muted)]'}`}
+                >
+                  {stateLabel}
+                </p>
+                <h3 className='mt-1 text-sm font-semibold'>
+                  <span className='sr-only'>Step {index + 1}: </span>
+                  {title}
+                </h3>
+                <p className='mt-1 text-sm leading-5 text-[var(--admin-muted)]'>
+                  {description}
+                </p>
+              </div>
+            </li>
+          )
+        })}
       </ol>
-      <div
-        aria-labelledby='embed-troubleshooting-title'
-        className='grid gap-3 border-t pt-5 sm:grid-cols-2'
-      >
-        <h3
-          className='text-base font-semibold sm:col-span-2'
-          id='embed-troubleshooting-title'
-        >
-          Troubleshooting
-        </h3>
-        <div className='rounded-lg border p-4'>
-          <h4 className='text-sm font-semibold'>Origin mismatch</h4>
-          <p className='mt-1 text-sm text-muted-foreground'>
+    </AdminSurface>
+  )
+}
+
+function EmbedTroubleshooting() {
+  return (
+    <AdminSurface contentClassName='grid gap-6 p-6 sm:p-8'>
+      <AdminSurfaceHeader
+        description='Fast checks for the two most common setup failures.'
+        title='Troubleshooting'
+      />
+      <div className='grid gap-5 sm:grid-cols-2'>
+        <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
+          <h3 className='text-sm font-semibold'>Origin mismatch</h3>
+          <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
             Check that the allowed origin exactly matches your site’s protocol,
             host, and port. Remove any path, save it again, then reload your
             site.
           </p>
-        </div>
-        <div className='rounded-lg border p-4'>
-          <h4 className='text-sm font-semibold'>Widget stays disabled</h4>
-          <p className='mt-1 text-sm text-muted-foreground'>
+        </section>
+        <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
+          <h3 className='text-sm font-semibold'>Widget stays disabled</h3>
+          <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
             Confirm the host origin is listed, turn on Enable widget, and save
             the configuration. Refresh the host page after installing the
             snippet.
           </p>
-        </div>
+        </section>
       </div>
     </AdminSurface>
   )
@@ -478,13 +577,19 @@ function OriginsSection({
   return (
     <section
       aria-labelledby='allowed-origins-title'
-      className='grid gap-4 rounded-lg border border-border bg-card p-6'
+      className='grid content-start gap-5 p-6 sm:p-8 lg:border-e lg:border-[var(--admin-line)] lg:p-10'
     >
       <header>
-        <h2 className='m-0 text-2xl' id='allowed-origins-title'>
+        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+          Host access
+        </p>
+        <h2
+          className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
+          id='allowed-origins-title'
+        >
           Allowed origins
         </h2>
-        <p className='mt-2 mb-0 text-muted-foreground'>
+        <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
           Use complete HTTP or HTTPS origins without paths.
         </p>
       </header>
@@ -504,9 +609,14 @@ function OriginsSection({
       </form>
       <AuthErrorAlert message={error} title='Origin update failed.' />
       {config.allowed_origins.length === 0 ? (
-        <StatePanel title='No origins yet'>
-          Add an origin before enabling the widget.
-        </StatePanel>
+        <div className='rounded-2xl bg-[var(--admin-surface-muted)] p-4'>
+          <h3 className='text-sm font-semibold text-[var(--admin-ink)]'>
+            No origins yet
+          </h3>
+          <p className='mt-1 text-sm leading-5 text-[var(--admin-muted)]'>
+            Add an origin before enabling the widget.
+          </p>
+        </div>
       ) : (
         <ul className='m-0 grid list-none gap-2 p-0'>
           {config.allowed_origins.map((allowedOrigin) => (
@@ -535,7 +645,7 @@ function OriginItem({
   const handleRemove = useCallback(() => onRemove(origin), [onRemove, origin])
 
   return (
-    <li className='flex items-center justify-between gap-3 rounded-md border p-3 text-sm'>
+    <li className='flex items-center justify-between gap-3 rounded-xl bg-[var(--admin-surface-muted)] p-3 text-sm'>
       <span className='break-all'>{origin}</span>
       <Button
         aria-label={`Remove ${origin}`}
@@ -551,13 +661,41 @@ function OriginItem({
   )
 }
 
-function WidgetPreview({
-  enabled,
-  theme,
-}: {
-  enabled: boolean
-  theme: EmbedTheme
-}) {
+function PublishedState({ config }: { config: EmbedConfig }) {
+  const originCount = config.allowed_origins.length
+  const published = config.enabled && originCount > 0
+  const needsOrigin = config.enabled && originCount === 0
+  const label = published
+    ? 'Published'
+    : needsOrigin
+      ? 'Needs approved host'
+      : 'Not published'
+  const detail = published
+    ? `${originCount} approved ${originCount === 1 ? 'host' : 'hosts'}`
+    : needsOrigin
+      ? 'Enabled, but no site is approved'
+      : 'Widget is disabled'
+
+  return (
+    <div className='flex items-center gap-3 border-y border-[var(--admin-line)] py-4'>
+      <span
+        aria-hidden='true'
+        className={`size-2.5 shrink-0 rounded-full ${published ? 'bg-emerald-600' : needsOrigin ? 'bg-amber-500' : 'bg-[var(--admin-muted)]'}`}
+      />
+      <div className='min-w-0'>
+        <p className='m-0 text-sm font-semibold text-[var(--admin-ink)]'>
+          {label}
+        </p>
+        <p className='m-0 text-xs text-[var(--admin-muted)]'>{detail}</p>
+      </div>
+      <p className='ms-auto m-0 text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+        Saved state
+      </p>
+    </div>
+  )
+}
+
+function WidgetPreview({ theme }: { theme: EmbedTheme }) {
   const [open, setOpen] = useState(true)
   const left = theme.position === 'bottom-left'
   const copy = getEmbedCopy(theme.language)
@@ -573,25 +711,35 @@ function WidgetPreview({
   return (
     <section
       aria-labelledby='widget-preview-title'
-      className='relative min-h-[34rem] overflow-hidden rounded-lg border bg-muted/30 p-5'
+      className='relative min-h-[34rem] overflow-hidden bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[38rem] lg:p-10'
     >
-      <h2 className='m-0 text-lg' id='widget-preview-title'>
+      <p className='mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-nav-muted)] uppercase'>
+        <span
+          aria-hidden='true'
+          className='size-2 rounded-full bg-[var(--admin-accent)]'
+        />
+        Visual preview
+      </p>
+      <h2
+        className='m-0 text-2xl font-semibold tracking-[-0.035em]'
+        id='widget-preview-title'
+      >
         Preview
       </h2>
-      <p className='mt-1 text-sm text-muted-foreground'>
+      <p className='mt-2 max-w-xs text-sm leading-6 text-[var(--admin-nav-text)]'>
         Static preview. It does not create a guest session.
       </p>
       {open && (
         <div
           aria-label='Chat preview'
           lang={theme.language}
-          className={`absolute bottom-20 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-xl border bg-background shadow-xl ${left ? 'left-4' : 'right-4'}`}
+          className={`absolute bottom-24 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-2xl bg-[var(--admin-surface)] text-[var(--admin-ink)] shadow-[0_24px_70px_oklch(0_0_0/0.28)] ring-1 ring-white/12 ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
         >
           <div className='p-4 text-sm font-semibold' style={themeStyle}>
             P&amp;AI Tutor
           </div>
           <div className='grid min-h-64 content-end gap-3 p-4'>
-            <div className='max-w-[85%] rounded-xl border bg-card p-3 text-sm'>
+            <div className='max-w-[85%] rounded-2xl bg-[var(--admin-surface-muted)] p-3 text-sm leading-5'>
               {copy.greeting}
             </div>
             <div className='flex gap-2 border-t pt-3'>
@@ -610,8 +758,7 @@ function WidgetPreview({
       <Button
         aria-expanded={open}
         aria-label={open ? 'Close chat preview' : 'Open chat preview'}
-        className={`absolute bottom-4 size-12 rounded-xl ${left ? 'left-4' : 'right-4'}`}
-        disabled={!enabled}
+        className={`absolute bottom-6 size-12 rounded-2xl ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
         onClick={toggleOpen}
         size='icon'
         style={themeStyle}
