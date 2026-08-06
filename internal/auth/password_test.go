@@ -3,7 +3,11 @@
 
 package auth
 
-import "testing"
+import (
+	"testing"
+
+	"golang.org/x/crypto/bcrypt"
+)
 
 func TestNormalizeIdentifier(t *testing.T) {
 	tests := []struct {
@@ -43,6 +47,25 @@ func TestHashAndComparePassword(t *testing.T) {
 func TestHashPasswordRejectsEmpty(t *testing.T) {
 	if _, err := HashPassword("   "); err == nil {
 		t.Fatal("HashPassword() should reject empty password")
+	}
+}
+
+func TestValidatePasswordBoundary(t *testing.T) {
+	if err := ValidatePassword("12345678901"); err != ErrWeakPassword {
+		t.Fatalf("ValidatePassword(11 characters) error = %v, want %v", err, ErrWeakPassword)
+	}
+	if err := ValidatePassword("123456789012"); err != nil {
+		t.Fatalf("ValidatePassword(12 characters) error = %v", err)
+	}
+}
+
+func TestComparePasswordAcceptsLegacyShortPassword(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("legacy-123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("GenerateFromPassword() error = %v", err)
+	}
+	if err := ComparePassword(string(hash), "legacy-123"); err != nil {
+		t.Fatalf("ComparePassword() error = %v", err)
 	}
 }
 

@@ -3,12 +3,16 @@ package chat
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -22,22 +26,38 @@ type WhatsAppChannel struct {
 	accessToken string
 	phoneID     string
 	verifyToken string
+	appSecret   string
 	baseURL     string
 	client      *http.Client
 }
 
+// WhatsAppCloudConfig contains the credentials for a WhatsApp Cloud API channel.
+type WhatsAppCloudConfig struct {
+	AccessToken string
+	PhoneID     string
+	VerifyToken string
+	AppSecret   string
+}
+
 // NewWhatsAppChannel creates a WhatsApp channel adapter.
-func NewWhatsAppChannel(accessToken, phoneID, verifyToken string) (*WhatsAppChannel, error) {
-	if accessToken == "" {
+func NewWhatsAppChannel(cfg WhatsAppCloudConfig) (*WhatsAppChannel, error) {
+	if strings.TrimSpace(cfg.AccessToken) == "" {
 		return nil, fmt.Errorf("whatsapp access token is required (LEARN_WHATSAPP_ACCESS_TOKEN)")
 	}
-	if phoneID == "" {
+	if strings.TrimSpace(cfg.PhoneID) == "" {
 		return nil, fmt.Errorf("whatsapp phone number ID is required (LEARN_WHATSAPP_PHONE_ID)")
 	}
+	if strings.TrimSpace(cfg.VerifyToken) == "" {
+		return nil, fmt.Errorf("whatsapp verify token is required (LEARN_WHATSAPP_VERIFY_TOKEN)")
+	}
+	if strings.TrimSpace(cfg.AppSecret) == "" {
+		return nil, fmt.Errorf("whatsapp app secret is required (LEARN_WHATSAPP_APP_SECRET)")
+	}
 	return &WhatsAppChannel{
-		accessToken: accessToken,
-		phoneID:     phoneID,
-		verifyToken: verifyToken,
+		accessToken: cfg.AccessToken,
+		phoneID:     cfg.PhoneID,
+		verifyToken: cfg.VerifyToken,
+		appSecret:   cfg.AppSecret,
 		baseURL:     defaultWhatsAppBaseURL,
 		client:      &http.Client{},
 	}, nil
@@ -116,6 +136,10 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
+	if !w.validInboundSignature(r.Header.Get("X-Hub-Signature-256"), body) {
+		http.Error(rw, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var payload waWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -162,6 +186,20 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 			}
 		}
 	}
+}
+
+func (w *WhatsAppChannel) validInboundSignature(header string, body []byte) bool {
+	const prefix = "sha256="
+	if w.appSecret == "" || !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	signature, err := hex.DecodeString(strings.TrimPrefix(header, prefix))
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(w.appSecret))
+	_, _ = mac.Write(body)
+	return hmac.Equal(signature, mac.Sum(nil))
 }
 
 func (w *WhatsAppChannel) postJSON(ctx context.Context, path string, body any) error {

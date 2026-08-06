@@ -9,7 +9,6 @@ import { isJoinClassView } from './join-types'
 import { isOnboardingView, isSubmitOnboardingResult } from './onboarding-types'
 import { isParentSummary } from './parent-summary-types'
 import { isStudentConversations, isStudentDetail } from './student-detail-types'
-import { isWhatsAppStatus } from './whatsapp-types'
 import { readEmbedConfig } from './embed-config-types'
 import { isTeacherResource } from './teacher-resource-types'
 import type { ClassProgress } from './dashboard-types'
@@ -35,7 +34,6 @@ import type {
   InviteRecord,
   UserManagementView,
 } from './user-management-types'
-import type { WhatsAppStatus } from './whatsapp-types'
 import type {
   TeacherResource,
   UploadTeacherResourceInput,
@@ -262,18 +260,6 @@ export async function submitOnboarding(
   return payload
 }
 
-export async function getWhatsAppStatus(
-  fetcher: typeof fetch = fetch,
-): Promise<WhatsAppStatus> {
-  const payload = await fetchJSON('/api/admin/whatsapp/status', fetcher)
-
-  if (!isWhatsAppStatus(payload)) {
-    throw new APIContractError('Invalid WhatsApp status response')
-  }
-
-  return payload
-}
-
 export async function getParentSummary(
   parentID: string,
   fetcher: typeof fetch = fetch,
@@ -320,14 +306,6 @@ export async function getStudentConversations(
   }
 
   return payload
-}
-
-export async function disconnectWhatsApp(
-  fetcher: typeof fetch = fetch,
-): Promise<void> {
-  await fetchJSON('/api/admin/whatsapp/disconnect', fetcher, {
-    method: 'POST',
-  })
 }
 
 export async function getEmbedConfig(
