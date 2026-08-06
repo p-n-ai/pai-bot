@@ -17,6 +17,8 @@ import type {
   LearnerProgressFilter,
 } from '@/lib/dashboard-learners'
 import type { ClassProgress } from '@/lib/dashboard-types'
+import type { LeaderboardState } from '@/components/dashboard/class-leaderboard'
+import { ClassLeaderboard } from '@/components/dashboard/class-leaderboard'
 import {
   AdminSurface,
   AdminSurfaceHeader,
@@ -59,16 +61,20 @@ export function DashboardReady({
   nudgeMessage,
   onCloseStudent = noop,
   onNudge,
+  onRetryLeaderboard,
   onSelectStudent = noop,
   progress,
+  leaderboardState,
   selectedStudentID,
   sendingStudentID,
 }: {
   nudgeMessage: string
   onCloseStudent?: () => void
   onNudge: (studentID: string, studentName: string) => void
+  onRetryLeaderboard?: () => void
   onSelectStudent?: (studentID: string) => void
   progress: ClassProgress
+  leaderboardState?: LeaderboardState
   selectedStudentID?: string
   sendingStudentID: string
 }) {
@@ -84,6 +90,13 @@ export function DashboardReady({
     <div className='mt-7 flex flex-col gap-6'>
       <DashboardStats progress={progress} />
       {nudgeMessage ? <NudgeFeedback message={nudgeMessage} /> : null}
+      {leaderboardState ? (
+        <ClassLeaderboard
+          onRetry={onRetryLeaderboard ?? noop}
+          onSelectStudent={onSelectStudent}
+          state={leaderboardState}
+        />
+      ) : null}
       <DashboardHeatmap
         hasHeatmap={summary.hasHeatmap}
         onNudge={onNudge}

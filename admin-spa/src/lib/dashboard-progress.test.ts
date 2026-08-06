@@ -13,13 +13,21 @@ describe('dashboard progress', () => {
         }),
     })
 
-    await expect(fetchDashboardProgress(fetcher)).resolves.toEqual({
+    await expect(fetchDashboardProgress('class-1', fetcher)).resolves.toEqual({
       progress: {
         students: [],
         topic_ids: [],
       },
       source: 'live',
     })
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/admin/classes/class-1/progress',
+      {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {},
+      },
+    )
   })
 
   it('normalizes empty backend progress slices', async () => {
@@ -32,7 +40,9 @@ describe('dashboard progress', () => {
         }),
     })
 
-    await expect(fetchDashboardProgress(fetcher)).resolves.toEqual({
+    await expect(
+      fetchDashboardProgress('all-students', fetcher),
+    ).resolves.toEqual({
       progress: {
         students: [],
         topic_ids: [],

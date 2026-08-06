@@ -1,9 +1,15 @@
+import { useCallback } from 'react'
+import type { ChangeEvent } from 'react'
+
 import type { DashboardProgressResult } from '@/lib/dashboard-progress'
+import type { GroupRecord } from '@/lib/group-types'
+import type { LeaderboardState } from '@/components/dashboard/class-leaderboard'
 import { AdminPageSection } from '@/components/shared/admin-page-section'
 import { AdminSurface } from '@/components/shared/admin-surface'
 import { DashboardReady } from '@/components/dashboard/dashboard-ready'
 import { StatePanel } from '@/components/shared/state-panel'
 import { Card, CardHeader } from '@/components/ui/card'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const TABLE_HEADER_SKELETON_KEYS = [
@@ -14,6 +20,10 @@ const TABLE_HEADER_SKELETON_KEYS = [
   'action',
 ]
 const TABLE_ROW_SKELETON_KEYS = ['first', 'second', 'third', 'fourth']
+const EMPTY_CLASSES: ReadonlyArray<GroupRecord> = []
+const UNAVAILABLE_LEADERBOARD_STATE: LeaderboardState = {
+  status: 'unavailable',
+}
 
 export type DashboardState =
   | {
@@ -33,21 +43,35 @@ export type DashboardState =
     }
 
 interface DashboardPageViewProps {
+  classes?: ReadonlyArray<GroupRecord>
+  classesError?: string
+  classesLoading?: boolean
+  leaderboardState?: LeaderboardState
   nudgeMessage: string
   onCloseStudent: () => void
   onNudge: (studentID: string, studentName: string) => void
+  onRetryLeaderboard?: () => void
+  onSelectClass?: (classID: string | undefined) => void
   onSelectStudent: (studentID: string) => void
   selectedStudentID: string | undefined
+  selectedClassID?: string
   sendingStudentID: string
   state: DashboardState
 }
 
 export function DashboardPageView({
+  classes = EMPTY_CLASSES,
+  classesError = '',
+  classesLoading = false,
+  leaderboardState = UNAVAILABLE_LEADERBOARD_STATE,
   nudgeMessage,
   onCloseStudent,
   onNudge,
+  onRetryLeaderboard = noop,
+  onSelectClass = noop,
   onSelectStudent,
   selectedStudentID,
+  selectedClassID,
   sendingStudentID,
   state,
 }: DashboardPageViewProps) {
@@ -58,10 +82,19 @@ export function DashboardPageView({
       hideEyebrow
       title='Today'
     >
+      <ClassSelector
+        classes={classes}
+        error={classesError}
+        loading={classesLoading}
+        onSelectClass={onSelectClass}
+        selectedClassID={selectedClassID}
+      />
       <DashboardContent
+        leaderboardState={leaderboardState}
         nudgeMessage={nudgeMessage}
         onCloseStudent={onCloseStudent}
         onNudge={onNudge}
+        onRetryLeaderboard={onRetryLeaderboard}
         onSelectStudent={onSelectStudent}
         selectedStudentID={selectedStudentID}
         sendingStudentID={sendingStudentID}
@@ -72,14 +105,27 @@ export function DashboardPageView({
 }
 
 function DashboardContent({
+  leaderboardState,
   nudgeMessage,
   onCloseStudent,
   onNudge,
+  onRetryLeaderboard,
   onSelectStudent,
   selectedStudentID,
   sendingStudentID,
   state,
-}: DashboardPageViewProps) {
+}: Pick<
+  DashboardPageViewProps,
+  | 'leaderboardState'
+  | 'nudgeMessage'
+  | 'onCloseStudent'
+  | 'onNudge'
+  | 'onRetryLeaderboard'
+  | 'onSelectStudent'
+  | 'selectedStudentID'
+  | 'sendingStudentID'
+  | 'state'
+>) {
   if (state.status === 'loading') {
     return <DashboardSkeleton />
   }
@@ -97,11 +143,63 @@ function DashboardContent({
       nudgeMessage={nudgeMessage}
       onCloseStudent={onCloseStudent}
       onNudge={onNudge}
+      onRetryLeaderboard={onRetryLeaderboard}
       onSelectStudent={onSelectStudent}
       progress={state.result.progress}
+      leaderboardState={leaderboardState}
       selectedStudentID={selectedStudentID}
       sendingStudentID={sendingStudentID}
     />
+  )
+}
+
+function ClassSelector({
+  classes,
+  error,
+  loading,
+  onSelectClass,
+  selectedClassID,
+}: {
+  classes: ReadonlyArray<GroupRecord>
+  error: string
+  loading: boolean
+  onSelectClass: (classID: string | undefined) => void
+  selectedClassID: string | undefined
+}) {
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      onSelectClass(event.target.value || undefined)
+    },
+    [onSelectClass],
+  )
+
+  return (
+    <div className='mt-6 max-w-sm space-y-2'>
+      <label className='text-sm font-medium' htmlFor='dashboard-class'>
+        Class view
+      </label>
+      <NativeSelect
+        className='w-full [&_select]:min-h-11'
+        disabled={loading}
+        id='dashboard-class'
+        onChange={handleChange}
+        value={selectedClassID ?? ''}
+      >
+        <NativeSelectOption value=''>All learners</NativeSelectOption>
+        {classes
+          .filter((group) => !group.closed)
+          .map((group) => (
+            <NativeSelectOption key={group.id} value={group.id}>
+              {group.name}
+            </NativeSelectOption>
+          ))}
+      </NativeSelect>
+      {error ? (
+        <p className='text-sm text-destructive' role='alert'>
+          {error}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -163,3 +261,5 @@ function DashboardStatSkeleton({ className }: { className?: string }) {
     </Card>
   )
 }
+
+function noop() {}
