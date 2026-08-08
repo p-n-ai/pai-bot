@@ -1,6 +1,7 @@
 const pageLabels = [
   { prefix: '/dashboard/classes', label: 'My classes' },
   { prefix: '/dashboard/metrics', label: 'Learning progress' },
+  { prefix: '/build-ai', label: 'Build AI' },
   { prefix: '/dashboard/ai-usage', label: 'AI activity' },
   { prefix: '/settings/users', label: 'Staff access' },
   { prefix: '/settings/budget', label: 'AI budget' },
