@@ -1103,3 +1103,26 @@ func TestValidateWhatsAppCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadCatalogProviderConfiguration(t *testing.T) {
+	t.Setenv("LEARN_AI_GROQ_API_KEY", "groq-key")
+	t.Setenv("LEARN_AI_GROQ_MODEL", "groq-model")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.AI.CatalogProviders["groq"]; got.APIKey != "groq-key" || got.Model != "groq-model" {
+		t.Fatalf("Groq catalog config = %#v", got)
+	}
+	if !cfg.HasAIProvider() {
+		t.Fatal("HasAIProvider() = false with catalog API key")
+	}
+}
+
+func TestCatalogProvidersAreKnown(t *testing.T) {
+	for _, name := range []string{"deepseek", "groq", "xai", "mistral", "cerebras"} {
+		if !isKnownAIProvider(name) {
+			t.Errorf("isKnownAIProvider(%q) = false", name)
+		}
+	}
+}
