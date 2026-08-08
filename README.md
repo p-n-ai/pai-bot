@@ -2,11 +2,17 @@
 
 # P&AI Bot
 
-Curriculum-grounded AI tutoring through chat.
+The proactive AI learning companion that turns curriculum into conversations, practice, and progress.
+
+<a href="https://pandai.org">
+  <img src="docs/assets/pandai-logo.png" alt="Pandai" width="72">
+</a>
+
+A [Pandai](https://pandai.org) initiative
 
 Open source · self-hostable · cloud or local AI · built for schools
 
-[How it works](#how-pai-works) · [Available now](#what-is-available) · [Run locally](#run-pai-locally) · [Develop](#develop-pai) · [Deploy](#deploy-pai)
+[How P&AI works](#how-pai-works) · [Explore the features](#what-pai-includes) · [About Pandai](#about-pandai) · [Run P&AI locally](#run-pai-locally) · [Develop P&AI](#develop-pai) · [Deploy P&AI](#deploy-pai)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/p-n-ai/pai-bot)](https://goreportcard.com/report/github.com/p-n-ai/pai-bot)
@@ -14,22 +20,24 @@ Open source · self-hostable · cloud or local AI · built for schools
 
 </div>
 
-## Learning support between lessons
+## Help students keep learning between lessons
 
-P&AI helps students learn and practise in the chat tools they already use.
-It connects each conversation to curriculum, learning progress, quizzes, goals, and scheduled review.
+P&AI (Practice & AI) is an open-source tutoring agent for the chat tools students already use.
+It grounds each conversation in the curriculum and connects explanations to practice, mastery, goals, and scheduled review.
 
-P&AI keeps this context between conversations.
-The tutor can continue from the learner's current topic instead of starting a new generic chat.
+Unlike a generic chatbot, P&AI carries learning context from one conversation to the next.
+It can pick up the current topic, adapt practice to the learner's progress, and start a review when it is due.
 
-| Role | What P&AI provides |
+P&AI builds on Pandai's experience making learning engaging for millions of students across Southeast Asia.
+The goal is not only to give students better answers, but to help them keep going.
+
+| Who it helps | What P&AI provides |
 | --- | --- |
 | Students | Guided explanations, practice, progress, goals, and review reminders |
 | Teachers | Class progress, student details, conversation history, and targeted nudges |
 | School administrators | Access controls, AI settings, usage data, metrics, and exports |
 
-The project currently targets Malaysian secondary education.
-It loads KSSM curriculum data from [Open School Syllabus](https://github.com/p-n-ai/oss).
+The project currently targets Malaysian secondary education and loads KSSM curriculum data from [Open School Syllabus](https://github.com/p-n-ai/oss).
 
 ## How P&AI works
 
@@ -41,7 +49,7 @@ It loads KSSM curriculum data from [Open School Syllabus](https://github.com/p-n
 
 The same agent engine runs quizzes, goals, challenges, and scheduled review nudges.
 
-## What is available
+## What P&AI includes
 
 | Area | What works now |
 | --- | --- |
@@ -49,7 +57,7 @@ The same agent engine runs quizzes, goals, challenges, and scheduled review nudg
 | Practice | OSS-backed quizzes, hints, answer checks, and feedback |
 | Progress | Per-topic mastery, due reviews, goals, streaks, XP, and leaderboards |
 | Engagement | Proactive nudges and peer challenges |
-| Chat channels | Telegram, Slack, Discord, and Microsoft Teams |
+| Chat channels | Telegram, WhatsApp, Slack, Discord, and Microsoft Teams |
 | Web access | Authenticated web embed, plus a development WebSocket chat route |
 | Admin web app | Class mastery, student details, parent summaries, invites, exports, metrics, and AI usage |
 | AI providers | OpenAI, Anthropic, DeepSeek, Google Gemini, OpenRouter, Ollama, and Codex |
@@ -168,6 +176,7 @@ Production requires one complete channel configuration and one AI provider.
 | Channel | Configuration start |
 | --- | --- |
 | Telegram | `LEARN_TELEGRAM_BOT_TOKEN` |
+| WhatsApp | `LEARN_WHATSAPP_ENABLED` |
 | Slack | `LEARN_SLACK_ENABLED` |
 | Discord | `LEARN_DISCORD_ENABLED` |
 | Microsoft Teams | `LEARN_TEAMS_ENABLED` |
@@ -244,6 +253,14 @@ Read these guides before deployment:
 
 A merge to `main` creates a release candidate after CI passes. It does not deploy production.
 A feature is shipped only when it is included in a release tag.
+
+## About Pandai
+
+[Pandai](https://pandai.org) is a Southeast Asian learning platform that has helped millions of students learn through quizzes, tests, notes, videos, and features that encourage consistent learning, including challenges, streaks, and leaderboards.
+
+P&AI is a Pandai initiative.
+It brings that experience into an open-source, chat-first tutor that schools can run with their own curriculum, infrastructure, and choice of AI provider.
+Good tutoring needs more than correct answers, so P&AI also uses practice, progress tracking, goals, and timely prompts to help students keep learning.
 
 ## Related projects
 
