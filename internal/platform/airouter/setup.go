@@ -13,7 +13,15 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 )
 
-var defaultProviderOrder = []string{"openai", "codex", "anthropic", "deepseek", "google", "ollama", "openrouter"}
+var coreProviderOrder = []string{"openai", "codex", "anthropic"}
+
+func defaultProviderOrder() []string {
+	order := append([]string(nil), coreProviderOrder...)
+	for _, provider := range ai.ProviderCatalog() {
+		order = append(order, provider.ID)
+	}
+	return append(order, "google", "ollama", "openrouter")
+}
 
 // Plan is a fully constructed provider set that can be atomically installed
 // without further validation or provider construction.
@@ -28,7 +36,7 @@ func (p Plan) Apply(router *ai.Router) {
 
 // ProviderNames returns every provider name Apply can register.
 func ProviderNames() []string {
-	return append(append([]string(nil), defaultProviderOrder...), "mock")
+	return append(defaultProviderOrder(), "mock")
 }
 
 // Setup builds an AI router from env-backed config, honoring a preferred
@@ -155,6 +163,24 @@ func buildProviderChecked(
 	cfg config.AIConfig,
 	codexAuth ai.CodexAppServerClient,
 ) (ai.ProviderRegistration, bool, error) {
+	if definition, catalogProvider := ai.LookupProviderDefinition(name); catalogProvider {
+		settings := cfg.CatalogProviders[name]
+		if name == "deepseek" && settings.APIKey == "" {
+			settings = config.CatalogProviderConfig{APIKey: cfg.DeepSeek.APIKey, Model: cfg.DeepSeek.Model}
+		}
+		if settings.APIKey == "" {
+			return ai.ProviderRegistration{}, false, nil
+		}
+		provider, err := ai.NewProviderFromDefinition(definition, settings.APIKey)
+		if err != nil {
+			return ai.ProviderRegistration{}, true, err
+		}
+		defaultModel := strings.TrimSpace(settings.Model)
+		if defaultModel == "" {
+			defaultModel = definition.DefaultModel
+		}
+		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: defaultModel}, true, nil
+	}
 	switch name {
 	case "mock":
 		if cfg.Mock.Response == "" {
@@ -175,11 +201,6 @@ func buildProviderChecked(
 			return ai.ProviderRegistration{}, true, err
 		}
 		return ai.ProviderRegistration{Name: name, Provider: provider, DefaultModel: cfg.Anthropic.Model}, true, nil
-	case "deepseek":
-		if cfg.DeepSeek.APIKey == "" {
-			return ai.ProviderRegistration{}, false, nil
-		}
-		return ai.ProviderRegistration{Name: name, Provider: ai.NewDeepSeekProvider(cfg.DeepSeek.APIKey), DefaultModel: cfg.DeepSeek.Model}, true, nil
 	case "google":
 		if cfg.Google.APIKey == "" {
 			return ai.ProviderRegistration{}, false, nil
@@ -225,12 +246,13 @@ func buildProviderChecked(
 func providerOrder(preferred string) []string {
 	preferred = strings.ToLower(strings.TrimSpace(preferred))
 	if preferred == "" {
-		return append([]string(nil), defaultProviderOrder...)
+		return defaultProviderOrder()
 	}
 
-	order := make([]string, 0, len(defaultProviderOrder))
+	defaults := defaultProviderOrder()
+	order := make([]string, 0, len(defaults))
 	order = append(order, preferred)
-	for _, candidate := range defaultProviderOrder {
+	for _, candidate := range defaults {
 		if candidate == preferred {
 			continue
 		}

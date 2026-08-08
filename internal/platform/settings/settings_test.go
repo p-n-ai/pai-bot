@@ -66,6 +66,42 @@ func TestReconcileAIClosedProviderOverrides(t *testing.T) {
 	}
 }
 
+func TestReconcileAICatalogProviderOverrides(t *testing.T) {
+	env := envAIConfig()
+	env.CatalogProviders = map[string]config.CatalogProviderConfig{
+		"groq": {APIKey: "env-groq-key", Model: "env-groq-model"},
+		"xai":  {APIKey: "env-xai-key", Model: "env-xai-model"},
+	}
+	st := AISettings{
+		Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
+			APIKeyProviderGroq: {Model: stringPointer("db-groq-model")},
+		}},
+		Credentials: map[APIKeyProvider]CredentialOverride{
+			APIKeyProviderGroq:    {Value: "db-groq-secret-1234"},
+			APIKeyProviderMistral: {Value: "db-mistral-secret-5678"},
+		},
+	}
+
+	got := ReconcileAI(env, st)
+	if groq := got.Config.CatalogProviders["groq"]; groq.Model != "db-groq-model" || groq.APIKey != "db-groq-secret-1234" {
+		t.Fatalf("Groq = %+v, want DB model and credential", groq)
+	}
+	if xai := got.Config.CatalogProviders["xai"]; xai.Model != "env-xai-model" || xai.APIKey != "env-xai-key" {
+		t.Fatalf("xAI = %+v, want environment baseline", xai)
+	}
+	if mistral := got.Config.CatalogProviders["mistral"]; mistral.APIKey != "db-mistral-secret-5678" {
+		t.Fatalf("Mistral = %+v, want DB credential", mistral)
+	}
+	for _, provider := range []string{"groq", "xai", "mistral", "cerebras"} {
+		if _, ok := got.Effective.Providers[provider]; !ok {
+			t.Fatalf("effective providers missing %q", provider)
+		}
+	}
+	if got.ProviderSources["groq"].Model != SourceDB || got.ProviderSources["xai"].Credential != SourceEnv {
+		t.Fatalf("catalog provider sources = %+v", got.ProviderSources)
+	}
+}
+
 func TestReconcileAIResetFallsBackToEnvironment(t *testing.T) {
 	got := ReconcileAI(envAIConfig(), AISettings{})
 	if got.Config.DefaultProvider != "openai" || got.DefaultProviderSource != SourceEnv {

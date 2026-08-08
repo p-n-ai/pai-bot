@@ -60,7 +60,7 @@ The same agent engine runs quizzes, goals, challenges, and scheduled review nudg
 | Chat channels | Telegram, WhatsApp, Slack, Discord, and Microsoft Teams |
 | Web access | Authenticated web embed, plus a development WebSocket chat route |
 | Admin web app | Class mastery, student details, parent summaries, invites, exports, metrics, and AI usage |
-| AI providers | OpenAI, Anthropic, DeepSeek, Google Gemini, OpenRouter, Ollama, and Codex |
+| AI providers | OpenAI, Anthropic, DeepSeek, Groq, xAI, Mistral, Cerebras, Google Gemini, OpenRouter, Ollama, and Codex |
 | Self-hosting | Local Docker Compose, production Compose, and Helm |
 
 P&AI is under active development. Configure and test each external channel before production use.
@@ -110,8 +110,8 @@ LEARN_AI_OPENROUTER_API_KEY=your-api-key
 LEARN_AI_OPENROUTER_MODEL=provider/model
 ```
 
-You can instead configure OpenAI, Anthropic, DeepSeek, Google Gemini, or Ollama.
-The production image also supports Codex through the admin AI settings.
+You can instead configure OpenAI, Anthropic, DeepSeek, Groq, xAI, Mistral, Cerebras, Google Gemini, or Ollama.
+The production image also supports Codex through the admin AI settings. Provider-specific behavior and compatibility notes live in the [AI provider specifications](docs/ai/providers/README.md).
 
 Read the [environment variable reference](.env.example) for every provider and channel option.
 
@@ -182,7 +182,7 @@ Production requires one complete channel configuration and one AI provider.
 | Microsoft Teams | `LEARN_TEAMS_ENABLED` |
 | Web embed | `LEARN_EMBED_BASE_URL` |
 
-Set `LEARN_AI_DEFAULT_PROVIDER` to `openai`, `anthropic`, `deepseek`, `google`, `openrouter`, `ollama`, or `codex`.
+Set `LEARN_AI_DEFAULT_PROVIDER` to `openai`, `anthropic`, `deepseek`, `groq`, `xai`, `mistral`, `cerebras`, `google`, `openrouter`, `ollama`, or `codex`.
 
 Platform administrators can change supported AI settings at runtime.
 Environment values remain the deployment baseline.
