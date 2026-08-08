@@ -56,6 +56,10 @@ const providerLabels: Record<APIKeyProviderName, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
+  groq: 'Groq',
+  xai: 'xAI',
+  mistral: 'Mistral',
+  cerebras: 'Cerebras',
   google: 'Google',
   openrouter: 'OpenRouter',
 }
@@ -1183,6 +1187,14 @@ function decodeSelectorValue(value: string): ProviderSelector {
       return { type: 'api_key', name: 'anthropic' }
     case 'api_key:deepseek':
       return { type: 'api_key', name: 'deepseek' }
+    case 'api_key:groq':
+      return { type: 'api_key', name: 'groq' }
+    case 'api_key:xai':
+      return { type: 'api_key', name: 'xai' }
+    case 'api_key:mistral':
+      return { type: 'api_key', name: 'mistral' }
+    case 'api_key:cerebras':
+      return { type: 'api_key', name: 'cerebras' }
     case 'api_key:google':
       return { type: 'api_key', name: 'google' }
     case 'api_key:openrouter':
