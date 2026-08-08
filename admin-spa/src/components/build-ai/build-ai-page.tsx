@@ -31,6 +31,15 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -39,6 +48,57 @@ import { cn } from '@/lib/utils'
 type BuildPage = BuildAIPageKey
 type TestState = 'out-of-date' | 'passed'
 type PreviewState = 'not-run' | 'ready' | 'out-of-date'
+type TeachingSetting = 'start' | 'detail' | 'language' | 'tone'
+
+interface TeachingSettings {
+  readonly start: string
+  readonly detail: string
+  readonly language: string
+  readonly tone: string
+}
+
+interface PublishedVersion {
+  readonly authorizedClassCount: number
+  readonly curriculumRevision: string
+  readonly draftRevision: number
+  readonly id: string
+  readonly note: string
+  readonly publisher: string
+  readonly teachingSettings: TeachingSettings
+}
+
+const initialTeachingSettings: TeachingSettings = {
+  start: 'Adapt to the learner',
+  detail: 'Adapt to the learner',
+  language: 'follow',
+  tone: 'Calm and clear',
+}
+
+const initialPublishedVersions = [
+  {
+    authorizedClassCount: 4,
+    curriculumRevision: '2026.08',
+    draftRevision: 17,
+    id: '3',
+    note: 'Clearer mixed-language guidance',
+    publisher: 'Nabila',
+    teachingSettings: initialTeachingSettings,
+  },
+  {
+    authorizedClassCount: 0,
+    curriculumRevision: '2026.06',
+    draftRevision: 12,
+    id: '2',
+    note: 'Initial pilot',
+    publisher: 'Nabila',
+    teachingSettings: {
+      start: 'Start with one guiding question',
+      detail: 'Brief',
+      language: 'english',
+      tone: 'Calm and clear',
+    },
+  },
+] as const satisfies ReadonlyArray<PublishedVersion>
 
 const destinations: ReadonlyArray<{
   id: BuildPage
@@ -65,16 +125,32 @@ export function BuildAIPage({
   onPageChange: (page: BuildAIPageKey) => void
   page: BuildAIPageKey
 }) {
-  const [draftSaved, setDraftSaved] = useState(true)
-  const [testState, setTestState] = useState<TestState>('out-of-date')
-  const [previewState, setPreviewState] = useState<PreviewState>('not-run')
-  const [scenario, setScenario] = useState('fractions')
-  const [replyLanguage, setReplyLanguage] = useState('follow')
-  const [versionNote, setVersionNote] = useState('')
-  const [published, setPublished] = useState(false)
-  const [educatorReviewComplete, setEducatorReviewComplete] = useState(true)
-  const [draftBase, setDraftBase] = useState('3')
   const [announcement, setAnnouncement] = useState('')
+  const [draftBase, setDraftBase] = useState('3')
+  const [savedDraftBase, setSavedDraftBase] = useState('3')
+  const [draftRevision, setDraftRevision] = useState(18)
+  const [draftSaved, setDraftSaved] = useState(true)
+  const [educatorReviewComplete, setEducatorReviewComplete] = useState(true)
+  const [previewState, setPreviewState] = useState<PreviewState>('not-run')
+  const [publishedVersions, setPublishedVersions] = useState<
+    ReadonlyArray<PublishedVersion>
+  >(initialPublishedVersions)
+  const [savedTeachingSettings, setSavedTeachingSettings] = useState(
+    initialTeachingSettings,
+  )
+  const [scenario, setScenario] = useState('fractions')
+  const [teachingSettings, setTeachingSettings] = useState(
+    initialTeachingSettings,
+  )
+  const [testState, setTestState] = useState<TestState>('out-of-date')
+  const [versionNote, setVersionNote] = useState('')
+
+  const currentDraftPublished = publishedVersions.some(
+    (version) => version.draftRevision === draftRevision,
+  )
+  const effectiveEducatorReviewComplete = draftSaved && educatorReviewComplete
+  const effectiveTestState = draftSaved ? testState : 'out-of-date'
+  const latestPublishedVersion = publishedVersions[0]
 
   const navigate = useCallback(
     (nextPage: BuildPage) => {
@@ -85,43 +161,109 @@ export function BuildAIPage({
 
   const markDraftChanged = useCallback((message: string) => {
     setDraftSaved(false)
-    setTestState('out-of-date')
-    setEducatorReviewComplete(false)
     setPreviewState((current) =>
       current === 'ready' ? 'out-of-date' : current,
     )
     setAnnouncement(`${message} The Draft has unsaved changes.`)
   }, [])
 
+  const updateTeachingSetting = useCallback(
+    (setting: TeachingSetting, value: string, message: string) => {
+      setTeachingSettings((current) => ({ ...current, [setting]: value }))
+      markDraftChanged(message)
+    },
+    [markDraftChanged],
+  )
+
   const saveDraft = useCallback(() => {
+    setDraftRevision((current) => current + 1)
     setDraftSaved(true)
+    setEducatorReviewComplete(false)
+    setSavedDraftBase(draftBase)
+    setSavedTeachingSettings(teachingSettings)
+    setTestState('out-of-date')
+    setVersionNote('')
     setAnnouncement(
-      'Draft saved. Existing Published versions and classes are unchanged.',
+      'Draft saved. Existing Published versions and classes are unchanged. Test results and educator review must be refreshed for this saved revision.',
     )
-  }, [])
+  }, [draftBase, teachingSettings])
+
+  const discardChanges = useCallback(() => {
+    setDraftBase(savedDraftBase)
+    setDraftSaved(true)
+    setTeachingSettings(savedTeachingSettings)
+    setPreviewState((current) =>
+      current === 'ready' ? 'out-of-date' : current,
+    )
+    setAnnouncement('Unsaved Draft changes discarded.')
+  }, [savedDraftBase, savedTeachingSettings])
 
   const runTests = useCallback(() => {
+    if (!draftSaved) {
+      setAnnouncement('Save the Draft before running required tests.')
+      return
+    }
     setTestState('passed')
     setAnnouncement(
       'Synthetic Test runner completed: required results passed for the exact saved Draft.',
     )
-  }, [])
+  }, [draftSaved])
+
+  const completeEducatorReview = useCallback(() => {
+    if (!draftSaved || testState !== 'passed') {
+      setAnnouncement(
+        'Save the Draft and complete required tests before educator review.',
+      )
+      return
+    }
+    setEducatorReviewComplete(true)
+    setAnnouncement(
+      'Synthetic educator review completed for the exact saved Draft.',
+    )
+  }, [draftSaved, testState])
 
   const publishVersion = useCallback(() => {
-    setPublished(true)
-    setDraftBase('new')
-    setAnnouncement('Published version 4 is available. No classes changed.')
-  }, [])
+    if (currentDraftPublished) return
+    const nextIdentifier = String(
+      Math.max(...publishedVersions.map(({ id }) => Number(id))) + 1,
+    )
+    const publishedVersion: PublishedVersion = {
+      authorizedClassCount: 0,
+      curriculumRevision: '2026.08',
+      draftRevision,
+      id: nextIdentifier,
+      note: versionNote.trim(),
+      publisher: 'Nabila',
+      teachingSettings,
+    }
+    setPublishedVersions((current) => [publishedVersion, ...current])
+    setDraftBase(nextIdentifier)
+    setSavedDraftBase(nextIdentifier)
+    setAnnouncement(
+      `Published version ${nextIdentifier} is available. No classes changed.`,
+    )
+  }, [
+    currentDraftPublished,
+    draftRevision,
+    publishedVersions,
+    teachingSettings,
+    versionNote,
+  ])
 
   const startDraft = useCallback(() => {
-    setDraftBase('2')
+    const sourceVersion =
+      publishedVersions.find((version) => version.id === '2') ??
+      initialPublishedVersions[1]
+    setDraftBase(sourceVersion.id)
     setDraftSaved(false)
-    setTestState('out-of-date')
     setEducatorReviewComplete(false)
+    setTeachingSettings(sourceVersion.teachingSettings)
+    setTestState('out-of-date')
+    setVersionNote('')
     setAnnouncement(
-      'Private Draft started from Published version 2. Published version 3 remains available and no classes changed.',
+      `Private Draft started from Published version ${sourceVersion.id}. Published version ${latestPublishedVersion.id} remains available and no classes changed.`,
     )
-  }, [])
+  }, [latestPublishedVersion.id, publishedVersions])
 
   return (
     <section className='mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8'>
@@ -156,10 +298,12 @@ export function BuildAIPage({
           {page === 'overview' ? (
             <Overview
               draftBase={draftBase}
+              draftRevision={draftRevision}
               draftSaved={draftSaved}
-              educatorReviewComplete={educatorReviewComplete}
+              educatorReviewComplete={effectiveEducatorReviewComplete}
+              latestPublishedVersion={latestPublishedVersion}
               navigate={navigate}
-              testState={testState}
+              testState={effectiveTestState}
             />
           ) : null}
           {page === 'curriculum' ? (
@@ -178,18 +322,19 @@ export function BuildAIPage({
           ) : null}
           {page === 'teaching' ? (
             <Teaching
+              discardChanges={discardChanges}
               draftSaved={draftSaved}
-              markDraftChanged={markDraftChanged}
               navigate={navigate}
               previewState={previewState}
-              replyLanguage={replyLanguage}
               saveDraft={saveDraft}
               setPreviewState={setPreviewState}
-              setReplyLanguage={setReplyLanguage}
+              teachingSettings={teachingSettings}
+              updateTeachingSetting={updateTeachingSetting}
             />
           ) : null}
           {page === 'test' ? (
             <TestTutor
+              draftRevision={draftRevision}
               draftSaved={draftSaved}
               navigate={navigate}
               runTests={runTests}
@@ -198,18 +343,26 @@ export function BuildAIPage({
           ) : null}
           {page === 'publish' ? (
             <Publish
+              completeEducatorReview={completeEducatorReview}
+              currentDraftPublished={currentDraftPublished}
+              draftRevision={draftRevision}
               draftSaved={draftSaved}
-              educatorReviewComplete={educatorReviewComplete}
+              educatorReviewComplete={effectiveEducatorReviewComplete}
               navigate={navigate}
-              published={published}
+              publishedVersions={publishedVersions}
               publishVersion={publishVersion}
               startDraft={startDraft}
-              testState={testState}
+              testState={effectiveTestState}
               versionNote={versionNote}
               setVersionNote={setVersionNote}
             />
           ) : null}
-          {page === 'activity' ? <Activity navigate={navigate} /> : null}
+          {page === 'activity' ? (
+            <Activity
+              latestPublishedVersion={latestPublishedVersion}
+              navigate={navigate}
+            />
+          ) : null}
         </div>
       </div>
     </section>
@@ -334,14 +487,18 @@ function PageHeader({
 
 function Overview({
   draftBase,
+  draftRevision,
   draftSaved,
   educatorReviewComplete,
+  latestPublishedVersion,
   navigate,
   testState,
 }: {
   draftBase: string
+  draftRevision: number
   draftSaved: boolean
   educatorReviewComplete: boolean
+  latestPublishedVersion: PublishedVersion
   navigate: (page: BuildPage) => void
   testState: TestState
 }) {
@@ -349,8 +506,8 @@ function Overview({
     <div>
       <PageHeader page='overview' title='P&AI Tutor'>
         {draftSaved
-          ? 'Draft saved. Published version 3 remains available to teachers, and four authorized classes use it. Test results are out of date after Tutor reply language changed.'
-          : 'The Draft has unsaved changes. Published version 3 remains available to teachers, and four authorized classes still use it. Learners are not affected.'}
+          ? `Draft saved. Published version ${latestPublishedVersion.id} remains available to teachers, and ${latestPublishedVersion.authorizedClassCount} authorized classes use it. Test results are ${testState === 'passed' ? 'passed and current' : 'out of date'}.`
+          : `The Draft has unsaved changes. Published version ${latestPublishedVersion.id} remains available to teachers, and ${latestPublishedVersion.authorizedClassCount} authorized classes still use it. Learners are not affected.`}
       </PageHeader>
       <section aria-labelledby='destination-map-heading' className='mb-8'>
         <h2 id='destination-map-heading' className='mb-3 text-lg font-semibold'>
@@ -365,7 +522,7 @@ function Overview({
                   ? 'Current'
                   : id === 'activity'
                     ? 'Monitor'
-                    : pageSummary(id)}
+                    : pageSummary(id, draftSaved, testState)}
               </TextLink>
             </li>
           ))}
@@ -384,7 +541,7 @@ function Overview({
               : 'Unsaved bounded preference changes. Learners are not affected.'}
           </StateItem>
           <StateItem term='Test results'>
-            {testLabel(testState)} for Draft revision D-18.
+            {testLabel(testState)} for Draft revision D-{draftRevision}.
           </StateItem>
           <StateItem term='Educator review'>
             {educatorReviewComplete
@@ -403,11 +560,12 @@ function Overview({
         aria-labelledby='published-heading'
       >
         <h2 id='published-heading' className='text-lg font-semibold'>
-          Published version 3 is available
+          Published version {latestPublishedVersion.id} is available
         </h2>
         <p className='mt-2 text-muted-foreground'>
-          Four authorized classes use this immutable version. The private Draft
-          is based on Published version {draftBase === 'new' ? '4' : draftBase}.
+          {latestPublishedVersion.authorizedClassCount} authorized classes use
+          this immutable version. The private Draft is based on Published
+          version {draftBase}.
         </p>
         <div className='mt-3 flex flex-wrap gap-x-5 gap-y-2'>
           <TextLink navigate={navigate} page='publish'>
@@ -515,15 +673,29 @@ function Curriculum({
             setScenario={setScenario}
           />
         </div>
-        <Button
-          className='min-h-11 xl:hidden'
-          variant='outline'
-          onClick={() => setNarrowPreviewOpen(true)}
-        >
-          Open full-screen preview
-        </Button>
-        {narrowPreviewOpen ? (
-          <NarrowScreenPreview onBack={() => setNarrowPreviewOpen(false)}>
+        <Dialog open={narrowPreviewOpen} onOpenChange={setNarrowPreviewOpen}>
+          <DialogTrigger asChild>
+            <Button className='min-h-11 xl:hidden' variant='outline'>
+              Open full-screen preview
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            className='inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 content-start overflow-y-auto rounded-none p-4 xl:hidden'
+            data-testid='narrow-screen-preview'
+            showCloseButton={false}
+          >
+            <DialogHeader className='sr-only'>
+              <DialogTitle>Curriculum preview</DialogTitle>
+              <DialogDescription>
+                Preview the current local Curriculum values.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogClose asChild>
+              <Button className='mb-4 min-h-11' variant='ghost'>
+                <ArrowLeftIcon aria-hidden='true' />
+                Back
+              </Button>
+            </DialogClose>
             <PreviewPanel
               owner='Curriculum'
               previewState={previewState}
@@ -532,11 +704,19 @@ function Curriculum({
               setPreviewState={setPreviewState}
               setScenario={setScenario}
             />
-          </NarrowScreenPreview>
-        ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
       <div className='mt-7 flex flex-wrap gap-3'>
-        <Button variant='outline'>Change curriculum</Button>
+        <div>
+          <Button disabled variant='outline'>
+            Change curriculum unavailable
+          </Button>
+          <p className='mt-2 max-w-sm text-sm text-muted-foreground'>
+            This illustrative workspace does not connect to a curriculum-change
+            contract.
+          </p>
+        </div>
         <Button variant='outline' onClick={() => navigate('teaching')}>
           Continue to Teaching
         </Button>
@@ -614,45 +794,28 @@ function PreviewPanel({
   )
 }
 
-function NarrowScreenPreview({
-  children,
-  onBack,
-}: {
-  children: ReactNode
-  onBack: () => void
-}) {
-  return (
-    <div
-      className='fixed inset-0 z-50 overflow-y-auto bg-background p-4 xl:hidden'
-      data-testid='narrow-screen-preview'
-    >
-      <Button className='mb-4 min-h-11' variant='outline' onClick={onBack}>
-        <ArrowLeftIcon aria-hidden='true' />
-        Back
-      </Button>
-      {children}
-    </div>
-  )
-}
-
 function Teaching({
+  discardChanges,
   draftSaved,
-  markDraftChanged,
   navigate,
   previewState,
-  replyLanguage,
   saveDraft,
   setPreviewState,
-  setReplyLanguage,
+  teachingSettings,
+  updateTeachingSetting,
 }: {
+  discardChanges: () => void
   draftSaved: boolean
-  markDraftChanged: (message: string) => void
   navigate: (page: BuildPage) => void
   previewState: PreviewState
-  replyLanguage: string
   saveDraft: () => void
   setPreviewState: (state: PreviewState) => void
-  setReplyLanguage: (value: string) => void
+  teachingSettings: TeachingSettings
+  updateTeachingSetting: (
+    setting: TeachingSetting,
+    value: string,
+    message: string,
+  ) => void
 }) {
   const [narrowPreviewOpen, setNarrowPreviewOpen] = useState(false)
   return (
@@ -673,7 +836,14 @@ function Teaching({
               'Start with one small worked example',
               'Start with a short explanation',
             ]}
-            onChange={() => markDraftChanged('Tutor start preference changed.')}
+            selectedValue={teachingSettings.start}
+            onChange={(value) =>
+              updateTeachingSetting(
+                'start',
+                value,
+                'Tutor start preference changed.',
+              )
+            }
           />
           <TeachingFieldset
             legend='Typical response detail'
@@ -684,7 +854,10 @@ function Teaching({
               'Balanced',
               'More detailed when useful',
             ]}
-            onChange={() => markDraftChanged('Response detail changed.')}
+            selectedValue={teachingSettings.detail}
+            onChange={(value) =>
+              updateTeachingSetting('detail', value, 'Response detail changed.')
+            }
           />
           <fieldset className='rounded-xl border border-border p-4'>
             <legend className='px-1 font-semibold'>Tutor reply language</legend>
@@ -708,11 +881,14 @@ function Teaching({
                   type='radio'
                   name='language'
                   value={value}
-                  checked={replyLanguage === value}
-                  onChange={() => {
-                    setReplyLanguage(value)
-                    markDraftChanged('Tutor reply language changed.')
-                  }}
+                  checked={teachingSettings.language === value}
+                  onChange={() =>
+                    updateTeachingSetting(
+                      'language',
+                      value,
+                      'Tutor reply language changed.',
+                    )
+                  }
                 />
                 <span>{label}</span>
               </label>
@@ -726,7 +902,10 @@ function Teaching({
               'Warm and encouraging',
               'Direct and concise',
             ]}
-            onChange={() => markDraftChanged('Tone changed.')}
+            selectedValue={teachingSettings.tone}
+            onChange={(value) =>
+              updateTeachingSetting('tone', value, 'Tone changed.')
+            }
           />
           <section
             className='border-t border-border pt-6'
@@ -773,15 +952,29 @@ function Teaching({
             setPreviewState={setPreviewState}
           />
         </div>
-        <Button
-          className='min-h-11 xl:hidden'
-          variant='outline'
-          onClick={() => setNarrowPreviewOpen(true)}
-        >
-          Open full-screen preview
-        </Button>
-        {narrowPreviewOpen ? (
-          <NarrowScreenPreview onBack={() => setNarrowPreviewOpen(false)}>
+        <Dialog open={narrowPreviewOpen} onOpenChange={setNarrowPreviewOpen}>
+          <DialogTrigger asChild>
+            <Button className='min-h-11 xl:hidden' variant='outline'>
+              Open full-screen preview
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            className='inset-0 top-0 left-0 h-dvh max-w-none translate-x-0 translate-y-0 content-start overflow-y-auto rounded-none p-4 xl:hidden'
+            data-testid='narrow-screen-preview'
+            showCloseButton={false}
+          >
+            <DialogHeader className='sr-only'>
+              <DialogTitle>Teaching preview</DialogTitle>
+              <DialogDescription>
+                Preview the current local Teaching values.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogClose asChild>
+              <Button className='mb-4 min-h-11' variant='ghost'>
+                <ArrowLeftIcon aria-hidden='true' />
+                Back
+              </Button>
+            </DialogClose>
             <PreviewPanel
               owner='Teaching'
               previewState={previewState}
@@ -789,8 +982,8 @@ function Teaching({
               scenarioID='teaching-preview-narrow'
               setPreviewState={setPreviewState}
             />
-          </NarrowScreenPreview>
-        ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
       <div className='mt-7 flex flex-wrap gap-3'>
         <Button className='min-h-11' disabled={draftSaved} onClick={saveDraft}>
@@ -800,7 +993,7 @@ function Teaching({
         <Button
           variant='outline'
           disabled={draftSaved}
-          onClick={() => window.location.reload()}
+          onClick={discardChanges}
         >
           Discard changes
         </Button>
@@ -821,11 +1014,13 @@ function TeachingFieldset({
   name,
   onChange,
   options,
+  selectedValue,
 }: {
   legend: string
   name: string
-  onChange: () => void
+  onChange: (value: string) => void
   options: ReadonlyArray<string>
+  selectedValue: string
 }) {
   return (
     <fieldset className='rounded-xl border border-border p-4'>
@@ -833,16 +1028,16 @@ function TeachingFieldset({
       <p className='mb-3 text-sm text-muted-foreground'>
         The Tutor may adapt when learner evidence calls for it.
       </p>
-      {options.map((option, index) => (
+      {options.map((option) => (
         <label
           key={option}
           className='flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm'
         >
           <input
             className='mt-0.5 size-4'
-            defaultChecked={index === 0}
+            checked={selectedValue === option}
             name={name}
-            onChange={onChange}
+            onChange={() => onChange(option)}
             type='radio'
           />
           <span>{option}</span>
@@ -853,11 +1048,13 @@ function TeachingFieldset({
 }
 
 function TestTutor({
+  draftRevision,
   draftSaved,
   navigate,
   runTests,
   testState,
 }: {
+  draftRevision: number
   draftSaved: boolean
   navigate: (page: BuildPage) => void
   runTests: () => void
@@ -893,8 +1090,8 @@ function TestTutor({
   return (
     <div>
       <PageHeader page='test' title='Test tutor'>
-        Exact saved Draft D-18, saved by Nabila at 10:42, using curriculum
-        revision 2026.08. These synthetic results are reproducible
+        Exact saved Draft D-{draftRevision}, saved by Nabila at 10:42, using
+        curriculum revision 2026.08. These synthetic results are reproducible
         illustrations, not production evidence.
       </PageHeader>
       <div className='mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6'>
@@ -919,7 +1116,7 @@ function TestTutor({
                 <h2 className='font-semibold'>{name}</h2>
                 <p className='mt-1 text-sm text-muted-foreground'>
                   Required · synthetic approved scenario · rule-based evaluator
-                  · Draft D-18
+                  · Draft D-{draftRevision}
                 </p>
               </div>
               <Status tone={status === 'Passed' ? 'positive' : 'warning'}>
@@ -937,21 +1134,25 @@ function TestTutor({
               </summary>
               <p className='text-muted-foreground'>
                 Approved synthetic case · curriculum revision 2026.08 · saved
-                Draft D-18.
+                Draft D-{draftRevision}.
               </p>
             </details>
             <Button
               className='mt-3'
               variant='outline'
-              onClick={() =>
-                action === 'Edit Curriculum'
-                  ? navigate('curriculum')
-                  : action === 'Edit Teaching'
-                    ? navigate('teaching')
-                    : runTests()
-              }
+              onClick={() => {
+                if (!draftSaved && action === 'Rerun') {
+                  navigate('teaching')
+                  return
+                }
+                if (action === 'Edit Curriculum') navigate('curriculum')
+                else if (action === 'Edit Teaching') navigate('teaching')
+                else runTests()
+              }}
             >
-              {action}
+              {!draftSaved && action === 'Rerun'
+                ? 'Open Teaching to save'
+                : action}
             </Button>
           </li>
         ))}
@@ -961,20 +1162,26 @@ function TestTutor({
 }
 
 function Publish({
+  completeEducatorReview,
+  currentDraftPublished,
+  draftRevision,
   draftSaved,
   educatorReviewComplete,
   navigate,
-  published,
+  publishedVersions,
   publishVersion,
   setVersionNote,
   startDraft,
   testState,
   versionNote,
 }: {
+  completeEducatorReview: () => void
+  currentDraftPublished: boolean
+  draftRevision: number
   draftSaved: boolean
   educatorReviewComplete: boolean
   navigate: (page: BuildPage) => void
-  published: boolean
+  publishedVersions: ReadonlyArray<PublishedVersion>
   publishVersion: () => void
   setVersionNote: (value: string) => void
   startDraft: () => void
@@ -982,6 +1189,11 @@ function Publish({
   versionNote: string
 }) {
   const noteID = useId()
+  const currentPublishedVersion = publishedVersions.find(
+    (version) => version.draftRevision === draftRevision,
+  )
+  const latestPublishedVersion =
+    publishedVersions[0] ?? initialPublishedVersions[0]
   const ready = draftSaved && testState === 'passed'
   const rows = [
     [
@@ -1012,21 +1224,25 @@ function Publish({
     ],
   ] as const
   const canPublish =
-    ready && educatorReviewComplete && versionNote.trim().length > 0
+    ready &&
+    educatorReviewComplete &&
+    versionNote.trim().length > 0 &&
+    !currentDraftPublished
   return (
     <div>
       <PageHeader page='publish' title='Publish'>
         One authoritative gate for the exact saved Draft. Published versions are
         immutable, and educator review cannot waive required safeguards.
       </PageHeader>
-      {published ? (
+      {currentPublishedVersion ? (
         <div
           className='mb-7 rounded-xl border border-border bg-muted/40 p-4'
           role='status'
         >
           <Status tone='positive'>Published</Status>
           <p className='mt-2 font-medium'>
-            Published version 4 is available. No classes changed.
+            Published version {currentPublishedVersion.id} is available. No
+            classes changed.
           </p>
         </div>
       ) : null}
@@ -1046,7 +1262,8 @@ function Publish({
               <div>
                 <p className='font-medium'>{label}</p>
                 <p className='mt-1 text-sm text-muted-foreground'>
-                  Synthetic evidence checked at 10:48 · exact Draft D-18.
+                  Synthetic evidence checked at 10:48 · exact Draft D-
+                  {draftRevision}.
                 </p>
               </div>
               <div className='flex items-center gap-3'>
@@ -1080,12 +1297,14 @@ function Publish({
                     {repair}
                   </button>
                 ) : repair === 'Educator review' && !educatorReviewComplete ? (
-                  <a
-                    className='min-h-10 py-2 text-sm font-medium underline underline-offset-4'
-                    href='?workspace=teach&page=reviews'
+                  <button
+                    className='min-h-10 text-sm font-medium underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-50'
+                    disabled={!draftSaved || testState !== 'passed'}
+                    onClick={completeEducatorReview}
+                    type='button'
                   >
-                    Request educator review in Teach
-                  </a>
+                    Complete educator review
+                  </button>
                 ) : null}
               </div>
             </li>
@@ -1096,6 +1315,7 @@ function Publish({
         <Label htmlFor={noteID}>Version note</Label>
         <Input
           className='mt-2 min-h-11 text-base sm:text-sm'
+          disabled={currentDraftPublished}
           id={noteID}
           value={versionNote}
           onChange={(event) => setVersionNote(event.target.value)}
@@ -1132,57 +1352,48 @@ function Publish({
           Version history
         </h2>
         <ul className='mt-4 space-y-5'>
-          {published ? (
-            <li>
+          {publishedVersions.map((version, index) => (
+            <li key={version.id}>
               <p className='font-medium'>
-                Published version 4 · Latest available
+                Published version {version.id} ·{' '}
+                {index === 0 ? 'Latest available' : 'Earlier'}
               </p>
               <p className='mt-1 text-sm text-muted-foreground'>
-                {versionNote.trim()} · published by Nabila · curriculum 2026.08
-                · no authorized classes
+                {version.note} · published by {version.publisher} · curriculum{' '}
+                {version.curriculumRevision} ·{' '}
+                {version.authorizedClassCount === 0
+                  ? 'no authorized classes'
+                  : `${version.authorizedClassCount} authorized classes`}
               </p>
+              {version.id === '2' ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button className='mt-3' variant='outline'>
+                      Start Draft from this version
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Start Draft from version 2?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This replaces the existing private Draft. Published
+                        versions remain immutable and available, and no classes
+                        change.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep existing Draft</AlertDialogCancel>
+                      <AlertDialogAction onClick={startDraft}>
+                        Replace Draft
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : null}
             </li>
-          ) : null}
-          <li>
-            <p className='font-medium'>
-              Published version 3 · {published ? 'Earlier' : 'Latest available'}
-            </p>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              Clearer mixed-language guidance · published by Nabila · curriculum
-              2026.08 · 4 authorized classes
-            </p>
-          </li>
-          <li>
-            <p className='font-medium'>Published version 2 · Earlier</p>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              Initial pilot · independently reviewed · curriculum 2026.06 · no
-              authorized classes
-            </p>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className='mt-3' variant='outline'>
-                  Start Draft from this version
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Start Draft from version 2?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This replaces the existing private Draft. Published versions
-                    remain immutable and available, and no classes change.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep existing Draft</AlertDialogCancel>
-                  <AlertDialogAction onClick={startDraft}>
-                    Replace Draft
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </li>
+          ))}
         </ul>
       </section>
       <section
@@ -1193,9 +1404,12 @@ function Publish({
           Used by classes
         </h2>
         <p className='mt-2 text-sm text-muted-foreground'>
-          Four authorized classes use immutable Published version 3. Newly
-          published version 4 is available to teachers but is not applied to any
-          class.
+          Four authorized classes use immutable Published version 3. Published
+          version {latestPublishedVersion.id} is latest and has{' '}
+          {latestPublishedVersion.authorizedClassCount === 0
+            ? 'not been applied to a class'
+            : `been applied to ${latestPublishedVersion.authorizedClassCount} authorized classes`}
+          .
         </p>
         <ul className='mt-4 grid gap-2 text-sm sm:grid-cols-2'>
           <li>Form 1 Amanah · version 3</li>
@@ -1208,7 +1422,13 @@ function Publish({
   )
 }
 
-function Activity({ navigate }: { navigate: (page: BuildPage) => void }) {
+function Activity({
+  latestPublishedVersion,
+  navigate,
+}: {
+  latestPublishedVersion: PublishedVersion
+  navigate: (page: BuildPage) => void
+}) {
   return (
     <div>
       <PageHeader page='activity' title='Activity'>
@@ -1236,7 +1456,8 @@ function Activity({ navigate }: { navigate: (page: BuildPage) => void }) {
           Published-version context
         </h2>
         <p className='mt-2 text-muted-foreground'>
-          Published version 3 remains available to teachers and is used by four
+          Published version {latestPublishedVersion.id} remains available to
+          teachers and is used by {latestPublishedVersion.authorizedClassCount}{' '}
           authorized classes.
         </p>
         <div className='mt-3 flex gap-5'>
@@ -1259,7 +1480,10 @@ function Activity({ navigate }: { navigate: (page: BuildPage) => void }) {
           <li>
             Draft reply-language preference changed · synthetic · 12 minutes ago
           </li>
-          <li>Published version 3 became available · synthetic · 3 days ago</li>
+          <li>
+            Published version {latestPublishedVersion.id} became available ·
+            synthetic · recently
+          </li>
           <li>
             Four classes remain authorized to use version 3 · synthetic
             aggregate
@@ -1346,10 +1570,14 @@ function TextLink({
 function pageLabel(page: BuildPage) {
   return destinations.find(({ id }) => id === page)?.label ?? 'Overview'
 }
-function pageSummary(page: BuildPage) {
+function pageSummary(
+  page: BuildPage,
+  draftSaved: boolean,
+  testState: TestState,
+) {
   if (page === 'curriculum') return '2026.08'
-  if (page === 'teaching') return 'Saved'
-  if (page === 'test') return 'Out of date'
+  if (page === 'teaching') return draftSaved ? 'Saved' : 'Unsaved changes'
+  if (page === 'test') return testLabel(testState)
   if (page === 'publish') return 'Review'
   return ''
 }

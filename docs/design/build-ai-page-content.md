@@ -379,12 +379,11 @@ The server recomputes readiness. The client does not use a green score or local 
 
 ### Educator review
 
-- Request only after required Test results are current.
-- Select an authorized designated reviewer; the Draft creator is excluded.
-- Reviewer completes or requests changes in Teach on a stable exact-Draft link.
+- Complete only after required Test results are current.
+- In this synthetic component, Publish provides **Complete educator review** for the exact saved Draft.
 - Any Draft edit makes review Out of date.
 - Educator review covers teaching and curriculum quality; it cannot waive non-waivable safeguards.
-- Publish lets the operator request and track review, but never **Complete educator review**.
+- This local transition demonstrates readiness without claiming that a production review service or separation-of-duties contract exists. A production workflow still requires an authorized designated reviewer, excludes the Draft creator, and provides a stable exact-Draft review link.
 
 ### Publication
 
@@ -518,7 +517,7 @@ The component may use synthetic data only when it visibly says so. It must demon
 - Curriculum/Teaching-only explicit preview with Out of date state
 - bounded Teaching fieldsets and no free-form prompt boxes
 - Test states beyond Passed, direct repair, and no persistent chat
-- Publish checklist, external Teach review handoff, consequence confirmation, and no predicted version number
+- Publish checklist, explicitly synthetic in-workspace educator-review completion, consequence confirmation, and no predicted version number
 - Publish success that changes availability but no class
 - Version history and **Start Draft from this version** without overwriting
 - Activity led by honest monitoring state, not a fake green or duplicate history

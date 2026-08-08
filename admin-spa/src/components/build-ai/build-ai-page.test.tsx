@@ -65,4 +65,15 @@ describe('Build AI illustrative workspace', () => {
     expect(screen.getByText(/Tutor health cannot be confirmed/i)).toBeVisible()
     expect(screen.queryByText(/^Healthy$/i)).not.toBeInTheDocument()
   })
+
+  it('labels unavailable curriculum mutation instead of exposing a dead action', () => {
+    renderPage('curriculum')
+
+    expect(
+      screen.getByRole('button', { name: 'Change curriculum unavailable' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/does not connect to a curriculum-change contract/i),
+    ).toBeVisible()
+  })
 })
