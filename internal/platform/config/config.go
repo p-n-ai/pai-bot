@@ -18,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
@@ -108,15 +109,22 @@ type CacheConfig struct {
 
 // AIConfig holds configuration for all AI providers.
 type AIConfig struct {
-	DefaultProvider string
-	Mock            MockAIConfig
-	OpenAI          OpenAIConfig
-	Codex           CodexConfig
-	Anthropic       AnthropicConfig
-	DeepSeek        DeepSeekConfig
-	Google          GoogleConfig
-	Ollama          OllamaConfig
-	OpenRouter      OpenRouterConfig
+	DefaultProvider  string
+	Mock             MockAIConfig
+	OpenAI           OpenAIConfig
+	Codex            CodexConfig
+	Anthropic        AnthropicConfig
+	DeepSeek         DeepSeekConfig
+	Google           GoogleConfig
+	Ollama           OllamaConfig
+	OpenRouter       OpenRouterConfig
+	CatalogProviders map[string]CatalogProviderConfig
+}
+
+// CatalogProviderConfig holds credentials and a default model for a catalog provider.
+type CatalogProviderConfig struct {
+	APIKey string
+	Model  string
 }
 
 // MockAIConfig holds local dev-only mock AI settings.
@@ -298,7 +306,8 @@ func Load() (*Config, error) {
 			GraphFrontier:       envInt("LEARN_RETRIEVAL_GRAPH_FRONTIER", 40),
 		},
 		AI: AIConfig{
-			DefaultProvider: envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
+			DefaultProvider:  envStr("LEARN_AI_DEFAULT_PROVIDER", ""),
+			CatalogProviders: loadCatalogProviderConfigs(),
 			Mock: MockAIConfig{
 				Response: envStr("LEARN_AI_MOCK_RESPONSE", ""),
 			},
@@ -531,15 +540,19 @@ func (c *Config) validateChatAdapterCredentials() error {
 
 // HasAIProvider returns true if at least one AI provider is configured.
 func (c *Config) HasAIProvider() bool {
-	return c.mockAIProviderEnabled() ||
-		c.AI.OpenAI.APIKey != "" ||
-		strings.TrimSpace(c.AI.Codex.AccessToken) != "" ||
-		c.AI.Anthropic.APIKey != "" ||
-		c.AI.DeepSeek.APIKey != "" ||
-		c.AI.Google.APIKey != "" ||
-		c.AI.OpenRouter.APIKey != "" ||
-		c.AI.Ollama.Enabled ||
-		c.CodexDeviceAuthAvailable()
+	if c.mockAIProviderEnabled() || c.AI.OpenAI.APIKey != "" ||
+		strings.TrimSpace(c.AI.Codex.AccessToken) != "" || c.AI.Anthropic.APIKey != "" ||
+		c.AI.Google.APIKey != "" || c.AI.OpenRouter.APIKey != "" || c.AI.Ollama.Enabled ||
+		c.CodexDeviceAuthAvailable() {
+		return true
+	}
+	for _, provider := range ai.ProviderCatalog() {
+		settings := c.AI.CatalogProviders[provider.ID]
+		if settings.APIKey != "" || provider.ID == "deepseek" && c.AI.DeepSeek.APIKey != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // CodexDeviceAuthAvailable reports whether the server has isolated storage
@@ -555,12 +568,26 @@ func (c *Config) mockAIProviderEnabled() bool {
 }
 
 func isKnownAIProvider(name string) bool {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "mock", "openai", "codex", "anthropic", "deepseek", "google", "ollama", "openrouter":
-		return true
-	default:
-		return false
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, core := range []string{"mock", "openai", "codex", "anthropic", "google", "ollama", "openrouter"} {
+		if name == core {
+			return true
+		}
 	}
+	_, ok := ai.LookupProviderDefinition(name)
+	return ok
+}
+
+func loadCatalogProviderConfigs() map[string]CatalogProviderConfig {
+	providers := make(map[string]CatalogProviderConfig)
+	for _, provider := range ai.ProviderCatalog() {
+		prefix := "LEARN_AI_" + strings.ToUpper(provider.ID)
+		providers[provider.ID] = CatalogProviderConfig{
+			APIKey: envStr(prefix+"_API_KEY", ""),
+			Model:  envStr(prefix+"_MODEL", ""),
+		}
+	}
+	return providers
 }
 
 func defaultCodexHome() string {

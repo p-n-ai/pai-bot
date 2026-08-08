@@ -24,11 +24,12 @@ const (
 // OpenAIProvider implements Provider for OpenAI and OpenAI-compatible APIs
 // (DeepSeek, Groq, Together AI, etc.) via a configurable base URL.
 type OpenAIProvider struct {
-	apiKey  string
-	baseURL string
-	client  *http.Client
-	name    string
-	models  []ModelInfo
+	apiKey       string
+	baseURL      string
+	client       *http.Client
+	name         string
+	models       []ModelInfo
+	defaultModel string
 }
 
 type directOpenAIProvider struct {
@@ -66,6 +67,13 @@ func WithModels(models []ModelInfo) OpenAIOption {
 func WithProviderName(name string) OpenAIOption {
 	return func(p *OpenAIProvider) {
 		p.name = name
+	}
+}
+
+// WithDefaultModel sets the model used when a request does not select one.
+func WithDefaultModel(model string) OpenAIOption {
+	return func(p *OpenAIProvider) {
+		p.defaultModel = strings.TrimSpace(model)
 	}
 }
 
@@ -194,6 +202,9 @@ type openaiNativeResponse struct {
 
 func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
+	if model == "" {
+		model = p.defaultModel
+	}
 	if model == "" {
 		model = "gpt-5.4-mini" // current low-latency default
 	}
