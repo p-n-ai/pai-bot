@@ -180,7 +180,7 @@ func aiProviderSelectorSchema() *Schema {
 			closedObjectSchema(
 				map[string]*Schema{
 					"type": {Type: "string", Enum: []any{"api_key"}},
-					"name": {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
+					"name": {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter", "groq", "xai", "mistral", "cerebras"}},
 				},
 				"type", "name",
 			),
@@ -201,7 +201,7 @@ func aiProviderPatchSchema() *Schema {
 	apiKey := closedObjectSchema(
 		map[string]*Schema{
 			"type":   {Type: "string", Enum: []any{"api_key"}},
-			"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter"}},
+			"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter", "groq", "xai", "mistral", "cerebras"}},
 			"model":  nullableStringSchema(),
 			"apiKey": nullableStringSchema(),
 		},

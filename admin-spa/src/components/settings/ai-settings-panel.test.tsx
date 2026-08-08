@@ -73,6 +73,10 @@ describe('AISettingsPanel', () => {
       'OpenAI provider',
       'Anthropic provider',
       'DeepSeek provider',
+      'Groq provider',
+      'xAI provider',
+      'Mistral provider',
+      'Cerebras provider',
       'Google provider',
       'OpenRouter provider',
       'Ollama provider',
@@ -103,6 +107,27 @@ describe('AISettingsPanel', () => {
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({
         defaultProvider: { type: 'ollama' },
+        expectedRevision: 3,
+      })
+    })
+  })
+
+  it.each([
+    ['Groq', 'groq'],
+    ['xAI', 'xai'],
+    ['Mistral', 'mistral'],
+    ['Cerebras', 'cerebras'],
+  ] as const)('selects %s as the default provider', async (label, name) => {
+    render(<AISettingsPanel />)
+    const section = await screen.findByRole('region', {
+      name: 'Default AI provider',
+    })
+    fireEvent.click(within(section).getByRole('combobox'))
+    fireEvent.click(await screen.findByRole('option', { name: label }))
+
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        defaultProvider: { type: 'api_key', name },
         expectedRevision: 3,
       })
     })

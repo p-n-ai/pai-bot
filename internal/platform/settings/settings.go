@@ -29,6 +29,10 @@ const (
 	APIKeyProviderDeepSeek   APIKeyProvider = "deepseek"
 	APIKeyProviderGoogle     APIKeyProvider = "google"
 	APIKeyProviderOpenRouter APIKeyProvider = "openrouter"
+	APIKeyProviderGroq       APIKeyProvider = "groq"
+	APIKeyProviderXAI        APIKeyProvider = "xai"
+	APIKeyProviderMistral    APIKeyProvider = "mistral"
+	APIKeyProviderCerebras   APIKeyProvider = "cerebras"
 )
 
 var apiKeyProviders = []APIKeyProvider{
@@ -37,6 +41,10 @@ var apiKeyProviders = []APIKeyProvider{
 	APIKeyProviderDeepSeek,
 	APIKeyProviderGoogle,
 	APIKeyProviderOpenRouter,
+	APIKeyProviderGroq,
+	APIKeyProviderXAI,
+	APIKeyProviderMistral,
+	APIKeyProviderCerebras,
 }
 
 // APIKeyProviders returns the closed API-key provider set.
@@ -420,6 +428,9 @@ func apiKeyConfig(cfg config.AIConfig, provider APIKeyProvider) (model, key stri
 		return cfg.Google.Model, cfg.Google.APIKey
 	case APIKeyProviderOpenRouter:
 		return cfg.OpenRouter.Model, cfg.OpenRouter.APIKey
+	case APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+		providerConfig := cfg.CatalogProviders[string(provider)]
+		return providerConfig.Model, providerConfig.APIKey
 	}
 	panic("unreachable API-key provider")
 }
@@ -436,6 +447,11 @@ func setAPIKeyConfig(cfg *config.AIConfig, provider APIKeyProvider, model, key s
 		cfg.Google.Model, cfg.Google.APIKey = model, key
 	case APIKeyProviderOpenRouter:
 		cfg.OpenRouter.Model, cfg.OpenRouter.APIKey = model, key
+	case APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+		if cfg.CatalogProviders == nil {
+			cfg.CatalogProviders = make(map[string]config.CatalogProviderConfig)
+		}
+		cfg.CatalogProviders[string(provider)] = config.CatalogProviderConfig{Model: model, APIKey: key}
 	default:
 		panic("unreachable API-key provider")
 	}
