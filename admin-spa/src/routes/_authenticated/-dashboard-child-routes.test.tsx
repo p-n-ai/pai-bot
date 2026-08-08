@@ -23,6 +23,7 @@ const authContext: AuthContextValue = {
       expires_at: '2099-01-01T00:00:00Z',
       user: {
         role: 'admin',
+        can_manage_ai_settings: true,
         tenant_id: 'tenant_1',
         tenant_name: 'Test School',
         user_id: 'admin_1',
@@ -72,6 +73,7 @@ describe('dashboard child routes', () => {
     ['/dashboard/classes', 'Classes'],
     ['/dashboard/metrics', 'AI usage'],
     ['/dashboard/ai-usage', 'AI usage'],
+    ['/build-ai?page=activity', 'Activity'],
   ])('mounts the child page for %s', async (path, heading) => {
     window.scrollTo = vi.fn()
     const router = createRouter({

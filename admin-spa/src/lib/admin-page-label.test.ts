@@ -5,6 +5,7 @@ import { getAdminPageLabel } from './admin-page-label'
 describe('admin topbar context', () => {
   it.each([
     ['/dashboard', 'Today'],
+    ['/build-ai', 'Build AI'],
     ['/dashboard/classes', 'My classes'],
     ['/dashboard/classes/class_1', 'My classes'],
     ['/dashboard/metrics', 'Learning progress'],

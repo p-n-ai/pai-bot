@@ -1,4 +1,5 @@
 import {
+  BlocksIcon,
   BookOpenCheckIcon,
   BotIcon,
   CableIcon,
@@ -51,6 +52,11 @@ const navigationGroups = [
   {
     label: 'Technical tools',
     items: [
+      {
+        Icon: BlocksIcon,
+        href: '/build-ai',
+        label: 'Build AI',
+      },
       {
         Icon: BotIcon,
         href: '/dashboard/ai-usage',

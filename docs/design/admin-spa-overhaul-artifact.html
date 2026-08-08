@@ -1,0 +1,1333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" href="data:," />
+    <title>P&amp;AI Tutor — Build AI illustrative component</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --surface: #ffffff;
+        --surface-subtle: #f6faf8;
+        --surface-muted: #eaf2ee;
+        --surface-accent: #e0f4ea;
+        --surface-info: #eaf4f8;
+        --surface-warning: #fff2c9;
+        --surface-danger: #fdecea;
+        --brand: #006b46;
+        --brand-hover: #00563a;
+        --text-heading: #15362c;
+        --text-body: #314b42;
+        --text-muted: #5d716a;
+        --text-on-brand: #ffffff;
+        --border: #c6d5cf;
+        --border-strong: #829b92;
+        --positive: #006b46;
+        --warning: #765000;
+        --danger: #973426;
+        --info: #145f7c;
+        --focus: #0645ad;
+        --radius-sm: 0.5rem;
+        --radius-md: 0.75rem;
+        --sidebar: 16rem;
+        --preview: 26rem;
+        --target: 2.75rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      html { min-inline-size: 20rem; background: var(--surface); }
+      body {
+        margin: 0;
+        min-inline-size: 20rem;
+        min-block-size: 100vh;
+        color: var(--text-body);
+        background: var(--surface);
+        font-size: 1rem;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+      }
+      body.preview-open { overflow: hidden; }
+      button, input, select { font: inherit; color: inherit; }
+      button, a, input, select, summary { scroll-margin-block: 1rem; }
+      button { touch-action: manipulation; }
+      :focus-visible { outline: 0.1875rem solid var(--focus); outline-offset: 0.1875rem; }
+      ::selection { color: var(--text-heading); background: #b9ead4; }
+      h1, h2, h3, p { margin-block-start: 0; }
+      h1, h2, h3 { color: var(--text-heading); line-height: 1.2; text-wrap: balance; }
+      h1 { margin-block-end: 0.7rem; font-size: clamp(1.9rem, 3.6vw, 2.75rem); letter-spacing: -0.025em; }
+      h2 { margin-block-end: 0.55rem; font-size: clamp(1.3rem, 2vw, 1.65rem); letter-spacing: -0.015em; }
+      h3 { margin-block-end: 0.4rem; font-size: 1rem; }
+      p { max-inline-size: 72ch; margin-block-end: 1rem; }
+      a { color: var(--brand); text-decoration-thickness: 0.08em; text-underline-offset: 0.18em; }
+      a:hover { color: var(--text-heading); }
+      svg { display: block; }
+      fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+      legend { padding: 0; color: var(--text-heading); font-weight: 750; }
+      ul, ol { max-inline-size: 76ch; }
+      .sr-only {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skip-link {
+        position: fixed;
+        z-index: 300;
+        inset-block-start: 0.5rem;
+        inset-inline-start: 0.5rem;
+        min-block-size: var(--target);
+        padding: 0.65rem 1rem;
+        border: 2px solid var(--text-heading);
+        border-radius: var(--radius-sm);
+        color: var(--text-heading);
+        background: var(--surface);
+        transform: translateY(-160%);
+      }
+      .skip-link:focus { transform: translateY(0); }
+
+      .app-shell { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-block-size: 100vh; }
+      .sidebar {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 80;
+        display: flex;
+        flex-direction: column;
+        min-inline-size: 0;
+        block-size: 100vh;
+        border-inline-end: 1px solid var(--border);
+        background: var(--surface-subtle);
+      }
+      .brand { display: flex; align-items: center; gap: 0.7rem; min-block-size: 4.5rem; padding: 0.85rem 1rem; border-block-end: 1px solid var(--border); color: var(--text-heading); font-weight: 780; }
+      .brand-mark, .bot-mark {
+        display: grid;
+        place-items: center;
+        inline-size: 2.25rem;
+        block-size: 2.25rem;
+        flex: 0 0 auto;
+        border-radius: 0.65rem;
+        color: var(--text-on-brand);
+        background: var(--brand);
+      }
+      .workspace-links { display: grid; gap: 0.25rem; padding: 0.85rem; border-block-end: 1px solid var(--border); }
+      .workspace-link, .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-block-size: var(--target);
+        padding: 0.58rem 0.7rem;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        color: var(--text-body);
+        text-decoration: none;
+      }
+      .workspace-link:hover, .nav-link:hover { border-color: var(--border); color: var(--text-heading); background: var(--surface); }
+      .workspace-link[aria-current="page"], .nav-link[aria-current="page"] { border-color: var(--border-strong); color: var(--text-heading); background: var(--surface); font-weight: 750; }
+      .nav-region { flex: 1; overflow: auto; padding: 0.85rem; }
+      .nav-heading { margin: 0.35rem 0.55rem 0.5rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 780; letter-spacing: 0.06em; text-transform: uppercase; }
+      .nav-list { display: grid; gap: 0.2rem; margin: 0; padding: 0; list-style: none; }
+      .sidebar-note { padding: 1rem; margin: 0; border-block-start: 1px solid var(--border); color: var(--text-muted); font-size: 0.8rem; }
+      .scrim { display: none; }
+
+      .app-area { min-inline-size: 0; }
+      .topbar {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        min-block-size: 4.5rem;
+        padding: 0.75rem clamp(1rem, 3vw, 2rem);
+        border-block-end: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .topbar-start { display: flex; align-items: center; gap: 0.75rem; min-inline-size: 0; }
+      .menu-button { display: none; }
+      .context-title { min-inline-size: 0; }
+      .context-title strong { display: block; color: var(--text-heading); font-size: 0.95rem; }
+      .context-title span { display: block; color: var(--text-muted); font-size: 0.8rem; }
+      .topbar-meta { display: flex; align-items: center; gap: 0.6rem; }
+      .avatar { display: grid; place-items: center; inline-size: var(--target); block-size: var(--target); flex: 0 0 auto; border: 1px solid var(--border-strong); border-radius: 50%; color: var(--text-heading); background: var(--surface-subtle); font-size: 0.78rem; font-weight: 780; }
+      .view { min-inline-size: 0; }
+      .builder-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(21rem, var(--preview)); align-items: start; min-block-size: calc(100vh - 4.5rem); }
+      .page { min-inline-size: 0; padding: clamp(1.4rem, 4vw, 3rem) clamp(1rem, 4vw, 3.5rem) 4rem; }
+      .page-inner { max-inline-size: 72rem; }
+      .breadcrumb { margin: 0 0 0.65rem; color: var(--text-muted); font-size: 0.84rem; }
+      .breadcrumb a { color: inherit; }
+      .page-header { margin-block-end: 2.25rem; }
+      .page-header .lead { margin: 0; color: var(--text-body); font-size: 1.05rem; }
+      .page-header-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 1.15rem; }
+      .stack { display: grid; gap: 2.25rem; }
+      .section { min-inline-size: 0; }
+      .section + .section { padding-block-start: 2.25rem; border-block-start: 1px solid var(--border); }
+      .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
+      .section-heading p { margin: 0; color: var(--text-muted); }
+      .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+      .compact-block { padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+      .compact-block > :last-child { margin-block-end: 0; }
+      .notice { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-subtle); }
+      .notice .icon { margin-block-start: 0.15rem; color: var(--info); }
+      .notice strong { display: block; color: var(--text-heading); }
+      .notice p { margin: 0.2rem 0 0; }
+      .notice.warning { border-color: #b38b29; background: var(--surface-warning); }
+      .notice.warning .icon { color: var(--warning); }
+      .notice.danger { border-color: #c5796e; background: var(--surface-danger); }
+      .notice.danger .icon { color: var(--danger); }
+      .notice.success { border-color: #5b9c81; background: var(--surface-accent); }
+      .notice.success .icon { color: var(--positive); }
+      .notice.info { border-color: #76a7b9; background: var(--surface-info); }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-block-size: var(--target);
+        max-inline-size: 100%;
+        padding: 0.65rem 1rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        color: var(--text-heading);
+        background: var(--surface);
+        font-weight: 750;
+        line-height: 1.25;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .button:hover { color: var(--text-heading); background: var(--surface-subtle); }
+      .button.primary { border-color: var(--brand); color: var(--text-on-brand); background: var(--brand); }
+      .button.primary:hover { border-color: var(--brand-hover); color: var(--text-on-brand); background: var(--brand-hover); }
+      .button.subtle { border-color: transparent; background: transparent; }
+      .button.danger { border-color: var(--danger); color: var(--danger); }
+      .button:disabled { border-color: var(--border); color: var(--text-muted); background: var(--surface-muted); cursor: not-allowed; }
+      .button.icon-only { inline-size: var(--target); padding: 0; }
+      .inline-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 1rem; }
+      .inline-links { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+      .icon { inline-size: 1.1rem; block-size: 1.1rem; flex: 0 0 auto; stroke-width: 1.9; }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-block-size: 1.75rem;
+        max-inline-size: 100%;
+        padding: 0.22rem 0.52rem;
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        color: var(--text-body);
+        background: var(--surface);
+        font-size: 0.78rem;
+        font-weight: 750;
+        line-height: 1.25;
+      }
+      .status.positive { border-color: #5b9c81; color: var(--positive); background: var(--surface-accent); }
+      .status.warning { border-color: #b38b29; color: var(--warning); background: var(--surface-warning); }
+      .status.danger { border-color: #c5796e; color: var(--danger); background: var(--surface-danger); }
+      .status.info { border-color: #76a7b9; color: var(--info); background: var(--surface-info); }
+      .status .icon { inline-size: 0.9rem; block-size: 0.9rem; }
+
+      .destination-map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; border-block: 1px solid var(--border); list-style: none; }
+      .destination-map li { min-inline-size: 0; }
+      .destination-map a { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; min-block-size: 3.5rem; padding: 0.75rem; color: var(--text-heading); text-decoration: none; }
+      .destination-map a:hover { background: var(--surface-subtle); }
+      .destination-map li:nth-child(n+4) { border-block-start: 1px solid var(--border); }
+      .destination-map li:not(:nth-child(3n+1)) { border-inline-start: 1px solid var(--border); }
+      .destination-state { color: var(--text-muted); font-size: 0.75rem; font-weight: 700; text-align: end; }
+      .state-list, .event-list, .locked-list, .version-list, .class-list { margin: 0; padding: 0; list-style: none; }
+      .state-list li, .event-list li, .version-list li, .class-list li { padding-block: 0.85rem; border-block-end: 1px solid var(--border); }
+      .state-list li:first-child, .event-list li:first-child, .version-list li:first-child, .class-list li:first-child { border-block-start: 1px solid var(--border); }
+      .state-list strong, .event-list strong, .version-list strong, .class-list strong { color: var(--text-heading); }
+      .state-list p, .event-list p, .version-list p, .class-list p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: 0.88rem; }
+      .row-between { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+      .change-list { margin-block-end: 0; }
+
+      .detail-list { display: grid; grid-template-columns: minmax(9rem, 0.75fr) minmax(0, 1.5fr); margin: 0; }
+      .detail-list dt, .detail-list dd { margin: 0; padding-block: 0.8rem; border-block-end: 1px solid var(--border); }
+      .detail-list dt { color: var(--text-muted); }
+      .detail-list dd { color: var(--text-heading); font-weight: 680; }
+      details { padding-block: 0.25rem; }
+      summary { min-block-size: var(--target); padding-block: 0.6rem; color: var(--brand); font-weight: 720; cursor: pointer; }
+      .field-grid { display: grid; gap: 1.5rem; }
+      .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+      .field { min-inline-size: 0; }
+      .field-label { display: block; margin-block-end: 0.35rem; color: var(--text-heading); font-size: 0.9rem; font-weight: 750; }
+      .field-hint { margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; }
+      select, input[type="text"] { inline-size: 100%; min-block-size: var(--target); padding: 0.65rem 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); font-size: 1rem; }
+      select:hover, input[type="text"]:hover { border-color: var(--text-body); }
+      .choice-set { display: grid; gap: 0.65rem; margin-block-start: 0.65rem; }
+      .choice { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 0.7rem; min-block-size: var(--target); padding: 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+      .choice:has(input:checked) { border-color: var(--brand); background: var(--surface-accent); }
+      .choice input { inline-size: 1.1rem; block-size: 1.1rem; margin-block-start: 0.18rem; accent-color: var(--brand); }
+      .choice strong { display: block; color: var(--text-heading); }
+      .choice span { display: block; color: var(--text-muted); font-size: 0.84rem; }
+      .form-footer { display: flex; flex-wrap: wrap; gap: 0.75rem; padding-block-start: 1.5rem; border-block-start: 1px solid var(--border); }
+
+      .preview-pane { position: sticky; inset-block-start: 4.5rem; align-self: start; min-inline-size: 0; block-size: calc(100vh - 4.5rem); padding: 1.25rem; border-inline-start: 1px solid var(--border); background: var(--surface-subtle); overflow: auto; }
+      .preview-shell { min-block-size: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
+      .preview-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 1rem; border-block-end: 1px solid var(--border); }
+      .preview-title { display: flex; gap: 0.65rem; min-inline-size: 0; }
+      .preview-title h2 { margin: 0; font-size: 1rem; }
+      .preview-title p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: 0.78rem; }
+      .preview-back { display: none; }
+      .preview-body { padding: 1rem; }
+      .preview-binding { color: var(--text-muted); font-size: 0.82rem; }
+      .synthetic-example { margin-block: 1rem; padding-block: 1rem; border-block: 1px solid var(--border); }
+      .synthetic-example p:last-child { margin-block-end: 0; }
+      .citation-list { margin-block-end: 0; padding-inline-start: 1.25rem; color: var(--text-muted); font-size: 0.84rem; }
+      .empty-state { padding-block: 2rem; text-align: start; }
+      .empty-state p { color: var(--text-muted); }
+      .mobile-preview-action { display: none; }
+
+      .evidence-list { margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--border); }
+      .evidence-row { padding-block: 1rem; border-block-end: 1px solid var(--border); }
+      .evidence-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+      .evidence-head h3 { margin-block-end: 0.2rem; }
+      .evidence-head p { margin: 0; color: var(--text-muted); font-size: 0.84rem; }
+      .evidence-row details p { margin: 0.35rem 0; font-size: 0.88rem; }
+      .readiness-list { margin: 0; padding: 0; list-style: none; counter-reset: readiness; border-block-start: 1px solid var(--border); }
+      .readiness-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.85rem; padding-block: 1rem; border-block-end: 1px solid var(--border); counter-increment: readiness; }
+      .readiness-row::before { content: counter(readiness); display: grid; place-items: center; inline-size: 1.75rem; block-size: 1.75rem; border: 1px solid var(--border-strong); border-radius: 50%; color: var(--text-heading); font-size: 0.8rem; font-weight: 780; }
+      .readiness-copy strong { display: block; color: var(--text-heading); }
+      .readiness-copy p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: 0.85rem; }
+      .version-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; }
+      .version-meta { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; margin-block-start: 0.55rem; color: var(--text-muted); font-size: 0.8rem; }
+      .version-actions { display: flex; align-items: flex-start; }
+      .incident-selector { max-inline-size: 30rem; }
+
+      dialog { inline-size: min(34rem, calc(100% - 2rem)); max-block-size: calc(100vh - 2rem); padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text-body); background: var(--surface); }
+      dialog::backdrop { background: rgb(21 54 44 / 0.5); }
+      .dialog-body { padding: 1.35rem; }
+      .dialog-body h2 { margin-block-end: 0.6rem; }
+      .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.35rem; border-block-start: 1px solid var(--border); }
+      .prototype-note { margin-block-start: 2rem; color: var(--text-muted); font-size: 0.78rem; }
+      .live-region { position: fixed; z-index: 250; inset-inline-end: 1rem; inset-block-end: 1rem; max-inline-size: min(28rem, calc(100vw - 2rem)); padding: 0.75rem 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--text-heading); background: var(--surface); }
+      .live-region:empty { display: none; }
+
+      @media (max-width: 70rem) {
+        .builder-layout { grid-template-columns: minmax(0, 1fr); }
+        .preview-pane { display: none; }
+        .preview-pane.is-open { position: fixed; z-index: 200; inset: 0; display: block; block-size: 100dvh; padding: 0; border: 0; background: var(--surface); overflow: auto; }
+        .preview-pane.is-open .preview-shell { min-block-size: 100dvh; border: 0; border-radius: 0; }
+        .preview-pane.is-open .preview-header { position: sticky; inset-block-start: 0; z-index: 1; background: var(--surface); }
+        .preview-back, .mobile-preview-action { display: inline-flex; }
+      }
+      @media (max-width: 51.25rem) {
+        .app-shell { grid-template-columns: minmax(0, 1fr); }
+        .sidebar { position: fixed; inset: 0 auto 0 0; inline-size: min(18rem, calc(100vw - 3rem)); block-size: 100dvh; transform: translateX(-105%); transition: transform 160ms ease-out; }
+        .app-shell.menu-open .sidebar { transform: translateX(0); }
+        .scrim { position: fixed; z-index: 70; inset: 0; border: 0; background: rgb(21 54 44 / 0.45); }
+        .app-shell.menu-open .scrim { display: block; }
+        .menu-button { display: inline-flex; }
+        .topbar { min-block-size: 4rem; }
+        .builder-layout { min-block-size: 0; }
+      }
+      @media (max-width: 42rem) {
+        .split, .field-row { grid-template-columns: minmax(0, 1fr); }
+        .destination-map { grid-template-columns: minmax(0, 1fr); }
+        .destination-map li:nth-child(n+2) { border-block-start: 1px solid var(--border); }
+        .destination-map li:not(:nth-child(3n+1)) { border-inline-start: 0; }
+        .section-heading, .row-between, .evidence-head { display: grid; }
+        .detail-list { grid-template-columns: minmax(0, 1fr); }
+        .detail-list dt { padding-block-end: 0.15rem; border-block-end: 0; }
+        .detail-list dd { padding-block-start: 0.15rem; }
+        .readiness-row { grid-template-columns: auto minmax(0, 1fr); }
+        .readiness-row > .status { grid-column: 2; justify-self: start; }
+        .version-item { grid-template-columns: minmax(0, 1fr); }
+        .dialog-actions { justify-content: stretch; }
+        .dialog-actions .button { inline-size: 100%; }
+      }
+      @media (max-width: 30rem) {
+        .topbar-meta .status { display: none; }
+        .page { padding-inline: 1rem; }
+        .form-footer .button, .form-footer a, .page-header-actions .button, .page-header-actions a { inline-size: 100%; }
+        .inline-actions { display: grid; }
+        .inline-actions .button, .inline-actions a { inline-size: 100%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+      }
+      @media (prefers-contrast: more) {
+        :root { --border: #667c74; --border-strong: #263f36; --text-muted: #425850; --surface-muted: #e2ebe7; }
+        .button, select, input[type="text"], .choice, .compact-block, .notice, .preview-shell, dialog { border-width: 2px; }
+        .status { border-width: 2px; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">Skip to main content</a>
+    <div class="app-shell" id="appShell">
+      <aside class="sidebar" id="sidebar" aria-label="Application navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7.5h10M7 12h6M7 16.5h3"/><path d="M5 3.5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2Z"/></svg>
+          </span>
+          <span>P&amp;AI Bot</span>
+        </div>
+        <nav class="workspace-links" aria-label="Workspaces" id="workspaceLinks"></nav>
+        <nav class="nav-region" aria-labelledby="navHeading">
+          <p class="nav-heading" id="navHeading">Build AI</p>
+          <ul class="nav-list" id="navList"></ul>
+        </nav>
+        <p class="sidebar-note">Illustrative artifact · Synthetic data · Nothing reaches learners</p>
+      </aside>
+      <button class="scrim" type="button" data-action="close-menu"><span class="sr-only">Close navigation</span></button>
+      <div class="app-area">
+        <header class="topbar">
+          <div class="topbar-start">
+            <button class="button icon-only menu-button" id="menuButton" type="button" data-action="open-menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
+            <div class="context-title"><strong id="contextName">P&amp;AI Tutor</strong><span id="contextScope">Platform scope · All authorized schools</span></div>
+          </div>
+          <div class="topbar-meta"><span class="status info" id="topStatus"></span><span class="avatar" id="avatar" aria-label="Signed in as Nabila Rahman">NR</span></div>
+        </header>
+        <main class="view" id="mainContent" tabindex="-1"></main>
+      </div>
+    </div>
+    <div class="live-region" id="liveRegion" role="status" aria-live="polite" aria-atomic="true"></div>
+    <script>
+      (() => {
+        "use strict";
+
+        const BUILD_PAGES = ["overview", "curriculum", "teaching", "test", "publish", "activity"];
+        const TEACH_PAGES = ["classroom", "reviews"];
+        const SCHOOL_PAGES = ["overview", "channels"];
+        const buildNav = [
+          ["overview", "Overview", "home"],
+          ["curriculum", "Curriculum", "book"],
+          ["teaching", "Teaching", "sliders"],
+          ["test", "Test tutor", "flask"],
+          ["publish", "Publish", "upload"],
+          ["activity", "Activity", "clock"]
+        ];
+        const teachNav = [["classroom", "5 Amanah", "users"], ["reviews", "Review tasks", "review"]];
+        const schoolNav = [["overview", "Overview", "home"], ["channels", "Setup and channels", "channel"]];
+        const icons = {
+          home: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
+          book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v17H6.5A2.5 2.5 0 0 0 4 22V5.5Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v17h4.5A2.5 2.5 0 0 1 20 22V5.5Z"/>',
+          sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+          flask: '<path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7.5 16h9"/>',
+          upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v6h14v-6"/>',
+          clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+          users: '<path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M17 11a4 4 0 0 1 4 4v2M16 3.3a4 4 0 0 1 0 7.4"/>',
+          review: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+          channel: '<path d="M4 6h16v12H4z"/><path d="m5 7 7 6 7-6"/>',
+          check: '<path d="m5 12 4 4L19 6"/>',
+          info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+          alert: '<path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17h.01"/>',
+          edit: '<path d="M13.5 6.5 17.5 10.5M4 20l4.5-1 10-10a2.8 2.8 0 0 0-4-4l-10 10L4 20Z"/>',
+          shield: '<path d="M12 3 5 6v5c0 4.8 2.9 8.1 7 10 4.1-1.9 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
+          arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
+          back: '<path d="M19 12H5M10 7l-5 5 5 5"/>',
+          close: '<path d="m6 6 12 12M18 6 6 18"/>',
+          circle: '<circle cx="12" cy="12" r="8"/>'
+        };
+
+        const initialTeaching = {
+          approach: "adapt",
+          detail: "balanced",
+          language: "follow",
+          tone: "calm"
+        };
+        const state = {
+          workspace: "build",
+          page: "overview",
+          draft: {
+            savedRevision: "Draft revision 7",
+            savedAt: "19 Aug 2026, 10:24",
+            savedBy: "Nabila Rahman",
+            unsaved: false,
+            baseVersionId: "PV-2026-08-03",
+            curriculum: { bundle: "math-f1-aug", source: "Open School Syllabus mirror", revision: "2026.08", coverage: "English and Bahasa Melayu" },
+            teaching: { ...initialTeaching },
+            savedTeaching: { ...initialTeaching },
+            savedCurriculumBundle: "math-f1-aug",
+            changedSections: []
+          },
+          tests: {
+            status: "passed",
+            fresh: true,
+            draftRevision: "Draft revision 7",
+            runAt: "19 Aug 2026, 10:31",
+            invalidatedBy: ""
+          },
+          educatorReview: {
+            status: "complete",
+            reviewer: "Aisyah Salleh",
+            draftRevision: "Draft revision 7",
+            updatedAt: "19 Aug 2026, 11:05"
+          },
+          reviewTask: null,
+          versionNote: "",
+          publicationSuccess: "",
+          publishedVersions: [
+            { id: "PV-2026-08-03", latest: true, note: "Clearer mixed-language guidance", publisher: "Nabila Rahman", time: "12 Aug 2026, 14:10", curriculum: "2026.08", tests: "Passed · 12 Aug 2026", review: "Aisyah Salleh · complete", classes: 4 },
+            { id: "PV-2026-07-18", latest: false, note: "Initial supervised pilot", publisher: "Nabila Rahman", time: "18 Jul 2026, 09:20", curriculum: "2026.07", tests: "Passed · 18 Jul 2026", review: "Farid Hakim · complete", classes: 0 }
+          ],
+          preview: {
+            curriculum: { scenario: "stuck", topic: "fractions", language: "mixed", status: "not-run", revision: "", binding: "" },
+            teaching: { scenario: "stuck", topic: "fractions", language: "mixed", status: "not-run", revision: "", binding: "" }
+          },
+          testPreviewState: "passed",
+          activityMode: "not-connected",
+          activityEvents: [
+            ["Draft checked", "No difference from the latest Published version.", "Today, 11:05"],
+            ["Educator review recorded", "Independent review completed for Draft revision 7.", "Today, 11:05"],
+            ["Published version made available", "PV-2026-08-03 became available to teachers. No class changed.", "12 Aug, 14:10"]
+          ],
+          classAdaptation: { version: "PV-2026-08-03", appliedVersion: "PV-2026-08-03", help: "hint-first", detail: "balanced", language: "follow", topic: "current", previewReady: false, applied: false },
+          runTimer: 0
+        };
+
+        function icon(name) {
+          return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.circle}</svg>`;
+        }
+        function escapeHTML(value) {
+          return String(value).replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+        }
+        function status(label, tone = "info") {
+          const glyph = tone === "positive" ? "check" : tone === "danger" || tone === "warning" ? "alert" : "info";
+          return `<span class="status ${tone}">${icon(glyph)}<span>${escapeHTML(label)}</span></span>`;
+        }
+        function button(label, action, variant = "", extra = "") {
+          return `<button class="button ${variant}" type="button" data-action="${action}" ${extra}>${escapeHTML(label)}</button>`;
+        }
+        function buildHref(page, anchor = "") { return `?page=${page}${anchor}`; }
+        function routeHref(workspace, page) { return workspace === "build" ? buildHref(page) : `?workspace=${workspace}&page=${page}`; }
+        function pageHeader(title, lead, breadcrumb) {
+          return `<header class="page-header"><p class="breadcrumb"><a href="${buildHref("overview")}" data-nav>Build AI</a> / ${escapeHTML(breadcrumb || title)}</p><h1 tabindex="-1">${escapeHTML(title)}</h1><p class="lead">${lead}</p></header>`;
+        }
+        function latestVersion() { return state.publishedVersions[0]; }
+        function draftMatchesLatest() {
+          const latest = latestVersion();
+          return !state.draft.unsaved && state.draft.baseVersionId === latest.id && state.draft.changedSections.length === 0;
+        }
+        function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
+        function templateInto(element, markup) {
+          const template = document.createElement("template");
+          template.innerHTML = markup;
+          element.replaceChildren(template.content.cloneNode(true));
+        }
+        function announce(message) {
+          const region = document.getElementById("liveRegion");
+          region.textContent = "";
+          window.setTimeout(() => { region.textContent = message; }, 20);
+        }
+        function closeMenu() {
+          document.getElementById("appShell").classList.remove("menu-open");
+          document.getElementById("menuButton").setAttribute("aria-expanded", "false");
+        }
+        function focusHeading() {
+          window.requestAnimationFrame(() => document.querySelector("main h1")?.focus());
+        }
+        function currentRouteFromURL() {
+          const params = new URLSearchParams(window.location.search);
+          const workspace = ["build", "teach", "school"].includes(params.get("workspace")) ? params.get("workspace") : "build";
+          const allowed = workspace === "build" ? BUILD_PAGES : workspace === "teach" ? TEACH_PAGES : SCHOOL_PAGES;
+          const fallback = workspace === "build" ? "overview" : workspace === "teach" ? "classroom" : "overview";
+          const page = allowed.includes(params.get("page")) ? params.get("page") : fallback;
+          return { workspace, page, preview: params.get("preview") };
+        }
+        function navigate(href, replace = false) {
+          if (replace) history.replaceState({}, "", href); else history.pushState({}, "", href);
+          const route = currentRouteFromURL();
+          state.workspace = route.workspace;
+          state.page = route.page;
+          renderRoute();
+          closeMenu();
+          focusHeading();
+        }
+
+        function renderNavigation() {
+          const workspaceLinks = [
+            ["build", "Build AI", "overview"],
+            ["teach", "Teach", "classroom"],
+            ["school", "Manage school", "overview"]
+          ].map(([workspace, label, page]) => `<a class="workspace-link" href="${routeHref(workspace, page)}" data-nav ${state.workspace === workspace ? 'aria-current="page"' : ""}>${escapeHTML(label)}</a>`).join("");
+          templateInto(document.getElementById("workspaceLinks"), workspaceLinks);
+          const nav = state.workspace === "build" ? buildNav : state.workspace === "teach" ? teachNav : schoolNav;
+          const navMarkup = nav.map(([page, label, glyph]) => `<li><a class="nav-link" href="${routeHref(state.workspace, page)}" data-nav ${state.page === page ? 'aria-current="page"' : ""}>${icon(glyph)}<span>${escapeHTML(label)}</span></a></li>`).join("");
+          templateInto(document.getElementById("navList"), navMarkup);
+          document.getElementById("navHeading").textContent = state.workspace === "build" ? "Build AI" : state.workspace === "teach" ? "Teach" : "Manage school";
+
+          const contextName = document.getElementById("contextName");
+          const contextScope = document.getElementById("contextScope");
+          const topStatus = document.getElementById("topStatus");
+          const avatar = document.getElementById("avatar");
+          if (state.workspace === "build") {
+            contextName.textContent = "P&AI Tutor";
+            contextScope.textContent = "Platform scope · All authorized schools";
+            topStatus.className = "status info";
+            topStatus.innerHTML = `${icon("shield")}<span>Platform operator</span>`;
+            avatar.textContent = "NR";
+            avatar.setAttribute("aria-label", "Signed in as Nabila Rahman");
+          } else if (state.workspace === "teach") {
+            contextName.textContent = state.page === "reviews" ? "Educator review" : "5 Amanah · Mathematics";
+            contextScope.textContent = "School scope · Sekolah Menengah Pandai";
+            topStatus.className = "status info";
+            topStatus.innerHTML = `${icon("users")}<span>Assigned class</span>`;
+            avatar.textContent = "AS";
+            avatar.setAttribute("aria-label", "Signed in as Aisyah Salleh, synthetic designated reviewer");
+          } else {
+            contextName.textContent = "Sekolah Menengah Pandai";
+            contextScope.textContent = "School scope · School administrator";
+            topStatus.className = "status info";
+            topStatus.innerHTML = `${icon("shield")}<span>School scope</span>`;
+            avatar.textContent = "NR";
+            avatar.setAttribute("aria-label", "Signed in as Nabila Rahman");
+          }
+        }
+
+        function overviewLead() {
+          const latest = latestVersion();
+          if (draftMatchesLatest() && state.activityMode === "not-connected") {
+            return `The Draft matches Published version <strong>${escapeHTML(latest.id)}</strong>. ${latest.classes} authorized classes use it. Tutor setup is up to date; operational monitoring is not connected in this illustrative artifact.`;
+          }
+          if (state.draft.unsaved) {
+            return `The Draft has unsaved changes. Published version <strong>${escapeHTML(latest.id)}</strong> remains available to teachers, and ${latest.classes} authorized classes still use it. Save the Draft before running tests.`;
+          }
+          if (!state.tests.fresh || state.tests.draftRevision !== state.draft.savedRevision) {
+            return `Draft saved. Published version <strong>${escapeHTML(latest.id)}</strong> remains available to teachers, and ${latest.classes} authorized classes use it. Test results are out of date${state.tests.invalidatedBy ? ` after ${escapeHTML(state.tests.invalidatedBy)}` : ""}.`;
+          }
+          if (["failed", "needs-review", "inconclusive", "cancelled"].includes(state.tests.status)) {
+            return `Draft saved. Published version <strong>${escapeHTML(latest.id)}</strong> remains available to teachers, and ${latest.classes} authorized classes use it. Test results are ${escapeHTML(testStatusLabel(state.tests.status))}.`;
+          }
+          if (state.educatorReview.status !== "complete" || state.educatorReview.draftRevision !== state.draft.savedRevision) {
+            return `Draft saved and Test results are current. Published version <strong>${escapeHTML(latest.id)}</strong> remains available to teachers, and ${latest.classes} authorized classes use it. Educator review is ${escapeHTML(reviewStatusLabel())}.`;
+          }
+          return `Draft saved and ready for publication review. Published version <strong>${escapeHTML(latest.id)}</strong> remains available to teachers, and ${latest.classes} authorized classes use it. No class will change on publication.`;
+        }
+        function overviewAction() {
+          if (draftMatchesLatest()) return "";
+          if (state.draft.unsaved) return `<a class="button primary" href="${buildHref("teaching")}" data-nav>Review Teaching</a>`;
+          if (!state.tests.fresh || state.tests.draftRevision !== state.draft.savedRevision) return `<a class="button primary" href="${buildHref("test")}" data-nav>Run tests</a>`;
+          if (["failed", "needs-review", "inconclusive", "cancelled"].includes(state.tests.status)) return `<a class="button primary" href="${buildHref("test")}" data-nav>Review Test results</a>`;
+          return `<a class="button primary" href="${buildHref("publish")}" data-nav>Open Publish</a>`;
+        }
+        function overviewPage() {
+          const latest = latestVersion();
+          const changes = state.draft.changedSections.length ? state.draft.changedSections.slice(0, 3) : ["No private changes since the latest Published version", "Educator review recorded for the exact saved Draft", "Four authorized classes continue using the latest Published version"];
+          return `<section class="page"><div class="page-inner">
+            ${pageHeader("P&AI Tutor", overviewLead(), "Overview")}
+            ${overviewAction() ? `<div class="page-header-actions">${overviewAction()}</div>` : ""}
+            <div class="stack">
+              <nav class="section" aria-label="Build AI destinations">
+                <ol class="destination-map">
+                  <li><a href="${buildHref("overview")}" data-nav aria-current="page"><span>Overview</span><span class="destination-state">Current</span></a></li>
+                  <li><a href="${buildHref("curriculum")}" data-nav><span>Curriculum</span><span class="destination-state">2026.08</span></a></li>
+                  <li><a href="${buildHref("teaching")}" data-nav><span>Teaching</span><span class="destination-state">${state.draft.unsaved ? "Unsaved" : "Saved"}</span></a></li>
+                  <li><a href="${buildHref("test")}" data-nav><span>Test tutor</span><span class="destination-state">${escapeHTML(testStatusLabel(state.tests.status, state.tests.fresh))}</span></a></li>
+                  <li><a href="${buildHref("publish")}" data-nav><span>Publish</span><span class="destination-state">${escapeHTML(reviewStatusLabel())}</span></a></li>
+                  <li><a href="${buildHref("activity")}" data-nav><span>Activity</span><span class="destination-state">Monitor</span></a></li>
+                </ol>
+              </nav>
+              <section class="section" aria-labelledby="tutorStateHeading">
+                <div class="section-heading"><div><h2 id="tutorStateHeading">Tutor state</h2><p>One compact view of the private Draft and available Published version.</p></div></div>
+                <ul class="state-list">
+                  <li><strong>Curriculum</strong><p>${escapeHTML(state.draft.curriculum.source)} · aligned to KSSM Mathematics Form 1 · revision ${escapeHTML(state.draft.curriculum.revision)} · approved and validated.</p></li>
+                  <li><strong>Teaching</strong><p>${state.draft.unsaved ? "Unsaved bounded preference changes. Learners are not affected." : `Saved in ${escapeHTML(state.draft.savedRevision)}. ${state.draft.changedSections.length ? escapeHTML(state.draft.changedSections.join("; ")) : "Matches the latest Published version."}`}</p></li>
+                  <li><strong>Test results</strong><p>${escapeHTML(testStatusLabel(state.tests.status, state.tests.fresh))} for ${escapeHTML(state.tests.draftRevision)}${state.tests.invalidatedBy ? ` · invalidated by ${escapeHTML(state.tests.invalidatedBy)}` : ""}.</p></li>
+                  <li><strong>Educator review and readiness</strong><p>${escapeHTML(reviewStatusLabel(true))}. ${state.educatorReview.status === "complete" && state.educatorReview.draftRevision === state.draft.savedRevision ? "The exact saved Draft was reviewed independently." : "Open Publish for the review handoff and current blocker."}</p></li>
+                </ul>
+              </section>
+              <section class="section" aria-labelledby="publishedRelationshipHeading">
+                <div class="row-between"><div><h2 id="publishedRelationshipHeading">Published version ${escapeHTML(latest.id)} is available</h2><p>${latest.classes} authorized classes use this immutable version. Starting or editing a Draft does not remove it or change any class.</p></div>${status("Latest available", "positive")}</div>
+                <div class="inline-links"><a href="${buildHref("publish", "#versionHistory")}" data-nav>Version history</a><a href="${buildHref("publish", "#usedByClasses")}" data-nav>Used by classes</a></div>
+              </section>
+              <section class="section" aria-labelledby="changesHeading">
+                <div class="section-heading"><div><h2 id="changesHeading">Significant changes</h2><p>Privacy-safe changes only. Operational monitoring is not connected.</p></div><a href="${buildHref("activity")}" data-nav>Open Activity</a></div>
+                <ul class="change-list">${changes.map(change => `<li>${escapeHTML(change)}</li>`).join("")}</ul>
+              </section>
+              <section class="section" aria-labelledby="accessHeading"><h2 id="accessHeading">Platform access</h2><p>Runtime settings require the narrower platform grant. School channel setup remains in Manage school.</p><div class="inline-links"><a href="${routeHref("school", "channels")}" data-nav>Manage school channels</a><a href="#runtime-unavailable">Runtime settings access details</a></div></section>
+            </div>
+            <p class="prototype-note">Illustrative component. All people, evidence, school context, and identifiers are synthetic and are not production or backend evidence.</p>
+          </div></section>`;
+        }
+
+        function previewControls(kind) {
+          const preview = state.preview[kind];
+          return `<fieldset><legend>Approved synthetic preview scenario</legend><div class="field-row">
+            <div class="field"><label class="field-label" for="${kind}Scenario">Scenario</label><select id="${kind}Scenario" data-preview-kind="${kind}" data-preview-field="scenario"><option value="stuck" ${preview.scenario === "stuck" ? "selected" : ""}>Learner is stuck</option><option value="misconception" ${preview.scenario === "misconception" ? "selected" : ""}>Common misconception</option><option value="explain" ${preview.scenario === "explain" ? "selected" : ""}>Ask for an explanation</option></select></div>
+            <div class="field"><label class="field-label" for="${kind}Topic">Topic</label><select id="${kind}Topic" data-preview-kind="${kind}" data-preview-field="topic"><option value="fractions" ${preview.topic === "fractions" ? "selected" : ""}>Fractions and ratios</option><option value="algebra" ${preview.topic === "algebra" ? "selected" : ""}>Introductory algebra</option></select></div>
+            <div class="field"><label class="field-label" for="${kind}Language">Language</label><select id="${kind}Language" data-preview-kind="${kind}" data-preview-field="language"><option value="mixed" ${preview.language === "mixed" ? "selected" : ""}>Natural English/Bahasa Melayu mix</option><option value="english" ${preview.language === "english" ? "selected" : ""}>English</option><option value="bm" ${preview.language === "bm" ? "selected" : ""}>Bahasa Melayu</option></select></div>
+          </div><p class="field-hint">Approved scenarios only. Preview never becomes Test results, Educator review evidence, or learner history.</p></fieldset>`;
+        }
+        function curriculumPage() {
+          const sourceSentence = `${escapeHTML(state.draft.curriculum.source)} is aligned to KSSM Mathematics Form 1, curriculum revision ${escapeHTML(state.draft.curriculum.revision)}, approved for use by the synthetic curriculum council on 4 Aug 2026, and validated. ${state.draft.curriculum.revision === latestVersion().curriculum ? "It matches the latest Published version." : "It differs from the latest Published version."}`;
+          return `<div class="builder-layout"><section class="page"><div class="page-inner">
+            ${pageHeader("Curriculum", sourceSentence, "Curriculum")}
+            <form class="stack" id="curriculumForm">
+              <section class="section" aria-labelledby="sourceHeading">
+                <div class="section-heading"><div><h2 id="sourceHeading">Source and curriculum revision</h2><p>The Draft uses one approved immutable bundle.</p></div>${status("Approved and validated", "positive")}</div>
+                <div class="field-grid">
+                  <div class="field"><label class="field-label" for="curriculumBundle">Approved bundle</label><select id="curriculumBundle" data-draft-field="curriculum.bundle"><option value="math-f1-aug" ${state.draft.curriculum.bundle === "math-f1-aug" ? "selected" : ""}>Mathematics Form 1 · revision 2026.08</option><option value="math-f1-jul" ${state.draft.curriculum.bundle === "math-f1-jul" ? "selected" : ""}>Mathematics Form 1 · revision 2026.07</option></select><p class="field-hint">Changing the bundle validates it automatically and makes current Test results and Educator review out of date.</p></div>
+                  <dl class="detail-list"><dt>Source</dt><dd>Open School Syllabus mirror · synthetic</dd><dt>Alignment</dt><dd>KSSM · Mathematics · Form 1</dd><dt>Approval</dt><dd>Synthetic curriculum council · 4 Aug 2026</dd><dt>Language coverage</dt><dd>English and Bahasa Melayu</dd></dl>
+                  <details><summary>Exact snapshot identifier</summary><p><code>oss-math-f1-2026-08-simulated</code> · illustrative identifier, not production evidence.</p></details>
+                </div>
+              </section>
+              <section class="section" aria-labelledby="scopeHeading"><h2 id="scopeHeading">Approved bundle scope</h2><p>The Draft uses the complete approved bundle. Individual objectives cannot be removed in this version of the component.</p><ul><li>12 topics and 47 supported objectives</li><li>Teaching notes, worked examples, and assessments present</li><li>No missing areas; two wording notes reviewed during synthetic validation</li></ul></section>
+              <section class="section" aria-labelledby="groundingHeading"><h2 id="groundingHeading">Grounding examples</h2><p>These examples explain provenance; they do not use learner messages.</p><div class="compact-block"><h3>Equivalent fractions</h3><p><strong>Synthetic Tutor excerpt:</strong> “Three sixths and one half name the same amount. Bahagikan pembilang dan penyebut dengan nombor yang sama.”</p><ul class="citation-list"><li>Fractions and ratios — equivalence objective, curriculum revision 2026.08</li><li>Teaching note — use area models before symbolic simplification</li></ul></div></section>
+              <section class="section" aria-labelledby="curriculumPreviewControlsHeading"><h2 id="curriculumPreviewControlsHeading">Preview grounding</h2>${previewControls("curriculum")}<div class="inline-actions">${button(state.preview.curriculum.status === "not-run" ? "Run preview" : "Run preview again", "run-preview", "primary", 'data-kind="curriculum"')} ${button("Open preview", "open-preview", "mobile-preview-action", 'data-kind="curriculum"')}</div></section>
+              <section class="section" aria-labelledby="curriculumDraftHeading"><div class="row-between"><div><h2 id="curriculumDraftHeading">Draft change</h2><p id="draftStatus">${state.draft.unsaved ? "Unsaved curriculum change. Prior preview remains visible but may be out of date." : `${escapeHTML(state.draft.savedRevision)} saved ${escapeHTML(state.draft.savedAt)} by ${escapeHTML(state.draft.savedBy)}.`}</p></div>${status(state.draft.unsaved ? "Unsaved" : "Saved", state.draft.unsaved ? "warning" : "positive")}</div><div class="form-footer">${button("Save Draft", "save-draft", "primary", state.draft.unsaved ? "" : "disabled")} ${button("Discard changes", "discard-draft", "", state.draft.unsaved ? "" : "disabled")}<a class="button" href="${buildHref("teaching")}" data-nav>Continue to Teaching</a><a class="button subtle" href="${buildHref("publish", "#versionHistory")}" data-nav>Compare with Published version</a></div></section>
+            </form>
+            <p class="prototype-note">Illustrative component. Curriculum provenance and validation are synthetic.</p>
+          </div></section>${previewPane("curriculum")}</div>`;
+        }
+
+        const teachingOptions = {
+          approach: [["adapt", "Adapt to the learner"], ["question", "Start with one guiding question"], ["example", "Start with one small worked example"], ["explain", "Start with a short explanation"]],
+          detail: [["adapt", "Adapt to the learner"], ["brief", "Brief"], ["balanced", "Balanced"], ["detailed", "More detailed when useful"]],
+          language: [["follow", "Follow the learner’s English, Bahasa Melayu, or natural mix"], ["english", "Prefer English"], ["bm", "Prefer Bahasa Melayu"]],
+          tone: [["calm", "Calm and clear"], ["warm", "Warm and encouraging"], ["direct", "Direct and concise"]]
+        };
+        function choiceFieldset(field, legend, helper) {
+          const choices = teachingOptions[field].map(([value, label]) => `<label class="choice"><input type="radio" name="teaching-${field}" value="${value}" data-draft-field="teaching.${field}" ${state.draft.teaching[field] === value ? "checked" : ""}/><span><strong>${escapeHTML(label)}</strong></span></label>`).join("");
+          return `<fieldset><legend>${escapeHTML(legend)}</legend><p class="field-hint">${escapeHTML(helper)}</p><div class="choice-set">${choices}</div></fieldset>`;
+        }
+        function teachingPage() {
+          const saved = state.draft.unsaved ? "has unsaved bounded preference changes" : `is saved in ${escapeHTML(state.draft.savedRevision)}`;
+          return `<div class="builder-layout"><section class="page"><div class="page-inner">
+            ${pageHeader("Teaching", `The private Draft ${saved}. Explicit learner requests, demonstrated progress, curriculum evidence, and locked safeguards take priority over these preferences.`, "Teaching")}
+            <form class="stack" id="teachingForm">
+              <section class="section" aria-labelledby="preferencesHeading"><div class="section-heading"><div><h2 id="preferencesHeading">Teaching preferences</h2><p>Bounded choices only. There is no prompt or free-form guidance field.</p></div></div><div class="field-grid">
+                ${choiceFieldset("approach", "How the Tutor starts", "This preference yields when the learner’s current need calls for a different start.")}
+                ${choiceFieldset("detail", "Typical response detail", "The Tutor may shorten or expand a response using learner progress and curriculum evidence.")}
+                ${choiceFieldset("language", "Tutor reply language", "Available choices stay within English and Bahasa Melayu curriculum coverage.")}
+                ${choiceFieldset("tone", "Tone", "Locked identity, uncertainty, safety, and curriculum boundaries always take priority.")}
+              </div></section>
+              <section class="section" aria-labelledby="lockedHeading"><h2 id="lockedHeading">Locked behavior</h2><p>These are visible so the operator knows what the bounded preferences cannot change.</p><ul class="locked-list"><li><strong>Hints, practice, and assessment</strong><p>Controlled by the teaching policy and approved curriculum so responses maintain instructional purpose.</p></li><li><strong>AI identity and uncertainty</strong><p>Controlled by the platform disclosure policy so the Tutor does not present itself as a human or hide uncertainty.</p></li><li><strong>Approved curriculum boundary</strong><p>Controlled by the selected immutable revision so grounding cannot move outside the approved scope.</p></li><li><strong>Privacy boundaries</strong><p>Controlled by the platform policy and required tests; operators and teachers cannot weaken it.</p></li><li><strong>Enabled-channel response constraints</strong><p>Controlled by school channel setup. This page cannot change channel delivery.</p></li></ul></section>
+              <section class="section" aria-labelledby="adaptationBoundsHeading"><h2 id="adaptationBoundsHeading">Class adaptation bounds</h2><p>Assigned teachers may choose a help-first preference, pacing/detail, reply-language preference within supported coverage, and current-topic emphasis inside this curriculum revision. Free-form class instructions, provider changes, and safeguard changes are not allowed.</p><a href="${routeHref("teach", "classroom")}" data-nav>See class adaptation in Teach</a></section>
+              <section class="section" aria-labelledby="teachingPreviewControlsHeading"><h2 id="teachingPreviewControlsHeading">Preview these choices</h2>${previewControls("teaching")}<div class="inline-actions">${button(state.preview.teaching.status === "not-run" ? "Run preview" : "Run preview again", "run-preview", "primary", 'data-kind="teaching"')} ${button("Open preview", "open-preview", "mobile-preview-action", 'data-kind="teaching"')}</div></section>
+              <section class="section" aria-labelledby="teachingDraftHeading"><div class="row-between"><div><h2 id="teachingDraftHeading">Draft change</h2><p id="draftStatus">${state.draft.unsaved ? "Unsaved Teaching changes. Learners are not affected; prior preview remains visible but is out of date." : `${escapeHTML(state.draft.savedRevision)} saved ${escapeHTML(state.draft.savedAt)} by ${escapeHTML(state.draft.savedBy)}.`}</p></div>${status(state.draft.unsaved ? "Unsaved" : "Saved", state.draft.unsaved ? "warning" : "positive")}</div><div class="form-footer">${button("Save Draft", "save-draft", "primary", state.draft.unsaved ? "" : "disabled")} ${button("Discard changes", "discard-draft", "", state.draft.unsaved ? "" : "disabled")}<a class="button" href="${buildHref("test")}" data-nav>Continue to Test tutor</a></div></section>
+            </form>
+            <p class="prototype-note">Illustrative component. Teaching choices and preview responses are synthetic.</p>
+          </div></section>${previewPane("teaching")}</div>`;
+        }
+
+        function previewStatusMarkup(kind) {
+          const value = state.preview[kind].status;
+          if (value === "ready") return status("Current preview", "positive");
+          if (value === "out-of-date") return status("Out of date", "warning");
+          if (value === "running") return status("Running", "info");
+          if (value === "failed") return status("Failed", "danger");
+          return status("Not run", "info");
+        }
+        function previewBinding(kind) {
+          const preview = state.preview[kind];
+          if (preview.status === "not-run") return "Choose an approved scenario, topic, and language, then run preview. Learners are not affected.";
+          const localState = state.draft.unsaved ? `unsaved ${kind === "teaching" ? "Teaching" : "Curriculum"} changes` : state.draft.savedRevision;
+          return `Synthetic preview using ${localState} and curriculum revision ${state.draft.curriculum.revision}. Learners are not affected.`;
+        }
+        function previewExample(kind) {
+          const preview = state.preview[kind];
+          if (preview.status === "not-run") return `<div class="empty-state"><h3>Preview not run</h3><p>Results appear only after an explicit run. This is not a chat and nothing is sent to learners.</p></div>`;
+          if (preview.status === "running") return `<div class="empty-state"><h3>Running synthetic preview</h3><p>The approved scenario is being evaluated against current local choices.</p></div>`;
+          const scenarioCopy = preview.scenario === "misconception" ? "The learner says that 3/6 is larger than 1/2 because 6 is larger than 2." : preview.scenario === "explain" ? "The learner asks why multiplying numerator and denominator by the same number preserves a fraction." : "The learner is stuck comparing 3/6 and 1/2.";
+          const reply = state.draft.teaching.language === "bm" || preview.language === "bm"
+            ? "Mari lihat jumlah yang sama dalam dua cara. Tiga daripada enam bahagian sama dengan satu daripada dua bahagian. Cuba lorek kedua-dua rajah—apa yang kamu perasan?"
+            : state.draft.teaching.language === "english" || preview.language === "english"
+              ? "Let’s represent the same whole in two ways. Three of six equal parts cover the same amount as one of two equal parts. What do you notice when you shade both diagrams?"
+              : "Let’s show the same whole in two ways. Tiga daripada enam bahagian meliputi jumlah yang sama dengan satu daripada dua bahagian. What do you notice when both diagrams are shaded?";
+          return `<div class="synthetic-example"><p><strong>Approved synthetic scenario:</strong> ${escapeHTML(scenarioCopy)}</p><p><strong>Synthetic Tutor excerpt:</strong> ${escapeHTML(reply)}</p>${kind === "curriculum" ? `<h3>Citations</h3><ul class="citation-list"><li>Fractions and ratios — equivalence objective, curriculum revision ${escapeHTML(state.draft.curriculum.revision)}</li><li>Teaching note — compare area models before symbolic simplification</li></ul>` : `<p><strong>Applied local choices:</strong> ${escapeHTML(teachingOptions.approach.find(([value]) => value === state.draft.teaching.approach)[1])}; ${escapeHTML(teachingOptions.detail.find(([value]) => value === state.draft.teaching.detail)[1])}; ${escapeHTML(teachingOptions.language.find(([value]) => value === state.draft.teaching.language)[1])}; ${escapeHTML(teachingOptions.tone.find(([value]) => value === state.draft.teaching.tone)[1])}.</p>`}</div>${preview.status === "out-of-date" ? `<div class="notice warning">${icon("alert")}<div><strong>Previous result kept</strong><p>A field changed after this run. Run preview again to update the result.</p></div></div>` : ""}`;
+        }
+        function previewPane(kind) {
+          return `<aside class="preview-pane" id="${kind}Preview" aria-labelledby="${kind}PreviewHeading" data-preview-pane="${kind}"><div class="preview-shell"><header class="preview-header"><div class="preview-title"><span class="bot-mark" aria-hidden="true">P</span><div><h2 id="${kind}PreviewHeading">${kind === "curriculum" ? "Curriculum preview" : "Teaching preview"}</h2><p>Approved synthetic scenario</p></div></div><div>${previewStatusMarkup(kind)}</div></header><div class="preview-body"><button class="button subtle preview-back" type="button" data-action="close-preview">${icon("back")} Back to ${kind === "curriculum" ? "Curriculum" : "Teaching"}</button><p class="preview-binding" data-preview-binding>${escapeHTML(previewBinding(kind))}</p><div data-preview-result>${previewExample(kind)}</div><div class="inline-actions">${button(state.preview[kind].status === "not-run" ? "Run preview" : "Run preview again", "run-preview", "primary", `data-kind="${kind}"`)}</div></div></div></aside>`;
+        }
+        function refreshPreview(kind) {
+          const pane = document.querySelector(`[data-preview-pane="${kind}"]`);
+          if (!pane) return;
+          const binding = pane.querySelector("[data-preview-binding]");
+          if (binding) binding.textContent = previewBinding(kind);
+          const result = pane.querySelector("[data-preview-result]");
+          if (result) templateInto(result, previewExample(kind));
+          const headerStatus = pane.querySelector(".preview-header > div:last-child");
+          if (headerStatus) templateInto(headerStatus, previewStatusMarkup(kind));
+          pane.querySelectorAll('[data-action="run-preview"]').forEach(control => { control.textContent = state.preview[kind].status === "not-run" ? "Run preview" : "Run preview again"; });
+          const editorButton = document.querySelector(`.page [data-action="run-preview"][data-kind="${kind}"]`);
+          if (editorButton) editorButton.textContent = state.preview[kind].status === "not-run" ? "Run preview" : "Run preview again";
+        }
+        function runPreview(kind) {
+          const preview = state.preview[kind];
+          preview.status = "ready";
+          preview.revision = state.draft.curriculum.revision;
+          preview.binding = state.draft.unsaved ? "unsaved" : state.draft.savedRevision;
+          refreshPreview(kind);
+          announce(`Synthetic ${kind} preview ready. Learners are not affected.`);
+          if (window.matchMedia("(max-width: 70rem)").matches) openPreview(kind, true);
+        }
+        function markPreviewOutOfDate(kind) {
+          if (["ready", "out-of-date", "failed"].includes(state.preview[kind].status)) state.preview[kind].status = "out-of-date";
+          refreshPreview(kind);
+        }
+        function openPreview(kind, pushHistory) {
+          const pane = document.querySelector(`[data-preview-pane="${kind}"]`);
+          if (!pane) return;
+          pane.classList.add("is-open");
+          document.body.classList.add("preview-open");
+          if (pushHistory && window.matchMedia("(max-width: 70rem)").matches) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.get("preview") !== kind) {
+              url.searchParams.set("preview", kind);
+              history.pushState({ preview: kind }, "", `${url.pathname}${url.search}${url.hash}`);
+            }
+          }
+          window.requestAnimationFrame(() => pane.querySelector(".preview-back")?.focus());
+        }
+        function closePreview(useHistory) {
+          const pane = document.querySelector(".preview-pane.is-open");
+          if (!pane) return;
+          pane.classList.remove("is-open");
+          document.body.classList.remove("preview-open");
+          if (useHistory && new URLSearchParams(window.location.search).has("preview")) history.back();
+          else document.querySelector('[data-action="open-preview"]')?.focus();
+        }
+
+        function testStatusLabel(value = state.tests.status, fresh = state.tests.fresh) {
+          if (!fresh || value === "out-of-date") return "Out of date";
+          return ({ running: "Running", passed: "Passed", failed: "Failed", "needs-review": "Needs review", inconclusive: "Inconclusive", cancelled: "Cancelled" })[value] || "Inconclusive";
+        }
+        function testTone(value = state.tests.status, fresh = state.tests.fresh) {
+          if (!fresh || ["out-of-date", "needs-review", "inconclusive", "cancelled"].includes(value)) return "warning";
+          if (value === "passed") return "positive";
+          if (value === "failed") return "danger";
+          return "info";
+        }
+        const testGroups = [
+          ["Curriculum grounding", "Answers stay inside the approved objectives and cite usable curriculum evidence.", "Curriculum", "Rule-based citation check plus synthetic rubric"],
+          ["Teaching behavior", "The bounded start, detail, language, and tone preferences yield to learner evidence.", "Teaching", "Synthetic scenario rubric"],
+          ["English, Bahasa Melayu, and supported mixed-language behavior", "Replies remain understandable and grounded across supported language choices.", "Teaching", "Bilingual synthetic scenario set"],
+          ["Safety and wellbeing", "Implemented non-waivable boundaries refuse unsafe requests and name the safe next step.", "Teaching", "Deterministic policy check and synthetic rubric"],
+          ["Privacy boundaries", "Responses do not expose learner, school, prompt, credential, or private operational data.", "Teaching", "Deterministic privacy fixtures"],
+          ["Enabled-channel constraints", "Responses fit the synthetic enabled web-chat constraints without changing channel setup.", "Teaching", "Format and length check"]
+        ];
+        function groupStatus(index) {
+          const value = !state.tests.fresh ? "out-of-date" : state.tests.status;
+          if (value === "passed") return "passed";
+          if (value === "running") return index < 2 ? "passed" : "running";
+          if (value === "failed") return index === 3 ? "failed" : "passed";
+          if (value === "needs-review") return index === 2 ? "needs-review" : "passed";
+          if (value === "inconclusive") return index === 5 ? "inconclusive" : "passed";
+          if (value === "cancelled") return index < 2 ? "passed" : "inconclusive";
+          return "out-of-date";
+        }
+        function groupEvidence(index) {
+          const group = groupStatus(index);
+          if (group === "passed") return "Approved synthetic evidence matched the required expectation. No learner records were used.";
+          if (group === "failed") return "A synthetic wellbeing scenario continued instruction instead of naming the safe escalation boundary.";
+          if (group === "needs-review") return "The mixed-language response is grounded, but an educator must judge whether the switch is natural.";
+          if (group === "inconclusive") return "The evaluator did not return trustworthy evidence. This result is not treated as Passed.";
+          if (group === "running") return "The synthetic group is still running; no result is claimed yet.";
+          return `The saved Draft changed after this evidence was recorded${state.tests.invalidatedBy ? `: ${state.tests.invalidatedBy}` : ""}.`;
+        }
+        function evidenceRows() {
+          return testGroups.map(([name, expected, repair, method], index) => {
+            const group = groupStatus(index);
+            const label = testStatusLabel(group, group !== "out-of-date");
+            const tone = testTone(group, group !== "out-of-date");
+            return `<li class="evidence-row"><div class="evidence-head"><div><h3>${escapeHTML(name)}</h3><p>Required · 3 synthetic checks</p></div>${status(label, tone)}</div><details><summary>Evidence and reproduction</summary><p><strong>Expected:</strong> ${escapeHTML(expected)}</p><p><strong>Observed:</strong> ${escapeHTML(groupEvidence(index))}</p><p><strong>Source:</strong> approved synthetic scenario set; no learner conversations or school records.</p><p><strong>Evaluator:</strong> ${escapeHTML(method)}.</p><p><strong>Freshness:</strong> ${escapeHTML(state.tests.runAt)} · ${escapeHTML(state.tests.draftRevision)}.</p><p><strong>Reproduce:</strong> Save the exact Draft, select this group, and rerun the approved scenario set.</p></details><div class="inline-links"><a href="${buildHref(repair.toLowerCase())}" data-nav>Edit ${escapeHTML(repair)}</a><button class="button subtle" type="button" data-action="rerun-group" data-group="${index}">Rerun group</button></div></li>`;
+          }).join("");
+        }
+        function testSummarySentence() {
+          const states = testGroups.map((_, index) => groupStatus(index));
+          const counts = states.reduce((result, value) => ({ ...result, [value]: (result[value] || 0) + 1 }), {});
+          return Object.entries(counts).map(([value, count]) => `${count} ${testStatusLabel(value, value !== "out-of-date")}`).join(" · ");
+        }
+        function testPrimaryAction() {
+          if (state.draft.unsaved) return `<a class="button primary" href="${buildHref("teaching")}" data-nav>Open Teaching to save</a>`;
+          if (state.tests.status === "running") return button("Cancel tests", "cancel-tests", "");
+          if (state.tests.status === "passed" && state.tests.fresh && state.tests.draftRevision === state.draft.savedRevision) return `<a class="button primary" href="${buildHref("publish")}" data-nav>Open Publish</a>${button("Run tests again", "run-tests", "")}`;
+          if (["failed", "needs-review", "inconclusive"].includes(state.tests.status)) return `<a class="button primary" href="${buildHref(state.tests.status === "failed" ? "teaching" : "test", state.tests.status === "failed" ? "" : "#evidence")}" data-nav>${state.tests.status === "failed" ? "Edit Teaching" : "Review evidence"}</a>${button("Run tests again", "run-tests", "")}`;
+          return button("Run tests", "run-tests", "primary");
+        }
+        function testPage() {
+          return `<section class="page"><div class="page-inner">
+            ${pageHeader("Test tutor", `Test results use the exact saved <strong>${escapeHTML(state.draft.savedRevision)}</strong>, saved ${escapeHTML(state.draft.savedAt)} by ${escapeHTML(state.draft.savedBy)}, with curriculum revision ${escapeHTML(state.draft.curriculum.revision)}. Changed sections: ${state.draft.changedSections.length ? escapeHTML(state.draft.changedSections.join(", ")) : "none"}.`, "Test tutor")}
+            <div class="stack">
+              ${state.draft.unsaved ? `<div class="notice warning">${icon("alert")}<div><strong>Unsaved Draft</strong><p>Tests cannot run until the Draft is saved. Existing evidence remains tied to ${escapeHTML(state.tests.draftRevision)}.</p></div></div>` : ""}
+              <section class="section" aria-labelledby="testResultHeading" id="testResult"><div class="row-between"><div><h2 id="testResultHeading">Current Test results</h2><p id="testSummary">${escapeHTML(testSummarySentence())} · ${escapeHTML(state.tests.runAt)}.</p></div><div id="testStatus">${status(testStatusLabel(), testTone())}</div></div>
+                <p id="testBinding">${state.tests.fresh && state.tests.draftRevision === state.draft.savedRevision ? `Current for ${escapeHTML(state.draft.savedRevision)}.` : `Out of date for ${escapeHTML(state.draft.savedRevision)}${state.tests.invalidatedBy ? ` after ${escapeHTML(state.tests.invalidatedBy)}` : ""}.`}</p>
+                <div class="inline-actions" id="testActions">${testPrimaryAction()}</div>
+              </section>
+              <section class="section" aria-labelledby="previewStateHeading"><div class="notice info">${icon("info")}<div><strong id="previewStateHeading">Preview state — illustrative artifact only</strong><p>This control changes only the local demonstration below. It is not a product control, evaluator result, backend response, or production truth.</p><div class="field incident-selector"><label class="field-label" for="testPreviewState">Show synthetic Test-result state</label><select id="testPreviewState" data-test-preview-state><option value="passed" ${state.testPreviewState === "passed" ? "selected" : ""}>Passed</option><option value="needs-review" ${state.testPreviewState === "needs-review" ? "selected" : ""}>Needs review</option><option value="inconclusive" ${state.testPreviewState === "inconclusive" ? "selected" : ""}>Inconclusive</option><option value="failed" ${state.testPreviewState === "failed" ? "selected" : ""}>Failed</option><option value="out-of-date" ${state.testPreviewState === "out-of-date" ? "selected" : ""}>Out of date</option><option value="cancelled" ${state.testPreviewState === "cancelled" ? "selected" : ""}>Cancelled</option><option value="running" ${state.testPreviewState === "running" ? "selected" : ""}>Running</option></select></div></div></div></section>
+              <section class="section" aria-labelledby="evidenceHeading" id="evidence"><div class="section-heading"><div><h2 id="evidenceHeading">Required groups</h2><p>Each group shows expected behavior, privacy-safe evidence, method, freshness, reproduction, and repair.</p></div></div><ul class="evidence-list" id="evidenceList">${evidenceRows()}</ul></section>
+            </div>
+            <p class="prototype-note">Illustrative component. All Test results and evidence are visibly synthetic and are not backend evidence.</p>
+          </div></section>`;
+        }
+        function refreshTestView() {
+          const statusNode = document.getElementById("testStatus");
+          if (!statusNode) return;
+          templateInto(statusNode, status(testStatusLabel(), testTone()));
+          document.getElementById("testSummary").textContent = `${testSummarySentence()} · ${state.tests.runAt}.`;
+          document.getElementById("testBinding").textContent = state.tests.fresh && state.tests.draftRevision === state.draft.savedRevision ? `Current for ${state.draft.savedRevision}.` : `Out of date for ${state.draft.savedRevision}${state.tests.invalidatedBy ? ` after ${state.tests.invalidatedBy}` : ""}.`;
+          templateInto(document.getElementById("testActions"), testPrimaryAction());
+          templateInto(document.getElementById("evidenceList"), evidenceRows());
+        }
+
+        function reviewStatusLabel(sentence = false) {
+          const current = state.educatorReview.draftRevision === state.draft.savedRevision;
+          const labels = { complete: "Complete", requested: "In progress", "changes-requested": "Needs action", "out-of-date": "Out of date", idle: "Needs action" };
+          const label = current ? (labels[state.educatorReview.status] || "Needs action") : "Out of date";
+          return sentence ? `${label}${state.educatorReview.reviewer ? ` · ${state.educatorReview.reviewer}` : ""}` : label;
+        }
+        function testsReady() { return !state.draft.unsaved && state.tests.status === "passed" && state.tests.fresh && state.tests.draftRevision === state.draft.savedRevision; }
+        function reviewReady() { return state.educatorReview.status === "complete" && state.educatorReview.draftRevision === state.draft.savedRevision; }
+        function readinessData() {
+          const saved = !state.draft.unsaved;
+          const tests = testsReady();
+          const review = reviewReady();
+          const note = state.versionNote.trim().length > 0;
+          return [
+            ["Draft saved and current", saved ? "Ready" : "Needs action", saved ? `${state.draft.savedRevision} saved ${state.draft.savedAt}.` : "Save the private Draft before evidence can bind to it.", "teaching"],
+            ["Curriculum revision approved and validated", "Ready", `Revision ${state.draft.curriculum.revision} approved for use and validated in this synthetic component.`, "curriculum"],
+            ["Teaching and grounding Test results passed and current", tests ? "Ready" : state.tests.status === "running" ? "In progress" : state.tests.fresh ? "Needs action" : "Out of date", tests ? `${state.tests.draftRevision} · Passed ${state.tests.runAt}.` : "Required Teaching and grounding evidence is not current and Passed.", "test"],
+            ["Non-waivable safeguards and coverage passed and current", tests ? "Ready" : state.tests.status === "running" ? "In progress" : state.tests.fresh ? "Needs action" : "Out of date", tests ? "Safety, privacy, language coverage, and enabled-channel groups Passed." : "A required non-waivable group is not current and Passed.", "test"],
+            ["Educator review complete", review ? "Ready" : state.educatorReview.status === "requested" && state.educatorReview.draftRevision === state.draft.savedRevision ? "In progress" : state.educatorReview.status === "out-of-date" || state.educatorReview.draftRevision !== state.draft.savedRevision ? "Out of date" : "Needs action", review ? `${state.educatorReview.reviewer} completed review ${state.educatorReview.updatedAt}.` : "A designated reviewer must judge this exact saved Draft in Teach.", "publish"],
+            ["Version note and recovery ready", note ? "Ready" : "Needs action", note ? "Plain version note supplied; recovery provenance will be recorded automatically." : "Add a plain version note. Technical recovery provenance is recorded automatically.", "publish"]
+          ];
+        }
+        function readinessTone(label) { return label === "Ready" ? "positive" : label === "Needs action" || label === "Out of date" ? "warning" : "info"; }
+        function readinessRows() {
+          return readinessData().map(([name, label, proof, destination], index) => `<li class="readiness-row" data-readiness-row="${index}"><div class="readiness-copy"><strong>${escapeHTML(name)}</strong><p>${escapeHTML(proof)} <a href="${buildHref(destination, destination === "publish" ? "#educatorReview" : "")}" data-nav>${destination === "publish" ? "Review this item" : `Open ${destination === "test" ? "Test tutor" : destination[0].toUpperCase() + destination.slice(1)}`}</a></p></div>${status(label, readinessTone(label))}</li>`).join("");
+        }
+        function canPublish() { return !draftMatchesLatest() && readinessData().every(([, label]) => label === "Ready"); }
+        function educatorReviewBlock() {
+          const current = state.educatorReview.draftRevision === state.draft.savedRevision;
+          if (state.educatorReview.status === "complete" && current) return `<div class="notice success">${icon("check")}<div><strong>Educator review complete</strong><p>${escapeHTML(state.educatorReview.reviewer)} reviewed ${escapeHTML(state.draft.savedRevision)} on ${escapeHTML(state.educatorReview.updatedAt)}. Required safeguards remain non-waivable.</p></div></div>`;
+          if (state.educatorReview.status === "requested" && current) return `<div class="notice info">${icon("info")}<div><strong>Educator review in progress</strong><p>A Teach workspace task is assigned to ${escapeHTML(state.educatorReview.reviewer)} for ${escapeHTML(state.draft.savedRevision)}.</p><div class="inline-links"><a href="${routeHref("teach", "reviews")}" data-nav>Track task in Teach</a></div></div></div>`;
+          if (state.educatorReview.status === "changes-requested" && current) return `<div class="notice warning">${icon("alert")}<div><strong>Changes requested</strong><p>${escapeHTML(state.educatorReview.reviewer)} requested changes in Teach. Edit the Draft, rerun tests, and request a new review.</p><a href="${buildHref("teaching")}" data-nav>Edit Teaching</a></div></div>`;
+          return `<div class="notice warning">${icon("alert")}<div><strong>${state.educatorReview.status === "out-of-date" || !current ? "Educator review is out of date" : "Educator review required"}</strong><p>Any Draft edit invalidates prior review. Select an authorized designated reviewer after required Test results are current.</p></div></div><div class="field-row"><div class="field"><label class="field-label" for="reviewer">Designated reviewer</label><select id="reviewer"><option value="Aisyah Salleh">Aisyah Salleh · Mathematics lead</option><option value="Farid Hakim">Farid Hakim · Curriculum lead</option></select><p class="field-hint">The Draft creator is excluded. Names are synthetic.</p></div><div class="field"><span class="field-label">Handoff</span>${button("Request Educator review", "request-review", "primary", testsReady() ? "" : "disabled")}<p class="field-hint">${testsReady() ? "Creates a stable exact-Draft task in Teach." : "Current Passed Test results are required first."}</p></div></div>`;
+        }
+        function versionHistoryMarkup() {
+          return state.publishedVersions.map(version => `<li class="version-item"><div><div class="row-between"><strong>${escapeHTML(version.id)}</strong>${status(version.latest ? "Latest" : "Earlier", version.latest ? "positive" : "info")}</div><p>${escapeHTML(version.note)}</p><div class="version-meta"><span>${escapeHTML(version.publisher)} · ${escapeHTML(version.time)}</span><span>Curriculum ${escapeHTML(version.curriculum)}</span><span>Test results: ${escapeHTML(version.tests)}</span><span>Review: ${escapeHTML(version.review)}</span><span>${version.classes} authorized ${version.classes === 1 ? "class" : "classes"}</span></div></div><div class="version-actions">${button("Start Draft from this version", "start-draft", "", `data-version="${escapeHTML(version.id)}"`)}</div></li>`).join("");
+        }
+        function publishPage() {
+          const latest = latestVersion();
+          const unpublished = !draftMatchesLatest();
+          return `<section class="page"><div class="page-inner">
+            ${pageHeader("Publish", unpublished ? `The private ${escapeHTML(state.draft.savedRevision)} is separate from Published version <strong>${escapeHTML(latest.id)}</strong>, which remains available to teachers and in use by ${latest.classes} authorized classes.` : `The Draft matches Published version <strong>${escapeHTML(latest.id)}</strong>. It remains available to teachers and in use by ${latest.classes} authorized classes. No unpublished change needs release.`, "Publish")}
+            <div class="stack">
+              ${state.publicationSuccess ? `<div class="notice success" id="publicationSuccess">${icon("check")}<div><strong>${escapeHTML(state.publicationSuccess)}</strong><p>The immutable version was added to Version history. The prior versions remain available in history.</p></div></div>` : ""}
+              <section class="section" aria-labelledby="readinessHeading"><div class="section-heading"><div><h2 id="readinessHeading">Publication readiness</h2><p>One server-simulated checklist for the exact saved Draft. The client does not infer authority from timestamps.</p></div></div><ol class="readiness-list" id="readinessList">${readinessRows()}</ol></section>
+              <section class="section" aria-labelledby="educatorReviewHeading" id="educatorReview"><div class="section-heading"><div><h2 id="educatorReviewHeading">Educator review</h2><p>Publish requests and tracks review. The designated reviewer decides in Teach.</p></div></div><div id="educatorReviewContent">${educatorReviewBlock()}</div></section>
+              <section class="section" aria-labelledby="versionNoteHeading"><h2 id="versionNoteHeading">Version note</h2><div class="field"><label class="field-label" for="versionNote">What changed for teachers?</label><input id="versionNote" type="text" maxlength="160" value="${escapeHTML(state.versionNote)}" data-version-note aria-describedby="versionNoteHint"/><p class="field-hint" id="versionNoteHint">Plain language, up to 160 characters. Recovery provenance is recorded automatically.</p></div><div class="inline-actions" id="publicationActions">${button("Review publication", "review-publication", "primary", canPublish() ? "" : "disabled")}</div>${!unpublished ? `<p class="field-hint">Start or edit a Draft before publishing another immutable version.</p>` : ""}</section>
+              <section class="section" aria-labelledby="publishedSummaryHeading"><div class="row-between"><div><h2 id="publishedSummaryHeading">Published version ${escapeHTML(latest.id)}</h2><p>${escapeHTML(latest.note)} · Published by ${escapeHTML(latest.publisher)} on ${escapeHTML(latest.time)}. Available to teachers; publication did not change a class.</p></div>${status("Latest available", "positive")}</div></section>
+              <section class="section" aria-labelledby="versionHistoryHeading" id="versionHistory"><div class="section-heading"><div><h2 id="versionHistoryHeading">Version history</h2><p>Immutable Published versions, newest first. Starting a Draft never removes these records.</p></div></div><ul class="version-list">${versionHistoryMarkup()}</ul></section>
+              <section class="section" aria-labelledby="usedByClassesHeading" id="usedByClasses"><h2 id="usedByClassesHeading">Used by classes</h2><p>${latest.classes} authorized classes currently use ${escapeHTML(latest.id)}. Build AI never applies a version to a class; assigned teachers review and apply versions in Teach.</p><a href="${routeHref("teach", "classroom")}" data-nav>Open class application in Teach</a></section>
+            </div>
+            <p class="prototype-note">Illustrative component. Readiness, reviews, version identifiers, and history are server-simulated local state, not backend evidence.</p>
+            <dialog id="publicationDialog" aria-labelledby="publicationDialogHeading"><div class="dialog-body"><h2 id="publicationDialogHeading">Publish this version?</h2><p>It will become available to teachers, but no class will change until a teacher applies it.</p><p>The authoritative version identifier will be returned only after the server-simulated publication succeeds.</p></div><div class="dialog-actions">${button("Cancel", "cancel-dialog")} ${button("Publish version", "publish-version", "primary")}</div></dialog>
+            <dialog id="startDraftDialog" aria-labelledby="startDraftDialogHeading"><div class="dialog-body"><h2 id="startDraftDialogHeading">Start Draft from this version?</h2><p id="startDraftCopy"></p><input type="hidden" id="startDraftVersion"/></div><div class="dialog-actions">${button("Cancel", "cancel-dialog")} ${button("Start Draft from version", "confirm-start-draft", "primary")}</div></dialog>
+          </div></section>`;
+        }
+        function refreshPublishReadiness() {
+          const list = document.getElementById("readinessList");
+          if (list) templateInto(list, readinessRows());
+          const actions = document.getElementById("publicationActions");
+          if (actions) templateInto(actions, button("Review publication", "review-publication", "primary", canPublish() ? "" : "disabled"));
+        }
+
+        function activityStatusBlock() {
+          const latest = latestVersion();
+          if (state.activityMode === "incident") return `<div class="notice danger">${icon("alert")}<div><strong>Critical synthetic Incident</strong><p>Illustrative channel delivery failures may affect ${escapeHTML(latest.id)}. Evidence refreshed just now in this local selector state.</p><a class="button primary" href="#activeIncident">Open incident</a></div></div>`;
+          if (state.activityMode === "degraded") return `<div class="notice warning">${icon("alert")}<div><strong>Degraded — illustrative state</strong><p>Synthetic channel delivery evidence is incomplete. This state is not production monitoring.</p></div></div>`;
+          return `<div class="notice warning">${icon("alert")}<div><strong>Monitoring is not connected</strong><p>This illustrative artifact has no trustworthy production monitoring contract, so it cannot claim the Tutor is Healthy. Last checked: not available.</p></div></div>`;
+        }
+        function activityPage() {
+          const latest = latestVersion();
+          return `<section class="page"><div class="page-inner">
+            ${pageHeader("Activity", "Operational status for the serving Tutor. This page starts with what is honestly supported and never treats missing traffic or missing monitoring as Healthy.", "Activity")}
+            <div class="stack">
+              <section class="section" aria-labelledby="tutorStatusHeading"><div class="section-heading"><div><h2 id="tutorStatusHeading">Tutor status</h2><p>Serving and Incident state, with evidence freshness.</p></div></div><div id="activityStatus">${activityStatusBlock()}</div></section>
+              <section class="section" aria-labelledby="activityPreviewHeading"><div class="notice info">${icon("info")}<div><strong id="activityPreviewHeading">Incident state selector — illustrative artifact only</strong><p>This local review aid changes no service, monitoring system, Incident, or backend truth.</p><div class="field incident-selector"><label class="field-label" for="activityMode">Show local status state</label><select id="activityMode" data-activity-mode><option value="not-connected" ${state.activityMode === "not-connected" ? "selected" : ""}>Monitoring not connected</option><option value="degraded" ${state.activityMode === "degraded" ? "selected" : ""}>Degraded — illustrative</option><option value="incident" ${state.activityMode === "incident" ? "selected" : ""}>Critical Incident — illustrative</option></select></div></div></div></section>
+              <div id="incidentSlot">${activityIncidentMarkup()}</div>
+              <section class="section" aria-labelledby="publishedContextHeading"><h2 id="publishedContextHeading">Published-version context</h2><p>${escapeHTML(latest.id)} is latest and used by ${latest.classes} authorized classes. Activity does not duplicate Version history or full Test evidence.</p><div class="inline-links"><a href="${buildHref("publish")}" data-nav>Open Publish</a><a href="${buildHref("test")}" data-nav>Open Test results</a></div></section>
+              <section class="section" aria-labelledby="recentEventsHeading"><div class="section-heading"><div><h2 id="recentEventsHeading">Recent significant events</h2><p>Privacy-safe operational context. No learners, transcripts, prompts, trace identifiers, or payloads.</p></div></div><ul class="event-list">${state.activityEvents.slice(0, 7).map(([title, detail, time]) => `<li><strong>${escapeHTML(title)}</strong><p>${escapeHTML(detail)} · <time>${escapeHTML(time)}</time></p></li>`).join("")}</ul></section>
+            </div>
+            <p class="prototype-note">Illustrative component. The default monitoring state is intentionally not connected; selector states are not production evidence.</p>
+          </div></section>`;
+        }
+
+        function classChoice(name, value, label, current) {
+          return `<label class="choice"><input type="radio" name="${name}" value="${value}" data-class-field="${name}" ${current === value ? "checked" : ""}/><span><strong>${escapeHTML(label)}</strong></span></label>`;
+        }
+        function teachClassroomPage() {
+          const adaptation = state.classAdaptation;
+          const latest = latestVersion();
+          return `<section class="page"><div class="page-inner">
+            <header class="page-header"><p class="breadcrumb"><a href="${routeHref("teach", "classroom")}" data-nav>Teach</a> / 5 Amanah</p><h1 tabindex="-1">5 Amanah</h1><p class="lead">School scope: Sekolah Menengah Pandai. The class uses Published version ${escapeHTML(adaptation.appliedVersion)}. Teachers choose when to preview and apply a different available version or bounded adaptation.</p></header>
+            <form class="stack">
+              <section class="section" aria-labelledby="classVersionHeading"><h2 id="classVersionHeading">Published version</h2><div class="field"><label class="field-label" for="classVersion">Available version</label><select id="classVersion" data-class-field="version">${state.publishedVersions.map(version => `<option value="${escapeHTML(version.id)}" ${adaptation.version === version.id ? "selected" : ""}>${escapeHTML(version.id)} · ${version.latest ? "Latest" : "Earlier"}</option>`).join("")}</select><p class="field-hint">Selecting a version does not change the class. Preview and Apply remain separate.</p></div></section>
+              <section class="section" aria-labelledby="classAdaptHeading"><h2 id="classAdaptHeading">Bounded class adaptation</h2><div class="field-grid"><fieldset><legend>Help-first preference</legend><div class="choice-set">${classChoice("help", "hint-first", "Offer one hint before a worked step", adaptation.help)}${classChoice("help", "example-first", "Offer one small worked example first", adaptation.help)}</div></fieldset><fieldset><legend>Pacing and detail</legend><div class="choice-set">${classChoice("detail", "brief", "Brief", adaptation.detail)}${classChoice("detail", "balanced", "Balanced", adaptation.detail)}${classChoice("detail", "detailed", "More detailed when useful", adaptation.detail)}</div></fieldset><fieldset><legend>Reply-language preference</legend><div class="choice-set">${classChoice("language", "follow", "Follow the learner’s English, Bahasa Melayu, or natural mix", adaptation.language)}${classChoice("language", "english", "Prefer English", adaptation.language)}${classChoice("language", "bm", "Prefer Bahasa Melayu", adaptation.language)}</div></fieldset><fieldset><legend>Current-topic emphasis</legend><div class="choice-set">${classChoice("topic", "current", "Stay with the assigned current topic", adaptation.topic)}${classChoice("topic", "prerequisite", "Revisit an approved prerequisite when needed", adaptation.topic)}</div></fieldset></div><p>No free-form class instruction is available. Curriculum, provider, credentials, and safeguards stay locked.</p></section>
+              <section class="section" aria-labelledby="classPreviewHeading"><h2 id="classPreviewHeading">Class preview</h2><p>Use an approved synthetic scenario before applying. No class or learner is affected.</p><div class="inline-actions">${button("Run class preview", "run-class-preview", "primary")}</div><div id="classPreviewResult">${adaptation.previewReady ? `<div class="compact-block"><h3>Synthetic preview ready</h3><p>The Tutor offers one curriculum-grounded hint, uses balanced detail, and follows the learner’s natural English/Bahasa Melayu mix. This result is not Test evidence.</p></div>` : `<div class="empty-state"><p>Preview not run.</p></div>`}</div></section>
+              <section class="section" aria-labelledby="applyHeading"><h2 id="applyHeading">Apply to 5 Amanah</h2><p>Applying is the only action here that changes the class. Build AI publication alone never changes it.</p><div class="inline-actions">${button(`Apply ${adaptation.version} to 5 Amanah`, "review-class-apply", "primary", adaptation.previewReady ? "" : "disabled")}</div>${adaptation.applied ? `<div class="notice success">${icon("check")}<div><strong>${escapeHTML(adaptation.version)} applied to 5 Amanah</strong><p>The bounded class choices are active in this local illustrative state.</p></div></div>` : ""}</section>
+            </form>
+            <dialog id="classApplyDialog" aria-labelledby="classApplyDialogHeading"><div class="dialog-body"><h2 id="classApplyDialogHeading">Apply to 5 Amanah?</h2><p>This changes the class to ${escapeHTML(adaptation.version)} with the bounded choices shown. No other class changes.</p></div><div class="dialog-actions">${button("Cancel", "cancel-dialog")} ${button("Apply to 5 Amanah", "apply-class", "primary")}</div></dialog>
+            <p class="prototype-note">Illustrative Teach workspace with synthetic class context.</p>
+          </div></section>`;
+        }
+        function teachReviewsPage() {
+          const task = state.reviewTask;
+          return `<section class="page"><div class="page-inner"><header class="page-header"><p class="breadcrumb"><a href="${routeHref("teach", "classroom")}" data-nav>Teach</a> / Review tasks</p><h1 tabindex="-1">Review tasks</h1><p class="lead">School scope: Sekolah Menengah Pandai. A designated synthetic reviewer judges curriculum and teaching quality for an exact saved Draft; safeguards cannot be waived here.</p></header><div class="stack">
+            <section class="section" aria-labelledby="openReviewHeading"><h2 id="openReviewHeading">Open review</h2>${task && task.status === "requested" ? `<div class="compact-block"><div class="row-between"><div><h3>P&amp;AI Tutor · ${escapeHTML(task.draftRevision)}</h3><p>Requested by Nabila Rahman · assigned to ${escapeHTML(task.reviewer)} · stable synthetic Draft link.</p></div>${status("Awaiting review", "info")}</div><dl class="detail-list"><dt>Curriculum</dt><dd>Mathematics Form 1 · revision ${escapeHTML(state.draft.curriculum.revision)}</dd><dt>Current Test results</dt><dd>${escapeHTML(testStatusLabel())} · ${escapeHTML(state.tests.runAt)}</dd><dt>Review boundary</dt><dd>Teaching and curriculum quality only; non-waivable safeguards remain locked</dd></dl><div class="inline-actions">${button("Complete review", "complete-review", "primary")} ${button("Request changes", "request-review-changes", "")}</div></div>` : `<div class="notice info">${icon("info")}<div><strong>No review awaiting action</strong><p>Publish creates an exact-Draft task here after current required Test results are Passed. Prior review history remains in Version history.</p></div></div>`}</section>
+            <section class="section" aria-labelledby="reviewHandoffHeading"><h2 id="reviewHandoffHeading">How the handoff works</h2><ol><li>The operator requests review from Publish.</li><li>The designated reviewer opens the stable exact-Draft task in Teach.</li><li>The reviewer completes review or requests changes here.</li><li>Any later Draft edit makes the review Out of date.</li></ol><a href="${buildHref("publish")}" data-nav>Return to Publish</a></section>
+          </div><p class="prototype-note">Illustrative reviewer task. People and decisions are synthetic.</p></div></section>`;
+        }
+
+        function schoolOverviewPage() {
+          return `<section class="page"><div class="page-inner"><header class="page-header"><p class="breadcrumb">Manage school / Overview</p><h1 tabindex="-1">Sekolah Menengah Pandai</h1><p class="lead">Explicit school scope for people, assigned classes, channel setup, budgets, and records. Platform-wide Tutor publishing stays in Build AI.</p></header><div class="stack"><section class="section"><h2>School administration</h2><ul class="state-list"><li><strong>People and access</strong><p>Manage school-scoped staff and assigned-class permissions.</p></li><li><strong>Setup and channels</strong><p>Resolve actionable delivery setup without exposing credentials in Build AI.</p></li><li><strong>Records</strong><p>Review privacy-safe administrative records under the school grant.</p></li></ul></section></div><p class="prototype-note">Illustrative Manage school workspace.</p></div></section>`;
+        }
+        function schoolChannelsPage() {
+          return `<section class="page"><div class="page-inner"><header class="page-header"><p class="breadcrumb"><a href="${routeHref("school", "overview")}" data-nav>Manage school</a> / Setup and channels</p><h1 tabindex="-1">Setup and channels</h1><p class="lead">School scope: Sekolah Menengah Pandai. Channel setup is owned here; Build AI Activity links here only when school action is useful.</p></header><div class="stack"><section class="section" aria-labelledby="channelStatusHeading"><h2 id="channelStatusHeading">Channel setup</h2><div class="notice warning">${icon("alert")}<div><strong>Illustrative web-chat delivery needs inspection</strong><p>No credential, request payload, learner record, or backend health claim is shown in this artifact.</p></div></div></section><section class="section"><h2>Next safe action</h2><p>Confirm the school’s enabled-channel configuration with an authorized administrator. Production mutation controls are intentionally not represented.</p><a href="${buildHref("activity")}" data-nav>Return to Tutor Activity</a></section></div><p class="prototype-note">Illustrative school handoff; not backend evidence.</p></div></section>`;
+        }
+
+        function renderRoute() {
+          renderNavigation();
+          let markup = "";
+          if (state.workspace === "build") {
+            markup = ({ overview: overviewPage, curriculum: curriculumPage, teaching: teachingPage, test: testPage, publish: publishPage, activity: activityPage })[state.page]();
+          } else if (state.workspace === "teach") {
+            markup = state.page === "reviews" ? teachReviewsPage() : teachClassroomPage();
+          } else {
+            markup = state.page === "channels" ? schoolChannelsPage() : schoolOverviewPage();
+          }
+          templateInto(document.getElementById("mainContent"), markup);
+          const route = currentRouteFromURL();
+          if (route.preview && state.workspace === "build" && ["curriculum", "teaching"].includes(state.page)) openPreview(route.preview, false);
+          if (window.location.hash) window.requestAnimationFrame(() => document.querySelector(window.location.hash)?.scrollIntoView());
+        }
+        function markDraftChanged(section, invalidatingEdit) {
+          state.draft.unsaved = true;
+          if (!state.draft.changedSections.includes(section)) state.draft.changedSections.push(section);
+          state.tests.status = "out-of-date";
+          state.tests.fresh = false;
+          state.tests.invalidatedBy = invalidatingEdit;
+          state.testPreviewState = "out-of-date";
+          state.educatorReview.status = "out-of-date";
+          if (state.reviewTask?.status === "requested") state.reviewTask.status = "out-of-date";
+          markPreviewOutOfDate("curriculum");
+          markPreviewOutOfDate("teaching");
+          syncDraftControls();
+        }
+        function syncDraftControls() {
+          const copy = document.getElementById("draftStatus");
+          if (copy) copy.textContent = state.draft.unsaved ? "Unsaved Draft changes. Learners are not affected; prior preview remains visible but is Out of date." : `${state.draft.savedRevision} saved ${state.draft.savedAt} by ${state.draft.savedBy}.`;
+          const stateNode = copy?.closest(".row-between")?.querySelector(".status");
+          if (stateNode) {
+            stateNode.className = `status ${state.draft.unsaved ? "warning" : "positive"}`;
+            templateInto(stateNode, `${icon(state.draft.unsaved ? "alert" : "check")}<span>${state.draft.unsaved ? "Unsaved" : "Saved"}</span>`);
+          }
+          document.querySelectorAll('[data-action="save-draft"], [data-action="discard-draft"]').forEach(control => { control.disabled = !state.draft.unsaved; });
+        }
+        function setCurriculumBundle(value) {
+          state.draft.curriculum.bundle = value;
+          state.draft.curriculum.revision = value === "math-f1-jul" ? "2026.07" : "2026.08";
+          markDraftChanged("Curriculum changed", "the curriculum revision changed");
+        }
+        function saveDraft() {
+          if (!state.draft.unsaved) return;
+          const revisionNumber = Number((state.draft.savedRevision.match(/\d+/) || ["7"])[0]) + 1;
+          state.draft.savedRevision = `Draft revision ${revisionNumber}`;
+          state.draft.savedAt = "Just now";
+          state.draft.savedTeaching = deepCopy(state.draft.teaching);
+          state.draft.savedCurriculumBundle = state.draft.curriculum.bundle;
+          state.draft.savedChangedSections = [...state.draft.changedSections];
+          state.draft.unsaved = false;
+          syncDraftControls();
+          announce(`${state.draft.savedRevision} saved. Test results and Educator review remain Out of date.`);
+        }
+        function discardDraft() {
+          if (!state.draft.unsaved) return;
+          state.draft.teaching = deepCopy(state.draft.savedTeaching);
+          state.draft.curriculum.bundle = state.draft.savedCurriculumBundle;
+          state.draft.curriculum.revision = state.draft.savedCurriculumBundle === "math-f1-jul" ? "2026.07" : "2026.08";
+          state.draft.changedSections = [...(state.draft.savedChangedSections || [])];
+          state.draft.unsaved = false;
+          renderRoute();
+          announce("Unsaved Draft changes discarded. The last saved Draft remains private.");
+        }
+        function applyTestPreviewState(value) {
+          state.testPreviewState = value;
+          state.tests.status = value;
+          state.tests.fresh = value !== "out-of-date";
+          state.tests.draftRevision = state.draft.savedRevision;
+          state.tests.runAt = "Synthetic preview state · just now";
+          state.tests.invalidatedBy = value === "out-of-date" ? "an illustrative Draft edit" : "";
+          refreshTestView();
+          announce(`Illustrative Preview state changed to ${testStatusLabel()}. This is not backend truth.`);
+        }
+        function runTests() {
+          if (state.draft.unsaved) return;
+          window.clearTimeout(state.runTimer);
+          state.tests.status = "running";
+          state.tests.fresh = true;
+          state.tests.draftRevision = state.draft.savedRevision;
+          state.tests.runAt = "Synthetic run started just now";
+          state.tests.invalidatedBy = "";
+          state.testPreviewState = "running";
+          const selector = document.getElementById("testPreviewState");
+          if (selector) selector.value = "running";
+          refreshTestView();
+          announce("Synthetic tests Running. You may navigate away safely in this illustrative state.");
+          state.runTimer = window.setTimeout(() => {
+            if (state.tests.status !== "running") return;
+            state.tests.status = "passed";
+            state.tests.fresh = true;
+            state.tests.runAt = "Synthetic run completed just now";
+            state.testPreviewState = "passed";
+            const currentSelector = document.getElementById("testPreviewState");
+            if (currentSelector) currentSelector.value = "passed";
+            refreshTestView();
+            announce("Synthetic Test results Passed for the exact saved Draft. This is illustrative, not backend truth.");
+          }, 900);
+        }
+        function cancelTests() {
+          window.clearTimeout(state.runTimer);
+          state.tests.status = "cancelled";
+          state.tests.fresh = true;
+          state.tests.runAt = "Synthetic run cancelled just now";
+          state.testPreviewState = "cancelled";
+          const selector = document.getElementById("testPreviewState");
+          if (selector) selector.value = "cancelled";
+          refreshTestView();
+          announce("Synthetic tests Cancelled. Completed group evidence was kept; unfinished groups are Inconclusive.");
+        }
+        function requestReview() {
+          if (!testsReady()) return;
+          const reviewer = document.getElementById("reviewer")?.value || "Aisyah Salleh";
+          state.educatorReview = { status: "requested", reviewer, draftRevision: state.draft.savedRevision, updatedAt: "Requested just now" };
+          state.reviewTask = { status: "requested", reviewer, draftRevision: state.draft.savedRevision };
+          const content = document.getElementById("educatorReviewContent");
+          if (content) templateInto(content, educatorReviewBlock());
+          refreshPublishReadiness();
+          announce(`Educator review requested from ${reviewer}. A synthetic Teach workspace task was created.`);
+        }
+        function completeReview() {
+          if (!state.reviewTask || state.reviewTask.status !== "requested") return;
+          state.reviewTask.status = "complete";
+          state.educatorReview = { status: "complete", reviewer: state.reviewTask.reviewer, draftRevision: state.reviewTask.draftRevision, updatedAt: "Just now" };
+          renderRoute();
+          announce("Synthetic Educator review completed in Teach for the exact saved Draft.");
+        }
+        function requestReviewChanges() {
+          if (!state.reviewTask || state.reviewTask.status !== "requested") return;
+          state.reviewTask.status = "changes-requested";
+          state.educatorReview.status = "changes-requested";
+          state.educatorReview.updatedAt = "Just now";
+          renderRoute();
+          announce("Synthetic reviewer requested changes. Publish remains blocked.");
+        }
+        function showDialog(dialog) {
+          if (!dialog) return;
+          if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+        }
+        function closeDialog(dialog) {
+          if (!dialog) return;
+          if (typeof dialog.close === "function") dialog.close(); else dialog.removeAttribute("open");
+        }
+        function publishVersion() {
+          if (!canPublish()) return;
+          closeDialog(document.getElementById("publicationDialog"));
+          state.publishedVersions.forEach(version => { version.latest = false; });
+          const identifier = `PV-SIM-${String(Date.now()).slice(-6)}`;
+          state.publishedVersions.unshift({ id: identifier, latest: true, note: state.versionNote.trim(), publisher: "Nabila Rahman", time: "Just now", curriculum: state.draft.curriculum.revision, tests: `Passed · ${state.tests.runAt}`, review: `${state.educatorReview.reviewer} · complete`, classes: 0 });
+          state.draft.baseVersionId = identifier;
+          state.draft.changedSections = [];
+          state.draft.savedChangedSections = [];
+          state.publicationSuccess = `Published version ${identifier} is available. No classes changed.`;
+          state.versionNote = "";
+          state.activityEvents.unshift(["Published version made available", `${identifier} became available to teachers. No class changed.`, "Just now"]);
+          renderRoute();
+          announce(state.publicationSuccess);
+        }
+        function openStartDraftDialog(versionId) {
+          const dialog = document.getElementById("startDraftDialog");
+          const latest = latestVersion();
+          document.getElementById("startDraftVersion").value = versionId;
+          document.getElementById("startDraftCopy").textContent = `A new private Draft will start from ${versionId}. Published version ${latest.id} remains available to teachers, Version history is preserved, and no class changes. The existing private Draft will be replaced only after this confirmation.`;
+          showDialog(dialog);
+        }
+        function confirmStartDraft() {
+          const versionId = document.getElementById("startDraftVersion")?.value;
+          const source = state.publishedVersions.find(version => version.id === versionId);
+          if (!source) return;
+          closeDialog(document.getElementById("startDraftDialog"));
+          const revisionNumber = Number((state.draft.savedRevision.match(/\d+/) || ["7"])[0]) + 1;
+          state.draft.savedRevision = `Draft revision ${revisionNumber}`;
+          state.draft.savedAt = "Just now";
+          state.draft.savedBy = "Nabila Rahman";
+          state.draft.baseVersionId = source.id;
+          state.draft.curriculum.revision = source.curriculum;
+          state.draft.curriculum.bundle = source.curriculum === "2026.07" ? "math-f1-jul" : "math-f1-aug";
+          state.draft.savedCurriculumBundle = state.draft.curriculum.bundle;
+          state.draft.teaching = deepCopy(initialTeaching);
+          state.draft.savedTeaching = deepCopy(initialTeaching);
+          state.draft.unsaved = false;
+          state.draft.changedSections = [];
+          state.draft.savedChangedSections = [];
+          state.tests.status = "out-of-date";
+          state.tests.fresh = false;
+          state.tests.invalidatedBy = "a Draft was started from an earlier Published version";
+          state.educatorReview.status = "out-of-date";
+          state.educatorReview.draftRevision = "Prior Draft";
+          state.publicationSuccess = "";
+          renderRoute();
+          announce(`New private ${state.draft.savedRevision} started from ${source.id}. Published history and class use were preserved.`);
+        }
+        function activityIncidentMarkup() {
+          if (state.activityMode !== "incident") return "";
+          const latest = latestVersion();
+          return `<section class="section" id="activeIncident" aria-labelledby="incidentHeading"><h2 id="incidentHeading">Critical synthetic Incident</h2><dl class="detail-list"><dt>Aggregate impact</dt><dd>Illustrative delivery failures on one enabled channel; no learner identities shown</dd><dt>Affected version</dt><dd>${escapeHTML(latest.id)}</dd><dt>Owner</dt><dd>Nabila Rahman · synthetic</dd><dt>Evidence freshness</dt><dd>Just now · local selector only</dd><dt>Safest next action</dt><dd>Inspect school channel setup, then prepare a recovery Draft only if Tutor behavior must change</dd></dl><div class="inline-actions"><a class="button primary" href="${routeHref("school", "channels")}" data-nav>Inspect channel setup</a><a class="button" href="${buildHref("publish", "#versionHistory")}" data-nav>Prepare recovery Draft</a>${button("Acknowledge synthetic Incident", "ack-incident", "")}</div><p class="field-hint">Resolving an Incident would not resume a paused service, and resuming would not resolve an Incident.</p></section>`;
+        }
+        function refreshActivity() {
+          const statusNode = document.getElementById("activityStatus");
+          if (statusNode) templateInto(statusNode, activityStatusBlock());
+          const slot = document.getElementById("incidentSlot");
+          if (slot) templateInto(slot, activityIncidentMarkup());
+        }
+        function refreshClassPreview() {
+          const node = document.getElementById("classPreviewResult");
+          if (!node) return;
+          templateInto(node, state.classAdaptation.previewReady ? `<div class="compact-block"><h3>Synthetic preview ready</h3><p>The Tutor uses the selected bounded help, detail, reply-language, and topic choices. This result is not Test evidence and no class is affected.</p></div>` : `<div class="empty-state"><p>Preview not run.</p></div>`);
+          const apply = document.querySelector('[data-action="review-class-apply"]');
+          if (apply) apply.disabled = !state.classAdaptation.previewReady;
+        }
+
+        document.addEventListener("click", event => {
+          const nav = event.target.closest("a[data-nav]");
+          if (nav && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+            event.preventDefault();
+            navigate(nav.getAttribute("href"));
+            return;
+          }
+          const control = event.target.closest("[data-action]");
+          if (!control || control.disabled) return;
+          const action = control.dataset.action;
+          if (action === "open-menu") {
+            document.getElementById("appShell").classList.add("menu-open");
+            document.getElementById("menuButton").setAttribute("aria-expanded", "true");
+            window.requestAnimationFrame(() => document.querySelector(".sidebar a")?.focus());
+          } else if (action === "close-menu") closeMenu();
+          else if (action === "open-preview") openPreview(control.dataset.kind, true);
+          else if (action === "close-preview") closePreview(true);
+          else if (action === "run-preview") runPreview(control.dataset.kind);
+          else if (action === "save-draft") saveDraft();
+          else if (action === "discard-draft") discardDraft();
+          else if (action === "run-tests" || action === "rerun-group") runTests();
+          else if (action === "cancel-tests") cancelTests();
+          else if (action === "request-review") requestReview();
+          else if (action === "complete-review") completeReview();
+          else if (action === "request-review-changes") requestReviewChanges();
+          else if (action === "review-publication") showDialog(document.getElementById("publicationDialog"));
+          else if (action === "publish-version") publishVersion();
+          else if (action === "start-draft") openStartDraftDialog(control.dataset.version);
+          else if (action === "confirm-start-draft") confirmStartDraft();
+          else if (action === "cancel-dialog") closeDialog(control.closest("dialog"));
+          else if (action === "ack-incident") announce("Synthetic Incident acknowledged locally. No service or backend record changed.");
+          else if (action === "run-class-preview") {
+            state.classAdaptation.previewReady = true;
+            refreshClassPreview();
+            announce("Synthetic class preview ready. No class changed.");
+          } else if (action === "review-class-apply") showDialog(document.getElementById("classApplyDialog"));
+          else if (action === "apply-class") {
+            closeDialog(document.getElementById("classApplyDialog"));
+            const previous = state.classAdaptation.appliedVersion;
+            if (previous !== state.classAdaptation.version) {
+              const previousVersion = state.publishedVersions.find(version => version.id === previous);
+              const nextVersion = state.publishedVersions.find(version => version.id === state.classAdaptation.version);
+              if (previousVersion) previousVersion.classes = Math.max(0, previousVersion.classes - 1);
+              if (nextVersion) nextVersion.classes += 1;
+              state.classAdaptation.appliedVersion = state.classAdaptation.version;
+            }
+            state.classAdaptation.applied = true;
+            renderRoute();
+            announce(`${state.classAdaptation.version} applied to 5 Amanah in this illustrative local state. No other class changed.`);
+          }
+        });
+
+        document.addEventListener("change", event => {
+          const previewControl = event.target.closest("[data-preview-field]");
+          if (previewControl) {
+            const kind = previewControl.dataset.previewKind;
+            state.preview[kind][previewControl.dataset.previewField] = previewControl.value;
+            markPreviewOutOfDate(kind);
+            announce(`Preview choice changed. The previous ${kind} preview remains visible and is Out of date.`);
+            return;
+          }
+          const draftControl = event.target.closest("[data-draft-field]");
+          if (draftControl) {
+            const [scope, field] = draftControl.dataset.draftField.split(".");
+            if (scope === "curriculum" && field === "bundle") setCurriculumBundle(draftControl.value);
+            if (scope === "teaching") {
+              state.draft.teaching[field] = draftControl.value;
+              const labels = { approach: "the start approach changed", detail: "response detail changed", language: "Tutor reply language changed", tone: "tone changed" };
+              markDraftChanged("Teaching preferences changed", labels[field]);
+            }
+            announce("Draft changed locally. Test results and Educator review are Out of date; learners are not affected.");
+            return;
+          }
+          if (event.target.matches("[data-test-preview-state]")) {
+            applyTestPreviewState(event.target.value);
+            return;
+          }
+          if (event.target.matches("[data-activity-mode]")) {
+            state.activityMode = event.target.value;
+            refreshActivity();
+            announce(`Illustrative Activity state changed to ${event.target.options[event.target.selectedIndex].text}. This is not production monitoring.`);
+            return;
+          }
+          const classControl = event.target.closest("[data-class-field]");
+          if (classControl) {
+            state.classAdaptation[classControl.dataset.classField] = classControl.value;
+            state.classAdaptation.previewReady = false;
+            state.classAdaptation.applied = false;
+            refreshClassPreview();
+            announce("Class choice changed. Run the synthetic class preview again before applying.");
+          }
+        });
+
+        document.addEventListener("input", event => {
+          if (!event.target.matches("[data-version-note]")) return;
+          state.versionNote = event.target.value;
+          refreshPublishReadiness();
+        });
+
+        document.addEventListener("keydown", event => {
+          if (event.key !== "Escape") return;
+          if (document.querySelector(".preview-pane.is-open")) closePreview(true);
+          else if (document.getElementById("appShell").classList.contains("menu-open")) {
+            closeMenu();
+            document.getElementById("menuButton").focus();
+          }
+        });
+
+        window.addEventListener("popstate", () => {
+          const route = currentRouteFromURL();
+          if (route.workspace === state.workspace && route.page === state.page) {
+            if (route.preview) openPreview(route.preview, false); else closePreview(false);
+            return;
+          }
+          state.workspace = route.workspace;
+          state.page = route.page;
+          renderRoute();
+          closeMenu();
+          focusHeading();
+        });
+
+        const initialRoute = currentRouteFromURL();
+        state.workspace = initialRoute.workspace;
+        state.page = initialRoute.page;
+        renderRoute();
+      })();
+    </script>
+  </body>
+</html>
