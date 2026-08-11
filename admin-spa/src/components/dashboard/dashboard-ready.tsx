@@ -142,7 +142,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
       className='grid gap-4 md:grid-cols-2 xl:grid-cols-12'
     >
       <Card className='relative border-0 bg-[var(--admin-navigation)] py-0 text-[var(--admin-nav-text)] ring-0 md:col-span-2 xl:col-span-5'>
-        <CardContent className='flex h-full min-h-52 flex-col justify-between p-5 sm:p-6'>
+        <CardContent className='flex h-full min-h-48 flex-col justify-between p-5 sm:p-6'>
           <div className='flex items-start justify-between gap-4'>
             <div className='flex items-center gap-2.5'>
               <span className='flex size-9 items-center justify-center rounded-lg bg-white/10 text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
@@ -157,14 +157,14 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
                 </p>
               </div>
             </div>
-            <span className='inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-medium text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
+            <span className='inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-xs font-medium text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
               <span className='size-1.5 rounded-full bg-[var(--admin-accent)]' />
               Current
             </span>
           </div>
           <div className='mt-8 flex items-end justify-between gap-5'>
             <div>
-              <p className='text-5xl leading-none font-semibold text-[var(--admin-nav-text)] tabular-nums'>
+              <p className='text-4xl leading-none font-semibold tracking-[-0.025em] text-[var(--admin-nav-text)] tabular-nums'>
                 {summary.studentCount}
               </p>
               <p
@@ -287,7 +287,7 @@ function DashboardMetricCard({
 }) {
   return (
     <Card className={cn('py-0', className)}>
-      <CardContent className='flex h-full min-h-52 flex-col justify-between p-5 sm:p-6'>
+      <CardContent className='flex h-full min-h-48 flex-col justify-between p-5 sm:p-6'>
         <div className='flex items-center justify-between'>
           <p className='text-sm font-medium text-[var(--admin-ink-soft)]'>
             {label}
@@ -299,7 +299,7 @@ function DashboardMetricCard({
         <div className='mt-7'>
           <p
             className={cn(
-              'text-4xl leading-none font-semibold text-[var(--admin-ink)] tabular-nums',
+              'text-3xl leading-none font-semibold tracking-[-0.025em] text-[var(--admin-ink)] tabular-nums',
               tone,
             )}
           >
@@ -399,21 +399,21 @@ function DashboardHeatmap({
               <Table className='min-w-[960px] border-separate border-spacing-y-1.5'>
                 <TableHeader>
                   <TableRow className='border-0 hover:bg-transparent'>
-                    <TableHead className='sticky left-0 z-10 min-w-52 bg-[var(--admin-surface)] px-3 py-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+                    <TableHead className='sticky left-0 z-10 min-w-52 bg-[var(--admin-surface)] px-3 py-3 text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
                       Student
                     </TableHead>
                     {progress.topic_ids.map((topicID) => (
                       <TableHead
-                        className='min-w-28 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'
+                        className='min-w-28 px-2 py-3 text-center text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'
                         key={topicID}
                       >
                         <TopicHeaderLabel topicID={topicID} />
                       </TableHead>
                     ))}
-                    <TableHead className='min-w-24 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+                    <TableHead className='min-w-24 px-2 py-3 text-center text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
                       Average
                     </TableHead>
-                    <TableHead className='min-w-64 px-3 py-3 text-right text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+                    <TableHead className='min-w-64 px-3 py-3 text-right text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
                       Next action
                     </TableHead>
                   </TableRow>
@@ -592,7 +592,7 @@ function MasteryLegend() {
   return (
     <div
       aria-label='Mastery score legend'
-      className='flex flex-wrap items-center gap-3 text-[11px] text-[var(--admin-muted)]'
+      className='flex flex-wrap items-center gap-3 text-xs text-[var(--admin-muted)]'
     >
       <LegendItem
         className='bg-[var(--status-danger-text)]'
@@ -651,7 +651,7 @@ function StudentDetailSheet({
     <Sheet open={Boolean(studentID)} onOpenChange={handleSheetOpenChange}>
       <SheetContent className='w-full overflow-y-auto border-l border-[var(--border-primary-default)] bg-[var(--admin-canvas)] p-0 sm:max-w-[720px]'>
         <SheetHeader className='border-b border-[var(--border-primary-default)] bg-[var(--admin-surface)] p-5 sm:p-6'>
-          <p className='text-[10px] font-semibold tracking-[0.12em] text-[var(--text-tertiary-default)] uppercase'>
+          <p className='text-xs font-semibold tracking-[0.1em] text-[var(--text-tertiary-default)] uppercase'>
             Learner profile
           </p>
           <SheetTitle className='text-xl'>
@@ -776,7 +776,7 @@ function StudentDetailButton({
         </span>
         <span className='min-w-0'>
           <span className='block truncate'>{studentName}</span>
-          <span className='mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-[var(--admin-muted)]'>
+          <span className='mt-0.5 flex items-center gap-1.5 text-xs font-normal text-[var(--admin-muted)]'>
             <AttentionDot learner={learner} />
             {getLearnerStatusLabel(learner.status)}
           </span>

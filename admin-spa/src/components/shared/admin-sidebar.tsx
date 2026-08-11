@@ -70,7 +70,7 @@ export function AdminSidebar() {
             </span>
             <span className='min-w-0 leading-tight'>
               <span className='block truncate'>P&AI Bot</span>
-              <span className='mt-0.5 block truncate text-[10px] font-medium tracking-[0.1em] text-[var(--admin-nav-muted)] uppercase'>
+              <span className='mt-0.5 block truncate text-xs font-medium tracking-[0.08em] text-[var(--admin-nav-muted)] uppercase'>
                 Learning OS
               </span>
             </span>
@@ -94,7 +94,7 @@ export function AdminSidebar() {
         <nav aria-label='Admin navigation'>
           {visibleGroups.map((group) => (
             <SidebarGroup className='px-0 py-2' key={group.label}>
-              <SidebarGroupLabel className='h-7 px-3 text-[10px] font-semibold tracking-[0.14em] text-[var(--admin-nav-label)] uppercase'>
+              <SidebarGroupLabel className='h-7 px-3 text-xs font-semibold tracking-[0.1em] text-[var(--admin-nav-label)] uppercase'>
                 {group.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>

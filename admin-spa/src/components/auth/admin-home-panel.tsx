@@ -26,7 +26,7 @@ export function AdminHomePanel({
 
   return (
     <section className='min-h-svh overflow-y-auto bg-[var(--surface-secondary-default-hover)] px-4 text-[var(--text-default-heading)] sm:px-6 lg:px-8'>
-      <div className='mx-auto grid min-h-svh max-w-[1180px] grid-rows-[56px_minmax(0,1fr)] font-sans sm:grid-rows-[64px_minmax(0,1fr)]'>
+      <div className='mx-auto grid min-h-svh max-w-[1120px] grid-rows-[56px_minmax(0,1fr)] font-sans sm:grid-rows-[64px_minmax(0,1fr)]'>
         <LoginHeader />
         <AdminEntryPanel
           nextPath={nextPath}
@@ -67,20 +67,20 @@ function AdminEntryPanel({
 }) {
   return (
     <section
-      className='grid min-h-0 items-start py-10 min-[1040px]:items-center min-[1040px]:py-5 sm:py-14'
+      className='grid min-h-0 items-start py-8 min-[1040px]:items-center min-[1040px]:py-6 sm:py-12'
       aria-label='Admin sign in'
       id='sign-in'
     >
-      <div className='grid w-full items-center gap-8 min-[1040px]:grid-cols-[minmax(0,1fr)_minmax(360px,432px)] min-[1040px]:gap-8 xl:gap-12'>
+      <div className='grid w-full items-center gap-8 min-[1040px]:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] min-[1040px]:gap-12'>
         <div className='hidden max-w-[560px] min-[1040px]:block'>
-          <p className='m-0 max-w-[13ch] font-sans text-[64px] leading-[0.94] font-semibold tracking-[-0.025em] text-balance text-[var(--text-default-heading)] xl:text-[76px]'>
+          <p className='m-0 max-w-[14ch] font-sans text-[clamp(2.75rem,4vw,3.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance text-[var(--text-default-heading)]'>
             See who needs help next.
           </p>
-          <p className='mt-6 max-w-[42ch] text-base leading-7 text-pretty text-[var(--text-default-body)]'>
+          <p className='mt-4 max-w-[50ch] text-base leading-6 text-pretty text-[var(--text-default-body)]'>
             Move from class progress to the right next action without losing the
             learner behind the data.
           </p>
-          <div className='mt-8 grid max-w-[520px] gap-3'>
+          <div className='mt-6 grid max-w-[520px] gap-3'>
             <EntryPromise
               Icon={GraduationCapIcon}
               title='Guide the next lesson'
@@ -99,11 +99,11 @@ function AdminEntryPanel({
           </div>
         </div>
 
-        <div className='mx-auto w-full max-w-[432px]'>
+        <div className='mx-auto w-full max-w-[420px]'>
           <Card className='gap-5 rounded-[20px] bg-[var(--surface-general-default)] py-6 shadow-none ring-[var(--border-default)] sm:gap-6 sm:py-7'>
             <CardHeader className='gap-2 px-5 sm:px-7'>
               <CardTitle>
-                <h1 className='m-0 font-sans !text-[32px] !leading-[1.08] font-semibold tracking-[-0.018em] text-balance text-[var(--text-default-heading)] sm:!text-[38px]'>
+                <h1 className='m-0 font-sans text-[30px] leading-[1.12] font-semibold tracking-[-0.02em] text-balance text-[var(--text-default-heading)] sm:text-[32px]'>
                   Welcome back.
                 </h1>
               </CardTitle>

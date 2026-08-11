@@ -450,17 +450,14 @@ function SelectedClassSummary({ group }: { group: GroupRecord }) {
             Student join code
           </p>
           <p
-            className='mt-1 font-mono text-2xl font-semibold tracking-wider tabular-nums'
+            className='mt-1 text-2xl font-semibold tracking-[0.08em] tabular-nums'
             translate='no'
           >
             {group.join_code}
           </p>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Students send{' '}
-            <span className='font-mono' translate='no'>
-              /join {group.join_code}
-            </span>{' '}
-            to P&amp;AI Bot.
+            Students send <span translate='no'>/join {group.join_code}</span> to
+            P&amp;AI Bot.
           </p>
         </div>
         <div className='flex flex-col items-stretch gap-2 sm:items-end'>

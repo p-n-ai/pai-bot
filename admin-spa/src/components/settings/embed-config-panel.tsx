@@ -250,7 +250,7 @@ export function EmbedConfigPanel() {
   }
 
   return (
-    <div className='mt-8 grid gap-8'>
+    <div className='mt-7 grid gap-7'>
       <EmbedSetupGuide
         config={config}
         copied={copied}
@@ -259,20 +259,20 @@ export function EmbedConfigPanel() {
 
       <section
         aria-label='Website chat settings'
-        className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
+        className='overflow-hidden rounded-[1.5rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
       >
         <div className='grid lg:grid-cols-[minmax(21rem,0.9fr)_minmax(25rem,1.1fr)]'>
           <WidgetPreview theme={theme} />
           <section
             aria-labelledby='embed-configuration-title'
-            className='grid content-center gap-7 p-6 sm:p-8 lg:p-10'
+            className='grid content-center gap-7 p-6 sm:p-8'
           >
             <header>
-              <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+              <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
                 Appearance
               </p>
               <h2
-                className='m-0 text-2xl leading-tight font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'
+                className='m-0 text-xl leading-snug font-semibold tracking-[-0.02em] text-[var(--admin-ink)]'
                 id='embed-configuration-title'
               >
                 Chat appearance
@@ -310,7 +310,7 @@ export function EmbedConfigPanel() {
                     type='color'
                     value={theme.color}
                   />
-                  <span className='font-mono text-sm font-medium text-[var(--admin-ink)] uppercase'>
+                  <span className='text-sm font-medium tracking-[0.06em] text-[var(--admin-ink)] uppercase'>
                     {theme.color}
                   </span>
                   <span className='ms-auto text-xs text-[var(--admin-muted)]'>
@@ -390,7 +390,7 @@ export function EmbedConfigPanel() {
 
       <section
         aria-label='Website chat installation'
-        className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
+        className='grid overflow-hidden rounded-[1.5rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
       >
         <OriginsSection
           config={config}
@@ -404,10 +404,10 @@ export function EmbedConfigPanel() {
 
         <section
           aria-labelledby='install-snippet-title'
-          className='grid content-start gap-5 p-6 sm:p-8 lg:p-10'
+          className='grid content-start gap-5 p-6 sm:p-8'
         >
           <header>
-            <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+            <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
               Installation
             </p>
             <h2
@@ -524,7 +524,7 @@ function EmbedSetupGuide({
               </span>
               <div className='min-w-0 lg:mt-4'>
                 <p
-                  className={`m-0 text-[0.625rem] font-semibold tracking-[0.12em] uppercase ${current ? 'text-[var(--admin-ink)]' : 'text-[var(--admin-muted)]'}`}
+                  className={`m-0 text-xs font-semibold tracking-[0.1em] uppercase ${current ? 'text-[var(--admin-ink)]' : 'text-[var(--admin-muted)]'}`}
                 >
                   {stateLabel}
                 </p>
@@ -598,10 +598,10 @@ function OriginsSection({
   return (
     <section
       aria-labelledby='allowed-origins-title'
-      className='grid content-start gap-5 p-6 sm:p-8 lg:border-e lg:border-[var(--admin-line)] lg:p-10'
+      className='grid content-start gap-5 p-6 sm:p-8 lg:border-e lg:border-[var(--admin-line)]'
     >
       <header>
-        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+        <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
           Website access
         </p>
         <h2
@@ -708,7 +708,7 @@ function PublishedState({ config }: { config: EmbedConfig }) {
         </p>
         <p className='m-0 text-xs text-[var(--admin-muted)]'>{detail}</p>
       </div>
-      <p className='m-0 ms-auto text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+      <p className='m-0 ms-auto text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
         Publication status
       </p>
     </div>
@@ -731,9 +731,9 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
   return (
     <section
       aria-labelledby='widget-preview-title'
-      className='relative min-h-[34rem] overflow-hidden bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[38rem] lg:p-10'
+      className='relative min-h-[30rem] overflow-hidden bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[34rem]'
     >
-      <p className='mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-nav-muted)] uppercase'>
+      <p className='mb-2.5 flex items-center gap-2 text-xs font-semibold tracking-[0.12em] text-[var(--admin-nav-muted)] uppercase'>
         <span
           aria-hidden='true'
           className='size-2 rounded-full bg-[var(--admin-accent)]'
@@ -741,7 +741,7 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
         Visual preview
       </p>
       <h2
-        className='m-0 text-2xl font-semibold tracking-[-0.035em]'
+        className='m-0 text-xl leading-snug font-semibold tracking-[-0.02em]'
         id='widget-preview-title'
       >
         Preview

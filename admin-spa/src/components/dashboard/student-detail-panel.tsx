@@ -158,9 +158,9 @@ function StudentDetailReady({
     <div className='min-w-0 space-y-6'>
       {variant === 'page' ? (
         <PageHero
-          eyebrow='Student detail'
+          eyebrow='Learner record'
           title={detail.student.name}
-          description={`${detail.student.form} | ${detail.student.channel} | ${detail.student.external_id}`}
+          description={`${detail.student.form} · ${detail.student.channel} · ${detail.student.external_id}`}
           className='bg-[var(--admin-surface)]'
         >
           <a
@@ -383,7 +383,7 @@ function StudentSummaryMetric({
 }) {
   return (
     <div className='min-w-0 bg-[var(--admin-surface)] px-3 py-3'>
-      <dt className='truncate text-[11px] font-medium text-[var(--admin-muted)]'>
+      <dt className='truncate text-xs font-medium text-[var(--admin-muted)]'>
         {label}
       </dt>
       <dd className='mt-1 truncate text-sm font-semibold text-[var(--admin-ink)] tabular-nums'>
@@ -527,7 +527,7 @@ function StudentActivityGrid({
                 >
                   {item.count}
                 </div>
-                <p className='text-[10px] text-[var(--admin-muted)] tabular-nums'>
+                <p className='text-xs text-[var(--admin-muted)] tabular-nums'>
                   {item.shortLabel}
                 </p>
               </div>

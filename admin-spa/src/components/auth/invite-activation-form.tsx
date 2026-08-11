@@ -128,10 +128,10 @@ export function InviteActivationForm({
   )
 
   return (
-    <div className='min-h-svh bg-[var(--surface-secondary-default-hover)] px-4 py-6 text-[var(--text-default-heading)] sm:px-6 sm:py-8 lg:px-10'>
+    <div className='min-h-svh bg-[var(--surface-secondary-default-hover)] px-4 py-6 text-[var(--text-default-heading)] sm:px-6 sm:py-8 lg:px-8'>
       <section
         aria-labelledby={headingID}
-        className='mx-auto grid min-h-[calc(100svh-3rem)] w-full max-w-[1180px] content-center gap-6 min-[1040px]:grid-cols-[minmax(0,1fr)_minmax(22rem,27rem)] min-[1040px]:grid-rows-[auto_auto] min-[1040px]:gap-x-16 min-[1040px]:gap-y-8 sm:min-h-[calc(100svh-4rem)]'
+        className='mx-auto grid min-h-[calc(100svh-3rem)] w-full max-w-[1120px] content-center gap-6 min-[1040px]:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)] min-[1040px]:grid-rows-[auto_auto] min-[1040px]:gap-x-12 min-[1040px]:gap-y-6 sm:min-h-[calc(100svh-4rem)]'
       >
         <InviteActivationHeader headingID={headingID} />
 
@@ -166,7 +166,7 @@ export function InviteActivationForm({
 
 function InviteActivationHeader({ headingID }: { headingID: string }) {
   return (
-    <header className='grid gap-4 min-[1040px]:col-start-1 min-[1040px]:row-start-1 min-[1040px]:self-end'>
+    <header className='grid gap-3 min-[1040px]:col-start-1 min-[1040px]:row-start-1 min-[1040px]:self-end'>
       <p className='m-0 inline-flex items-center gap-2 text-xs font-bold tracking-[0.14em] text-[var(--text-default-body)] uppercase'>
         <ShieldCheckIcon
           aria-hidden='true'
@@ -176,12 +176,12 @@ function InviteActivationHeader({ headingID }: { headingID: string }) {
         Invite activation
       </p>
       <h1
-        className='max-w-[16ch] text-[clamp(1.875rem,4vw,2.5rem)] leading-[1.08] font-semibold tracking-[-0.035em] text-balance'
+        className='max-w-[16ch] text-[clamp(2rem,3.2vw,2.25rem)] leading-[1.1] font-semibold tracking-[-0.025em] text-balance'
         id={headingID}
       >
         Accept your invite
       </h1>
-      <p className='m-0 max-w-[42ch] text-base leading-6 text-pretty text-[var(--text-default-body)]'>
+      <p className='m-0 max-w-[50ch] text-base leading-6 text-pretty text-[var(--text-default-body)]'>
         Create your account once, then use your new password for future
         sign-ins.
       </p>

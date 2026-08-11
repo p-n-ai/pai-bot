@@ -53,7 +53,7 @@ function JoinRoute() {
 
   return (
     <main className='min-h-svh bg-[var(--surface-secondary-default-hover)] px-4 text-[var(--text-default-heading)] sm:px-6 lg:px-8'>
-      <div className='mx-auto grid min-h-svh max-w-[1180px] grid-rows-[64px_minmax(0,1fr)]'>
+      <div className='mx-auto grid min-h-svh max-w-[1120px] grid-rows-[64px_minmax(0,1fr)]'>
         <header className='flex items-center border-b border-[var(--border-default)]'>
           <a
             className='inline-flex min-h-11 items-center gap-2.5 text-sm font-semibold tracking-tight text-[var(--text-default-heading)] no-underline outline-none focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-secondary-default-hover)]'
@@ -71,7 +71,7 @@ function JoinRoute() {
 
         <section
           aria-labelledby='join-page-title'
-          className='grid items-start gap-8 py-10 md:grid-cols-[minmax(0,0.8fr)_minmax(360px,1fr)] md:items-center md:py-14 lg:gap-14'
+          className='grid items-start gap-8 py-8 md:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] md:items-center md:py-12 lg:gap-12'
         >
           <div className='max-w-lg'>
             <span className='grid size-11 place-items-center rounded-xl border border-[var(--border-primary-focus)] bg-[var(--surface-primary-default)] text-[var(--icon-tertiary-default)]'>
@@ -81,17 +81,17 @@ function JoinRoute() {
               Student access
             </p>
             <h1
-              className='mt-3 text-[42px] leading-[0.98] font-semibold tracking-[-0.025em] text-balance sm:text-[56px]'
+              className='mt-3 text-[36px] leading-[1.05] font-semibold tracking-[-0.025em] text-balance sm:text-[44px]'
               id='join-page-title'
             >
               Join your class.
             </h1>
-            <p className='mt-5 max-w-[38ch] text-base leading-7 text-pretty text-[var(--text-default-body)]'>
+            <p className='mt-4 max-w-[42ch] text-base leading-6 text-pretty text-[var(--text-default-body)]'>
               Confirm the school and class before using the join code in
               P&amp;AI Bot.
             </p>
             <a
-              className='mt-7 inline-flex min-h-11 items-center gap-2 rounded-full px-1 text-sm font-semibold text-[var(--text-tertiary-default)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--border-primary-focus)]'
+              className='mt-6 inline-flex min-h-11 items-center gap-2 rounded-full px-1 text-sm font-semibold text-[var(--text-tertiary-default)] underline decoration-from-font underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--border-primary-focus)]'
               href='/'
             >
               <ArrowLeftIcon aria-hidden='true' className='size-4' />

@@ -57,8 +57,8 @@ export function PublicStatusPage() {
 
   return (
     <div className='min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'>
-      <div className='mx-auto w-[min(calc(100%-2rem),40rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-12'>
-        <header className='mb-14 sm:mb-16'>
+      <div className='mx-auto w-[min(calc(100%-2rem),42rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-10'>
+        <header className='mb-10 sm:mb-12'>
           <a
             className='inline-flex min-h-11 items-center gap-3 rounded-lg text-sm font-semibold tracking-[-0.01em] no-underline outline-offset-4 focus-visible:outline-2'
             href='/health'
@@ -73,7 +73,7 @@ export function PublicStatusPage() {
           </a>
         </header>
 
-        <div aria-live='polite' className='grid gap-14'>
+        <div aria-live='polite' className='grid gap-10 sm:gap-12'>
           <section aria-labelledby='status-heading' className='max-w-2xl'>
             <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-default-body)]'>
               <span
@@ -89,7 +89,7 @@ export function PublicStatusPage() {
               {presentation.liveLabel}
             </p>
             <h1
-              className='m-0 text-[clamp(2rem,6vw,3rem)] leading-[1.08] font-semibold tracking-[-0.04em] text-balance'
+              className='m-0 max-w-[18ch] text-[clamp(2rem,5vw,2.5rem)] leading-[1.1] font-semibold tracking-[-0.03em] text-balance'
               id='status-heading'
             >
               {presentation.headline}
@@ -109,7 +109,7 @@ export function PublicStatusPage() {
             >
               System status
             </h2>
-            <ul className='m-0 grid list-none gap-8 p-0'>
+            <ul className='m-0 grid list-none gap-6 p-0'>
               {presentation.components.map((component) => (
                 <StatusRow component={component} key={component.id} />
               ))}
@@ -117,7 +117,7 @@ export function PublicStatusPage() {
           </section>
         </div>
 
-        <footer className='mt-14 text-[13px] leading-5 text-[var(--text-default-body)]'>
+        <footer className='mt-10 text-[13px] leading-5 text-[var(--text-default-body)]'>
           <a
             className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
             href='/health/status'

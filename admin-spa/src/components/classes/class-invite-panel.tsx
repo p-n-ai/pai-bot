@@ -78,7 +78,7 @@ export function ClassInvitePanel() {
           </div>
           <Label htmlFor='class-invite-link'>Activation link</Label>
           <Input
-            className='min-h-11 font-mono text-xs'
+            className='min-h-11 text-xs'
             id='class-invite-link'
             readOnly
             value={resolveInviteLink(invite.latestInvite)}

@@ -98,7 +98,7 @@ function ParentSummaryReady({ summary }: { summary: ParentSummary }) {
   return (
     <div className='space-y-6'>
       <PageHero
-        eyebrow='Parent support summary'
+        eyebrow='Weekly overview'
         title={`${summary.child.name} this week`}
         description={view.contextLine}
         aside={heroAside}

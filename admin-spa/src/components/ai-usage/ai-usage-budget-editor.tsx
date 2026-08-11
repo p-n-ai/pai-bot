@@ -43,10 +43,10 @@ function EditableTokenBudget({
   return (
     <form className='grid gap-6' onSubmit={form.handleSubmit}>
       <div>
-        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+        <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
           Budget settings
         </p>
-        <h3 className='text-2xl font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'>
+        <h3 className='text-xl leading-snug font-semibold tracking-[-0.02em] text-[var(--admin-ink)]'>
           {isConfigured ? 'Update budget' : 'Set a budget'}
         </h3>
         <p className='mt-2 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>

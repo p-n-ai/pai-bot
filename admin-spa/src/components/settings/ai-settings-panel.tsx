@@ -885,7 +885,7 @@ function ConfiguredKeyState({
 }) {
   return (
     <div className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
-      <span className='font-mono text-foreground'>
+      <span className='text-foreground'>
         Saved key &middot;&middot;&middot;&middot; {last4}
         {fromEnv ? (
           <span className='ml-2 font-sans text-muted-foreground'>
@@ -1048,7 +1048,7 @@ function FeatureFlagRow({
   return (
     <li className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
       <span className='flex flex-wrap items-center gap-2'>
-        <span className='font-mono text-[13px]'>{name}</span>
+        <span className='text-[13px]'>{name}</span>
         <SourceBadge source={source} />
       </span>
       <div className='flex gap-2'>

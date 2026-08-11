@@ -21,7 +21,7 @@ export function AdminTopbar() {
           className='size-11 shrink-0 text-[var(--admin-ink-soft)] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current md:hidden'
         />
         <div className='min-w-0 leading-tight'>
-          <p className='truncate text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase sm:text-[11px]'>
+          <p className='truncate text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
             {user?.tenant_name ?? 'School'}
           </p>
           <p className='truncate text-sm font-semibold text-[var(--admin-ink)] sm:text-[15px]'>
@@ -30,7 +30,7 @@ export function AdminTopbar() {
         </div>
       </div>
       <div className='flex min-h-10 min-w-0 items-center gap-2 rounded-full border border-[var(--admin-line)] bg-[var(--admin-surface-muted)] py-1 pr-3 pl-1'>
-        <span className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-navigation)] text-[10px] font-semibold text-[var(--admin-nav-text)]'>
+        <span className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-navigation)] text-[11px] font-semibold text-[var(--admin-nav-text)]'>
           {getAdminUserInitials(user)}
         </span>
         <span className='hidden max-w-40 truncate text-xs font-medium text-[var(--admin-ink-soft)] sm:block'>

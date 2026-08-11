@@ -9,7 +9,7 @@ export function JoinClassCard({ joinClass }: { joinClass: JoinClassView }) {
       <p className='text-xs font-semibold tracking-[0.16em] text-[var(--text-tertiary-default)] uppercase'>
         Class join link
       </p>
-      <h2 className='mt-3 text-3xl leading-tight font-semibold tracking-[-0.02em] text-[var(--text-default-heading)]'>
+      <h2 className='mt-3 text-2xl leading-snug font-semibold tracking-[-0.02em] text-balance text-[var(--text-default-heading)]'>
         {joinClass.class_name}
       </h2>
       <p className='mt-3 max-w-[52ch] text-sm leading-6 text-[var(--text-default-body)]'>
