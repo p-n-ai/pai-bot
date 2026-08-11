@@ -11,7 +11,6 @@ function EmbedSettingsRoute() {
   return (
     <AdminPageSection
       description='Choose the appearance, approve websites, and install school chat.'
-      eyebrow='Technical tools'
       title='Website chat'
     >
       <EmbedConfigPanel />

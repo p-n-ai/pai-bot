@@ -25,7 +25,6 @@ function AIUsageRoute() {
   return (
     <AdminPageSection
       description='Review token use, budget status, and AI providers for this school.'
-      eyebrow='School AI'
       title='AI usage'
     >
       <AIUsageLoadBoundary

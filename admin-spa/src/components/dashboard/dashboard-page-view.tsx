@@ -78,8 +78,6 @@ export function DashboardPageView({
   return (
     <AdminPageSection
       description='Welcome back. Start with the learners who need you most today.'
-      eyebrow='Dashboard'
-      hideEyebrow
       title='Today'
     >
       <ClassSelector

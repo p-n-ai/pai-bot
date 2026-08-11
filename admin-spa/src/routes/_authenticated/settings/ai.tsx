@@ -11,7 +11,6 @@ function AISettingsRoute() {
   return (
     <AdminPageSection
       description='Choose providers, models, credentials, and AI features for every school.'
-      eyebrow='Platform'
       title='AI settings'
     >
       <AISettingsPanel />

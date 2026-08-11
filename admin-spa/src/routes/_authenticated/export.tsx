@@ -11,7 +11,6 @@ function ExportRoute() {
   return (
     <AdminPageSection
       description='Download school records for reporting, migration, or audit work.'
-      eyebrow='School administration'
       title='Download records'
     >
       <ExportPanel />

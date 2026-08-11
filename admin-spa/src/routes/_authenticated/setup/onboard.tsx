@@ -11,7 +11,6 @@ function OnboardingRoute() {
   return (
     <AdminPageSection
       description='Choose a syllabus, create your first class, and set up its tutor.'
-      eyebrow='Setup'
       title='Set up your first class'
     >
       <OnboardingPanel />

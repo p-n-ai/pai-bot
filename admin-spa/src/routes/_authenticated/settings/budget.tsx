@@ -20,7 +20,6 @@ function BudgetSettingsRoute() {
   return (
     <AdminPageSection
       description='Control the school-wide token allowance and the dates it applies.'
-      eyebrow='School administration'
       title='AI budget'
     >
       <AIUsageLoadBoundary

@@ -11,7 +11,6 @@ function UsersSettingsRoute() {
   return (
     <AdminPageSection
       description='Review school access and invite teachers, parents, or administrators.'
-      eyebrow='School administration'
       title='Staff access'
     >
       <UserManagementPanel />
