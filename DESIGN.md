@@ -3,27 +3,27 @@ version: alpha
 name: P&AI Operate
 description: A calm, learner-aware operating system for school administrators and educators.
 colors:
-  primary: "#00564C"
-  primary-hover: "#00CC85"
-  canvas: "#F6FEF6"
-  surface: "#FFFFFF"
-  surface-muted: "#D9F7ED"
-  line: "#00CC85"
-  control-line: "#6B7280"
-  focus-line: "#00564C"
-  ink: "#404040"
-  ink-hover: "#00564C"
-  ink-soft: "#666666"
-  muted: "#6B7280"
-  accent: "#00CC85"
-  accent-muted: "#00A36A"
-  nav-text: "#FFFFFF"
-  nav-muted: "#99EBCE"
-  nav-label: "#B5F291"
-  success: "#166534"
-  warning: "#92400E"
-  danger: "#B42318"
-  informative: "#00A2E8"
+  primary: "oklch(0.406 0.073 181.541)"
+  primary-hover: "oklch(0.745 0.17 159.438)"
+  canvas: "oklch(0.989 0.013 145.472)"
+  surface: "oklch(1 0 0)"
+  surface-muted: "oklch(0.952 0.034 173.507)"
+  line: "oklch(0.745 0.17 159.438)"
+  control-line: "oklch(0.551 0.023 264.365)"
+  focus-line: "oklch(0.406 0.073 181.541)"
+  ink: "oklch(0.371 0 0)"
+  ink-hover: "oklch(0.406 0.073 181.541)"
+  ink-soft: "oklch(0.51 0 0)"
+  muted: "oklch(0.551 0.023 264.365)"
+  accent: "oklch(0.745 0.17 159.438)"
+  accent-muted: "oklch(0.631 0.143 159.699)"
+  nav-text: "oklch(1 0 0)"
+  nav-muted: "oklch(0.879 0.09 169.866)"
+  nav-label: "oklch(0.897 0.141 134.649)"
+  success: "oklch(0.448 0.108 151.328)"
+  warning: "oklch(0.473 0.125 46.2)"
+  danger: "oklch(0.5 0.182 29.513)"
+  informative: "oklch(0.676 0.15 238.112)"
 typography:
   display:
     fontFamily: "Poppins, ui-sans-serif, system-ui, sans-serif"
@@ -219,20 +219,22 @@ The current sign-in screen is more editorial than the authenticated workspace. K
 
 ## Colors
 
-The front matter records the implemented Pandai DS 1.5 sRGB values. `admin-spa/src/styles.css` defines the runtime semantic tokens and maps the `--admin-*` vocabulary onto them.
+The front matter records OKLCH conversions of the implemented Pandai DS 1.5 sRGB source values. `admin-spa/src/styles.css` defines the runtime semantic tokens and maps the `--admin-*` vocabulary onto them.
+
+Author interface colors in OKLCH. Six-digit hex remains valid only where an external contract requires it, including Google brand artwork, Recharts-generated SVG selectors, the native color input, and the published embed configuration.
 
 Use color by role:
 
-- Canvas uses `Surface/secondary/default-hover #f6fef6` and never competes with content.
-- Surface uses `Surface/general/default #ffffff` for focused work.
-- Surface muted uses `Surface/primary/default-subtle #d9f7ed` for secondary information.
-- Ink uses `Text/default/heading #404040` for headings and primary reading order.
-- Navigation uses `Surface/tertiary/default #00564c` as its stable frame.
-- Pandai green uses `Surface/primary/default #00cc85` for selection and orientation.
-- Control boundaries use the P&AI adaptation `#6b7280` so inputs remain visible at non-text contrast requirements.
+- Canvas uses `Surface/secondary/default-hover oklch(0.989 0.013 145.472)` and never competes with content.
+- Surface uses `Surface/general/default oklch(1 0 0)` for focused work.
+- Surface muted uses `Surface/primary/default-subtle oklch(0.952 0.034 173.507)` for secondary information.
+- Ink uses `Text/default/heading oklch(0.371 0 0)` for headings and primary reading order.
+- Navigation uses `Surface/tertiary/default oklch(0.406 0.073 181.541)` as its stable frame.
+- Pandai green uses `Surface/primary/default oklch(0.745 0.17 159.438)` for selection and orientation.
+- Control boundaries use the P&AI adaptation `oklch(0.551 0.023 264.365)` so inputs remain visible at non-text contrast requirements.
 - Secondary graphite carries supporting copy, never primary instructions.
 
-Pandai green is the implemented accent and hover color. The shared primary action deliberately uses Pandai dark teal with white text at rest, then green with graphite text on hover. This is an accessibility adaptation: do not place white normal-size text directly on `#00cc85`.
+Pandai green is the implemented accent and hover color. The shared primary action deliberately uses Pandai dark teal with white text at rest, then green with graphite text on hover. This is an accessibility adaptation: do not place white normal-size text directly on `oklch(0.745 0.17 159.438)`.
 
 Success, warning, danger, and informative colors communicate state only with an adjacent label or icon. Do not use a colored dot as the complete message. Keep status colors out of navigation and brand surfaces.
 

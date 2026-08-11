@@ -290,7 +290,7 @@ describe('EmbedConfigPanel', () => {
     expect(screen.getByPlaceholderText('Tanya soalan…')).toBeInTheDocument()
     expect(screen.getByText('Hantar')).toBeInTheDocument()
     expect(screen.getByText('P&AI Tutor')).toHaveStyle({
-      color: '#ffffff',
+      color: 'oklch(1 0 0)',
     })
     expect(addEmbedOrigin).not.toHaveBeenCalled()
   })
