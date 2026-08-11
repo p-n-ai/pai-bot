@@ -44,7 +44,7 @@ describe('ParentSummaryPanel', () => {
     expect(screen.getByText('Total XP')).toBeInTheDocument()
     expect(screen.getByText('Linear Equations')).toBeInTheDocument()
     expect(
-      screen.getByText('Next review 09 May 2026, 00:00 UTC'),
+      screen.getByText('Next review: 09 May 2026, 00:00 UTC'),
     ).toBeInTheDocument()
     expect(screen.getByText('Alya kept the streak alive.')).toBeInTheDocument()
   })

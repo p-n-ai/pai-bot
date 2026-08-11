@@ -32,7 +32,7 @@ export function AIUsageBudgetPage({
 
   return (
     <section
-      aria-label='AI budget configuration'
+      aria-label='AI budget settings'
       className='mt-8 overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
     >
       <div className='grid lg:grid-cols-[minmax(19rem,0.86fr)_minmax(24rem,1.14fr)]'>
@@ -90,14 +90,13 @@ function EmptyBudgetStatus() {
           Set a clear limit for this school.
         </h2>
         <p className='mt-5 max-w-md text-sm leading-6 text-[var(--admin-nav-text)]'>
-          Choose a token allowance and the dates it applies. Usage is measured
-          against one school-wide window.
+          Choose a token allowance and the dates it applies to this school.
         </p>
       </div>
 
       <dl className='grid gap-5 border-t border-white/12 pt-6 text-sm'>
         <BudgetDefinition
-          description='The total tokens available during the window.'
+          description='The total tokens available during the period.'
           label='Allowance'
         />
         <BudgetDefinition
@@ -105,7 +104,7 @@ function EmptyBudgetStatus() {
           label='Schedule'
         />
         <BudgetDefinition
-          description='All AI usage in this school workspace.'
+          description='All AI use across this school.'
           label='Scope'
         />
       </dl>
@@ -157,7 +156,7 @@ function ActiveBudgetStatus({
           value={formatCompactNumber(snapshot.limit)}
         />
         <div className='col-span-2'>
-          <BudgetMetric label='Window' value={snapshot.window} />
+          <BudgetMetric label='Period' value={snapshot.window} />
         </div>
       </dl>
     </div>

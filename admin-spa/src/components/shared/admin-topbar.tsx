@@ -22,7 +22,7 @@ export function AdminTopbar() {
         />
         <div className='min-w-0 leading-tight'>
           <p className='truncate text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase sm:text-[11px]'>
-            {user?.tenant_name ?? 'School workspace'}
+            {user?.tenant_name ?? 'School'}
           </p>
           <p className='truncate text-sm font-semibold text-[var(--admin-ink)] sm:text-[15px]'>
             {pageLabel}

@@ -13,9 +13,8 @@ export function JoinClassCard({ joinClass }: { joinClass: JoinClassView }) {
         {joinClass.class_name}
       </h2>
       <p className='mt-3 max-w-[52ch] text-sm leading-6 text-[var(--text-default-body)]'>
-        {joinClass.school_name} is ready to use this join route for{' '}
-        <strong>{joinClass.class_slug}</strong>. Student enrollment and invite
-        completion still land in the next slice.
+        Confirm these class details, then send{' '}
+        <strong>/join {joinClass.class_slug}</strong> to P&amp;AI Bot.
       </p>
       <dl className='mt-6 grid gap-3'>
         <div className='flex items-center justify-between gap-4 rounded-xl bg-[var(--surface-secondary-default-hover)] px-4 py-3'>
@@ -25,11 +24,15 @@ export function JoinClassCard({ joinClass }: { joinClass: JoinClassView }) {
           </dd>
         </div>
         <div className='flex items-center justify-between gap-4 rounded-xl bg-[var(--surface-secondary-default-hover)] px-4 py-3'>
-          <dt className='text-sm text-[var(--text-default-body)]'>
-            Curriculum
-          </dt>
+          <dt className='text-sm text-[var(--text-default-body)]'>Syllabus</dt>
           <dd className='m-0 text-right text-sm font-semibold text-[var(--text-default-heading)]'>
             {joinClass.curriculum_label}
+          </dd>
+        </div>
+        <div className='flex items-center justify-between gap-4 rounded-xl bg-[var(--surface-secondary-default-hover)] px-4 py-3'>
+          <dt className='text-sm text-[var(--text-default-body)]'>Join code</dt>
+          <dd className='m-0 text-right text-sm font-semibold text-[var(--text-default-heading)]'>
+            {joinClass.class_slug}
           </dd>
         </div>
       </dl>

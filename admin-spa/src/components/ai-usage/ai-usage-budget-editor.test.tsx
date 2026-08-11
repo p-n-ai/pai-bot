@@ -61,7 +61,7 @@ describe('AIUsageBudgetEditor', () => {
     )
 
     expect(
-      screen.getByText('Budget changes require admin access.'),
+      screen.getByText('Ask a school administrator to change this budget.'),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Save token budget' }),

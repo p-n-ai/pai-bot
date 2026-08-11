@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 
 export function ExportPanel() {
   return (
-    <section aria-label='Tenant export downloads' className='mt-6'>
+    <section aria-label='School record downloads' className='mt-6'>
       <div className='overflow-hidden rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)]'>
         <ul className='m-0 list-none divide-y divide-[var(--admin-line)] p-0'>
           {adminExportLinks.map((item) => (
@@ -32,7 +32,7 @@ export function ExportPanel() {
               </div>
               <div className='flex items-center justify-between gap-4 sm:justify-end'>
                 <span className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-                  Current tenant
+                  Current school
                 </span>
                 <Button asChild size='sm' variant='outline'>
                   <a
@@ -41,7 +41,7 @@ export function ExportPanel() {
                     href={item.href}
                   >
                     <DownloadIcon data-icon='inline-start' />
-                    Download
+                    Download file
                   </a>
                 </Button>
               </div>

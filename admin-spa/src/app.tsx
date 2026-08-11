@@ -24,8 +24,8 @@ export function AdminApp() {
         id='main-content'
       >
         <section className='w-full max-w-140' role='alert'>
-          <h1>Session unavailable</h1>
-          <p>{auth.error.message}</p>
+          <h1>Unable to verify your session</h1>
+          <p>Check your connection and reload the page.</p>
         </section>
       </main>
     )
@@ -38,13 +38,13 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
   return (
     <main
       aria-busy='true'
-      aria-label='Preparing admin workspace'
+      aria-label='Loading P&AI Bot'
       className='flex min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'
       id='main-content'
       role='status'
     >
       <Button
-        aria-label='Close loading screen'
+        aria-label='Continue to sign in'
         className='absolute top-4 right-4 z-10 size-9 rounded-full bg-[var(--surface-general-default)]'
         onClick={onClose}
         size='icon'
@@ -76,7 +76,7 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
         </div>
         <Skeleton className='mt-5 h-56 rounded-lg' />
       </section>
-      <span className='sr-only'>Preparing admin workspace</span>
+      <span className='sr-only'>Loading P&amp;AI Bot</span>
     </main>
   )
 }

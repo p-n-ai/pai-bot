@@ -74,7 +74,7 @@ export function InviteActivationForm({
             passwordID={passwordID}
           />
 
-          <AuthErrorAlert message={error} title='Activation failed.' />
+          <AuthErrorAlert message={error} title='Unable to activate invite' />
 
           <ActivationSubmitButton
             isPending={isPending}
@@ -115,7 +115,7 @@ function InviteActivationTrustCues() {
       className='grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3'
     >
       <TrustCue
-        description='This link activates one workspace account.'
+        description='This link activates one school account.'
         Icon={MailCheckIcon}
         title='One-time activation'
       />
@@ -169,7 +169,7 @@ function ActivationSubmitButton({
 }) {
   return (
     <Button disabled={isPending || tokenMissing} type='submit'>
-      {isPending ? 'Activating...' : 'Accept invite'}
+      {isPending ? 'Activating…' : 'Accept invite'}
     </Button>
   )
 }
@@ -205,7 +205,7 @@ function useInviteActivationSubmit({
       }
 
       if (Array.from(password).length < minimumPasswordLength) {
-        setError('Password must be at least 12 characters.')
+        setError('Choose a password with at least 12 characters.')
         return
       }
 
@@ -221,8 +221,8 @@ function useInviteActivationSubmit({
           setError(
             readAuthDisplayError(
               caught,
-              'Invite activation failed',
-              "We couldn't reach the activation service. Check your connection and try again.",
+              'Unable to activate this invite. Check the link and try again.',
+              'Unable to reach the activation service. Check your connection and try again.',
             ),
           )
         })
@@ -265,7 +265,7 @@ function InviteActivationFields({
           id={nameID}
           name='name'
           onChange={name.handleChange}
-          placeholder='Parent One'
+          placeholder='Amina Rahman'
           required
           type='text'
           value={name.value}

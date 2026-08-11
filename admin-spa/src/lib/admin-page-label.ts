@@ -1,7 +1,7 @@
 const pageLabels = [
-  { prefix: '/dashboard/classes', label: 'My classes' },
+  { prefix: '/dashboard/classes', label: 'Classes' },
   { prefix: '/dashboard/metrics', label: 'Learning progress' },
-  { prefix: '/dashboard/ai-usage', label: 'AI activity' },
+  { prefix: '/dashboard/ai-usage', label: 'AI usage' },
   { prefix: '/settings/users', label: 'Staff access' },
   { prefix: '/settings/budget', label: 'AI budget' },
   { prefix: '/settings/ai', label: 'AI settings' },
@@ -20,6 +20,6 @@ export function getAdminPageLabel(pathname: string): string {
   return (
     pageLabels.find(
       ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    )?.label ?? 'School workspace'
+    )?.label ?? 'School'
   )
 }

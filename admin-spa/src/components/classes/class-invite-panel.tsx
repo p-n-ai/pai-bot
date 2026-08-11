@@ -60,7 +60,7 @@ export function ClassInvitePanel() {
       </div>
       {invite.error ? (
         <p className='text-sm text-destructive' role='alert'>
-          {invite.error} Try again.
+          {invite.error}
         </p>
       ) : null}
       {invite.latestInvite ? (
@@ -91,7 +91,7 @@ export function ClassInvitePanel() {
               variant='outline'
             >
               <CopyIcon data-icon='inline-start' />
-              Copy link
+              Copy activation link
             </Button>
             {invite.copyFeedback ? (
               <span className='text-sm text-muted-foreground'>

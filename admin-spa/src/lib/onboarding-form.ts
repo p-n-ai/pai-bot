@@ -13,18 +13,19 @@ export const onboardingCurriculumOptions = [
 export const onboardingBotPresetOptions = [
   {
     description:
-      'Step-by-step hints, calmer pacing, easier first-time teacher rollout.',
+      'Step-by-step hints and a calm pace for learners who need more guidance.',
     id: 'guided-practice',
     title: 'Guided practice',
   },
   {
     description:
-      'Shorter turns, faster repetition, tighter algebra practice loops.',
+      'Short turns and quick repetition for focused algebra practice.',
     id: 'algebra-drills',
     title: 'Algebra drills',
   },
   {
-    description: 'Mixed review mode for recap, catch-up, and light exam prep.',
+    description:
+      'Mixed review for recap, catch-up, and light exam preparation.',
     id: 'revision-boost',
     title: 'Revision boost',
   },

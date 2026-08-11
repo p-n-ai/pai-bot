@@ -132,7 +132,7 @@ function DashboardContent({
 
   if (state.status === 'error') {
     return (
-      <StatePanel role='alert' title='Class data unavailable'>
+      <StatePanel role='alert' title='Class progress unavailable'>
         {state.error}
       </StatePanel>
     )
@@ -176,7 +176,7 @@ function ClassSelector({
   return (
     <div className='mt-6 max-w-sm space-y-2'>
       <label className='text-sm font-medium' htmlFor='dashboard-class'>
-        Class view
+        Class
       </label>
       <NativeSelect
         className='w-full [&_select]:min-h-11'
@@ -210,7 +210,7 @@ function DashboardSkeleton() {
       data-testid='dashboard-skeleton'
       role='status'
     >
-      <span className='sr-only'>Preparing class snapshot</span>
+      <span className='sr-only'>Loading class progress</span>
       <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-5'>
         <DashboardStatSkeleton className='xl:col-span-2' />
         <DashboardStatSkeleton />

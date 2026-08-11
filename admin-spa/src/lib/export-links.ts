@@ -22,14 +22,14 @@ export const adminExportLinks: Array<AdminExportLink> = [
   },
   {
     description:
-      'Download structured conversation transcripts with message metadata for audit and review workflows.',
+      'Download conversation transcripts with message details for audit and review.',
     href: '/api/admin/export/conversations',
     icon: MessagesSquareIcon,
     title: 'Conversations JSON',
   },
   {
     description:
-      'Download per-topic mastery records with scheduling fields for spreadsheet or warehouse import.',
+      'Download topic mastery and review schedules for spreadsheet analysis.',
     href: '/api/admin/export/progress',
     icon: DatabaseBackupIcon,
     title: 'Progress CSV',

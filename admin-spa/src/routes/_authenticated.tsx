@@ -19,7 +19,7 @@ function AuthenticatedLayout() {
         className='fixed top-3 left-3 z-50 -translate-y-20 rounded-full bg-[var(--admin-navigation)] px-4 py-3 text-sm font-semibold text-[var(--admin-nav-text)] transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current motion-reduce:transition-none'
         href='#admin-content'
       >
-        Skip to content
+        Skip to main content
       </a>
       <AdminSidebar />
       <SidebarInset

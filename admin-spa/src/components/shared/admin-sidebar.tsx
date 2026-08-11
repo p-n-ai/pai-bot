@@ -186,5 +186,5 @@ function AdminNavigationLink({
 }
 
 function formatRole(role: AuthUser['role'] | undefined): string {
-  return role ? role.replaceAll('_', ' ') : 'Admin workspace'
+  return role ? role.replaceAll('_', ' ') : 'Administrator'
 }

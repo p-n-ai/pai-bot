@@ -51,7 +51,7 @@ export function InviteForm({
       ) : null}
       <Button disabled={isSubmitting || !email.trim()} type='submit'>
         <MailPlusIcon data-icon='inline-start' />
-        {isSubmitting ? 'Sending invite...' : 'Send invite'}
+        {isSubmitting ? 'Sending invite…' : 'Send invite'}
       </Button>
     </form>
   )
@@ -134,12 +134,14 @@ function LatestInvite({
       <div className='mt-6 flex flex-wrap gap-3'>
         <Button onClick={onCopyLink} type='button' variant='outline'>
           <CopyIcon data-icon='inline-start' />
-          Copy link
+          Copy activation link
         </Button>
         {copyFeedback ? <p>{copyFeedback}</p> : null}
       </div>
       {invite.delivery_error ? (
-        <p className='text-muted-foreground'>{invite.delivery_error}</p>
+        <p className='text-muted-foreground'>
+          Email delivery failed. Copy the activation link and send it directly.
+        </p>
       ) : null}
     </div>
   )
@@ -153,7 +155,7 @@ function getInviteDeliveryDescription(
   }
 
   if (deliveryStatus === 'failed') {
-    return 'Invite delivery failed.'
+    return 'Email delivery failed. Copy and send the activation link directly.'
   }
 
   return 'Copy the activation link.'

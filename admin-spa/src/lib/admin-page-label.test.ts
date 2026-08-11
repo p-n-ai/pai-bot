@@ -5,8 +5,8 @@ import { getAdminPageLabel } from './admin-page-label'
 describe('admin topbar context', () => {
   it.each([
     ['/dashboard', 'Today'],
-    ['/dashboard/classes', 'My classes'],
-    ['/dashboard/classes/class_1', 'My classes'],
+    ['/dashboard/classes', 'Classes'],
+    ['/dashboard/classes/class_1', 'Classes'],
     ['/dashboard/metrics', 'Learning progress'],
     ['/settings/users', 'Staff access'],
     ['/settings/embed', 'Website chat'],
@@ -18,12 +18,10 @@ describe('admin topbar context', () => {
   })
 
   it('uses a calm fallback for an unknown authenticated path', () => {
-    expect(getAdminPageLabel('/unknown')).toBe('School workspace')
+    expect(getAdminPageLabel('/unknown')).toBe('School')
   })
 
   it('does not restore context for the retired retrieval lab', () => {
-    expect(getAdminPageLabel('/dashboard/retrieval-lab')).toBe(
-      'School workspace',
-    )
+    expect(getAdminPageLabel('/dashboard/retrieval-lab')).toBe('School')
   })
 })

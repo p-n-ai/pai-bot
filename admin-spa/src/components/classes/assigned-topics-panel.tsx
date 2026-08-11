@@ -27,7 +27,7 @@ export function AssignedTopicsPanel() {
       <div>
         <p className='eyebrow'>Assigned topics</p>
         <h2>Topic assignment</h2>
-        <p>Topic assignment (coming soon)</p>
+        <p>Topic assignment is not available yet.</p>
       </div>
       <div className='topic-list'>
         {assignedTopics.map((topic) => (
@@ -40,7 +40,7 @@ export function AssignedTopicsPanel() {
         type='button'
         variant='outline'
       >
-        Assign topics to class (coming soon)
+        Topic assignment unavailable
       </Button>
     </section>
   )

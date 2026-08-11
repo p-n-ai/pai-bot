@@ -13,7 +13,9 @@ export const Route = createFileRoute('/_authenticated/settings/budget')({
 
 function BudgetSettingsRoute() {
   const { auth } = useAuth()
-  const [state, setState] = useAIUsageState('Token budget failed')
+  const [state, setState] = useAIUsageState(
+    'Unable to load the AI budget. Check your connection and try again.',
+  )
 
   return (
     <AdminPageSection
@@ -23,7 +25,7 @@ function BudgetSettingsRoute() {
     >
       <AIUsageLoadBoundary
         errorTitle='Unable to load token budget'
-        loadingTitle='Loading token budget...'
+        loadingTitle='Loading AI budget…'
         loadingVariant='budget'
         setState={setState}
         state={state}

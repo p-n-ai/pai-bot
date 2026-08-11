@@ -84,7 +84,7 @@ function AdminEntryPanel({
             <EntryPromise
               Icon={GraduationCapIcon}
               title='Guide the next lesson'
-              text='See class mastery and student detail in one place.'
+              text='See class mastery and learner progress in one place.'
             />
             <EntryPromise
               Icon={SchoolIcon}

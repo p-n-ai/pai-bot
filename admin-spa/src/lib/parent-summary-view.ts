@@ -47,7 +47,7 @@ function buildParentContextLine(summary: ParentSummary | null): string {
 
 function buildLoadedContextLine(summary: ParentSummary): string {
   const contact = summary.parent.email || summary.parent.name || 'Parent'
-  return `${summary.child.form} | ${summary.child.channel} | Parent contact ${contact}`
+  return `${summary.child.form} • ${summary.child.channel} • Parent contact: ${contact}`
 }
 
 function getEncouragement(summary: ParentSummary | null) {
@@ -55,7 +55,7 @@ function getEncouragement(summary: ParentSummary | null) {
 }
 
 const unloadedContextLine =
-  'Pulling weekly activity, mastery, and encouragement from the admin API.'
+  'Loading weekly activity, mastery, and encouragement.'
 
 const defaultEncouragement = {
   headline: 'A suggested encouragement will appear here soon.',

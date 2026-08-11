@@ -18,12 +18,12 @@ interface StatusRowModel {
 
 const componentCopy = {
   application: {
-    name: 'Application API',
-    description: 'Core application and chat services',
+    name: 'P&AI application',
+    description: 'Admin and chat services',
   },
   ai_provider: {
     name: 'AI provider',
-    description: 'Primary provider response health',
+    description: 'AI response availability',
   },
 } as const
 
@@ -122,7 +122,7 @@ export function PublicStatusPage() {
             className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
             href='/health/status'
           >
-            JSON status
+            View JSON status
           </a>
         </footer>
       </div>
@@ -192,7 +192,7 @@ function statusPresentation(viewState: StatusViewState): {
     return {
       headline: 'Status currently unavailable',
       summary:
-        'The status service could not be reached. This does not necessarily mean the application is down.',
+        'Unable to check the latest status. P&AI may still be available. Try again shortly.',
       components: [
         { id: 'application', status: 'unknown' },
         { id: 'ai_provider', status: 'unknown' },

@@ -24,7 +24,7 @@ const navigationGroups = [
       {
         Icon: BookOpenCheckIcon,
         href: '/dashboard/classes',
-        label: 'My classes',
+        label: 'Classes',
       },
     ],
   },
@@ -54,7 +54,7 @@ const navigationGroups = [
       {
         Icon: BotIcon,
         href: '/dashboard/ai-usage',
-        label: 'AI activity',
+        label: 'AI usage',
       },
       {
         // Visible only with can_manage_ai_settings (canAccessPath filter).

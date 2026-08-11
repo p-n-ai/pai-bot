@@ -85,8 +85,8 @@ export function StudentDetailPanel({
     return (
       <LoadState
         error={null}
-        errorTitle='Student detail unavailable'
-        loadingTitle='Loading student detail…'
+        errorTitle='Learner profile unavailable'
+        loadingTitle='Loading learner profile…'
         status={loadState}
       />
     )
@@ -94,10 +94,10 @@ export function StudentDetailPanel({
 
   if (loadState === 'error') {
     return (
-      <StatePanel role='alert' title='Student detail unavailable'>
+      <StatePanel role='alert' title='Learner profile unavailable'>
         <p>
-          The latest learner record could not be loaded. Check your connection
-          and try again.
+          Unable to load the latest learner record. Check your connection and
+          try again.
         </p>
         <Button
           className='mt-4 transition-transform duration-150 active:scale-[0.96]'
@@ -112,7 +112,7 @@ export function StudentDetailPanel({
 
   if (!detail) {
     return (
-      <StatePanel title='Student detail unavailable'>
+      <StatePanel title='Learner profile unavailable'>
         Student details will appear once the latest record is ready.
       </StatePanel>
     )
@@ -558,7 +558,7 @@ function StudentConversationList({
     <AdminSurface>
       <AdminSurfaceHeader
         title='Recent conversations'
-        description='Raw tutoring messages for context.'
+        description='Review recent tutoring messages for context.'
         action={renderConversationCount(view.conversations.length)}
       />
       <section
@@ -612,7 +612,7 @@ function StudentProfileCard({ detail }: { detail: StudentDetail }) {
           valueClassName='capitalize'
         />
         <StudentProfileField
-          label='External ID'
+          label='Channel account ID'
           value={detail.student.external_id}
           valueClassName='break-all'
         />

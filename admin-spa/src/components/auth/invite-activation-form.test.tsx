@@ -99,7 +99,7 @@ describe('InviteActivationForm', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('One-time activation')).toBeInTheDocument()
     expect(
-      screen.getByText('This link activates one workspace account.'),
+      screen.getByText('This link activates one school account.'),
     ).toBeInTheDocument()
     expect(screen.getByText('Immediate sign-in')).toBeInTheDocument()
     expect(
@@ -124,7 +124,7 @@ describe('InviteActivationForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept invite' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Password must be at least 12 characters.',
+      'Choose a password with at least 12 characters.',
     )
     expect(acceptInvite).not.toHaveBeenCalled()
   })

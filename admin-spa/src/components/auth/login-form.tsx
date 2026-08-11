@@ -101,7 +101,7 @@ export function LoginForm({
           setError(
             readAuthDisplayError(
               caught,
-              'Sign-in failed',
+              'Unable to sign in',
               'Unable to reach the sign-in service. Check your connection and try again.',
             ),
           )
@@ -164,8 +164,8 @@ export function LoginForm({
           message={error}
           title={
             tenantChoices.length > 0 && !tenantID
-              ? 'Choose a school.'
-              : 'Unable to sign in.'
+              ? 'Choose a school'
+              : 'Unable to sign in'
           }
         />
 
@@ -175,7 +175,7 @@ export function LoginForm({
             isPending={isPending}
           />
           <p className='m-0 text-center text-xs leading-5 text-[var(--text-default-body)]'>
-            Need sign-in help? Contact your platform admin.
+            Need help signing in? Contact your platform administrator.
           </p>
         </div>
       </FieldGroup>
@@ -264,7 +264,7 @@ function PasswordLoginButton({
       {isPending ? (
         <Spinner aria-hidden='true' data-icon='inline-start' />
       ) : null}
-      {isPending ? 'Signing in...' : 'Sign in'}
+      {isPending ? 'Signing in…' : 'Sign in'}
     </Button>
   )
 }
@@ -309,7 +309,7 @@ function GoogleLoginButton({
       ) : (
         <GoogleMark />
       )}
-      {isRedirecting ? 'Redirecting to Google...' : 'Sign in with Google'}
+      {isRedirecting ? 'Opening Google…' : 'Sign in with Google'}
     </Button>
   )
 }

@@ -65,7 +65,12 @@ export function EmbedConfigPanel() {
       setErrorScope('')
       setStatus('ready')
     } catch (caught) {
-      setError(errorMessage(caught, 'Embed config could not be loaded.'))
+      setError(
+        errorMessage(
+          caught,
+          'Unable to load website chat settings. Check your connection and try again.',
+        ),
+      )
       setErrorScope('configuration')
       setStatus('error')
     }
@@ -88,9 +93,14 @@ export function EmbedConfigPanel() {
       setConfig(next)
       setEnabled(next.enabled)
       setTheme(readEmbedTheme(next.theme_config))
-      setSaveSuccess('Configuration saved.')
+      setSaveSuccess('Website chat settings saved.')
     } catch (caught) {
-      setError(errorMessage(caught, 'Embed settings could not be saved.'))
+      setError(
+        errorMessage(
+          caught,
+          'Unable to save website chat settings. Try again.',
+        ),
+      )
       setErrorScope('configuration')
     } finally {
       setSaving(false)
@@ -101,7 +111,7 @@ export function EmbedConfigPanel() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
       if (!origin.trim()) {
-        setError('Origin is required.')
+        setError('Enter the website origin, including http:// or https://.')
         setErrorScope('origins')
         return
       }
@@ -115,7 +125,12 @@ export function EmbedConfigPanel() {
         setConfig(next)
         setError('')
       } catch (caught) {
-        setError(errorMessage(caught, 'Origin could not be added.'))
+        setError(
+          errorMessage(
+            caught,
+            'Unable to add this website. Check the address and try again.',
+          ),
+        )
       } finally {
         setSaving(false)
       }
@@ -133,7 +148,9 @@ export function EmbedConfigPanel() {
       setConfig(next)
       setError('')
     } catch (caught) {
-      setError(errorMessage(caught, 'Origin could not be removed.'))
+      setError(
+        errorMessage(caught, 'Unable to remove this website. Try again.'),
+      )
     } finally {
       setSaving(false)
     }
@@ -167,7 +184,7 @@ export function EmbedConfigPanel() {
         | undefined
       if (!clipboard) {
         throw new Error(
-          'Clipboard access is unavailable. Copy the snippet manually.',
+          'Clipboard access is unavailable. Select and copy the install code manually.',
         )
       }
       await clipboard.writeText(snippet)
@@ -175,7 +192,10 @@ export function EmbedConfigPanel() {
     } catch (caught) {
       setCopied(false)
       setCopyError(
-        errorMessage(caught, 'Could not copy the snippet. Try again.'),
+        errorMessage(
+          caught,
+          'Unable to copy the install code. Select and copy it manually.',
+        ),
       )
     }
   }, [snippet])
@@ -213,8 +233,8 @@ export function EmbedConfigPanel() {
     return (
       <LoadState
         error={error}
-        errorTitle='Could not load embed settings'
-        loadingTitle='Loading embed settings'
+        errorTitle='Unable to load website chat settings'
+        loadingTitle='Loading website chat settings'
         loadingVariant='settings'
         status={status}
       />
@@ -222,8 +242,9 @@ export function EmbedConfigPanel() {
   }
   if (!config) {
     return (
-      <StatePanel title='Embed settings unavailable'>
-        The backend did not return a tenant embed configuration.
+      <StatePanel title='Website chat settings unavailable'>
+        Reload the page. If the problem continues, contact your platform
+        administrator.
       </StatePanel>
     )
   }
@@ -237,7 +258,7 @@ export function EmbedConfigPanel() {
       />
 
       <section
-        aria-label='Website chat workspace'
+        aria-label='Website chat settings'
         className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
       >
         <div className='grid lg:grid-cols-[minmax(21rem,0.9fr)_minmax(25rem,1.1fr)]'>
@@ -248,17 +269,16 @@ export function EmbedConfigPanel() {
           >
             <header>
               <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-                Configuration
+                Appearance
               </p>
               <h2
                 className='m-0 text-2xl leading-tight font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'
                 id='embed-configuration-title'
               >
-                Widget configuration
+                Chat appearance
               </h2>
               <p className='mt-2 mb-0 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
-                Set the widget appearance, placement, and availability for
-                approved host sites.
+                Choose how chat looks and where it appears on approved websites.
               </p>
             </header>
 
@@ -266,9 +286,9 @@ export function EmbedConfigPanel() {
 
             <div className='flex items-center justify-between gap-5 rounded-2xl bg-[var(--admin-surface-muted)] p-4 sm:p-5'>
               <div>
-                <Label htmlFor='embed-enabled'>Enable widget</Label>
+                <Label htmlFor='embed-enabled'>Show chat widget</Label>
                 <p className='mt-1 mb-0 text-sm leading-5 text-[var(--admin-muted)]'>
-                  Guest sessions remain limited to allowed origins.
+                  Only approved websites can open guest chats.
                 </p>
               </div>
               <Switch
@@ -349,11 +369,11 @@ export function EmbedConfigPanel() {
                 onClick={save}
                 type='button'
               >
-                {saving ? 'Saving…' : 'Save configuration'}
+                {saving ? 'Saving…' : 'Save website chat'}
               </Button>
               <AuthErrorAlert
                 message={errorScope === 'configuration' ? error : ''}
-                title='Update failed.'
+                title='Unable to save website chat settings'
               />
               {saveSuccess && (
                 <p
@@ -369,7 +389,7 @@ export function EmbedConfigPanel() {
       </section>
 
       <section
-        aria-label='Website chat deployment'
+        aria-label='Website chat installation'
         className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
       >
         <OriginsSection
@@ -388,21 +408,22 @@ export function EmbedConfigPanel() {
         >
           <header>
             <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-              Deployment
+              Installation
             </p>
             <h2
               className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
               id='install-snippet-title'
             >
-              Install snippet
+              Install website chat
             </h2>
             <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
-              Add this before the closing body tag on an approved site.
+              Paste this code before the closing &lt;/body&gt; tag on an
+              approved website.
             </p>
           </header>
           {!tenantSlug ? (
-            <StatePanel title='Tenant slug unavailable'>
-              Switch to a tenant session before copying the widget snippet.
+            <StatePanel title='School account required'>
+              Sign in to a school account before copying the install code.
             </StatePanel>
           ) : (
             <>
@@ -421,9 +442,12 @@ export function EmbedConfigPanel() {
                 ) : (
                   <Copy aria-hidden='true' />
                 )}
-                {copied ? 'Copied' : 'Copy snippet'}
+                {copied ? 'Install code copied' : 'Copy install code'}
               </Button>
-              <AuthErrorAlert message={copyError} title='Copy failed.' />
+              <AuthErrorAlert
+                message={copyError}
+                title='Unable to copy install code'
+              />
             </>
           )}
         </section>
@@ -454,11 +478,11 @@ function EmbedSetupGuide({
           ? 4
           : 3
   const steps = [
-    ['Add host origin', 'Enter the site URL.'],
+    ['Approve a website', 'Enter the complete website origin.'],
     ['Configure appearance', 'Set color, language, and position.'],
-    ['Enable the widget', 'Turn it on and save.'],
-    ['Install the snippet', 'Copy it into your site.'],
-    ['Verify chat', 'Send a test message.'],
+    ['Show the chat widget', 'Turn it on and save your changes.'],
+    ['Install website chat', 'Copy the install code into your website.'],
+    ['Test website chat', 'Send a test message from the website.'],
   ] as const
 
   return (
@@ -468,7 +492,7 @@ function EmbedSetupGuide({
         title='Setup guide'
       />
       <ol
-        aria-label='Embed setup steps'
+        aria-label='Website chat setup steps'
         className='m-0 grid list-none p-0 lg:grid-cols-5'
       >
         {steps.map(([title, description], index) => {
@@ -529,19 +553,19 @@ function EmbedTroubleshooting() {
       />
       <div className='grid gap-5 sm:grid-cols-2'>
         <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
-          <h3 className='text-sm font-semibold'>Origin mismatch</h3>
+          <h3 className='text-sm font-semibold'>
+            Website address does not match
+          </h3>
           <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
-            Check that the allowed origin exactly matches your site’s protocol,
-            host, and port. Remove any path, save it again, then reload your
-            site.
+            Match the approved origin to your website’s protocol, host, and
+            port. Remove any path, save again, then reload the website.
           </p>
         </section>
         <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
-          <h3 className='text-sm font-semibold'>Widget stays disabled</h3>
+          <h3 className='text-sm font-semibold'>Chat widget remains hidden</h3>
           <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
-            Confirm the host origin is listed, turn on Enable widget, and save
-            the configuration. Refresh the host page after installing the
-            snippet.
+            Confirm the website is approved, turn on Show chat widget, and save.
+            Refresh the website after installing the code.
           </p>
         </section>
       </div>
@@ -578,21 +602,21 @@ function OriginsSection({
     >
       <header>
         <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-          Host access
+          Website access
         </p>
         <h2
           className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
           id='allowed-origins-title'
         >
-          Allowed origins
+          Approved websites
         </h2>
         <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
-          Use complete HTTP or HTTPS origins without paths.
+          Enter complete HTTP or HTTPS origins without paths.
         </p>
       </header>
       <form className='flex flex-col gap-3 sm:flex-row' onSubmit={onAdd}>
         <Label className='sr-only' htmlFor='embed-origin'>
-          Allowed origin
+          Website origin
         </Label>
         <Input
           id='embed-origin'
@@ -601,17 +625,20 @@ function OriginsSection({
           value={origin}
         />
         <Button disabled={disabled} type='submit'>
-          Add origin
+          Add website
         </Button>
       </form>
-      <AuthErrorAlert message={error} title='Origin update failed.' />
+      <AuthErrorAlert
+        message={error}
+        title='Unable to update approved websites'
+      />
       {config.allowed_origins.length === 0 ? (
         <div className='rounded-2xl bg-[var(--admin-surface-muted)] p-4'>
           <h3 className='text-sm font-semibold text-[var(--admin-ink)]'>
-            No origins yet
+            No websites approved
           </h3>
           <p className='mt-1 text-sm leading-5 text-[var(--admin-muted)]'>
-            Add an origin before enabling the widget.
+            Add a website before showing the chat widget.
           </p>
         </div>
       ) : (
@@ -645,14 +672,14 @@ function OriginItem({
     <li className='flex items-center justify-between gap-3 rounded-xl bg-[var(--admin-surface-muted)] p-3 text-sm'>
       <span className='break-all'>{origin}</span>
       <Button
-        aria-label={`Remove ${origin}`}
+        aria-label={`Remove website ${origin}`}
         disabled={disabled}
         onClick={handleRemove}
         size='sm'
         type='button'
         variant='outline'
       >
-        Remove
+        Remove website
       </Button>
     </li>
   )
@@ -662,16 +689,12 @@ function PublishedState({ config }: { config: EmbedConfig }) {
   const originCount = config.allowed_origins.length
   const published = config.enabled && originCount > 0
   const needsOrigin = config.enabled && originCount === 0
-  const label = published
-    ? 'Published'
-    : needsOrigin
-      ? 'Needs approved host'
-      : 'Not published'
+  const label = published ? 'Live' : needsOrigin ? 'Website required' : 'Hidden'
   const detail = published
-    ? `${originCount} approved ${originCount === 1 ? 'host' : 'hosts'}`
+    ? `${originCount} approved ${originCount === 1 ? 'website' : 'websites'}`
     : needsOrigin
-      ? 'Enabled, but no site is approved'
-      : 'Widget is disabled'
+      ? 'Chat widget is on, but no website is approved'
+      : 'Chat widget is hidden'
 
   return (
     <div className='flex items-center gap-3 border-y border-[var(--admin-line)] py-4'>
@@ -686,7 +709,7 @@ function PublishedState({ config }: { config: EmbedConfig }) {
         <p className='m-0 text-xs text-[var(--admin-muted)]'>{detail}</p>
       </div>
       <p className='m-0 ms-auto text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
-        Saved state
+        Publication status
       </p>
     </div>
   )

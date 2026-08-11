@@ -29,7 +29,8 @@ export function useInviteWorkflow(options: InviteWorkflowOptions = {}) {
       event.preventDefault()
       submitInviteAction({
         action: () => issueInvite({ email: email.trim(), role }),
-        fallbackError: 'Invite issuance failed',
+        fallbackError:
+          'Unable to create the invite. Check the email and try again.',
         onInviteChanged: options.onInviteChanged,
         setCopyFeedback,
         setError,
@@ -44,7 +45,8 @@ export function useInviteWorkflow(options: InviteWorkflowOptions = {}) {
     (inviteID: string) => {
       submitInviteAction({
         action: () => reissueInvite(inviteID),
-        fallbackError: 'Invite reissue failed',
+        fallbackError:
+          'Unable to resend the invite. Check your connection and try again.',
         onInviteChanged: options.onInviteChanged,
         setCopyFeedback,
         setError,
@@ -62,10 +64,12 @@ export function useInviteWorkflow(options: InviteWorkflowOptions = {}) {
 
     copyInviteLink(resolveInviteLink(latestInvite))
       .then(() => {
-        setCopyFeedback('Copied')
+        setCopyFeedback('Activation link copied.')
       })
       .catch(() => {
-        setError('Could not copy the activation link')
+        setError(
+          'Unable to copy the activation link. Copy it from the field and try again.',
+        )
       })
   }, [latestInvite])
 

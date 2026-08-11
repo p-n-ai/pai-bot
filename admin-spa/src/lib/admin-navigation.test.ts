@@ -22,9 +22,9 @@ describe('admin sidebar navigation', () => {
     ])
     expect(groups[0]?.items.map(({ label }) => label)).toEqual([
       'Today',
-      'My classes',
+      'Classes',
     ])
-    expect(groups[1]?.items.map(({ label }) => label)).toEqual(['AI activity'])
+    expect(groups[1]?.items.map(({ label }) => label)).toEqual(['AI usage'])
     expect(
       groups.flatMap(({ items }) => items).map(({ href }) => href),
     ).not.toContain('/dashboard/retrieval-lab')

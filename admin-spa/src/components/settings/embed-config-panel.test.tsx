@@ -88,10 +88,12 @@ describe('EmbedConfigPanel', () => {
       }),
     )
     render(<EmbedConfigPanel />)
-    expect(screen.getByText('Loading embed settings')).toBeInTheDocument()
+    expect(
+      screen.getByText('Loading website chat settings'),
+    ).toBeInTheDocument()
     rejectLoad(new Error('Service unavailable'))
     expect(
-      await screen.findByText('Could not load embed settings'),
+      await screen.findByText('Unable to load website chat settings'),
     ).toBeInTheDocument()
     expect(screen.getByText('Service unavailable')).toBeInTheDocument()
   })
@@ -102,24 +104,26 @@ describe('EmbedConfigPanel', () => {
 
     await screen.findByRole('heading', { name: 'Setup guide' })
     const steps = within(
-      screen.getByRole('list', { name: 'Embed setup steps' }),
+      screen.getByRole('list', { name: 'Website chat setup steps' }),
     ).getAllByRole('listitem')
     expect(steps).toHaveLength(5)
     expect(steps.map((step) => step.textContent)).toEqual([
-      expect.stringContaining('Add host origin'),
+      expect.stringContaining('Approve a website'),
       expect.stringContaining('Configure appearance'),
-      expect.stringContaining('Enable the widget'),
-      expect.stringContaining('Install the snippet'),
-      expect.stringContaining('Verify chat'),
+      expect.stringContaining('Show the chat widget'),
+      expect.stringContaining('Install website chat'),
+      expect.stringContaining('Test website chat'),
     ])
     expect(
-      screen.getByRole('heading', { name: 'Origin mismatch' }),
+      screen.getByRole('heading', {
+        name: 'Website address does not match',
+      }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Widget stays disabled' }),
+      screen.getByRole('heading', { name: 'Chat widget remains hidden' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/exactly matches your site’s protocol, host, and port/i),
+      screen.getByText(/website’s protocol, host, and port/i),
     ).toBeInTheDocument()
   })
 
@@ -133,13 +137,13 @@ describe('EmbedConfigPanel', () => {
       }),
     )
     render(<EmbedConfigPanel />)
-    await screen.findByText('Widget configuration')
+    await screen.findByText('Chat appearance')
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Enable widget' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Show chat widget' }))
     fireEvent.change(screen.getByLabelText('Language'), {
       target: { value: 'ms' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save website chat' }))
 
     await waitFor(() =>
       expect(updateEmbedConfig).toHaveBeenCalledWith({
@@ -151,7 +155,9 @@ describe('EmbedConfigPanel', () => {
         },
       }),
     )
-    expect(screen.getByRole('status')).toHaveTextContent('Configuration saved.')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Website chat settings saved.',
+    )
   })
 
   it('adds and removes normalized origin entries through the API', async () => {
@@ -159,19 +165,19 @@ describe('EmbedConfigPanel', () => {
     addEmbedOrigin.mockResolvedValue(undefined)
     removeEmbedOrigin.mockResolvedValue(undefined)
     render(<EmbedConfigPanel />)
-    await screen.findByText('Allowed origins')
+    await screen.findByText('Approved websites')
 
-    fireEvent.change(screen.getByLabelText('Allowed origin'), {
+    fireEvent.change(screen.getByLabelText('Website origin'), {
       target: { value: '  https://new.example  ' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add website' }))
     await waitFor(() =>
       expect(addEmbedOrigin).toHaveBeenCalledWith('https://new.example'),
     )
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Remove https://school.example',
+        name: 'Remove website https://school.example',
       }),
     )
     await waitFor(() =>
@@ -185,26 +191,30 @@ describe('EmbedConfigPanel', () => {
       .mockRejectedValueOnce(new Error('Origin rejected'))
       .mockResolvedValueOnce(undefined)
     render(<EmbedConfigPanel />)
-    const originsTitle = await screen.findByText('Allowed origins')
+    const originsTitle = await screen.findByText('Approved websites')
     const originsSection = originsTitle.closest('section')
     if (!originsSection) {
       throw new Error('allowed origins section not found')
     }
 
-    fireEvent.change(screen.getByLabelText('Allowed origin'), {
+    fireEvent.change(screen.getByLabelText('Website origin'), {
       target: { value: 'https://new.example' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add website' }))
 
     expect(
-      await within(originsSection).findByText('Origin update failed.'),
+      await within(originsSection).findByText(
+        'Unable to update approved websites',
+      ),
     ).toBeInTheDocument()
     expect(
       within(originsSection).getByText('Origin rejected'),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Update failed.')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Unable to save website chat settings'),
+    ).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add origin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add website' }))
     await waitFor(() =>
       expect(
         within(originsSection).queryByText('Origin rejected'),
@@ -216,8 +226,11 @@ describe('EmbedConfigPanel', () => {
     getEmbedConfig.mockResolvedValue(config)
     writeText.mockResolvedValue(undefined)
     render(<EmbedConfigPanel />)
-    await screen.findByText('Install snippet')
-    fireEvent.click(screen.getByRole('button', { name: 'Copy snippet' }))
+    await screen.findByRole('heading', {
+      level: 2,
+      name: 'Install website chat',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy install code' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
     expect(writeText.mock.calls[0][0]).toContain(
@@ -229,7 +242,7 @@ describe('EmbedConfigPanel', () => {
       target: { value: 'zh' },
     })
     expect(
-      screen.getByRole('button', { name: 'Copy snippet' }),
+      screen.getByRole('button', { name: 'Copy install code' }),
     ).toBeInTheDocument()
   })
 
@@ -237,10 +250,15 @@ describe('EmbedConfigPanel', () => {
     getEmbedConfig.mockResolvedValue(config)
     writeText.mockRejectedValue(new Error('Clipboard permission denied'))
     render(<EmbedConfigPanel />)
-    await screen.findByText('Install snippet')
-    fireEvent.click(screen.getByRole('button', { name: 'Copy snippet' }))
+    await screen.findByRole('heading', {
+      level: 2,
+      name: 'Install website chat',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy install code' }))
 
-    expect(await screen.findByText('Copy failed.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Unable to copy install code'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Clipboard permission denied')).toBeInTheDocument()
   })
 
@@ -251,13 +269,18 @@ describe('EmbedConfigPanel', () => {
       value: undefined,
     })
     render(<EmbedConfigPanel />)
-    await screen.findByText('Install snippet')
-    fireEvent.click(screen.getByRole('button', { name: 'Copy snippet' }))
+    await screen.findByRole('heading', {
+      level: 2,
+      name: 'Install website chat',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy install code' }))
 
-    expect(await screen.findByText('Copy failed.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Unable to copy install code'),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Clipboard access is unavailable. Copy the snippet manually.',
+        'Clipboard access is unavailable. Select and copy the install code manually.',
       ),
     ).toBeInTheDocument()
   })

@@ -317,6 +317,14 @@ Motion is direct and brief. Use the existing 150ms transition and ease curve for
 
 Every component must preserve keyboard access, visible focus, an accessible name, and correct semantic ownership. Hidden navigation is not authorization. Preview data is not test evidence. Synthetic people, identifiers, and learning outcomes must remain visibly synthetic.
 
+## Interface Writing
+
+Use sentence case for headings, labels, buttons, and status messages. Keep the voice warm in onboarding and neutral in routine administration. Use calm, direct language for errors and security messages.
+
+Buttons start with a verb and name the action. Links describe their destination. Use one term for the same object within a flow. Prefer school, class, student, and tutor over implementation terms such as tenant, route, slice, runtime, or backend.
+
+Errors state what failed and how to recover. Place them beside the affected field or action. Empty states explain what belongs there and give one clear next step. Placeholders show an example format and never replace a visible label.
+
 ## Do's and Don'ts
 
 - Do keep the learner and the operational consequence visible in the main reading flow.

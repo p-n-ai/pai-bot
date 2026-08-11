@@ -83,10 +83,12 @@ describe('ClassInvitePanel', () => {
         writeText: vi.fn().mockRejectedValue(new Error('blocked')),
       },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy activation link' }),
+    )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not copy the activation link Try again.',
+      'Unable to copy the activation link. Copy it from the field and try again.',
     )
     expect(screen.getByRole('alert')).not.toHaveTextContent('Check the email')
   })

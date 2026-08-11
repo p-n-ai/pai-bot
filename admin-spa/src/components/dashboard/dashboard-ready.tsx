@@ -159,7 +159,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
             </div>
             <span className='inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-medium text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
               <span className='size-1.5 rounded-full bg-[var(--admin-accent)]' />
-              Live
+              Current
             </span>
           </div>
           <div className='mt-8 flex items-end justify-between gap-5'>
@@ -218,7 +218,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
       >
         <span>
           {summary.trackedScores} of {summary.studentCount * summary.topicCount}{' '}
-          score slots filled
+          topic scores recorded
         </span>
       </DashboardMetricCard>
 
@@ -487,15 +487,15 @@ function DashboardHeatmap({
               </Table>
             ) : (
               <div className='py-5'>
-                <StatePanel title='No learners match'>
-                  Try another name or progress filter.
+                <StatePanel title='No learners match your search'>
+                  Change the name or progress filter, or clear the search field.
                 </StatePanel>
               </div>
             )
           ) : (
             <div className='py-5'>
-              <StatePanel title='No class heatmap yet'>
-                Progress appears after students start topics.
+              <StatePanel title='No class progress yet'>
+                Topic scores will appear after students begin practising.
               </StatePanel>
             </div>
           )}
@@ -655,7 +655,7 @@ function StudentDetailSheet({
             Learner profile
           </p>
           <SheetTitle className='text-xl'>
-            {studentName ?? 'Student detail'}
+            {studentName ?? 'Learner profile'}
           </SheetTitle>
           <SheetDescription>
             Progress, streaks, and chat history.
@@ -839,7 +839,9 @@ function NudgeButton({
   return (
     <Button
       aria-label={
-        isSending ? `Sending nudge to ${studentName}` : `Nudge ${studentName}`
+        isSending
+          ? `Sending nudge to ${studentName}`
+          : `Send nudge to ${studentName}`
       }
       className='min-h-11 px-3 sm:min-h-8'
       disabled={isSending}
@@ -854,15 +856,16 @@ function NudgeButton({
 }
 
 function getNudgeButtonLabel(isSending: boolean): string {
-  return isSending ? 'Sending…' : 'Nudge'
+  return isSending ? 'Sending…' : 'Send nudge'
 }
 
 function getLearnerAttentionNote(attentionCount: number): string {
   if (attentionCount === 0) {
-    return 'No learners flagged right now'
+    return 'No learners need attention right now'
   }
 
-  return `${attentionCount} learner${attentionCount === 1 ? '' : 's'} need attention`
+  const verb = attentionCount === 1 ? 'needs' : 'need'
+  return `${attentionCount} learner${attentionCount === 1 ? '' : 's'} ${verb} attention`
 }
 
 function getMasteryTone(averageMastery: number): string {

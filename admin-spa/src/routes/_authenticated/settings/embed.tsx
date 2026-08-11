@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_authenticated/settings/embed')({
 function EmbedSettingsRoute() {
   return (
     <AdminPageSection
-      description='Configure, approve hosts, and install the school chat widget.'
+      description='Choose the appearance, approve websites, and install school chat.'
       eyebrow='Technical tools'
       title='Website chat'
     >

@@ -29,9 +29,9 @@ interface OnboardingWizardStepProps {
 }
 
 const onboardingSteps: ReadonlyArray<OnboardingStep> = [
-  { id: 'curriculum', title: 'Curriculum' },
+  { id: 'curriculum', title: 'Syllabus' },
   { id: 'class', title: 'First class' },
-  { id: 'bot', title: 'Bot setup' },
+  { id: 'bot', title: 'Tutor style' },
   { id: 'school', title: 'School' },
 ]
 
@@ -230,8 +230,8 @@ function OnboardingCurriculumStep({ form }: OnboardingWizardStepProps) {
 
   return (
     <OnboardingStepLayout
-      description='Choose the syllabus.'
-      title='Choose the starting syllabus'
+      description='This sets the starting topics for your first class.'
+      title='Choose a starting syllabus'
     >
       <div className='flex flex-col gap-2'>
         <Label htmlFor='onboarding-curriculum'>Syllabus</Label>
@@ -267,8 +267,8 @@ function OnboardingClassStep({
 
   return (
     <OnboardingStepLayout
-      description='Enter the class name.'
-      title='Name the class'
+      description='Use a name that teachers and students will recognize.'
+      title='Name your first class'
     >
       <div className='flex flex-col gap-2'>
         <Label htmlFor='onboarding-first-class'>First class name</Label>
@@ -292,8 +292,8 @@ function OnboardingBotStep({
 }: OnboardingWizardStepProps) {
   return (
     <OnboardingStepLayout
-      description='Choose the tutor style.'
-      title='Choose how the tutor begins'
+      description='Set how P&AI Tutor guides practice.'
+      title='Choose a tutor style'
     >
       <div className='grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3'>
         {onboardingBotPresetOptions.map((option) => (
@@ -370,8 +370,8 @@ function OnboardingSchoolStep({
 
   return (
     <OnboardingStepLayout
-      description='Check the details.'
-      title='Review and save'
+      description='Check the details before creating your class.'
+      title='Review your setup'
     >
       <OnboardingReviewList
         currentPresetTitle={currentPresetTitle}
@@ -384,7 +384,7 @@ function OnboardingSchoolStep({
           id='onboarding-school-name'
           name='school-name'
           onChange={handleSchoolNameChange}
-          placeholder={tenantName || 'Current workspace'}
+          placeholder={tenantName || 'School name'}
           value={form.school_name ?? ''}
         />
       </div>
@@ -402,7 +402,7 @@ function OnboardingReviewList({
   return (
     <dl className='mt-4 grid gap-2.5'>
       <div className='flex justify-between gap-3'>
-        <dt>Curriculum</dt>
+        <dt>Syllabus</dt>
         <dd className='m-0'>{form.curriculum.label}</dd>
       </div>
       <div className='flex justify-between gap-3'>

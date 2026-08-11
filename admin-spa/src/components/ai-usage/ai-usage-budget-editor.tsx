@@ -21,8 +21,8 @@ export function AIUsageBudgetEditor({
 }) {
   if (!canManageBudget) {
     return (
-      <StatePanel title='Budget locked'>
-        Budget changes require admin access.
+      <StatePanel title='Budget is read-only'>
+        Ask a school administrator to change this budget.
       </StatePanel>
     )
   }
@@ -50,7 +50,7 @@ function EditableTokenBudget({
           {isConfigured ? 'Update budget' : 'Set a budget'}
         </h3>
         <p className='mt-2 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
-          Define one token allowance for the current school workspace.
+          Set one token allowance for this school.
         </p>
       </div>
       <BudgetFields
@@ -62,14 +62,14 @@ function EditableTokenBudget({
         setPeriodStart={form.setPeriodStart}
       />
 
-      <AuthErrorAlert message={form.error} title='Budget save failed.' />
+      <AuthErrorAlert message={form.error} title='Unable to save budget' />
 
       <div className='flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between'>
         <p className='max-w-xs text-xs leading-5 text-[var(--admin-muted)]'>
-          Dates define the exact window used to measure this allowance.
+          These dates define when the allowance starts and ends.
         </p>
         <Button disabled={form.isPending} type='submit'>
-          {form.isPending ? 'Saving budget...' : 'Save token budget'}
+          {form.isPending ? 'Saving budget…' : 'Save token budget'}
         </Button>
       </div>
     </form>
@@ -116,7 +116,7 @@ function useTokenBudgetForm({
           setError(
             caught instanceof Error
               ? caught.message
-              : 'Unable to save the token budget window.',
+              : 'Unable to save the AI budget. Check your connection and try again.',
           )
         })
         .finally(finishSubmit)

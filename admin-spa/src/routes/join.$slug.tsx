@@ -41,7 +41,7 @@ function JoinRoute() {
             error:
               caught instanceof Error
                 ? caught.message
-                : 'Class join link unavailable',
+                : 'Unable to open this class link. Check the link and try again.',
           })
         }
       })
@@ -87,8 +87,8 @@ function JoinRoute() {
               Join your class.
             </h1>
             <p className='mt-5 max-w-[38ch] text-base leading-7 text-pretty text-[var(--text-default-body)]'>
-              Open the class link from your school to confirm the learning space
-              before you continue.
+              Confirm the school and class before using the join code in
+              P&amp;AI Bot.
             </p>
             <a
               className='mt-7 inline-flex min-h-11 items-center gap-2 rounded-full px-1 text-sm font-semibold text-[var(--text-tertiary-default)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--border-primary-focus)]'
@@ -106,7 +106,7 @@ function JoinRoute() {
               <LoadState
                 error={state.error}
                 errorTitle='Class join link unavailable'
-                loadingTitle='Loading class join link...'
+                loadingTitle='Loading class join link…'
                 status={state.status}
               />
             )}

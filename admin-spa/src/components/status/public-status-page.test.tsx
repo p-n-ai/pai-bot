@@ -36,16 +36,13 @@ it('shows the application and AI availability without requiring admin auth', asy
       name: 'All systems operational',
     }),
   ).toBeInTheDocument()
-  expect(screen.getByText('Application API')).toBeInTheDocument()
+  expect(screen.getByText('P&AI application')).toBeInTheDocument()
   expect(screen.getByText('AI provider')).toBeInTheDocument()
-  expect(
-    screen.getByText('Primary provider response health'),
-  ).toBeInTheDocument()
+  expect(screen.getByText('AI response availability')).toBeInTheDocument()
   expect(screen.getAllByText('Operational')).toHaveLength(2)
-  expect(screen.getByRole('link', { name: 'JSON status' })).toHaveAttribute(
-    'href',
-    '/health/status',
-  )
+  expect(
+    screen.getByRole('link', { name: 'View JSON status' }),
+  ).toHaveAttribute('href', '/health/status')
 })
 
 it('does not claim an outage when the status service cannot be reached', async () => {
@@ -80,7 +77,7 @@ it('shows provider degradation separately from the application', async () => {
       name: 'Some systems unavailable',
     }),
   ).toBeInTheDocument()
-  expect(screen.getByText('Application API')).toBeInTheDocument()
+  expect(screen.getByText('P&AI application')).toBeInTheDocument()
   expect(screen.getByText('AI provider')).toBeInTheDocument()
   expect(screen.getByText('Operational')).toBeInTheDocument()
   expect(screen.getByText('Unavailable')).toBeInTheDocument()

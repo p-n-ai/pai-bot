@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_authenticated/settings/users')({
 function UsersSettingsRoute() {
   return (
     <AdminPageSection
-      description='Review active access, search the current workspace, and issue new teacher, parent, or admin invites.'
+      description='Review school access and invite teachers, parents, or administrators.'
       eyebrow='School administration'
       title='Staff access'
     >

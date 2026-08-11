@@ -17,7 +17,12 @@ describe('JoinClassCard', () => {
       screen.getByRole('heading', { name: 'Form 1 Algebra' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Student enrollment and invite completion/u),
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent ===
+            'Confirm these class details, then send /join form-1-algebra to P&AI Bot.',
+      ),
     ).toBeInTheDocument()
     expect(screen.getByText('Sekolah Harapan')).toBeInTheDocument()
     expect(screen.getByText('KSSM Form 1')).toBeInTheDocument()

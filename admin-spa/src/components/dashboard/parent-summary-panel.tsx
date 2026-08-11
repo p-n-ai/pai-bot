@@ -56,7 +56,7 @@ export function ParentSummaryPanel({ parentID }: { parentID: string }) {
   if (loadState !== 'ready') {
     return (
       <LoadState
-        error='Try again later.'
+        error='Check your connection and try again.'
         errorTitle='Parent summary unavailable'
         loadingTitle='Loading parent summary'
         status={loadState}
@@ -119,7 +119,7 @@ function ParentSummaryReady({ summary }: { summary: ParentSummary }) {
           icon={MessageCircleIcon}
           title='Messages'
           value={String(summary.weekly_stats.messages_exchanged)}
-          note='Student and AI exchanges this week'
+          note='Messages between the student and tutor this week'
         />
         <StatCard
           icon={TrophyIcon}
@@ -203,7 +203,7 @@ function ParentMasteryRow({
       </div>
       <p className='text-xs text-[var(--admin-muted)]'>
         {item.next_review_at
-          ? `Next review ${formatAdminDateTime(item.next_review_at)}`
+          ? `Next review: ${formatAdminDateTime(item.next_review_at)}`
           : 'No review scheduled yet'}
       </p>
     </div>

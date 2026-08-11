@@ -89,7 +89,7 @@ describe('admin sidebar', () => {
       </SidebarProvider>,
     )
 
-    expect(screen.getByRole('link', { name: 'My classes' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Classes' })).toHaveAttribute(
       'aria-current',
       'page',
     )

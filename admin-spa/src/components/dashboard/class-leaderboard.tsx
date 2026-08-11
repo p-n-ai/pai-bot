@@ -68,7 +68,7 @@ function LeaderboardContent({
   }
   if (state.status === 'error') {
     return (
-      <StatePanel role='alert' title='Leaderboard unavailable'>
+      <StatePanel role='alert' title='Weekly progress unavailable'>
         <p>{state.message}</p>
         <Button className='mt-4' onClick={onRetry} size='sm' type='button'>
           Try again
