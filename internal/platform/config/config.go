@@ -114,7 +114,6 @@ type AIConfig struct {
 	OpenAI           OpenAIConfig
 	Codex            CodexConfig
 	Anthropic        AnthropicConfig
-	DeepSeek         DeepSeekConfig
 	Google           GoogleConfig
 	Ollama           OllamaConfig
 	OpenRouter       OpenRouterConfig
@@ -140,12 +139,6 @@ type OpenAIConfig struct {
 
 // AnthropicConfig holds Anthropic provider settings.
 type AnthropicConfig struct {
-	APIKey string
-	Model  string
-}
-
-// DeepSeekConfig holds DeepSeek provider settings (OpenAI-compatible).
-type DeepSeekConfig struct {
 	APIKey string
 	Model  string
 }
@@ -318,10 +311,6 @@ func Load() (*Config, error) {
 			Anthropic: AnthropicConfig{
 				APIKey: envStr("LEARN_AI_ANTHROPIC_API_KEY", ""),
 				Model:  envStr("LEARN_AI_ANTHROPIC_MODEL", ""),
-			},
-			DeepSeek: DeepSeekConfig{
-				APIKey: envStr("LEARN_AI_DEEPSEEK_API_KEY", ""),
-				Model:  envStr("LEARN_AI_DEEPSEEK_MODEL", ""),
 			},
 			Google: GoogleConfig{
 				APIKey: envStr("LEARN_AI_GOOGLE_API_KEY", ""),
@@ -548,7 +537,7 @@ func (c *Config) HasAIProvider() bool {
 	}
 	for _, provider := range ai.ProviderCatalog() {
 		settings := c.AI.CatalogProviders[provider.ID]
-		if settings.APIKey != "" || provider.ID == "deepseek" && c.AI.DeepSeek.APIKey != "" {
+		if settings.APIKey != "" {
 			return true
 		}
 	}

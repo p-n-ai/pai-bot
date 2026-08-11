@@ -64,7 +64,31 @@ const providerLabels: Record<APIKeyProviderName, string> = {
   openrouter: 'OpenRouter',
 }
 
-export function AISettingsPanel() {
+/** Supplies the admin boundary operations required by the AI settings panel. */
+export type AISettingsPanelAPI = {
+  readonly getAISettings: () => Promise<AISettings>
+  readonly getCodexAuthStatus: () => Promise<CodexAuthStatus>
+  readonly startCodexDeviceAuth: () => Promise<CodexAuthStatus>
+  readonly updateAISettings: (
+    input: UpdateAISettingsInput,
+  ) => Promise<AISettings>
+}
+
+const defaultAISettingsPanelAPI = {
+  getAISettings,
+  getCodexAuthStatus,
+  startCodexDeviceAuth,
+  updateAISettings,
+} satisfies AISettingsPanelAPI
+
+type AISettingsPanelProps = {
+  api?: AISettingsPanelAPI
+}
+
+/** Renders runtime AI settings through an injectable application boundary. */
+export function AISettingsPanel({
+  api = defaultAISettingsPanelAPI,
+}: AISettingsPanelProps = {}) {
   const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [modelInputs, setModelInputs] = useState<Record<string, string>>({})
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({})
@@ -92,7 +116,8 @@ export function AISettingsPanel() {
   }, [])
 
   useEffect(() => {
-    getAISettings()
+    api
+      .getAISettings()
       .then(acceptSettings)
       .catch((caught: unknown) => {
         setState({
@@ -103,10 +128,11 @@ export function AISettingsPanel() {
               : 'Unable to load AI settings. Check your connection and try again.',
         })
       })
-  }, [acceptSettings])
+  }, [acceptSettings, api])
 
   const loadCodexStatus = useCallback(() => {
-    return getCodexAuthStatus()
+    return api
+      .getCodexAuthStatus()
       .then((auth) => setCodexState({ status: 'ready', auth }))
       .catch((caught: unknown) => {
         if (caught instanceof AdminAPIError && caught.status === 404) {
@@ -121,7 +147,7 @@ export function AISettingsPanel() {
               : 'Unable to check the Codex connection. Try again.',
         })
       })
-  }, [])
+  }, [api])
 
   useEffect(() => {
     loadCodexStatus()
@@ -141,7 +167,8 @@ export function AISettingsPanel() {
 
   const handleStartCodex = useCallback(() => {
     setIsStartingCodex(true)
-    startCodexDeviceAuth()
+    api
+      .startCodexDeviceAuth()
       .then((auth) => setCodexState({ status: 'ready', auth }))
       .catch((caught: unknown) => {
         setCodexState({
@@ -153,7 +180,7 @@ export function AISettingsPanel() {
         })
       })
       .finally(() => setIsStartingCodex(false))
-  }, [])
+  }, [api])
 
   const submitSettings = useCallback(
     (
@@ -172,7 +199,7 @@ export function AISettingsPanel() {
           if (!current) {
             throw new Error('Reload AI settings before making changes.')
           }
-          const next = await updateAISettings({
+          const next = await api.updateAISettings({
             ...input,
             expectedRevision: current.revision,
           })
@@ -183,7 +210,7 @@ export function AISettingsPanel() {
         } catch (caught: unknown) {
           if (caught instanceof AdminAPIError && caught.status === 409) {
             try {
-              acceptSettings(await getAISettings())
+              acceptSettings(await api.getAISettings())
             } catch {
               // Keep the conflict as the actionable error; retrying will reload.
             }
@@ -197,7 +224,7 @@ export function AISettingsPanel() {
         }
       })
     },
-    [acceptSettings],
+    [acceptSettings, api],
   )
 
   const setDefaultProvider = useCallback(

@@ -69,9 +69,6 @@ func ProviderCatalog() []ProviderDefinition {
 	return catalog
 }
 
-// BuiltInProviderCatalog is an explicit alias for ProviderCatalog.
-func BuiltInProviderCatalog() []ProviderDefinition { return ProviderCatalog() }
-
 // LookupProviderDefinition returns a defensive copy of a built-in definition.
 func LookupProviderDefinition(id string) (ProviderDefinition, bool) {
 	for i := range builtInProviderDefinitions {

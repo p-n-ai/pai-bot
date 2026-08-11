@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 func TestProviderCatalogDefinitions(t *testing.T) {
@@ -66,7 +68,7 @@ func TestNewCatalogProviderRoutesThroughDefinitionEndpoint(t *testing.T) {
 			t.Fatal(err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"model":"deepseek-chat"}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"model":"deepseek-chat"}`))
 	}))
 	defer server.Close()
 	provider, err := NewCatalogProvider("deepseek", "secret", WithBaseURL(server.URL))
@@ -82,5 +84,21 @@ func TestNewCatalogProviderRoutesThroughDefinitionEndpoint(t *testing.T) {
 	}
 	if path != "/chat/completions" || request.Model != "deepseek-v4-flash" || response.Content != "ok" {
 		t.Fatalf("path=%q request=%+v response=%+v", path, request, response)
+	}
+	native, ok := provider.(NativeProvider)
+	if !ok {
+		t.Fatal("catalog tool-capable provider does not implement NativeProvider")
+	}
+	message, err := native.CompleteNative(
+		context.Background(),
+		"deepseek-v4-flash",
+		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message.Provider != "deepseek" {
+		t.Fatalf("native provider = %q, want deepseek", message.Provider)
 	}
 }

@@ -69,20 +69,26 @@ func TestReconcileAIClosedProviderOverrides(t *testing.T) {
 func TestReconcileAICatalogProviderOverrides(t *testing.T) {
 	env := envAIConfig()
 	env.CatalogProviders = map[string]config.CatalogProviderConfig{
-		"groq": {APIKey: "env-groq-key", Model: "env-groq-model"},
-		"xai":  {APIKey: "env-xai-key", Model: "env-xai-model"},
+		"deepseek": {APIKey: "env-deepseek-key", Model: "env-deepseek-model"},
+		"groq":     {APIKey: "env-groq-key", Model: "env-groq-model"},
+		"xai":      {APIKey: "env-xai-key", Model: "env-xai-model"},
 	}
 	st := AISettings{
 		Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
-			APIKeyProviderGroq: {Model: stringPointer("db-groq-model")},
+			APIKeyProviderDeepSeek: {Model: stringPointer("db-deepseek-model")},
+			APIKeyProviderGroq:     {Model: stringPointer("db-groq-model")},
 		}},
 		Credentials: map[APIKeyProvider]CredentialOverride{
-			APIKeyProviderGroq:    {Value: "db-groq-secret-1234"},
-			APIKeyProviderMistral: {Value: "db-mistral-secret-5678"},
+			APIKeyProviderDeepSeek: {Value: "db-deepseek-secret-9012"},
+			APIKeyProviderGroq:     {Value: "db-groq-secret-1234"},
+			APIKeyProviderMistral:  {Value: "db-mistral-secret-5678"},
 		},
 	}
 
 	got := ReconcileAI(env, st)
+	if deepseek := got.Config.CatalogProviders["deepseek"]; deepseek.Model != "db-deepseek-model" || deepseek.APIKey != "db-deepseek-secret-9012" {
+		t.Fatalf("DeepSeek = %+v, want DB model and credential", deepseek)
+	}
 	if groq := got.Config.CatalogProviders["groq"]; groq.Model != "db-groq-model" || groq.APIKey != "db-groq-secret-1234" {
 		t.Fatalf("Groq = %+v, want DB model and credential", groq)
 	}
@@ -92,13 +98,39 @@ func TestReconcileAICatalogProviderOverrides(t *testing.T) {
 	if mistral := got.Config.CatalogProviders["mistral"]; mistral.APIKey != "db-mistral-secret-5678" {
 		t.Fatalf("Mistral = %+v, want DB credential", mistral)
 	}
-	for _, provider := range []string{"groq", "xai", "mistral", "cerebras"} {
+	for _, provider := range []string{"deepseek", "groq", "xai", "mistral", "cerebras"} {
 		if _, ok := got.Effective.Providers[provider]; !ok {
 			t.Fatalf("effective providers missing %q", provider)
 		}
 	}
-	if got.ProviderSources["groq"].Model != SourceDB || got.ProviderSources["xai"].Credential != SourceEnv {
+	if got.ProviderSources["deepseek"].Credential != SourceDB || got.ProviderSources["groq"].Model != SourceDB || got.ProviderSources["xai"].Credential != SourceEnv {
 		t.Fatalf("catalog provider sources = %+v", got.ProviderSources)
+	}
+}
+
+func TestReconcileAIDoesNotMutateCatalogEnvironmentBaseline(t *testing.T) {
+	env := config.AIConfig{CatalogProviders: map[string]config.CatalogProviderConfig{
+		"groq": {APIKey: "env-groq-key", Model: "env-groq-model"},
+	}}
+	override := AISettings{
+		Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
+			APIKeyProviderGroq: {Model: stringPointer("db-groq-model")},
+		}},
+		Credentials: map[APIKeyProvider]CredentialOverride{
+			APIKeyProviderGroq: {Value: "db-groq-secret-1234"},
+		},
+	}
+
+	got := ReconcileAI(env, override)
+	if groq := got.Config.CatalogProviders["groq"]; groq.Model != "db-groq-model" || groq.APIKey != "db-groq-secret-1234" {
+		t.Fatalf("reconciled Groq = %+v, want DB model and credential", groq)
+	}
+	if groq := env.CatalogProviders["groq"]; groq.Model != "env-groq-model" || groq.APIKey != "env-groq-key" {
+		t.Fatalf("environment Groq mutated to %+v", groq)
+	}
+	reset := ReconcileAI(env, AISettings{})
+	if groq := reset.Config.CatalogProviders["groq"]; groq.Model != "env-groq-model" || groq.APIKey != "env-groq-key" {
+		t.Fatalf("reset Groq = %+v, want environment baseline", groq)
 	}
 }
 

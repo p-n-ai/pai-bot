@@ -352,7 +352,7 @@ func (p *directOpenAIProvider) CompleteNative(ctx context.Context, model string,
 	if len(decoded.Choices) == 0 {
 		return llm.AssistantMessage{}, fmt.Errorf("native OpenAI response contains no choices")
 	}
-	return projectNativeOpenAIResponse(model, decoded)
+	return projectNativeOpenAIResponse(p.name, model, decoded)
 }
 
 func buildNativeOpenAIMessages(c llm.Context) ([]openaiMessage, error) {
@@ -462,7 +462,7 @@ func buildNativeOpenAITools(tools []llm.Tool) ([]openaiTool, error) {
 	return projected, nil
 }
 
-func projectNativeOpenAIResponse(requestModel string, response openaiNativeResponse) (llm.AssistantMessage, error) {
+func projectNativeOpenAIResponse(providerName, requestModel string, response openaiNativeResponse) (llm.AssistantMessage, error) {
 	choice := response.Choices[0]
 	content := make([]llm.AssistantContent, 0, 1+len(choice.Message.ToolCalls))
 	if choice.Message.Content != "" {
@@ -497,10 +497,14 @@ func projectNativeOpenAIResponse(requestModel string, response openaiNativeRespo
 	if responseModel == "" {
 		responseModel = requestModel
 	}
+	providerName = strings.TrimSpace(providerName)
+	if providerName == "" {
+		providerName = "openai"
+	}
 	return llm.AssistantMessage{
 		Content:       content,
 		API:           llm.APIOpenAICompletions,
-		Provider:      "openai",
+		Provider:      providerName,
 		Model:         requestModel,
 		ResponseModel: responseModel,
 		ResponseID:    response.ID,

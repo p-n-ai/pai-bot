@@ -165,9 +165,6 @@ func buildProviderChecked(
 ) (ai.ProviderRegistration, bool, error) {
 	if definition, catalogProvider := ai.LookupProviderDefinition(name); catalogProvider {
 		settings := cfg.CatalogProviders[name]
-		if name == "deepseek" && settings.APIKey == "" {
-			settings = config.CatalogProviderConfig{APIKey: cfg.DeepSeek.APIKey, Model: cfg.DeepSeek.Model}
-		}
 		if settings.APIKey == "" {
 			return ai.ProviderRegistration{}, false, nil
 		}

@@ -53,6 +53,14 @@ func clearEnv(t *testing.T) {
 		"LEARN_AI_ANTHROPIC_MODEL",
 		"LEARN_AI_DEEPSEEK_API_KEY",
 		"LEARN_AI_DEEPSEEK_MODEL",
+		"LEARN_AI_GROQ_API_KEY",
+		"LEARN_AI_GROQ_MODEL",
+		"LEARN_AI_XAI_API_KEY",
+		"LEARN_AI_XAI_MODEL",
+		"LEARN_AI_MISTRAL_API_KEY",
+		"LEARN_AI_MISTRAL_MODEL",
+		"LEARN_AI_CEREBRAS_API_KEY",
+		"LEARN_AI_CEREBRAS_MODEL",
 		"LEARN_AI_GOOGLE_API_KEY",
 		"LEARN_AI_GOOGLE_MODEL",
 		"LEARN_AI_OPENROUTER_API_KEY",
@@ -1105,6 +1113,9 @@ func TestValidateWhatsAppCredentials(t *testing.T) {
 }
 
 func TestLoadCatalogProviderConfiguration(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("LEARN_AI_DEEPSEEK_API_KEY", "deepseek-key")
+	t.Setenv("LEARN_AI_DEEPSEEK_MODEL", "deepseek-model")
 	t.Setenv("LEARN_AI_GROQ_API_KEY", "groq-key")
 	t.Setenv("LEARN_AI_GROQ_MODEL", "groq-model")
 	cfg, err := Load()
@@ -1113,6 +1124,9 @@ func TestLoadCatalogProviderConfiguration(t *testing.T) {
 	}
 	if got := cfg.AI.CatalogProviders["groq"]; got.APIKey != "groq-key" || got.Model != "groq-model" {
 		t.Fatalf("Groq catalog config = %#v", got)
+	}
+	if got := cfg.AI.CatalogProviders["deepseek"]; got.APIKey != "deepseek-key" || got.Model != "deepseek-model" {
+		t.Fatalf("DeepSeek catalog config = %#v", got)
 	}
 	if !cfg.HasAIProvider() {
 		t.Fatal("HasAIProvider() = false with catalog API key")

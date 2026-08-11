@@ -322,11 +322,3 @@ func TestCatalogProvidersAreNamedAndRegistrable(t *testing.T) {
 		}
 	}
 }
-
-func TestLegacyDeepSeekConfigurationRemainsCompatible(t *testing.T) {
-	cfg := config.AIConfig{DeepSeek: config.DeepSeekConfig{APIKey: "legacy-key", Model: "deepseek-chat"}}
-	reg, ok := buildProvider("deepseek", cfg)
-	if !ok || reg.DefaultModel != "deepseek-chat" {
-		t.Fatalf("legacy DeepSeek registration = %#v, %v", reg, ok)
-	}
-}
