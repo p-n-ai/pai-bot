@@ -45,7 +45,7 @@ export function InviteActivationForm({
 
   return (
     <main
-      className='grid min-h-screen items-center gap-8 px-6 py-10 min-[960px]:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] min-[960px]:p-10'
+      className='grid min-h-screen items-center gap-8 bg-[var(--surface-secondary-default-hover)] px-6 py-10 text-[var(--text-default-heading)] min-[960px]:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] min-[960px]:p-10'
       aria-label='Invite activation'
     >
       <section className='grid gap-6'>
@@ -54,11 +54,11 @@ export function InviteActivationForm({
       </section>
 
       <section
-        className='grid gap-5 rounded-lg border border-white/75 bg-white/80 p-7 shadow-[0_28px_90px_rgb(15_23_42_/_12%)]'
+        className='grid gap-5 rounded-2xl border border-[var(--border-primary-default)] bg-[var(--surface-general-default)] p-7'
         aria-label='Set up invite access'
       >
         <div className='grid gap-2'>
-          <h2 className='text-2xl leading-tight font-semibold text-[#17211b]'>
+          <h2 className='text-2xl leading-tight font-semibold text-[var(--text-default-heading)]'>
             Set up access
           </h2>
           <p className='m-0 leading-6 text-muted-foreground'>
@@ -139,7 +139,7 @@ function TrustCue({
 }) {
   return (
     <article className='grid gap-2 rounded-lg border border-border bg-card p-3.5'>
-      <span className='inline-flex w-6 text-[#2f6f5b]'>
+      <span className='inline-flex w-6 text-[var(--icon-tertiary-default)]'>
         <Icon aria-hidden='true' />
       </span>
       <strong>{title}</strong>

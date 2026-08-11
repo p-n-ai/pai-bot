@@ -52,7 +52,7 @@ describe('embed widget helpers', () => {
   })
 
   it('chooses readable foreground colors', () => {
-    expect(readableForeground('#ffffff')).toBe('#111827')
+    expect(readableForeground('#ffffff')).toBe('#404040')
     expect(readableForeground('#000000')).toBe('#ffffff')
   })
 })

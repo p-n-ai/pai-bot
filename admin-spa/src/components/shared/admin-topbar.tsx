@@ -14,7 +14,7 @@ export function AdminTopbar() {
   const pageLabel = getAdminPageLabel(pathname)
 
   return (
-    <header className='sticky top-3 z-20 mx-3 mt-3 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--admin-line)] bg-[color:var(--admin-surface)]/90 px-3 shadow-[0_8px_30px_oklch(0.25_0.015_150/0.06)] backdrop-blur-xl sm:mx-5 sm:px-5 lg:mx-7 lg:px-6'>
+    <header className='sticky top-3 z-20 mx-3 mt-3 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--admin-line)] bg-[color:var(--admin-surface)]/96 px-3 sm:mx-5 sm:px-5 lg:mx-7 lg:px-6'>
       <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
         <SidebarTrigger
           aria-label='Open navigation'
@@ -30,7 +30,7 @@ export function AdminTopbar() {
         </div>
       </div>
       <div className='flex min-h-10 min-w-0 items-center gap-2 rounded-full border border-[var(--admin-line)] bg-[var(--admin-surface-muted)] py-1 pr-3 pl-1'>
-        <span className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-ink)] text-[10px] font-semibold text-[var(--admin-accent)]'>
+        <span className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-navigation)] text-[10px] font-semibold text-[var(--admin-nav-text)]'>
           {getAdminUserInitials(user)}
         </span>
         <span className='hidden max-w-40 truncate text-xs font-medium text-[var(--admin-ink-soft)] sm:block'>

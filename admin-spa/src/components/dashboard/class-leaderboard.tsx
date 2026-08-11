@@ -85,7 +85,7 @@ function LeaderboardContent({
   }
 
   return (
-    <ol className='divide-y divide-slate-200 dark:divide-white/10'>
+    <ol className='divide-y divide-[var(--border-general-default)]'>
       {state.entries.map((entry) => (
         <LeaderboardRow
           entry={entry}
@@ -125,10 +125,9 @@ function LeaderboardRow({
       <span
         className={cn(
           'inline-flex items-center gap-1 text-sm font-semibold tabular-nums',
-          row.gainTone === 'positive' &&
-            'text-emerald-700 dark:text-emerald-300',
-          row.gainTone === 'negative' && 'text-rose-700 dark:text-rose-300',
-          row.gainTone === 'neutral' && 'text-slate-600 dark:text-slate-300',
+          row.gainTone === 'positive' && 'text-[var(--status-success-text)]',
+          row.gainTone === 'negative' && 'text-[var(--status-danger-text)]',
+          row.gainTone === 'neutral' && 'text-[var(--admin-ink-soft)]',
         )}
       >
         <TrendingUpIcon aria-hidden='true' className='size-4' />

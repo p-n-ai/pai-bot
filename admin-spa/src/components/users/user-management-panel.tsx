@@ -210,7 +210,7 @@ function UserManagementReady({
             <div className='mt-6 flex flex-col gap-5 md:col-span-2'>
               <div className='flex items-center justify-between gap-3'>
                 <div>
-                  <h2 className='m-0 text-sm font-semibold text-[#0c0a09]'>
+                  <h2 className='m-0 text-sm font-semibold text-[var(--admin-ink)]'>
                     Admin access
                   </h2>
                 </div>

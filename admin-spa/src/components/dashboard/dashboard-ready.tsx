@@ -116,7 +116,7 @@ export function DashboardReady({
 function NudgeFeedback({ message }: { message: string }) {
   return (
     <div
-      className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_8px_20px_rgb(16_24_40/0.08)]'
+      className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'
       role='status'
     >
       <CheckCircle2Icon aria-hidden='true' className='size-4 shrink-0' />
@@ -141,41 +141,38 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
       aria-label='Class overview'
       className='grid gap-4 md:grid-cols-2 xl:grid-cols-12'
     >
-      <Card className='relative border-0 bg-[#101828] py-0 text-white shadow-[0_1px_2px_rgb(16_24_40/0.08),0_12px_28px_rgb(16_24_40/0.18)] ring-0 md:col-span-2 xl:col-span-5'>
-        <div
-          aria-hidden='true'
-          className='pointer-events-none absolute inset-0 overflow-hidden rounded-xl'
-        >
-          <span className='absolute -top-16 -right-12 size-48 rounded-full bg-[#2f80ed]/20 blur-3xl' />
-          <span className='absolute -bottom-20 left-20 size-40 rounded-full bg-[#53d3a0]/10 blur-3xl' />
-        </div>
-        <CardContent className='relative flex h-full min-h-52 flex-col justify-between p-5 sm:p-6'>
+      <Card className='relative border-0 bg-[var(--admin-navigation)] py-0 text-[var(--admin-nav-text)] ring-0 md:col-span-2 xl:col-span-5'>
+        <CardContent className='flex h-full min-h-52 flex-col justify-between p-5 sm:p-6'>
           <div className='flex items-start justify-between gap-4'>
             <div className='flex items-center gap-2.5'>
-              <span className='flex size-9 items-center justify-center rounded-lg bg-white/10 text-[#84adff] ring-1 ring-white/10'>
+              <span className='flex size-9 items-center justify-center rounded-lg bg-white/10 text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
                 <UsersIcon aria-hidden='true' className='size-[18px]' />
               </span>
               <div>
-                <p className='text-sm font-medium text-white'>Learners</p>
-                <p className='text-xs text-[#98a2b3]'>Active class roster</p>
+                <p className='text-sm font-medium text-[var(--admin-nav-text)]'>
+                  Learners
+                </p>
+                <p className='text-xs text-[var(--admin-nav-muted)]'>
+                  Active class roster
+                </p>
               </div>
             </div>
-            <span className='inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-medium text-[#d0d5dd] ring-1 ring-white/10'>
-              <span className='size-1.5 rounded-full bg-[#53d3a0]' />
+            <span className='inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-medium text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
+              <span className='size-1.5 rounded-full bg-[var(--admin-accent)]' />
               Live
             </span>
           </div>
           <div className='mt-8 flex items-end justify-between gap-5'>
             <div>
-              <p className='text-5xl leading-none font-semibold text-white tabular-nums'>
+              <p className='text-5xl leading-none font-semibold text-[var(--admin-nav-text)] tabular-nums'>
                 {summary.studentCount}
               </p>
               <p
                 className={cn(
                   'mt-3 flex items-center gap-1.5 text-sm font-medium',
                   summary.attentionCount > 0
-                    ? 'text-[#fdb9a8]'
-                    : 'text-[#75e0a7]',
+                    ? 'text-[var(--status-danger-surface)]'
+                    : 'text-[var(--admin-nav-muted)]',
                 )}
               >
                 {summary.attentionCount > 0 ? (
@@ -186,7 +183,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
                 {learnerNote}
               </p>
             </div>
-            <span className='hidden max-w-36 text-right text-xs leading-5 text-[#98a2b3] sm:block'>
+            <span className='hidden max-w-36 text-right text-xs leading-5 text-[var(--admin-nav-muted)] sm:block'>
               Select a learner below to open their full progress.
             </span>
           </div>
@@ -202,7 +199,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
         value={`${summary.averageMastery}%`}
       >
         <span>Class grade</span>
-        <span className='rounded-md bg-[#f2f4f7] px-2 py-0.5 font-semibold text-[#344054]'>
+        <span className='rounded-md bg-[var(--admin-surface-muted)] px-2 py-0.5 font-semibold text-[var(--admin-ink)]'>
           {classGrade}
         </span>
         <span className='sr-only'>
@@ -225,7 +222,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
         </span>
       </DashboardMetricCard>
 
-      <Card className='py-0 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_8px_20px_rgb(16_24_40/0.05)] ring-[#e6e9ef] md:col-span-2 xl:col-span-7'>
+      <Card className='py-0 md:col-span-2 xl:col-span-7'>
         <CardContent className='grid gap-4 p-5 sm:grid-cols-2 sm:p-6'>
           <TopicSignal
             description={
@@ -250,14 +247,16 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
         </CardContent>
       </Card>
 
-      <Card className='overflow-hidden border-0 bg-[#eaf2ff] py-0 shadow-none ring-0 md:col-span-2 xl:col-span-5'>
+      <Card className='overflow-hidden border-0 bg-[var(--surface-primary-default-subtle)] py-0 shadow-none ring-0 md:col-span-2 xl:col-span-5'>
         <CardContent className='flex h-full items-center gap-4 p-5 sm:p-6'>
-          <span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#175cd3] shadow-[0_1px_2px_rgb(16_24_40/0.05),0_6px_14px_rgb(23_92_211/0.12)]'>
+          <span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--admin-surface)] text-[var(--icon-tertiary-default)] ring-1 ring-[var(--border-primary-default)]'>
             <SparklesIcon aria-hidden='true' className='size-5' />
           </span>
           <div>
-            <p className='font-semibold text-[#194185]'>Today’s focus</p>
-            <p className='mt-1 text-sm leading-5 text-[#175cd3]'>
+            <p className='font-semibold text-[var(--text-tertiary-default)]'>
+              Today’s focus
+            </p>
+            <p className='mt-1 text-sm leading-5 text-[var(--text-default-body)]'>
               {summary.weakestTopic
                 ? `Review ${weakestTopicLabel.toLowerCase()} with the learners marked for attention.`
                 : 'Learner activity will shape the next recommended review.'}
@@ -287,23 +286,20 @@ function DashboardMetricCard({
   value: string
 }) {
   return (
-    <Card
-      className={cn(
-        'py-0 shadow-[0_1px_2px_rgb(16_24_40/0.04),0_8px_20px_rgb(16_24_40/0.05)] ring-[#e6e9ef]',
-        className,
-      )}
-    >
+    <Card className={cn('py-0', className)}>
       <CardContent className='flex h-full min-h-52 flex-col justify-between p-5 sm:p-6'>
         <div className='flex items-center justify-between'>
-          <p className='text-sm font-medium text-[#475467]'>{label}</p>
-          <span className='flex size-8 items-center justify-center rounded-lg bg-[#f2f4f7] text-[#667085]'>
+          <p className='text-sm font-medium text-[var(--admin-ink-soft)]'>
+            {label}
+          </p>
+          <span className='flex size-8 items-center justify-center rounded-lg bg-[var(--admin-surface-muted)] text-[var(--icon-tertiary-default)]'>
             <Icon aria-hidden className='size-4' />
           </span>
         </div>
         <div className='mt-7'>
           <p
             className={cn(
-              'text-4xl leading-none font-semibold text-[#101828] tabular-nums',
+              'text-4xl leading-none font-semibold text-[var(--admin-ink)] tabular-nums',
               tone,
             )}
           >
@@ -311,10 +307,10 @@ function DashboardMetricCard({
           </p>
           <Progress
             aria-label={`${label}: ${progress}%`}
-            className='mt-5 h-1.5 bg-[#eaecf0] [&_[data-slot=progress-indicator]]:bg-[#2f80ed] [&_[data-slot=progress-indicator]]:transition-transform [&_[data-slot=progress-indicator]]:duration-200 [&_[data-slot=progress-indicator]]:ease-[cubic-bezier(0.23,1,0.32,1)]'
+            className='mt-5 h-1.5 bg-[var(--border-general-default)] [&_[data-slot=progress-indicator]]:bg-[var(--surface-primary-default)] [&_[data-slot=progress-indicator]]:transition-transform [&_[data-slot=progress-indicator]]:duration-200 [&_[data-slot=progress-indicator]]:ease-[cubic-bezier(0.23,1,0.32,1)]'
             value={progress}
           />
-          <div className='mt-3 flex flex-wrap items-center gap-1.5 text-xs text-[#667085]'>
+          <div className='mt-3 flex flex-wrap items-center gap-1.5 text-xs text-[var(--admin-muted)]'>
             {children}
           </div>
         </div>
@@ -335,21 +331,23 @@ function TopicSignal({
   tone: 'emerald' | 'rose'
 }) {
   return (
-    <div className='flex gap-3 rounded-xl bg-[#f8fafc] p-4'>
+    <div className='flex gap-3 rounded-xl bg-[var(--surface-secondary-default-hover)] p-4'>
       <span
         className={cn(
           'mt-1 size-2.5 shrink-0 rounded-full ring-4',
           tone === 'rose'
-            ? 'bg-rose-500 ring-rose-100'
-            : 'bg-emerald-500 ring-emerald-100',
+            ? 'bg-[var(--status-danger-text)] ring-[var(--status-danger-surface)]'
+            : 'bg-[var(--surface-primary-default)] ring-[var(--surface-primary-default-subtle)]',
         )}
       />
       <div>
-        <p className='text-xs font-medium tracking-[0.08em] text-[#667085] uppercase'>
+        <p className='text-xs font-medium tracking-[0.08em] text-[var(--admin-muted)] uppercase'>
           {label}
         </p>
-        <p className='mt-1 font-semibold text-[#101828]'>{name}</p>
-        <p className='mt-1 text-xs leading-5 text-[#667085]'>{description}</p>
+        <p className='mt-1 font-semibold text-[var(--admin-ink)]'>{name}</p>
+        <p className='mt-1 text-xs leading-5 text-[var(--admin-muted)]'>
+          {description}
+        </p>
       </div>
     </div>
   )
@@ -377,14 +375,11 @@ function DashboardHeatmap({
   const hasLearners = progress.students.length > 0
 
   return (
-    <AdminSurface
-      className='shadow-[0_1px_2px_rgb(16_24_40/0.04),0_10px_28px_rgb(16_24_40/0.05)] ring-[#e6e9ef]'
-      contentClassName='p-0'
-    >
+    <AdminSurface contentClassName='p-0'>
       <section aria-label='Learner progress'>
         <AdminSurfaceHeader
           action={masteryLegend}
-          className='flex-col items-start border-b border-[#eef0f3] p-5 sm:flex-row sm:items-center sm:p-6'
+          className='flex-col items-start border-b border-[var(--border-general-default)] p-5 sm:flex-row sm:items-center sm:p-6'
           description='Start with learners who need support, then open progress or send a nudge.'
           title='Learner progress'
         />
@@ -404,21 +399,21 @@ function DashboardHeatmap({
               <Table className='min-w-[960px] border-separate border-spacing-y-1.5'>
                 <TableHeader>
                   <TableRow className='border-0 hover:bg-transparent'>
-                    <TableHead className='sticky left-0 z-10 min-w-52 bg-white px-3 py-3 text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                    <TableHead className='sticky left-0 z-10 min-w-52 bg-[var(--admin-surface)] px-3 py-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
                       Student
                     </TableHead>
                     {progress.topic_ids.map((topicID) => (
                       <TableHead
-                        className='min-w-28 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'
+                        className='min-w-28 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'
                         key={topicID}
                       >
                         <TopicHeaderLabel topicID={topicID} />
                       </TableHead>
                     ))}
-                    <TableHead className='min-w-24 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                    <TableHead className='min-w-24 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
                       Average
                     </TableHead>
-                    <TableHead className='min-w-64 px-3 py-3 text-right text-[10px] font-semibold tracking-[0.12em] text-[#98a2b3] uppercase'>
+                    <TableHead className='min-w-64 px-3 py-3 text-right text-[10px] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
                       Next action
                     </TableHead>
                   </TableRow>
@@ -426,8 +421,8 @@ function DashboardHeatmap({
                 <TableBody>
                   {learners.map((learner) => {
                     const rowSurfaceClass = learner.needsAttention
-                      ? 'bg-rose-50/75'
-                      : 'bg-[#f8fafc]'
+                      ? 'bg-[var(--status-danger-surface)]'
+                      : 'bg-[var(--surface-secondary-default-hover)]'
                     const { student } = learner
 
                     return (
@@ -437,7 +432,7 @@ function DashboardHeatmap({
                       >
                         <TableCell
                           className={cn(
-                            'sticky left-0 z-10 rounded-l-xl p-3 font-medium text-[#101828] shadow-[-6px_0_0_white] transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                            'sticky left-0 z-10 rounded-l-xl p-3 font-medium text-[var(--admin-ink)] transition-[background-color] duration-150 group-hover/heatmap-row:bg-[var(--admin-surface-muted)]',
                             rowSurfaceClass,
                           )}
                         >
@@ -451,7 +446,7 @@ function DashboardHeatmap({
                         {progress.topic_ids.map((topicID) => (
                           <TableCell
                             className={cn(
-                              'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                              'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[var(--admin-surface-muted)]',
                               rowSurfaceClass,
                             )}
                             key={`${student.id}-${topicID}`}
@@ -461,7 +456,7 @@ function DashboardHeatmap({
                         ))}
                         <TableCell
                           className={cn(
-                            'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                            'p-2 text-center transition-[background-color] duration-150 group-hover/heatmap-row:bg-[var(--admin-surface-muted)]',
                             rowSurfaceClass,
                           )}
                         >
@@ -469,12 +464,12 @@ function DashboardHeatmap({
                         </TableCell>
                         <TableCell
                           className={cn(
-                            'rounded-r-xl p-3 text-right transition-[background-color] duration-150 group-hover/heatmap-row:bg-[#f2f4f7]',
+                            'rounded-r-xl p-3 text-right transition-[background-color] duration-150 group-hover/heatmap-row:bg-[var(--admin-surface-muted)]',
                             rowSurfaceClass,
                           )}
                         >
                           <div className='flex items-center justify-end gap-3'>
-                            <p className='max-w-44 text-right text-xs leading-5 font-medium text-[#475467]'>
+                            <p className='max-w-44 text-right text-xs leading-5 font-medium text-[var(--admin-ink-soft)]'>
                               {learner.nextAction}
                             </p>
                             <NudgeButton
@@ -539,17 +534,17 @@ function LearnerProgressTools({
   )
 
   return (
-    <div className='flex flex-col gap-3 border-b border-[#eef0f3] p-4 sm:flex-row sm:items-end sm:justify-between sm:px-6'>
+    <div className='flex flex-col gap-3 border-b border-[var(--border-general-default)] p-4 sm:flex-row sm:items-end sm:justify-between sm:px-6'>
       <div className='grid flex-1 gap-3 sm:max-w-2xl sm:grid-cols-[minmax(0,1fr)_13rem]'>
         <label
-          className='grid gap-1.5 text-xs font-medium text-[#475467]'
+          className='grid gap-1.5 text-xs font-medium text-[var(--admin-ink-soft)]'
           htmlFor='dashboard-learner-search'
         >
           Search learners
           <span className='relative'>
             <SearchIcon
               aria-hidden='true'
-              className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#667085]'
+              className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--admin-muted)]'
             />
             <Input
               className='h-11 bg-white pl-9'
@@ -562,7 +557,7 @@ function LearnerProgressTools({
           </span>
         </label>
         <label
-          className='grid gap-1.5 text-xs font-medium text-[#475467]'
+          className='grid gap-1.5 text-xs font-medium text-[var(--admin-ink-soft)]'
           htmlFor='dashboard-progress-status'
         >
           Progress status
@@ -583,7 +578,10 @@ function LearnerProgressTools({
           </NativeSelect>
         </label>
       </div>
-      <p aria-live='polite' className='text-sm text-[#667085] tabular-nums'>
+      <p
+        aria-live='polite'
+        className='text-sm text-[var(--admin-muted)] tabular-nums'
+      >
         Showing {resultCount} of {totalCount}
       </p>
     </div>
@@ -594,12 +592,24 @@ function MasteryLegend() {
   return (
     <div
       aria-label='Mastery score legend'
-      className='flex flex-wrap items-center gap-3 text-[11px] text-[#667085]'
+      className='flex flex-wrap items-center gap-3 text-[11px] text-[var(--admin-muted)]'
     >
-      <LegendItem className='bg-rose-400' label='Below 40%' />
-      <LegendItem className='bg-amber-400' label='40–59%' />
-      <LegendItem className='bg-lime-400' label='60–79%' />
-      <LegendItem className='bg-emerald-500' label='80%+' />
+      <LegendItem
+        className='bg-[var(--status-danger-text)]'
+        label='Below 40%'
+      />
+      <LegendItem
+        className='bg-[var(--status-warning-border)]'
+        label='40–59%'
+      />
+      <LegendItem
+        className='bg-[var(--surface-secondary-default)]'
+        label='60–79%'
+      />
+      <LegendItem
+        className='bg-[var(--surface-primary-default)]'
+        label='80%+'
+      />
     </div>
   )
 }
@@ -639,9 +649,9 @@ function StudentDetailSheet({
 
   return (
     <Sheet open={Boolean(studentID)} onOpenChange={handleSheetOpenChange}>
-      <SheetContent className='w-full overflow-y-auto border-l border-[#e6e9ef] bg-[#f8fafc] p-0 shadow-[-16px_0_48px_rgb(16_24_40/0.12)] sm:max-w-[720px]'>
-        <SheetHeader className='border-b border-[#e6e9ef] bg-white p-5 sm:p-6'>
-          <p className='text-[10px] font-semibold tracking-[0.12em] text-[#2f80ed] uppercase'>
+      <SheetContent className='w-full overflow-y-auto border-l border-[var(--border-primary-default)] bg-[var(--admin-canvas)] p-0 sm:max-w-[720px]'>
+        <SheetHeader className='border-b border-[var(--border-primary-default)] bg-[var(--admin-surface)] p-5 sm:p-6'>
+          <p className='text-[10px] font-semibold tracking-[0.12em] text-[var(--text-tertiary-default)] uppercase'>
             Learner profile
           </p>
           <SheetTitle className='text-xl'>
@@ -669,7 +679,7 @@ function TopicHeaderLabel({ topicID }: { topicID: string }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            className='inline-block min-h-11 max-w-28 truncate rounded-md border-0 bg-transparent px-1 py-1 align-middle font-[inherit] tracking-[inherit] text-inherit normal-case transition-[background-color,color] duration-150 hover:bg-[#f2f4f7] hover:text-[#344054] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] sm:min-h-8'
+            className='inline-block min-h-11 max-w-28 truncate rounded-md border-0 bg-transparent px-1 py-1 align-middle font-[inherit] tracking-[inherit] text-inherit normal-case transition-[background-color,color] duration-150 hover:bg-[var(--admin-surface-muted)] hover:text-[var(--admin-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-primary-focus)] sm:min-h-8'
             type='button'
           >
             {topicLabel}
@@ -686,7 +696,7 @@ function TopicHeaderLabel({ topicID }: { topicID: string }) {
 function MasteryScore({ score }: { score: number | undefined }) {
   if (typeof score !== 'number') {
     return (
-      <span className='inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border border-dashed border-[#d0d5dd] bg-white/50 px-3 py-1 text-xs font-medium text-[#98a2b3]'>
+      <span className='inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border border-dashed border-[var(--border-general-default)] bg-white/50 px-3 py-1 text-xs font-medium text-[var(--admin-muted)]'>
         --
       </span>
     )
@@ -695,7 +705,7 @@ function MasteryScore({ score }: { score: number | undefined }) {
   return (
     <span
       className={cn(
-        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border px-3 py-1 text-xs font-semibold tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.45)]',
+        'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border px-3 py-1 text-xs font-semibold tabular-nums',
         getMasteryScoreTone(score),
       )}
     >
@@ -709,7 +719,7 @@ function StudentAverage({ learner }: { learner: DashboardLearner }) {
     return (
       <span
         aria-label='No average mastery data'
-        className='inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border border-dashed border-[#d0d5dd] bg-white/50 px-3 py-1 text-xs font-medium text-[#98a2b3]'
+        className='inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border border-dashed border-[var(--border-general-default)] bg-white/50 px-3 py-1 text-xs font-medium text-[var(--admin-muted)]'
       >
         --
       </span>
@@ -722,8 +732,8 @@ function StudentAverage({ learner }: { learner: DashboardLearner }) {
       className={cn(
         'inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border bg-white px-3 py-1 text-xs font-semibold tabular-nums',
         learner.needsAttention
-          ? 'border-rose-200 text-rose-700'
-          : 'border-[#e6e9ef] text-[#344054]',
+          ? 'border-[var(--status-danger-border)] text-[var(--status-danger-text)]'
+          : 'border-[var(--border-general-default)] text-[var(--admin-ink)]',
       )}
     >
       {learner.averageMastery}%
@@ -749,7 +759,7 @@ function StudentDetailButton({
   return (
     <button
       aria-label={`Open ${studentName} progress`}
-      className='inline-flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent p-0 text-left font-[inherit] text-[#101828] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#175cd3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f80ed] active:scale-[0.96]'
+      className='inline-flex w-full items-center justify-between gap-3 rounded-lg border-0 bg-transparent p-0 text-left font-[inherit] text-[var(--admin-ink)] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[var(--admin-ink-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-primary-focus)] active:scale-[0.96]'
       onClick={selectStudent}
       type='button'
     >
@@ -758,15 +768,15 @@ function StudentDetailButton({
           className={cn(
             'flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
             learner.needsAttention
-              ? 'bg-rose-100 text-rose-700'
-              : 'bg-[#eaf2ff] text-[#175cd3]',
+              ? 'bg-[var(--status-danger-surface)] text-[var(--status-danger-text)]'
+              : 'bg-[var(--admin-surface-muted)] text-[var(--text-tertiary-default)]',
           )}
         >
           {getInitials(studentName)}
         </span>
         <span className='min-w-0'>
           <span className='block truncate'>{studentName}</span>
-          <span className='mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-[#667085]'>
+          <span className='mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-[var(--admin-muted)]'>
             <AttentionDot learner={learner} />
             {getLearnerStatusLabel(learner.status)}
           </span>
@@ -774,7 +784,7 @@ function StudentDetailButton({
       </span>
       <ChevronRightIcon
         aria-hidden='true'
-        className='size-4 shrink-0 text-[#98a2b3]'
+        className='size-4 shrink-0 text-[var(--admin-muted)]'
       />
     </button>
   )
@@ -793,10 +803,10 @@ function AttentionDot({ learner }: { learner: DashboardLearner }) {
       className={cn(
         'size-1.5 shrink-0 rounded-full',
         learner.needsAttention
-          ? 'bg-rose-500'
+          ? 'bg-[var(--status-danger-text)]'
           : learner.status === 'unmeasured'
-            ? 'bg-[#98a2b3]'
-            : 'bg-emerald-500',
+            ? 'bg-[var(--admin-muted)]'
+            : 'bg-[var(--surface-primary-default)]',
       )}
       role='img'
     />
@@ -831,7 +841,7 @@ function NudgeButton({
       aria-label={
         isSending ? `Sending nudge to ${studentName}` : `Nudge ${studentName}`
       }
-      className='min-h-11 bg-[#101828] px-3 text-white shadow-[0_1px_2px_rgb(16_24_40/0.12)] hover:bg-[#344054] sm:min-h-8'
+      className='min-h-11 px-3 sm:min-h-8'
       disabled={isSending}
       onClick={sendNudge}
       size='sm'
@@ -857,14 +867,14 @@ function getLearnerAttentionNote(attentionCount: number): string {
 
 function getMasteryTone(averageMastery: number): string {
   if (averageMastery >= 80) {
-    return 'text-emerald-700 dark:text-emerald-300'
+    return 'text-[var(--status-success-text)]'
   }
 
   if (averageMastery >= 60) {
-    return 'text-amber-700 dark:text-amber-300'
+    return 'text-[var(--status-warning-text)]'
   }
 
-  return 'text-rose-700 dark:text-rose-300'
+  return 'text-[var(--status-danger-text)]'
 }
 
 function getMasteryGrade(averageMastery: number): string {
@@ -876,18 +886,24 @@ function getMasteryGrade(averageMastery: number): string {
 function getMasteryScoreTone(score: number): string {
   return (
     masteryScoreTones.find((tone) => score >= tone.minimum)?.className ??
-    'border-rose-200 bg-rose-100 text-rose-900'
+    'border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] text-[var(--status-danger-text)]'
   )
 }
 
 const masteryScoreTones = [
   {
-    className: 'border-emerald-200 bg-emerald-100/90 text-emerald-800',
+    className:
+      'border-[var(--status-success-border)] bg-[var(--status-success-surface)] text-[var(--status-success-text)]',
     minimum: 0.8,
   },
-  { className: 'border-lime-200 bg-lime-100/90 text-lime-800', minimum: 0.6 },
   {
-    className: 'border-amber-200 bg-amber-100/90 text-amber-800',
+    className:
+      'border-[var(--border-secondary-focus)] bg-[var(--surface-secondary-default-subtle)] text-[var(--text-tertiary-default)]',
+    minimum: 0.6,
+  },
+  {
+    className:
+      'border-[var(--status-warning-border)] bg-[var(--status-warning-surface)] text-[var(--status-warning-text)]',
     minimum: 0.4,
   },
 ] as const

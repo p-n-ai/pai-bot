@@ -39,13 +39,13 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
     <main
       aria-busy='true'
       aria-label='Preparing admin workspace'
-      className='flex min-h-svh bg-[#fafaf9] text-[#0c0a09]'
+      className='flex min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'
       id='main-content'
       role='status'
     >
       <Button
         aria-label='Close loading screen'
-        className='absolute top-4 right-4 z-10 size-9 rounded-full bg-white shadow-sm'
+        className='absolute top-4 right-4 z-10 size-9 rounded-full bg-[var(--surface-general-default)]'
         onClick={onClose}
         size='icon'
         type='button'
@@ -53,7 +53,7 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
       >
         <XIcon aria-hidden='true' className='size-4' />
       </Button>
-      <aside className='hidden h-svh w-[17rem] shrink-0 border-r border-[#e5e7eb] bg-white p-4 sm:block'>
+      <aside className='hidden h-svh w-[17rem] shrink-0 border-r border-[var(--border-primary-default)] bg-[var(--surface-general-default)] p-4 sm:block'>
         <div className='flex items-center gap-3 px-2 py-3'>
           <Skeleton className='size-9 rounded-lg' />
           <Skeleton className='h-4 w-24' />

@@ -29,6 +29,7 @@ import {
   readAuthCapabilities,
 } from '@/lib/auth-client'
 import { getAuthErrorMessage } from '@/lib/auth-feedback'
+import { cn } from '@/lib/utils'
 
 interface LoginFormProps {
   authError?: string
@@ -74,6 +75,12 @@ export function LoginForm({
   const submit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
+
+      if (tenantChoices.length > 0 && !tenantID) {
+        setError('Choose a school to continue signing in.')
+        return
+      }
+
       beginSubmit()
 
       loginWithPassword({
@@ -84,7 +91,7 @@ export function LoginForm({
         .then((result) => {
           if (result.kind === 'tenant_required') {
             setTenantChoices(result.tenant_choices)
-            setError('Choose a school to continue signing in.')
+            setError('')
             return
           }
 
@@ -111,6 +118,7 @@ export function LoginForm({
       password,
       setError,
       tenantID,
+      tenantChoices.length,
     ],
   )
 
@@ -152,12 +160,24 @@ export function LoginForm({
           value={tenantID}
         />
 
-        <AuthErrorAlert message={error} title='Sign-in failed.' />
-
-        <PasswordLoginButton
-          isDisabled={isPending || isGooglePending}
-          isPending={isPending}
+        <AuthErrorAlert
+          message={error}
+          title={
+            tenantChoices.length > 0 && !tenantID
+              ? 'Choose a school.'
+              : 'Unable to sign in.'
+          }
         />
+
+        <div className='grid gap-2'>
+          <PasswordLoginButton
+            isDisabled={isPending || isGooglePending}
+            isPending={isPending}
+          />
+          <p className='m-0 text-center text-xs leading-5 text-[var(--text-default-body)]'>
+            Need sign-in help? Contact your platform admin.
+          </p>
+        </div>
       </FieldGroup>
     </form>
   )
@@ -179,14 +199,14 @@ function LoginCredentialsFields({
     <>
       <Field data-disabled={disabled}>
         <FieldLabel
-          className='text-[13px] font-semibold tracking-[0.01em] text-slate-text'
+          className='text-[13px] font-semibold tracking-[0.01em] text-[var(--text-default-heading)]'
           htmlFor={emailID}
         >
           Email
         </FieldLabel>
         <Input
           autoComplete='username'
-          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-base text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf] sm:text-sm'
+          className='h-11 rounded-[10px] border-[var(--border-control-default)] bg-[var(--surface-general-default)] px-3 text-base text-[var(--text-default-heading)] placeholder:text-[var(--text-default-secondary)] focus-visible:border-[var(--border-primary-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-general-default)] sm:text-sm'
           disabled={disabled}
           id={emailID}
           name='email'
@@ -201,14 +221,14 @@ function LoginCredentialsFields({
 
       <Field data-disabled={disabled}>
         <FieldLabel
-          className='text-[13px] font-semibold tracking-[0.01em] text-slate-text'
+          className='text-[13px] font-semibold tracking-[0.01em] text-[var(--text-default-heading)]'
           htmlFor={passwordID}
         >
           Password
         </FieldLabel>
         <Input
           autoComplete='current-password'
-          className='h-11 rounded-[10px] border-[#d9d3ca] bg-[#fffdf9] px-3 text-base text-slate-text placeholder:text-ash-gray focus-visible:border-[#2f6f5b] focus-visible:ring-2 focus-visible:ring-[#bedbcf] sm:text-sm'
+          className='h-11 rounded-[10px] border-[var(--border-control-default)] bg-[var(--surface-general-default)] px-3 text-base text-[var(--text-default-heading)] placeholder:text-[var(--text-default-secondary)] focus-visible:border-[var(--border-primary-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-general-default)] sm:text-sm'
           disabled={disabled}
           id={passwordID}
           name='password'
@@ -232,7 +252,12 @@ function PasswordLoginButton({
 }) {
   return (
     <Button
-      className='h-11 rounded-[10px] bg-[#17211b] px-4 text-sm font-semibold text-cloud-white shadow-[0_10px_24px_rgba(23,33,27,0.18)] hover:bg-[#235f72] focus-visible:ring-[#2f6f5b]'
+      className={cn(
+        'h-11 rounded-[10px] border border-[var(--border-primary-focus)] bg-[var(--surface-tertiary-default)] px-4 text-sm font-semibold text-[var(--text-primary-on-color)] shadow-none hover:border-[var(--border-secondary-focus)] hover:bg-[var(--surface-secondary-default)] hover:text-[var(--text-tertiary-default)] focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-general-default)] active:border-[var(--border-primary-focus)] active:bg-[var(--surface-primary-default)] active:text-[var(--text-default-heading)] disabled:opacity-100',
+        isPending
+          ? 'disabled:border-[var(--border-primary-focus)] disabled:bg-[var(--surface-tertiary-default)] disabled:text-[var(--text-primary-on-color)]'
+          : 'disabled:border-[var(--border-disabled-disabled)] disabled:bg-[var(--surface-disabled-primary)] disabled:text-[var(--text-disabled-default)]',
+      )}
       disabled={isDisabled}
       type='submit'
     >
@@ -250,7 +275,7 @@ function LoginDivider({ visible }: { visible: boolean }) {
   }
 
   return (
-    <FieldSeparator className='text-xs text-ash-gray'>
+    <FieldSeparator className='text-xs text-[var(--text-default-body)]'>
       or sign in with email
     </FieldSeparator>
   )
@@ -273,7 +298,7 @@ function GoogleLoginButton({
 
   return (
     <Button
-      className='min-h-11 w-full rounded-[10px] border-[#d9d3ca] bg-cloud-white text-sm font-semibold text-slate-text shadow-subtle hover:bg-[#f7f5ef] focus-visible:ring-[#2f6f5b]'
+      className='min-h-11 w-full rounded-[10px] border-[var(--border-control-default)] bg-[var(--surface-general-default)] text-sm font-semibold text-[var(--text-tertiary-default)] shadow-none hover:bg-[var(--surface-secondary-default-subtle)] hover:text-[var(--text-tertiary-default)] focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-general-default)]'
       disabled={isPending}
       onClick={onClick}
       type='button'
@@ -336,10 +361,13 @@ function SchoolSelect({
 
   return (
     <Field
-      className='rounded-xl border border-[#d9d3ca] bg-[#f7fbf8] p-3'
+      className='rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] p-3'
       data-disabled={disabled}
     >
-      <div className='mb-3 flex gap-2 text-sm leading-5 text-[#445c4d]'>
+      <div
+        className='mb-3 flex gap-2 text-sm leading-5 text-[var(--text-default-body)]'
+        role='status'
+      >
         <Building2Icon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
         <p className='m-0'>
           This email belongs to more than one school. Choose where you want to
@@ -347,7 +375,7 @@ function SchoolSelect({
         </p>
       </div>
       <FieldLabel
-        className='text-xs font-semibold text-slate-text'
+        className='text-xs font-semibold text-[var(--text-default-heading)]'
         htmlFor={id}
       >
         School
@@ -359,7 +387,7 @@ function SchoolSelect({
         value={value}
       >
         <SelectTrigger
-          className='mt-1.5 h-11 rounded-[10px] border-[#d9d3ca] bg-cloud-white focus-visible:ring-[#2f6f5b]'
+          className='mt-1.5 h-11 rounded-[10px] border-[var(--border-control-default)] bg-[var(--surface-general-default)] focus-visible:border-[var(--border-primary-focus)] focus-visible:ring-2 focus-visible:ring-[var(--border-primary-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-primary-default-subtle)]'
           id={id}
         >
           <SelectValue placeholder='Choose school' />

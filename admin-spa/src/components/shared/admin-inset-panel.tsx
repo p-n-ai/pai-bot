@@ -14,12 +14,12 @@ export function AdminInsetPanel({
   return (
     <div
       className={cn(
-        'rounded-[24px] border border-slate-200/70 bg-white/85 p-4 dark:border-white/10 dark:bg-slate-950/45',
+        'rounded-[24px] border border-[var(--admin-line)] bg-[var(--admin-surface)] p-4',
         className,
       )}
     >
       {title ? (
-        <p className='text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase dark:text-slate-400'>
+        <p className='text-xs font-semibold tracking-[0.2em] text-[var(--admin-muted)] uppercase'>
           {title}
         </p>
       ) : null}

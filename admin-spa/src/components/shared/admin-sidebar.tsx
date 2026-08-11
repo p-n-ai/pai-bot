@@ -53,7 +53,7 @@ export function AdminSidebar() {
   return (
     <Sidebar
       collapsible='offcanvas'
-      className='border-r-0 bg-[var(--admin-ink)] text-[var(--admin-nav-text)]'
+      className='border-r-0 bg-[var(--admin-navigation)] text-[var(--admin-nav-text)]'
     >
       <SidebarHeader className='px-4 pt-5 pb-4'>
         <div className='flex min-h-11 items-center gap-2'>
@@ -64,7 +64,7 @@ export function AdminSidebar() {
             search={dashboardSearch}
             to='/dashboard'
           >
-            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_1px_oklch(0.925_0.175_115/0.2),0_8px_24px_oklch(0_0_0/0.18)]'>
+            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] ring-1 ring-white/30'>
               <SparklesIcon aria-hidden='true' className='size-[18px]' />
               <span className='absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-[var(--admin-ink)] ring-2 ring-[var(--admin-accent)]' />
             </span>

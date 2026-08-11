@@ -12,7 +12,7 @@ export function AdminHighlightPanel({
   return (
     <div
       className={cn(
-        'grid gap-3 rounded-[24px] bg-slate-950 p-4 text-white dark:bg-slate-900/90',
+        'grid gap-3 rounded-[24px] bg-[var(--admin-navigation)] p-4 text-[var(--admin-nav-text)]',
         className,
       )}
     >

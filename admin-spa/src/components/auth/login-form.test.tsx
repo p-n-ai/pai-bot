@@ -184,9 +184,9 @@ describe('LoginForm', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
-    expect(
-      await screen.findByText('Choose a school to continue signing in.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This email belongs to more than one school. Choose where you want to sign in.',
+    )
 
     fireEvent.click(screen.getByRole('combobox', { name: 'School' }))
     fireEvent.click(

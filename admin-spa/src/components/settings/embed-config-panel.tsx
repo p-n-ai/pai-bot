@@ -238,7 +238,7 @@ export function EmbedConfigPanel() {
 
       <section
         aria-label='Website chat workspace'
-        className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_24px_80px_-52px_oklch(0.22_0.02_150/0.65)] ring-1 ring-[var(--admin-line)]'
+        className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
       >
         <div className='grid lg:grid-cols-[minmax(21rem,0.9fr)_minmax(25rem,1.1fr)]'>
           <WidgetPreview theme={theme} />
@@ -333,11 +333,11 @@ export function EmbedConfigPanel() {
             <div className='flex flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-line)] pt-5'>
               <p
                 aria-live='polite'
-                className={`m-0 flex items-center gap-2 text-sm font-medium ${hasConfigurationChanges ? 'text-amber-700' : 'text-[var(--admin-muted)]'}`}
+                className={`m-0 flex items-center gap-2 text-sm font-medium ${hasConfigurationChanges ? 'text-[var(--status-warning-text)]' : 'text-[var(--admin-muted)]'}`}
               >
                 <span
                   aria-hidden='true'
-                  className={`size-2 rounded-full ${hasConfigurationChanges ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                  className={`size-2 rounded-full ${hasConfigurationChanges ? 'bg-[var(--status-warning-border)]' : 'bg-[var(--surface-primary-default)]'}`}
                 />
                 {hasConfigurationChanges
                   ? 'Unsaved changes'
@@ -357,7 +357,7 @@ export function EmbedConfigPanel() {
               />
               {saveSuccess && (
                 <p
-                  className='w-full text-sm font-medium text-emerald-700'
+                  className='w-full text-sm font-medium text-[var(--status-success-text)]'
                   role='status'
                 >
                   {saveSuccess}
@@ -370,7 +370,7 @@ export function EmbedConfigPanel() {
 
       <section
         aria-label='Website chat deployment'
-        className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
+        className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
       >
         <OriginsSection
           config={config}
@@ -489,12 +489,12 @@ function EmbedSetupGuide({
               {index < steps.length - 1 && (
                 <span
                   aria-hidden='true'
-                  className={`absolute top-10 bottom-0 left-[1.21875rem] w-px lg:top-5 lg:right-0 lg:bottom-auto lg:left-10 lg:h-px lg:w-auto ${completed ? 'bg-[var(--admin-ink)]' : 'bg-[var(--admin-line)]'}`}
+                  className={`absolute top-10 bottom-0 left-[1.21875rem] w-px lg:top-5 lg:right-0 lg:bottom-auto lg:left-10 lg:h-px lg:w-auto ${completed ? 'bg-[var(--admin-navigation)]' : 'bg-[var(--admin-line)]'}`}
                 />
               )}
               <span
                 aria-hidden='true'
-                className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${completed ? 'bg-[var(--admin-ink)] text-[var(--admin-surface)]' : current ? 'bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_4px_var(--admin-surface-muted)]' : 'bg-[var(--admin-surface-muted)] text-[var(--admin-muted)] ring-1 ring-[var(--admin-line)]'}`}
+                className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${completed ? 'bg-[var(--admin-navigation)] text-[var(--admin-nav-text)]' : current ? 'bg-[var(--admin-accent)] text-[var(--admin-ink)] ring-4 ring-[var(--admin-surface-muted)]' : 'bg-[var(--admin-surface-muted)] text-[var(--admin-muted)] ring-1 ring-[var(--admin-line)]'}`}
               >
                 {completed ? <Check className='size-4' /> : index + 1}
               </span>
@@ -677,7 +677,7 @@ function PublishedState({ config }: { config: EmbedConfig }) {
     <div className='flex items-center gap-3 border-y border-[var(--admin-line)] py-4'>
       <span
         aria-hidden='true'
-        className={`size-2.5 shrink-0 rounded-full ${published ? 'bg-emerald-600' : needsOrigin ? 'bg-amber-500' : 'bg-[var(--admin-muted)]'}`}
+        className={`size-2.5 shrink-0 rounded-full ${published ? 'bg-[var(--surface-primary-default)]' : needsOrigin ? 'bg-[var(--status-warning-border)]' : 'bg-[var(--admin-muted)]'}`}
       />
       <div className='min-w-0'>
         <p className='m-0 text-sm font-semibold text-[var(--admin-ink)]'>
@@ -730,7 +730,7 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
         <div
           aria-label='Chat preview'
           lang={theme.language}
-          className={`absolute bottom-24 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-2xl bg-[var(--admin-surface)] text-[var(--admin-ink)] shadow-[0_24px_70px_oklch(0_0_0/0.28)] ring-1 ring-white/12 ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
+          className={`absolute bottom-24 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-2xl bg-[var(--admin-surface)] text-[var(--admin-ink)] ring-1 ring-[var(--admin-line)] ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
         >
           <div className='p-4 text-sm font-semibold' style={themeStyle}>
             P&amp;AI Tutor

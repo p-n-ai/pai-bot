@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 export function ExportPanel() {
   return (
     <section aria-label='Tenant export downloads' className='mt-6'>
-      <div className='overflow-hidden rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)]'>
+      <div className='overflow-hidden rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)]'>
         <ul className='m-0 list-none divide-y divide-[var(--admin-line)] p-0'>
           {adminExportLinks.map((item) => (
             <li

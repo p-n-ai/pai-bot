@@ -33,7 +33,7 @@ export function AIUsageBudgetPage({
   return (
     <section
       aria-label='AI budget configuration'
-      className='mt-8 overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_24px_80px_-52px_oklch(0.22_0.02_150/0.65)] ring-1 ring-[var(--admin-line)]'
+      className='mt-8 overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
     >
       <div className='grid lg:grid-cols-[minmax(19rem,0.86fr)_minmax(24rem,1.14fr)]'>
         <BudgetStatusPanel snapshot={snapshot} view={view} />

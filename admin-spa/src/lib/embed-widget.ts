@@ -8,7 +8,7 @@ export interface EmbedTheme {
 }
 
 export const defaultEmbedTheme: EmbedTheme = {
-  color: '#b45a1a',
+  color: '#00cc85',
   language: 'en',
   position: 'bottom-right',
 }
@@ -46,8 +46,8 @@ export function readableForeground(color: string) {
   })
   const luminance =
     0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-  const dark = '#111827'
-  const darkLuminance = 0.0097
+  const dark = '#404040'
+  const darkLuminance = 0.0513
   const darkContrast =
     (Math.max(luminance, darkLuminance) + 0.05) /
     (Math.min(luminance, darkLuminance) + 0.05)

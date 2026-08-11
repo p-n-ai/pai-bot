@@ -429,7 +429,7 @@ function OnboardingStepLayout({
   title: string
 }) {
   return (
-    <section className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_14px_40px_oklch(0.25_0.015_150/0.045)] sm:p-7'>
+    <section className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 sm:p-7'>
       <div>
         <h2 className='text-2xl leading-tight font-semibold tracking-[-0.025em] text-balance text-[var(--admin-ink)]'>
           {title}

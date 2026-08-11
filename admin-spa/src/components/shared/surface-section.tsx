@@ -11,7 +11,7 @@ export function SurfaceSection({
 }) {
   return (
     <section
-      className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_14px_40px_oklch(0.25_0.015_150/0.045)] sm:p-7'
+      className='grid gap-6 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 sm:p-7'
       aria-label={title}
     >
       <div className='flex items-start justify-between gap-3'>

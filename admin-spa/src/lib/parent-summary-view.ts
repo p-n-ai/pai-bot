@@ -31,14 +31,14 @@ export function formatParentTopicLabel(topicID: string): string {
 
 export function getParentMasteryTone(score: number): string {
   if (score >= 0.75) {
-    return 'bg-emerald-500'
+    return 'bg-[var(--surface-primary-default)]'
   }
 
   if (score >= 0.5) {
-    return 'bg-sky-500'
+    return 'bg-[var(--surface-primary-focus)]'
   }
 
-  return 'bg-amber-500'
+  return 'bg-[var(--status-warning-border)]'
 }
 
 function buildParentContextLine(summary: ParentSummary | null): string {

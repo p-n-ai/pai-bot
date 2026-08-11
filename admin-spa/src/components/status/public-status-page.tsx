@@ -56,7 +56,7 @@ export function PublicStatusPage() {
   const presentation = statusPresentation(viewState)
 
   return (
-    <div className='min-h-svh bg-[oklch(0.982_0.004_250)] text-[oklch(0.22_0.018_255)]'>
+    <div className='min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'>
       <div className='mx-auto w-[min(calc(100%-2rem),40rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-12'>
         <header className='mb-14 sm:mb-16'>
           <a
@@ -65,7 +65,7 @@ export function PublicStatusPage() {
           >
             <span
               aria-hidden='true'
-              className='grid size-8 place-items-center rounded-lg bg-[oklch(0.22_0.018_255)] text-[11px] font-bold tracking-[-0.04em] text-white'
+              className='grid size-8 place-items-center rounded-lg border border-[var(--border-primary-default)] bg-[var(--surface-tertiary-default)] text-[11px] font-bold tracking-[-0.04em] text-[var(--text-primary-on-color)]'
             >
               P&amp;
             </span>
@@ -75,15 +75,15 @@ export function PublicStatusPage() {
 
         <div aria-live='polite' className='grid gap-14'>
           <section aria-labelledby='status-heading' className='max-w-2xl'>
-            <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[oklch(0.49_0.018_255)]'>
+            <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-default-body)]'>
               <span
                 aria-hidden='true'
                 className={
                   presentation.tone === 'operational'
-                    ? 'size-2.5 rounded-full bg-[oklch(0.58_0.16_153)]'
+                    ? 'size-2.5 rounded-full bg-[var(--surface-primary-default)]'
                     : presentation.tone === 'degraded'
-                      ? 'size-2.5 rounded-full bg-[oklch(0.63_0.18_45)]'
-                      : 'size-2.5 rounded-full bg-[oklch(0.6_0.012_250)]'
+                      ? 'size-2.5 rounded-full bg-[var(--status-warning-border)]'
+                      : 'size-2.5 rounded-full bg-[var(--text-disabled-default)]'
                 }
               />
               {presentation.liveLabel}
@@ -94,7 +94,7 @@ export function PublicStatusPage() {
             >
               {presentation.headline}
             </h1>
-            <p className='mt-4 max-w-[60ch] text-base leading-7 text-pretty text-[oklch(0.49_0.018_255)]'>
+            <p className='mt-4 max-w-[60ch] text-base leading-7 text-pretty text-[var(--text-default-body)]'>
               {presentation.summary}
             </p>
           </section>
@@ -117,7 +117,7 @@ export function PublicStatusPage() {
           </section>
         </div>
 
-        <footer className='mt-14 text-[13px] leading-5 text-[oklch(0.49_0.018_255)]'>
+        <footer className='mt-14 text-[13px] leading-5 text-[var(--text-default-body)]'>
           <a
             className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
             href='/health/status'
@@ -148,17 +148,17 @@ function StatusRow({ component }: { component: StatusRowModel }) {
         <h3 className='m-0 text-base leading-[1.3] font-semibold'>
           {copy.name}
         </h3>
-        <p className='mt-1.5 text-sm leading-6 text-pretty text-[oklch(0.49_0.018_255)]'>
+        <p className='mt-1.5 text-sm leading-6 text-pretty text-[var(--text-default-body)]'>
           {copy.description}
         </p>
       </div>
       <span
         className={
           operational
-            ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.39_0.13_153)]'
+            ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--text-tertiary-default)]'
             : unavailable
-              ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.16_42)]'
-              : 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.018_255)]'
+              ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--status-warning-text)]'
+              : 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--text-default-body)]'
         }
       >
         <span aria-hidden='true' className='size-2 rounded-full bg-current' />
