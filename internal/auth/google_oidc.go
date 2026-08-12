@@ -121,17 +121,17 @@ type googleFlowRecord struct {
 }
 
 type googleIDTokenClaims struct {
-	Issuer        string      `json:"iss"`
-	Subject       string      `json:"sub"`
-	Audience      interface{} `json:"aud"`
-	AuthorizedFor string      `json:"azp"`
-	Email         string      `json:"email"`
-	Name          string      `json:"name"`
-	Picture       string      `json:"picture"`
-	HostedDomain  string      `json:"hd"`
-	Nonce         string      `json:"nonce"`
-	ExpiresAt     int64       `json:"exp"`
-	EmailVerified interface{} `json:"email_verified"`
+	Issuer        string          `json:"iss"`
+	Subject       string          `json:"sub"`
+	Audience      json.RawMessage `json:"aud"`
+	AuthorizedFor string          `json:"azp"`
+	Email         string          `json:"email"`
+	Name          string          `json:"name"`
+	Picture       string          `json:"picture"`
+	HostedDomain  string          `json:"hd"`
+	Nonce         string          `json:"nonce"`
+	ExpiresAt     int64           `json:"exp"`
+	EmailVerified json.RawMessage `json:"email_verified"`
 }
 
 func NewGoogleOAuthProvider(cfg GoogleOAuthProviderConfig, doer HTTPDoer, now func() time.Time) *GoogleOAuthProvider {
@@ -565,29 +565,30 @@ func parseJWT(token string) (jwtHeader, []byte, string, []byte, error) {
 	return header, claims, parts[0] + "." + parts[1], signature, nil
 }
 
-func googleAudienceContains(raw interface{}, want string) bool {
-	switch value := raw.(type) {
-	case string:
-		return value == want
-	case []interface{}:
-		for _, item := range value {
-			if text, ok := item.(string); ok && text == want {
-				return true
-			}
+func googleAudienceContains(raw json.RawMessage, want string) bool {
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil {
+		return single == want
+	}
+	var multiple []string
+	if err := json.Unmarshal(raw, &multiple); err != nil {
+		return false
+	}
+	for _, audience := range multiple {
+		if audience == want {
+			return true
 		}
 	}
 	return false
 }
 
-func googleEmailVerified(raw interface{}) bool {
-	switch value := raw.(type) {
-	case bool:
-		return value
-	case string:
-		return strings.EqualFold(value, "true")
-	default:
-		return false
+func googleEmailVerified(raw json.RawMessage) bool {
+	var verified bool
+	if err := json.Unmarshal(raw, &verified); err == nil {
+		return verified
 	}
+	var text string
+	return json.Unmarshal(raw, &text) == nil && strings.EqualFold(text, "true")
 }
 
 func googleAuthoritativeEmail(identity googleIdentity) bool {
@@ -913,7 +914,7 @@ func (s *PostgresService) completeGoogleAutoLink(ctx context.Context, chosen ses
 	if err != nil {
 		return Session{}, err
 	}
-	session.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, chosen.Email)
+	session.TenantChoices, err = tenantOptionsByEmailTx(ctx, tx, chosen.Email)
 	if err != nil {
 		return Session{}, err
 	}

@@ -40,19 +40,17 @@ function providerSection(name: string) {
   return screen.getByRole('region', { name })
 }
 
+const decodedInitialSettings = readAISettings(aiSettingsFixture)
+if (!decodedInitialSettings) {
+  throw new Error('test AI settings fixture is invalid')
+}
+const initialSettings = decodedInitialSettings
+
 function responseWith(
-  update: (settings: typeof aiSettingsFixture) => unknown,
+  update: (settings: AISettings) => AISettings,
 ): AISettings {
-  return requireAISettings(update(aiSettingsFixture))
+  return update(initialSettings)
 }
-
-function requireAISettings(value: unknown): AISettings {
-  const settings = readAISettings(value)
-  if (!settings) throw new Error('test AI settings fixture is invalid')
-  return settings
-}
-
-const initialSettings = requireAISettings(aiSettingsFixture)
 
 describe('AISettingsPanel', () => {
   beforeEach(() => {
@@ -424,16 +422,16 @@ describe('AISettingsPanel', () => {
 
   it('serializes cross-section saves against the latest confirmed revision', async () => {
     const flagSave = deferred<AISettings>()
-    const revision4 = {
+    const revision4: AISettings = {
       ...aiSettingsFixture,
       revision: 4,
       appliedRevision: 4,
-    } as unknown as AISettings
-    const revision5 = {
+    }
+    const revision5: AISettings = {
       ...aiSettingsFixture,
       revision: 5,
       appliedRevision: 5,
-    } as unknown as AISettings
+    }
     updateAISettings
       .mockImplementationOnce(() => flagSave.promise)
       .mockResolvedValueOnce(revision5)

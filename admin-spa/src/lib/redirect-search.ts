@@ -1,7 +1,10 @@
+import { Option, Schema, flow } from 'effect'
+
 import { isSafeRedirectPath } from './rbac'
 
-export function readNextPath(value: unknown): string | undefined {
-  return typeof value === 'string' && isSafeRedirectPath(value)
-    ? value
-    : undefined
-}
+/** Parses a safe in-app redirect from unknown router input. */
+export const readNextPath = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.filter(isSafeRedirectPath),
+  Option.getOrUndefined,
+)

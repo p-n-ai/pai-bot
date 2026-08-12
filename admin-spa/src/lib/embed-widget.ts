@@ -1,3 +1,5 @@
+import type { EmbedThemeConfig } from './embed-config-types'
+
 export type EmbedLanguage = 'en' | 'ms' | 'zh'
 export type EmbedPosition = 'bottom-left' | 'bottom-right'
 
@@ -60,10 +62,10 @@ export function readableForeground(color: string) {
     : embedForegroundLight
 }
 
-export function readEmbedTheme(config: Record<string, unknown>): EmbedTheme {
+export function readEmbedTheme(config: EmbedThemeConfig): EmbedTheme {
   return {
     color:
-      typeof config.color === 'string' && /^#[\dA-Fa-f]{6}$/.test(config.color)
+      config.color !== undefined && /^#[\dA-Fa-f]{6}$/.test(config.color)
         ? config.color
         : defaultEmbedTheme.color,
     language:

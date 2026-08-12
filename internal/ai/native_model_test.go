@@ -38,7 +38,7 @@ func (*nativeTestProvider) Models() []ModelInfo               { return nil }
 func (*nativeTestProvider) HealthCheck(context.Context) error { return nil }
 
 func TestNativeModelPreservesContextAndAssistantMessage(t *testing.T) {
-	call := llm.ToolCall{ID: "call-1", Name: "lookup", Arguments: map[string]any{"topic_id": "F1-02"}}
+	call := llm.ToolCall{ID: "call-1", Name: "lookup", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "F1-02"})}
 	want := llm.AssistantMessage{
 		Content:       []llm.AssistantContent{llm.TextContent{Text: "Checking."}, call},
 		Provider:      "test",
@@ -70,7 +70,7 @@ func TestNativeModelPreservesContextAndAssistantMessage(t *testing.T) {
 
 func TestNativeModelEmitsSanitizedTraceForNativeToolRequest(t *testing.T) {
 	provider := &nativeTestProvider{response: llm.AssistantMessage{
-		Content:       []llm.AssistantContent{llm.ToolCall{ID: "call-1", Name: "lookup", Arguments: map[string]any{"topic_id": "F1-02"}}},
+		Content:       []llm.AssistantContent{llm.ToolCall{ID: "call-1", Name: "lookup", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "F1-02"})}},
 		ResponseModel: "model-a",
 		Usage:         llm.Usage{Input: 12, Output: 3},
 	}}

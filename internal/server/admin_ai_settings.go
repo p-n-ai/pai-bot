@@ -333,7 +333,7 @@ func anyProviderRegistrable(cfg config.AIConfig, managedCodexAvailable bool) boo
 // decodeStrictJSONBody mirrors decodeJSONBody but rejects unknown fields and
 // trailing data, so a typoed field (e.g. GET's "openrouterKey") fails loudly
 // instead of silently no-oping.
-func decodeStrictJSONBody(r *http.Request, target any) (err error) {
+func decodeStrictJSONBody[T any](r *http.Request, target *T) (err error) {
 	defer func() {
 		closeErr := r.Body.Close()
 		if err == nil && closeErr != nil {
@@ -347,13 +347,13 @@ func decodeStrictJSONBody(r *http.Request, target any) (err error) {
 	return nil
 }
 
-func decodeStrictJSON(reader io.Reader, target any) error {
+func decodeStrictJSON[T any](reader io.Reader, target *T) error {
 	dec := json.NewDecoder(reader)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(target); err != nil {
 		return err
 	}
-	var trailing any
+	var trailing json.RawMessage
 	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
 		if err == nil {
 			return errors.New("trailing data")
@@ -363,7 +363,7 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 	return nil
 }
 
-func decodeStrictJSONBytes(data []byte, target any) error {
+func decodeStrictJSONBytes[T any](data []byte, target *T) error {
 	return decodeStrictJSON(strings.NewReader(string(data)), target)
 }
 

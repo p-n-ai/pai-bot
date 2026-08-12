@@ -112,10 +112,10 @@ function useTokenBudgetForm({
         period_end: periodEnd,
       })
         .then(onSaved)
-        .catch((caught: unknown) => {
+        .catch((cause: unknown) => {
           setError(
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to save the AI budget. Check your connection and try again.',
           )
         })

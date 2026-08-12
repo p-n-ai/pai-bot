@@ -158,12 +158,12 @@ func (e *Engine) startQuizWithIntensity(msg chat.InboundMessage, conv *Conversat
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "quiz_started",
-		Data: map[string]any{
-			"topic_id":        topicID,
-			"intensity":       session.Intensity,
-			"question_count":  len(session.Questions),
-			"start_transport": quizInputSource(msg),
-		},
+		Data: eventData(
+			eventField("topic_id", topicID),
+			eventField("intensity", session.Intensity),
+			eventField("question_count", len(session.Questions)),
+			eventField("start_transport", quizInputSource(msg)),
+		),
 	})
 	return response
 }
@@ -199,11 +199,11 @@ func (e *Engine) handleQuizIntensitySelection(msg chat.InboundMessage, conv *Con
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "quiz_intensity_selected",
-		Data: map[string]any{
-			"topic_id":  topicID,
-			"intensity": intensity,
-			"transport": quizInputSource(msg),
-		},
+		Data: eventData(
+			eventField("topic_id", topicID),
+			eventField("intensity", intensity),
+			eventField("transport", quizInputSource(msg)),
+		),
 	})
 	return e.startQuizWithIntensity(msg, conv, topicID, intensity, false)
 }
@@ -280,10 +280,10 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "quiz_exited",
-			Data: map[string]any{
-				"topic_id":       state.TopicID,
-				"question_index": state.CurrentIndex,
-			},
+			Data: eventData(
+				eventField("topic_id", state.TopicID),
+				eventField("question_index", state.CurrentIndex),
+			),
 		})
 		return response, true
 	case quizTurnActionPause:
@@ -397,11 +397,11 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "quiz_answer_incorrect",
-			Data: map[string]any{
-				"topic_id":         state.TopicID,
-				"question_index":   state.CurrentIndex,
-				"answer_transport": quizInputSource(msg),
-			},
+			Data: eventData(
+				eventField("topic_id", state.TopicID),
+				eventField("question_index", state.CurrentIndex),
+				eventField("answer_transport", quizInputSource(msg)),
+			),
 		})
 		return response, true
 	}
@@ -432,11 +432,11 @@ func (e *Engine) handleActiveQuizTurn(ctx context.Context, msg chat.InboundMessa
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "quiz_completed",
-			Data: map[string]any{
-				"topic_id":        state.TopicID,
-				"correct_answers": session.CorrectAnswers,
-				"total_questions": len(session.Questions),
-			},
+			Data: eventData(
+				eventField("topic_id", state.TopicID),
+				eventField("correct_answers", session.CorrectAnswers),
+				eventField("total_questions", len(session.Questions)),
+			),
 		})
 	} else {
 		if err := e.store.UpdateConversationQuizState(conv.ID, conversationStateQuizActive, nextState); err != nil {
@@ -533,10 +533,10 @@ func (e *Engine) resumePausedQuizTurn(_ context.Context, msg chat.InboundMessage
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "quiz_resumed",
-		Data: map[string]any{
-			"topic_id":     state.TopicID,
-			"suspended_by": suspendedBy,
-		},
+		Data: eventData(
+			eventField("topic_id", state.TopicID),
+			eventField("suspended_by", suspendedBy),
+		),
 	})
 	return response
 }
@@ -553,11 +553,11 @@ func (e *Engine) pauseQuizTurn(msg chat.InboundMessage, conv *Conversation, stat
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "quiz_paused",
-		Data: map[string]any{
-			"topic_id":       state.TopicID,
-			"question_index": state.CurrentIndex,
-			"reason":         reason,
-		},
+		Data: eventData(
+			eventField("topic_id", state.TopicID),
+			eventField("question_index", state.CurrentIndex),
+			eventField("reason", reason),
+		),
 	})
 
 	if reason == quizPauseReasonManual {

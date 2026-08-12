@@ -6,7 +6,12 @@ package progress
 import (
 	"fmt"
 	"sync"
+
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
+
+type XPField = jsonobject.Field
+type XPMetadata = jsonobject.Object
 
 // XPSource identifies where XP was earned.
 type XPSource string
@@ -35,12 +40,12 @@ type XPEntry struct {
 	UserID   string
 	Source   XPSource
 	Amount   int
-	Metadata map[string]any
+	Metadata *XPMetadata
 }
 
 // XPTracker defines the interface for XP tracking.
 type XPTracker interface {
-	Award(userID string, source XPSource, amount int, metadata map[string]any) error
+	Award(userID string, source XPSource, amount int, metadata *XPMetadata) error
 	GetTotal(userID string) (int, error)
 }
 
@@ -55,7 +60,7 @@ func NewMemoryXPTracker() *MemoryXPTracker {
 	return &MemoryXPTracker{}
 }
 
-func (t *MemoryXPTracker) Award(userID string, source XPSource, amount int, metadata map[string]any) error {
+func (t *MemoryXPTracker) Award(userID string, source XPSource, amount int, metadata *XPMetadata) error {
 	if amount <= 0 {
 		return fmt.Errorf("XP amount must be positive, got %d", amount)
 	}
@@ -70,6 +75,15 @@ func (t *MemoryXPTracker) Award(userID string, source XPSource, amount int, meta
 		Metadata: metadata,
 	})
 	return nil
+}
+
+func NewXPField[T any](name string, value T) XPField {
+	return jsonobject.Member(name, value)
+}
+
+func NewXPMetadata(fields ...XPField) *XPMetadata {
+	metadata := jsonobject.New(fields...)
+	return &metadata
 }
 
 func (t *MemoryXPTracker) GetTotal(userID string) (int, error) {

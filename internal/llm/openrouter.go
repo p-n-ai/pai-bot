@@ -18,6 +18,7 @@ import (
 	"github.com/OpenRouterTeam/go-sdk/models/components"
 	"github.com/OpenRouterTeam/go-sdk/models/sdkerrors"
 	"github.com/OpenRouterTeam/go-sdk/optionalnullable"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 const APIOpenRouterChat = "openrouter-chat"
@@ -247,20 +248,23 @@ func openRouterJSONSchemaResponseFormat(spec *StructuredOutputSpec) (*components
 		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema is required")
 	}
 
-	decoder := json.NewDecoder(bytes.NewReader(rawSchema))
-	decoder.UseNumber()
-	var decoded any
-	if err := decoder.Decode(&decoded); err != nil || len(bytes.TrimSpace(rawSchema[decoder.InputOffset():])) != 0 {
+	if !json.Valid(rawSchema) {
 		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema must contain valid JSON")
 	}
-	schema, ok := decoded.(map[string]any)
-	if !ok {
+	schemaObject, err := jsonobject.Parse(rawSchema)
+	if err != nil {
 		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema must be a JSON object")
 	}
-
-	jsonSchema := components.ChatJSONSchemaConfig{
-		Name:   spec.Name,
-		Schema: schema,
+	encodedConfig, err := json.Marshal(struct {
+		Name   string            `json:"name"`
+		Schema jsonobject.Object `json:"schema"`
+	}{Name: spec.Name, Schema: schemaObject})
+	if err != nil {
+		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema: %w", err)
+	}
+	var jsonSchema components.ChatJSONSchemaConfig
+	if err := json.Unmarshal(encodedConfig, &jsonSchema); err != nil {
+		return nil, fmt.Errorf("openrouter-chat: structured output JSON schema: %w", err)
 	}
 	if spec.Strict {
 		jsonSchema.Strict = optionalnullable.From(openrouter.Pointer(true))
@@ -463,26 +467,30 @@ func convertOpenRouterTools(tools []Tool) ([]components.ChatFunctionTool, error)
 	}
 	converted := make([]components.ChatFunctionTool, 0, len(tools))
 	for _, tool := range tools {
-		parameters := map[string]any{}
+		parameters := jsonobject.New()
 		if len(tool.Parameters) > 0 {
-			var decoded any
-			if err := json.Unmarshal(tool.Parameters, &decoded); err != nil {
-				return nil, fmt.Errorf("openrouter-chat: tool %q parameters: %w", tool.Name, err)
-			}
-			var ok bool
-			parameters, ok = decoded.(map[string]any)
-			if !ok {
+			var err error
+			parameters, err = jsonobject.Parse(tool.Parameters)
+			if err != nil {
 				return nil, fmt.Errorf("openrouter-chat: tool %q parameters must be a JSON object", tool.Name)
 			}
 		}
+		encodedFunction, err := json.Marshal(struct {
+			Description *string           `json:"description"`
+			Name        string            `json:"name"`
+			Parameters  jsonobject.Object `json:"parameters"`
+		}{Description: openrouter.Pointer(tool.Description), Name: tool.Name, Parameters: parameters})
+		if err != nil {
+			return nil, fmt.Errorf("openrouter-chat: tool %q parameters: %w", tool.Name, err)
+		}
+		var function components.ChatFunctionToolFunctionFunction
+		if err := json.Unmarshal(encodedFunction, &function); err != nil {
+			return nil, fmt.Errorf("openrouter-chat: tool %q parameters: %w", tool.Name, err)
+		}
 
 		fn := components.ChatFunctionToolFunction{
-			Type: components.ChatFunctionToolTypeFunction,
-			Function: components.ChatFunctionToolFunctionFunction{
-				Description: openrouter.Pointer(tool.Description),
-				Name:        tool.Name,
-				Parameters:  parameters,
-			},
+			Type:     components.ChatFunctionToolTypeFunction,
+			Function: function,
 		}
 		converted = append(converted, components.CreateChatFunctionToolChatFunctionToolFunction(fn))
 	}
@@ -656,7 +664,7 @@ func consumeOpenRouterStream(
 				tool = toolByID[tc.ID]
 			}
 			if tool == nil {
-				out.Content = append(out.Content, ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: map[string]any{}})
+				out.Content = append(out.Content, ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: jsonobject.New()})
 				tool = &openRouterStreamingToolCall{contentIndex: len(out.Content) - 1}
 				if streamIndex != nil {
 					toolByStreamIndex[*streamIndex] = tool

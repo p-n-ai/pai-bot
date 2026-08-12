@@ -11,7 +11,6 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot='input-group'
-      role='group'
       className={cn(
         'group/input-group relative flex h-8 w-full min-w-0 items-center rounded-lg border border-input transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:bg-input/50 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:bg-input/30 dark:has-disabled:bg-input/80 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5',
         className,
@@ -46,9 +45,10 @@ function InputGroupAddon({
   className,
   align = 'inline-start',
   ...props
-}: React.ComponentProps<'div'> & VariantProps<typeof inputGroupAddonVariants>) {
+}: React.ComponentProps<'button'> &
+  VariantProps<typeof inputGroupAddonVariants>) {
   const focusInput = React.useCallback(
-    (target: HTMLElement, currentTarget: HTMLDivElement) => {
+    (target: HTMLElement, currentTarget: HTMLButtonElement) => {
       if (!target.closest('button')) {
         currentTarget.parentElement?.querySelector('input')?.focus()
       }
@@ -56,13 +56,13 @@ function InputGroupAddon({
     [],
   )
   const handleClick = React.useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
+    (event: React.MouseEvent<HTMLButtonElement>) => {
       focusInput(event.target as HTMLElement, event.currentTarget)
     },
     [focusInput],
   )
   const handleKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (event.key === 'Enter' || event.key === ' ') {
         focusInput(event.target as HTMLElement, event.currentTarget)
       }
@@ -71,8 +71,8 @@ function InputGroupAddon({
   )
 
   return (
-    <div
-      role='group'
+    <button
+      type='button'
       data-slot='input-group-addon'
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}

@@ -52,7 +52,7 @@ func TestSchedulerOpenAILiveNudge(t *testing.T) {
 	if err := streaks.RecordActivity("live-nudge-user", time.Now()); err != nil {
 		t.Fatalf("RecordActivity() error = %v", err)
 	}
-	if err := xp.Award("live-nudge-user", progress.XPSourceSession, 135, map[string]any{"topic_id": "algebra-linear-equations"}); err != nil {
+	if err := xp.Award("live-nudge-user", progress.XPSourceSession, 135, progress.NewXPMetadata(progress.NewXPField("topic_id", "algebra-linear-equations"))); err != nil {
 		t.Fatalf("Award() error = %v", err)
 	}
 

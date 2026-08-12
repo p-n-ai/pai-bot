@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Predicate } from 'effect'
 import { cva } from 'class-variance-authority'
 import { Slot } from 'radix-ui'
 import type { VariantProps } from 'class-variance-authority'
@@ -76,7 +77,7 @@ function SidebarProvider({
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === 'function' ? value(open) : value
+      const openState = Predicate.isFunction(value) ? value(open) : value
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
@@ -525,7 +526,7 @@ function SidebarMenuButton({
     return button
   }
 
-  if (typeof tooltip === 'string') {
+  if (Predicate.isString(tooltip)) {
     tooltip = {
       children: tooltip,
     }

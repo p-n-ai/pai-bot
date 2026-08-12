@@ -114,14 +114,14 @@ func (e *Engine) maybeHandleCurriculumAttempt(
 		ConversationID: conv.ID,
 		UserID:         identity.ExternalID(),
 		EventType:      "curriculum_attempt_recorded",
-		Data: map[string]any{
-			"topic_id":     state.ActiveTopicID,
-			"question_id":  result.Evidence.QuestionID,
-			"correct":      result.Correct,
-			"attempt_id":   attemptID,
-			"mastery_from": result.MasteryBefore,
-			"mastery_to":   result.MasteryAfter,
-		},
+		Data: eventData(
+			eventField("topic_id", state.ActiveTopicID),
+			eventField("question_id", result.Evidence.QuestionID),
+			eventField("correct", result.Correct),
+			eventField("attempt_id", attemptID),
+			eventField("mastery_from", result.MasteryBefore),
+			eventField("mastery_to", result.MasteryAfter),
+		),
 	})
 	e.recordActivityAsync(identity)
 	return response, true
@@ -258,15 +258,15 @@ func (e *Engine) persistQuizCurriculumAttempt(
 		ConversationID: conv.ID,
 		UserID:         identity.ExternalID(),
 		EventType:      "curriculum_attempt_recorded",
-		Data: map[string]any{
-			"topic_id":     quizState.TopicID,
-			"question_id":  question.ID,
-			"correct":      result.Correct,
-			"attempt_id":   attemptID,
-			"mastery_from": result.MasteryBefore,
-			"mastery_to":   result.MasteryAfter,
-			"from_quiz":    true,
-		},
+		Data: eventData(
+			eventField("topic_id", quizState.TopicID),
+			eventField("question_id", question.ID),
+			eventField("correct", result.Correct),
+			eventField("attempt_id", attemptID),
+			eventField("mastery_from", result.MasteryBefore),
+			eventField("mastery_to", result.MasteryAfter),
+			eventField("from_quiz", true),
+		),
 	})
 	e.recordActivityAsync(identity)
 	return nil
@@ -293,21 +293,21 @@ func (e *Engine) applyCurriculumAttemptSideEffects(
 	e.checkTopicUnlocks(identity, syllabusID, &topic)
 
 	if result.Correct && e.xp != nil {
-		if err := e.xp.Award(identity.ExternalID(), progress.XPSourceQuiz, progress.XPQuizCorrect, map[string]any{
-			"topic_id":    topicID,
-			"question_id": questionID,
-			"source":      "curriculum_engine",
-		}); err != nil {
+		if err := e.xp.Award(identity.ExternalID(), progress.XPSourceQuiz, progress.XPQuizCorrect, progress.NewXPMetadata(
+			progress.NewXPField("topic_id", topicID),
+			progress.NewXPField("question_id", questionID),
+			progress.NewXPField("source", "curriculum_engine"),
+		)); err != nil {
 			slog.Warn("award curriculum check xp", "topic_id", topicID, "error", err)
 		}
 	}
 	if !progress.IsMastered(result.MasteryBefore) && progress.IsMastered(result.MasteryAfter) {
 		if e.xp != nil {
-			if err := e.xp.Award(identity.ExternalID(), progress.XPSourceMastery, progress.XPMasteryUp, map[string]any{
-				"topic_id":    topicID,
-				"syllabus_id": syllabusID,
-				"question_id": questionID,
-			}); err != nil {
+			if err := e.xp.Award(identity.ExternalID(), progress.XPSourceMastery, progress.XPMasteryUp, progress.NewXPMetadata(
+				progress.NewXPField("topic_id", topicID),
+				progress.NewXPField("syllabus_id", syllabusID),
+				progress.NewXPField("question_id", questionID),
+			)); err != nil {
 				slog.Warn("award curriculum mastery xp", "topic_id", topicID, "error", err)
 			}
 		}

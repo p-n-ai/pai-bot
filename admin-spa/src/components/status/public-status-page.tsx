@@ -41,8 +41,8 @@ export function PublicStatusPage() {
       .then((snapshot) => {
         setViewState({ kind: 'ready', snapshot })
       })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
           return
         }
         setViewState({ kind: 'error' })
@@ -168,13 +168,15 @@ function StatusRow({ component }: { component: StatusRowModel }) {
   )
 }
 
-function statusPresentation(viewState: StatusViewState): {
+interface StatusPresentation {
   readonly headline: string
   readonly summary: string
   readonly components: ReadonlyArray<StatusRowModel>
   readonly liveLabel: string
   readonly tone: 'operational' | 'degraded' | 'neutral'
-} {
+}
+
+function statusPresentation(viewState: StatusViewState): StatusPresentation {
   if (viewState.kind === 'loading') {
     return {
       headline: 'Checking system status',

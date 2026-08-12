@@ -150,6 +150,7 @@ export default tseslint.config(
       'eslint.config.js',
       'src/routeTree.gen.ts',
       '**/__index__.tsx',
+      'tools/oxlint/anti-slop/**',
     ],
   },
   {

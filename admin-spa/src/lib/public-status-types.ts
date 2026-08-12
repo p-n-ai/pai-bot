@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const PublicServiceIDSchema = Schema.Literals([
@@ -28,23 +28,14 @@ export interface PublicStatusSnapshot extends EffectSchema.Type<
   typeof PublicStatusSnapshotSchema
 > {}
 
-const matchesPublicStatusSnapshot = Schema.is(PublicStatusSnapshotSchema)
-
-/** Parses a coherent public status response from the backend boundary. */
-export function readPublicStatusSnapshot(
-  value: unknown,
-): PublicStatusSnapshot | null {
-  if (!matchesPublicStatusSnapshot(value)) {
-    return null
-  }
-
+function isCoherentPublicStatusSnapshot(value: PublicStatusSnapshot): boolean {
   const componentIDs = value.components.map((component) => component.id)
   if (
     componentIDs.filter((id) => id === 'application').length !== 1 ||
     componentIDs.filter((id) => id === 'ai_provider').length !== 1 ||
     new Set(componentIDs).size !== componentIDs.length
   ) {
-    return null
+    return false
   }
 
   const hasUnavailableComponent = value.components.some(
@@ -54,8 +45,19 @@ export function readPublicStatusSnapshot(
     (value.status === 'ok' && hasUnavailableComponent) ||
     (value.status === 'degraded' && !hasUnavailableComponent)
   ) {
-    return null
+    return false
   }
 
-  return value
+  return true
 }
+
+const decodePublicStatusSnapshot = Schema.decodeUnknownOption(
+  PublicStatusSnapshotSchema,
+)
+
+/** Parses a coherent public status response from the backend boundary. */
+export const readPublicStatusSnapshot = flow(
+  decodePublicStatusSnapshot,
+  Option.filter(isCoherentPublicStatusSnapshot),
+  Option.getOrNull,
+)

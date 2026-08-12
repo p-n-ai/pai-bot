@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/p-n-ai/pai-bot/internal/auth"
 )
@@ -19,10 +18,16 @@ type beginner interface {
 }
 
 type txLike interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	ExecSQL(context.Context, string) error
+	QueryRowSQL(context.Context, string) pgx.Row
+	LookupTenant(context.Context, string) pgx.Row
+	UpsertTokenBudget(context.Context, tokenBudgetWrite) error
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
+}
+
+type postgresTx struct {
+	pgx.Tx
 }
 
 type poolBeginner struct {
@@ -30,7 +35,42 @@ type poolBeginner struct {
 }
 
 func (p poolBeginner) Begin(ctx context.Context) (txLike, error) {
-	return p.pool.Begin(ctx)
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return postgresTx{Tx: tx}, nil
+}
+
+func (tx postgresTx) ExecSQL(ctx context.Context, sql string) error {
+	_, err := tx.Exec(ctx, sql)
+	return err
+}
+
+func (tx postgresTx) QueryRowSQL(ctx context.Context, sql string) pgx.Row {
+	return tx.QueryRow(ctx, sql)
+}
+
+func (tx postgresTx) LookupTenant(ctx context.Context, slug string) pgx.Row {
+	return tx.QueryRow(ctx, `SELECT id::text FROM tenants WHERE slug = $1 LIMIT 1`, slug)
+}
+
+type tokenBudgetWrite struct {
+	TenantID     string
+	BudgetTokens int64
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
+}
+
+func (tx postgresTx) UpsertTokenBudget(ctx context.Context, write tokenBudgetWrite) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO token_budgets (tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
+VALUES ($1::uuid, NULL, $2, 0, $3, $4)
+ON CONFLICT (tenant_id, user_id, period_start, period_end) DO UPDATE
+SET budget_tokens = EXCLUDED.budget_tokens,
+    updated_at = NOW()
+`, write.TenantID, write.BudgetTokens, write.PeriodStart, write.PeriodEnd)
+	return err
 }
 
 // SeedDemo inserts a small idempotent demo dataset into the current database.
@@ -80,7 +120,7 @@ func seedDemo(ctx context.Context, db beginner) (err error) {
 	}
 
 	for i, stmt := range demoStatements(defaultTenantID, secondTenantID) {
-		if _, err = tx.Exec(ctx, stmt); err != nil {
+		if err = tx.ExecSQL(ctx, stmt); err != nil {
 			return fmt.Errorf("seed statement %d: %w", i+1, err)
 		}
 	}
@@ -116,22 +156,14 @@ func seedTokenBudget(ctx context.Context, db beginner, params TokenBudgetSeedPar
 	}()
 
 	var tenantID string
-	if err := tx.QueryRow(ctx, `
-SELECT id::text
-FROM tenants
-WHERE slug = $1
-LIMIT 1
-`, params.TenantSlug).Scan(&tenantID); err != nil {
+	if err := tx.LookupTenant(ctx, params.TenantSlug).Scan(&tenantID); err != nil {
 		return fmt.Errorf("lookup tenant by slug: %w", err)
 	}
 
-	if _, err = tx.Exec(ctx, `
-INSERT INTO token_budgets (tenant_id, user_id, budget_tokens, used_tokens, period_start, period_end)
-VALUES ($1::uuid, NULL, $2, 0, $3, $4)
-ON CONFLICT (tenant_id, user_id, period_start, period_end) DO UPDATE
-SET budget_tokens = EXCLUDED.budget_tokens,
-    updated_at = NOW()
-`, tenantID, params.BudgetTokens, params.PeriodStart.UTC(), params.PeriodEnd.UTC()); err != nil {
+	if err = tx.UpsertTokenBudget(ctx, tokenBudgetWrite{
+		TenantID: tenantID, BudgetTokens: params.BudgetTokens,
+		PeriodStart: params.PeriodStart.UTC(), PeriodEnd: params.PeriodEnd.UTC(),
+	}); err != nil {
 		return fmt.Errorf("upsert token budget: %w", err)
 	}
 
@@ -153,7 +185,7 @@ RETURNING id::text
 `, name, slug, configJSON)
 
 	var tenantID string
-	if err := tx.QueryRow(ctx, sql).Scan(&tenantID); err != nil {
+	if err := tx.QueryRowSQL(ctx, sql).Scan(&tenantID); err != nil {
 		return "", err
 	}
 

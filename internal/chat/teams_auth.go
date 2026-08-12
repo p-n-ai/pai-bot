@@ -158,7 +158,7 @@ func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]t
 		Issuer  string `json:"issuer"`
 		JWKSURL string `json:"jwks_uri"`
 	}
-	if err := a.getJSON(ctx, a.metadataURL, &metadata); err != nil {
+	if err := getTeamsJSON(ctx, a, a.metadataURL, &metadata); err != nil {
 		return nil, "", fmt.Errorf("load Teams OpenID metadata: %w", err)
 	}
 	if metadata.Issuer == "" || metadata.JWKSURL == "" {
@@ -170,7 +170,7 @@ func (a *TeamsAuthenticator) verificationKeys(ctx context.Context) (map[string]t
 	var set struct {
 		Keys []teamsJWK `json:"keys"`
 	}
-	if err := a.getJSON(ctx, metadata.JWKSURL, &set); err != nil {
+	if err := getTeamsJSON(ctx, a, metadata.JWKSURL, &set); err != nil {
 		return nil, "", fmt.Errorf("load Teams signing keys: %w", err)
 	}
 	keys := make(map[string]teamsVerificationKey, len(set.Keys))
@@ -200,12 +200,12 @@ func newTeamsAuthenticationHTTPClient() *http.Client {
 	}
 }
 
-func (a *TeamsAuthenticator) getJSON(ctx context.Context, endpoint string, target any) error {
+func getTeamsJSON[T any](ctx context.Context, authenticator *TeamsAuthenticator, endpoint string, target *T) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
 	}
-	response, err := a.client.Do(request)
+	response, err := authenticator.client.Do(request)
 	if err != nil {
 		return err
 	}

@@ -57,9 +57,11 @@ func (e *OpenAICompatibleEmbedder) Embed(ctx context.Context, inputs []string) (
 	if len(inputs) == 0 {
 		return nil, nil
 	}
-	body, err := json.Marshal(map[string]any{
-		"model": e.model, "input": inputs, "dimensions": e.dimensions,
-	})
+	body, err := json.Marshal(struct {
+		Model      string   `json:"model"`
+		Input      []string `json:"input"`
+		Dimensions int      `json:"dimensions"`
+	}{Model: e.model, Input: inputs, Dimensions: e.dimensions})
 	if err != nil {
 		return nil, err
 	}

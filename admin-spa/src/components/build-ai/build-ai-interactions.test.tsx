@@ -41,10 +41,10 @@ describe('Build AI state transitions', () => {
       name: /P&AI Tutor character preview/i,
     })
 
-    expect(preview).toHaveAttribute('data-shape', 'blob')
+    expect(preview).toHaveAttribute('data-silhouette', 'blob')
     expect(preview).toHaveAttribute('data-expression', 'attentive')
     fireEvent.click(screen.getByRole('button', { name: 'Bean' }))
-    expect(preview).toHaveAttribute('data-shape', 'bean')
+    expect(preview).toHaveAttribute('data-silhouette', 'bean')
     expect(screen.getByTestId('build-ai-live-region')).toHaveTextContent(
       'Character silhouette changed. The Draft has unsaved changes.',
     )

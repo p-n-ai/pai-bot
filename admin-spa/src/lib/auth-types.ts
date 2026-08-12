@@ -46,15 +46,8 @@ export interface AuthSession extends EffectSchema.Type<
   typeof AuthSessionSchema
 > {}
 
-const matchesAuthSession = Schema.is(AuthSessionSchema)
-const matchesSchoolChoices = Schema.is(SchoolChoices)
-
 /** Returns whether an unknown response satisfies the complete auth session contract. */
-export function isAuthSession(value: unknown): value is AuthSession {
-  return matchesAuthSession(value)
-}
+export const isAuthSession = Schema.is(AuthSessionSchema)
 
 /** Returns whether an unknown response is a valid mutable school-choice list. */
-export function isSchoolChoices(value: unknown): value is Array<SchoolChoice> {
-  return matchesSchoolChoices(value)
-}
+export const isSchoolChoices = Schema.is(SchoolChoices)

@@ -239,6 +239,24 @@ type fakeTx struct {
 	rolledBack     bool
 }
 
+func (f *fakeTx) ExecSQL(ctx context.Context, sql string) error {
+	_, err := f.Exec(ctx, sql)
+	return err
+}
+
+func (f *fakeTx) QueryRowSQL(ctx context.Context, sql string) pgx.Row {
+	return f.QueryRow(ctx, sql)
+}
+
+func (f *fakeTx) LookupTenant(ctx context.Context, slug string) pgx.Row {
+	return f.QueryRow(ctx, "SELECT id::text FROM tenants WHERE slug = $1 LIMIT 1", slug)
+}
+
+func (f *fakeTx) UpsertTokenBudget(ctx context.Context, write tokenBudgetWrite) error {
+	_, err := f.Exec(ctx, "INSERT INTO token_budgets", write.TenantID, write.BudgetTokens, write.PeriodStart, write.PeriodEnd)
+	return err
+}
+
 func (f *fakeTx) Begin(ctx context.Context) (pgx.Tx, error) {
 	return nil, errors.New("not implemented")
 }

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 const APIOpenAICompletions = "openai-completions"
@@ -121,33 +123,48 @@ type oaTool struct {
 	} `json:"function"`
 }
 
+type oaStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
+type oaRequest struct {
+	Model               string          `json:"model"`
+	Messages            []oaMessage     `json:"messages"`
+	Stream              bool            `json:"stream"`
+	StreamOptions       oaStreamOptions `json:"stream_options"`
+	Store               *bool           `json:"store,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	Tools               *[]oaTool       `json:"tools,omitempty"`
+}
+
 func buildOpenAIRequest(model Model, c Context, opts *StreamOptions) ([]byte, error) {
 	messages, err := convertOpenAIMessages(model, c)
 	if err != nil {
 		return nil, err
 	}
-	params := map[string]any{
-		"model":          model.ID,
-		"messages":       messages,
-		"stream":         true,
-		"stream_options": map[string]any{"include_usage": true},
+	request := oaRequest{
+		Model:         model.ID,
+		Messages:      messages,
+		Stream:        true,
+		StreamOptions: oaStreamOptions{IncludeUsage: true},
 	}
 	if strings.Contains(model.BaseURL, "api.openai.com") {
-		params["store"] = false
+		store := false
+		request.Store = &store
 	}
-	if opts.Temperature != nil {
-		params["temperature"] = *opts.Temperature
-	}
+	request.Temperature = opts.Temperature
 	if opts.MaxTokens > 0 {
-		params["max_completion_tokens"] = opts.MaxTokens
+		request.MaxCompletionTokens = opts.MaxTokens
 	}
 	if len(c.Tools) > 0 {
-		params["tools"] = convertOpenAITools(c.Tools)
+		tools := convertOpenAITools(c.Tools)
+		request.Tools = &tools
 	} else if hasToolHistory(c.Messages) {
-
-		params["tools"] = []oaTool{}
+		tools := []oaTool{}
+		request.Tools = &tools
 	}
-	return json.Marshal(params)
+	return json.Marshal(request)
 }
 
 func hasToolHistory(messages []Message) bool {
@@ -393,7 +410,7 @@ func consumeOpenAIStream(ctx context.Context, s *EventStream, out *AssistantMess
 				tool = nil
 			}
 			if tool == nil {
-				out.Content = append(out.Content, ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: map[string]any{}})
+				out.Content = append(out.Content, ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: jsonobject.New()})
 				tool = &streamingToolCall{contentIndex: len(out.Content) - 1}
 				if tc.Index != nil {
 					toolByStreamIndex[*tc.Index] = tool

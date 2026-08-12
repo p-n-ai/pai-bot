@@ -225,7 +225,7 @@ func TestCodexProviderCompleteNativePreservesToolContinuation(t *testing.T) {
 		t.Fatalf("first CompleteNative() error = %v", err)
 	}
 	call := requireContractToolCall(t, first)
-	if call.ID != "call-page-1|fc-1" || call.Name != tool.Name || call.Arguments["message"] != "Steady progress." {
+	if call.ID != "call-page-1|fc-1" || call.Name != tool.Name || llm.ToolArgumentValueOrZero[string](call.Arguments, "message") != "Steady progress." {
 		t.Fatalf("tool call = %#v", call)
 	}
 	if len(first.Content) != 2 {

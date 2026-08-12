@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 
 /** State reported by the server-owned Codex device authorization process. */
 const CodexAuthStateSchema = Schema.Literals([
@@ -30,15 +30,20 @@ const decodeCodexAuthStatus = Schema.decodeUnknownOption(
   CodexAuthStatusWireSchema,
 )
 
-/** Parses a Codex status response and normalizes omitted display fields. */
-export function readCodexAuthStatus(value: unknown): CodexAuthStatus | null {
-  return Option.match(decodeCodexAuthStatus(value), {
-    onNone: () => null,
-    onSome: (status) => ({
-      state: status.state,
-      verificationUrl: status.verificationUrl ?? '',
-      userCode: status.userCode ?? '',
-      message: status.message ?? '',
-    }),
-  })
+function normalizeCodexAuthStatus(
+  status: typeof CodexAuthStatusWireSchema.Type,
+): CodexAuthStatus {
+  return {
+    state: status.state,
+    verificationUrl: status.verificationUrl ?? '',
+    userCode: status.userCode ?? '',
+    message: status.message ?? '',
+  }
 }
+
+/** Parses a Codex status response and normalizes omitted display fields. */
+export const readCodexAuthStatus = flow(
+  decodeCodexAuthStatus,
+  Option.map(normalizeCodexAuthStatus),
+  Option.getOrNull,
+)

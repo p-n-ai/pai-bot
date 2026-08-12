@@ -111,11 +111,11 @@ func (e *Engine) handleChallengeSearch(msg chat.InboundMessage, conv *Conversati
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "challenge_matchmaking_paired",
-			Data: map[string]any{
-				"topic_id":     result.Challenge.TopicID,
-				"match_source": result.Challenge.MatchSource,
-				"state":        result.Challenge.State,
-			},
+			Data: eventData(
+				eventField("topic_id", result.Challenge.TopicID),
+				eventField("match_source", result.Challenge.MatchSource),
+				eventField("state", result.Challenge.State),
+			),
 		})
 		if result.Challenge.State == ChallengeStatePendingAcceptance {
 			return formatQueueChallengePendingAcceptanceMessage(result.Challenge, opponentName), nil
@@ -130,10 +130,10 @@ func (e *Engine) handleChallengeSearch(msg chat.InboundMessage, conv *Conversati
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_matchmaking_queued",
-		Data: map[string]any{
-			"topic_id": result.Search.TopicID,
-			"status":   result.Search.Status,
-		},
+		Data: eventData(
+			eventField("topic_id", result.Search.TopicID),
+			eventField("status", result.Search.Status),
+		),
 	})
 	return formatChallengeSearchingMessage(result.Search), nil
 }
@@ -202,10 +202,10 @@ func (e *Engine) handleChallengeAccept(msg chat.InboundMessage, conv *Conversati
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_matchmaking_accepted",
-		Data: map[string]any{
-			"topic_id": challenge.TopicID,
-			"state":    challenge.State,
-		},
+		Data: eventData(
+			eventField("topic_id", challenge.TopicID),
+			eventField("state", challenge.State),
+		),
 	})
 	if challenge.State == ChallengeStateReady {
 		// Notify the other player that the challenge is ready.
@@ -243,11 +243,11 @@ func (e *Engine) handleChallengeInvite(msg chat.InboundMessage, conv *Conversati
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_created",
-		Data: map[string]any{
-			"challenge_code": challenge.Code,
-			"topic_id":       challenge.TopicID,
-			"match_source":   challenge.MatchSource,
-		},
+		Data: eventData(
+			eventField("challenge_code", challenge.Code),
+			eventField("topic_id", challenge.TopicID),
+			eventField("match_source", challenge.MatchSource),
+		),
 	})
 	return formatChallengeCreatedMessage(challenge), nil
 }
@@ -276,10 +276,10 @@ func (e *Engine) handleChallengeJoin(msg chat.InboundMessage, conv *Conversation
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_joined",
-		Data: map[string]any{
-			"challenge_code": challenge.Code,
-			"topic_id":       challenge.TopicID,
-		},
+		Data: eventData(
+			eventField("challenge_code", challenge.Code),
+			eventField("topic_id", challenge.TopicID),
+		),
 	})
 
 	// Notify the creator that someone joined and the challenge is ready.

@@ -1080,11 +1080,11 @@ func handleAdminStudentNudge(adminProvider adminDataSourceProvider, sender messa
 			return
 		}
 
-		writeJSON(w, http.StatusAccepted, map[string]any{
-			"status":  "queued",
-			"student": detail.Student.ID,
-			"channel": msg.Channel,
-		})
+		writeJSON(w, http.StatusAccepted, struct {
+			Status  string `json:"status"`
+			Student string `json:"student"`
+			Channel string `json:"channel"`
+		}{Status: "queued", Student: detail.Student.ID, Channel: msg.Channel})
 	}
 }
 
@@ -1831,7 +1831,9 @@ func handleAuthIdentities(authSvc authService) http.HandlerFunc {
 			writeAuthError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"identities": identities})
+		writeJSON(w, http.StatusOK, struct {
+			Identities []auth.LinkedIdentity `json:"identities"`
+		}{Identities: identities})
 	}
 }
 
@@ -1961,7 +1963,7 @@ func handleAuthLogout(authSvc authService) http.HandlerFunc {
 	}
 }
 
-func decodeJSONBody(r *http.Request, target any) (err error) {
+func decodeJSONBody[T any](r *http.Request, target *T) (err error) {
 	defer func() {
 		closeErr := r.Body.Close()
 		if err == nil && closeErr != nil {
@@ -1975,7 +1977,7 @@ func decodeJSONBody(r *http.Request, target any) (err error) {
 	return nil
 }
 
-func decodeOptionalJSONBody(r *http.Request, target any) (err error) {
+func decodeOptionalJSONBody[T any](r *http.Request, target *T) (err error) {
 	if r.Body == nil || r.ContentLength == 0 {
 		return nil
 	}
@@ -2132,7 +2134,7 @@ func readCookieValue(r *http.Request, name string) string {
 	return strings.TrimSpace(cookie.Value)
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
+func writeJSON[T any](w http.ResponseWriter, status int, payload T) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
@@ -2216,10 +2218,10 @@ func writeAuthError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusConflict)
 	case errors.Is(err, auth.ErrTenantRequired):
 		options, _ := auth.TenantRequiredOptions(err)
-		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"error":   err.Error(),
-			"tenants": options,
-		})
+		writeJSON(w, http.StatusBadRequest, struct {
+			Error   string              `json:"error"`
+			Tenants []auth.TenantOption `json:"tenants"`
+		}{Error: err.Error(), Tenants: options})
 	case errors.Is(err, auth.ErrNotImplemented):
 		http.Error(w, err.Error(), http.StatusNotImplemented)
 	default:

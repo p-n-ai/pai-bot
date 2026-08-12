@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
@@ -407,9 +408,6 @@ func buildNativeOpenAIAssistantMessage(message llm.AssistantMessage) (openaiMess
 			if err != nil {
 				return openaiMessage{}, fmt.Errorf("native OpenAI tool call %q arguments: %w", block.Name, err)
 			}
-			if block.Arguments == nil {
-				arguments = []byte("{}")
-			}
 			projected.ToolCalls = append(projected.ToolCalls, openaiToolCall{
 				ID:   block.ID,
 				Type: "function",
@@ -447,12 +445,8 @@ func nativeOpenAIToolResultText(message llm.ToolResultMessage) (string, error) {
 func buildNativeOpenAITools(tools []llm.Tool) ([]openaiTool, error) {
 	projected := make([]openaiTool, len(tools))
 	for index, tool := range tools {
-		var parameters map[string]any
-		if err := json.Unmarshal(tool.Parameters, &parameters); err != nil {
+		if _, err := jsonobject.Parse(tool.Parameters); err != nil {
 			return nil, fmt.Errorf("native OpenAI tool %q parameters: %w", tool.Name, err)
-		}
-		if parameters == nil {
-			return nil, fmt.Errorf("native OpenAI tool %q parameters must be a JSON object", tool.Name)
 		}
 		projected[index].Type = "function"
 		projected[index].Function.Name = tool.Name
@@ -469,14 +463,14 @@ func projectNativeOpenAIResponse(providerName, requestModel string, response ope
 		content = append(content, llm.TextContent{Text: choice.Message.Content})
 	}
 	for _, toolCall := range choice.Message.ToolCalls {
-		var arguments map[string]any
+		arguments := jsonobject.New()
 		encoded := strings.TrimSpace(toolCall.Function.Arguments)
-		if encoded == "" {
-			arguments = map[string]any{}
-		} else if err := json.Unmarshal([]byte(encoded), &arguments); err != nil {
-			return llm.AssistantMessage{}, fmt.Errorf("native OpenAI tool call %q arguments: %w", toolCall.Function.Name, err)
-		} else if arguments == nil {
-			return llm.AssistantMessage{}, fmt.Errorf("native OpenAI tool call %q arguments must be a JSON object", toolCall.Function.Name)
+		if encoded != "" {
+			var err error
+			arguments, err = jsonobject.Parse([]byte(encoded))
+			if err != nil {
+				return llm.AssistantMessage{}, fmt.Errorf("native OpenAI tool call %q arguments: %w", toolCall.Function.Name, err)
+			}
 		}
 		content = append(content, llm.ToolCall{
 			ID:        toolCall.ID,

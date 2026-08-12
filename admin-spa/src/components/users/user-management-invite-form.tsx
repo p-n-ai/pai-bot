@@ -162,9 +162,10 @@ function getInviteDeliveryDescription(
 }
 
 function buildInviteLink(token: string): string {
-  if (typeof window === 'undefined') {
+  const origin = globalThis.window.location.origin
+  if (!origin) {
     return `/activate?token=${encodeURIComponent(token)}`
   }
 
-  return `${window.location.origin}/activate?token=${encodeURIComponent(token)}`
+  return `${origin}/activate?token=${encodeURIComponent(token)}`
 }

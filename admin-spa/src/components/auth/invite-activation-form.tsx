@@ -109,8 +109,8 @@ export function InviteActivationForm({
         password: password.value,
       })
         .then(onAuthenticated)
-        .catch((caught: unknown) => {
-          setError(readInviteActivationError(caught))
+        .catch((cause: unknown) => {
+          setError(readInviteActivationError(cause))
         })
         .finally(() => {
           finishSubmit()
@@ -464,19 +464,19 @@ function readActivationFieldErrors(
   }
 }
 
-function readInviteActivationError(caught: unknown): string {
+function readInviteActivationError(cause: unknown): string {
   const fallback =
     'Unable to accept this invite. Check your connection and try again.'
 
-  if (!(caught instanceof Error)) {
+  if (!(cause instanceof Error)) {
     return fallback
   }
 
-  if (caught.message === 'Failed to fetch') {
+  if (cause.message === 'Failed to fetch') {
     return fallback
   }
 
-  const message = caught.message.toLowerCase()
+  const message = cause.message.toLowerCase()
 
   if (
     message.includes('invalid invite') ||

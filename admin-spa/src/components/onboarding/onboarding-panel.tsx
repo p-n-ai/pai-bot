@@ -78,10 +78,10 @@ function useOnboardingSubmit(form: SubmitOnboardingInput | null) {
       beginSubmit()
       submitOnboarding(prepareOnboardingInput(form))
         .then(setResult)
-        .catch((caught: unknown) => {
+        .catch((cause: unknown) => {
           setError(
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to save the setup. Check your connection and try again.',
           )
         })

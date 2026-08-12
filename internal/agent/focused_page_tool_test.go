@@ -26,7 +26,7 @@ func TestProcessTurnNativeToolThenFinalReplyPersistsOnlyConversationText(t *test
 		t.Fatal(err)
 	}
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
-		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "You completed your goal report."}}}},
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "You completed your goal report."})}}},
 		{Content: []llm.AssistantContent{llm.TextContent{Text: "I made a focused page for your report."}}, Model: "test-model"},
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
@@ -179,7 +179,7 @@ func TestFocusedPageTurnRepairsEmptyFinalTutorReply(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
-		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "Goal report"}}}, StopReason: llm.StopReasonToolUse},
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Goal report"})}}, StopReason: llm.StopReasonToolUse},
 		{StopReason: llm.StopReasonStop},
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{0}})
@@ -222,7 +222,7 @@ func TestProcessAndDeliverReturnsFailedDeliveryWithoutAutomaticRetry(t *testing.
 	_ = store.SetUserName("learner-1", "Aina")
 	pageService, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
-		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "Goal report"}}}},
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Goal report"})}}},
 		{Content: []llm.AssistantContent{llm.TextContent{Text: "Your report is ready."}}},
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})
@@ -249,10 +249,10 @@ func TestProcessAndDeliverReturnsFailedDeliveryWithoutAutomaticRetry(t *testing.
 func TestCreateFocusedPageToolIsIdempotentAndEnforcesOneArtifact(t *testing.T) {
 	service, _ := focusedpage.NewService(focusedpage.NewMemoryStore(), "https://pages.example", []byte("0123456789abcdef0123456789abcdef"), time.Now)
 	tool := &createFocusedPageTool{service: service, input: focusedpage.CreateInput{TenantID: "tenant-1", OwnerUserID: "user-1", ConversationID: "conv-1", TurnID: "turn-1", RecipientName: "Aina"}}
-	first, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
+	first, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Goal summary"})})
 	artifact := tool.artifact
-	duplicate, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Goal summary"}})
-	second, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"message": "Different report"}})
+	duplicate, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Goal summary"})})
+	second, _ := tool.Execute(context.Background(), llm.ToolCall{Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Different report"})})
 	if first.IsError || duplicate.IsError {
 		t.Fatalf("idempotent results = %#v %#v", first, duplicate)
 	}
@@ -344,7 +344,7 @@ func TestFocusedPageCreationFailureReturnsFinalTextWithoutArtifactOrLeak(t *test
 		t.Fatal(err)
 	}
 	provider := &nativeScriptProvider{replies: []llm.AssistantMessage{
-		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: map[string]any{"message": "Private goal report"}}}},
+		{Content: []llm.AssistantContent{llm.ToolCall{ID: "page-1", Name: createFocusedPageToolName, Arguments: llm.ToolArgumentsFrom(map[string]any{"message": "Private goal report"})}}},
 		{Content: []llm.AssistantContent{llm.TextContent{Text: "Your report is ready here in chat."}}},
 	}}
 	router := ai.NewRouterWithConfig(ai.RouterConfig{RetryBackoff: []time.Duration{time.Millisecond}})

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { readAISettings } from './ai-settings-types'
+import type { AISettings } from './ai-settings-types'
 
 const readiness = {
   supported: true,
@@ -8,14 +9,14 @@ const readiness = {
   registrable: true,
   effective: false,
   managedBy: 'runtime',
-}
+} as const
 
 const model = {
   baseline: 'baseline-model',
   override: null,
   effective: 'baseline-model',
   source: 'env',
-}
+} as const
 
 const credential = {
   baseline: { set: false, last4: '' },
@@ -30,7 +31,7 @@ const credential = {
     keyId: 'test-safe-key-id',
     migrationNeeded: false,
   },
-}
+} as const
 
 export const aiSettingsFixture = {
   defaultProvider: {
@@ -135,7 +136,7 @@ export const aiSettingsFixture = {
   revision: 3,
   appliedRevision: 3,
   drift: false,
-} as const
+} satisfies AISettings
 
 describe('AI settings response guard', () => {
   it('accepts all three closed provider variants', () => {
@@ -170,7 +171,7 @@ describe('AI settings response guard', () => {
   })
 
   it('rejects unknown, partial, and cross-provider variants', () => {
-    const replaceProvider = (provider: unknown) => ({
+    const replaceProvider = <TProvider>(provider: TProvider) => ({
       ...aiSettingsFixture,
       providers: [provider, ...aiSettingsFixture.providers.slice(1)],
     })

@@ -120,7 +120,7 @@ func TestFormatUnlockNotification_English(t *testing.T) {
 }
 
 func TestFormatUnlockNotification_Chinese(t *testing.T) {
-	_ = i18n.S("zh", i18n.MsgTopicUnlocked, "test") // ensure key exists
+	_ = i18n.SF("zh", i18n.MsgTopicUnlocked, "test") // ensure key exists
 	topics := []curriculum.Topic{
 		{ID: "F1-06", Name: "线性方程"},
 	}

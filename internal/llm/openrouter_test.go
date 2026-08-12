@@ -333,11 +333,11 @@ func TestOpenRouterCoalescesMixedParallelToolDeltas(t *testing.T) {
 		t.Fatalf("message = %+v", msg)
 	}
 	readCall, ok := msg.Content[2].(llm.ToolCall)
-	if !ok || readCall.ID != "read-first" || readCall.Name != "read" || readCall.Arguments["path"] != "README.md" {
+	if !ok || readCall.ID != "read-first" || readCall.Name != "read" || llm.ToolArgumentValueOrZero[string](readCall.Arguments, "path") != "README.md" {
 		t.Fatalf("read call = %#v", msg.Content[2])
 	}
 	grepCall, ok := msg.Content[3].(llm.ToolCall)
-	if !ok || grepCall.ID != "grep-first" || grepCall.Name != "grep" || grepCall.Arguments["pattern"] != "TODO" || grepCall.Arguments["path"] != "src" {
+	if !ok || grepCall.ID != "grep-first" || grepCall.Name != "grep" || llm.ToolArgumentValueOrZero[string](grepCall.Arguments, "pattern") != "TODO" || llm.ToolArgumentValueOrZero[string](grepCall.Arguments, "path") != "src" {
 		t.Fatalf("grep call = %#v", msg.Content[3])
 	}
 
@@ -379,10 +379,10 @@ func TestOpenRouterSeparatesIndexlessParallelToolCalls(t *testing.T) {
 	}
 	first := msg.Content[0].(llm.ToolCall)
 	second := msg.Content[1].(llm.ToolCall)
-	if first.ID != "first" || first.Name != "read" || first.Arguments["path"] != "README.md" {
+	if first.ID != "first" || first.Name != "read" || llm.ToolArgumentValueOrZero[string](first.Arguments, "path") != "README.md" {
 		t.Fatalf("first = %#v", first)
 	}
-	if second.ID != "second" || second.Name != "grep" || second.Arguments["pattern"] != "TODO" {
+	if second.ID != "second" || second.Name != "grep" || llm.ToolArgumentValueOrZero[string](second.Arguments, "pattern") != "TODO" {
 		t.Fatalf("second = %#v", second)
 	}
 }
@@ -407,7 +407,7 @@ func TestOpenRouterCoalescesIndexlessToolCallByID(t *testing.T) {
 		t.Fatalf("content = %#v", msg.Content)
 	}
 	call := msg.Content[0].(llm.ToolCall)
-	if call.ID != "call-1" || call.Name != "read" || call.Arguments["path"] != "README.md" {
+	if call.ID != "call-1" || call.Name != "read" || llm.ToolArgumentValueOrZero[string](call.Arguments, "path") != "README.md" {
 		t.Fatalf("call = %#v", call)
 	}
 }
@@ -551,7 +551,7 @@ func TestOpenRouterConvertsMessagesToolsAndImages(t *testing.T) {
 	prior := llm.AssistantMessage{Content: []llm.AssistantContent{
 		llm.TextContent{Text: "calling"},
 		llm.ThinkingContent{Thinking: "planning"},
-		llm.ToolCall{ID: "call-1", Name: "inspect", Arguments: map[string]any{"path": "README.md"}},
+		llm.ToolCall{ID: "call-1", Name: "inspect", Arguments: llm.ToolArgumentsFrom(map[string]any{"path": "README.md"})},
 	}}
 	tool := llm.Tool{
 		Name:        "inspect",
@@ -716,7 +716,7 @@ func TestOpenRouterRejectsUnencodableToolArguments(t *testing.T) {
 		llm.Context{Messages: []llm.Message{
 			llm.UserText("call the tool"),
 			llm.AssistantMessage{Content: []llm.AssistantContent{
-				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: llm.ToolArgumentsFrom(map[string]any{"value": func() {}})},
 			}},
 		}},
 		&llm.StreamOptions{APIKey: "sk-or-test"},

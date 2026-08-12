@@ -83,7 +83,7 @@ func TestNativeProviderContinuationContract(t *testing.T) {
 				t.Fatalf("first CompleteNative() error = %v", err)
 			}
 			call := requireContractToolCall(t, first)
-			if call.ID != "call-page-1" || call.Name != "create_focused_page" || call.Arguments["message"] != "You are making steady progress." {
+			if call.ID != "call-page-1" || call.Name != "create_focused_page" || llm.ToolArgumentValueOrZero[string](call.Arguments, "message") != "You are making steady progress." {
 				t.Fatalf("tool call = %#v", call)
 			}
 

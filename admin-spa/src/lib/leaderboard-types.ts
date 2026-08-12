@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const LeaderboardEntrySchema = Schema.Struct({
@@ -17,8 +17,7 @@ const decodeLeaderboardEntries = Schema.decodeUnknownOption(
 )
 
 /** Decodes the server-ranked weekly class leaderboard. */
-export function readLeaderboardEntries(
-  value: unknown,
-): ReadonlyArray<LeaderboardEntry> | null {
-  return Option.getOrNull(decodeLeaderboardEntries(value))
-}
+export const readLeaderboardEntries = flow(
+  decodeLeaderboardEntries,
+  Option.getOrNull,
+)

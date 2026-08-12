@@ -72,7 +72,7 @@ func TestOpenAILiveNudgeConversationDemo(t *testing.T) {
 	}
 
 	xp := progress.NewMemoryXPTracker()
-	if err := xp.Award(userID, progress.XPSourceSession, 135, map[string]any{"topic_id": "linear-equations"}); err != nil {
+	if err := xp.Award(userID, progress.XPSourceSession, 135, progress.NewXPMetadata(progress.NewXPField("topic_id", "linear-equations"))); err != nil {
 		t.Fatalf("Award() error = %v", err)
 	}
 

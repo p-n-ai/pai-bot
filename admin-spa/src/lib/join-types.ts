@@ -13,9 +13,5 @@ export interface JoinClassView extends EffectSchema.Type<
   typeof JoinClassViewSchema
 > {}
 
-const matchesJoinClassView = Schema.is(JoinClassViewSchema)
-
 /** Returns whether an unknown response satisfies the join-class view contract. */
-export function isJoinClassView(value: unknown): value is JoinClassView {
-  return matchesJoinClassView(value)
-}
+export const isJoinClassView = Schema.is(JoinClassViewSchema)

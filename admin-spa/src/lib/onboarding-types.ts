@@ -71,17 +71,8 @@ export interface SubmitOnboardingInput {
   bot_setup: OnboardingBotSetup
 }
 
-const matchesOnboardingView = Schema.is(OnboardingViewSchema)
-const matchesSubmitOnboardingResult = Schema.is(SubmitOnboardingResultSchema)
-
 /** Returns whether an unknown response satisfies the onboarding view contract. */
-export function isOnboardingView(value: unknown): value is OnboardingView {
-  return matchesOnboardingView(value)
-}
+export const isOnboardingView = Schema.is(OnboardingViewSchema)
 
 /** Returns whether an unknown response satisfies the onboarding result contract. */
-export function isSubmitOnboardingResult(
-  value: unknown,
-): value is SubmitOnboardingResult {
-  return matchesSubmitOnboardingResult(value)
-}
+export const isSubmitOnboardingResult = Schema.is(SubmitOnboardingResultSchema)

@@ -35,10 +35,21 @@ interface TokenBudgetNumbers {
   used: number
 }
 
+interface DailyTrendView {
+  hasTrend: boolean
+  peak: number
+  usage: Array<AIUsageDailyPoint>
+}
+
+interface USDSummary {
+  budgetLimit: number | null
+  monthlyCost: number | null
+}
+
 type BudgetStatusKey = 'exceeded' | 'near' | 'within'
 type BudgetSource = 'token' | 'usd'
 
-const budgetLabels: Record<BudgetSource, Record<BudgetStatusKey, string>> = {
+const budgetLabels = {
   token: {
     exceeded: 'Token budget exceeded',
     near: 'Near token budget limit',
@@ -49,7 +60,7 @@ const budgetLabels: Record<BudgetSource, Record<BudgetStatusKey, string>> = {
     near: 'Near budget limit',
     within: 'Within budget',
   },
-}
+} satisfies Record<BudgetSource, Record<BudgetStatusKey, string>>
 
 const emptyBudgetView: BudgetView = {
   label: 'No token budget configured',
@@ -116,27 +127,18 @@ function formatBudgetWindowLabel(start: string, end: string): string {
 
 type BudgetWindowKey = 'both' | 'empty' | 'end' | 'start'
 
-const budgetWindowFormatters: Record<
-  BudgetWindowKey,
-  (start: string, end: string) => string
-> = {
+const budgetWindowFormatters = {
   both: (start, end) =>
     `${formatAIUsageDateLabel(start)} to ${formatAIUsageDateLabel(end)}`,
   empty: () => 'No active budget period',
   end: (_start, end) => `Ends ${formatAIUsageDateLabel(end)}`,
   start: (start) => `Started ${formatAIUsageDateLabel(start)}`,
-}
+} satisfies Record<BudgetWindowKey, (start: string, end: string) => string>
 
 function getBudgetWindowKey(start: string, end: string): BudgetWindowKey {
-  const key = `${Number(Boolean(start))}${Number(Boolean(end))}`
-  const keys: Record<string, BudgetWindowKey> = {
-    '00': 'empty',
-    '01': 'end',
-    '10': 'start',
-    '11': 'both',
-  }
-
-  return keys[key] ?? 'empty'
+  if (start && end) return 'both'
+  if (start) return 'start'
+  return end ? 'end' : 'empty'
 }
 
 export function formatAIUsageDateLabel(value: string): string {
@@ -189,11 +191,9 @@ function getDailyTrendPeak(
   return dailyUsage.reduce((peak, point) => Math.max(peak, point.tokens), 0)
 }
 
-function getDailyTrendView(dailyUsage: Array<AIUsageDailyPoint>): {
-  hasTrend: boolean
-  peak: number
-  usage: Array<AIUsageDailyPoint>
-} {
+function getDailyTrendView(
+  dailyUsage: Array<AIUsageDailyPoint>,
+): DailyTrendView {
   return {
     hasTrend: dailyUsage.length > 0,
     peak: getDailyTrendPeak(dailyUsage),
@@ -205,10 +205,7 @@ function readDailyUsage(usage: AIUsageSummary): Array<AIUsageDailyPoint> {
   return usage.daily_usage ?? []
 }
 
-function getUSDSummary(usage: AIUsageSummary): {
-  budgetLimit: number | null
-  monthlyCost: number | null
-} {
+function getUSDSummary(usage: AIUsageSummary): USDSummary {
   return {
     budgetLimit: usage.budget_limit_usd ?? null,
     monthlyCost: usage.monthly_cost_usd ?? null,
@@ -285,7 +282,7 @@ function getBudgetStatusKey(ratio: number): BudgetStatusKey {
 }
 
 function hasNumber(value: number | null | undefined): value is number {
-  return typeof value === 'number'
+  return value !== null && value !== undefined
 }
 
 function hasPositiveNumber(value: number | null | undefined): value is number {

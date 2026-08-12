@@ -419,7 +419,7 @@ func populateOverview(file *excelize.File, styles workbookStyles, exports Export
 		if err := file.SetCellValue(sheet, fmt.Sprintf("A%d", row), metric.Label); err != nil {
 			return err
 		}
-		if err := file.SetCellValue(sheet, fmt.Sprintf("B%d", row), coerceCellValue("value", metric.Value)); err != nil {
+		if err := setCell(file, sheet, fmt.Sprintf("B%d", row), coerceCellValue("value", metric.Value)); err != nil {
 			return err
 		}
 		if err := file.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styles.metricLabel); err != nil {
@@ -737,10 +737,10 @@ func writeDataset(file *excelize.File, styles workbookStyles, sheet string, data
 				return 0, err
 			}
 			styleID := styles.data
-			switch value.(type) {
-			case int64:
+			switch value.kind {
+			case cellInteger:
 				styleID = styles.dataNumber
-			case float64:
+			case cellDecimal:
 				styleID = styles.dataDecimal
 			}
 			if err := file.SetCellStyle(sheet, cell, cell, styleID); err != nil {
@@ -914,27 +914,42 @@ func firstValue(dataset Dataset, key string) string {
 	return dataset.Rows[0][key]
 }
 
-func coerceCellValue(header string, raw string) interface{} {
+type cellKind uint8
+
+const (
+	cellText cellKind = iota
+	cellInteger
+	cellDecimal
+)
+
+type cellValue struct {
+	kind    cellKind
+	text    string
+	integer int64
+	decimal float64
+}
+
+func coerceCellValue(header string, raw string) cellValue {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return ""
+		return cellValue{}
 	}
 	if keepAsText(header) {
-		return value
+		return cellValue{text: value}
 	}
 	if isIntegerString(value) {
 		parsed, err := strconv.ParseInt(value, 10, 64)
 		if err == nil {
-			return parsed
+			return cellValue{kind: cellInteger, integer: parsed}
 		}
 	}
 	if isDecimalString(value) {
 		parsed, err := strconv.ParseFloat(value, 64)
 		if err == nil {
-			return parsed
+			return cellValue{kind: cellDecimal, decimal: parsed}
 		}
 	}
-	return value
+	return cellValue{text: value}
 }
 
 func keepAsText(header string) bool {
@@ -983,11 +998,15 @@ func labelize(header string) string {
 	return titleCaser.String(strings.ReplaceAll(header, "_", " "))
 }
 
-func setCell(file *excelize.File, sheet string, cell string, value interface{}) error {
-	if text, ok := value.(string); ok {
-		return file.SetCellStr(sheet, cell, text)
+func setCell(file *excelize.File, sheet string, cell string, value cellValue) error {
+	switch value.kind {
+	case cellInteger:
+		return file.SetCellValue(sheet, cell, value.integer)
+	case cellDecimal:
+		return file.SetCellValue(sheet, cell, value.decimal)
+	default:
+		return file.SetCellStr(sheet, cell, value.text)
 	}
-	return file.SetCellValue(sheet, cell, value)
 }
 
 func max(a int, b int) int {

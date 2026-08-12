@@ -65,13 +65,11 @@ func NewWhatsAppChannel(cfg WhatsAppCloudConfig) (*WhatsAppChannel, error) {
 
 // SendMessage sends a text message to a WhatsApp user.
 func (w *WhatsAppChannel) SendMessage(ctx context.Context, userID string, msg OutboundMessage) error {
-	body := map[string]any{
-		"messaging_product": "whatsapp",
-		"to":                userID,
-		"type":              "text",
-		"text": map[string]string{
-			"body": msg.Text,
-		},
+	body := whatsAppMessageRequest{
+		MessagingProduct: "whatsapp",
+		To:               userID,
+		Type:             "text",
+		Text:             whatsAppText{Body: msg.Text},
 	}
 
 	return w.postJSON(ctx, fmt.Sprintf("/v21.0/%s/messages", w.phoneID), body)
@@ -202,7 +200,18 @@ func (w *WhatsAppChannel) validInboundSignature(header string, body []byte) bool
 	return hmac.Equal(signature, mac.Sum(nil))
 }
 
-func (w *WhatsAppChannel) postJSON(ctx context.Context, path string, body any) error {
+type whatsAppText struct {
+	Body string `json:"body"`
+}
+
+type whatsAppMessageRequest struct {
+	MessagingProduct string       `json:"messaging_product"`
+	To               string       `json:"to"`
+	Type             string       `json:"type"`
+	Text             whatsAppText `json:"text"`
+}
+
+func (w *WhatsAppChannel) postJSON(ctx context.Context, path string, body whatsAppMessageRequest) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)

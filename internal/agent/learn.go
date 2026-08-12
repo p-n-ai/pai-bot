@@ -62,7 +62,7 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 	}
 
 	if topic == nil {
-		return i18n.S(locale, i18n.MsgLearnTopicNotFound, raw), nil
+		return i18n.SF(locale, i18n.MsgLearnTopicNotFound, raw), nil
 	}
 
 	// Get or create conversation and set topic.
@@ -98,15 +98,15 @@ func (e *Engine) handleLearnCommand(ctx context.Context, msg chat.InboundMessage
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "learn_topic_set",
-		Data: map[string]any{
-			"topic_id":   topic.ID,
-			"topic_name": topic.Name,
-		},
+		Data: eventData(
+			eventField("topic_id", topic.ID),
+			eventField("topic_name", topic.Name),
+		),
 	})
 
 	// Store the /learn exchange in conversation history so subsequent AI
 	// calls see that a topic was just set and a learning session started.
-	response := i18n.S(locale, i18n.MsgLearnTopicSet, topic.Name)
+	response := i18n.SF(locale, i18n.MsgLearnTopicSet, topic.Name)
 	if _, err := e.store.AddMessage(conv.ID, StoredMessage{
 		Role:    "user",
 		Content: msg.Text,
@@ -158,14 +158,7 @@ If nothing is remotely close, return an empty topic_id.
 
 Return JSON: {"topic_id": "<ID>"}`, userInput, topicList.String())
 
-	schema, _ := json.Marshal(map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"topic_id": map[string]any{"type": "string"},
-		},
-		"required":             []string{"topic_id"},
-		"additionalProperties": false,
-	})
+	schema := json.RawMessage(`{"type":"object","properties":{"topic_id":{"type":"string"}},"required":["topic_id"],"additionalProperties":false}`)
 
 	var result matchResult
 	_, err := e.aiRouter.CompleteJSON(ctx, ai.CompletionRequest{
@@ -177,7 +170,7 @@ Return JSON: {"topic_id": "<ID>"}`, userInput, topicList.String())
 			JSONSchema: schema,
 			Strict:     true,
 		},
-	}, &result)
+	}, ai.DecodeInto(&result))
 	if err != nil {
 		slog.Warn("AI topic match failed", "error", err, "input", userInput)
 		return nil

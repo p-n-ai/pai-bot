@@ -102,17 +102,8 @@ export interface UserManagementView extends EffectSchema.Type<
   typeof UserManagementViewSchema
 > {}
 
-const matchesInviteRecord = Schema.is(InviteRecordSchema)
-const matchesUserManagementView = Schema.is(UserManagementViewSchema)
-
 /** Returns whether an unknown response satisfies the invite contract. */
-export function isInviteRecord(value: unknown): value is InviteRecord {
-  return matchesInviteRecord(value)
-}
+export const isInviteRecord = Schema.is(InviteRecordSchema)
 
 /** Returns whether an unknown response satisfies the user-management view contract. */
-export function isUserManagementView(
-  value: unknown,
-): value is UserManagementView {
-  return matchesUserManagementView(value)
-}
+export const isUserManagementView = Schema.is(UserManagementViewSchema)

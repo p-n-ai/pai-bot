@@ -89,7 +89,7 @@ function getScoresForTopics(
 }
 
 function getScoreValue(score: number | undefined): Array<number> {
-  return typeof score === 'number' ? [score] : []
+  return score === undefined ? [] : [score]
 }
 
 function getCoveragePercent(trackedScores: number, totalSlots: number): number {

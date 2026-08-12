@@ -13,20 +13,26 @@ import (
 )
 
 type stubQuerier struct {
-	rows      []stubRow
-	queries   []string
-	queryArgs [][]any
+	rows    []stubRow
+	queries []string
 }
 
-func (s *stubQuerier) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
+func (s *stubQuerier) nextRow(sql string) pgx.Row {
 	s.queries = append(s.queries, sql)
-	s.queryArgs = append(s.queryArgs, args)
 	if len(s.rows) == 0 {
 		return stubRow{err: errors.New("unexpected query")}
 	}
 	row := s.rows[0]
 	s.rows = s.rows[1:]
 	return row
+}
+
+func (s *stubQuerier) FindDefaultTenant(context.Context) pgx.Row {
+	return s.nextRow(findDefaultTenantSQL)
+}
+
+func (s *stubQuerier) UpsertDefaultTenant(context.Context) pgx.Row {
+	return s.nextRow(upsertDefaultTenantSQL)
 }
 
 type stubRow struct {

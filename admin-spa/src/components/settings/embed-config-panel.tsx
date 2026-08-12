@@ -376,12 +376,9 @@ export function EmbedConfigPanel() {
                 title='Unable to save website chat settings'
               />
               {saveSuccess && (
-                <p
-                  className='w-full text-sm font-medium text-[var(--status-success-text)]'
-                  role='status'
-                >
+                <output className='w-full text-sm font-medium text-[var(--status-success-text)]'>
                   {saveSuccess}
-                </p>
+                </output>
               )}
             </div>
           </section>
@@ -798,6 +795,6 @@ function setThemeField<TKey extends keyof EmbedTheme>(
   setTheme((current) => ({ ...current, [key]: value }))
 }
 
-function errorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback
+function errorMessage(cause: unknown, fallback: string) {
+  return cause instanceof Error ? cause.message : fallback
 }

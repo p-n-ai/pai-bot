@@ -52,7 +52,7 @@ func readDiscordGatewayPayload(ctx context.Context, connection *websocket.Conn) 
 	return payload, nil
 }
 
-func writeDiscordGatewayPayload(ctx context.Context, connection *websocket.Conn, payload any) error {
+func writeDiscordGatewayPayload[T any](ctx context.Context, connection *websocket.Conn, payload T) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode Discord Gateway payload: %w", err)

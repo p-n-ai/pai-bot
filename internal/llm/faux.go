@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 const (
@@ -33,11 +35,11 @@ func FauxText(text string) TextContent { return TextContent{Text: text} }
 
 func FauxThinking(thinking string) ThinkingContent { return ThinkingContent{Thinking: thinking} }
 
-func FauxToolCall(name string, arguments map[string]any) ToolCall {
+func FauxToolCall[T any](name string, arguments T) ToolCall {
 	return ToolCall{
 		ID:        fmt.Sprintf("tool:%d", fauxCounter.Add(1)),
 		Name:      name,
-		Arguments: arguments,
+		Arguments: jsonobject.From(arguments),
 	}
 }
 
@@ -295,7 +297,7 @@ func (f *FauxProvider) streamWithDeltas(ctx context.Context, s *EventStream, msg
 			if err != nil {
 				return fmt.Errorf("faux: tool call %q arguments: %w", b.Name, err)
 			}
-			partial.Content = append(partial.Content, ToolCall{ID: b.ID, Name: b.Name, Arguments: map[string]any{}})
+			partial.Content = append(partial.Content, ToolCall{ID: b.ID, Name: b.Name, Arguments: jsonobject.New()})
 			push(EventToolCallStart, func(ev *AssistantMessageEvent) { ev.ContentIndex = i })
 			for _, chunk := range f.splitByTokenSize(args) {
 				f.pace(chunk)

@@ -160,12 +160,14 @@ function CarouselContent({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function CarouselItem({ className, ...props }: React.ComponentProps<'div'>) {
+function CarouselItem({
+  className,
+  ...props
+}: React.ComponentProps<'section'>) {
   const { orientation } = useCarousel()
 
   return (
-    <div
-      role='group'
+    <section
       aria-roledescription='slide'
       data-slot='carousel-item'
       className={cn(

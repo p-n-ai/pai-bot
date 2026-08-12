@@ -52,13 +52,13 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "message_sent",
-		Data: map[string]any{
-			"channel":   msg.Channel,
-			"text_len":  len(msg.Text),
-			"has_reply": msg.ReplyToText != "",
-			"has_image": msg.HasImage,
-			"source":    "chat",
-		},
+		Data: eventData(
+			eventField("channel", msg.Channel),
+			eventField("text_len", len(msg.Text)),
+			eventField("has_reply", msg.ReplyToText != ""),
+			eventField("has_image", msg.HasImage),
+			eventField("source", "chat"),
+		),
 	})
 
 	// Refresh conversation to get latest messages.
@@ -179,14 +179,14 @@ func (e *Engine) runTeachingTurn(ctx context.Context, msg chat.InboundMessage, c
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "ai_response",
-		Data: map[string]any{
-			"channel":       msg.Channel,
-			"model":         resp.Model,
-			"input_tokens":  resp.InputTokens,
-			"output_tokens": resp.OutputTokens,
-			"text_len":      len(finalContent),
-			"has_image":     msg.HasImage,
-		},
+		Data: eventData(
+			eventField("channel", msg.Channel),
+			eventField("model", resp.Model),
+			eventField("input_tokens", resp.InputTokens),
+			eventField("output_tokens", resp.OutputTokens),
+			eventField("text_len", len(finalContent)),
+			eventField("has_image", msg.HasImage),
+		),
 	})
 	e.logAgentTurnCompleted(turn, "completed")
 	identity, identityErr := learnerIdentityForMessage(msg)

@@ -186,7 +186,11 @@ func executeTool(ctx context.Context, registry map[string]registeredTool, call l
 	if !ok {
 		return toolError(call, "unknown tool")
 	}
-	validation, err := registered.schema.Validate(gojsonschema.NewGoLoader(call.Arguments))
+	arguments, err := json.Marshal(call.Arguments)
+	if err != nil {
+		return toolError(call, "invalid tool arguments")
+	}
+	validation, err := registered.schema.Validate(gojsonschema.NewBytesLoader(arguments))
 	if err != nil || !validation.Valid() {
 		return toolError(call, "invalid tool arguments")
 	}

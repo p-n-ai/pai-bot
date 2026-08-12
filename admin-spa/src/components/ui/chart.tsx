@@ -2,7 +2,12 @@
 
 import * as React from 'react'
 import * as RechartsPrimitive from 'recharts'
-import type { TooltipValueType } from 'recharts'
+import { Option, Predicate, Schema } from 'effect'
+import type {
+  LegendPayload,
+  TooltipPayloadEntry,
+  TooltipValueType,
+} from 'recharts'
 
 import { cn } from '@/lib/utils'
 
@@ -11,6 +16,7 @@ const THEMES = { light: '', dark: '.dark' } as const
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const
 type TooltipNameType = number | string
+type ChartPayloadItem = LegendPayload | TooltipPayloadEntry
 
 export type ChartConfig = Record<
   string,
@@ -184,7 +190,7 @@ function ChartTooltipContent({
     const key = `${labelKey ?? item.dataKey ?? item.name ?? 'value'}`
     const itemConfig = getPayloadConfigFromPayload(config, item, key)
     const value =
-      !labelKey && typeof label === 'string'
+      !labelKey && Predicate.isString(label)
         ? ((Object.prototype.hasOwnProperty.call(config, label)
             ? config[label].label
             : undefined) ?? label)
@@ -283,7 +289,7 @@ function ChartTooltipContent({
                     </div>
                     {item.value != null && (
                       <span className='font-medium text-foreground tabular-nums'>
-                        {typeof item.value === 'number'
+                        {Predicate.isNumber(item.value)
                           ? item.value.toLocaleString()
                           : String(item.value)}
                       </span>
@@ -357,34 +363,16 @@ function ChartLegendContent({
 
 function getPayloadConfigFromPayload(
   config: ChartConfig,
-  payload: unknown,
+  payload: ChartPayloadItem,
   key: string,
-) {
-  if (typeof payload !== 'object' || payload === null) {
-    return undefined
-  }
-
-  const payloadPayload =
-    'payload' in payload &&
-    typeof payload.payload === 'object' &&
-    payload.payload !== null
-      ? payload.payload
-      : undefined
-
-  let configLabelKey: string = key
-
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === 'string'
-  ) {
-    configLabelKey = payload[key as keyof typeof payload]
-  } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === 'string'
-  ) {
-    configLabelKey = payloadPayload[key as keyof typeof payloadPayload]
-  }
+): ChartConfig[string] | undefined {
+  const LabelFieldsSchema = Schema.Struct({
+    [key]: Schema.optionalKey(Schema.String),
+  })
+  const decodeLabelFields = Schema.decodeUnknownOption(LabelFieldsSchema)
+  const directFields = Option.getOrNull(decodeLabelFields(payload))
+  const nestedFields = Option.getOrNull(decodeLabelFields(payload.payload))
+  const configLabelKey = directFields?.[key] ?? nestedFields?.[key] ?? key
 
   return configLabelKey in config ? config[configLabelKey] : config[key]
 }

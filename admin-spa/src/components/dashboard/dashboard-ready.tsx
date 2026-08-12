@@ -106,13 +106,10 @@ export function DashboardReady({
 
 function NudgeFeedback({ message }: { message: string }) {
   return (
-    <div
-      className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'
-      role='status'
-    >
+    <output className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'>
       <PandaiIcon className='size-4 shrink-0' name='check-circle' />
       {message}
-    </div>
+    </output>
   )
 }
 
@@ -691,7 +688,7 @@ function TopicHeaderLabel({ topicID }: { topicID: string }) {
 }
 
 function MasteryScore({ score }: { score: number | undefined }) {
-  if (typeof score !== 'number') {
+  if (score === undefined) {
     return (
       <span className='inline-flex min-h-9 min-w-16 items-center justify-center rounded-lg border border-dashed border-[var(--border-general-default)] bg-white/50 px-3 py-1 text-xs font-medium text-[var(--admin-muted)]'>
         --
@@ -789,8 +786,8 @@ function StudentDetailButton({
 
 function AttentionDot({ learner }: { learner: DashboardLearner }) {
   return (
-    <span
-      aria-label={
+    <img
+      alt={
         learner.averageMastery === null
           ? 'No mastery data'
           : learner.needsAttention
@@ -805,7 +802,7 @@ function AttentionDot({ learner }: { learner: DashboardLearner }) {
             ? 'bg-[var(--admin-muted)]'
             : 'bg-[var(--surface-primary-default)]',
       )}
-      role='img'
+      src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
     />
   )
 }

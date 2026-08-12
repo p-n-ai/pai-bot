@@ -144,7 +144,7 @@ func TestOpenRouterLLMAdapterCompleteNativePreservesToolCall(t *testing.T) {
 		t.Fatalf("native content = %#v", message.Content)
 	}
 	call, ok := message.Content[1].(llm.ToolCall)
-	if !ok || call.ID != "call-1" || call.Name != "lookup_curriculum_topic" || call.Arguments["topic_id"] != "F1-02" {
+	if !ok || call.ID != "call-1" || call.Name != "lookup_curriculum_topic" || llm.ToolArgumentValueOrZero[string](call.Arguments, "topic_id") != "F1-02" {
 		t.Fatalf("native tool call = %#v", message.Content[1])
 	}
 }

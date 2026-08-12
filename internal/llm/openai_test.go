@@ -203,7 +203,7 @@ func TestOpenAIStreamsToolCallDeltas(t *testing.T) {
 		t.Fatalf("stopReason = %q", msg.StopReason)
 	}
 	tc, ok := msg.Content[0].(llm.ToolCall)
-	if !ok || tc.ID != "call_1" || tc.Name != "echo" || tc.Arguments["text"] != "hi" {
+	if !ok || tc.ID != "call_1" || tc.Name != "echo" || llm.ToolArgumentValueOrZero[string](tc.Arguments, "text") != "hi" {
 		t.Fatalf("toolCall = %#v", msg.Content[0])
 	}
 	for _, want := range []llm.EventType{llm.EventToolCallStart, llm.EventToolCallDelta, llm.EventToolCallEnd, llm.EventDone} {
@@ -270,7 +270,7 @@ func TestOpenAIRejectsUnencodableToolArguments(t *testing.T) {
 		llm.Context{Messages: []llm.Message{
 			llm.UserText("call the tool"),
 			llm.AssistantMessage{Content: []llm.AssistantContent{
-				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+				llm.ToolCall{ID: "call-1", Name: "bad", Arguments: llm.ToolArgumentsFrom(map[string]any{"value": func() {}})},
 			}},
 		}},
 		&llm.StreamOptions{APIKey: "sk-test"},
@@ -393,7 +393,7 @@ func TestOpenAIMessageConversion(t *testing.T) {
 
 	prior := llm.FauxAssistantMessage(
 		llm.FauxText("calling"),
-		llm.ToolCall{ID: "call_1", Name: "echo", Arguments: map[string]any{"text": "hi"}},
+		llm.ToolCall{ID: "call_1", Name: "echo", Arguments: llm.ToolArgumentsFrom(map[string]any{"text": "hi"})},
 	)
 	aborted := llm.FauxAssistantMessage()
 	c := llm.Context{

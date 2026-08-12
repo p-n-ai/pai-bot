@@ -52,7 +52,7 @@ type CodexState =
   | { status: 'error'; message: string }
   | { status: 'ready'; auth: CodexAuthStatus }
 
-const providerLabels: Record<APIKeyProviderName, string> = {
+const providerLabels = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
@@ -62,7 +62,7 @@ const providerLabels: Record<APIKeyProviderName, string> = {
   cerebras: 'Cerebras',
   google: 'Google',
   openrouter: 'OpenRouter',
-}
+} satisfies Record<APIKeyProviderName, string>
 
 /** Supplies the admin boundary operations required by the AI settings panel. */
 export type AISettingsPanelAPI = {
@@ -93,16 +93,16 @@ function useCodexAuth(api: AISettingsPanelAPI) {
     return api
       .getCodexAuthStatus()
       .then((auth) => setState({ status: 'ready', auth }))
-      .catch((caught: unknown) => {
-        if (caught instanceof AdminAPIError && caught.status === 404) {
+      .catch((cause: unknown) => {
+        if (cause instanceof AdminAPIError && cause.status === 404) {
           setState({ status: 'unavailable' })
           return
         }
         setState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Codex login status could not be loaded.',
         })
       })
@@ -129,12 +129,12 @@ function useCodexAuth(api: AISettingsPanelAPI) {
     api
       .startCodexDeviceAuth()
       .then((auth) => setState({ status: 'ready', auth }))
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         setState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Codex device login could not be started.',
         })
       })
@@ -175,12 +175,12 @@ export function AISettingsPanel({
     api
       .getAISettings()
       .then(acceptSettings)
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         setState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to load AI settings. Check your connection and try again.',
         })
       })
@@ -211,8 +211,8 @@ export function AISettingsPanel({
           if (seq === sectionSeq.current[section]) {
             onSaved?.(next)
           }
-        } catch (caught: unknown) {
-          if (caught instanceof AdminAPIError && caught.status === 409) {
+        } catch (cause: unknown) {
+          if (cause instanceof AdminAPIError && cause.status === 409) {
             try {
               acceptSettings(await api.getAISettings())
             } catch {
@@ -221,7 +221,7 @@ export function AISettingsPanel({
           }
           if (seq !== sectionSeq.current[section]) return
           submit.setError(
-            caught instanceof Error ? caught.message : fallbackMessage,
+            cause instanceof Error ? cause.message : fallbackMessage,
           )
         } finally {
           if (seq === sectionSeq.current[section]) submit.finishSubmit()

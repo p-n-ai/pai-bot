@@ -36,12 +36,11 @@ export function AdminApp() {
 
 function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
   return (
-    <main
+    <output
       aria-busy='true'
       aria-label='Loading P&AI Bot'
       className='flex min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'
       id='main-content'
-      role='status'
     >
       <Button
         aria-label='Continue to sign in'
@@ -77,7 +76,7 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
         <Skeleton className='mt-5 h-56 rounded-lg' />
       </section>
       <span className='sr-only'>Loading P&amp;AI Bot</span>
-    </main>
+    </output>
   )
 }
 

@@ -115,8 +115,8 @@ function submitInviteAction({
       setLatestInvite(invite)
       onInviteChanged?.()
     })
-    .catch((caught: unknown) => {
-      setError(caught instanceof Error ? caught.message : fallbackError)
+    .catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : fallbackError)
     })
     .finally(() => {
       setSubmitting(false)

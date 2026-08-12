@@ -128,14 +128,14 @@ func aiSettingsSchemas(registry *schemaRegistry) (request, response *Schema) {
 		&Schema{Type: "null"},
 	)}
 
-	apiKeyProjection := registry.refFor(aiAPIKeyProviderProjectionDoc{})
-	ollamaProjection := registry.refFor(aiOllamaProviderProjectionDoc{})
-	managedCodexProjection := registry.refFor(aiManagedCodexProviderProjectionDoc{})
+	apiKeyProjection := schemaRefFor(registry, aiAPIKeyProviderProjectionDoc{})
+	ollamaProjection := schemaRefFor(registry, aiOllamaProviderProjectionDoc{})
+	managedCodexProjection := schemaRefFor(registry, aiManagedCodexProviderProjectionDoc{})
 	setSchemaPropertyEnum(registry, aiAPIKeyProviderProjectionDoc{}, "type", "api_key")
 	setSchemaPropertyEnum(registry, aiOllamaProviderProjectionDoc{}, "type", "ollama")
 	setSchemaPropertyEnum(registry, aiManagedCodexProviderProjectionDoc{}, "type", "managed_codex")
 
-	response = registry.refFor(aiSettingsResponseDoc{})
+	response = schemaRefFor(registry, aiSettingsResponseDoc{})
 	responseSchema := registry.schemas[schemaName(indirectType(reflect.TypeOf(aiSettingsResponseDoc{})))]
 	responseSchema.Properties["providers"] = &Schema{
 		Type: "array",
@@ -244,7 +244,7 @@ func nullableStringSchema() *Schema {
 	return &Schema{OneOf: []*Schema{{Type: "string"}, {Type: "null"}}}
 }
 
-func setSchemaPropertyEnum(registry *schemaRegistry, value any, property string, enum ...string) {
+func setSchemaPropertyEnum[T any](registry *schemaRegistry, value T, property string, enum ...string) {
 	component := registry.schemas[schemaName(indirectType(reflect.TypeOf(value)))]
 	values := make([]any, len(enum))
 	for i, value := range enum {
@@ -289,21 +289,21 @@ func Build() (*Document, error) {
 	doc.Paths["/healthz"] = route("GET", Operation{
 		Summary:   "Health check",
 		Tags:      []string{"Health"},
-		Responses: okJSON("Service is healthy.", registry.refFor(healthResponse{})),
+		Responses: okJSON("Service is healthy.", schemaRefFor(registry, healthResponse{})),
 	})
 	doc.Paths["/readyz"] = route("GET", Operation{
 		Summary:   "Readiness check",
 		Tags:      []string{"Health"},
-		Responses: okJSON("Service is ready.", registry.refFor(healthResponse{})),
+		Responses: okJSON("Service is ready.", schemaRefFor(registry, healthResponse{})),
 	})
 
 	doc.Paths["/api/auth/login"] = route("POST", Operation{
 		Summary:     "Issue access and refresh tokens",
 		Tags:        []string{"Auth"},
-		RequestBody: jsonBody(registry.refFor(auth.LoginRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, auth.LoginRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Authentication succeeded.", registry.refFor(auth.Session{})),
-			responseMixed400(registry.refFor(tenantRequiredErrorResponse{})),
+			responseJSON("200", "Authentication succeeded.", schemaRefFor(registry, auth.Session{})),
+			responseMixed400(schemaRefFor(registry, tenantRequiredErrorResponse{})),
 			responseText("401", "Credentials are invalid."),
 			responseText("501", "Auth service is not implemented."),
 		),
@@ -311,9 +311,9 @@ func Build() (*Document, error) {
 	doc.Paths["/api/auth/invitations/accept"] = route("POST", Operation{
 		Summary:     "Activate an invited account",
 		Tags:        []string{"Auth"},
-		RequestBody: jsonBody(registry.refFor(auth.AcceptInviteRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, auth.AcceptInviteRequest{})),
 		Responses: mergeResponses(
-			responseJSON("201", "Invitation accepted.", registry.refFor(auth.Session{})),
+			responseJSON("201", "Invitation accepted.", schemaRefFor(registry, auth.Session{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Invite token is invalid or expired."),
 			responseText("501", "Auth service is not implemented."),
@@ -322,9 +322,9 @@ func Build() (*Document, error) {
 	doc.Paths["/api/auth/switch-tenant"] = route("POST", Operation{
 		Summary:     "Switch the active tenant for a session",
 		Tags:        []string{"Auth"},
-		RequestBody: jsonBody(registry.refFor(switchTenantRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, switchTenantRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Tenant switch succeeded.", registry.refFor(auth.Session{})),
+			responseJSON("200", "Tenant switch succeeded.", schemaRefFor(registry, auth.Session{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Refresh token or password is invalid."),
 			responseText("501", "Auth service is not implemented."),
@@ -333,7 +333,7 @@ func Build() (*Document, error) {
 	doc.Paths["/api/auth/logout"] = route("POST", Operation{
 		Summary:     "Revoke a refresh token",
 		Tags:        []string{"Auth"},
-		RequestBody: jsonBody(registry.refFor(refreshTokenRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, refreshTokenRequest{})),
 		Responses: mergeResponses(
 			responseEmpty("204", "Logout succeeded."),
 			responseText("400", "Request body is invalid."),
@@ -357,9 +357,9 @@ func Build() (*Document, error) {
 		Summary:     "Create a teacher, parent, or admin invite",
 		Tags:        []string{"Admin"},
 		Security:    protected,
-		RequestBody: jsonBody(registry.refFor(createInviteRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, createInviteRequest{})),
 		Responses: mergeResponses(
-			responseJSON("201", "Invite created.", registry.refFor(auth.InviteRecord{})),
+			responseJSON("201", "Invite created.", schemaRefFor(registry, auth.InviteRecord{})),
 			responseText("400", "Request body is invalid."),
 			responseText("401", "Request is not authenticated."),
 			responseText("403", "Caller is not allowed to issue invites."),
@@ -373,7 +373,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Pending invite identifier."),
 		Responses: mergeResponses(
-			responseJSON("200", "Invite reissued.", registry.refFor(auth.InviteRecord{})),
+			responseJSON("200", "Invite reissued.", schemaRefFor(registry, auth.InviteRecord{})),
 			protectedErrors(),
 			responseText("409", "Invite already exists."),
 			responseText("501", "Auth service is not implemented."),
@@ -384,7 +384,7 @@ func Build() (*Document, error) {
 		Tags:     []string{"Admin"},
 		Security: protected,
 		Responses: mergeResponses(
-			responseJSON("200", "User and invite management payload.", registry.refFor(adminapi.UserManagementView{})),
+			responseJSON("200", "User and invite management payload.", schemaRefFor(registry, adminapi.UserManagementView{})),
 			protectedErrors(),
 		),
 	})
@@ -394,7 +394,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Class identifier."),
 		Responses: mergeResponses(
-			responseJSON("200", "Class progress summary.", registry.refFor(adminapi.ClassProgress{})),
+			responseJSON("200", "Class progress summary.", schemaRefFor(registry, adminapi.ClassProgress{})),
 			protectedErrors(),
 			responseText("404", "Requested class data was not found."),
 		),
@@ -405,7 +405,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Student identifier."),
 		Responses: mergeResponses(
-			responseJSON("200", "Student detail payload.", registry.refFor(adminapi.StudentDetail{})),
+			responseJSON("200", "Student detail payload.", schemaRefFor(registry, adminapi.StudentDetail{})),
 			protectedErrors(),
 			responseText("404", "Requested student was not found."),
 		),
@@ -416,7 +416,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Student identifier."),
 		Responses: mergeResponses(
-			responseJSON("200", "Conversation history.", arrayOf(registry.refFor(adminapi.StudentConversation{}))),
+			responseJSON("200", "Conversation history.", arrayOf(schemaRefFor(registry, adminapi.StudentConversation{}))),
 			protectedErrors(),
 			responseText("404", "Requested student was not found."),
 		),
@@ -427,7 +427,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Student identifier."),
 		Responses: mergeResponses(
-			responseJSON("202", "Nudge accepted for delivery.", registry.refFor(manualNudgeResponse{})),
+			responseJSON("202", "Nudge accepted for delivery.", schemaRefFor(registry, manualNudgeResponse{})),
 			protectedErrors(),
 			responseText("400", "Student cannot receive a manual Telegram nudge."),
 			responseText("404", "Requested student was not found."),
@@ -439,7 +439,7 @@ func Build() (*Document, error) {
 		Tags:     []string{"Admin"},
 		Security: protected,
 		Responses: mergeResponses(
-			responseJSON("200", "Metrics summary.", registry.refFor(adminapi.MetricsSummary{})),
+			responseJSON("200", "Metrics summary.", schemaRefFor(registry, adminapi.MetricsSummary{})),
 			protectedErrors(),
 		),
 	})
@@ -448,7 +448,7 @@ func Build() (*Document, error) {
 		Tags:     []string{"Admin"},
 		Security: protected,
 		Responses: mergeResponses(
-			responseJSON("200", "AI usage summary.", registry.refFor(adminapi.AIUsageSummary{})),
+			responseJSON("200", "AI usage summary.", schemaRefFor(registry, adminapi.AIUsageSummary{})),
 			protectedErrors(),
 		),
 	})
@@ -483,7 +483,7 @@ func Build() (*Document, error) {
 		Tags:     []string{"Admin"},
 		Security: protected,
 		Responses: mergeResponses(
-			responseJSON("200", "Comprehensive analytics report.", registry.refFor(adminapi.AnalyticsReport{})),
+			responseJSON("200", "Comprehensive analytics report.", schemaRefFor(registry, adminapi.AnalyticsReport{})),
 			protectedErrors(),
 		),
 	})
@@ -491,9 +491,9 @@ func Build() (*Document, error) {
 		Summary:     "Create or update the token budget window for the tenant",
 		Tags:        []string{"Admin"},
 		Security:    protected,
-		RequestBody: jsonBody(registry.refFor(adminapi.UpsertTokenBudgetWindowRequest{})),
+		RequestBody: jsonBody(schemaRefFor(registry, adminapi.UpsertTokenBudgetWindowRequest{})),
 		Responses: mergeResponses(
-			responseJSON("200", "Updated AI usage summary.", registry.refFor(adminapi.AIUsageSummary{})),
+			responseJSON("200", "Updated AI usage summary.", schemaRefFor(registry, adminapi.AIUsageSummary{})),
 			protectedErrors(),
 			responseText("400", "Request body is invalid."),
 			responseText("404", "Token budget window could not be updated."),
@@ -513,7 +513,7 @@ func Build() (*Document, error) {
 		Tags:     []string{"Admin"},
 		Security: protected,
 		Responses: mergeResponses(
-			responseJSON("200", "Conversation export payload.", arrayOf(registry.refFor(adminapi.ConversationExportRecord{}))),
+			responseJSON("200", "Conversation export payload.", arrayOf(schemaRefFor(registry, adminapi.ConversationExportRecord{}))),
 			protectedErrors(),
 		),
 	})
@@ -532,7 +532,7 @@ func Build() (*Document, error) {
 		Security:   protected,
 		Parameters: idParam("Parent identifier."),
 		Responses: mergeResponses(
-			responseJSON("200", "Parent summary payload.", registry.refFor(adminapi.ParentSummary{})),
+			responseJSON("200", "Parent summary payload.", schemaRefFor(registry, adminapi.ParentSummary{})),
 			protectedErrors(),
 			responseText("404", "Requested parent was not found."),
 		),

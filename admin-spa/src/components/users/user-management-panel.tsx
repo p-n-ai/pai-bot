@@ -4,6 +4,9 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type {
   InviteIssueRole,
   InviteRecord,
+  ManagedStudent,
+  ManagedUser,
+  PendingInvite,
   UserManagementView,
 } from '@/lib/user-management-types'
 import { MailPlusIcon, RotateCcwIcon } from '@/components/ui/pandai-icons'
@@ -553,7 +556,13 @@ function ReissueInviteButton({
   )
 }
 
-function filterRecords<T extends object>(
+type SearchableRecord =
+  | DirectoryUser
+  | ManagedStudent
+  | ManagedUser
+  | PendingInvite
+
+function filterRecords<T extends SearchableRecord>(
   records: Array<T>,
   search: string,
 ): Array<T> {
@@ -564,12 +573,38 @@ function filterRecords<T extends object>(
   }
 
   return records.filter((record) =>
-    Object.values(record as Record<string, unknown>).some((value) =>
-      String(value ?? '')
-        .toLowerCase()
-        .includes(query),
-    ),
+    searchableRecordText(record).includes(query),
   )
+}
+
+function searchableRecordText(record: SearchableRecord): string {
+  if ('access' in record) {
+    return [
+      record.name,
+      record.type,
+      record.contact,
+      record.scope,
+      record.access,
+    ]
+      .join(' ')
+      .toLowerCase()
+  }
+
+  if (!('status' in record)) {
+    return [record.name, record.channel, record.external_id, record.form]
+      .join(' ')
+      .toLowerCase()
+  }
+
+  if (record.status === 'active') {
+    return [record.name, record.email, record.role, record.tenant_name]
+      .join(' ')
+      .toLowerCase()
+  }
+
+  return [record.email, record.role, record.invited_by, record.tenant_name]
+    .join(' ')
+    .toLowerCase()
 }
 
 function formatRole(value: string): string {

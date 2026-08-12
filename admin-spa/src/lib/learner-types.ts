@@ -37,21 +37,11 @@ export interface LearningStreak extends EffectSchema.Type<
   typeof LearningStreakSchema
 > {}
 
-const matchesStudentProfile = Schema.is(StudentProfileSchema)
-const matchesProgressItem = Schema.is(ProgressItemSchema)
-const matchesLearningStreak = Schema.is(LearningStreakSchema)
-
 /** Returns whether an unknown response satisfies the student profile contract. */
-export function isStudentProfile(value: unknown): value is StudentProfile {
-  return matchesStudentProfile(value)
-}
+export const isStudentProfile = Schema.is(StudentProfileSchema)
 
 /** Returns whether an unknown response satisfies the progress item contract. */
-export function isProgressItem(value: unknown): value is ProgressItem {
-  return matchesProgressItem(value)
-}
+export const isProgressItem = Schema.is(ProgressItemSchema)
 
 /** Returns whether an unknown response satisfies the learning streak contract. */
-export function isLearningStreak(value: unknown): value is LearningStreak {
-  return matchesLearningStreak(value)
-}
+export const isLearningStreak = Schema.is(LearningStreakSchema)
