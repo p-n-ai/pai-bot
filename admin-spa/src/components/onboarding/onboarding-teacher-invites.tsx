@@ -1,8 +1,8 @@
-import { CopyIcon, MailPlusIcon } from 'lucide-react'
 import { useCallback, useMemo, useState, useTransition } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
 
 import type { InviteRecord } from '@/lib/user-management-types'
+import { CopyIcon, MailPlusIcon } from '@/components/ui/pandai-icons'
 import { issueInvite } from '@/lib/admin-api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +48,9 @@ export function OnboardingTeacherInvites() {
           }
         })
         .catch(() => {
-          setInviteError('Invite issuance failed')
+          setInviteError(
+            'Unable to create teacher invites. Check the emails and try again.',
+          )
         })
     })
   }, [teacherEmails])
@@ -137,7 +139,7 @@ function InviteError({ message }: { message: string }) {
 
   return (
     <div className='text-muted-foreground' role='alert'>
-      <strong>We could not send the invite</strong>
+      <strong>Unable to create the invite</strong>
       <p>{message}</p>
     </div>
   )
@@ -159,8 +161,7 @@ function InviteOutcomeList({
   return (
     <div className='grid gap-3.5'>
       <p className='text-muted-foreground'>
-        {inviteCounts.sent} sent, {inviteCounts.failed} needing follow-up,{' '}
-        {inviteCounts.total} processed.
+        {getInviteCountSummary(inviteCounts)}
       </p>
       {inviteOutcomes.map((item) => (
         <InviteOutcomeRow
@@ -215,7 +216,9 @@ function InviteOutcomeSummary({ item }: { item: InviteOutcome }) {
 
 function InviteDeliveryError({ invite }: { invite: InviteRecord | null }) {
   return invite?.delivery_error ? (
-    <p className='text-muted-foreground'>{invite.delivery_error}</p>
+    <p className='text-muted-foreground'>
+      Email delivery failed. Copy the activation link and send it directly.
+    </p>
   ) : null
 }
 
@@ -235,10 +238,12 @@ function InviteLinkActions({
     navigator.clipboard
       .writeText(inviteLink)
       .then(() => {
-        onCopyFeedbackChange(`Copied link for ${email}`)
+        onCopyFeedbackChange(`Activation link copied for ${email}.`)
       })
       .catch(() => {
-        onInviteErrorChange('Could not copy the activation link.')
+        onInviteErrorChange(
+          'Unable to copy the activation link. Copy it from the field and try again.',
+        )
       })
   }, [email, inviteLink, onCopyFeedbackChange, onInviteErrorChange])
 
@@ -281,7 +286,10 @@ async function issueTeacherInvite(email: string): Promise<InviteOutcome> {
   } catch (error) {
     return {
       email,
-      error: error instanceof Error ? error.message : 'Invite issuance failed',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unable to create this invite. Check the email and try again.',
       invite: null,
     }
   }
@@ -303,6 +311,21 @@ function getInviteCounts(inviteOutcomes: Array<InviteOutcome>): {
   }
 }
 
+function getInviteCountSummary({
+  failed,
+  sent,
+  total,
+}: {
+  failed: number
+  sent: number
+  total: number
+}): string {
+  const inviteLabel = total === 1 ? 'invite' : 'invites'
+  const followUpVerb = failed === 1 ? 'needs' : 'need'
+
+  return `${total} ${inviteLabel} processed: ${sent} sent, ${failed} ${followUpVerb} follow-up.`
+}
+
 function getInviteOutcomeMessage(item: InviteOutcome): string {
   if (item.error) {
     return item.error
@@ -315,7 +338,8 @@ function getDeliveryStatusMessage(
   status: InviteRecord['delivery_status'],
 ): string {
   const messages = {
-    failed: 'We could not send the email, but the teacher invite is ready.',
+    failed:
+      'Email delivery failed. Copy and send the activation link directly.',
     pending: 'Teacher invite is ready.',
     sent: 'Invite email sent.',
   }

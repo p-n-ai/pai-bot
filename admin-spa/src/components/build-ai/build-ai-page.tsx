@@ -1,23 +1,9 @@
 /* oxlint-disable react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop -- This local illustrative state machine intentionally keeps event transitions beside their controls; child views are not memoized, so callback identity does not affect rendering. */
 import { useCallback, useId, useReducer, useState } from 'react'
-import {
-  ActivityIcon,
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  BookOpenIcon,
-  BotIcon,
-  CheckCircle2Icon,
-  CircleDotIcon,
-  FlaskConicalIcon,
-  GaugeIcon,
-  RadioIcon,
-  SaveIcon,
-  SendIcon,
-  Settings2Icon,
-} from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { BuildAIPageKey } from '@/lib/build-ai-search'
 import type { CharacterConfig } from '@/components/build-ai/character-creator'
+import type { PandaiIconName } from '@/components/ui/pandai-icon'
 
 import {
   CharacterCreator,
@@ -50,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import { cn } from '@/lib/utils'
 
 type BuildPage = BuildAIPageKey
@@ -315,15 +302,15 @@ function buildAIWorkflowReducer(
 const destinations: ReadonlyArray<{
   id: BuildPage
   label: string
-  icon: typeof GaugeIcon
+  icon: PandaiIconName
 }> = [
-  { id: 'overview', label: 'Overview', icon: GaugeIcon },
-  { id: 'character', label: 'Character', icon: BotIcon },
-  { id: 'curriculum', label: 'Curriculum', icon: BookOpenIcon },
-  { id: 'teaching', label: 'Teaching', icon: Settings2Icon },
-  { id: 'test', label: 'Test tutor', icon: FlaskConicalIcon },
-  { id: 'publish', label: 'Publish', icon: SendIcon },
-  { id: 'activity', label: 'Activity', icon: ActivityIcon },
+  { id: 'overview', label: 'Overview', icon: 'layout' },
+  { id: 'character', label: 'Character', icon: 'star' },
+  { id: 'curriculum', label: 'Curriculum', icon: 'book-open' },
+  { id: 'teaching', label: 'Teaching', icon: 'settings' },
+  { id: 'test', label: 'Test tutor', icon: 'zap' },
+  { id: 'publish', label: 'Publish', icon: 'check-circle' },
+  { id: 'activity', label: 'Activity', icon: 'activity' },
 ]
 
 /**
@@ -434,7 +421,7 @@ export function BuildAIPage({
           </p>
         </div>
         <Badge variant='outline' className='min-h-8 gap-1.5'>
-          <CircleDotIcon aria-hidden='true' className='size-3.5' />
+          <PandaiIcon aria-hidden='true' className='size-3.5' name='shield' />
           Platform operator
         </Badge>
       </header>
@@ -567,7 +554,7 @@ function DestinationList({
 }) {
   return (
     <ul className='grid gap-1'>
-      {destinations.map(({ icon: Icon, id, label }) => (
+      {destinations.map(({ icon, id, label }) => (
         <li key={id}>
           <a
             aria-current={page === id ? 'page' : undefined}
@@ -590,7 +577,11 @@ function DestinationList({
               navigate(id)
             }}
           >
-            <Icon aria-hidden='true' className='size-4 shrink-0' />
+            <PandaiIcon
+              aria-hidden='true'
+              className='size-4 shrink-0'
+              name={icon}
+            />
             <span>{label}</span>
             {id === 'activity' ? (
               <span aria-hidden='true' className='ml-auto text-xs font-normal'>
@@ -780,7 +771,7 @@ function CharacterPage({
       <CharacterCreator config={character} onChange={updateCharacter} />
       <div className='mt-8 flex flex-wrap gap-3 border-t border-border pt-7'>
         <Button className='min-h-11' disabled={draftSaved} onClick={saveDraft}>
-          <SaveIcon aria-hidden='true' />
+          <PandaiIcon aria-hidden='true' name='check' />
           Save Draft
         </Button>
         <Button
@@ -890,7 +881,7 @@ function Curriculum({
             </DialogHeader>
             <DialogClose asChild>
               <Button className='mb-4 min-h-11' variant='ghost'>
-                <ArrowLeftIcon aria-hidden='true' />
+                <PandaiIcon aria-hidden='true' name='arrow-left' />
                 Back
               </Button>
             </DialogClose>
@@ -1169,7 +1160,7 @@ function Teaching({
             </DialogHeader>
             <DialogClose asChild>
               <Button className='mb-4 min-h-11' variant='ghost'>
-                <ArrowLeftIcon aria-hidden='true' />
+                <PandaiIcon aria-hidden='true' name='arrow-left' />
                 Back
               </Button>
             </DialogClose>
@@ -1185,7 +1176,7 @@ function Teaching({
       </div>
       <div className='mt-7 flex flex-wrap gap-3'>
         <Button className='min-h-11' disabled={draftSaved} onClick={saveDraft}>
-          <SaveIcon aria-hidden='true' />
+          <PandaiIcon aria-hidden='true' name='check' />
           Save Draft
         </Button>
         <Button
@@ -1718,12 +1709,12 @@ function Status({
   children: ReactNode
   tone: 'positive' | 'warning' | 'info'
 }) {
-  const Icon =
+  const icon: PandaiIconName =
     tone === 'positive'
-      ? CheckCircle2Icon
+      ? 'check-circle'
       : tone === 'warning'
-        ? AlertTriangleIcon
-        : RadioIcon
+        ? 'alert-triangle'
+        : 'info'
   return (
     <span
       className={cn(
@@ -1735,7 +1726,7 @@ function Status({
         tone === 'info' && 'border-border text-foreground',
       )}
     >
-      <Icon aria-hidden='true' className='size-3.5' />
+      <PandaiIcon aria-hidden='true' className='size-3.5' name={icon} />
       {children}
     </span>
   )

@@ -235,7 +235,7 @@ export function ClassResourcesPanel({
             id='resource-title'
             name='resource-title'
             onChange={changeTitle}
-            placeholder='e.g. Week 3 revision'
+            placeholder='Week 3 revision'
             value={state.title}
           />
         </div>
@@ -336,7 +336,7 @@ function UploadFeedback({
   if (status === 'error') {
     return (
       <p className='text-sm text-destructive' role='alert'>
-        Extraction/indexing failed: {error}
+        Unable to prepare this file: {error}
       </p>
     )
   }
@@ -348,10 +348,10 @@ function UploadFeedback({
     )
   }
   if (status === 'complete') {
-    return <p role='status'>Resource extracted and indexed.</p>
+    return <p role='status'>Resource is ready for tutor search.</p>
   }
   if (status === 'uploading') {
-    return <p role='status'>Extracting pages or slides and indexing chunks.</p>
+    return <p role='status'>Preparing the file for tutor search…</p>
   }
   return null
 }
@@ -370,7 +370,7 @@ function ResourceList({
   resources: Array<TeacherResource>
 }) {
   if (loading) {
-    return <LoadingStatus>Loading class resources...</LoadingStatus>
+    return <LoadingStatus>Loading class resources…</LoadingStatus>
   }
   if (error) {
     return (
@@ -458,16 +458,16 @@ function ResourceItem({
           <dd>{uploader || 'Not available'}</dd>
         </div>
         <div>
-          <dt className='font-medium text-foreground'>Indexed content</dt>
-          <dd>{resource.chunk_count} page/slide chunks</dd>
+          <dt className='font-medium text-foreground'>Searchable sections</dt>
+          <dd>{formatSectionCount(resource.chunk_count)}</dd>
         </div>
       </dl>
       {resource.extraction_error ? (
         <p className='text-sm text-destructive' role='alert'>
-          Extraction error: {resource.extraction_error}
+          Unable to prepare this file: {resource.extraction_error}
         </p>
       ) : (
-        <p className='text-sm text-muted-foreground'>Extraction: Indexed</p>
+        <p className='text-sm text-muted-foreground'>Ready for tutor search</p>
       )}
       <div className='flex flex-wrap gap-2'>
         <Button
@@ -476,7 +476,7 @@ function ResourceItem({
           type='button'
           variant='outline'
         >
-          {resource.active ? 'Deactivate' : 'Reactivate'}
+          {resource.active ? 'Hide from tutor' : 'Show to tutor'}
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -485,14 +485,14 @@ function ResourceItem({
               type='button'
               variant='destructive'
             >
-              Delete
+              Delete resource
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {displayTitle}?</AlertDialogTitle>
               <AlertDialogDescription>
-                This permanently removes the resource and its indexed chunks
+                This permanently removes the file and its searchable content
                 from every class where it is shared.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -513,7 +513,13 @@ function readResourceError(caught: unknown): string {
   if (caught instanceof AdminAPIError && caught.status === 401) {
     return 'Your session expired. Sign in again.'
   }
-  return caught instanceof Error ? caught.message : 'Resource request failed'
+  return caught instanceof Error
+    ? caught.message
+    : 'Unable to update this resource. Check your connection and try again.'
+}
+
+function formatSectionCount(count: number): string {
+  return `${count} searchable ${count === 1 ? 'section' : 'sections'}`
 }
 
 function formatUploadedAt(value: string): string {

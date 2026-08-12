@@ -204,7 +204,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const selector = screen.getByLabelText('Class view')
+    const selector = screen.getByLabelText('Class')
     expect(
       within(selector).getByRole('option', { name: 'All learners' }),
     ).toBeInTheDocument()
@@ -299,7 +299,7 @@ describe('DashboardReady', () => {
     )
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Preparing class snapshot',
+      'Loading class progress',
     )
     expect(screen.getByTestId('dashboard-skeleton')).toBeInTheDocument()
 
@@ -315,7 +315,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    expect(screen.getByRole('heading', { name: 'Class data unavailable' }))
+    expect(screen.getByRole('heading', { name: 'Class progress unavailable' }))
     expect(screen.getByText('Backend offline')).toBeInTheDocument()
   })
 
@@ -424,10 +424,12 @@ describe('DashboardReady', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: 'No learners match' }),
+      screen.getByRole('heading', { name: 'No learners match your search' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Try another name or progress filter.'),
+      screen.getByText(
+        'Change the name or progress filter, or clear the search field.',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -470,11 +472,11 @@ describe('DashboardReady', () => {
       within(heatmap).getByRole('heading', { name: 'Learner progress' }),
     ).toBeInTheDocument()
     expect(
-      within(heatmap).getByRole('heading', { name: 'No class heatmap yet' }),
+      within(heatmap).getByRole('heading', { name: 'No class progress yet' }),
     ).toBeInTheDocument()
     expect(
       within(heatmap).getByText(
-        'Progress appears after students start topics.',
+        'Topic scores will appear after students begin practising.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -551,8 +553,8 @@ describe('DashboardReady', () => {
 
     expect(screen.getByText('Class grade')).toBeInTheDocument()
     expect(screen.getByText('60% average mastery')).toBeInTheDocument()
-    expect(screen.getByText('4 of 4 score slots filled')).toBeInTheDocument()
-    expect(screen.getByText('1 learner need attention')).toBeInTheDocument()
+    expect(screen.getByText('4 of 4 topic scores recorded')).toBeInTheDocument()
+    expect(screen.getByText('1 learner needs attention')).toBeInTheDocument()
     expect(screen.getByText('Weakest: Algebra')).toBeInTheDocument()
     expect(screen.getByText('Strongest: Geometry')).toBeInTheDocument()
   })
@@ -582,7 +584,7 @@ describe('DashboardReady', () => {
 
     expect(within(learners).getByText('2')).toBeInTheDocument()
     expect(
-      within(learners).getByText('1 learner need attention'),
+      within(learners).getByText('1 learner needs attention'),
     ).toBeInTheDocument()
     expect(within(average).getByText('Weakest: Algebra')).toBeInTheDocument()
     expect(within(average).getByText('Strongest: Geometry')).toBeInTheDocument()
@@ -598,7 +600,9 @@ describe('DashboardReady', () => {
       />,
     )
 
-    const nudgeButton = screen.getByRole('button', { name: 'Nudge Alya' })
+    const nudgeButton = screen.getByRole('button', {
+      name: 'Send nudge to Alya',
+    })
 
     expect(nudgeButton).toHaveAttribute('data-size', 'sm')
     expect(nudgeButton).toHaveAttribute('data-variant', 'default')
@@ -616,7 +620,7 @@ describe('DashboardReady', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nudge Alya' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send nudge to Alya' }))
 
     expect(onNudge).toHaveBeenCalledWith('student_1', 'Alya')
     expect(screen.getByRole('status')).toHaveTextContent(

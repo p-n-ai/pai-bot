@@ -71,7 +71,7 @@ function useOnboardingSubmit(form: SubmitOnboardingInput | null) {
       event.preventDefault()
 
       if (!isOnboardingSubmittable(form)) {
-        setError('Curriculum, first class, and bot setup are required.')
+        setError('Complete the syllabus, class name, and tutor style.')
         return
       }
 
@@ -82,7 +82,7 @@ function useOnboardingSubmit(form: SubmitOnboardingInput | null) {
           setError(
             caught instanceof Error
               ? caught.message
-              : 'Onboarding save failed.',
+              : 'Unable to save the setup. Check your connection and try again.',
           )
         })
         .finally(finishSubmit)
@@ -105,9 +105,9 @@ function OnboardingContent({
   if (loadState !== 'ready') {
     return (
       <LoadState
-        error='Onboarding data is not available right now.'
-        errorTitle='Onboarding unavailable'
-        loadingTitle='Loading onboarding'
+        error='Unable to load setup. Check your connection and try again.'
+        errorTitle='Setup unavailable'
+        loadingTitle='Loading setup'
         status={loadState}
       />
     )
@@ -142,8 +142,9 @@ function OnboardingReadyBoundary({
 }) {
   if (!view || !form) {
     return (
-      <StatePanel title='Onboarding not ready'>
-        The onboarding API is not returning tenant setup data yet.
+      <StatePanel title='Setup is not ready'>
+        Reload the page. If the problem continues, contact your platform
+        administrator.
       </StatePanel>
     )
   }
@@ -206,7 +207,7 @@ function OnboardingReady({
         stepIndex={stepIndex}
         tenantName={view.tenant_name}
       />
-      <AuthErrorAlert message={error} title='Save failed.' />
+      <AuthErrorAlert message={error} title='Unable to save setup' />
     </form>
   )
 }

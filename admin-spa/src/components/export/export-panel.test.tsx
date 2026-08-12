@@ -16,7 +16,7 @@ describe('ExportPanel', () => {
   it('renders the tenant-scoped export downloads from the current admin app', () => {
     render(<ExportPanel />)
 
-    expect(screen.getByLabelText('Tenant export downloads')).toBeInTheDocument()
+    expect(screen.getByLabelText('School record downloads')).toBeInTheDocument()
     expectDownloadLink('Students CSV', '/api/admin/export/students')
     expectDownloadLink('Conversations JSON', '/api/admin/export/conversations')
     expectDownloadLink('Progress CSV', '/api/admin/export/progress')
@@ -41,12 +41,12 @@ describe('ExportPanel', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Download structured conversation transcripts with message metadata for audit and review workflows.',
+        'Download conversation transcripts with message details for audit and review.',
       ),
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Download per-topic mastery records with scheduling fields for spreadsheet or warehouse import.',
+        'Download topic mastery and review schedules for spreadsheet analysis.',
       ),
     ).toBeInTheDocument()
   })

@@ -10,8 +10,7 @@ export const Route = createFileRoute('/_authenticated/settings/ai')({
 function AISettingsRoute() {
   return (
     <AdminPageSection
-      description='Default provider, OpenRouter model and key, and AI feature flags. Changes apply live to every tenant — no restart.'
-      eyebrow='Platform'
+      description='Choose providers, models, credentials, and AI features for every school.'
       title='AI settings'
     >
       <AISettingsPanel />

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Copy, MessageCircle, X } from 'lucide-react'
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
 
 import type { EmbedConfig } from '@/lib/embed-config-types'
@@ -8,6 +7,7 @@ import type {
   EmbedPosition,
   EmbedTheme,
 } from '@/lib/embed-widget'
+import { Check, Copy, MessageCircle, X } from '@/components/ui/pandai-icons'
 import { useAuth } from '@/auth-provider'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import {
@@ -65,7 +65,12 @@ export function EmbedConfigPanel() {
       setErrorScope('')
       setStatus('ready')
     } catch (caught) {
-      setError(errorMessage(caught, 'Embed config could not be loaded.'))
+      setError(
+        errorMessage(
+          caught,
+          'Unable to load website chat settings. Check your connection and try again.',
+        ),
+      )
       setErrorScope('configuration')
       setStatus('error')
     }
@@ -88,9 +93,14 @@ export function EmbedConfigPanel() {
       setConfig(next)
       setEnabled(next.enabled)
       setTheme(readEmbedTheme(next.theme_config))
-      setSaveSuccess('Configuration saved.')
+      setSaveSuccess('Website chat settings saved.')
     } catch (caught) {
-      setError(errorMessage(caught, 'Embed settings could not be saved.'))
+      setError(
+        errorMessage(
+          caught,
+          'Unable to save website chat settings. Try again.',
+        ),
+      )
       setErrorScope('configuration')
     } finally {
       setSaving(false)
@@ -101,7 +111,7 @@ export function EmbedConfigPanel() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
       if (!origin.trim()) {
-        setError('Origin is required.')
+        setError('Enter the website origin, including http:// or https://.')
         setErrorScope('origins')
         return
       }
@@ -115,7 +125,12 @@ export function EmbedConfigPanel() {
         setConfig(next)
         setError('')
       } catch (caught) {
-        setError(errorMessage(caught, 'Origin could not be added.'))
+        setError(
+          errorMessage(
+            caught,
+            'Unable to add this website. Check the address and try again.',
+          ),
+        )
       } finally {
         setSaving(false)
       }
@@ -133,7 +148,9 @@ export function EmbedConfigPanel() {
       setConfig(next)
       setError('')
     } catch (caught) {
-      setError(errorMessage(caught, 'Origin could not be removed.'))
+      setError(
+        errorMessage(caught, 'Unable to remove this website. Try again.'),
+      )
     } finally {
       setSaving(false)
     }
@@ -167,7 +184,7 @@ export function EmbedConfigPanel() {
         | undefined
       if (!clipboard) {
         throw new Error(
-          'Clipboard access is unavailable. Copy the snippet manually.',
+          'Clipboard access is unavailable. Select and copy the install code manually.',
         )
       }
       await clipboard.writeText(snippet)
@@ -175,7 +192,10 @@ export function EmbedConfigPanel() {
     } catch (caught) {
       setCopied(false)
       setCopyError(
-        errorMessage(caught, 'Could not copy the snippet. Try again.'),
+        errorMessage(
+          caught,
+          'Unable to copy the install code. Select and copy it manually.',
+        ),
       )
     }
   }, [snippet])
@@ -213,8 +233,8 @@ export function EmbedConfigPanel() {
     return (
       <LoadState
         error={error}
-        errorTitle='Could not load embed settings'
-        loadingTitle='Loading embed settings'
+        errorTitle='Unable to load website chat settings'
+        loadingTitle='Loading website chat settings'
         loadingVariant='settings'
         status={status}
       />
@@ -222,14 +242,15 @@ export function EmbedConfigPanel() {
   }
   if (!config) {
     return (
-      <StatePanel title='Embed settings unavailable'>
-        The backend did not return a tenant embed configuration.
+      <StatePanel title='Website chat settings unavailable'>
+        Reload the page. If the problem continues, contact your platform
+        administrator.
       </StatePanel>
     )
   }
 
   return (
-    <div className='mt-8 grid gap-8'>
+    <div className='mt-7 grid gap-7'>
       <EmbedSetupGuide
         config={config}
         copied={copied}
@@ -237,28 +258,27 @@ export function EmbedConfigPanel() {
       />
 
       <section
-        aria-label='Website chat workspace'
-        className='overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_24px_80px_-52px_oklch(0.22_0.02_150/0.65)] ring-1 ring-[var(--admin-line)]'
+        aria-label='Website chat settings'
+        className='overflow-hidden rounded-[1.5rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
       >
         <div className='grid lg:grid-cols-[minmax(21rem,0.9fr)_minmax(25rem,1.1fr)]'>
           <WidgetPreview theme={theme} />
           <section
             aria-labelledby='embed-configuration-title'
-            className='grid content-center gap-7 p-6 sm:p-8 lg:p-10'
+            className='grid content-center gap-7 p-6 sm:p-8'
           >
             <header>
-              <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-                Configuration
+              <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+                Appearance
               </p>
               <h2
-                className='m-0 text-2xl leading-tight font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'
+                className='m-0 text-xl leading-snug font-semibold tracking-[-0.02em] text-[var(--admin-ink)]'
                 id='embed-configuration-title'
               >
-                Widget configuration
+                Chat appearance
               </h2>
               <p className='mt-2 mb-0 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
-                Set the widget appearance, placement, and availability for
-                approved host sites.
+                Choose how chat looks and where it appears on approved websites.
               </p>
             </header>
 
@@ -266,9 +286,9 @@ export function EmbedConfigPanel() {
 
             <div className='flex items-center justify-between gap-5 rounded-2xl bg-[var(--admin-surface-muted)] p-4 sm:p-5'>
               <div>
-                <Label htmlFor='embed-enabled'>Enable widget</Label>
+                <Label htmlFor='embed-enabled'>Show chat widget</Label>
                 <p className='mt-1 mb-0 text-sm leading-5 text-[var(--admin-muted)]'>
-                  Guest sessions remain limited to allowed origins.
+                  Only approved websites can open guest chats.
                 </p>
               </div>
               <Switch
@@ -290,7 +310,7 @@ export function EmbedConfigPanel() {
                     type='color'
                     value={theme.color}
                   />
-                  <span className='font-mono text-sm font-medium text-[var(--admin-ink)] uppercase'>
+                  <span className='text-sm font-medium tracking-[0.06em] text-[var(--admin-ink)] uppercase'>
                     {theme.color}
                   </span>
                   <span className='ms-auto text-xs text-[var(--admin-muted)]'>
@@ -333,11 +353,11 @@ export function EmbedConfigPanel() {
             <div className='flex flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-line)] pt-5'>
               <p
                 aria-live='polite'
-                className={`m-0 flex items-center gap-2 text-sm font-medium ${hasConfigurationChanges ? 'text-amber-700' : 'text-[var(--admin-muted)]'}`}
+                className={`m-0 flex items-center gap-2 text-sm font-medium ${hasConfigurationChanges ? 'text-[var(--status-warning-text)]' : 'text-[var(--admin-muted)]'}`}
               >
                 <span
                   aria-hidden='true'
-                  className={`size-2 rounded-full ${hasConfigurationChanges ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                  className={`size-2 rounded-full ${hasConfigurationChanges ? 'bg-[var(--status-warning-border)]' : 'bg-[var(--surface-primary-default)]'}`}
                 />
                 {hasConfigurationChanges
                   ? 'Unsaved changes'
@@ -349,15 +369,15 @@ export function EmbedConfigPanel() {
                 onClick={save}
                 type='button'
               >
-                {saving ? 'Saving…' : 'Save configuration'}
+                {saving ? 'Saving…' : 'Save website chat'}
               </Button>
               <AuthErrorAlert
                 message={errorScope === 'configuration' ? error : ''}
-                title='Update failed.'
+                title='Unable to save website chat settings'
               />
               {saveSuccess && (
                 <p
-                  className='w-full text-sm font-medium text-emerald-700'
+                  className='w-full text-sm font-medium text-[var(--status-success-text)]'
                   role='status'
                 >
                   {saveSuccess}
@@ -369,8 +389,8 @@ export function EmbedConfigPanel() {
       </section>
 
       <section
-        aria-label='Website chat deployment'
-        className='grid overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
+        aria-label='Website chat installation'
+        className='grid overflow-hidden rounded-[1.5rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)] lg:grid-cols-2'
       >
         <OriginsSection
           config={config}
@@ -384,25 +404,26 @@ export function EmbedConfigPanel() {
 
         <section
           aria-labelledby='install-snippet-title'
-          className='grid content-start gap-5 p-6 sm:p-8 lg:p-10'
+          className='grid content-start gap-5 p-6 sm:p-8'
         >
           <header>
-            <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-              Deployment
+            <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+              Installation
             </p>
             <h2
               className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
               id='install-snippet-title'
             >
-              Install snippet
+              Install website chat
             </h2>
             <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
-              Add this before the closing body tag on an approved site.
+              Paste this code before the closing &lt;/body&gt; tag on an
+              approved website.
             </p>
           </header>
           {!tenantSlug ? (
-            <StatePanel title='Tenant slug unavailable'>
-              Switch to a tenant session before copying the widget snippet.
+            <StatePanel title='School account required'>
+              Sign in to a school account before copying the install code.
             </StatePanel>
           ) : (
             <>
@@ -421,9 +442,12 @@ export function EmbedConfigPanel() {
                 ) : (
                   <Copy aria-hidden='true' />
                 )}
-                {copied ? 'Copied' : 'Copy snippet'}
+                {copied ? 'Install code copied' : 'Copy install code'}
               </Button>
-              <AuthErrorAlert message={copyError} title='Copy failed.' />
+              <AuthErrorAlert
+                message={copyError}
+                title='Unable to copy install code'
+              />
             </>
           )}
         </section>
@@ -454,11 +478,11 @@ function EmbedSetupGuide({
           ? 4
           : 3
   const steps = [
-    ['Add host origin', 'Enter the site URL.'],
+    ['Approve a website', 'Enter the complete website origin.'],
     ['Configure appearance', 'Set color, language, and position.'],
-    ['Enable the widget', 'Turn it on and save.'],
-    ['Install the snippet', 'Copy it into your site.'],
-    ['Verify chat', 'Send a test message.'],
+    ['Show the chat widget', 'Turn it on and save your changes.'],
+    ['Install website chat', 'Copy the install code into your website.'],
+    ['Test website chat', 'Send a test message from the website.'],
   ] as const
 
   return (
@@ -468,7 +492,7 @@ function EmbedSetupGuide({
         title='Setup guide'
       />
       <ol
-        aria-label='Embed setup steps'
+        aria-label='Website chat setup steps'
         className='m-0 grid list-none p-0 lg:grid-cols-5'
       >
         {steps.map(([title, description], index) => {
@@ -489,18 +513,18 @@ function EmbedSetupGuide({
               {index < steps.length - 1 && (
                 <span
                   aria-hidden='true'
-                  className={`absolute top-10 bottom-0 left-[1.21875rem] w-px lg:top-5 lg:right-0 lg:bottom-auto lg:left-10 lg:h-px lg:w-auto ${completed ? 'bg-[var(--admin-ink)]' : 'bg-[var(--admin-line)]'}`}
+                  className={`absolute top-10 bottom-0 left-[1.21875rem] w-px lg:top-5 lg:right-0 lg:bottom-auto lg:left-10 lg:h-px lg:w-auto ${completed ? 'bg-[var(--admin-navigation)]' : 'bg-[var(--admin-line)]'}`}
                 />
               )}
               <span
                 aria-hidden='true'
-                className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${completed ? 'bg-[var(--admin-ink)] text-[var(--admin-surface)]' : current ? 'bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_4px_var(--admin-surface-muted)]' : 'bg-[var(--admin-surface-muted)] text-[var(--admin-muted)] ring-1 ring-[var(--admin-line)]'}`}
+                className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${completed ? 'bg-[var(--admin-navigation)] text-[var(--admin-nav-text)]' : current ? 'bg-[var(--admin-accent)] text-[var(--admin-ink)] ring-4 ring-[var(--admin-surface-muted)]' : 'bg-[var(--admin-surface-muted)] text-[var(--admin-muted)] ring-1 ring-[var(--admin-line)]'}`}
               >
                 {completed ? <Check className='size-4' /> : index + 1}
               </span>
               <div className='min-w-0 lg:mt-4'>
                 <p
-                  className={`m-0 text-[0.625rem] font-semibold tracking-[0.12em] uppercase ${current ? 'text-[var(--admin-ink)]' : 'text-[var(--admin-muted)]'}`}
+                  className={`m-0 text-xs font-semibold tracking-[0.1em] uppercase ${current ? 'text-[var(--admin-ink)]' : 'text-[var(--admin-muted)]'}`}
                 >
                   {stateLabel}
                 </p>
@@ -529,19 +553,19 @@ function EmbedTroubleshooting() {
       />
       <div className='grid gap-5 sm:grid-cols-2'>
         <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
-          <h3 className='text-sm font-semibold'>Origin mismatch</h3>
+          <h3 className='text-sm font-semibold'>
+            Website address does not match
+          </h3>
           <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
-            Check that the allowed origin exactly matches your site’s protocol,
-            host, and port. Remove any path, save it again, then reload your
-            site.
+            Match the approved origin to your website’s protocol, host, and
+            port. Remove any path, save again, then reload the website.
           </p>
         </section>
         <section className='rounded-2xl bg-[var(--admin-surface-muted)] p-5 sm:p-6'>
-          <h3 className='text-sm font-semibold'>Widget stays disabled</h3>
+          <h3 className='text-sm font-semibold'>Chat widget remains hidden</h3>
           <p className='mt-2 text-sm leading-6 text-[var(--admin-muted)]'>
-            Confirm the host origin is listed, turn on Enable widget, and save
-            the configuration. Refresh the host page after installing the
-            snippet.
+            Confirm the website is approved, turn on Show chat widget, and save.
+            Refresh the website after installing the code.
           </p>
         </section>
       </div>
@@ -574,25 +598,25 @@ function OriginsSection({
   return (
     <section
       aria-labelledby='allowed-origins-title'
-      className='grid content-start gap-5 p-6 sm:p-8 lg:border-e lg:border-[var(--admin-line)] lg:p-10'
+      className='grid content-start gap-5 p-6 sm:p-8 lg:border-e lg:border-[var(--admin-line)]'
     >
       <header>
-        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
-          Host access
+        <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
+          Website access
         </p>
         <h2
           className='m-0 text-xl font-semibold tracking-[-0.025em] text-[var(--admin-ink)]'
           id='allowed-origins-title'
         >
-          Allowed origins
+          Approved websites
         </h2>
         <p className='mt-2 mb-0 text-sm leading-6 text-[var(--admin-muted)]'>
-          Use complete HTTP or HTTPS origins without paths.
+          Enter complete HTTP or HTTPS origins without paths.
         </p>
       </header>
       <form className='flex flex-col gap-3 sm:flex-row' onSubmit={onAdd}>
         <Label className='sr-only' htmlFor='embed-origin'>
-          Allowed origin
+          Website origin
         </Label>
         <Input
           id='embed-origin'
@@ -601,17 +625,20 @@ function OriginsSection({
           value={origin}
         />
         <Button disabled={disabled} type='submit'>
-          Add origin
+          Add website
         </Button>
       </form>
-      <AuthErrorAlert message={error} title='Origin update failed.' />
+      <AuthErrorAlert
+        message={error}
+        title='Unable to update approved websites'
+      />
       {config.allowed_origins.length === 0 ? (
         <div className='rounded-2xl bg-[var(--admin-surface-muted)] p-4'>
           <h3 className='text-sm font-semibold text-[var(--admin-ink)]'>
-            No origins yet
+            No websites approved
           </h3>
           <p className='mt-1 text-sm leading-5 text-[var(--admin-muted)]'>
-            Add an origin before enabling the widget.
+            Add a website before showing the chat widget.
           </p>
         </div>
       ) : (
@@ -645,14 +672,14 @@ function OriginItem({
     <li className='flex items-center justify-between gap-3 rounded-xl bg-[var(--admin-surface-muted)] p-3 text-sm'>
       <span className='break-all'>{origin}</span>
       <Button
-        aria-label={`Remove ${origin}`}
+        aria-label={`Remove website ${origin}`}
         disabled={disabled}
         onClick={handleRemove}
         size='sm'
         type='button'
         variant='outline'
       >
-        Remove
+        Remove website
       </Button>
     </li>
   )
@@ -662,22 +689,18 @@ function PublishedState({ config }: { config: EmbedConfig }) {
   const originCount = config.allowed_origins.length
   const published = config.enabled && originCount > 0
   const needsOrigin = config.enabled && originCount === 0
-  const label = published
-    ? 'Published'
-    : needsOrigin
-      ? 'Needs approved host'
-      : 'Not published'
+  const label = published ? 'Live' : needsOrigin ? 'Website required' : 'Hidden'
   const detail = published
-    ? `${originCount} approved ${originCount === 1 ? 'host' : 'hosts'}`
+    ? `${originCount} approved ${originCount === 1 ? 'website' : 'websites'}`
     : needsOrigin
-      ? 'Enabled, but no site is approved'
-      : 'Widget is disabled'
+      ? 'Chat widget is on, but no website is approved'
+      : 'Chat widget is hidden'
 
   return (
     <div className='flex items-center gap-3 border-y border-[var(--admin-line)] py-4'>
       <span
         aria-hidden='true'
-        className={`size-2.5 shrink-0 rounded-full ${published ? 'bg-emerald-600' : needsOrigin ? 'bg-amber-500' : 'bg-[var(--admin-muted)]'}`}
+        className={`size-2.5 shrink-0 rounded-full ${published ? 'bg-[var(--surface-primary-default)]' : needsOrigin ? 'bg-[var(--status-warning-border)]' : 'bg-[var(--admin-muted)]'}`}
       />
       <div className='min-w-0'>
         <p className='m-0 text-sm font-semibold text-[var(--admin-ink)]'>
@@ -685,8 +708,8 @@ function PublishedState({ config }: { config: EmbedConfig }) {
         </p>
         <p className='m-0 text-xs text-[var(--admin-muted)]'>{detail}</p>
       </div>
-      <p className='m-0 ms-auto text-[0.6875rem] font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
-        Saved state
+      <p className='m-0 ms-auto text-xs font-semibold tracking-[0.1em] text-[var(--admin-muted)] uppercase'>
+        Publication status
       </p>
     </div>
   )
@@ -708,9 +731,9 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
   return (
     <section
       aria-labelledby='widget-preview-title'
-      className='relative min-h-[34rem] overflow-hidden bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[38rem] lg:p-10'
+      className='relative min-h-[30rem] overflow-hidden bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[34rem]'
     >
-      <p className='mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-nav-muted)] uppercase'>
+      <p className='mb-2.5 flex items-center gap-2 text-xs font-semibold tracking-[0.12em] text-[var(--admin-nav-muted)] uppercase'>
         <span
           aria-hidden='true'
           className='size-2 rounded-full bg-[var(--admin-accent)]'
@@ -718,7 +741,7 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
         Visual preview
       </p>
       <h2
-        className='m-0 text-2xl font-semibold tracking-[-0.035em]'
+        className='m-0 text-xl leading-snug font-semibold tracking-[-0.02em]'
         id='widget-preview-title'
       >
         Preview
@@ -730,7 +753,7 @@ function WidgetPreview({ theme }: { theme: EmbedTheme }) {
         <div
           aria-label='Chat preview'
           lang={theme.language}
-          className={`absolute bottom-24 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-2xl bg-[var(--admin-surface)] text-[var(--admin-ink)] shadow-[0_24px_70px_oklch(0_0_0/0.28)] ring-1 ring-white/12 ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
+          className={`absolute bottom-24 w-[min(20rem,calc(100%-2rem))] overflow-hidden rounded-2xl bg-[var(--admin-surface)] text-[var(--admin-ink)] ring-1 ring-[var(--admin-line)] ${left ? 'left-4 sm:left-8' : 'right-4 sm:right-8'}`}
         >
           <div className='p-4 text-sm font-semibold' style={themeStyle}>
             P&amp;AI Tutor

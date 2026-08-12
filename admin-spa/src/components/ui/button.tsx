@@ -11,9 +11,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-[var(--admin-ink,var(--primary))] text-[var(--admin-surface,var(--primary-foreground))] shadow-[0_3px_10px_oklch(0.225_0.018_150/0.16)] hover:bg-[var(--admin-ink-hover,var(--primary))]',
+          'bg-[var(--admin-navigation,var(--primary))] text-[var(--text-primary-on-color,var(--primary-foreground))] hover:bg-[var(--admin-accent,var(--secondary))] hover:text-[var(--admin-ink,var(--secondary-foreground))]',
         outline:
-          'border-[var(--admin-line,var(--border))] bg-[var(--admin-surface,var(--background))] text-[var(--admin-ink,var(--foreground))] hover:bg-[var(--admin-surface-muted,var(--muted))] aria-expanded:bg-[var(--admin-surface-muted,var(--muted))]',
+          'border-[var(--admin-line,var(--border-primary-default))] bg-[var(--admin-surface,var(--background))] text-[var(--admin-ink-hover,var(--text-tertiary-default))] hover:bg-[var(--admin-surface-muted,var(--accent))] aria-expanded:bg-[var(--admin-surface-muted,var(--accent))]',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:

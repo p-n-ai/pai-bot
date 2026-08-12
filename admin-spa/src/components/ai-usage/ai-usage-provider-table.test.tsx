@@ -13,10 +13,10 @@ describe('AIUsageProviderTable', () => {
   it('renders the source-admin empty provider traffic copy', () => {
     render(<AIUsageProviderTable providers={emptyProviders} />)
 
-    expect(screen.getByText('No provider traffic recorded')).toBeInTheDocument()
+    expect(screen.getByText('No AI provider activity yet')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Provider rows will populate after the first successful AI requests for this tenant.',
+        'Provider details will appear after the first successful AI response.',
       ),
     ).toBeInTheDocument()
   })

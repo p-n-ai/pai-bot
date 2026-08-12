@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AdminApp } from './app'
 import type { AuthContextValue } from './auth-provider'
@@ -30,6 +30,14 @@ vi.mock('./auth-provider', async (importOriginal) => {
 })
 
 describe('AdminApp', () => {
+  beforeEach(() => {
+    authContext.auth = {
+      status: 'pending',
+      session: null,
+      error: null,
+    }
+  })
+
   afterEach(() => {
     cleanup()
   })
@@ -38,7 +46,7 @@ describe('AdminApp', () => {
     render(<AdminApp />)
 
     expect(
-      screen.getByRole('status', { name: 'Preparing admin workspace' }),
+      screen.getByRole('status', { name: 'Loading P&AI Bot' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByText('Checking admin session...'),
@@ -48,10 +56,26 @@ describe('AdminApp', () => {
   it('allows the loading shell to be closed', () => {
     render(<AdminApp />)
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Close loading screen' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to sign in' }))
 
     expect(authContext.setAnonymousSession).toHaveBeenCalled()
+  })
+
+  it('gives safe recovery guidance when session verification fails', () => {
+    authContext.auth = {
+      status: 'error',
+      session: null,
+      error: new Error('private service detail'),
+    }
+
+    render(<AdminApp />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Unable to verify your session' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Check your connection and reload the page.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('private service detail')).not.toBeInTheDocument()
   })
 })

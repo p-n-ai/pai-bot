@@ -17,7 +17,7 @@ describe('AIUsageOverviewStats', () => {
     expect(screen.getByText('5K')).toBeInTheDocument()
     expect(screen.getByText('openai top source')).toBeInTheDocument()
     expect(screen.getByText('Messages')).toBeInTheDocument()
-    expect(screen.getByText('Current aggregate window')).toBeInTheDocument()
+    expect(screen.getByText('Current reporting period')).toBeInTheDocument()
     expect(screen.getByText('Budget')).toBeInTheDocument()
     expect(screen.getByText('Apr 1 to Apr 30')).toBeInTheDocument()
     expect(screen.getByText('Per learner')).toBeInTheDocument()

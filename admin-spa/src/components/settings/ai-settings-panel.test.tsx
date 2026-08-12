@@ -132,7 +132,7 @@ describe('AISettingsPanel', () => {
 
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Reset model to environment',
+        name: 'Use environment model',
       }),
     )
     await waitFor(() => {
@@ -175,7 +175,7 @@ describe('AISettingsPanel', () => {
 
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Reset key to environment',
+        name: 'Use environment key',
       }),
     )
     await waitFor(() => {
@@ -232,7 +232,7 @@ describe('AISettingsPanel', () => {
     expect(within(section).getByText('from environment')).toBeInTheDocument()
     expect(
       within(section).queryByRole('button', {
-        name: 'Reset key to environment',
+        name: 'Use environment key',
       }),
     ).not.toBeInTheDocument()
   })
@@ -263,7 +263,7 @@ describe('AISettingsPanel', () => {
 
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Reset Ollama to environment',
+        name: 'Use environment setting',
       }),
     )
     await waitFor(() => {
@@ -274,7 +274,7 @@ describe('AISettingsPanel', () => {
     })
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Reset model to environment',
+        name: 'Use environment model',
       }),
     )
     await waitFor(() => {
@@ -318,7 +318,7 @@ describe('AISettingsPanel', () => {
     })
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Reset model to environment',
+        name: 'Use environment model',
       }),
     )
     await waitFor(() => {
@@ -333,7 +333,9 @@ describe('AISettingsPanel', () => {
     )
     expect(await within(section).findByText('ABCD-1234')).toBeInTheDocument()
     expect(
-      within(section).getByRole('link', { name: 'Open Codex verification' }),
+      within(section).getByRole('link', {
+        name: 'Open Codex verification page',
+      }),
     ).toHaveAttribute('href', 'https://auth.openai.com/codex/device')
   })
 
@@ -354,7 +356,7 @@ describe('AISettingsPanel', () => {
   it('uses null to reset default-provider and feature-flag overrides', async () => {
     render(<AISettingsPanel />)
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Reset to environment' }),
+      await screen.findByRole('button', { name: 'Use environment default' }),
     )
     await waitFor(() => {
       expect(updateAISettings).toHaveBeenCalledWith({

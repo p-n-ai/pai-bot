@@ -87,7 +87,7 @@ describe('ClassesContent', () => {
     expect(
       screen.getByText(
         (_, element) =>
-          element?.textContent === 'Students send /join ALG-F1A to the bot.',
+          element?.textContent === 'Students send /join ALG-F1A to P&AI Bot.',
       ),
     ).toBeInTheDocument()
     expect(await screen.findByText('Student roster')).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('ClassesContent', () => {
     expect(screen.getByText('76%')).toBeInTheDocument()
     expect(
       screen.getByRole('button', {
-        name: 'Assign topics to class (coming soon)',
+        name: 'Topic assignment unavailable',
       }),
     ).toBeDisabled()
   })
@@ -130,9 +130,11 @@ describe('ClassesContent', () => {
     expect(
       screen.getByRole('heading', { name: 'Create a class' }),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Invite an adult' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Invite staff or parent' }),
+    )
     expect(
-      screen.getByRole('heading', { name: 'Invite an adult' }),
+      screen.getByRole('heading', { name: 'Invite staff or parent' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Create a class' }),
@@ -157,7 +159,7 @@ describe('ClassesContent', () => {
     )
 
     expect(
-      screen.queryByRole('button', { name: 'Invite an adult' }),
+      screen.queryByRole('button', { name: 'Invite staff or parent' }),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Create class' }),
@@ -184,7 +186,7 @@ describe('ClassesContent', () => {
       screen.queryByRole('button', { name: 'Create class', expanded: false }),
     ).not.toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Invite an adult' }),
+      screen.getByRole('button', { name: 'Invite staff or parent' }),
     ).toBeInTheDocument()
   })
 
@@ -209,7 +211,9 @@ describe('ClassesContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy join code' }))
 
     expect(
-      await screen.findByText('Could not copy the join code'),
+      await screen.findByText(
+        'Unable to copy the join code. Select and copy the code manually.',
+      ),
     ).toHaveAttribute('role', 'alert')
   })
 
@@ -233,7 +237,7 @@ describe('ClassesContent', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy join code' }))
-    expect(await screen.findByText('Join code copied')).toBeInTheDocument()
+    expect(await screen.findByText('Join code copied.')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith('ALG-F1A')
 
     rerender(
@@ -247,7 +251,7 @@ describe('ClassesContent', () => {
       />,
     )
 
-    expect(screen.queryByText('Join code copied')).not.toBeInTheDocument()
+    expect(screen.queryByText('Join code copied.')).not.toBeInTheDocument()
     expect(screen.getByText('SCI-F2B')).toBeInTheDocument()
   })
 

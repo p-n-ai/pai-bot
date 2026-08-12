@@ -294,6 +294,14 @@ func TestNightlyCandidateContracts(t *testing.T) {
 	if _, ok := on["workflow_run"]; !ok || len(on) != 1 {
 		t.Fatalf("nightly triggers = %#v, want only workflow_run", on)
 	}
+	candidate, err := workflowJob(document, "candidate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissions, ok := stringMap(candidate["permissions"])
+	if !ok || permissions["contents"] != "write" {
+		t.Fatalf("nightly contents permission = %v, want write", permissions["contents"])
+	}
 	requirePinnedActions(t, document)
 	requireContains(t, source,
 		"github.event.workflow_run.conclusion == 'success'",
@@ -302,6 +310,7 @@ func TestNightlyCandidateContracts(t *testing.T) {
 		"github.event.workflow_run.head_sha",
 		"Reuse completed candidate artifact",
 		"this rerun is a no-op",
+		"Restore completed candidate metadata",
 		"Reuse existing SHA-addressed application images",
 		`docker buildx imagetools inspect "$1"`,
 		"steps.existing.outputs.app_exists != 'true'",
@@ -313,9 +322,97 @@ func TestNightlyCandidateContracts(t *testing.T) {
 		"postgres_image:",
 		"nightly-candidate-${{ github.event.workflow_run.head_sha }}",
 		"retention-days: 30",
+		"Publish nightly GitHub Release",
+		`tag="nightly-$SHA"`,
+		"--prerelease",
+		"--latest=false",
+		"--target \"$SHA\"",
 	)
 	if strings.Contains(source, "environment: production") {
 		t.Fatal("nightly workflow must not deploy to production")
+	}
+}
+
+func TestNightlyGitHubReleaseIsImmutableAndRetrySafe(t *testing.T) {
+	_, document := repositoryWorkflow(t, ".github/workflows/nightly.yml")
+	publish := workflowStepRun(t, document, "candidate", "Publish nightly GitHub Release")
+
+	workDir := t.TempDir()
+	bin := filepath.Join(workDir, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(workDir, "gh.log")
+	writeExecutable(t, filepath.Join(bin, "gh"), `#!/bin/bash
+echo "$*" >> "$FAKE_GH_LOG"
+if [ "$1" = "api" ] && [[ "$2" == */git/ref/tags/* ]]; then
+  if [ -n "${FAKE_TAG_SHA:-}" ]; then
+    echo "$FAKE_TAG_SHA"
+    exit 0
+  fi
+  exit 1
+fi
+if [ "$1" = "release" ] && [ "$2" = "view" ]; then
+  if [ "${FAKE_RELEASE_EXISTS:-false}" = "true" ]; then
+    exit 0
+  fi
+  exit 1
+fi
+exit 0
+`)
+
+	sha := strings.Repeat("a", 40)
+	manifest := fmt.Sprintf(`{"repository":"p-n-ai/pai-bot","sha":"%s"}`, sha)
+	if err := os.WriteFile(filepath.Join(workDir, "candidate.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	commonEnvironment := []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"),
+		"FAKE_GH_LOG=" + logPath,
+		"GITHUB_REPOSITORY=p-n-ai/pai-bot",
+		"SHA=" + sha,
+	}
+	if err := runBash(
+		t,
+		"cd \"$TEST_WORKDIR\"\n"+publish,
+		append(commonEnvironment, "TEST_WORKDIR="+workDir)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	log := string(mustReadFile(t, logPath))
+	requireContains(t, log,
+		"api repos/p-n-ai/pai-bot/git/ref/tags/nightly-"+sha+" --jq .object.sha",
+		"release create nightly-"+sha+" candidate.json --prerelease --latest=false --generate-notes --title Nightly "+sha[:12]+" --target "+sha,
+	)
+
+	if err := os.WriteFile(logPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runBash(
+		t,
+		"cd \"$TEST_WORKDIR\"\n"+publish,
+		append(commonEnvironment,
+			"TEST_WORKDIR="+workDir,
+			"FAKE_TAG_SHA="+sha,
+			"FAKE_RELEASE_EXISTS=true",
+		)...,
+	); err != nil {
+		t.Fatal(err)
+	}
+	log = string(mustReadFile(t, logPath))
+	if strings.Contains(log, "release create") {
+		t.Fatal("retry attempted to recreate an existing nightly release")
+	}
+
+	if err := runBash(
+		t,
+		"cd \"$TEST_WORKDIR\"\n"+publish,
+		append(commonEnvironment,
+			"TEST_WORKDIR="+workDir,
+			"FAKE_TAG_SHA="+strings.Repeat("b", 40),
+		)...,
+	); err == nil {
+		t.Fatal("nightly publication accepted an existing tag for another commit")
 	}
 }
 

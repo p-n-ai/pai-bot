@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      contents: read
+      contents: write
       id-token: write
       packages: write
     steps:
@@ -48,6 +48,16 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Restore completed candidate metadata
+        if: steps.artifact.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          gh run download "$GITHUB_RUN_ID"
+          --name "nightly-candidate-$SHA"
+          --dir .
 
       - name: Configure AWS credentials
         if: steps.artifact.outputs.exists != 'true'
@@ -225,3 +235,44 @@ jobs:
           path: candidate.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish nightly GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ ! -s candidate.json ]; then
+            echo "candidate.json is missing or empty" >&2
+            exit 1
+          fi
+          jq -e \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg sha "$SHA" \
+            '.repository == $repository and .sha == $sha' \
+            candidate.json >/dev/null
+
+          tag="nightly-$SHA"
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null) || tag_sha=""
+          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$SHA" ]; then
+            echo "tag $tag points to $tag_sha, expected $SHA" >&2
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release $tag already exists"
+            exit 0
+          fi
+
+          release_args=(
+            "$tag"
+            candidate.json
+            --prerelease
+            --latest=false
+            --generate-notes
+            --title "Nightly ${SHA:0:12}"
+          )
+          if [ -n "$tag_sha" ]; then
+            release_args+=(--verify-tag)
+          else
+            release_args+=(--target "$SHA")
+          fi
+          gh release create "${release_args[@]}"

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Accordion as AccordionPrimitive } from 'radix-ui'
 
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 
 function Accordion({

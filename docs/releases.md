@@ -1,9 +1,9 @@
-# Nightly candidates and stable releases
+# Nightly and stable releases
 
 P&AI separates building a release from deploying it. A successful `CI` run for
-a push to `main` produces a digest-pinned nightly candidate, but it never
-deploys production. A maintainer must explicitly promote one successful
-candidate through the `Stable release` workflow.
+a push to `main` produces a digest-pinned candidate and publishes a SHA-addressed
+GitHub prerelease, but it never deploys production. A maintainer must explicitly
+promote one successful candidate through the `Stable release` workflow.
 
 This runbook is for maintainers who create candidates, promote releases, or
 diagnose release failures.
@@ -15,9 +15,11 @@ The release workflows enforce these invariants:
 - Pull requests and `main` must pass the aggregate `Required CI gate`.
 - Only a successful `CI` push run on `main` can produce a nightly candidate.
 - A candidate records immutable app, admin, and PostgreSQL image digests.
+- Every candidate publishes one `nightly-<40-character-sha>` GitHub prerelease.
+- The prerelease includes `candidate.json` and never replaces a previous tag.
 - Stable promotion downloads an existing candidate and never rebuilds it.
-- Production receives the candidate commit and image digests before a semantic
-  tag or GitHub Release is published.
+- Production receives the candidate commit and image digests before a stable
+  semantic tag or GitHub Release is published.
 - Production deployment is manual. A merge to `main` does not deploy.
 - A failed deployment does not publish a new semantic tag or GitHub Release.
 
@@ -29,6 +31,7 @@ pull request
   -> merge to main
   -> successful main CI
   -> Nightly candidate artifact
+  -> SHA-addressed nightly GitHub prerelease
   -> manual Stable release
   -> production deployment
   -> vMAJOR.MINOR.PATCH tag and GitHub Release
@@ -77,7 +80,7 @@ See [Runtime AI settings](operations/runtime-ai-settings.md) for the production
 AI and secret-rotation contract. The exact values consumed during deployment
 are defined in [the deploy workflow](../.github/workflows/deploy.yml).
 
-## Create a nightly candidate
+## Create a nightly release
 
 No operator action is normally required. The `Nightly candidate` workflow
 starts after `CI` completes successfully for a push to `main`.
@@ -91,6 +94,8 @@ The workflow:
 5. Resolves all three registry digests.
 6. Uploads `candidate.json` as
    `nightly-candidate-<40-character-sha>` with 30-day retention.
+7. Publishes `nightly-<40-character-sha>` as a GitHub prerelease with
+   `candidate.json` attached.
 
 Registry inspection is fail-closed. Only a confirmed `manifest unknown` or
 not-found response marks an app/admin image as missing. Authentication,
@@ -159,7 +164,9 @@ run IDs, artifact name, source CI run, SHA, registry paths, and digest formats.
 
 Rerunning the same Nightly workflow is safe:
 
-- If its complete candidate artifact already exists, the rerun is a no-op.
+- If its complete candidate artifact already exists, candidate construction is
+  a no-op and its metadata is restored for publication.
+- If its GitHub prerelease already exists, publication is a no-op.
 - If no artifact exists, app and admin images are checked independently.
 - Confirmed-missing images are built; existing images are reused.
 - Multiple matching candidate artifacts fail as ambiguous.

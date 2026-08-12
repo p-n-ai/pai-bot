@@ -24,7 +24,7 @@ describe('AIUsageDailyTrend', () => {
     ).toBeInTheDocument()
     expect(
       within(section).getByText(
-        'Recent day-by-day token volume from the admin AI usage API.',
+        'Compare daily token use across the current reporting period.',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('May 1')).toBeInTheDocument()
@@ -45,7 +45,7 @@ describe('AIUsageDailyTrend', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Daily usage bars will appear once the tenant starts generating AI traffic.',
+        'Daily totals will appear after this school starts using AI features.',
       ),
     ).toBeInTheDocument()
   })
@@ -56,7 +56,7 @@ const viewWithDailyUsage: AIUsageView = {
   budgetLabel: 'No token budget configured',
   budgetLimit: null,
   budgetRemaining: null,
-  budgetWindowLabel: 'No active token window',
+  budgetWindowLabel: 'No active budget period',
   budgetUnit: 'none',
   dailyTrendPeak: 900,
   dailyUsage: [

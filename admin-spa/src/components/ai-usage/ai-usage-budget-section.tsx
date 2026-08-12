@@ -35,8 +35,8 @@ export function AIUsageBudgetSection({
 
   return (
     <SurfaceSection
-      description='Budget thresholds and remaining allowance for the active tenant-wide token window.'
-      title='Token budget window'
+      description='Review the limit, dates, and remaining tokens for this school.'
+      title='Token budget period'
     >
       <div className='grid gap-6'>
         {hasTokenBudget ? (
@@ -66,7 +66,7 @@ function ActiveBudgetSummary({
   return (
     <div className='grid gap-4'>
       <div className='flex flex-wrap items-center gap-2'>
-        <Badge variant='secondary'>Active window</Badge>
+        <Badge variant='secondary'>Active period</Badge>
         {progress !== null ? (
           <span className='text-sm text-[var(--admin-muted)]'>
             {progress}% used
@@ -74,7 +74,7 @@ function ActiveBudgetSummary({
         ) : null}
       </div>
       <section className='stat-grid' aria-label='Token budget summary'>
-        <StatItem label='Window' value={view.budgetWindowLabel} />
+        <StatItem label='Period' value={view.budgetWindowLabel} />
         <StatItem
           label='Limit'
           value={formatBudgetAmount(view.budgetLimit, view.budgetUnit)}
@@ -107,11 +107,10 @@ function EmptyBudgetSummary() {
       </Badge>
       <div>
         <h3 className='text-xl font-semibold tracking-[-0.025em]'>
-          No token budget yet
+          No token budget set
         </h3>
         <p className='mt-2 max-w-xl text-sm leading-6 text-[var(--admin-nav-text)]'>
-          Set a token limit and date range to create a clear usage guardrail for
-          this school.
+          Set a token limit and date range to manage this school’s AI use.
         </p>
       </div>
     </section>

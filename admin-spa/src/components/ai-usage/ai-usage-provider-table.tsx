@@ -16,9 +16,8 @@ export function AIUsageProviderTable({
 
   if (providers.length === 0) {
     return (
-      <StatePanel title='No provider traffic recorded'>
-        Provider rows will populate after the first successful AI requests for
-        this tenant.
+      <StatePanel title='No AI provider activity yet'>
+        Provider details will appear after the first successful AI response.
       </StatePanel>
     )
   }

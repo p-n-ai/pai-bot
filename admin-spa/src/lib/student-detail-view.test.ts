@@ -85,8 +85,8 @@ describe('buildStudentViewModel', () => {
 
   it('provides contrasting text for each activity intensity', () => {
     for (const level of [0, 1, 2, 3, 4]) {
-      expect(getActivityTone(level)).toContain('text-')
-      expect(getActivityTone(level)).toContain('dark:text-')
+      expect(getActivityTone(level)).toContain('text-[')
+      expect(getActivityTone(level)).toContain('bg-[')
     }
   })
 })

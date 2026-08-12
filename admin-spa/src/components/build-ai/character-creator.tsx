@@ -1,9 +1,9 @@
 /* oxlint-disable react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- This bounded local editor keeps each visible control transition beside its state update; extracted children are not memoized. */
 import { useEffect, useId, useRef, useState } from 'react'
-import { EyeIcon, RotateCcwIcon, SparklesIcon } from 'lucide-react'
 
 import { AdminSurface } from '@/components/shared/admin-surface'
 import { Button } from '@/components/ui/button'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 
@@ -232,7 +232,7 @@ export function CharacterCreator({
                 </Button>
               ))}
               <Button onClick={blink} size='sm' variant='outline'>
-                <EyeIcon aria-hidden='true' />
+                <PandaiIcon aria-hidden='true' name='activity' />
                 Blink
               </Button>
             </div>
@@ -356,7 +356,7 @@ export function CharacterCreator({
               title='Reset motion tuning'
               variant='ghost'
             >
-              <RotateCcwIcon aria-hidden='true' />
+              <PandaiIcon aria-hidden='true' name='rotate-ccw' />
             </Button>
           </div>
           <div className='mt-5 space-y-6'>
@@ -408,7 +408,11 @@ export function CharacterCreator({
         </section>
 
         <div className='flex gap-3 border-t border-border pt-7 text-sm text-muted-foreground'>
-          <SparklesIcon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
+          <PandaiIcon
+            aria-hidden='true'
+            className='mt-0.5 size-4 shrink-0'
+            name='star'
+          />
           <p>
             Character settings belong to this private Draft. Published Tutors
             and active classes remain unchanged until publication.

@@ -1,7 +1,11 @@
-import { CopyIcon, ExternalLinkIcon, PencilIcon } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 import type { SubmitOnboardingResult } from '@/lib/onboarding-types'
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  PencilIcon,
+} from '@/components/ui/pandai-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { OnboardingTeacherInvites } from '@/components/onboarding/onboarding-teacher-invites'
@@ -19,10 +23,12 @@ export function OnboardingResultActions({
     navigator.clipboard
       .writeText(result.join_link)
       .then(() => {
-        setCopyFeedback('Copied')
+        setCopyFeedback('Join link copied.')
       })
       .catch(() => {
-        setCopyFeedback('Could not copy the join link.')
+        setCopyFeedback(
+          'Unable to copy the join link. Copy it from the field and try again.',
+        )
       })
   }, [result.join_link])
   const handleOpen = useCallback(() => {
@@ -30,21 +36,24 @@ export function OnboardingResultActions({
   }, [result.join_link])
 
   return (
-    <StatePanel title='Welcome to your classroom.'>
+    <StatePanel title='Your first class is ready'>
       <div className='grid gap-3.5'>
-        <p>Your first class is ready to share.</p>
+        <p>Share this link with students joining {result.class_name}.</p>
         <p>{result.class_name}</p>
         <p>{result.school_name}</p>
-        <p>Students</p>
-        <Input aria-label='Join link' readOnly value={result.join_link} />
+        <Input
+          aria-label='Student join link'
+          readOnly
+          value={result.join_link}
+        />
         <div className='mt-6 flex flex-wrap gap-3'>
           <Button onClick={handleCopy} type='button' variant='outline'>
             <CopyIcon data-icon='inline-start' />
-            Copy
+            Copy join link
           </Button>
           <Button onClick={handleOpen} type='button' variant='outline'>
             <ExternalLinkIcon data-icon='inline-start' />
-            Open
+            Open join page
           </Button>
           <Button onClick={onEditSetup} type='button' variant='ghost'>
             <PencilIcon data-icon='inline-start' />

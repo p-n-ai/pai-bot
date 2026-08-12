@@ -27,14 +27,14 @@ it('keeps signed-out navigation free of duplicate sign in links', () => {
   ).toBeInTheDocument()
   expect(
     screen.getByText(
-      'Sign in to review progress and support the right students.',
+      'Sign in to see who needs support and choose the next action.',
     ),
   ).toBeInTheDocument()
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   expect(screen.getByText('See who needs help next.')).toBeInTheDocument()
   expect(screen.getByText('Guide the next lesson')).toBeInTheDocument()
-  expect(screen.getByText('Run the whole workspace')).toBeInTheDocument()
-  expect(screen.getByText('Keep access accountable')).toBeInTheDocument()
+  expect(screen.getByText('Manage school operations')).toBeInTheDocument()
+  expect(screen.getByText('Protect admin access')).toBeInTheDocument()
   expect(
     screen.queryByRole('link', { name: /sign in/i }),
   ).not.toBeInTheDocument()

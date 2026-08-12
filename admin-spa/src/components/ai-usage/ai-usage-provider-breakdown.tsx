@@ -6,7 +6,7 @@ import { SurfaceSection } from '@/components/shared/surface-section'
 export function AIUsageProviderBreakdown({ view }: { view: AIUsageView }) {
   return (
     <SurfaceSection
-      description='Provider and model mix for the recorded AI traffic in this workspace.'
+      description='Compare the providers and models used by this school.'
       title='Provider breakdown'
     >
       <div className='dashboard-stack'>

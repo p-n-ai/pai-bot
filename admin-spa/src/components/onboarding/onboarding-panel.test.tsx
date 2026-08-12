@@ -46,18 +46,20 @@ describe('OnboardingPanel', () => {
   it('walks the setup wizard and submits the selected class and tutor style', async () => {
     render(<OnboardingPanel />)
 
-    expect(await screen.findByText('Curriculum')).toBeInTheDocument()
-    expect(screen.getByText('Choose the starting syllabus')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Syllabus' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Choose a starting syllabus')).toBeInTheDocument()
     expect(
       screen.getByRole('progressbar', { name: 'Setup progress' }),
     ).toHaveAttribute('aria-valuenow', '25')
-    expect(screen.getByRole('button', { name: 'Curriculum' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Syllabus' })).toHaveAttribute(
       'aria-current',
       'step',
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect(screen.getByText('Name the class')).toBeInTheDocument()
+    expect(screen.getByText('Name your first class')).toBeInTheDocument()
     expect(
       screen.getByRole('progressbar', { name: 'Setup progress' }),
     ).toHaveAttribute('aria-valuenow', '50')
@@ -76,14 +78,14 @@ describe('OnboardingPanel', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
 
-    expect(screen.getByText('Choose how the tutor begins')).toBeInTheDocument()
+    expect(screen.getByText('Choose a tutor style')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Revision boost' }))
     expect(
       screen.getByRole('button', { name: 'Revision boost' }),
     ).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
 
-    expect(screen.getByText('Review and save')).toBeInTheDocument()
+    expect(screen.getByText('Review your setup')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('School name (optional)'), {
       target: { value: 'Sekolah Amanah' },
     })
@@ -107,7 +109,7 @@ describe('OnboardingPanel', () => {
     })
     expect(
       await screen.findByRole('heading', {
-        name: 'Welcome to your classroom.',
+        name: 'Your first class is ready',
       }),
     ).toBeInTheDocument()
     expect(screen.getByText('Form 1 Amanah')).toBeInTheDocument()

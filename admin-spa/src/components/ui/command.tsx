@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Command as CommandPrimitive } from 'cmdk'
 
-import { CheckIcon, SearchIcon } from 'lucide-react'
+import { CheckIcon, SearchIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -29,8 +29,8 @@ function Command({
 }
 
 function CommandDialog({
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title = 'Command palette',
+  description = 'Search for a command to run…',
   children,
   className,
   showCloseButton = false,

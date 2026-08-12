@@ -7,8 +7,12 @@ export interface EmbedTheme {
   position: EmbedPosition
 }
 
+const embedForegroundDark = 'oklch(0.371 0 0)'
+const embedForegroundLight = 'oklch(1 0 0)'
+
+// The native color input and published embed contract require six-digit hex.
 export const defaultEmbedTheme: EmbedTheme = {
-  color: '#b45a1a',
+  color: '#00cc85',
   language: 'en',
   position: 'bottom-right',
 }
@@ -38,7 +42,7 @@ export function getEmbedCopy(language: EmbedLanguage) {
 export function readableForeground(color: string) {
   const match = /^#([\dA-Fa-f]{6})$/.exec(color)
   if (!match) {
-    return '#ffffff'
+    return embedForegroundLight
   }
   const channels = [0, 2, 4].map((offset) => {
     const value = Number.parseInt(match[1].slice(offset, offset + 2), 16) / 255
@@ -46,13 +50,14 @@ export function readableForeground(color: string) {
   })
   const luminance =
     0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-  const dark = '#111827'
-  const darkLuminance = 0.0097
+  const darkLuminance = 0.0513
   const darkContrast =
     (Math.max(luminance, darkLuminance) + 0.05) /
     (Math.min(luminance, darkLuminance) + 0.05)
   const lightContrast = 1.05 / (luminance + 0.05)
-  return darkContrast >= lightContrast ? dark : '#ffffff'
+  return darkContrast >= lightContrast
+    ? embedForegroundDark
+    : embedForegroundLight
 }
 
 export function readEmbedTheme(config: Record<string, unknown>): EmbedTheme {

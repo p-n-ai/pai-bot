@@ -1,6 +1,6 @@
-import { PlusIcon } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
+import { PlusIcon } from '@/components/ui/pandai-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,7 +51,7 @@ export function ClassCreateForm({ onCreated }: { onCreated: () => void }) {
       <ClassCreateFields form={form} />
       {form.error ? (
         <p className='text-sm text-destructive lg:col-span-3' role='alert'>
-          {form.error} Try again.
+          {form.error}
         </p>
       ) : null}
       <Button
@@ -138,7 +138,7 @@ function ClassNameField({ form }: { form: ClassCreateFormState }) {
         id='class-name'
         name='class-name'
         onChange={form.handleNameChange}
-        placeholder='e.g. Form 1 Algebra A'
+        placeholder='Form 1 Algebra A'
         required
         value={form.name}
       />
@@ -174,7 +174,7 @@ function CadenceField({ form }: { form: ClassCreateFormState }) {
         id='class-cadence'
         name='class-cadence'
         onChange={form.handleCadenceChange}
-        placeholder='e.g. Mon, Wed, Fri'
+        placeholder='Mon, Wed, Fri'
         value={form.cadence}
       />
     </div>
@@ -241,6 +241,10 @@ async function createClass({
     setCadence('')
     onCreated()
   } catch (caught) {
-    setError(caught instanceof Error ? caught.message : 'Class create failed')
+    setError(
+      caught instanceof Error
+        ? caught.message
+        : 'Unable to create the class. Check your connection and try again.',
+    )
   }
 }

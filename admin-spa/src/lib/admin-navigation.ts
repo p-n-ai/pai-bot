@@ -1,31 +1,31 @@
-import {
-  BlocksIcon,
-  BookOpenCheckIcon,
-  BotIcon,
-  CableIcon,
-  DownloadIcon,
-  GaugeIcon,
-  Settings2Icon,
-  UsersIcon,
-  WalletCardsIcon,
-} from 'lucide-react'
-
 import { canAccessPath } from './rbac'
 import type { AuthUser } from './auth-types'
+import type { PandaiIconName } from '@/components/ui/pandai-icon'
 
-const navigationGroups = [
+export type NavigationItem = {
+  readonly href: string
+  readonly icon: PandaiIconName
+  readonly label: string
+}
+
+type NavigationGroup = {
+  readonly items: ReadonlyArray<NavigationItem>
+  readonly label: string
+}
+
+const navigationGroups: ReadonlyArray<NavigationGroup> = [
   {
     label: 'Teaching',
     items: [
       {
-        Icon: GaugeIcon,
         href: '/dashboard',
+        icon: 'home',
         label: 'Today',
       },
       {
-        Icon: BookOpenCheckIcon,
         href: '/dashboard/classes',
-        label: 'My classes',
+        icon: 'book-open',
+        label: 'Classes',
       },
     ],
   },
@@ -33,18 +33,18 @@ const navigationGroups = [
     label: 'School administration',
     items: [
       {
-        Icon: UsersIcon,
         href: '/settings/users',
+        icon: 'users',
         label: 'Staff access',
       },
       {
-        Icon: WalletCardsIcon,
         href: '/settings/budget',
+        icon: 'credit-card',
         label: 'AI budget',
       },
       {
-        Icon: DownloadIcon,
         href: '/export',
+        icon: 'download',
         label: 'Download records',
       },
     ],
@@ -53,31 +53,29 @@ const navigationGroups = [
     label: 'Technical tools',
     items: [
       {
-        Icon: BlocksIcon,
         href: '/build-ai',
+        icon: 'layers',
         label: 'Build AI',
       },
       {
-        Icon: BotIcon,
         href: '/dashboard/ai-usage',
-        label: 'AI activity',
+        icon: 'activity',
+        label: 'AI usage',
       },
       {
         // Visible only with can_manage_ai_settings (canAccessPath filter).
-        Icon: Settings2Icon,
         href: '/settings/ai',
+        icon: 'settings',
         label: 'AI settings',
       },
       {
-        Icon: CableIcon,
         href: '/settings/embed',
+        icon: 'globe',
         label: 'Website chat',
       },
     ],
   },
 ]
-
-export type NavigationItem = (typeof navigationGroups)[number]['items'][number]
 
 export function getVisibleNavigationGroups(user: AuthUser | null) {
   return navigationGroups

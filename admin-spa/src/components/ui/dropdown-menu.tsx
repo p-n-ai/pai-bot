@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 
-import { CheckIcon, ChevronRightIcon } from 'lucide-react'
+import { CheckIcon, ChevronRightIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 
 function DropdownMenu({

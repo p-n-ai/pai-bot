@@ -9,7 +9,7 @@ import {
 export function AIUsageDailyTrend({ view }: { view: AIUsageView }) {
   return (
     <SurfaceSection
-      description='Recent day-by-day token volume from the admin AI usage API.'
+      description='Compare daily token use across the current reporting period.'
       title='Daily token trend'
     >
       {view.hasDailyTrend ? (
@@ -24,8 +24,7 @@ export function AIUsageDailyTrend({ view }: { view: AIUsageView }) {
         </div>
       ) : (
         <StatePanel title='No daily token trend yet'>
-          Daily usage bars will appear once the tenant starts generating AI
-          traffic.
+          Daily totals will appear after this school starts using AI features.
         </StatePanel>
       )}
     </SurfaceSection>
