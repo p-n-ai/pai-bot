@@ -45,9 +45,8 @@ function InputGroupAddon({
   className,
   align = 'inline-start',
   ...props
-}: React.ComponentProps<'button'> & VariantProps<
-  typeof inputGroupAddonVariants
->) {
+}: React.ComponentProps<'button'> &
+  VariantProps<typeof inputGroupAddonVariants>) {
   const focusInput = React.useCallback(
     (target: HTMLElement, currentTarget: HTMLButtonElement) => {
       if (!target.closest('button')) {

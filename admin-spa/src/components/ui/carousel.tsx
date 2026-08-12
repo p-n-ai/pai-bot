@@ -160,7 +160,10 @@ function CarouselContent({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function CarouselItem({ className, ...props }: React.ComponentProps<'section'>) {
+function CarouselItem({
+  className,
+  ...props
+}: React.ComponentProps<'section'>) {
   const { orientation } = useCarousel()
 
   return (

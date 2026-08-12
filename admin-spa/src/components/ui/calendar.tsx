@@ -2,7 +2,12 @@
 
 import * as React from 'react'
 import { DayPicker, getDefaultClassNames, useDayPicker } from 'react-day-picker'
-import type { ChevronProps, DayButton, RootProps, WeekNumberProps } from 'react-day-picker'
+import type {
+  ChevronProps,
+  DayButton,
+  RootProps,
+  WeekNumberProps,
+} from 'react-day-picker'
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -25,11 +30,7 @@ function CalendarRoot({ className, rootRef, ...props }: RootProps) {
   )
 }
 
-function CalendarChevron({
-  className,
-  orientation,
-  ...props
-}: ChevronProps) {
+function CalendarChevron({ className, orientation, ...props }: ChevronProps) {
   if (orientation === 'left') {
     return <ChevronLeftIcon className={cn('size-4', className)} {...props} />
   }

@@ -64,9 +64,7 @@ export function ClassInvitePanel() {
         </p>
       ) : null}
       {invite.latestInvite ? (
-        <output
-          className='grid gap-3 rounded-lg border border-border bg-muted/30 p-4'
-        >
+        <output className='grid gap-3 rounded-lg border border-border bg-muted/30 p-4'>
           <div>
             <p className='font-medium'>
               Invite ready for {invite.latestInvite.email}

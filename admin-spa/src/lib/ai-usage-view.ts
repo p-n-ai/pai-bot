@@ -133,10 +133,7 @@ const budgetWindowFormatters = {
   empty: () => 'No active budget period',
   end: (_start, end) => `Ends ${formatAIUsageDateLabel(end)}`,
   start: (start) => `Started ${formatAIUsageDateLabel(start)}`,
-} satisfies Record<
-  BudgetWindowKey,
-  (start: string, end: string) => string
->
+} satisfies Record<BudgetWindowKey, (start: string, end: string) => string>
 
 function getBudgetWindowKey(start: string, end: string): BudgetWindowKey {
   if (start && end) return 'both'

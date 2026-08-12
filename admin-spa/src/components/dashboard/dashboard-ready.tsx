@@ -106,9 +106,7 @@ export function DashboardReady({
 
 function NudgeFeedback({ message }: { message: string }) {
   return (
-    <output
-      className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'
-    >
+    <output className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'>
       <PandaiIcon className='size-4 shrink-0' name='check-circle' />
       {message}
     </output>

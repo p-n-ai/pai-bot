@@ -22,11 +22,7 @@ export function ContentSkeleton({
   variant: ContentSkeletonVariant
 }) {
   return (
-    <output
-      aria-busy='true'
-      className='mt-6'
-      data-skeleton-variant={variant}
-    >
+    <output aria-busy='true' className='mt-6' data-skeleton-variant={variant}>
       <span className='sr-only'>{label}</span>
       {getSkeletonContent(variant)}
     </output>

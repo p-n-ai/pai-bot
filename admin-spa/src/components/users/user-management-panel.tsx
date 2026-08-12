@@ -572,12 +572,12 @@ function filterRecords<T extends SearchableRecord>(
     return records
   }
 
-  return records.filter((record) => searchableRecordText(record).includes(query))
+  return records.filter((record) =>
+    searchableRecordText(record).includes(query),
+  )
 }
 
-function searchableRecordText(
-  record: SearchableRecord,
-): string {
+function searchableRecordText(record: SearchableRecord): string {
   if ('access' in record) {
     return [
       record.name,

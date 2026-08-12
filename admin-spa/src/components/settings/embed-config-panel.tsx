@@ -376,9 +376,7 @@ export function EmbedConfigPanel() {
                 title='Unable to save website chat settings'
               />
               {saveSuccess && (
-                <output
-                  className='w-full text-sm font-medium text-[var(--status-success-text)]'
-                >
+                <output className='w-full text-sm font-medium text-[var(--status-success-text)]'>
                   {saveSuccess}
                 </output>
               )}
