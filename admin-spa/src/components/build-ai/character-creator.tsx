@@ -14,7 +14,7 @@ export type CharacterShape =
   | 'egg'
   | 'capsule'
   | 'cloud'
-export type CharacterColor = 'blue' | 'violet' | 'tangerine' | 'lime'
+export type CharacterColor = 'pandai' | 'mint' | 'leaf' | 'forest'
 export type CharacterExpression =
   | 'neutral'
   | 'joyful'
@@ -32,7 +32,7 @@ export interface CharacterConfig {
 }
 
 export const defaultCharacterConfig: CharacterConfig = {
-  color: 'blue',
+  color: 'pandai',
   expression: 'attentive',
   eyeScale: 1,
   gazeX: 0,
@@ -100,10 +100,26 @@ const colors: ReadonlyArray<{
   label: string
   value: string
 }> = [
-  { id: 'blue', label: 'P&AI blue', value: '#3ba6f1' },
-  { id: 'violet', label: 'Ube violet', value: '#8b7be8' },
-  { id: 'tangerine', label: 'Tangerine', value: '#ff7614' },
-  { id: 'lime', label: 'Lime', value: '#cbd810' },
+  {
+    id: 'pandai',
+    label: 'Pandai green',
+    value: 'var(--surface-primary-default)',
+  },
+  {
+    id: 'mint',
+    label: 'Pandai mint',
+    value: 'var(--surface-primary-default-subtle-hover)',
+  },
+  {
+    id: 'leaf',
+    label: 'Pandai leaf',
+    value: 'var(--surface-secondary-default)',
+  },
+  {
+    id: 'forest',
+    label: 'Pandai deep green',
+    value: 'var(--surface-primary-focus)',
+  },
 ]
 
 const expressions: ReadonlyArray<{
@@ -192,16 +208,25 @@ export function CharacterCreator({
           className='overflow-hidden shadow-none'
           contentClassName='p-0'
         >
-          <div className='flex items-center justify-between border-b border-[var(--admin-line)] px-5 py-4'>
-            <div>
-              <p className='font-semibold'>Character preview</p>
-              <p className='mt-1 text-xs text-muted-foreground'>
-                {shapeLabel(config.shape)} ·{' '}
-                {expressionLabel(config.expression)}
-              </p>
+          <div className='flex items-center justify-between gap-4 border-b border-[var(--admin-line)] px-5 py-4'>
+            <div className='flex min-w-0 items-center gap-3'>
+              <img
+                alt=''
+                className='size-12 shrink-0'
+                height='48'
+                src='/illustrations/pbot.svg'
+                width='48'
+              />
+              <div className='min-w-0'>
+                <p className='font-semibold'>P-Bot character preview</p>
+                <p className='mt-1 truncate text-xs text-muted-foreground'>
+                  {shapeLabel(config.shape)} ·{' '}
+                  {expressionLabel(config.expression)}
+                </p>
+              </div>
             </div>
-            <span className='rounded-full border border-border px-2.5 py-1 text-xs font-medium'>
-              {previewState}
+            <span className='shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-medium'>
+              P-Bot · {previewState}
             </span>
           </div>
           <div className='grid min-h-[22rem] place-items-center bg-[var(--admin-surface-muted)] p-8 sm:min-h-[28rem]'>
@@ -242,9 +267,9 @@ export function CharacterCreator({
 
       <div className='space-y-8'>
         <fieldset>
-          <legend className='text-lg font-semibold'>Silhouette</legend>
+          <legend className='text-lg font-semibold'>P-Bot silhouette</legend>
           <p className='mt-1 text-sm leading-6 text-muted-foreground'>
-            Choose the Tutor’s recognizable shape across chat surfaces.
+            Shape one P-Bot family character for every learner-facing chat.
           </p>
           <div className='mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3'>
             {shapes.map((shape) => (
@@ -271,9 +296,10 @@ export function CharacterCreator({
         </fieldset>
 
         <fieldset className='border-t border-border pt-7'>
-          <legend className='text-lg font-semibold'>Palette</legend>
+          <legend className='text-lg font-semibold'>Green tone</legend>
           <p className='mt-1 text-sm leading-6 text-muted-foreground'>
-            Use one high-contrast P&amp;AI color with the fixed dark face.
+            Every option stays inside Pandai’s green family with P-Bot’s fixed
+            dark visor.
           </p>
           <div className='mt-4 grid gap-2 sm:grid-cols-2'>
             {colors.map((color) => (
@@ -414,8 +440,8 @@ export function CharacterCreator({
             name='star'
           />
           <p>
-            Character settings belong to this private Draft. Published Tutors
-            and active classes remain unchanged until publication.
+            Every option keeps P-Bot’s visor, orbit nodes, and Pandai color
+            language. Settings stay private until publication.
           </p>
         </div>
       </div>
@@ -454,14 +480,19 @@ function CharacterPreview({
       role='img'
       viewBox='-22 -22 273 273'
     >
-      <title id={`${clipID}-title`}>P&amp;AI Tutor character preview</title>
+      <title id={`${clipID}-title`}>
+        P&amp;AI Tutor character preview · P-Bot
+      </title>
       <desc id={`${clipID}-description`}>
-        {shape.label} character with the {expression.label.toLowerCase()}{' '}
+        {shape.label} P-Bot character with the {expression.label.toLowerCase()}{' '}
         expression.
       </desc>
       <defs>
         <clipPath id={clipID}>
           <path d={bodyPath} />
+        </clipPath>
+        <clipPath id={`${clipID}-visor`}>
+          <rect height='174' rx='52' width='174' x='27' y='27' />
         </clipPath>
       </defs>
       <g
@@ -469,15 +500,52 @@ function CharacterPreview({
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         transform={`rotate(${config.turn} 114.27 114.27) ${shapeTransform}`}
       >
-        <path d={bodyPath} fill={colorValue(config.color)} />
+        <circle
+          cx='13'
+          cy='67'
+          fill={colorValue(config.color)}
+          r='11'
+          stroke='var(--text-default-heading)'
+          strokeWidth='1.5'
+        />
+        <circle
+          cx='216'
+          cy='171'
+          fill={colorValue(config.color)}
+          r='11'
+          stroke='var(--text-default-heading)'
+          strokeWidth='1.5'
+        />
+        <path
+          d={bodyPath}
+          fill={colorValue(config.color)}
+          stroke='var(--text-default-heading)'
+          strokeWidth='1.5'
+        />
         <g clipPath={`url(#${clipID})`}>
-          <g
-            className='transition-transform duration-150 ease-out motion-reduce:transition-none'
-            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            transform={eyeTransform}
-          >
-            <path d={expression.left} fill='#10130f' />
-            <path d={expression.right} fill='#10130f' />
+          <rect
+            fill='var(--text-default-heading)'
+            height='174'
+            rx='52'
+            width='174'
+            x='27'
+            y='27'
+          />
+          <g clipPath={`url(#${clipID}-visor)`}>
+            <g
+              className='transition-transform duration-150 ease-out motion-reduce:transition-none'
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+              transform={eyeTransform}
+            >
+              <path
+                d={expression.left}
+                fill='var(--surface-primary-default-subtle-hover)'
+              />
+              <path
+                d={expression.right}
+                fill='var(--surface-primary-default-subtle-hover)'
+              />
+            </g>
           </g>
         </g>
       </g>
@@ -492,10 +560,56 @@ function MiniShape({
   color: string
   shape: (typeof shapes)[number]
 }) {
+  const clipID = `mini-pbot-${useId().replaceAll(':', '')}`
   const transform = `translate(${shape.offsetX} ${shape.offsetY}) translate(114.27 114.27) scale(${shape.scaleX} ${shape.scaleY}) translate(-114.27 -114.27)`
   return (
     <svg aria-hidden='true' className='h-14 w-full' viewBox='-15 -15 259 259'>
-      <path d={bodyPath} fill={color} transform={transform} />
+      <defs>
+        <clipPath id={clipID}>
+          <path d={bodyPath} />
+        </clipPath>
+      </defs>
+      <g transform={transform}>
+        <circle
+          cx='13'
+          cy='67'
+          fill={color}
+          r='11'
+          stroke='var(--text-default-heading)'
+          strokeWidth='2'
+        />
+        <circle
+          cx='216'
+          cy='171'
+          fill={color}
+          r='11'
+          stroke='var(--text-default-heading)'
+          strokeWidth='2'
+        />
+        <path
+          d={bodyPath}
+          fill={color}
+          stroke='var(--text-default-heading)'
+          strokeWidth='2'
+        />
+        <g clipPath={`url(#${clipID})`}>
+          <rect
+            fill='var(--text-default-heading)'
+            height='174'
+            rx='52'
+            width='174'
+            x='27'
+            y='27'
+          />
+          <path
+            d='M61 108C68 90 82 90 89 108M139 108C146 90 160 90 167 108'
+            fill='none'
+            stroke='var(--surface-primary-default-subtle-hover)'
+            strokeLinecap='round'
+            strokeWidth='9'
+          />
+        </g>
+      </g>
     </svg>
   )
 }
@@ -545,12 +659,15 @@ export function characterSummary(config: CharacterConfig) {
 
 function colorLabel(color: CharacterColor) {
   return (
-    colors.find((candidate) => candidate.id === color)?.label ?? 'P&AI blue'
+    colors.find((candidate) => candidate.id === color)?.label ?? 'Pandai green'
   )
 }
 
 function colorValue(color: CharacterColor) {
-  return colors.find((candidate) => candidate.id === color)?.value ?? '#3ba6f1'
+  return (
+    colors.find((candidate) => candidate.id === color)?.value ??
+    'var(--surface-primary-default)'
+  )
 }
 
 function expressionLabel(expression: CharacterExpression) {

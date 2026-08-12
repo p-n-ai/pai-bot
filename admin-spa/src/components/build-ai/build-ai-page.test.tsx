@@ -38,7 +38,7 @@ describe('Build AI illustrative workspace', () => {
         .map((link) => link.textContent),
     ).toEqual([
       'Overview',
-      'Character',
+      'P-Bot character',
       'Curriculum',
       'Teaching',
       'Test tutor',

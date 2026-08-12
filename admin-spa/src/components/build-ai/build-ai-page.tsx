@@ -305,7 +305,7 @@ const destinations: ReadonlyArray<{
   icon: PandaiIconName
 }> = [
   { id: 'overview', label: 'Overview', icon: 'layout' },
-  { id: 'character', label: 'Character', icon: 'star' },
+  { id: 'character', label: 'P-Bot character', icon: 'star' },
   { id: 'curriculum', label: 'Curriculum', icon: 'book-open' },
   { id: 'teaching', label: 'Teaching', icon: 'settings' },
   { id: 'test', label: 'Test tutor', icon: 'zap' },
@@ -764,9 +764,9 @@ function CharacterPage({
 }) {
   return (
     <div>
-      <PageHeader page='character' title='Character'>
-        Create how the Tutor appears and reacts across learner-facing chat.
-        Character choices stay inside this private Draft until publication.
+      <PageHeader page='character' title='P-Bot character'>
+        Create one Tutor from P-Bot’s recognizable visor, movement, and Pandai
+        color language. Choices stay private until publication.
       </PageHeader>
       <CharacterCreator config={character} onChange={updateCharacter} />
       <div className='mt-8 flex flex-wrap gap-3 border-t border-border pt-7'>
