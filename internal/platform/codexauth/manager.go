@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 const requestTimeout = 15 * time.Second
@@ -64,6 +65,22 @@ type rpcMessage struct {
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  *rpcError       `json:"error,omitempty"`
+}
+
+type rpcRequest struct {
+	ID     int64             `json:"id"`
+	Method string            `json:"method"`
+	Params jsonobject.Object `json:"params"`
+}
+
+type rpcNotification struct {
+	Method string            `json:"method"`
+	Params jsonobject.Object `json:"params"`
+}
+
+type rpcFailure struct {
+	ID    json.RawMessage `json:"id"`
+	Error rpcError        `json:"error"`
 }
 
 type pendingResponse struct {
@@ -183,7 +200,7 @@ func (m *Manager) Refresh(ctx context.Context) error {
 }
 
 func (m *Manager) refresh(ctx context.Context, refreshToken bool) error {
-	result, err := m.call(ctx, "account/read", map[string]bool{"refreshToken": refreshToken})
+	result, err := m.call(ctx, "account/read", jsonobject.New(jsonobject.Member("refreshToken", refreshToken)))
 	if err != nil {
 		if refreshToken {
 			m.setStatusUnlessLoginActive(Status{
@@ -212,9 +229,7 @@ func (m *Manager) refresh(ctx context.Context, refreshToken bool) error {
 func (m *Manager) startDeviceLogin() {
 	ctx, cancel := context.WithTimeout(m.parent, requestTimeout)
 	defer cancel()
-	result, err := m.call(ctx, "account/login/start", map[string]string{
-		"type": "chatgptDeviceCode",
-	})
+	result, err := m.call(ctx, "account/login/start", jsonobject.New(jsonobject.Member("type", "chatgptDeviceCode")))
 	if err != nil {
 		m.failStarting("Codex device login could not be started.")
 		return
@@ -300,31 +315,31 @@ func (m *Manager) ensureProcess(ctx context.Context) error {
 
 	initCtx, initCancel := context.WithTimeout(ctx, requestTimeout)
 	defer initCancel()
-	if _, err := m.callRunning(initCtx, "initialize", map[string]any{
-		"clientInfo": map[string]string{
-			"name":    "pai_bot",
-			"title":   "PaiBot",
-			"version": "1",
-		},
-	}); err != nil {
+	if _, err := m.callRunning(initCtx, "initialize", jsonobject.New(
+		jsonobject.Member("clientInfo", struct {
+			Name    string `json:"name"`
+			Title   string `json:"title"`
+			Version string `json:"version"`
+		}{Name: "pai_bot", Title: "PaiBot", Version: "1"}),
+	)); err != nil {
 		cancel()
 		return errors.New("initialize Codex app-server")
 	}
-	if err := m.notify(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+	if err := m.notify(rpcNotification{Method: "initialized", Params: jsonobject.New()}); err != nil {
 		cancel()
 		return errors.New("acknowledge Codex app-server")
 	}
 	return nil
 }
 
-func (m *Manager) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (m *Manager) call(ctx context.Context, method string, params jsonobject.Object) (json.RawMessage, error) {
 	if err := m.ensureProcess(ctx); err != nil {
 		return nil, err
 	}
 	return m.callRunning(ctx, method, params)
 }
 
-func (m *Manager) callRunning(ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (m *Manager) callRunning(ctx context.Context, method string, params jsonobject.Object) (json.RawMessage, error) {
 	m.mu.Lock()
 	m.nextID++
 	id := m.nextID
@@ -332,7 +347,7 @@ func (m *Manager) callRunning(ctx context.Context, method string, params any) (j
 	m.pending[id] = response
 	m.mu.Unlock()
 
-	if err := m.write(map[string]any{"id": id, "method": method, "params": params}); err != nil {
+	if err := writeCodexMessage(m, rpcRequest{ID: id, Method: method, Params: params}); err != nil {
 		m.removePending(id)
 		return nil, err
 	}
@@ -353,11 +368,11 @@ func (m *Manager) callRunning(ctx context.Context, method string, params any) (j
 	}
 }
 
-func (m *Manager) notify(message any) error {
-	return m.write(message)
+func (m *Manager) notify(message rpcNotification) error {
+	return writeCodexMessage(m, message)
 }
 
-func (m *Manager) write(message any) error {
+func writeCodexMessage[T any](m *Manager, message T) error {
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()
 	m.mu.RLock()
@@ -408,11 +423,11 @@ func (m *Manager) readLoop(cmd *exec.Cmd, output io.Reader) {
 }
 
 func (m *Manager) rejectServerRequest(id json.RawMessage) {
-	_ = m.write(map[string]any{
-		"id": id,
-		"error": map[string]any{
-			"code":    -32601,
-			"message": "PaiBot does not expose interactive Codex tools",
+	_ = writeCodexMessage(m, rpcFailure{
+		ID: id,
+		Error: rpcError{
+			Code:    -32601,
+			Message: "PaiBot does not expose interactive Codex tools",
 		},
 	})
 }

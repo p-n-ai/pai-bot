@@ -93,8 +93,8 @@ func (t *createFocusedPageTool) Definition() llm.Tool {
 }
 
 func (t *createFocusedPageTool) Execute(ctx context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
-	message, ok := call.Arguments["message"].(string)
-	if !ok || len(call.Arguments) != 1 {
+	message, ok, err := llm.ToolArgumentValue[string](call.Arguments, "message")
+	if err != nil || !ok || call.Arguments.Len() != 1 {
 		return focusedPageToolResult("Invalid arguments: message must be the only field.", true), nil
 	}
 	parsed, err := focusedpage.ParseMessage(message)

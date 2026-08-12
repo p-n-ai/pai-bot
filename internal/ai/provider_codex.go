@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
@@ -118,20 +119,20 @@ var _ Provider = (*CodexProvider)(nil)
 var _ NativeProvider = (*CodexProvider)(nil)
 
 type codexRequest struct {
-	Model             string           `json:"model"`
-	Store             bool             `json:"store"`
-	Stream            bool             `json:"stream"`
-	Instructions      string           `json:"instructions"`
-	Input             []any            `json:"input"`
-	Tools             []codexTool      `json:"tools,omitempty"`
-	ToolChoice        string           `json:"tool_choice,omitempty"`
-	ParallelToolCalls bool             `json:"parallel_tool_calls,omitempty"`
-	MaxOutputTokens   int              `json:"max_output_tokens,omitempty"`
-	Temperature       *float64         `json:"temperature,omitempty"`
-	Reasoning         *codexReasoning  `json:"reasoning,omitempty"`
-	Text              codexTextOptions `json:"text"`
-	Include           []string         `json:"include,omitempty"`
-	PromptCacheKey    string           `json:"prompt_cache_key,omitempty"`
+	Model             string              `json:"model"`
+	Store             bool                `json:"store"`
+	Stream            bool                `json:"stream"`
+	Instructions      string              `json:"instructions"`
+	Input             []jsonobject.Object `json:"input"`
+	Tools             []codexTool         `json:"tools,omitempty"`
+	ToolChoice        string              `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool                `json:"parallel_tool_calls,omitempty"`
+	MaxOutputTokens   int                 `json:"max_output_tokens,omitempty"`
+	Temperature       *float64            `json:"temperature,omitempty"`
+	Reasoning         *codexReasoning     `json:"reasoning,omitempty"`
+	Text              codexTextOptions    `json:"text"`
+	Include           []string            `json:"include,omitempty"`
+	PromptCacheKey    string              `json:"prompt_cache_key,omitempty"`
 	headers           map[string]string
 }
 
@@ -626,7 +627,10 @@ func buildCodexLegacyRequest(req CompletionRequest) (codexRequest, error) {
 		case "user":
 			content := codexUserContent(message.Content, message.ImageURLs)
 			if len(content) > 0 {
-				request.Input = append(request.Input, map[string]any{"role": "user", "content": content})
+				request.Input = append(request.Input, jsonobject.New(
+					jsonobject.Member("role", "user"),
+					jsonobject.Member("content", content),
+				))
 			}
 		case "assistant":
 			if len(message.ImageURLs) > 0 {
@@ -666,7 +670,10 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 				return codexRequest{}, err
 			}
 			if len(content) > 0 {
-				request.Input = append(request.Input, map[string]any{"role": "user", "content": content})
+				request.Input = append(request.Input, jsonobject.New(
+					jsonobject.Member("role", "user"),
+					jsonobject.Member("content", content),
+				))
 			}
 		case llm.AssistantMessage:
 			for _, block := range typed.Content {
@@ -678,18 +685,15 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 					if err != nil {
 						return codexRequest{}, fmt.Errorf("codex tool call %q arguments: %w", value.Name, err)
 					}
-					if value.Arguments == nil {
-						arguments = []byte("{}")
-					}
 					callID, itemID, _ := strings.Cut(value.ID, "|")
-					item := map[string]any{
-						"type":      "function_call",
-						"call_id":   callID,
-						"name":      value.Name,
-						"arguments": string(arguments),
-					}
+					item := jsonobject.New(
+						jsonobject.Member("type", "function_call"),
+						jsonobject.Member("call_id", callID),
+						jsonobject.Member("name", value.Name),
+						jsonobject.Member("arguments", string(arguments)),
+					)
 					if itemID != "" {
-						item["id"] = itemID
+						item = item.With(jsonobject.Member("id", itemID))
 					}
 					request.Input = append(request.Input, item)
 				case llm.ThinkingContent:
@@ -711,11 +715,11 @@ func buildCodexNativeRequest(model string, c llm.Context, opts *llm.StreamOption
 				return codexRequest{}, err
 			}
 			callID, _, _ := strings.Cut(typed.ToolCallID, "|")
-			request.Input = append(request.Input, map[string]any{
-				"type":    "function_call_output",
-				"call_id": callID,
-				"output":  output,
-			})
+			request.Input = append(request.Input, jsonobject.New(
+				jsonobject.Member("type", "function_call_output"),
+				jsonobject.Member("call_id", callID),
+				jsonobject.Member("output", output),
+			))
 		default:
 			return codexRequest{}, fmt.Errorf("unsupported Codex message type %T", message)
 		}
@@ -771,36 +775,44 @@ func codexInstructions(instructions []string) string {
 	return strings.Join(instructions, "\n\n")
 }
 
-func codexUserContent(text string, imageURLs []string) []any {
-	content := make([]any, 0, 1+len(imageURLs))
+func codexUserContent(text string, imageURLs []string) []jsonobject.Object {
+	content := make([]jsonobject.Object, 0, 1+len(imageURLs))
 	if text != "" {
-		content = append(content, map[string]any{"type": "input_text", "text": text})
+		content = append(content, jsonobject.New(jsonobject.Member("type", "input_text"), jsonobject.Member("text", text)))
 	}
 	for _, imageURL := range imageURLs {
 		if imageURL != "" {
-			content = append(content, map[string]any{"type": "input_image", "image_url": imageURL, "detail": "auto"})
+			content = append(content, jsonobject.New(
+				jsonobject.Member("type", "input_image"),
+				jsonobject.Member("image_url", imageURL),
+				jsonobject.Member("detail", "auto"),
+			))
 		}
 	}
 	return content
 }
 
-func codexNativeUserContent(content []llm.UserContent) ([]any, error) {
-	projected := make([]any, 0, len(content))
+func codexNativeUserContent(content []llm.UserContent) ([]jsonobject.Object, error) {
+	projected := make([]jsonobject.Object, 0, len(content))
 	for _, block := range content {
 		switch value := block.(type) {
 		case llm.TextContent:
-			projected = append(projected, map[string]any{"type": "input_text", "text": value.Text})
+			projected = append(projected, jsonobject.New(jsonobject.Member("type", "input_text"), jsonobject.Member("text", value.Text)))
 		case llm.ImageURLContent:
-			projected = append(projected, map[string]any{"type": "input_image", "image_url": value.URL, "detail": "auto"})
+			projected = append(projected, jsonobject.New(
+				jsonobject.Member("type", "input_image"),
+				jsonobject.Member("image_url", value.URL),
+				jsonobject.Member("detail", "auto"),
+			))
 		case llm.ImageContent:
 			if _, err := base64.StdEncoding.DecodeString(value.Data); err != nil {
 				return nil, errors.New("codex user message contains invalid image data")
 			}
-			projected = append(projected, map[string]any{
-				"type":      "input_image",
-				"image_url": "data:" + value.MimeType + ";base64," + value.Data,
-				"detail":    "auto",
-			})
+			projected = append(projected, jsonobject.New(
+				jsonobject.Member("type", "input_image"),
+				jsonobject.Member("image_url", "data:"+value.MimeType+";base64,"+value.Data),
+				jsonobject.Member("detail", "auto"),
+			))
 		default:
 			return nil, fmt.Errorf("unsupported Codex user content type %T", block)
 		}
@@ -808,39 +820,38 @@ func codexNativeUserContent(content []llm.UserContent) ([]any, error) {
 	return projected, nil
 }
 
-func codexAssistantInput(text string) map[string]any {
-	return map[string]any{
-		"role": "assistant",
-		"content": []any{
-			map[string]any{"type": "input_text", "text": text},
-		},
-	}
+func codexAssistantInput(text string) jsonobject.Object {
+	return jsonobject.New(
+		jsonobject.Member("role", "assistant"),
+		jsonobject.Member("content", []jsonobject.Object{
+			jsonobject.New(jsonobject.Member("type", "input_text"), jsonobject.Member("text", text)),
+		}),
+	)
 }
 
-func parseCodexReasoningSignature(signature string) (json.RawMessage, error) {
+func parseCodexReasoningSignature(signature string) (jsonobject.Object, error) {
 	if !json.Valid([]byte(signature)) {
-		return nil, errors.New("codex reasoning signature is invalid JSON")
+		return jsonobject.Object{}, errors.New("codex reasoning signature is invalid JSON")
 	}
-	var item map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(signature), &item); err != nil || item == nil {
-		return nil, errors.New("codex reasoning signature must be a JSON object")
+	item, err := jsonobject.Parse([]byte(signature))
+	if err != nil {
+		return jsonobject.Object{}, errors.New("codex reasoning signature must be a JSON object")
 	}
-	var itemType string
-	if err := json.Unmarshal(item["type"], &itemType); err != nil || itemType != "reasoning" {
-		return nil, errors.New("codex reasoning signature must contain a reasoning output item")
+	itemType, ok, err := jsonobject.Get[string](item, "type")
+	if err != nil || !ok || itemType != "reasoning" {
+		return jsonobject.Object{}, errors.New("codex reasoning signature must contain a reasoning output item")
 	}
-	var id string
-	if err := json.Unmarshal(item["id"], &id); err != nil || id == "" {
-		return nil, errors.New("codex reasoning signature must contain an item ID")
+	id, ok, err := jsonobject.Get[string](item, "id")
+	if err != nil || !ok || id == "" {
+		return jsonobject.Object{}, errors.New("codex reasoning signature must contain an item ID")
 	}
-	return append(json.RawMessage(nil), signature...), nil
+	return item, nil
 }
 
 func buildCodexTools(tools []llm.Tool) ([]codexTool, error) {
 	projected := make([]codexTool, len(tools))
 	for i, tool := range tools {
-		var parameters map[string]any
-		if err := json.Unmarshal(tool.Parameters, &parameters); err != nil || parameters == nil {
+		if _, err := jsonobject.Parse(tool.Parameters); err != nil {
 			return nil, fmt.Errorf("codex tool %q parameters must be a JSON object", tool.Name)
 		}
 		projected[i] = codexTool{
@@ -864,8 +875,7 @@ func applyCodexStructuredOutput(request *codexRequest, spec *StructuredOutputSpe
 	if len(spec.JSONSchema) == 0 || !json.Valid(spec.JSONSchema) {
 		return errors.New("structured output JSON schema is required")
 	}
-	var schema map[string]any
-	if err := json.Unmarshal(spec.JSONSchema, &schema); err != nil || schema == nil {
+	if _, err := jsonobject.Parse(spec.JSONSchema); err != nil {
 		return errors.New("structured output JSON schema must be an object")
 	}
 	request.Text.Format = &codexResponseFormat{
@@ -1066,12 +1076,14 @@ func applyCodexTerminal(
 		default:
 			continue
 		}
-		var decoded map[string]any
+		var decoded jsonobject.Object
 		encoded := arguments[i]
 		if strings.TrimSpace(encoded) == "" {
 			encoded = "{}"
 		}
-		if err := json.Unmarshal([]byte(encoded), &decoded); err != nil || decoded == nil {
+		var err error
+		decoded, err = jsonobject.Parse([]byte(encoded))
+		if err != nil {
 			return fmt.Errorf("codex tool call %q returned invalid arguments", item.parsed.Name)
 		}
 		callID := item.parsed.CallID

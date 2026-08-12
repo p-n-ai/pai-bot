@@ -46,7 +46,7 @@ func TestSchedulerUsesAIPersonalizedNudgeWhenEnabled(t *testing.T) {
 	if err := scheduler.streaks.RecordActivity("user-1", time.Now()); err != nil {
 		t.Fatalf("RecordActivity() error = %v", err)
 	}
-	if err := scheduler.xp.Award("user-1", progress.XPSourceSession, 80, map[string]any{"topic_id": "linear-equations"}); err != nil {
+	if err := scheduler.xp.Award("user-1", progress.XPSourceSession, 80, progress.NewXPMetadata(progress.NewXPField("topic_id", "linear-equations"))); err != nil {
 		t.Fatalf("Award() error = %v", err)
 	}
 	if err := scheduler.tracker.UpdateMastery("user-1", "kssm-form1", "linear-equations", 0.62); err != nil {

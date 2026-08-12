@@ -81,11 +81,11 @@ func (h *FocusedPageHandler) redeem(w http.ResponseWriter, r *http.Request, publ
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"recipient_name": page.RecipientName,
-		"message":        page.Message,
-		"expires_at":     page.ExpiresAt.Format(time.RFC3339),
-	})
+	_ = json.NewEncoder(w).Encode(struct {
+		RecipientName string `json:"recipient_name"`
+		Message       string `json:"message"`
+		ExpiresAt     string `json:"expires_at"`
+	}{RecipientName: page.RecipientName, Message: page.Message, ExpiresAt: page.ExpiresAt.Format(time.RFC3339)})
 }
 
 func setFocusedPagePrivateHeaders(header http.Header) {

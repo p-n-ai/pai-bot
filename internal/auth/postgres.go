@@ -170,7 +170,7 @@ func (s *PostgresService) Login(ctx context.Context, req LoginRequest) (Session,
 	if err != nil {
 		return Session{}, err
 	}
-	pair.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, email)
+	pair.TenantChoices, err = tenantOptionsByEmailTx(ctx, tx, email)
 	if err != nil {
 		return Session{}, err
 	}
@@ -239,10 +239,11 @@ func (c passwordLoginCandidate) sessionUser(email string) sessionUser {
 
 func (s *PostgresService) resolvePasswordLoginCandidate(ctx context.Context, tenantID, email string) (passwordLoginCandidate, error) {
 	if tenantID != "" {
-		return passwordLoginCandidateByTenant(ctx, s.pool, tenantID, email, "query login identity")
+		return scanPasswordLoginCandidate(s.pool.QueryRow(ctx, passwordLoginCandidateByTenantSQL, tenantID, email), "query login identity")
 	}
 
-	candidates, err := passwordLoginCandidatesByEmail(ctx, s.pool, email)
+	rows, queryErr := s.pool.Query(ctx, passwordLoginCandidatesByEmailSQL, email)
+	candidates, err := passwordLoginCandidatesByEmail(rows, queryErr)
 	if err != nil {
 		return passwordLoginCandidate{}, err
 	}
@@ -252,18 +253,19 @@ func (s *PostgresService) resolvePasswordLoginCandidate(ctx context.Context, ten
 	return candidates[0], nil
 }
 
-func passwordLoginCandidateByTenant(ctx context.Context, q authRowQueryer, tenantID, email, errPrefix string) (passwordLoginCandidate, error) {
+const passwordLoginCandidateByTenantSQL = `
+	SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
+	FROM auth_identities ai
+	JOIN users u ON u.id = ai.user_id
+	LEFT JOIN tenants t ON t.id = u.tenant_id
+	WHERE ai.tenant_id = $1::uuid
+	  AND ai.provider = 'password'
+	  AND ai.identifier_normalized = $2
+	LIMIT 1`
+
+func scanPasswordLoginCandidate(row pgx.Row, errPrefix string) (passwordLoginCandidate, error) {
 	var c passwordLoginCandidate
-	err := q.QueryRow(ctx, `
-		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
-		FROM auth_identities ai
-		JOIN users u ON u.id = ai.user_id
-		LEFT JOIN tenants t ON t.id = u.tenant_id
-		WHERE ai.tenant_id = $1::uuid
-		  AND ai.provider = 'password'
-		  AND ai.identifier_normalized = $2
-		LIMIT 1
-	`, tenantID, email).Scan(&c.userID, &c.tenantID, &c.tenantSlug, &c.tenantName, &c.role, &c.name, &c.passwordHash)
+	err := row.Scan(&c.userID, &c.tenantID, &c.tenantSlug, &c.tenantName, &c.role, &c.name, &c.passwordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return passwordLoginCandidate{}, ErrInvalidCredentials
@@ -273,17 +275,17 @@ func passwordLoginCandidateByTenant(ctx context.Context, q authRowQueryer, tenan
 	return c, nil
 }
 
-func passwordLoginCandidatesByEmail(ctx context.Context, q authQueryer, email string) ([]passwordLoginCandidate, error) {
-	rows, err := q.Query(ctx, `
-		SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
-		FROM auth_identities ai
-		JOIN users u ON u.id = ai.user_id
-		LEFT JOIN tenants t ON t.id = u.tenant_id
-		WHERE ai.provider = 'password'
-		  AND ai.identifier_normalized = $1
-		ORDER BY u.created_at ASC
-		LIMIT 10
-	`, email)
+const passwordLoginCandidatesByEmailSQL = `
+	SELECT u.id::text, COALESCE(u.tenant_id::text, ''), COALESCE(t.slug, ''), COALESCE(t.name, ''), u.role, u.name, ai.password_hash
+	FROM auth_identities ai
+	JOIN users u ON u.id = ai.user_id
+	LEFT JOIN tenants t ON t.id = u.tenant_id
+	WHERE ai.provider = 'password'
+	  AND ai.identifier_normalized = $1
+	ORDER BY u.created_at ASC
+	LIMIT 10`
+
+func passwordLoginCandidatesByEmail(rows pgx.Rows, err error) ([]passwordLoginCandidate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query login identities: %w", err)
 	}
@@ -679,7 +681,7 @@ func (s *PostgresService) Session(ctx context.Context, sessionToken string) (Ses
 		}
 	}
 
-	tenantChoices, err := s.tenantOptionsByEmail(ctx, s.pool, email)
+	tenantChoices, err := s.tenantOptionsByEmail(ctx, email)
 	if err != nil {
 		return Session{}, err
 	}
@@ -724,7 +726,7 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, sessionToken, tenant
 		return Session{}, ErrInvalidCredentials
 	}
 
-	candidate, err := passwordLoginCandidateByTenant(ctx, tx, tenantID, current.email, "query target tenant identity")
+	candidate, err := scanPasswordLoginCandidate(tx.QueryRow(ctx, passwordLoginCandidateByTenantSQL, tenantID, current.email), "query target tenant identity")
 	if err != nil {
 		return Session{}, err
 	}
@@ -750,7 +752,7 @@ func (s *PostgresService) SwitchTenant(ctx context.Context, sessionToken, tenant
 		return Session{}, fmt.Errorf("revoke previous session: %w", err)
 	}
 
-	pair.TenantChoices, err = s.tenantOptionsByEmail(ctx, tx, current.email)
+	pair.TenantChoices, err = tenantOptionsByEmailTx(ctx, tx, current.email)
 	if err != nil {
 		return Session{}, err
 	}
@@ -866,14 +868,6 @@ func generateOpaqueToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-type authQueryer interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-}
-
-type authRowQueryer interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
 func rollbackAuthTx(tx pgx.Tx) {
 	ctx, cancel := context.WithTimeout(context.Background(), authRollbackTimeout)
 	defer cancel()
@@ -891,24 +885,38 @@ func shouldRefreshAuthSession(now, expiresAt time.Time, ttl time.Duration) bool 
 	return !expiresAt.After(now.Add(window))
 }
 
-func (s *PostgresService) tenantOptionsByEmail(ctx context.Context, q authQueryer, email string) ([]TenantOption, error) {
+const tenantOptionsByEmailSQL = `
+	SELECT COALESCE(u.tenant_id::text, ''),
+	       COALESCE(t.slug, ''),
+	       COALESCE(t.name, '')
+	FROM auth_identities ai
+	JOIN users u ON u.id = ai.user_id
+	LEFT JOIN tenants t ON t.id = u.tenant_id
+	WHERE ai.provider = 'password'
+	  AND ai.identifier_normalized = $1
+	  AND u.tenant_id IS NOT NULL
+	ORDER BY u.created_at ASC
+	LIMIT 10`
+
+func (s *PostgresService) tenantOptionsByEmail(ctx context.Context, email string) ([]TenantOption, error) {
 	email = NormalizeIdentifier(email)
 	if email == "" {
 		return nil, nil
 	}
-	rows, err := q.Query(ctx, `
-		SELECT COALESCE(u.tenant_id::text, ''),
-		       COALESCE(t.slug, ''),
-		       COALESCE(t.name, '')
-		FROM auth_identities ai
-		JOIN users u ON u.id = ai.user_id
-		LEFT JOIN tenants t ON t.id = u.tenant_id
-		WHERE ai.provider = 'password'
-		  AND ai.identifier_normalized = $1
-		  AND u.tenant_id IS NOT NULL
-		ORDER BY u.created_at ASC
-		LIMIT 10
-	`, email)
+	rows, err := s.pool.Query(ctx, tenantOptionsByEmailSQL, email)
+	return scanTenantOptions(rows, err)
+}
+
+func tenantOptionsByEmailTx(ctx context.Context, tx pgx.Tx, email string) ([]TenantOption, error) {
+	email = NormalizeIdentifier(email)
+	if email == "" {
+		return nil, nil
+	}
+	rows, err := tx.Query(ctx, tenantOptionsByEmailSQL, email)
+	return scanTenantOptions(rows, err)
+}
+
+func scanTenantOptions(rows pgx.Rows, err error) ([]TenantOption, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query tenant options: %w", err)
 	}

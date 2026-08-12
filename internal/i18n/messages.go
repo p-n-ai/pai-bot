@@ -341,16 +341,20 @@ func NormalizeLocale(locale string) string {
 	}
 }
 
-func S(locale string, key Key, args ...any) string {
+func S(locale string, key Key) string {
 	loc := NormalizeLocale(locale)
 	if loc == "" {
 		loc = DefaultLocale
 	}
-	msg := lookup(loc, key)
-	if len(args) == 0 {
-		return msg
+	return lookup(loc, key)
+}
+
+func SF[T any](locale string, key Key, args ...T) string {
+	values := make([]any, len(args))
+	for index, arg := range args {
+		values[index] = arg
 	}
-	return fmt.Sprintf(msg, args...)
+	return fmt.Sprintf(S(locale, key), values...)
 }
 
 func lookup(locale string, key Key) string {

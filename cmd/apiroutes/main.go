@@ -19,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	if (*basePath == "") != (*headPath == "") {
-		fail("-base and -head must be provided together")
+		failMessage("-base and -head must be provided together")
 	}
 	if *basePath != "" {
 		base := readRoutes(*basePath)
@@ -36,29 +36,34 @@ func main() {
 
 	routes, err := apicontract.Collect(*root)
 	if err != nil {
-		fail("%v", err)
+		failError(err)
 	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(routes); err != nil {
-		fail("encode API routes: %v", err)
+		failError(fmt.Errorf("encode API routes: %w", err))
 	}
 }
 
 func readRoutes(path string) []apicontract.Route {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fail("read %s: %v", path, err)
+		failError(fmt.Errorf("read %s: %w", path, err))
 	}
 
 	var routes []apicontract.Route
 	if err := json.Unmarshal(data, &routes); err != nil {
-		fail("decode %s: %v", path, err)
+		failError(fmt.Errorf("decode %s: %w", path, err))
 	}
 	return routes
 }
 
-func fail(format string, arguments ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", arguments...)
+func failMessage(message string) {
+	fmt.Fprintln(os.Stderr, message)
+	os.Exit(1)
+}
+
+func failError(err error) {
+	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
 }

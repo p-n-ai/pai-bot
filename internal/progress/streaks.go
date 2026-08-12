@@ -10,9 +10,9 @@ import (
 
 // Streak holds a user's streak data.
 type Streak struct {
-	UserID        string
-	CurrentStreak int
-	LongestStreak int
+	UserID         string
+	CurrentStreak  int
+	LongestStreak  int
 	LastActiveDate time.Time // truncated to date
 }
 

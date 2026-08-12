@@ -66,7 +66,7 @@ func (t *memoryTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResu
 }
 
 func TestRunPreservesExactToolTranscript(t *testing.T) {
-	call := llm.ToolCall{ID: "call-1", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "math-1"}}
+	call := llm.ToolCall{ID: "call-1", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "math-1"})}
 	first := llm.AssistantMessage{Content: []llm.AssistantContent{llm.TextContent{Text: "Checking."}, call}, StopReason: llm.StopReasonToolUse}
 	final := llm.AssistantMessage{Content: []llm.AssistantContent{llm.TextContent{Text: "Let us solve x + 2 = 5."}}, StopReason: llm.StopReasonStop}
 	model := &scriptedModel{responses: []llm.AssistantMessage{first, final}}
@@ -113,8 +113,8 @@ func TestRunReturnsToolErrorsToModel(t *testing.T) {
 		name string
 		call llm.ToolCall
 	}{
-		{name: "unknown", call: llm.ToolCall{ID: "1", Name: "missing", Arguments: map[string]any{}}},
-		{name: "invalid arguments", call: llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: map[string]any{}}},
+		{name: "unknown", call: llm.ToolCall{ID: "1", Name: "missing", Arguments: llm.ToolArgumentsFrom(map[string]any{})}},
+		{name: "invalid arguments", call: llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{})}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestRunReturnsToolErrorsToModel(t *testing.T) {
 }
 
 func TestRunReturnsToolExecutionErrorToModel(t *testing.T) {
-	call := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "math-1"}}
+	call := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "math-1"})}
 	model := &scriptedModel{responses: []llm.AssistantMessage{
 		{Content: []llm.AssistantContent{call}},
 		{Content: []llm.AssistantContent{llm.TextContent{Text: "Recovered"}}},
@@ -155,8 +155,8 @@ func TestRunReturnsToolExecutionErrorToModel(t *testing.T) {
 }
 
 func TestRunRecoversAfterRepeatedToolExecutionErrors(t *testing.T) {
-	firstCall := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "math-1"}}
-	secondCall := llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "math-2"}}
+	firstCall := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "math-1"})}
+	secondCall := llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "math-2"})}
 	model := &scriptedModel{responses: []llm.AssistantMessage{
 		{Content: []llm.AssistantContent{firstCall}},
 		{Content: []llm.AssistantContent{secondCall}},
@@ -185,7 +185,7 @@ func TestRunCancelsDuringToolExecution(t *testing.T) {
 		<-tool.started
 		cancel()
 	}()
-	call := llm.ToolCall{ID: "1", Name: "blocking_tool", Arguments: map[string]any{}}
+	call := llm.ToolCall{ID: "1", Name: "blocking_tool", Arguments: llm.ToolArgumentsFrom(map[string]any{})}
 	model := &scriptedModel{responses: []llm.AssistantMessage{{Content: []llm.AssistantContent{call}}}}
 
 	result, err := agentcore.Run(ctx, model, llm.Context{SystemPrompt: "Tutor"}, []agentcore.Tool{tool}, agentcore.Config{})
@@ -199,8 +199,8 @@ func TestRunCancelsDuringToolExecution(t *testing.T) {
 }
 
 func TestRunExecutesToolCallsSequentially(t *testing.T) {
-	firstCall := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "first"}}
-	secondCall := llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "second"}}
+	firstCall := llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "first"})}
+	secondCall := llm.ToolCall{ID: "2", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "second"})}
 	tool := &memoryTool{}
 	model := &scriptedModel{responses: []llm.AssistantMessage{
 		{Content: []llm.AssistantContent{firstCall, secondCall}},
@@ -224,7 +224,7 @@ func TestRunCancellationAndLimit(t *testing.T) {
 		t.Fatalf("cancelled Run() = %#v, %v", result, err)
 	}
 
-	toolCall := llm.AssistantMessage{Content: []llm.AssistantContent{llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: map[string]any{"topic_id": "math-1"}}}}
+	toolCall := llm.AssistantMessage{Content: []llm.AssistantContent{llm.ToolCall{ID: "1", Name: "lookup_curriculum", Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "math-1"})}}}
 	result, err = agentcore.Run(context.Background(), &scriptedModel{responses: []llm.AssistantMessage{toolCall}}, llm.Context{SystemPrompt: "Tutor"}, []agentcore.Tool{&memoryTool{}}, agentcore.Config{MaxModelCalls: 1})
 	if !errors.Is(err, agentcore.ErrModelCallLimit) || result.Termination != agentcore.TerminationModelCallLimit {
 		t.Fatalf("limited Run() = %#v, %v", result, err)

@@ -155,11 +155,11 @@ func (e *Engine) maybeHandleOutOfScopeTutorRequest(msg chat.InboundMessage, conv
 	}
 
 	response := outOfScopeCalculusResponse(msg.Text)
-	e.recordDeterministicTutorReply(msg, conv, response, "tutor_scope_redirect", map[string]any{
-		"channel": msg.Channel,
-		"scope":   "lower_secondary_kssm_math",
-		"reason":  "calculus",
-	})
+	e.recordDeterministicTutorReply(msg, conv, response, "tutor_scope_redirect", eventData(
+		eventField("channel", msg.Channel),
+		eventField("scope", "lower_secondary_kssm_math"),
+		eventField("reason", "calculus"),
+	))
 	return response, true
 }
 
@@ -168,14 +168,14 @@ func (e *Engine) maybeHandleInstructionPrivacyRequest(msg chat.InboundMessage, c
 		return "", false
 	}
 	response := instructionPrivacyRefusal(msg.Text)
-	e.recordDeterministicTutorReply(msg, conv, response, "tutor_instruction_privacy_refused", map[string]any{
-		"channel": msg.Channel,
-		"reason":  "hidden_instruction_request",
-	})
+	e.recordDeterministicTutorReply(msg, conv, response, "tutor_instruction_privacy_refused", eventData(
+		eventField("channel", msg.Channel),
+		eventField("reason", "hidden_instruction_request"),
+	))
 	return response, true
 }
 
-func (e *Engine) recordDeterministicTutorReply(msg chat.InboundMessage, conv *Conversation, response, eventType string, data map[string]any) {
+func (e *Engine) recordDeterministicTutorReply(msg chat.InboundMessage, conv *Conversation, response, eventType string, data EventData) {
 	userContent := strings.TrimSpace(msg.Text)
 	if userContent == "" {
 		userContent = msg.Text

@@ -21,6 +21,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
 	"github.com/p-n-ai/pai-bot/internal/focusedpage"
 	"github.com/p-n-ai/pai-bot/internal/i18n"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 	"github.com/p-n-ai/pai-bot/internal/retrieval"
@@ -321,10 +322,10 @@ func (e *Engine) processMessage(ctx context.Context, msg chat.InboundMessage, re
 		e.logEventAsync(Event{
 			UserID:    msg.UserID,
 			EventType: "auto_start_triggered",
-			Data: map[string]any{
-				"channel": msg.Channel,
-				"source":  "chat_flow",
-			},
+			Data: eventData(
+				eventField("channel", msg.Channel),
+				eventField("source", "chat_flow"),
+			),
 		})
 		return e.handleStart(msg)
 	}
@@ -519,10 +520,10 @@ func (e *Engine) createConversation(identity LearnerIdentity, threadID, state st
 		ConversationID: conv.ID,
 		UserID:         identity.ExternalID(),
 		EventType:      "session_started",
-		Data: map[string]any{
-			"channel": identity.Channel(),
-			"state":   conv.State,
-		},
+		Data: eventData(
+			eventField("channel", identity.Channel()),
+			eventField("state", conv.State),
+		),
 	})
 	return conv, nil
 }
@@ -554,10 +555,7 @@ func (e *Engine) logEventAsync(event Event) {
 	if event.UserID != "" {
 		if identity, ok := e.identityForEvent(event); ok {
 			if group, found := e.getUserABGroup(identity); found && group != "" {
-				if event.Data == nil {
-					event.Data = map[string]any{}
-				}
-				event.Data["ab_group"] = group
+				event.Data = event.Data.With(eventField("ab_group", group))
 			}
 		}
 	}
@@ -581,7 +579,7 @@ func (e *Engine) identityForEvent(event Event) (LearnerIdentity, bool) {
 			return identity, identityErr == nil
 		}
 	}
-	if channel, ok := event.Data["channel"].(string); ok {
+	if channel, ok, err := jsonobject.Get[string](event.Data, "channel"); err == nil && ok {
 		identity, err := NewLearnerIdentity(channel, event.UserID)
 		return identity, err == nil
 	}
@@ -596,24 +594,24 @@ func (e *Engine) logAgentTurnCompleted(turn *agentTurn, status string) {
 		ConversationID: turn.ConversationID,
 		UserID:         turn.UserID,
 		EventType:      "agent_turn_completed",
-		Data: map[string]any{
-			"turn_id":              turn.ID,
-			"channel":              turn.Channel,
-			"route":                turn.Route,
-			"task":                 turn.TaskType.String(),
-			"topic_id":             turnTopicID(turn),
-			"message_count":        turn.Prompt.MessageCount,
-			"summary_used":         turn.Prompt.HasSummary,
-			"context_sources":      includedContextSourceNames(turn.Prompt.ContextSources),
-			"evidence_sources":     tracedEvidenceSources(turn.Prompt.ContextSources),
-			"context_source_count": len(turn.Prompt.ContextSources),
-			"model":                turn.Model.Model,
-			"input_tokens":         turn.Model.InputTokens,
-			"output_tokens":        turn.Model.OutputTokens,
-			"latency_ms":           turn.Model.LatencyMS,
-			"status":               status,
-			"error":                turn.Model.Error,
-		},
+		Data: eventData(
+			eventField("turn_id", turn.ID),
+			eventField("channel", turn.Channel),
+			eventField("route", turn.Route),
+			eventField("task", turn.TaskType.String()),
+			eventField("topic_id", turnTopicID(turn)),
+			eventField("message_count", turn.Prompt.MessageCount),
+			eventField("summary_used", turn.Prompt.HasSummary),
+			eventField("context_sources", includedContextSourceNames(turn.Prompt.ContextSources)),
+			eventField("evidence_sources", tracedEvidenceSources(turn.Prompt.ContextSources)),
+			eventField("context_source_count", len(turn.Prompt.ContextSources)),
+			eventField("model", turn.Model.Model),
+			eventField("input_tokens", turn.Model.InputTokens),
+			eventField("output_tokens", turn.Model.OutputTokens),
+			eventField("latency_ms", turn.Model.LatencyMS),
+			eventField("status", status),
+			eventField("error", turn.Model.Error),
+		),
 	})
 }
 
@@ -678,9 +676,9 @@ func (e *Engine) recordActivityAsync(identity LearnerIdentity) {
 				// Check for milestone celebration.
 				s, _ := e.streaks.GetStreak(userID)
 				if progress.IsStreakMilestone(s.CurrentStreak) && e.xp != nil {
-					_ = e.xp.Award(userID, progress.XPSourceStreak, progress.XPStreakMilestone, map[string]any{
-						"streak_days": s.CurrentStreak,
-					})
+					_ = e.xp.Award(userID, progress.XPSourceStreak, progress.XPStreakMilestone, progress.NewXPMetadata(
+						progress.NewXPField("streak_days", s.CurrentStreak),
+					))
 				}
 			}
 		}
@@ -752,31 +750,31 @@ func (e *Engine) handleCommand(ctx context.Context, msg chat.InboundMessage) (st
 		return e.handleLeaderboardCommand(ctx, msg, fields[1:])
 	case "/dev-reset", "/dev_reset":
 		if !e.devMode {
-			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+			return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevReset(msg)
 	case "/dev-boost", "/dev_boost":
 		if !e.devMode {
-			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+			return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevBoost(msg, fields[1:])
 	case "/dev-summary", "/dev_summary":
 		if !e.devMode {
-			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+			return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevSummary(msg)
 	case "/dev-ab", "/dev_ab":
 		if !e.devMode {
-			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+			return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevAB(msg, fields[1:])
 	case "/dev-close-group", "/dev_close_group":
 		if !e.devMode {
-			return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+			return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 		}
 		return e.handleDevCloseGroup(fields[1:])
 	default:
-		return i18n.S(locale, i18n.MsgUnknownCommand, cmd), nil
+		return i18n.SF(locale, i18n.MsgUnknownCommand, cmd), nil
 	}
 }
 
@@ -842,10 +840,10 @@ func (e *Engine) handleLanguageCommand(msg chat.InboundMessage, args []string) (
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "language_changed",
-		Data: map[string]any{
-			"preferred_language": lang,
-			"source":             source,
-		},
+		Data: eventData(
+			eventField("preferred_language", lang),
+			eventField("source", source),
+		),
 	})
 
 	if onboardingFlow {
@@ -980,16 +978,16 @@ func (e *Engine) handleStart(msg chat.InboundMessage) (string, error) {
 	}
 
 	if e.disableMultiLanguage {
-		return i18n.S(locale, i18n.MsgStartOnboardingForm, name), nil
+		return i18n.SF(locale, i18n.MsgStartOnboardingForm, name), nil
 	}
 
 	// Language was auto-detected — skip language selection, go straight to form.
 	if autoDetectedLocale != "" {
-		return i18n.S(locale, i18n.MsgStartOnboardingAutoDetect, name, i18n.LocaleDisplayName(autoDetectedLocale)), nil
+		return i18n.SF(locale, i18n.MsgStartOnboardingAutoDetect, name, i18n.LocaleDisplayName(autoDetectedLocale)), nil
 	}
 
 	// No detectable language from Telegram — ask user to choose.
-	return i18n.S(locale, i18n.MsgStartOnboardingLang, name), nil
+	return i18n.SF(locale, i18n.MsgStartOnboardingLang, name), nil
 }
 
 func (e *Engine) maybePersistUserProfile(msg chat.InboundMessage) {
@@ -1106,10 +1104,10 @@ func (e *Engine) handleOnboardingSelection(ctx context.Context, msg chat.Inbound
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "onboarding_completed",
-		Data: map[string]any{
-			"selected_form":      form,
-			"preferred_language": lang,
-		},
+		Data: eventData(
+			eventField("selected_form", form),
+			eventField("preferred_language", lang),
+		),
 	})
 	return response
 }
@@ -1163,10 +1161,10 @@ func (e *Engine) handleLanguageSelection(msg chat.InboundMessage, conv *Conversa
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "language_changed",
-		Data: map[string]any{
-			"preferred_language": lang,
-			"source":             "command_interactive",
-		},
+		Data: eventData(
+			eventField("preferred_language", lang),
+			eventField("source", "command_interactive"),
+		),
 	})
 
 	return response
@@ -1352,7 +1350,7 @@ func onboardingFormPrompt(lang string) string {
 }
 
 func onboardingCompletionMessage(lang string, form int) string {
-	return i18n.S(lang, i18n.MsgOnboardingCompleted, form)
+	return i18n.SF(lang, i18n.MsgOnboardingCompleted, form)
 }
 
 func languageChangedMessage(lang string) string {

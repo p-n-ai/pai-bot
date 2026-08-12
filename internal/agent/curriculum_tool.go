@@ -33,7 +33,7 @@ func (curriculumLookupTool) Definition() llm.Tool {
 }
 
 func (t curriculumLookupTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
-	topicID, _ := call.Arguments["topic_id"].(string)
+	topicID, _, _ := llm.ToolArgumentValue[string](call.Arguments, "topic_id")
 	topic, ok := t.loader.GetTopic(topicID)
 	if !ok || !topic.IsAITeachingReady() {
 		return llm.ToolResultMessage{

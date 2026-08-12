@@ -136,11 +136,7 @@ func (s *PostgresStore) getByKey(ctx context.Context, tenantID, turnID, channel 
 	return delivery, nil
 }
 
-type rowScanner interface {
-	Scan(...any) error
-}
-
-func scanDelivery(row rowScanner) (Delivery, error) {
+func scanDelivery(row pgx.Row) (Delivery, error) {
 	var delivery Delivery
 	err := row.Scan(
 		&delivery.ID, &delivery.TenantID, &delivery.TurnID, &delivery.Channel,

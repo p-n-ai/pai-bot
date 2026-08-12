@@ -316,7 +316,7 @@ func (s *TeacherResourceService) Upload(ctx context.Context, input TeacherUpload
 		return TeacherResource{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := verifyClasses(ctx, tx, input.TenantID, input.ClassIDs); err != nil {
+	if err := verifyClasses(tx.QueryRow(ctx, verifyClassesSQL, input.TenantID, input.ClassIDs), len(input.ClassIDs)); err != nil {
 		return TeacherResource{}, err
 	}
 	digest := sha256.Sum256(input.Data)
@@ -401,7 +401,7 @@ func (s *TeacherResourceService) List(ctx context.Context, tenantID string, clas
 	if strings.TrimSpace(tenantID) == "" || len(classIDs) == 0 {
 		return nil, ErrTeacherResourceScope
 	}
-	if err := verifyClasses(ctx, s.pool, tenantID, classIDs); err != nil {
+	if err := verifyClasses(s.pool.QueryRow(ctx, verifyClassesSQL, tenantID, classIDs), len(classIDs)); err != nil {
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
@@ -476,7 +476,7 @@ func (s *TeacherResourceService) ensureScoped(ctx context.Context, tenantID, res
 	if tenantID == "" || resourceID == "" || len(classIDs) == 0 {
 		return ErrTeacherResourceScope
 	}
-	if err := verifyClasses(ctx, s.pool, tenantID, classIDs); err != nil {
+	if err := verifyClasses(s.pool.QueryRow(ctx, verifyClassesSQL, tenantID, classIDs), len(classIDs)); err != nil {
 		return err
 	}
 	var allowed bool
@@ -494,18 +494,17 @@ func (s *TeacherResourceService) ensureScoped(ctx context.Context, tenantID, res
 	return nil
 }
 
-func verifyClasses(ctx context.Context, q interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, tenantID string, classIDs []string) error {
+const verifyClassesSQL = `
+	SELECT count(*) FROM groups
+	WHERE tenant_id = $1::uuid AND type = 'class' AND id = ANY($2::uuid[])`
+
+func verifyClasses(row pgx.Row, expectedCount int) error {
 	var count int
-	err := q.QueryRow(ctx, `
-		SELECT count(*) FROM groups
-		WHERE tenant_id = $1::uuid AND type = 'class' AND id = ANY($2::uuid[])`,
-		tenantID, classIDs).Scan(&count)
+	err := row.Scan(&count)
 	if err != nil {
 		return err
 	}
-	if count != len(classIDs) {
+	if count != expectedCount {
 		return fmt.Errorf("%w: every selected class must belong to the authenticated tenant", ErrTeacherResourceScope)
 	}
 	return nil
@@ -522,7 +521,7 @@ func (s *TeacherResourceService) Search(ctx context.Context, req TeacherEvidence
 	if req.TenantID == "" || len(req.ClassIDs) == 0 || req.Query == "" {
 		return nil, ErrTeacherResourceScope
 	}
-	if err := verifyClasses(ctx, s.pool, req.TenantID, req.ClassIDs); err != nil {
+	if err := verifyClasses(s.pool.QueryRow(ctx, verifyClassesSQL, req.TenantID, req.ClassIDs), len(req.ClassIDs)); err != nil {
 		return nil, err
 	}
 	if req.Limit <= 0 || req.Limit > 20 {

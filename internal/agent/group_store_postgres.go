@@ -59,28 +59,28 @@ func (s *PostgresGroupStore) CreateGroup(tenantID, name, groupType, description,
 func (s *PostgresGroupStore) GetGroupByID(id string) (*Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-	return s.scanGroup(ctx, `
+	return scanGroup(s.pool.QueryRow(ctx, `
 		SELECT g.id::text, g.tenant_id::text, g.name, g.type, g.description, g.syllabus, g.subject, g.cadence,
 		       g.join_code, COALESCE(g.created_by::text, ''), g.created_at, g.updated_at,
 		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)::int,
 		       g.closed
-		FROM groups g WHERE g.id = $1::uuid`, id)
+		FROM groups g WHERE g.id = $1::uuid`, id))
 }
 
 func (s *PostgresGroupStore) GetGroupByJoinCode(code string) (*Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-	return s.scanGroup(ctx, `
+	return scanGroup(s.pool.QueryRow(ctx, `
 		SELECT g.id::text, g.tenant_id::text, g.name, g.type, g.description, g.syllabus, g.subject, g.cadence,
 		       g.join_code, COALESCE(g.created_by::text, ''), g.created_at, g.updated_at,
 		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id)::int,
 		       g.closed
-		FROM groups g WHERE g.join_code = $1`, strings.ToUpper(strings.TrimSpace(code)))
+		FROM groups g WHERE g.join_code = $1`, strings.ToUpper(strings.TrimSpace(code))))
 }
 
-func (s *PostgresGroupStore) scanGroup(ctx context.Context, query string, args ...any) (*Group, error) {
+func scanGroup(row pgx.Row) (*Group, error) {
 	g := &Group{}
-	err := s.pool.QueryRow(ctx, query, args...).Scan(
+	err := row.Scan(
 		&g.ID, &g.TenantID, &g.Name, &g.Type, &g.Description, &g.Syllabus, &g.Subject, &g.Cadence,
 		&g.JoinCode, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount, &g.Closed,
 	)

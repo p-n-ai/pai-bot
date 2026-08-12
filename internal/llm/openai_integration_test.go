@@ -178,13 +178,13 @@ func TestOpenAILiveToolCalling(t *testing.T) {
 				if block.Arguments == nil {
 					return fmt.Errorf("toolcall_end arguments undefined")
 				}
-				if block.Arguments["a"] != float64(15) || block.Arguments["b"] != float64(27) {
+				if llm.ToolArgumentValueOrZero[float64](block.Arguments, "a") != 15 || llm.ToolArgumentValueOrZero[float64](block.Arguments, "b") != 27 {
 					return fmt.Errorf("arguments = %+v", block.Arguments)
 				}
-				switch block.Arguments["operation"] {
+				switch llm.ToolArgumentValueOrZero[string](block.Arguments, "operation") {
 				case "add", "subtract", "multiply", "divide":
 				default:
-					return fmt.Errorf("operation = %v", block.Arguments["operation"])
+					return fmt.Errorf("operation = %v", llm.ToolArgumentValueOrZero[string](block.Arguments, "operation"))
 				}
 			}
 		}

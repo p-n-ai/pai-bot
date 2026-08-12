@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 const codexChatInstructions = `Act only as PaiBot's chat completion engine. Answer from the supplied conversation and instructions. Do not inspect files, run commands, call tools, ask for approval, or modify the environment. Return only the assistant response.`
@@ -38,16 +39,16 @@ func (m *Manager) Complete(
 	}
 
 	baseInstructions, messages := splitInstructions(request.Messages)
-	threadParams := map[string]any{
-		"approvalPolicy":        "never",
-		"cwd":                   workspace,
-		"developerInstructions": codexChatInstructions,
-		"ephemeral":             true,
-		"model":                 strings.TrimSpace(request.Model),
-		"sandbox":               "read-only",
-	}
+	threadParams := jsonobject.New(
+		jsonobject.Member("approvalPolicy", "never"),
+		jsonobject.Member("cwd", workspace),
+		jsonobject.Member("developerInstructions", codexChatInstructions),
+		jsonobject.Member("ephemeral", true),
+		jsonobject.Member("model", strings.TrimSpace(request.Model)),
+		jsonobject.Member("sandbox", "read-only"),
+	)
 	if baseInstructions != "" {
-		threadParams["baseInstructions"] = baseInstructions
+		threadParams = threadParams.With(jsonobject.Member("baseInstructions", baseInstructions))
 	}
 	threadRaw, err := m.call(ctx, "thread/start", threadParams)
 	if err != nil {
@@ -69,18 +70,18 @@ func (m *Manager) Complete(
 	m.completions[threadID] = state
 	m.mu.Unlock()
 
-	turnParams := map[string]any{
-		"approvalPolicy": "never",
-		"input":          completionInput(messages),
-		"threadId":       threadID,
-	}
+	turnParams := jsonobject.New(
+		jsonobject.Member("approvalPolicy", "never"),
+		jsonobject.Member("input", completionInput(messages)),
+		jsonobject.Member("threadId", threadID),
+	)
 	if request.StructuredOutput != nil {
-		var schema any
-		if json.Unmarshal(request.StructuredOutput.JSONSchema, &schema) != nil {
+		schema, err := jsonobject.Parse(request.StructuredOutput.JSONSchema)
+		if err != nil {
 			m.removeCompletion(threadID)
 			return ai.CompletionResponse{}, errors.New("invalid Codex output schema")
 		}
-		turnParams["outputSchema"] = schema
+		turnParams = turnParams.With(jsonobject.Member("outputSchema", schema))
 	}
 	if _, err := m.call(ctx, "turn/start", turnParams); err != nil {
 		m.removeCompletion(threadID)
@@ -101,12 +102,12 @@ func (m *Manager) Complete(
 		return completed.response, nil
 	case <-ctx.Done():
 		m.removeCompletion(threadID)
-		_, _ = m.callWithTimeout("turn/interrupt", map[string]string{"threadId": threadID})
+		_, _ = m.callWithTimeout("turn/interrupt", jsonobject.New(jsonobject.Member("threadId", threadID)))
 		return ai.CompletionResponse{}, ctx.Err()
 	}
 }
 
-func (m *Manager) callWithTimeout(method string, params any) (json.RawMessage, error) {
+func (m *Manager) callWithTimeout(method string, params jsonobject.Object) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(m.parent, requestTimeout)
 	defer cancel()
 	return m.call(ctx, method, params)
@@ -211,9 +212,9 @@ func splitInstructions(messages []ai.Message) (string, []ai.Message) {
 	return strings.Join(instructions, "\n\n"), conversation
 }
 
-func completionInput(messages []ai.Message) []map[string]any {
+func completionInput(messages []ai.Message) []jsonobject.Object {
 	var transcript strings.Builder
-	input := make([]map[string]any, 0, 1+len(messages))
+	input := make([]jsonobject.Object, 0, 1+len(messages))
 	for _, message := range messages {
 		role := strings.ToUpper(strings.TrimSpace(message.Role))
 		if role == "" {
@@ -225,15 +226,15 @@ func completionInput(messages []ai.Message) []map[string]any {
 		_, _ = fmt.Fprintf(&transcript, "%s:\n%s", role, strings.TrimSpace(message.Content))
 		for _, imageURL := range message.ImageURLs {
 			if strings.TrimSpace(imageURL) != "" {
-				input = append(input, map[string]any{"type": "image", "url": imageURL})
+				input = append(input, jsonobject.New(jsonobject.Member("type", "image"), jsonobject.Member("url", imageURL)))
 			}
 		}
 	}
 	if transcript.Len() == 0 {
 		transcript.WriteString("USER:\n")
 	}
-	textInput := map[string]any{"type": "text", "text": transcript.String()}
-	return append([]map[string]any{textInput}, input...)
+	textInput := jsonobject.New(jsonobject.Member("type", "text"), jsonobject.Member("text", transcript.String()))
+	return append([]jsonobject.Object{textInput}, input...)
 }
 
 func finalAgentMessage(items []agentMessageItem) string {

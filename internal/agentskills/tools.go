@@ -36,7 +36,7 @@ func (loadSkillTool) Definition() llm.Tool {
 }
 
 func (t loadSkillTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
-	name, _ := call.Arguments["name"].(string)
+	name, _, _ := llm.ToolArgumentValue[string](call.Arguments, "name")
 	skill, ok := t.registry.skill(name)
 	if !ok {
 		return skillToolResult("skill not found", true), nil
@@ -55,8 +55,8 @@ func (readResourceTool) Definition() llm.Tool {
 }
 
 func (t readResourceTool) Execute(_ context.Context, call llm.ToolCall) (llm.ToolResultMessage, error) {
-	skill, _ := call.Arguments["skill"].(string)
-	path, _ := call.Arguments["path"].(string)
+	skill, _, _ := llm.ToolArgumentValue[string](call.Arguments, "skill")
+	path, _, _ := llm.ToolArgumentValue[string](call.Arguments, "path")
 	contents, err := t.registry.readResource(skill, path)
 	if err != nil {
 		return skillToolResult("skill resource unavailable", true), nil

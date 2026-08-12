@@ -84,13 +84,13 @@ func (e *Engine) checkTopicUnlocks(identity LearnerIdentity, syllabusID string, 
 		e.logEventAsync(Event{
 			UserID:    identity.ExternalID(),
 			EventType: "topic_unlocked",
-			Data: map[string]any{
-				"channel":     identity.Channel(),
-				"topic_id":    t.ID,
-				"topic_name":  t.Name,
-				"unlocked_by": topic.ID,
-				"syllabus_id": syllabusID,
-			},
+			Data: eventData(
+				eventField("channel", identity.Channel()),
+				eventField("topic_id", t.ID),
+				eventField("topic_name", t.Name),
+				eventField("unlocked_by", topic.ID),
+				eventField("syllabus_id", syllabusID),
+			),
 		})
 	}
 }
@@ -106,7 +106,7 @@ func formatUnlockNotification(locale string, topics []curriculum.Topic) string {
 		names = append(names, t.Name)
 	}
 
-	return i18n.S(locale, i18n.MsgTopicUnlocked, strings.Join(names, "\n- "))
+	return i18n.SF(locale, i18n.MsgTopicUnlocked, strings.Join(names, "\n- "))
 }
 
 // drainUnlockNotification returns and clears any pending unlock notification for the user.

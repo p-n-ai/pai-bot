@@ -689,14 +689,14 @@ func (s *PostgresStore) GetConversation(id string) (*Conversation, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	conv, err := s.getConversationByQuery(ctx,
+	conv, err := scanConversation(s.pool.QueryRow(ctx,
 		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
 		 FROM conversations c
 		 JOIN users u ON u.id = c.user_id
 		 WHERE c.id = $1::uuid
 		 LIMIT 1`,
 		id,
-	)
+	))
 	if err != nil {
 		return nil, err
 	}
@@ -755,7 +755,7 @@ func (s *PostgresStore) getActiveConversation(userID, threadID string) (*Convers
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	conv, err := s.getConversationByQuery(ctx,
+	conv, err := scanConversation(s.pool.QueryRow(ctx,
 		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
 		 FROM conversations c
 		 JOIN users u ON u.id = c.user_id
@@ -770,7 +770,7 @@ func (s *PostgresStore) getActiveConversation(userID, threadID string) (*Convers
 		s.channel,
 		s.tenantID,
 		threadID,
-	)
+	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, false
@@ -789,7 +789,7 @@ func (s *PostgresStore) getLatestActiveConversation(userID string) (*Conversatio
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	conv, err := s.getConversationByQuery(ctx,
+	conv, err := scanConversation(s.pool.QueryRow(ctx,
 		`SELECT c.id::text, u.external_id, u.channel, c.thread_id, c.topic_id, c.state, c.started_at, c.ended_at, c.metadata
 		 FROM conversations c
 		 JOIN users u ON u.id = c.user_id
@@ -802,7 +802,7 @@ func (s *PostgresStore) getLatestActiveConversation(userID string) (*Conversatio
 		userID,
 		s.channel,
 		s.tenantID,
-	)
+	))
 	if err != nil {
 		return nil, false
 	}
@@ -1309,13 +1309,13 @@ func (s *PostgresStore) resolveOrCreateUser(ctx context.Context, externalID stri
 	return userID, nil
 }
 
-func (s *PostgresStore) getConversationByQuery(ctx context.Context, query string, args ...any) (*Conversation, error) {
+func scanConversation(row pgx.Row) (*Conversation, error) {
 	conv := &Conversation{}
 	var topicID *string
 	var endedAt *time.Time
 	var metadataBytes []byte
 
-	err := s.pool.QueryRow(ctx, query, args...).Scan(
+	err := row.Scan(
 		&conv.ID,
 		&conv.UserID,
 		&conv.Channel,

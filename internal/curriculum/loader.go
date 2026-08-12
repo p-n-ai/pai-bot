@@ -657,7 +657,7 @@ func (l *Loader) loadAssessment(path string) error {
 	return nil
 }
 
-func decodeYAMLFile(path string, target any) error {
+func decodeYAMLFile[T any](path string, target *T) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err

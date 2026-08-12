@@ -118,11 +118,11 @@ func (e *Engine) startChallengePlay(_ context.Context, msg chat.InboundMessage, 
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_started",
-		Data: map[string]any{
-			"challenge_id":   challenge.ID,
-			"topic_id":       challenge.TopicID,
-			"question_count": len(questions),
-		},
+		Data: eventData(
+			eventField("challenge_id", challenge.ID),
+			eventField("topic_id", challenge.TopicID),
+			eventField("question_count", len(questions)),
+		),
 	})
 
 	return response
@@ -172,7 +172,7 @@ func (e *Engine) handleChallengeAnswer(msg chat.InboundMessage, conv *Conversati
 	if correct {
 		feedback = i18n.S(locale, i18n.MsgChallengeCorrect)
 	} else {
-		feedback = i18n.S(locale, i18n.MsgChallengeIncorrect, question.Answer)
+		feedback = i18n.SF(locale, i18n.MsgChallengeIncorrect, question.Answer)
 	}
 
 	if newState.CurrentIndex >= len(newState.Questions) {
@@ -201,11 +201,11 @@ func (e *Engine) handleChallengeAnswer(msg chat.InboundMessage, conv *Conversati
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_answer",
-		Data: map[string]any{
-			"challenge_id":   state.ChallengeID,
-			"question_index": state.CurrentIndex,
-			"correct":        correct,
-		},
+		Data: eventData(
+			eventField("challenge_id", state.ChallengeID),
+			eventField("question_index", state.CurrentIndex),
+			eventField("correct", correct),
+		),
 	})
 
 	return response
@@ -224,10 +224,10 @@ func (e *Engine) completeChallengePlay(msg chat.InboundMessage, conv *Conversati
 		scorePercent = (state.CorrectCount * 100) / len(state.Questions)
 	}
 	if scorePercent > 50 && e.xp != nil {
-		if err := e.xp.Award(msg.UserID, progress.XPSourceChallenge, progress.XPChallengeWin, map[string]any{
-			"challenge_id": state.ChallengeID,
-			"score":        fmt.Sprintf("%d/%d", state.CorrectCount, len(state.Questions)),
-		}); err != nil {
+		if err := e.xp.Award(msg.UserID, progress.XPSourceChallenge, progress.XPChallengeWin, progress.NewXPMetadata(
+			progress.NewXPField("challenge_id", state.ChallengeID),
+			progress.NewXPField("score", fmt.Sprintf("%d/%d", state.CorrectCount, len(state.Questions))),
+		)); err != nil {
 			slog.Error("failed to award challenge XP", "user_id", msg.UserID, "error", err)
 		}
 	}
@@ -247,12 +247,12 @@ func (e *Engine) completeChallengePlay(msg chat.InboundMessage, conv *Conversati
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_completed",
-		Data: map[string]any{
-			"challenge_id":   state.ChallengeID,
-			"correct_count":  state.CorrectCount,
-			"total_questions": len(state.Questions),
-			"missed_count":   len(missedIndices),
-		},
+		Data: eventData(
+			eventField("challenge_id", state.ChallengeID),
+			eventField("correct_count", state.CorrectCount),
+			eventField("total_questions", len(state.Questions)),
+			eventField("missed_count", len(missedIndices)),
+		),
 	})
 
 	if len(missedIndices) == 0 {
@@ -323,10 +323,10 @@ func (e *Engine) handleChallengeReviewOffer(msg chat.InboundMessage, conv *Conve
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "challenge_review_started",
-			Data: map[string]any{
-				"challenge_id": state.ChallengeID,
-				"missed_count": len(state.MissedIndices),
-			},
+			Data: eventData(
+				eventField("challenge_id", state.ChallengeID),
+				eventField("missed_count", len(state.MissedIndices)),
+			),
 		})
 
 		return response
@@ -350,9 +350,9 @@ func (e *Engine) handleChallengeReviewOffer(msg chat.InboundMessage, conv *Conve
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_review_skipped",
-		Data: map[string]any{
-			"challenge_id": state.ChallengeID,
-		},
+		Data: eventData(
+			eventField("challenge_id", state.ChallengeID),
+		),
 	})
 
 	return response
@@ -396,11 +396,11 @@ func (e *Engine) handleChallengeReviewAnswer(msg chat.InboundMessage, conv *Conv
 			ConversationID: conv.ID,
 			UserID:         msg.UserID,
 			EventType:      "challenge_review_exited",
-			Data: map[string]any{
-				"challenge_id":  state.ChallengeID,
-				"review_index":  state.ReviewIndex,
-				"review_total":  len(state.MissedIndices),
-			},
+			Data: eventData(
+				eventField("challenge_id", state.ChallengeID),
+				eventField("review_index", state.ReviewIndex),
+				eventField("review_total", len(state.MissedIndices)),
+			),
 		})
 
 		return i18n.S(e.messageLocale(msg, conv), i18n.MsgChallengeReviewSkip)
@@ -477,11 +477,11 @@ func (e *Engine) handleChallengeReviewAnswer(msg chat.InboundMessage, conv *Conv
 func (e *Engine) completeChallengeReview(msg chat.InboundMessage, conv *Conversation, state *ConversationChallengeState) string {
 	// Award review XP
 	if e.xp != nil {
-		if err := e.xp.Award(msg.UserID, progress.XPSourceReview, progress.XPReviewCompleted, map[string]any{
-			"challenge_id":  state.ChallengeID,
-			"review_correct": state.ReviewCorrect,
-			"review_total":  len(state.MissedIndices),
-		}); err != nil {
+		if err := e.xp.Award(msg.UserID, progress.XPSourceReview, progress.XPReviewCompleted, progress.NewXPMetadata(
+			progress.NewXPField("challenge_id", state.ChallengeID),
+			progress.NewXPField("review_correct", state.ReviewCorrect),
+			progress.NewXPField("review_total", len(state.MissedIndices)),
+		)); err != nil {
 			slog.Error("failed to award review XP", "user_id", msg.UserID, "error", err)
 		}
 	}
@@ -494,11 +494,11 @@ func (e *Engine) completeChallengeReview(msg chat.InboundMessage, conv *Conversa
 		ConversationID: conv.ID,
 		UserID:         msg.UserID,
 		EventType:      "challenge_review_completed",
-		Data: map[string]any{
-			"challenge_id":  state.ChallengeID,
-			"review_correct": state.ReviewCorrect,
-			"review_total":  len(state.MissedIndices),
-		},
+		Data: eventData(
+			eventField("challenge_id", state.ChallengeID),
+			eventField("review_correct", state.ReviewCorrect),
+			eventField("review_total", len(state.MissedIndices)),
+		),
 	})
 
 	locale := e.messageLocale(msg, conv)
@@ -543,11 +543,11 @@ func renderChallengeResultLocalized(locale string, correct, total int) string {
 	if total > 0 {
 		scorePercent = (correct * 100) / total
 	}
-	return i18n.S(locale, i18n.MsgChallengeComplete, correct, total, scorePercent)
+	return i18n.SF(locale, i18n.MsgChallengeComplete, correct, total, scorePercent)
 }
 
 func renderChallengeReviewOfferLocalized(locale string, missedCount int) string {
-	return i18n.S(locale, i18n.MsgChallengeReviewOffer, missedCount)
+	return i18n.SF(locale, i18n.MsgChallengeReviewOffer, missedCount)
 }
 
 func renderChallengeReviewQuestion(topicName string, reviewIndex, reviewTotal int, question QuizQuestion) string {
@@ -574,7 +574,7 @@ func renderChallengeReviewQuestion(topicName string, reviewIndex, reviewTotal in
 }
 
 func renderChallengeReviewCompleteLocalized(locale string, reviewCorrect, reviewTotal int) string {
-	return i18n.S(locale, i18n.MsgChallengeReviewDone, reviewCorrect, reviewTotal)
+	return i18n.SF(locale, i18n.MsgChallengeReviewDone, reviewCorrect, reviewTotal)
 }
 
 // --- Helper functions ---

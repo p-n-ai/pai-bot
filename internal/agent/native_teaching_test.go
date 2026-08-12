@@ -107,7 +107,7 @@ func TestEngineAgentCoreRunsCurriculumToolAndPersistsOnlyFinalText(t *testing.T)
 			Content: []llm.AssistantContent{llm.ToolCall{
 				ID:        "curriculum-1",
 				Name:      "lookup_curriculum_topic",
-				Arguments: map[string]any{"topic_id": "F1-02"},
+				Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "F1-02"}),
 			}},
 			StopReason: llm.StopReasonToolUse,
 		},

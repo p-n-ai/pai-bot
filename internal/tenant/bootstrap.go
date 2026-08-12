@@ -18,18 +18,38 @@ const (
 	defaultTenantName = "Default"
 )
 
-type queryRower interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+const findDefaultTenantSQL = `SELECT id::text FROM tenants WHERE slug = $1 LIMIT 1`
+const upsertDefaultTenantSQL = `INSERT INTO tenants (name, slug)
+	 VALUES ($1, $2)
+	 ON CONFLICT (slug) DO UPDATE
+	 SET name = EXCLUDED.name
+	 RETURNING id::text`
+
+type defaultTenantStore interface {
+	FindDefaultTenant(context.Context) pgx.Row
+	UpsertDefaultTenant(context.Context) pgx.Row
+}
+
+type poolDefaultTenantStore struct {
+	pool *pgxpool.Pool
+}
+
+func (store poolDefaultTenantStore) FindDefaultTenant(ctx context.Context) pgx.Row {
+	return store.pool.QueryRow(ctx, findDefaultTenantSQL, defaultTenantSlug)
+}
+
+func (store poolDefaultTenantStore) UpsertDefaultTenant(ctx context.Context) pgx.Row {
+	return store.pool.QueryRow(ctx, upsertDefaultTenantSQL, defaultTenantName, defaultTenantSlug)
 }
 
 // EnsureDefaultTenantForMode enforces tenant bootstrap behavior by mode.
 // In single mode, it ensures the default tenant exists and returns its ID.
 // In multi mode, it performs no mutation and returns an empty tenant ID.
-func EnsureDefaultTenantForMode(ctx context.Context, mode string, q queryRower) (string, error) {
+func EnsureDefaultTenantForMode(ctx context.Context, mode string, store defaultTenantStore) (string, error) {
 	mode = strings.TrimSpace(mode)
 	switch mode {
 	case "single":
-		return ensureDefaultTenant(ctx, q)
+		return ensureDefaultTenant(ctx, store)
 	case "multi":
 		return "", nil
 	default:
@@ -42,15 +62,12 @@ func EnsureDefaultTenantForPool(ctx context.Context, mode string, pool *pgxpool.
 	if pool == nil {
 		return "", errors.New("pool is nil")
 	}
-	return EnsureDefaultTenantForMode(ctx, mode, pool)
+	return EnsureDefaultTenantForMode(ctx, mode, poolDefaultTenantStore{pool: pool})
 }
 
-func ensureDefaultTenant(ctx context.Context, q queryRower) (string, error) {
+func ensureDefaultTenant(ctx context.Context, store defaultTenantStore) (string, error) {
 	var tenantID string
-	err := q.QueryRow(ctx,
-		`SELECT id::text FROM tenants WHERE slug = $1 LIMIT 1`,
-		defaultTenantSlug,
-	).Scan(&tenantID)
+	err := store.FindDefaultTenant(ctx).Scan(&tenantID)
 	if err == nil {
 		return tenantID, nil
 	}
@@ -58,15 +75,7 @@ func ensureDefaultTenant(ctx context.Context, q queryRower) (string, error) {
 		return "", fmt.Errorf("query default tenant: %w", err)
 	}
 
-	err = q.QueryRow(ctx,
-		`INSERT INTO tenants (name, slug)
-		 VALUES ($1, $2)
-		 ON CONFLICT (slug) DO UPDATE
-		 SET name = EXCLUDED.name
-		 RETURNING id::text`,
-		defaultTenantName,
-		defaultTenantSlug,
-	).Scan(&tenantID)
+	err = store.UpsertDefaultTenant(ctx).Scan(&tenantID)
 	if err != nil {
 		return "", fmt.Errorf("upsert default tenant: %w", err)
 	}

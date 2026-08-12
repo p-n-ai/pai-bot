@@ -25,8 +25,12 @@ func newSchemaRegistry() *schemaRegistry {
 	}
 }
 
-func (r *schemaRegistry) refFor(value any) *Schema {
-	t := indirectType(reflect.TypeOf(value))
+func schemaRefFor[T any](r *schemaRegistry, value T) *Schema {
+	return r.refForType(reflect.TypeOf(value))
+}
+
+func (r *schemaRegistry) refForType(t reflect.Type) *Schema {
+	t = indirectType(t)
 	name := schemaName(t)
 	r.ensure(t)
 	return &Schema{Ref: "#/components/schemas/" + name}
@@ -49,7 +53,7 @@ func (r *schemaRegistry) schemaForField(t reflect.Type) *Schema {
 	if isInlineSchemaType(t) {
 		return r.schemaForType(t)
 	}
-	return r.refFor(reflect.New(t).Elem().Interface())
+	return r.refForType(t)
 }
 
 func (r *schemaRegistry) schemaForType(t reflect.Type) *Schema {

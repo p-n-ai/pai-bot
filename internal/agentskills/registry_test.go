@@ -45,15 +45,15 @@ Ask one question at a time.
 	}
 
 	tools := registry.Tools()
-	loaded, err := tools[0].Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{"name": "math-coach"}})
+	loaded, err := tools[0].Execute(context.Background(), llm.ToolCall{Arguments: llm.ToolArgumentsFrom(map[string]any{"name": "math-coach"})})
 	loadedText := textResult(t, loaded)
 	if err != nil || loaded.IsError || !strings.Contains(loadedText, "name: math-coach") || !strings.Contains(loadedText, "Ask one question at a time.") {
 		t.Fatalf("load skill = %#v, %v", loaded, err)
 	}
-	resource, err := tools[1].Execute(context.Background(), llm.ToolCall{Arguments: map[string]any{
+	resource, err := tools[1].Execute(context.Background(), llm.ToolCall{Arguments: llm.ToolArgumentsFrom(map[string]any{
 		"skill": "math-coach",
 		"path":  "references/fractions.md",
-	}})
+	})})
 	if err != nil || resource.IsError || textResult(t, resource) != "Use visual fractions." {
 		t.Fatalf("read resource = %#v, %v", resource, err)
 	}

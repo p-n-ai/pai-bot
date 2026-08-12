@@ -30,7 +30,7 @@ func TestRouter_CompleteJSON_ParsesOutputAndDefaultsToCheapModel(t *testing.T) {
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 			Strict:     true,
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRouter_CompleteJSON_RequiresStructuredOutputSpec(t *testing.T) {
 	var out structuredReply
 	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
 		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err == nil {
 		t.Fatal("CompleteJSON() should require structured output spec")
 	}
@@ -79,7 +79,7 @@ func TestRouter_CompleteJSON_FallsBackWhenProviderReturnsInvalidJSON(t *testing.
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -110,7 +110,7 @@ func TestRouter_CompleteJSON_FallsBackWhenProviderReturnsSchemaInvalidJSON(t *te
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 			Strict:     true,
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestRouter_CompleteJSON_SkipsProvidersWithoutStructuredOutputSupport(t *tes
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestRouter_CompleteJSON_UsesGoogleStructuredDefaults(t *testing.T) {
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -193,7 +193,7 @@ func TestRouter_CompleteJSON_UsesAnthropicStructuredDefaults(t *testing.T) {
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -228,7 +228,7 @@ func TestRouter_CompleteJSON_UsesCodexStructuredCapabilitiesAndDefault(t *testin
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -262,7 +262,7 @@ func TestRouter_CompleteJSON_UsesConfiguredStructuredModelForProvider(t *testing
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -291,7 +291,7 @@ func TestRouter_CompleteJSON_UsesGoogleForStructuredSystemPrompt(t *testing.T) {
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -325,7 +325,7 @@ func TestRouter_CompleteJSON_UsesGoogleForStructuredImageRequest(t *testing.T) {
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -359,7 +359,7 @@ func TestRouter_CompleteJSON_UsesAnthropicForStructuredImageRequest(t *testing.T
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -392,7 +392,7 @@ func TestRouter_CompleteJSON_SkipsProvidersWithoutRequiredStructuredCapabilities
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -422,7 +422,7 @@ func TestRouter_CompleteJSON_FallsBackWhenGoogleReturnsInvalidJSON(t *testing.T)
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -446,7 +446,7 @@ func TestRouter_CompleteJSON_FallsBackWhenAnthropicReturnsSchemaInvalidJSON(t *t
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -468,7 +468,7 @@ func TestRouter_CompleteJSON_RejectsMalformedSchemaBeforeProviderCall(t *testing
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object",`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err == nil {
 		t.Fatal("CompleteJSON() should reject malformed schema")
 	}
@@ -496,7 +496,7 @@ func TestRouter_CompleteJSON_InvalidJSONOpensStructuredCircuitOnly(t *testing.T)
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("CompleteJSON() error = %v", err)
 	}
@@ -515,7 +515,7 @@ func TestRouter_CompleteJSON_InvalidJSONOpensStructuredCircuitOnly(t *testing.T)
 			Name:       "grading_result",
 			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
 		},
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		t.Fatalf("second CompleteJSON() error = %v", err)
 	}

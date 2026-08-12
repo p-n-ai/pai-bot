@@ -209,7 +209,7 @@ func TestAdminEmbedConfigUpdatePreservesTenantScope(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", response.Code, response.Body.String())
 	}
 	updated := store.configs["tenant-a"]
-	if !updated.Enabled || updated.ThemeConfig["language"] != "ms" {
+	if !updated.Enabled || updated.ThemeConfig.Language != "ms" {
 		t.Fatalf("updated config = %#v", updated)
 	}
 	if len(updated.AllowedOrigins) != 1 {
@@ -323,11 +323,9 @@ func TestPublicEmbedConfigOnlyReturnsEnabledAllowedTenant(t *testing.T) {
 	store := &embedConfigStoreStub{
 		configs: map[string]chat.EmbedConfig{
 			"tenant-a": {
-				TenantID: "tenant-a",
-				Enabled:  true,
-				ThemeConfig: map[string]any{
-					"color": "#123456", "language": "ms",
-				},
+				TenantID:    "tenant-a",
+				Enabled:     true,
+				ThemeConfig: chat.EmbedThemeConfig{Color: "#123456", Language: "ms"},
 			},
 		},
 		tenantByOrigin: map[string]string{

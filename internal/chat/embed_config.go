@@ -19,13 +19,19 @@ var ErrEmbedNotConfigured = errors.New("embed not configured for tenant")
 
 // EmbedConfig holds the web-embed configuration for a tenant.
 type EmbedConfig struct {
-	ID             string         `json:"id"`
-	TenantID       string         `json:"tenant_id"`
-	Enabled        bool           `json:"enabled"`
-	AllowedOrigins []string       `json:"allowed_origins"`
-	ThemeConfig    map[string]any `json:"theme_config"`
-	CreatedAt      time.Time      `json:"created_at,omitempty"`
-	UpdatedAt      time.Time      `json:"updated_at,omitempty"`
+	ID             string           `json:"id"`
+	TenantID       string           `json:"tenant_id"`
+	Enabled        bool             `json:"enabled"`
+	AllowedOrigins []string         `json:"allowed_origins"`
+	ThemeConfig    EmbedThemeConfig `json:"theme_config"`
+	CreatedAt      time.Time        `json:"created_at,omitempty"`
+	UpdatedAt      time.Time        `json:"updated_at,omitempty"`
+}
+
+type EmbedThemeConfig struct {
+	Color    string `json:"color,omitempty"`
+	Language string `json:"language,omitempty"`
+	Position string `json:"position,omitempty"`
 }
 
 // EmbedConfigStore defines persistence operations for embed configurations.

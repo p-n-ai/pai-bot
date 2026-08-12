@@ -160,10 +160,10 @@ func handlePublicEmbedConfig(store chat.EmbedConfigStore) http.HandlerFunc {
 			return
 		}
 		normalizeEmbedConfig(&config, tenantID)
-		writeJSON(w, http.StatusOK, map[string]any{
-			"enabled":      true,
-			"theme_config": config.ThemeConfig,
-		})
+		writeJSON(w, http.StatusOK, struct {
+			Enabled     bool                  `json:"enabled"`
+			ThemeConfig chat.EmbedThemeConfig `json:"theme_config"`
+		}{Enabled: true, ThemeConfig: config.ThemeConfig})
 	}
 }
 
@@ -207,9 +207,11 @@ func handleEmbedGuestAuth(store chat.EmbedConfigStore, guests EmbedGuestService,
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"token": token, "user_id": userID, "expires_in": expiresIn,
-		})
+		writeJSON(w, http.StatusOK, struct {
+			Token     string `json:"token"`
+			UserID    string `json:"user_id"`
+			ExpiresIn int    `json:"expires_in"`
+		}{Token: token, UserID: userID, ExpiresIn: expiresIn})
 	}
 }
 
@@ -252,7 +254,10 @@ func handleEmbedUpgradeGuest(store chat.EmbedConfigStore, guests EmbedGuestServi
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"token": token, "role": auth.RoleStudent})
+		writeJSON(w, http.StatusOK, struct {
+			Token string    `json:"token"`
+			Role  auth.Role `json:"role"`
+		}{Token: token, Role: auth.RoleStudent})
 	}
 }
 
@@ -316,9 +321,13 @@ func handleEmbedLogin(store chat.EmbedConfigStore, authSvc EmbedPasswordAuthenti
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"token": token, "user_id": user.UserID, "role": user.Role, "name": user.Name, "expires_in": expiresIn,
-		})
+		writeJSON(w, http.StatusOK, struct {
+			Token     string    `json:"token"`
+			UserID    string    `json:"user_id"`
+			Role      auth.Role `json:"role"`
+			Name      string    `json:"name"`
+			ExpiresIn int       `json:"expires_in"`
+		}{Token: token, UserID: user.UserID, Role: user.Role, Name: user.Name, ExpiresIn: expiresIn})
 	}
 }
 
@@ -347,9 +356,13 @@ func handleEmbedMessages(configStore chat.EmbedConfigStore, store EmbedMessageSt
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		response := map[string]any{"messages": messages, "has_more": hasMore}
+		response := struct {
+			Messages   []EmbedMessage `json:"messages"`
+			HasMore    bool           `json:"has_more"`
+			NextCursor string         `json:"next_cursor,omitempty"`
+		}{Messages: messages, HasMore: hasMore}
 		if hasMore && len(messages) > 0 {
-			response["next_cursor"] = messages[0].ID
+			response.NextCursor = messages[0].ID
 		}
 		writeJSON(w, http.StatusOK, response)
 	}
@@ -378,8 +391,8 @@ func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore, publicBaseURL str
 			return
 		}
 		var request struct {
-			Enabled     *bool          `json:"enabled"`
-			ThemeConfig map[string]any `json:"theme_config"`
+			Enabled     *bool                  `json:"enabled"`
+			ThemeConfig *chat.EmbedThemeConfig `json:"theme_config"`
 		}
 		if !decodeEmbedJSON(w, r, &request) {
 			return
@@ -394,7 +407,7 @@ func handleAdminUpdateEmbedConfig(store chat.EmbedConfigStore, publicBaseURL str
 			config.Enabled = *request.Enabled
 		}
 		if request.ThemeConfig != nil {
-			config.ThemeConfig = request.ThemeConfig
+			config.ThemeConfig = *request.ThemeConfig
 		}
 		config, err = store.Upsert(r.Context(), config)
 		if err != nil {
@@ -478,7 +491,7 @@ func parseEmbedBearer(w http.ResponseWriter, r *http.Request, manager *auth.Toke
 	return claims, true
 }
 
-func decodeEmbedJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
+func decodeEmbedJSON[T any](w http.ResponseWriter, r *http.Request, destination *T) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxEmbedRequestBytes)
 	if err := json.NewDecoder(r.Body).Decode(destination); err != nil {
 		var tooLarge *http.MaxBytesError
@@ -602,8 +615,5 @@ func normalizeEmbedConfig(config *chat.EmbedConfig, tenantID string) {
 	config.TenantID = tenantID
 	if config.AllowedOrigins == nil {
 		config.AllowedOrigins = []string{}
-	}
-	if config.ThemeConfig == nil {
-		config.ThemeConfig = map[string]any{}
 	}
 }

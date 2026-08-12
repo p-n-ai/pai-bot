@@ -5,6 +5,7 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 	"github.com/p-n-ai/pai-bot/internal/curriculum"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 	"github.com/p-n-ai/pai-bot/internal/progress"
 )
 
@@ -1760,14 +1762,14 @@ func TestEngine_ProcessMessage_LogsCoreEvents(t *testing.T) {
 			aiResponse = true
 		case "agent_turn_completed":
 			agentTurnCompleted = true
-			if e.Data["turn_id"] == "" {
+			if mustEventValue[string](t, e.Data, "turn_id") == "" {
 				t.Fatalf("agent_turn_completed missing turn_id: %#v", e.Data)
 			}
-			if e.Data["route"] != "teaching" {
-				t.Fatalf("agent_turn_completed route = %v, want teaching", e.Data["route"])
+			if route := mustEventValue[string](t, e.Data, "route"); route != "teaching" {
+				t.Fatalf("agent_turn_completed route = %v, want teaching", route)
 			}
-			if e.Data["task"] != "teaching" {
-				t.Fatalf("agent_turn_completed task = %v, want teaching", e.Data["task"])
+			if task := mustEventValue[string](t, e.Data, "task"); task != "teaching" {
+				t.Fatalf("agent_turn_completed task = %v, want teaching", task)
 			}
 		}
 	}
@@ -1824,15 +1826,31 @@ func TestEngine_ProcessMessage_AgentTurnTraceOmitsRawContext(t *testing.T) {
 		if e.EventType != "agent_turn_completed" {
 			continue
 		}
-		if strings.Contains(fmt.Sprint(e.Data), poison) {
+		encoded, err := json.Marshal(e.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), poison) {
 			t.Fatalf("agent_turn_completed should not contain raw context: %#v", e.Data)
 		}
-		if e.Data["context_sources"] == nil {
+		if mustEventValue[[]string](t, e.Data, "context_sources") == nil {
 			t.Fatalf("agent_turn_completed missing context sources: %#v", e.Data)
 		}
 		return
 	}
 	t.Fatal("agent_turn_completed event not found")
+}
+
+func mustEventValue[T any](t *testing.T, data agent.EventData, name string) T {
+	t.Helper()
+	value, found, err := jsonobject.Get[T](data, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatalf("event data missing %q: %#v", name, data)
+	}
+	return value
 }
 
 func TestEngine_ProcessMessage_EventLoggingNonBlocking(t *testing.T) {

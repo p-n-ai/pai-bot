@@ -86,7 +86,7 @@ func TestFauxHelperBlocks(t *testing.T) {
 		t.Fatalf("block 0 = %#v", msg.Content[0])
 	}
 	tc, ok := msg.Content[1].(llm.ToolCall)
-	if !ok || tc.Name != "echo" || tc.ID == "" || tc.Arguments["text"] != "hi" {
+	if !ok || tc.Name != "echo" || tc.ID == "" || llm.ToolArgumentValueOrZero[string](tc.Arguments, "text") != "hi" {
 		t.Fatalf("block 1 = %#v", msg.Content[1])
 	}
 	if txt, ok := msg.Content[2].(llm.TextContent); !ok || txt.Text != "done" {
@@ -407,7 +407,7 @@ func TestFauxStreamsThinkingTextAndToolCallDeltas(t *testing.T) {
 	reply := llm.FauxAssistantMessage(
 		llm.FauxThinking("thinking text"),
 		llm.FauxText("answer text"),
-		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "hi", "count": float64(12)}},
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: llm.ToolArgumentsFrom(map[string]any{"text": "hi", "count": float64(12)})},
 	)
 	reply.StopReason = llm.StopReasonToolUse
 	f.SetResponses(llm.FauxRespond(reply))
@@ -447,7 +447,7 @@ func TestFauxStreamsExactEventOrderForFixedChunks(t *testing.T) {
 	reply := llm.FauxAssistantMessage(
 		llm.FauxThinking("go"),
 		llm.FauxText("ok"),
-		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{}},
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: llm.ToolArgumentsFrom(map[string]any{})},
 	)
 	reply.StopReason = llm.StopReasonToolUse
 	f.SetResponses(llm.FauxRespond(reply))
@@ -468,7 +468,7 @@ func TestFauxRejectsUnencodableToolArguments(t *testing.T) {
 	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	f.SetResponses(llm.FauxRespond(llm.FauxAssistantMessage(
-		llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+		llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: llm.ToolArgumentsFrom(map[string]any{"value": func() {}})},
 	)))
 
 	msg, err := llm.Complete(context.Background(), f.Model(), userContext("hi"), nil)
@@ -488,7 +488,7 @@ func TestFauxRejectsUnencodableContextToolArguments(t *testing.T) {
 	contextWithBadTool := llm.Context{Messages: []llm.Message{
 		llm.UserText("call the tool"),
 		llm.AssistantMessage{Content: []llm.AssistantContent{
-			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: llm.ToolArgumentsFrom(map[string]any{"value": func() {}})},
 		}},
 	}}
 
@@ -510,7 +510,7 @@ func TestFauxPreCanceledRequestPreservesContextCause(t *testing.T) {
 	cancel()
 	contextWithBadTool := llm.Context{Messages: []llm.Message{
 		llm.AssistantMessage{Content: []llm.AssistantContent{
-			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: map[string]any{"value": func() {}}},
+			llm.ToolCall{ID: "tool-1", Name: "bad", Arguments: llm.ToolArgumentsFrom(map[string]any{"value": func() {}})},
 		}},
 	}}
 
@@ -528,8 +528,8 @@ func TestFauxStreamsMultipleToolCalls(t *testing.T) {
 	f := llm.RegisterFauxProvider(llm.FauxOptions{})
 	defer f.Unregister()
 	reply := llm.FauxAssistantMessage(
-		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: map[string]any{"text": "one"}},
-		llm.ToolCall{ID: "tool-2", Name: "echo", Arguments: map[string]any{"text": "two"}},
+		llm.ToolCall{ID: "tool-1", Name: "echo", Arguments: llm.ToolArgumentsFrom(map[string]any{"text": "one"})},
+		llm.ToolCall{ID: "tool-2", Name: "echo", Arguments: llm.ToolArgumentsFrom(map[string]any{"text": "two"})},
 	)
 	reply.StopReason = llm.StopReasonToolUse
 	f.SetResponses(llm.FauxRespond(reply))

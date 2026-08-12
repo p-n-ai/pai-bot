@@ -385,11 +385,7 @@ func looksLikeUUID(s string) bool {
 	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
 }
 
-func scanClassProgressRows(rows interface {
-	Next() bool
-	Scan(dest ...any) error
-	Err() error
-}) (ClassProgress, error) {
+func scanClassProgressRows(rows pgx.Rows) (ClassProgress, error) {
 	studentsByID := make(map[string]*ClassStudent)
 	var studentOrder []string
 	var topicIDs []string

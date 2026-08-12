@@ -14,7 +14,7 @@ func TestCurriculumLookupToolRejectsTopicBelowAITeachingQuality(t *testing.T) {
 	tool := curriculumLookupTool{loader: newUnlockCurriculumLoader(t)}
 
 	result, err := tool.Execute(context.Background(), llm.ToolCall{
-		Arguments: map[string]any{"topic_id": "F1-02"},
+		Arguments: llm.ToolArgumentsFrom(map[string]any{"topic_id": "F1-02"}),
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

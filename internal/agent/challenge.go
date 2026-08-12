@@ -748,7 +748,7 @@ func (s *PostgresChallengeStore) GetChallenge(code string) (*Challenge, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	return s.getChallenge(ctx, s.pool, normalizeChallengeCode(code))
+	return s.getChallenge(ctx, normalizeChallengeCode(code))
 }
 
 func (s *PostgresChallengeStore) StartChallengeSearch(externalUserID string, input ChallengeCreateInput) (*StartChallengeSearchResult, error) {
@@ -1358,16 +1358,14 @@ func (s *PostgresChallengeStore) getChallengeForUpdate(ctx context.Context, tx p
 	return &challenge, creatorUUID, nil
 }
 
-func (s *PostgresChallengeStore) getChallenge(ctx context.Context, querier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, code string) (*Challenge, error) {
+func (s *PostgresChallengeStore) getChallenge(ctx context.Context, code string) (*Challenge, error) {
 	var challenge Challenge
 	var creatorID string
 	var opponentID *string
 	var joinDeadlineAt *time.Time
 	var creatorAcceptedAt *time.Time
 	var opponentAcceptedAt *time.Time
-	err := querier.QueryRow(ctx,
+	err := s.pool.QueryRow(ctx,
 		`SELECT c.id::text,
 		        c.invite_code,
 		        creator.external_id,
@@ -1802,9 +1800,7 @@ func (s *PostgresChallengeStore) insertChallengeSearch(ctx context.Context, tx p
 	return &search, nil
 }
 
-func (s *PostgresChallengeStore) getChallengeByID(ctx context.Context, querier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, challengeID string) (*Challenge, error) {
+func (s *PostgresChallengeStore) getChallengeByID(ctx context.Context, querier pgx.Tx, challengeID string) (*Challenge, error) {
 	var challenge Challenge
 	var creatorID string
 	var opponentID *string

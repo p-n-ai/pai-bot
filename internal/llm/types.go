@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
 
 type StopReason string
@@ -55,15 +57,33 @@ type ThinkingContent struct {
 }
 
 type ToolCall struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Arguments map[string]any `json:"arguments"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Arguments jsonobject.Object `json:"arguments"`
 }
 
-func marshalToolArguments(arguments map[string]any) (string, error) {
-	if arguments == nil {
-		return "{}", nil
-	}
+func NewToolArguments(fields ...jsonobject.Field) jsonobject.Object {
+	return jsonobject.New(fields...)
+}
+
+func ToolArgumentsFrom[T any](value T) jsonobject.Object {
+	return jsonobject.From(value)
+}
+
+func ToolArgument[T any](name string, value T) jsonobject.Field {
+	return jsonobject.Member(name, value)
+}
+
+func ToolArgumentValue[T any](arguments jsonobject.Object, name string) (T, bool, error) {
+	return jsonobject.Get[T](arguments, name)
+}
+
+func ToolArgumentValueOrZero[T any](arguments jsonobject.Object, name string) T {
+	value, _, _ := jsonobject.Get[T](arguments, name)
+	return value
+}
+
+func marshalToolArguments(arguments jsonobject.Object) (string, error) {
 	encoded, err := json.Marshal(arguments)
 	if err != nil {
 		return "", err
@@ -71,18 +91,11 @@ func marshalToolArguments(arguments map[string]any) (string, error) {
 	return string(encoded), nil
 }
 
-func parseToolArguments(encoded string) (map[string]any, error) {
+func parseToolArguments(encoded string) (jsonobject.Object, error) {
 	if strings.TrimSpace(encoded) == "" {
-		return map[string]any{}, nil
+		return jsonobject.New(), nil
 	}
-	var arguments map[string]any
-	if err := json.Unmarshal([]byte(encoded), &arguments); err != nil {
-		return nil, err
-	}
-	if arguments == nil {
-		return nil, fmt.Errorf("arguments must be a JSON object")
-	}
-	return arguments, nil
+	return jsonobject.Parse([]byte(encoded))
 }
 
 type ReasoningDetail struct {

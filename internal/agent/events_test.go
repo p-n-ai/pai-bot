@@ -16,9 +16,7 @@ func TestMemoryEventLogger_LogEvent(t *testing.T) {
 		ConversationID: "conv-1",
 		UserID:         "user-1",
 		EventType:      "message_sent",
-		Data: map[string]any{
-			"text_len": 42,
-		},
+		Data:           agent.NewEventData(agent.NewEventField("text_len", 42)),
 	})
 	if err != nil {
 		t.Fatalf("LogEvent() error = %v", err)

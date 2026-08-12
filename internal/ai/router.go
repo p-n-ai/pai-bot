@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -200,10 +199,27 @@ func (r *Router) Complete(ctx context.Context, req CompletionRequest) (Completio
 	return CompletionResponse{}, fmt.Errorf("all AI providers failed: %s", strings.Join(failures, "; "))
 }
 
-// CompleteJSON requests structured JSON output and unmarshals it into out.
+type StructuredOutputTarget struct {
+	decode func(json.RawMessage) error
+	err    error
+}
+
+func DecodeInto[T any](target *T) StructuredOutputTarget {
+	if target == nil {
+		return StructuredOutputTarget{err: fmt.Errorf("output target must be a non-nil pointer")}
+	}
+	return StructuredOutputTarget{decode: func(raw json.RawMessage) error {
+		if err := json.Unmarshal(raw, target); err != nil {
+			return fmt.Errorf("unmarshal structured output: %w", err)
+		}
+		return nil
+	}}
+}
+
+// CompleteJSON requests structured JSON output and decodes it into the target.
 // If no model is specified, it prefers a cheap default per provider.
-func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out any) (CompletionResponse, error) {
-	if err := validateCompleteJSONRequest(req, out); err != nil {
+func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, target StructuredOutputTarget) (CompletionResponse, error) {
+	if err := validateCompleteJSONRequest(req, target); err != nil {
 		return CompletionResponse{}, err
 	}
 
@@ -258,7 +274,7 @@ func (r *Router) CompleteJSON(ctx context.Context, req CompletionRequest, out an
 			payloadErr = validateStructuredJSONPayload(raw, providerReq.StructuredOutput)
 		}
 		if payloadErr == nil {
-			payloadErr = unmarshalStructuredOutput(raw, out)
+			payloadErr = target.decode(raw)
 		}
 		if payloadErr != nil {
 			trace.Error = payloadErr.Error()
@@ -495,7 +511,7 @@ func (r *Router) markStructuredSuccess(providerName string, gen uint64) {
 	r.structuredBreakerState[providerName] = state
 }
 
-func validateCompleteJSONRequest(req CompletionRequest, out any) error {
+func validateCompleteJSONRequest(req CompletionRequest, target StructuredOutputTarget) error {
 	if req.StructuredOutput == nil {
 		return fmt.Errorf("structured output spec is required")
 	}
@@ -509,9 +525,11 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 		return fmt.Errorf("invalid structured output JSON schema: %w", err)
 	}
 
-	target := reflect.ValueOf(out)
-	if !target.IsValid() || target.Kind() != reflect.Ptr || target.IsNil() {
-		return fmt.Errorf("output target must be a non-nil pointer")
+	if target.err != nil {
+		return target.err
+	}
+	if target.decode == nil {
+		return fmt.Errorf("output target must be configured")
 	}
 
 	return nil
@@ -642,16 +660,6 @@ func validateStructuredJSONPayload(raw json.RawMessage, spec *StructuredOutputSp
 		return fmt.Errorf("structured output does not match schema")
 	}
 	return fmt.Errorf("structured output does not match schema: %s", errors[0])
-}
-
-func unmarshalStructuredOutput(raw json.RawMessage, out any) error {
-	target := reflect.ValueOf(out)
-	temp := reflect.New(target.Elem().Type())
-	if err := json.Unmarshal(raw, temp.Interface()); err != nil {
-		return fmt.Errorf("unmarshal structured output: %w", err)
-	}
-	target.Elem().Set(temp.Elem())
-	return nil
 }
 
 func bytesTrimSpace(raw []byte) []byte {

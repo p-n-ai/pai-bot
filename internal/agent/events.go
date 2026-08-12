@@ -12,14 +12,18 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/p-n-ai/pai-bot/internal/jsonobject"
 )
+
+type EventField = jsonobject.Field
+type EventData = jsonobject.Object
 
 // Event represents an analytics event persisted to the events table.
 type Event struct {
 	ConversationID string
 	UserID         string
 	EventType      string
-	Data           map[string]any
+	Data           EventData
 	CreatedAt      time.Time
 }
 
@@ -88,11 +92,7 @@ func (l *PostgresEventLogger) LogEvent(event Event) error {
 		return fmt.Errorf("conversation_id is required")
 	}
 
-	payload := event.Data
-	if payload == nil {
-		payload = map[string]any{}
-	}
-	data, err := json.Marshal(payload)
+	data, err := json.Marshal(event.Data)
 	if err != nil {
 		return fmt.Errorf("marshal event data: %w", err)
 	}
@@ -128,4 +128,20 @@ func (l *PostgresEventLogger) LogEvent(event Event) error {
 		"user_id", event.UserID,
 	)
 	return nil
+}
+
+func NewEventField[T any](name string, value T) EventField {
+	return jsonobject.Member(name, value)
+}
+
+func NewEventData(fields ...EventField) jsonobject.Object {
+	return jsonobject.New(fields...)
+}
+
+func eventField[T any](name string, value T) EventField {
+	return NewEventField(name, value)
+}
+
+func eventData(fields ...EventField) jsonobject.Object {
+	return NewEventData(fields...)
 }

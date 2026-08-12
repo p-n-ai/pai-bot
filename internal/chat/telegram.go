@@ -120,9 +120,9 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 				}
 				inlineKeyboard = append(inlineKeyboard, inlineRow)
 			}
-			replyMarkup := map[string]any{
-				"inline_keyboard": inlineKeyboard,
-			}
+			replyMarkup := struct {
+				InlineKeyboard [][]tgInlineButton `json:"inline_keyboard"`
+			}{InlineKeyboard: inlineKeyboard}
 			b, err := json.Marshal(replyMarkup)
 			if err != nil {
 				return fmt.Errorf("marshal telegram inline reply markup: %w", err)
@@ -130,11 +130,11 @@ func (t *TelegramChannel) SendMessage(ctx context.Context, userID string, msg Ou
 			params.Set("reply_markup", string(b))
 		}
 		if len(msg.ReplyKeyboard) > 0 && telegramReplyKeyboardAllowed(chatID) {
-			replyMarkup := map[string]any{
-				"keyboard":          msg.ReplyKeyboard,
-				"resize_keyboard":   true,
-				"one_time_keyboard": true,
-			}
+			replyMarkup := struct {
+				Keyboard        [][]string `json:"keyboard"`
+				ResizeKeyboard  bool       `json:"resize_keyboard"`
+				OneTimeKeyboard bool       `json:"one_time_keyboard"`
+			}{Keyboard: msg.ReplyKeyboard, ResizeKeyboard: true, OneTimeKeyboard: true}
 			b, err := json.Marshal(replyMarkup)
 			if err != nil {
 				return fmt.Errorf("marshal telegram reply markup: %w", err)
@@ -619,7 +619,7 @@ func detectTelegramMIME(content []byte, filePath string) string {
 
 // MapTelegramInboundForTest helps tests build update payloads without depending
 // on unexported Telegram transport structs.
-func MapTelegramInboundForTest(update map[string]any) (InboundMessage, bool) {
+func MapTelegramInboundForTest[T any](update T) (InboundMessage, bool) {
 	b, err := json.Marshal(update)
 	if err != nil {
 		return InboundMessage{}, false

@@ -49,7 +49,7 @@ func (e *Engine) handleCreateGroupCommand(_ context.Context, msg chat.InboundMes
 		return "", fmt.Errorf("join own group: %w", err)
 	}
 
-	return i18n.S(locale, i18n.MsgGroupCreated, g.Name, g.JoinCode, g.JoinCode), nil
+	return i18n.SF(locale, i18n.MsgGroupCreated, g.Name, g.JoinCode, g.JoinCode), nil
 }
 
 // handleJoinGroupCommand handles "/join <code>".
@@ -67,7 +67,7 @@ func (e *Engine) handleJoinGroupCommand(_ context.Context, msg chat.InboundMessa
 		return "", fmt.Errorf("lookup group by code: %w", err)
 	}
 	if g == nil {
-		return i18n.S(locale, i18n.MsgGroupNotFound, code), nil
+		return i18n.SF(locale, i18n.MsgGroupNotFound, code), nil
 	}
 
 	identity, err := learnerIdentityForMessage(msg)
@@ -84,12 +84,12 @@ func (e *Engine) handleJoinGroupCommand(_ context.Context, msg chat.InboundMessa
 
 	if err := e.groups.JoinGroup(g.ID, userUUID, g.TenantID, "member"); err != nil {
 		if errors.Is(err, ErrGroupClosed) {
-			return i18n.S(locale, i18n.MsgGroupClosed, g.Name), nil
+			return i18n.SF(locale, i18n.MsgGroupClosed, g.Name), nil
 		}
 		return "", fmt.Errorf("join group: %w", err)
 	}
 
-	return i18n.S(locale, i18n.MsgGroupJoined, g.Name), nil
+	return i18n.SF(locale, i18n.MsgGroupJoined, g.Name), nil
 }
 
 // handleLeaderboardCommand handles "/leaderboard [code]".
@@ -129,7 +129,7 @@ func (e *Engine) handleLeaderboardCommand(_ context.Context, msg chat.InboundMes
 			}
 		}
 		if g == nil {
-			return i18n.S(locale, i18n.MsgGroupNotFound, code), nil
+			return i18n.SF(locale, i18n.MsgGroupNotFound, code), nil
 		}
 	} else {
 		g = &userGroups[0] // most recently joined
@@ -140,7 +140,7 @@ func (e *Engine) handleLeaderboardCommand(_ context.Context, msg chat.InboundMes
 		return "", fmt.Errorf("get leaderboard: %w", err)
 	}
 	if len(entries) == 0 {
-		return i18n.S(locale, i18n.MsgLeaderboardEmpty, g.Name), nil
+		return i18n.SF(locale, i18n.MsgLeaderboardEmpty, g.Name), nil
 	}
 
 	return formatLeaderboard(g.Name, entries, locale), nil

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/p-n-ai/pai-bot/internal/ai"
@@ -452,13 +453,13 @@ func (e *Engine) createGoal(userID string, conv *Conversation, draft PendingGoal
 		ConversationID: conv.ID,
 		UserID:         userID,
 		EventType:      "goal_created",
-		Data: map[string]any{
-			"goal_id":         goal.ID,
-			"topic_id":        goal.TopicID,
-			"target_mastery":  goal.TargetMastery,
-			"current_mastery": goal.CurrentMastery,
-			"status":          goal.Status,
-		},
+		Data: eventData(
+			eventField("goal_id", goal.ID),
+			eventField("topic_id", goal.TopicID),
+			eventField("target_mastery", goal.TargetMastery),
+			eventField("current_mastery", goal.CurrentMastery),
+			eventField("status", goal.Status),
+		),
 	})
 	return formatGoalSetMessage(goal), nil
 }
@@ -518,7 +519,7 @@ func (e *Engine) parseGoalRequest(ctx context.Context, raw string, topic *curric
 			Strict: true,
 		},
 		MaxTokens: 120,
-	}, &out)
+	}, ai.DecodeInto(&out))
 	if err != nil {
 		return fallback
 	}
@@ -560,12 +561,12 @@ func (e *Engine) syncGoalProgress(identity LearnerIdentity, syllabusID, topicID 
 			e.logEventAsync(Event{
 				UserID:    identity.ExternalID(),
 				EventType: "goal_completed",
-				Data: map[string]any{
-					"goal_id":         goal.ID,
-					"topic_id":        goal.TopicID,
-					"target_mastery":  goal.TargetMastery,
-					"current_mastery": goal.CurrentMastery,
-				},
+				Data: eventData(
+					eventField("goal_id", goal.ID),
+					eventField("topic_id", goal.TopicID),
+					eventField("target_mastery", goal.TargetMastery),
+					eventField("current_mastery", goal.CurrentMastery),
+				),
 			})
 		}
 	}
@@ -605,10 +606,6 @@ func cloneGoalSlice(goals []*Goal) []*Goal {
 	return cloned
 }
 
-type goalRowScanner interface {
-	Scan(...any) error
-}
-
 func newGoalRecord(userID string, input GoalInput, now time.Time) *Goal {
 	goal := &Goal{
 		UserID:         userID,
@@ -634,7 +631,7 @@ func markGoalCompletedIfReached(goal *Goal, now time.Time) {
 	goal.CompletedAt = &now
 }
 
-func scanGoal(scanner goalRowScanner) (*Goal, error) {
+func scanGoal(scanner pgx.Row) (*Goal, error) {
 	goal := &Goal{}
 	var completedAt *time.Time
 	if err := scanner.Scan(
