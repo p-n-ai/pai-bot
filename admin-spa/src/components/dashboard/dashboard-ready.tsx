@@ -1,16 +1,5 @@
-import {
-  BellRingIcon,
-  BookOpenCheckIcon,
-  CheckCircle2Icon,
-  ChevronRightIcon,
-  CircleAlertIcon,
-  SearchIcon,
-  SparklesIcon,
-  TrendingUpIcon,
-  UsersIcon,
-} from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
-import type { ChangeEvent, ComponentType, ReactNode } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 
 import type {
   DashboardLearner,
@@ -18,6 +7,7 @@ import type {
 } from '@/lib/dashboard-learners'
 import type { ClassProgress } from '@/lib/dashboard-types'
 import type { LeaderboardState } from '@/components/dashboard/class-leaderboard'
+import type { PandaiIconName } from '@/components/ui/pandai-icon'
 import { ClassLeaderboard } from '@/components/dashboard/class-leaderboard'
 import {
   AdminSurface,
@@ -29,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import { Progress } from '@/components/ui/progress'
 import {
   Sheet,
@@ -119,7 +110,7 @@ function NudgeFeedback({ message }: { message: string }) {
       className='sticky top-16 z-20 flex min-h-11 items-center gap-2.5 rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] px-4 py-3 text-sm font-medium text-[var(--text-tertiary-default)]'
       role='status'
     >
-      <CheckCircle2Icon aria-hidden='true' className='size-4 shrink-0' />
+      <PandaiIcon className='size-4 shrink-0' name='check-circle' />
       {message}
     </div>
   )
@@ -146,7 +137,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
           <div className='flex items-start justify-between gap-4'>
             <div className='flex items-center gap-2.5'>
               <span className='flex size-9 items-center justify-center rounded-lg bg-white/10 text-[var(--admin-nav-muted)] ring-1 ring-white/20'>
-                <UsersIcon aria-hidden='true' className='size-[18px]' />
+                <PandaiIcon className='size-[18px]' name='users' />
               </span>
               <div>
                 <p className='text-sm font-medium text-[var(--admin-nav-text)]'>
@@ -176,9 +167,9 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
                 )}
               >
                 {summary.attentionCount > 0 ? (
-                  <CircleAlertIcon aria-hidden='true' className='size-4' />
+                  <PandaiIcon className='size-4' name='alert-triangle' />
                 ) : (
-                  <CheckCircle2Icon aria-hidden='true' className='size-4' />
+                  <PandaiIcon className='size-4' name='check-circle' />
                 )}
                 {learnerNote}
               </p>
@@ -192,7 +183,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
 
       <DashboardMetricCard
         className='xl:col-span-3'
-        icon={TrendingUpIcon}
+        icon='trending-up'
         label='Average mastery'
         progress={summary.averageMastery}
         tone={getMasteryTone(summary.averageMastery)}
@@ -211,7 +202,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
 
       <DashboardMetricCard
         className='xl:col-span-4'
-        icon={BookOpenCheckIcon}
+        icon='book-open'
         label='Coverage'
         progress={summary.coveragePercent}
         value={`${summary.coveragePercent}%`}
@@ -248,9 +239,9 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
       </Card>
 
       <Card className='overflow-hidden border-0 bg-[var(--surface-primary-default-subtle)] py-0 shadow-none ring-0 md:col-span-2 xl:col-span-5'>
-        <CardContent className='flex h-full items-center gap-4 p-5 sm:p-6'>
+        <CardContent className='relative flex h-full min-h-36 items-center gap-4 overflow-hidden p-5 pr-28 sm:p-6 sm:pr-36'>
           <span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--admin-surface)] text-[var(--icon-tertiary-default)] ring-1 ring-[var(--border-primary-default)]'>
-            <SparklesIcon aria-hidden='true' className='size-5' />
+            <PandaiIcon className='size-5' name='star' />
           </span>
           <div>
             <p className='font-semibold text-[var(--text-tertiary-default)]'>
@@ -262,6 +253,12 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
                 : 'Learner activity will shape the next recommended review.'}
             </p>
           </div>
+          <img
+            alt=''
+            aria-hidden='true'
+            className='pointer-events-none absolute -right-3 -bottom-6 w-32 drop-shadow-[0_18px_18px_rgba(12,58,44,0.14)] sm:right-1 sm:w-36'
+            src='/illustrations/pbot.svg'
+          />
         </CardContent>
       </Card>
     </section>
@@ -271,7 +268,7 @@ function DashboardStats({ progress }: { progress: ClassProgress }) {
 function DashboardMetricCard({
   children,
   className,
-  icon: Icon,
+  icon,
   label,
   progress,
   tone,
@@ -279,7 +276,7 @@ function DashboardMetricCard({
 }: {
   children: ReactNode
   className?: string
-  icon: ComponentType<{ 'aria-hidden'?: boolean; className?: string }>
+  icon: PandaiIconName
   label: string
   progress: number
   tone?: string
@@ -293,7 +290,7 @@ function DashboardMetricCard({
             {label}
           </p>
           <span className='flex size-8 items-center justify-center rounded-lg bg-[var(--admin-surface-muted)] text-[var(--icon-tertiary-default)]'>
-            <Icon aria-hidden className='size-4' />
+            <PandaiIcon className='size-4' name={icon} />
           </span>
         </div>
         <div className='mt-7'>
@@ -542,9 +539,9 @@ function LearnerProgressTools({
         >
           Search learners
           <span className='relative'>
-            <SearchIcon
-              aria-hidden='true'
+            <PandaiIcon
               className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--admin-muted)]'
+              name='search'
             />
             <Input
               className='h-11 bg-white pl-9'
@@ -782,9 +779,9 @@ function StudentDetailButton({
           </span>
         </span>
       </span>
-      <ChevronRightIcon
-        aria-hidden='true'
+      <PandaiIcon
         className='size-4 shrink-0 text-[var(--admin-muted)]'
+        name='chevron-right'
       />
     </button>
   )
@@ -849,7 +846,7 @@ function NudgeButton({
       size='sm'
       type='button'
     >
-      <BellRingIcon data-icon='inline-start' />
+      <PandaiIcon data-icon='inline-start' name='bell' />
       {getNudgeButtonLabel(isSending)}
     </Button>
   )

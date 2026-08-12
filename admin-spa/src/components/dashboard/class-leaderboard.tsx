@@ -1,4 +1,3 @@
-import { TrendingUpIcon } from 'lucide-react'
 import { useCallback } from 'react'
 
 import type { LeaderboardEntry } from '@/lib/leaderboard-types'
@@ -8,6 +7,7 @@ import {
 } from '@/components/shared/admin-surface'
 import { StatePanel } from '@/components/shared/state-panel'
 import { Button } from '@/components/ui/button'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getLeaderboardRowView } from '@/lib/dashboard-leaderboard-view'
 import { cn } from '@/lib/utils'
@@ -130,7 +130,7 @@ function LeaderboardRow({
           row.gainTone === 'neutral' && 'text-[var(--admin-ink-soft)]',
         )}
       >
-        <TrendingUpIcon aria-hidden='true' className='size-4' />
+        <PandaiIcon className='size-4' name='trending-up' />
         {row.gainLabel}
       </span>
     </li>

@@ -1,11 +1,11 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { LogOutIcon, SparklesIcon, XIcon } from 'lucide-react'
 import { useCallback } from 'react'
 
 import type { AuthUser } from '@/lib/auth-types'
 import type { NavigationItem } from '@/lib/admin-navigation'
 import { useAuth } from '@/auth-provider'
 import { Button } from '@/components/ui/button'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import {
   Sidebar,
   SidebarContent,
@@ -65,7 +65,7 @@ export function AdminSidebar() {
             to='/dashboard'
           >
             <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] ring-1 ring-white/30'>
-              <SparklesIcon aria-hidden='true' className='size-[18px]' />
+              <PandaiIcon className='size-[18px]' name='star' />
               <span className='absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-[var(--admin-ink)] ring-2 ring-[var(--admin-accent)]' />
             </span>
             <span className='min-w-0 leading-tight'>
@@ -84,7 +84,7 @@ export function AdminSidebar() {
               type='button'
               variant='ghost'
             >
-              <XIcon aria-hidden='true' />
+              <PandaiIcon name='x' />
             </Button>
           )}
         </div>
@@ -135,7 +135,7 @@ export function AdminSidebar() {
             type='button'
             variant='ghost'
           >
-            <LogOutIcon aria-hidden='true' />
+            <PandaiIcon name='log-out' />
           </Button>
         </div>
       </SidebarFooter>
@@ -152,15 +152,14 @@ function AdminNavigationLink({
   onNavigate: () => void
   pathname: string
 }) {
-  const { Icon, href, label } = item
+  const { href, icon, label } = item
   const isActive = isNavigationItemActive(href, pathname)
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[var(--admin-accent)] data-active:font-semibold data-active:text-[var(--admin-ink)]'
-        isActive={isActive}
+        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none'
       >
         <Link
           aria-current={isActive ? 'page' : undefined}
@@ -169,15 +168,7 @@ function AdminNavigationLink({
           search={href === '/dashboard' ? dashboardSearch : undefined}
           to={href}
         >
-          <span
-            aria-hidden='true'
-            className='absolute left-0 h-5 w-0.5 rounded-full bg-transparent'
-          />
-          <Icon
-            aria-hidden='true'
-            className='text-[var(--admin-nav-label)] group-data-[active=true]/menu-button:text-[var(--admin-ink)]'
-            strokeWidth={1.5}
-          />
+          <PandaiIcon className='text-[var(--admin-nav-label)]' name={icon} />
           <span>{label}</span>
         </Link>
       </SidebarMenuButton>

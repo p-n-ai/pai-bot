@@ -89,13 +89,13 @@ describe('admin sidebar', () => {
       </SidebarProvider>,
     )
 
-    expect(screen.getByRole('link', { name: 'Classes' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
-    expect(screen.getByRole('link', { name: 'Today' })).not.toHaveAttribute(
-      'aria-current',
-    )
+    const currentPage = screen.getByRole('link', { name: 'Classes' })
+    const otherPage = screen.getByRole('link', { name: 'Today' })
+
+    expect(currentPage).toHaveAttribute('aria-current', 'page')
+    expect(otherPage).not.toHaveAttribute('aria-current')
+    expect(currentPage.className).not.toContain('data-active')
+    expect(otherPage.className).not.toContain('data-active')
     expect(
       screen.queryByRole('link', { name: 'Content search' }),
     ).not.toBeInTheDocument()
