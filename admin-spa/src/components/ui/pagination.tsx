@@ -4,7 +4,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   MoreHorizontalIcon,
-} from 'lucide-react'
+} from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 

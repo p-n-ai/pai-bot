@@ -1,4 +1,4 @@
-import { AlertCircleIcon } from 'lucide-react'
+import { AlertCircleIcon } from '@/components/ui/pandai-icons'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 

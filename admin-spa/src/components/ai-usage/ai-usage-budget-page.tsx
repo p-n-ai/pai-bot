@@ -1,7 +1,6 @@
-import { GaugeIcon } from 'lucide-react'
-
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
 import type { AIUsageView } from '@/lib/ai-usage-view'
+import { GaugeIcon } from '@/components/ui/pandai-icons'
 import { AIUsageBudgetEditor } from '@/components/ai-usage/ai-usage-budget-editor'
 import { formatCompactNumber } from '@/lib/ai-usage-view'
 

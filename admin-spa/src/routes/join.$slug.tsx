@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowLeftIcon, UsersRoundIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { JoinClassView } from '@/lib/join-types'
+import { ArrowLeftIcon, UsersRoundIcon } from '@/components/ui/pandai-icons'
 import { JoinClassCard } from '@/components/auth/join-class-card'
 import { LoadState } from '@/components/shared/load-state'
 import { getJoinClass } from '@/lib/admin-api'

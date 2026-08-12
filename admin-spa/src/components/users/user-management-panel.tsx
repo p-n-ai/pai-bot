@@ -1,4 +1,3 @@
-import { MailPlusIcon, RotateCcwIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
@@ -7,6 +6,7 @@ import type {
   InviteRecord,
   UserManagementView,
 } from '@/lib/user-management-types'
+import { MailPlusIcon, RotateCcwIcon } from '@/components/ui/pandai-icons'
 import { DataTable } from '@/components/shared/data-table'
 import { LoadState } from '@/components/shared/load-state'
 import { StatePanel } from '@/components/shared/state-panel'

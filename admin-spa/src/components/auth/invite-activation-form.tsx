@@ -1,14 +1,14 @@
 import { useCallback, useId, useRef, useState } from 'react'
+import type { PandaiIconComponent } from '@/components/ui/pandai-icons'
+import type { ChangeEventHandler, FormEvent, RefObject } from 'react'
+
+import type { AuthSession } from '@/lib/auth-types'
 import {
   CircleCheckIcon,
   MailCheckIcon,
   MailWarningIcon,
   ShieldCheckIcon,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import type { ChangeEventHandler, FormEvent, RefObject } from 'react'
-
-import type { AuthSession } from '@/lib/auth-types'
+} from '@/components/ui/pandai-icons'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -351,7 +351,7 @@ function TrustCue({
   Icon,
   title,
 }: {
-  Icon: LucideIcon
+  Icon: PandaiIconComponent
   description: string
   title: string
 }) {

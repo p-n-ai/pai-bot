@@ -1,7 +1,7 @@
-import { CopyIcon, MailPlusIcon } from 'lucide-react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import type { InviteIssueRole, InviteRecord } from '@/lib/user-management-types'
+import { CopyIcon, MailPlusIcon } from '@/components/ui/pandai-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

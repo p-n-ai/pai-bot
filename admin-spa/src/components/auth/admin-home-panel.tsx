@@ -1,7 +1,10 @@
-import { GraduationCapIcon, SchoolIcon, ShieldCheckIcon } from 'lucide-react'
-
 import type { AuthState } from '@/auth-provider'
 import type { AuthSession } from '@/lib/auth-types'
+import {
+  GraduationCapIcon,
+  SchoolIcon,
+  ShieldCheckIcon,
+} from '@/components/ui/pandai-icons'
 import { LoginForm } from '@/components/auth/login-form'
 import {
   Card,

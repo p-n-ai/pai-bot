@@ -1,11 +1,11 @@
 import { RouterProvider } from '@tanstack/react-router'
-import { XIcon } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { useAuth } from './auth-provider'
 import { Button } from './components/ui/button'
 import { Skeleton } from './components/ui/skeleton'
 import { router } from './router'
+import { XIcon } from '@/components/ui/pandai-icons'
 
 const SKELETON_LINE_KEYS = ['first', 'second', 'third', 'fourth']
 

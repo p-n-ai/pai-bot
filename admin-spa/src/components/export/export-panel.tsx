@@ -1,4 +1,4 @@
-import { DownloadIcon } from 'lucide-react'
+import { DownloadIcon } from '@/components/ui/pandai-icons'
 
 import { adminExportLinks } from '@/lib/export-links'
 import { Badge } from '@/components/ui/badge'

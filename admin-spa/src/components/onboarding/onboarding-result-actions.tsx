@@ -1,7 +1,11 @@
-import { CopyIcon, ExternalLinkIcon, PencilIcon } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 import type { SubmitOnboardingResult } from '@/lib/onboarding-types'
+import {
+  CopyIcon,
+  ExternalLinkIcon,
+  PencilIcon,
+} from '@/components/ui/pandai-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { OnboardingTeacherInvites } from '@/components/onboarding/onboarding-teacher-invites'

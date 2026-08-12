@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
+
+import type { ParentSummary } from '@/lib/parent-summary-types'
 import {
   BoltIcon,
   HeartHandshakeIcon,
   MessageCircleIcon,
   TrophyIcon,
-} from 'lucide-react'
-import type { CSSProperties } from 'react'
-
-import type { ParentSummary } from '@/lib/parent-summary-types'
+} from '@/components/ui/pandai-icons'
 import { AdminHighlightPanel } from '@/components/shared/admin-highlight-panel'
 import { AdminInsetPanel } from '@/components/shared/admin-inset-panel'
 import {

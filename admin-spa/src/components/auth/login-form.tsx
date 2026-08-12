@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Building2Icon } from 'lucide-react'
 import type { FormEvent } from 'react'
 
 import type { AuthSession, SchoolChoice } from '@/lib/auth-types'
+import { Building2Icon } from '@/components/ui/pandai-icons'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import { Button } from '@/components/ui/button'
 import {

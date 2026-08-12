@@ -1,8 +1,8 @@
-import { CheckIcon, SparklesIcon } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
 
 import type { SubmitOnboardingInput } from '@/lib/onboarding-types'
+import { CheckIcon, SparklesIcon } from '@/components/ui/pandai-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

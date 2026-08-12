@@ -1,14 +1,14 @@
+import type { PandaiIconComponent } from '@/components/ui/pandai-icons'
 import {
   DatabaseBackupIcon,
   FileSpreadsheetIcon,
   MessagesSquareIcon,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+} from '@/components/ui/pandai-icons'
 
 export interface AdminExportLink {
   description: string
   href: string
-  icon: LucideIcon
+  icon: PandaiIconComponent
   title: string
 }
 

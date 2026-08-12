@@ -1,13 +1,13 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { GroupDetail, GroupRecord } from '@/lib/group-types'
 import {
   CheckIcon,
   CopyIcon,
   MailPlusIcon,
   PlusIcon,
   UsersIcon,
-} from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-
-import type { GroupDetail, GroupRecord } from '@/lib/group-types'
+} from '@/components/ui/pandai-icons'
 import { AssignedTopicsPanel } from '@/components/classes/assigned-topics-panel'
 import { ClassCreateForm } from '@/components/classes/class-create-form'
 import { ClassInvitePanel } from '@/components/classes/class-invite-panel'

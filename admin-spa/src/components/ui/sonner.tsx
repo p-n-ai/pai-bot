@@ -1,13 +1,13 @@
 import { useTheme } from 'next-themes'
 import { Toaster as Sonner } from 'sonner'
+import type { ToasterProps } from 'sonner'
 import {
   CircleCheckIcon,
   InfoIcon,
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from 'lucide-react'
-import type { ToasterProps } from 'sonner'
+} from '@/components/ui/pandai-icons'
 
 const TOASTER_ICONS = {
   success: <CircleCheckIcon className='size-4' />,

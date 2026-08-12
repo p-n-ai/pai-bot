@@ -1,5 +1,5 @@
-import { CopyIcon, MailPlusIcon } from 'lucide-react'
 import { useCallback } from 'react'
+import { CopyIcon, MailPlusIcon } from '@/components/ui/pandai-icons'
 
 import { resolveInviteLink } from '@/components/users/user-management-invite-form'
 import { Button } from '@/components/ui/button'

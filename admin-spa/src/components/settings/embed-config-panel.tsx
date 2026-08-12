@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Copy, MessageCircle, X } from 'lucide-react'
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
 
 import type { EmbedConfig } from '@/lib/embed-config-types'
@@ -8,6 +7,7 @@ import type {
   EmbedPosition,
   EmbedTheme,
 } from '@/lib/embed-widget'
+import { Check, Copy, MessageCircle, X } from '@/components/ui/pandai-icons'
 import { useAuth } from '@/auth-provider'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
 import {
