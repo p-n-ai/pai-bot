@@ -71,6 +71,11 @@ class CIWorkflowTests(unittest.TestCase):
             "github.event.workflow_run.head_branch == 'main'",
             nightly,
         )
+        self.assertIn("      contents: write", nightly)
+        self.assertIn("      - name: Publish nightly GitHub Release", nightly)
+        self.assertIn('tag="nightly-$SHA"', nightly)
+        self.assertIn("--prerelease", nightly)
+        self.assertIn("--latest=false", nightly)
         for job in (
             "changes",
             "config",

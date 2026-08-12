@@ -251,7 +251,8 @@ Read these guides before deployment:
 - [Runtime AI settings and secret rotation](docs/operations/runtime-ai-settings.md)
 - [Conversation identity migration](docs/operations/conversation-identity-migration.md)
 
-A merge to `main` creates a release candidate after CI passes. It does not deploy production.
+A push to `main` publishes a SHA-addressed nightly prerelease after CI passes.
+It does not deploy production; stable promotion remains manual.
 A feature is shipped only when it is included in a release tag.
 
 ## About Pandai
