@@ -23,8 +23,10 @@ authorization; they are not tenant-scoped.
 The runtime API accepts a closed provider variant, so each provider can expose
 only fields that its production adapter supports:
 
-- API-key providers (`openai`, `anthropic`, `deepseek`, `google`, and
-  `openrouter`) allow model and write-only credential overrides.
+- API-key providers (`openai`, `anthropic`, `deepseek`, `groq`, `xai`,
+  `mistral`, `cerebras`, `google`, and `openrouter`) allow model and write-only
+  credential overrides. See the [provider specifications](../ai/providers/README.md)
+  for protocol and compatibility details.
 - Ollama allows enabled and model overrides. Its URL remains environment-only
   because runtime custom endpoints require a separately reviewed SSRF policy.
 - Managed Codex allows a model override. Enablement and device authentication

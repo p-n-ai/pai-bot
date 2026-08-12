@@ -29,6 +29,10 @@ const (
 	APIKeyProviderDeepSeek   APIKeyProvider = "deepseek"
 	APIKeyProviderGoogle     APIKeyProvider = "google"
 	APIKeyProviderOpenRouter APIKeyProvider = "openrouter"
+	APIKeyProviderGroq       APIKeyProvider = "groq"
+	APIKeyProviderXAI        APIKeyProvider = "xai"
+	APIKeyProviderMistral    APIKeyProvider = "mistral"
+	APIKeyProviderCerebras   APIKeyProvider = "cerebras"
 )
 
 var apiKeyProviders = []APIKeyProvider{
@@ -37,6 +41,10 @@ var apiKeyProviders = []APIKeyProvider{
 	APIKeyProviderDeepSeek,
 	APIKeyProviderGoogle,
 	APIKeyProviderOpenRouter,
+	APIKeyProviderGroq,
+	APIKeyProviderXAI,
+	APIKeyProviderMistral,
+	APIKeyProviderCerebras,
 }
 
 // APIKeyProviders returns the closed API-key provider set.
@@ -216,8 +224,10 @@ type AIReconciliation struct {
 
 // ReconcileAI applies sparse database overrides to the immutable environment baseline.
 func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
+	reconciledConfig := env
+	reconciledConfig.CatalogProviders = maps.Clone(env.CatalogProviders)
 	result := AIReconciliation{
-		Config:                env,
+		Config:                reconciledConfig,
 		DefaultProvider:       env.DefaultProvider,
 		DefaultProviderSource: sourceForString(env.DefaultProvider),
 		Baseline: AISettingsView{
@@ -414,12 +424,13 @@ func apiKeyConfig(cfg config.AIConfig, provider APIKeyProvider) (model, key stri
 		return cfg.OpenAI.Model, cfg.OpenAI.APIKey
 	case APIKeyProviderAnthropic:
 		return cfg.Anthropic.Model, cfg.Anthropic.APIKey
-	case APIKeyProviderDeepSeek:
-		return cfg.DeepSeek.Model, cfg.DeepSeek.APIKey
 	case APIKeyProviderGoogle:
 		return cfg.Google.Model, cfg.Google.APIKey
 	case APIKeyProviderOpenRouter:
 		return cfg.OpenRouter.Model, cfg.OpenRouter.APIKey
+	case APIKeyProviderDeepSeek, APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+		providerConfig := cfg.CatalogProviders[string(provider)]
+		return providerConfig.Model, providerConfig.APIKey
 	}
 	panic("unreachable API-key provider")
 }
@@ -430,12 +441,15 @@ func setAPIKeyConfig(cfg *config.AIConfig, provider APIKeyProvider, model, key s
 		cfg.OpenAI.Model, cfg.OpenAI.APIKey = model, key
 	case APIKeyProviderAnthropic:
 		cfg.Anthropic.Model, cfg.Anthropic.APIKey = model, key
-	case APIKeyProviderDeepSeek:
-		cfg.DeepSeek.Model, cfg.DeepSeek.APIKey = model, key
 	case APIKeyProviderGoogle:
 		cfg.Google.Model, cfg.Google.APIKey = model, key
 	case APIKeyProviderOpenRouter:
 		cfg.OpenRouter.Model, cfg.OpenRouter.APIKey = model, key
+	case APIKeyProviderDeepSeek, APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+		if cfg.CatalogProviders == nil {
+			cfg.CatalogProviders = make(map[string]config.CatalogProviderConfig)
+		}
+		cfg.CatalogProviders[string(provider)] = config.CatalogProviderConfig{Model: model, APIKey: key}
 	default:
 		panic("unreachable API-key provider")
 	}
