@@ -102,6 +102,9 @@ describe('AISettingsPanel', () => {
     expect(
       within(providerSection('Ollama provider')).queryByLabelText(/URL/i),
     ).not.toBeInTheDocument()
+    expect(
+      within(providerSection('Cerebras provider')).getByText('Default'),
+    ).toBeInTheDocument()
   })
 
   it('switches the default with a closed provider selector', async () => {
@@ -165,7 +168,7 @@ describe('AISettingsPanel', () => {
 
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Use environment model',
+        name: 'Reset model to baseline',
       }),
     )
     await waitFor(() => {
@@ -307,7 +310,7 @@ describe('AISettingsPanel', () => {
     })
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Use environment model',
+        name: 'Reset model to baseline',
       }),
     )
     await waitFor(() => {
@@ -351,7 +354,7 @@ describe('AISettingsPanel', () => {
     })
     fireEvent.click(
       within(section).getByRole('button', {
-        name: 'Use environment model',
+        name: 'Reset model to baseline',
       }),
     )
     await waitFor(() => {

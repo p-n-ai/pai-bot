@@ -181,6 +181,79 @@ func TestDeepSeekProvider_Complete_StructuredOutput_UsesJSONObjectMode(t *testin
 	}
 }
 
+func TestCatalogProvider_Complete_UsesModelStructuredOutputMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		model      string
+		wantFormat string
+	}{
+		{name: "default Llama JSON object", model: "llama-3.3-70b-versatile", wantFormat: "json_object"},
+		{name: "GPT-OSS JSON schema", model: "openai/gpt-oss-120b", wantFormat: "json_schema"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var captured map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+					t.Fatal(err)
+				}
+				writeOpenAITextResponse(t, w, `{"final_answer":"ok"}`, test.model, 10, 5)
+			}))
+			defer server.Close()
+
+			provider, err := NewCatalogProvider("groq", "test-key", WithBaseURL(server.URL))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = provider.Complete(context.Background(), CompletionRequest{
+				Messages: []Message{{Role: "user", Content: "grade this"}},
+				Model:    test.model,
+				StructuredOutput: &StructuredOutputSpec{
+					Name:       "grading_result",
+					JSONSchema: testStructuredSchema,
+					Strict:     true,
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			format, ok := captured["response_format"].(map[string]any)
+			if !ok || format["type"] != test.wantFormat {
+				t.Fatalf("response_format = %#v, want %q", captured["response_format"], test.wantFormat)
+			}
+		})
+	}
+}
+
+func TestCerebrasProvider_Complete_UsesMaxCompletionTokens(t *testing.T) {
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Fatal(err)
+		}
+		writeOpenAITextResponse(t, w, "ok", "gpt-oss-120b", 10, 5)
+	}))
+	defer server.Close()
+
+	provider, err := NewCatalogProvider("cerebras", "test-key", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = provider.Complete(context.Background(), CompletionRequest{
+		Messages:  []Message{{Role: "user", Content: "hello"}},
+		MaxTokens: 256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if captured["max_completion_tokens"] != float64(256) {
+		t.Fatalf("max_completion_tokens = %#v, want 256", captured["max_completion_tokens"])
+	}
+	if _, present := captured["max_tokens"]; present {
+		t.Fatalf("Cerebras request contains legacy max_tokens: %#v", captured["max_tokens"])
+	}
+}
+
 func TestOpenAIProvider_HealthCheck(t *testing.T) {
 	tests := []struct {
 		name       string

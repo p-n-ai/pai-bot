@@ -110,11 +110,12 @@ type aiCredentialProjection struct {
 }
 
 type aiAPIKeyProviderProjection struct {
-	Type       settings.ProviderKind  `json:"type"`
-	Name       string                 `json:"name"`
-	Model      aiStringProjection     `json:"model"`
-	Credential aiCredentialProjection `json:"credential"`
-	Readiness  aiProviderReadiness    `json:"readiness"`
+	Type        settings.ProviderKind  `json:"type"`
+	Name        string                 `json:"name"`
+	DisplayName string                 `json:"displayName"`
+	Model       aiStringProjection     `json:"model"`
+	Credential  aiCredentialProjection `json:"credential"`
+	Readiness   aiProviderReadiness    `json:"readiness"`
 }
 
 type aiOllamaProviderProjection struct {
@@ -680,16 +681,17 @@ func buildAISettingsResponse(
 	managedCodexAvailable bool,
 ) aiSettingsResponse {
 	providers := make([]any, 0, len(settings.APIKeyProviders())+2)
-	for _, provider := range settings.APIKeyProviders() {
-		name := string(provider)
+	for _, definition := range settings.APIKeyProviderDefinitions() {
+		name := string(definition.ID)
 		baseline := eff.Baseline.Providers[name]
 		override := eff.Override.Providers[name]
 		effective := eff.Effective.Providers[name]
 		sources := eff.ProviderSources[name]
 		providers = append(providers, aiAPIKeyProviderProjection{
-			Type:  settings.ProviderKindAPIKey,
-			Name:  name,
-			Model: stringProjection(baseline.Model, override.Model, effective.Model, sources.Model),
+			Type:        settings.ProviderKindAPIKey,
+			Name:        name,
+			DisplayName: definition.DisplayName,
+			Model:       stringProjection(baseline.Model, override.Model, effective.Model, sources.Model),
 			Credential: aiCredentialProjection{
 				Baseline:  keyStatus(baseline.Credential),
 				Override:  keyStatus(override.Credential),

@@ -9,6 +9,7 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/adminapi"
 	"github.com/p-n-ai/pai-bot/internal/auth"
+	"github.com/p-n-ai/pai-bot/internal/platform/settings"
 )
 
 type refreshTokenRequest struct {
@@ -91,11 +92,12 @@ type aiCredentialProjectionDoc struct {
 }
 
 type aiAPIKeyProviderProjectionDoc struct {
-	Type       string                    `json:"type"`
-	Name       string                    `json:"name"`
-	Model      aiStringProjectionDoc     `json:"model"`
-	Credential aiCredentialProjectionDoc `json:"credential"`
-	Readiness  aiProviderReadinessDoc    `json:"readiness"`
+	Type        string                    `json:"type"`
+	Name        string                    `json:"name"`
+	DisplayName string                    `json:"displayName"`
+	Model       aiStringProjectionDoc     `json:"model"`
+	Credential  aiCredentialProjectionDoc `json:"credential"`
+	Readiness   aiProviderReadinessDoc    `json:"readiness"`
 }
 
 type aiOllamaProviderProjectionDoc struct {
@@ -175,12 +177,13 @@ func aiSettingsSchemas(registry *schemaRegistry) (request, response *Schema) {
 }
 
 func aiProviderSelectorSchema() *Schema {
+	providerNames := apiKeyProviderNames()
 	return &Schema{
 		OneOf: []*Schema{
 			closedObjectSchema(
 				map[string]*Schema{
 					"type": {Type: "string", Enum: []any{"api_key"}},
-					"name": {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter", "groq", "xai", "mistral", "cerebras"}},
+					"name": {Type: "string", Enum: providerNames},
 				},
 				"type", "name",
 			),
@@ -198,10 +201,11 @@ func aiProviderSelectorSchema() *Schema {
 }
 
 func aiProviderPatchSchema() *Schema {
+	providerNames := apiKeyProviderNames()
 	apiKey := closedObjectSchema(
 		map[string]*Schema{
 			"type":   {Type: "string", Enum: []any{"api_key"}},
-			"name":   {Type: "string", Enum: []any{"openai", "anthropic", "deepseek", "google", "openrouter", "groq", "xai", "mistral", "cerebras"}},
+			"name":   {Type: "string", Enum: providerNames},
 			"model":  nullableStringSchema(),
 			"apiKey": nullableStringSchema(),
 		},
@@ -229,6 +233,15 @@ func aiProviderPatchSchema() *Schema {
 		OneOf:         []*Schema{apiKey, ollama, managedCodex},
 		Discriminator: &Discriminator{PropertyName: "type"},
 	}
+}
+
+func apiKeyProviderNames() []any {
+	definitions := settings.APIKeyProviderDefinitions()
+	names := make([]any, len(definitions))
+	for i, definition := range definitions {
+		names[i] = string(definition.ID)
+	}
+	return names
 }
 
 func closedObjectSchema(properties map[string]*Schema, required ...string) *Schema {

@@ -194,6 +194,13 @@ func TestDeepSeekProviderDoesNotImplementNativeContract(t *testing.T) {
 	if _, ok := NewOpenAIProvider("test-key", WithProviderName("compatible")).(NativeProvider); ok {
 		t.Fatal("arbitrary OpenAI-compatible providers must remain outside the direct OpenAI native contract")
 	}
+	provider, err := NewCatalogProvider("deepseek", "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := provider.(NativeProvider); ok {
+		t.Fatal("catalog OpenAI-compatible providers must remain outside the direct OpenAI native contract")
+	}
 }
 
 func requireContractToolCall(t *testing.T, message llm.AssistantMessage) llm.ToolCall {

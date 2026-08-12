@@ -9,7 +9,6 @@ import type {
 
 import type {
   AISettings,
-  APIKeyProviderName,
   ProviderProjection,
   ProviderSelector,
   UpdateAISettingsInput,
@@ -51,18 +50,6 @@ type CodexState =
   | { status: 'unavailable' }
   | { status: 'error'; message: string }
   | { status: 'ready'; auth: CodexAuthStatus }
-
-const providerLabels: Record<APIKeyProviderName, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  deepseek: 'DeepSeek',
-  groq: 'Groq',
-  xai: 'xAI',
-  mistral: 'Mistral',
-  cerebras: 'Cerebras',
-  google: 'Google',
-  openrouter: 'OpenRouter',
-}
 
 /** Supplies the admin boundary operations required by the AI settings panel. */
 export type AISettingsPanelAPI = {
@@ -295,7 +282,7 @@ export function AISettingsPanel({
           },
         },
         keySubmit,
-        `Unable to save the ${providerLabels[provider.name]} API key. Check the key and try again.`,
+        `${provider.displayName} API key could not be saved.`,
         () => {
           setKeyInputs((current) => ({ ...current, [provider.name]: '' }))
           setReplacingKeys((current) => ({
@@ -319,7 +306,7 @@ export function AISettingsPanel({
           },
         },
         keySubmit,
-        `Unable to reset the ${providerLabels[provider.name]} API key. Try again.`,
+        `${provider.displayName} API key could not be reset.`,
       )
     },
     [keySubmit, submitSettings],
@@ -656,8 +643,8 @@ function APIKeyProviderEditor({
   return (
     <SettingsSection
       description='Choose the model and save a new API key.'
-      label={`${providerLabels[provider.name]} provider`}
-      title={providerLabels[provider.name]}
+      label={`${provider.displayName} provider`}
+      title={provider.displayName}
     >
       <ModelEditor
         isPending={isModelPending}
@@ -684,7 +671,7 @@ function APIKeyProviderEditor({
         <KeyEntryForm
           isPending={isKeyPending}
           isReplacing={keyReplacing}
-          label={`${providerLabels[provider.name]} API key`}
+          label={`${provider.displayName} API key`}
           onCancel={onCancelKey}
           onChange={onKeyChange}
           onSave={onSaveKey}
@@ -841,7 +828,7 @@ function ModelEditor({
             type='button'
             variant='outline'
           >
-            Use environment model
+            Reset model to baseline
           </Button>
         ) : null}
       </form>
@@ -1149,6 +1136,7 @@ function SettingsSection({
 function SourceBadge({ source }: { source: string }) {
   if (source === 'db') return <Badge variant='secondary'>Override</Badge>
   if (source === 'env') return <Badge variant='outline'>Environment</Badge>
+  if (source === 'default') return <Badge variant='outline'>Default</Badge>
   return null
 }
 
@@ -1177,7 +1165,7 @@ function providerID(provider: ProviderProjection): string {
 function providerTitle(provider: ProviderProjection): string {
   switch (provider.type) {
     case 'api_key':
-      return providerLabels[provider.name]
+      return provider.displayName
     case 'ollama':
       return 'Ollama'
     case 'managed_codex':
@@ -1217,25 +1205,12 @@ function selectorValue(selector: ProviderSelector): string {
 }
 
 function decodeSelectorValue(value: string): ProviderSelector {
+  const apiKeyPrefix = 'api_key:'
+  if (value.startsWith(apiKeyPrefix)) {
+    const name = value.slice(apiKeyPrefix.length)
+    if (name) return { type: 'api_key', name }
+  }
   switch (value) {
-    case 'api_key:openai':
-      return { type: 'api_key', name: 'openai' }
-    case 'api_key:anthropic':
-      return { type: 'api_key', name: 'anthropic' }
-    case 'api_key:deepseek':
-      return { type: 'api_key', name: 'deepseek' }
-    case 'api_key:groq':
-      return { type: 'api_key', name: 'groq' }
-    case 'api_key:xai':
-      return { type: 'api_key', name: 'xai' }
-    case 'api_key:mistral':
-      return { type: 'api_key', name: 'mistral' }
-    case 'api_key:cerebras':
-      return { type: 'api_key', name: 'cerebras' }
-    case 'api_key:google':
-      return { type: 'api_key', name: 'google' }
-    case 'api_key:openrouter':
-      return { type: 'api_key', name: 'openrouter' }
     case 'ollama':
       return { type: 'ollama' }
     case 'managed_codex':

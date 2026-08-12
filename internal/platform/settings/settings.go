@@ -6,7 +6,9 @@ package settings
 
 import (
 	"maps"
+	"strings"
 
+	"github.com/p-n-ai/pai-bot/internal/ai"
 	"github.com/p-n-ai/pai-bot/internal/platform/config"
 	"github.com/p-n-ai/pai-bot/internal/platform/featureflags"
 )
@@ -26,25 +28,48 @@ type APIKeyProvider string
 const (
 	APIKeyProviderOpenAI     APIKeyProvider = "openai"
 	APIKeyProviderAnthropic  APIKeyProvider = "anthropic"
-	APIKeyProviderDeepSeek   APIKeyProvider = "deepseek"
 	APIKeyProviderGoogle     APIKeyProvider = "google"
 	APIKeyProviderOpenRouter APIKeyProvider = "openrouter"
-	APIKeyProviderGroq       APIKeyProvider = "groq"
-	APIKeyProviderXAI        APIKeyProvider = "xai"
-	APIKeyProviderMistral    APIKeyProvider = "mistral"
-	APIKeyProviderCerebras   APIKeyProvider = "cerebras"
 )
 
-var apiKeyProviders = []APIKeyProvider{
-	APIKeyProviderOpenAI,
-	APIKeyProviderAnthropic,
-	APIKeyProviderDeepSeek,
-	APIKeyProviderGoogle,
-	APIKeyProviderOpenRouter,
-	APIKeyProviderGroq,
-	APIKeyProviderXAI,
-	APIKeyProviderMistral,
-	APIKeyProviderCerebras,
+// APIKeyProviderDefinition describes one provider exposed by runtime settings.
+type APIKeyProviderDefinition struct {
+	ID          APIKeyProvider
+	DisplayName string
+}
+
+var apiKeyProviderDefinitions = buildAPIKeyProviderDefinitions()
+var apiKeyProviders = apiKeyProviderIDs(apiKeyProviderDefinitions)
+
+func buildAPIKeyProviderDefinitions() []APIKeyProviderDefinition {
+	definitions := []APIKeyProviderDefinition{
+		{ID: APIKeyProviderOpenAI, DisplayName: "OpenAI"},
+		{ID: APIKeyProviderAnthropic, DisplayName: "Anthropic"},
+	}
+	for _, provider := range ai.ProviderCatalog() {
+		definitions = append(definitions, APIKeyProviderDefinition{
+			ID:          APIKeyProvider(provider.ID),
+			DisplayName: provider.Name,
+		})
+	}
+	definitions = append(definitions,
+		APIKeyProviderDefinition{ID: APIKeyProviderGoogle, DisplayName: "Google"},
+		APIKeyProviderDefinition{ID: APIKeyProviderOpenRouter, DisplayName: "OpenRouter"},
+	)
+	return definitions
+}
+
+// APIKeyProviderDefinitions returns the settings provider metadata.
+func APIKeyProviderDefinitions() []APIKeyProviderDefinition {
+	return append([]APIKeyProviderDefinition(nil), apiKeyProviderDefinitions...)
+}
+
+func apiKeyProviderIDs(definitions []APIKeyProviderDefinition) []APIKeyProvider {
+	providers := make([]APIKeyProvider, len(definitions))
+	for i, definition := range definitions {
+		providers[i] = definition.ID
+	}
+	return providers
 }
 
 // APIKeyProviders returns the closed API-key provider set.
@@ -55,8 +80,8 @@ func APIKeyProviders() []APIKeyProvider {
 // ParseAPIKeyProvider refines a persisted or HTTP provider name.
 func ParseAPIKeyProvider(name string) (APIKeyProvider, bool) {
 	provider := APIKeyProvider(name)
-	for _, candidate := range apiKeyProviders {
-		if provider == candidate {
+	for _, candidate := range apiKeyProviderDefinitions {
+		if provider == candidate.ID {
 			return provider, true
 		}
 	}
@@ -142,9 +167,10 @@ type PrepareApply func(Settings) (PreparedApply, error)
 
 // Source tags where an effective settings value came from.
 const (
-	SourceDB   = "db"
-	SourceEnv  = "env"
-	SourceNone = "none"
+	SourceDB      = "db"
+	SourceEnv     = "env"
+	SourceDefault = "default"
+	SourceNone    = "none"
 )
 
 // SecretView is the only projection of a provider credential allowed outside
@@ -232,7 +258,7 @@ func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
 		DefaultProviderSource: sourceForString(env.DefaultProvider),
 		Baseline: AISettingsView{
 			DefaultProvider: env.DefaultProvider,
-			Providers:       make(map[string]ProviderSettingsView, len(apiKeyProviders)+2),
+			Providers:       make(map[string]ProviderSettingsView, len(apiKeyProviderDefinitions)+2),
 		},
 		Override: AISettingsOverrideView{
 			DefaultProvider: cloneStringPointer(st.DefaultProvider),
@@ -240,9 +266,9 @@ func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
 		},
 		Effective: AISettingsView{
 			DefaultProvider: env.DefaultProvider,
-			Providers:       make(map[string]ProviderSettingsView, len(apiKeyProviders)+2),
+			Providers:       make(map[string]ProviderSettingsView, len(apiKeyProviderDefinitions)+2),
 		},
-		ProviderSources:     make(map[string]ProviderSources, len(apiKeyProviders)+2),
+		ProviderSources:     make(map[string]ProviderSources, len(apiKeyProviderDefinitions)+2),
 		CredentialEnvelopes: make(map[string]CredentialEnvelopeStatus),
 	}
 	if st.DefaultProvider != nil {
@@ -252,11 +278,16 @@ func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
 		result.DefaultProviderSource = SourceDB
 	}
 
-	for _, provider := range apiKeyProviders {
+	for _, definition := range apiKeyProviderDefinitions {
+		provider := definition.ID
 		name := string(provider)
 		envModel, envKey := apiKeyConfig(env, provider)
-		model, key := envModel, envKey
-		modelSource, keySource := sourceForString(envModel), sourceForString(envKey)
+		baselineModel := configuredOrCatalogDefault(provider, envModel)
+		model, key := baselineModel, envKey
+		modelSource, keySource := sourceForString(strings.TrimSpace(envModel)), sourceForString(envKey)
+		if modelSource == SourceNone && baselineModel != "" {
+			modelSource = SourceDefault
+		}
 		override := ProviderOverrideView{Kind: ProviderKindAPIKey, Name: name}
 		if providerOverride, ok := st.Providers.APIKey[provider]; ok && providerOverride.Model != nil {
 			model = *providerOverride.Model
@@ -279,7 +310,7 @@ func ReconcileAI(env config.AIConfig, st AISettings) AIReconciliation {
 		setAPIKeyConfig(&result.Config, provider, model, key)
 		baseline := ProviderSettingsView{
 			Kind: ProviderKindAPIKey, Name: name, Enabled: envKey != "",
-			Model: envModel, Credential: SecretView{Set: envKey != ""},
+			Model: baselineModel, Credential: SecretView{Set: envKey != ""},
 		}
 		effective := ProviderSettingsView{
 			Kind: ProviderKindAPIKey, Name: name, Enabled: key != "",
@@ -428,11 +459,13 @@ func apiKeyConfig(cfg config.AIConfig, provider APIKeyProvider) (model, key stri
 		return cfg.Google.Model, cfg.Google.APIKey
 	case APIKeyProviderOpenRouter:
 		return cfg.OpenRouter.Model, cfg.OpenRouter.APIKey
-	case APIKeyProviderDeepSeek, APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+	default:
+		if _, ok := ai.LookupProviderDefinition(string(provider)); !ok {
+			panic("unreachable API-key provider")
+		}
 		providerConfig := cfg.CatalogProviders[string(provider)]
 		return providerConfig.Model, providerConfig.APIKey
 	}
-	panic("unreachable API-key provider")
 }
 
 func setAPIKeyConfig(cfg *config.AIConfig, provider APIKeyProvider, model, key string) {
@@ -445,14 +478,26 @@ func setAPIKeyConfig(cfg *config.AIConfig, provider APIKeyProvider, model, key s
 		cfg.Google.Model, cfg.Google.APIKey = model, key
 	case APIKeyProviderOpenRouter:
 		cfg.OpenRouter.Model, cfg.OpenRouter.APIKey = model, key
-	case APIKeyProviderDeepSeek, APIKeyProviderGroq, APIKeyProviderXAI, APIKeyProviderMistral, APIKeyProviderCerebras:
+	default:
+		if _, ok := ai.LookupProviderDefinition(string(provider)); !ok {
+			panic("unreachable API-key provider")
+		}
 		if cfg.CatalogProviders == nil {
 			cfg.CatalogProviders = make(map[string]config.CatalogProviderConfig)
 		}
 		cfg.CatalogProviders[string(provider)] = config.CatalogProviderConfig{Model: model, APIKey: key}
-	default:
-		panic("unreachable API-key provider")
 	}
+}
+
+func configuredOrCatalogDefault(provider APIKeyProvider, configured string) string {
+	if strings.TrimSpace(configured) != "" {
+		return configured
+	}
+	definition, ok := ai.LookupProviderDefinition(string(provider))
+	if !ok {
+		return configured
+	}
+	return definition.DefaultModel
 }
 
 func sourceForString(value string) string {
