@@ -84,6 +84,14 @@ describe('admin SPA RBAC', () => {
     expect(canAccessPath(teacher, '/settings/ai')).toBe(false)
   })
 
+  it('limits the illustrative Build AI workspace to the existing AI capability', () => {
+    const grantedAdmin: AuthUser = { ...admin, can_manage_ai_settings: true }
+
+    expect(canAccessPath(grantedAdmin, '/build-ai')).toBe(true)
+    expect(canAccessPath(admin, '/build-ai')).toBe(false)
+    expect(canAccessPath(teacher, '/build-ai')).toBe(false)
+  })
+
   it('rejects redirect values that could escape the admin app or loop login', () => {
     expect(isSafeRedirectPath('/dashboard')).toBe(true)
     expect(isSafeRedirectPath('/')).toBe(false)

@@ -48,6 +48,11 @@ function isParentSelfRoute(user: AuthUser, pathname: string): boolean {
 }
 
 function isElevatedRoute(user: AuthUser, pathname: string): boolean {
+  if (pathname.startsWith('/build-ai')) {
+    // Build AI is conservative until the dedicated scoped grant reaches the session contract.
+    return user.can_manage_ai_settings === true
+  }
+
   if (pathname.startsWith('/settings/ai')) {
     // AI settings are platform-global; the backend withholds this capability from tenant admins in multi-tenant mode.
     return user.can_manage_ai_settings === true

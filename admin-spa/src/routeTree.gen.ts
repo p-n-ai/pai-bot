@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinSlugRouteImport } from './routes/join.$slug'
 import { Route as AuthenticatedExportRouteImport } from './routes/_authenticated/export'
+import { Route as AuthenticatedBuildAiRouteImport } from './routes/_authenticated/build-ai'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedStudentsIdRouteImport } from './routes/_authenticated/students/$id'
 import { Route as AuthenticatedSetupOnboardRouteImport } from './routes/_authenticated/setup/onboard'
@@ -55,6 +56,11 @@ const JoinSlugRoute = JoinSlugRouteImport.update({
 const AuthenticatedExportRoute = AuthenticatedExportRouteImport.update({
   id: '/export',
   path: '/export',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedBuildAiRoute = AuthenticatedBuildAiRouteImport.update({
+  id: '/build-ai',
+  path: '/build-ai',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardIndexRoute =
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
   '/health': typeof HealthRoute
+  '/build-ai': typeof AuthenticatedBuildAiRoute
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activate': typeof ActivateRoute
   '/health': typeof HealthRoute
+  '/build-ai': typeof AuthenticatedBuildAiRoute
   '/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/activate': typeof ActivateRoute
   '/health': typeof HealthRoute
+  '/_authenticated/build-ai': typeof AuthenticatedBuildAiRoute
   '/_authenticated/export': typeof AuthenticatedExportRoute
   '/join/$slug': typeof JoinSlugRoute
   '/_authenticated/dashboard/ai-usage': typeof AuthenticatedDashboardAiUsageRoute
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/'
     | '/activate'
     | '/health'
+    | '/build-ai'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/'
     | '/activate'
     | '/health'
+    | '/build-ai'
     | '/export'
     | '/join/$slug'
     | '/dashboard/ai-usage'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/activate'
     | '/health'
+    | '/_authenticated/build-ai'
     | '/_authenticated/export'
     | '/join/$slug'
     | '/_authenticated/dashboard/ai-usage'
@@ -297,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/export'
       fullPath: '/export'
       preLoaderRoute: typeof AuthenticatedExportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/build-ai': {
+      id: '/_authenticated/build-ai'
+      path: '/build-ai'
+      fullPath: '/build-ai'
+      preLoaderRoute: typeof AuthenticatedBuildAiRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard/': {
@@ -387,6 +406,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedBuildAiRoute: typeof AuthenticatedBuildAiRoute
   AuthenticatedExportRoute: typeof AuthenticatedExportRoute
   AuthenticatedDashboardAiUsageRoute: typeof AuthenticatedDashboardAiUsageRoute
   AuthenticatedDashboardClassesRoute: typeof AuthenticatedDashboardClassesRoute
@@ -403,6 +423,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedBuildAiRoute: AuthenticatedBuildAiRoute,
   AuthenticatedExportRoute: AuthenticatedExportRoute,
   AuthenticatedDashboardAiUsageRoute: AuthenticatedDashboardAiUsageRoute,
   AuthenticatedDashboardClassesRoute: AuthenticatedDashboardClassesRoute,
