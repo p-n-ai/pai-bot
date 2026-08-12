@@ -64,6 +64,34 @@ export const aiSettingsFixture = {
     },
     {
       type: 'api_key',
+      name: 'groq',
+      model,
+      credential,
+      readiness,
+    },
+    {
+      type: 'api_key',
+      name: 'xai',
+      model,
+      credential,
+      readiness,
+    },
+    {
+      type: 'api_key',
+      name: 'mistral',
+      model,
+      credential,
+      readiness,
+    },
+    {
+      type: 'api_key',
+      name: 'cerebras',
+      model,
+      credential,
+      readiness,
+    },
+    {
+      type: 'api_key',
       name: 'google',
       model,
       credential,
@@ -170,7 +198,7 @@ describe('AI settings response guard', () => {
     expect(
       readAISettings(
         replaceProvider({
-          ...aiSettingsFixture.providers[5],
+          ...aiSettingsFixture.providers[9],
           credential,
         }),
       ),
@@ -178,7 +206,7 @@ describe('AI settings response guard', () => {
     expect(
       readAISettings(
         replaceProvider({
-          ...aiSettingsFixture.providers[6],
+          ...aiSettingsFixture.providers[10],
           apiKey: 'must-never-appear',
         }),
       ),

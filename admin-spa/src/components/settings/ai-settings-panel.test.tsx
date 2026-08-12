@@ -15,42 +15,48 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AISettingsPanel } from './ai-settings-panel'
-import type * as AdminAPI from '@/lib/admin-api'
+import type { AISettingsPanelAPI } from './ai-settings-panel'
 import type { AISettings } from '@/lib/ai-settings-types'
 import { AdminAPIError } from '@/lib/admin-api'
+import { readAISettings } from '@/lib/ai-settings-types'
 import { aiSettingsFixture } from '@/lib/ai-settings-types.test'
 
-const getAISettings = vi.hoisted(() => vi.fn())
-const getCodexAuthStatus = vi.hoisted(() => vi.fn())
-const startCodexDeviceAuth = vi.hoisted(() => vi.fn())
-const updateAISettings = vi.hoisted(() => vi.fn())
+const getAISettings = vi.fn<AISettingsPanelAPI['getAISettings']>()
+const getCodexAuthStatus = vi.fn<AISettingsPanelAPI['getCodexAuthStatus']>()
+const startCodexDeviceAuth = vi.fn<AISettingsPanelAPI['startCodexDeviceAuth']>()
+const updateAISettings = vi.fn<AISettingsPanelAPI['updateAISettings']>()
+const api: AISettingsPanelAPI = {
+  getAISettings,
+  getCodexAuthStatus,
+  startCodexDeviceAuth,
+  updateAISettings,
+}
 
-vi.mock('@/lib/admin-api', async (importOriginal) => {
-  const actual = await importOriginal<typeof AdminAPI>()
-  return {
-    ...actual,
-    getAISettings,
-    getCodexAuthStatus,
-    startCodexDeviceAuth,
-    updateAISettings,
-  }
-})
+function renderAISettingsPanel() {
+  return render(<AISettingsPanel api={api} />)
+}
 
 function providerSection(name: string) {
   return screen.getByRole('region', { name })
 }
 
+const decodedInitialSettings = readAISettings(aiSettingsFixture)
+if (!decodedInitialSettings) {
+  throw new Error('test AI settings fixture is invalid')
+}
+const initialSettings = decodedInitialSettings
+
 function responseWith(
-  update: (settings: typeof aiSettingsFixture) => unknown,
-): unknown {
-  return update(aiSettingsFixture)
+  update: (settings: AISettings) => AISettings,
+): AISettings {
+  return update(initialSettings)
 }
 
 describe('AISettingsPanel', () => {
   beforeEach(() => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
     getAISettings.mockReset()
-    getAISettings.mockResolvedValue(aiSettingsFixture)
+    getAISettings.mockResolvedValue(initialSettings)
     getCodexAuthStatus.mockReset()
     getCodexAuthStatus.mockResolvedValue({
       state: 'disconnected',
@@ -60,19 +66,23 @@ describe('AISettingsPanel', () => {
     })
     startCodexDeviceAuth.mockReset()
     updateAISettings.mockReset()
-    updateAISettings.mockResolvedValue(aiSettingsFixture)
+    updateAISettings.mockResolvedValue(initialSettings)
   })
 
   afterEach(cleanup)
 
   it('renders every closed provider with only its legal controls', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
 
     expect(await screen.findByText('Default provider')).toBeInTheDocument()
     for (const label of [
       'OpenAI provider',
       'Anthropic provider',
       'DeepSeek provider',
+      'Groq provider',
+      'xAI provider',
+      'Mistral provider',
+      'Cerebras provider',
       'Google provider',
       'OpenRouter provider',
       'Ollama provider',
@@ -93,7 +103,7 @@ describe('AISettingsPanel', () => {
   })
 
   it('switches the default with a closed provider selector', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'Default AI provider',
     })
@@ -108,8 +118,29 @@ describe('AISettingsPanel', () => {
     })
   })
 
+  it.each([
+    ['Groq', 'groq'],
+    ['xAI', 'xai'],
+    ['Mistral', 'mistral'],
+    ['Cerebras', 'cerebras'],
+  ] as const)('selects %s as the default provider', async (label, name) => {
+    renderAISettingsPanel()
+    const section = await screen.findByRole('region', {
+      name: 'Default AI provider',
+    })
+    fireEvent.click(within(section).getByRole('combobox'))
+    fireEvent.click(await screen.findByRole('option', { name: label }))
+
+    await waitFor(() => {
+      expect(updateAISettings).toHaveBeenCalledWith({
+        defaultProvider: { type: 'api_key', name },
+        expectedRevision: 3,
+      })
+    })
+  })
+
   it('saves and resets an API-key provider model through its variant', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'OpenRouter provider',
     })
@@ -148,7 +179,7 @@ describe('AISettingsPanel', () => {
   })
 
   it('replaces and resets an API key without retaining plaintext', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'OpenRouter provider',
     })
@@ -192,7 +223,7 @@ describe('AISettingsPanel', () => {
 
   it('keeps an API key input when the write fails', async () => {
     updateAISettings.mockRejectedValue(new Error('key rejected'))
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'OpenRouter provider',
     })
@@ -225,7 +256,7 @@ describe('AISettingsPanel', () => {
         ),
       })),
     )
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'OpenRouter provider',
     })
@@ -256,7 +287,7 @@ describe('AISettingsPanel', () => {
     }))
     getAISettings.mockResolvedValue(dbSettings)
     updateAISettings.mockResolvedValue(dbSettings)
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'Ollama provider',
     })
@@ -312,7 +343,7 @@ describe('AISettingsPanel', () => {
       userCode: 'ABCD-1234',
       message: '',
     })
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'Managed Codex provider',
     })
@@ -343,7 +374,7 @@ describe('AISettingsPanel', () => {
     getCodexAuthStatus.mockRejectedValue(
       new AdminAPIError('Request failed: 404', 404),
     )
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'Managed Codex provider',
     })
@@ -354,7 +385,7 @@ describe('AISettingsPanel', () => {
   })
 
   it('uses null to reset default-provider and feature-flag overrides', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     fireEvent.click(
       await screen.findByRole('button', { name: 'Use environment default' }),
     )
@@ -375,7 +406,7 @@ describe('AISettingsPanel', () => {
   })
 
   it('rejects a blank model before calling the API', async () => {
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     const section = await screen.findByRole('region', {
       name: 'OpenRouter provider',
     })
@@ -404,7 +435,7 @@ describe('AISettingsPanel', () => {
     updateAISettings
       .mockImplementationOnce(() => flagSave.promise)
       .mockResolvedValueOnce(revision5)
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
     const section = providerSection('OpenRouter provider')
     fireEvent.click(within(section).getByRole('button', { name: 'Save model' }))
@@ -434,24 +465,24 @@ describe('AISettingsPanel', () => {
   })
 
   it('refreshes the revision after a conflict before the next save', async () => {
-    const revision7: AISettings = {
-      ...aiSettingsFixture,
+    const revision7 = responseWith((settings) => ({
+      ...settings,
       revision: 7,
       appliedRevision: 7,
-    }
-    const revision8: AISettings = {
-      ...aiSettingsFixture,
+    }))
+    const revision8 = responseWith((settings) => ({
+      ...settings,
       revision: 8,
       appliedRevision: 8,
-    }
+    }))
     getAISettings
-      .mockResolvedValueOnce(aiSettingsFixture)
+      .mockResolvedValueOnce(initialSettings)
       .mockResolvedValueOnce(revision7)
     updateAISettings
       .mockRejectedValueOnce(new AdminAPIError('revision conflict', 409))
       .mockResolvedValueOnce(revision8)
 
-    render(<AISettingsPanel />)
+    renderAISettingsPanel()
     fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
     expect(await screen.findByText('revision conflict')).toBeInTheDocument()
     await waitFor(() => expect(getAISettings).toHaveBeenCalledTimes(2))

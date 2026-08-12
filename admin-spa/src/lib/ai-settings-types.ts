@@ -5,6 +5,10 @@ export const APIKeyProviderNameSchema = Schema.Literals([
   'openai',
   'anthropic',
   'deepseek',
+  'groq',
+  'xai',
+  'mistral',
+  'cerebras',
   'google',
   'openrouter',
 ])

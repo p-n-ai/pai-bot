@@ -561,8 +561,15 @@ type providerStructuredCapabilities struct {
 }
 
 func structuredProviderCapabilities(providerName string) (providerStructuredCapabilities, bool) {
+	if definition, ok := LookupProviderDefinition(providerName); ok {
+		return providerStructuredCapabilities{
+			StructuredOutput: definition.Capabilities.StructuredOutput,
+			SystemMessages:   true,
+			ImageInputs:      definition.Capabilities.Vision,
+		}, true
+	}
 	switch providerName {
-	case "openai", "codex", "deepseek", "openrouter", "google", "anthropic":
+	case "openai", "codex", "openrouter", "google", "anthropic":
 		return providerStructuredCapabilities{
 			StructuredOutput: true,
 			SystemMessages:   true,

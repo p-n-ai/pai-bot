@@ -302,3 +302,23 @@ func TestPrepareProviderRejectsUnavailableSelection(t *testing.T) {
 		t.Fatal("PrepareProviderWithCodexAuth() error = nil, want unsupported provider")
 	}
 }
+
+func TestCatalogProvidersAreNamedAndRegistrable(t *testing.T) {
+	cfg := config.AIConfig{CatalogProviders: map[string]config.CatalogProviderConfig{}}
+	for _, definition := range ai.ProviderCatalog() {
+		cfg.CatalogProviders[definition.ID] = config.CatalogProviderConfig{APIKey: "test-key", Model: definition.Models[0].ID}
+	}
+	for _, name := range []string{"deepseek", "groq", "xai", "mistral", "cerebras"} {
+		if !knownProvider(name) {
+			t.Errorf("knownProvider(%q) = false", name)
+		}
+		reg, ok := buildProvider(name, cfg)
+		if !ok {
+			t.Errorf("buildProvider(%q) = not registered", name)
+			continue
+		}
+		if reg.Name != name || reg.DefaultModel == "" {
+			t.Errorf("registration for %q = %#v", name, reg)
+		}
+	}
+}

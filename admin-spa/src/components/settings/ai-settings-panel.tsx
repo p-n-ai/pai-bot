@@ -56,21 +56,105 @@ const providerLabels = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
+  groq: 'Groq',
+  xai: 'xAI',
+  mistral: 'Mistral',
+  cerebras: 'Cerebras',
   google: 'Google',
   openrouter: 'OpenRouter',
 } satisfies Record<APIKeyProviderName, string>
 
-export function AISettingsPanel() {
+/** Supplies the admin boundary operations required by the AI settings panel. */
+export type AISettingsPanelAPI = {
+  readonly getAISettings: () => Promise<AISettings>
+  readonly getCodexAuthStatus: () => Promise<CodexAuthStatus>
+  readonly startCodexDeviceAuth: () => Promise<CodexAuthStatus>
+  readonly updateAISettings: (
+    input: UpdateAISettingsInput,
+  ) => Promise<AISettings>
+}
+
+const defaultAISettingsPanelAPI = {
+  getAISettings,
+  getCodexAuthStatus,
+  startCodexDeviceAuth,
+  updateAISettings,
+} satisfies AISettingsPanelAPI
+
+type AISettingsPanelProps = {
+  api?: AISettingsPanelAPI
+}
+
+function useCodexAuth(api: AISettingsPanelAPI) {
+  const [state, setState] = useState<CodexState>({ status: 'loading' })
+  const [isStarting, setIsStarting] = useState(false)
+
+  const loadStatus = useCallback(() => {
+    return api
+      .getCodexAuthStatus()
+      .then((auth) => setState({ status: 'ready', auth }))
+      .catch((cause: unknown) => {
+        if (cause instanceof AdminAPIError && cause.status === 404) {
+          setState({ status: 'unavailable' })
+          return
+        }
+        setState({
+          status: 'error',
+          message:
+            cause instanceof Error
+              ? cause.message
+              : 'Codex login status could not be loaded.',
+        })
+      })
+  }, [api])
+
+  useEffect(() => {
+    loadStatus()
+  }, [loadStatus])
+
+  useEffect(() => {
+    if (
+      state.status !== 'ready' ||
+      (state.auth.state !== 'starting' &&
+        state.auth.state !== 'awaiting_authorization')
+    ) {
+      return
+    }
+    const timer = window.setInterval(loadStatus, 1500)
+    return () => window.clearInterval(timer)
+  }, [loadStatus, state])
+
+  const handleStart = useCallback(() => {
+    setIsStarting(true)
+    api
+      .startCodexDeviceAuth()
+      .then((auth) => setState({ status: 'ready', auth }))
+      .catch((cause: unknown) => {
+        setState({
+          status: 'error',
+          message:
+            cause instanceof Error
+              ? cause.message
+              : 'Codex device login could not be started.',
+        })
+      })
+      .finally(() => setIsStarting(false))
+  }, [api])
+
+  return { handleStart, isStarting, state }
+}
+
+/** Renders runtime AI settings through an injectable application boundary. */
+export function AISettingsPanel({
+  api = defaultAISettingsPanelAPI,
+}: AISettingsPanelProps = {}) {
   const [state, setState] = useState<PanelState>({ status: 'loading' })
   const [modelInputs, setModelInputs] = useState<Record<string, string>>({})
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({})
   const [replacingKeys, setReplacingKeys] = useState<Record<string, boolean>>(
     {},
   )
-  const [codexState, setCodexState] = useState<CodexState>({
-    status: 'loading',
-  })
-  const [isStartingCodex, setIsStartingCodex] = useState(false)
+  const codexAuth = useCodexAuth(api)
   const nextRequestID = useRef(0)
   const sectionSeq = useRef<Record<string, number>>({})
   const settingsRef = useRef<AISettings | null>(null)
@@ -88,7 +172,8 @@ export function AISettingsPanel() {
   }, [])
 
   useEffect(() => {
-    getAISettings()
+    api
+      .getAISettings()
       .then(acceptSettings)
       .catch((cause: unknown) => {
         setState({
@@ -99,57 +184,7 @@ export function AISettingsPanel() {
               : 'Unable to load AI settings. Check your connection and try again.',
         })
       })
-  }, [acceptSettings])
-
-  const loadCodexStatus = useCallback(() => {
-    return getCodexAuthStatus()
-      .then((auth) => setCodexState({ status: 'ready', auth }))
-      .catch((cause: unknown) => {
-        if (cause instanceof AdminAPIError && cause.status === 404) {
-          setCodexState({ status: 'unavailable' })
-          return
-        }
-        setCodexState({
-          status: 'error',
-          message:
-            cause instanceof Error
-              ? cause.message
-              : 'Unable to check the Codex connection. Try again.',
-        })
-      })
-  }, [])
-
-  useEffect(() => {
-    loadCodexStatus()
-  }, [loadCodexStatus])
-
-  useEffect(() => {
-    if (
-      codexState.status !== 'ready' ||
-      (codexState.auth.state !== 'starting' &&
-        codexState.auth.state !== 'awaiting_authorization')
-    ) {
-      return
-    }
-    const timer = window.setInterval(loadCodexStatus, 1500)
-    return () => window.clearInterval(timer)
-  }, [codexState, loadCodexStatus])
-
-  const handleStartCodex = useCallback(() => {
-    setIsStartingCodex(true)
-    startCodexDeviceAuth()
-      .then((auth) => setCodexState({ status: 'ready', auth }))
-      .catch((cause: unknown) => {
-        setCodexState({
-          status: 'error',
-          message:
-            cause instanceof Error
-              ? cause.message
-              : 'Unable to start Codex verification. Try again.',
-        })
-      })
-      .finally(() => setIsStartingCodex(false))
-  }, [])
+  }, [acceptSettings, api])
 
   const submitSettings = useCallback(
     (
@@ -168,7 +203,7 @@ export function AISettingsPanel() {
           if (!current) {
             throw new Error('Reload AI settings before making changes.')
           }
-          const next = await updateAISettings({
+          const next = await api.updateAISettings({
             ...input,
             expectedRevision: current.revision,
           })
@@ -176,24 +211,24 @@ export function AISettingsPanel() {
           if (seq === sectionSeq.current[section]) {
             onSaved?.(next)
           }
-        } catch (caught: unknown) {
-          if (caught instanceof AdminAPIError && caught.status === 409) {
+        } catch (cause: unknown) {
+          if (cause instanceof AdminAPIError && cause.status === 409) {
             try {
-              acceptSettings(await getAISettings())
+              acceptSettings(await api.getAISettings())
             } catch {
               // Keep the conflict as the actionable error; retrying will reload.
             }
           }
           if (seq !== sectionSeq.current[section]) return
           submit.setError(
-            caught instanceof Error ? caught.message : fallbackMessage,
+            cause instanceof Error ? cause.message : fallbackMessage,
           )
         } finally {
           if (seq === sectionSeq.current[section]) submit.finishSubmit()
         }
       })
     },
-    [acceptSettings],
+    [acceptSettings, api],
   )
 
   const setDefaultProvider = useCallback(
@@ -342,15 +377,7 @@ export function AISettingsPanel() {
 
   return (
     <div className='mt-8 grid gap-6'>
-      <div className='flex flex-wrap items-center gap-2 text-sm text-muted-foreground'>
-        <Badge variant={settings.drift ? 'destructive' : 'secondary'}>
-          {settings.drift ? 'Changes pending' : 'Settings in sync'}
-        </Badge>
-        <span>
-          Requested version {settings.revision}; active version{' '}
-          {settings.appliedRevision}
-        </span>
-      </div>
+      <RuntimeStatus settings={settings} />
       <DefaultProviderSection
         error={providerSubmit.error}
         isPending={providerSubmit.isPending}
@@ -360,12 +387,12 @@ export function AISettingsPanel() {
       />
       {settings.providers.map((provider) => (
         <ProviderEditorController
-          codexState={codexState}
+          codexState={codexAuth.state}
           enabledError={enabledSubmit.error}
           isEnabledPending={enabledSubmit.isPending}
           isKeyPending={keySubmit.isPending}
           isModelPending={modelSubmit.isPending}
-          isStartingCodex={isStartingCodex}
+          isStartingCodex={codexAuth.isStarting}
           keyError={keySubmit.error}
           keyInput={keyInputs[providerID(provider)] ?? ''}
           keyReplacing={replacingKeys[providerID(provider)] === true}
@@ -377,7 +404,7 @@ export function AISettingsPanel() {
           onSaveKey={saveKey}
           onSaveModel={saveModel}
           onSetOllamaEnabled={setOllamaEnabled}
-          onStartCodex={handleStartCodex}
+          onStartCodex={codexAuth.handleStart}
           provider={provider}
           setKeyInputs={setKeyInputs}
           setModelInputs={setModelInputs}
@@ -392,6 +419,20 @@ export function AISettingsPanel() {
         onToggle={toggleFlag}
         sources={settings.flags.sources}
       />
+    </div>
+  )
+}
+
+function RuntimeStatus({ settings }: { settings: AISettings }) {
+  return (
+    <div className='flex flex-wrap items-center gap-2 text-sm text-muted-foreground'>
+      <Badge variant={settings.drift ? 'destructive' : 'secondary'}>
+        {settings.drift ? 'Runtime drift' : 'Runtime synchronized'}
+      </Badge>
+      <span>
+        Desired revision {settings.revision}, applied revision{' '}
+        {settings.appliedRevision}
+      </span>
     </div>
   )
 }
@@ -1183,6 +1224,14 @@ function decodeSelectorValue(value: string): ProviderSelector {
       return { type: 'api_key', name: 'anthropic' }
     case 'api_key:deepseek':
       return { type: 'api_key', name: 'deepseek' }
+    case 'api_key:groq':
+      return { type: 'api_key', name: 'groq' }
+    case 'api_key:xai':
+      return { type: 'api_key', name: 'xai' }
+    case 'api_key:mistral':
+      return { type: 'api_key', name: 'mistral' }
+    case 'api_key:cerebras':
+      return { type: 'api_key', name: 'cerebras' }
     case 'api_key:google':
       return { type: 'api_key', name: 'google' }
     case 'api_key:openrouter':

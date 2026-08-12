@@ -25,11 +25,12 @@ const (
 // OpenAIProvider implements Provider for OpenAI and OpenAI-compatible APIs
 // (DeepSeek, Groq, Together AI, etc.) via a configurable base URL.
 type OpenAIProvider struct {
-	apiKey  string
-	baseURL string
-	client  *http.Client
-	name    string
-	models  []ModelInfo
+	apiKey       string
+	baseURL      string
+	client       *http.Client
+	name         string
+	models       []ModelInfo
+	defaultModel string
 }
 
 type directOpenAIProvider struct {
@@ -67,6 +68,13 @@ func WithModels(models []ModelInfo) OpenAIOption {
 func WithProviderName(name string) OpenAIOption {
 	return func(p *OpenAIProvider) {
 		p.name = name
+	}
+}
+
+// WithDefaultModel sets the model used when a request does not select one.
+func WithDefaultModel(model string) OpenAIOption {
+	return func(p *OpenAIProvider) {
+		p.defaultModel = strings.TrimSpace(model)
 	}
 }
 
@@ -195,6 +203,9 @@ type openaiNativeResponse struct {
 
 func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	model := req.Model
+	if model == "" {
+		model = p.defaultModel
+	}
 	if model == "" {
 		model = "gpt-5.4-mini" // current low-latency default
 	}
@@ -342,7 +353,7 @@ func (p *directOpenAIProvider) CompleteNative(ctx context.Context, model string,
 	if len(decoded.Choices) == 0 {
 		return llm.AssistantMessage{}, fmt.Errorf("native OpenAI response contains no choices")
 	}
-	return projectNativeOpenAIResponse(model, decoded)
+	return projectNativeOpenAIResponse(p.name, model, decoded)
 }
 
 func buildNativeOpenAIMessages(c llm.Context) ([]openaiMessage, error) {
@@ -445,7 +456,7 @@ func buildNativeOpenAITools(tools []llm.Tool) ([]openaiTool, error) {
 	return projected, nil
 }
 
-func projectNativeOpenAIResponse(requestModel string, response openaiNativeResponse) (llm.AssistantMessage, error) {
+func projectNativeOpenAIResponse(providerName, requestModel string, response openaiNativeResponse) (llm.AssistantMessage, error) {
 	choice := response.Choices[0]
 	content := make([]llm.AssistantContent, 0, 1+len(choice.Message.ToolCalls))
 	if choice.Message.Content != "" {
@@ -480,10 +491,14 @@ func projectNativeOpenAIResponse(requestModel string, response openaiNativeRespo
 	if responseModel == "" {
 		responseModel = requestModel
 	}
+	providerName = strings.TrimSpace(providerName)
+	if providerName == "" {
+		providerName = "openai"
+	}
 	return llm.AssistantMessage{
 		Content:       content,
 		API:           llm.APIOpenAICompletions,
-		Provider:      "openai",
+		Provider:      providerName,
 		Model:         requestModel,
 		ResponseModel: responseModel,
 		ResponseID:    response.ID,

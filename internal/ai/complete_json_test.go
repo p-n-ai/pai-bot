@@ -49,6 +49,27 @@ func TestRouter_CompleteJSON_ParsesOutputAndDefaultsToCheapModel(t *testing.T) {
 	}
 }
 
+func TestRouter_CompleteJSON_UsesCatalogProviderCapabilitiesAndDefaultModel(t *testing.T) {
+	router := newTestRouter()
+	mock := ai.NewMockProvider(`{"final_answer":"ok"}`)
+	router.ReplaceProviders([]ai.ProviderRegistration{{Name: "groq", Provider: mock, DefaultModel: "llama-3.3-70b-versatile"}})
+
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), ai.CompletionRequest{
+		Messages: []ai.Message{{Role: "user", Content: "grade this"}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}, ai.DecodeInto(&out))
+	if err != nil {
+		t.Fatalf("CompleteJSON() error = %v", err)
+	}
+	if mock.LastRequest == nil || mock.LastRequest.Model != "llama-3.3-70b-versatile" {
+		t.Fatalf("catalog provider request = %#v", mock.LastRequest)
+	}
+}
+
 func TestRouter_CompleteJSON_RequiresStructuredOutputSpec(t *testing.T) {
 	router := newTestRouter()
 	router.Register("openai", ai.NewMockProvider(`{"final_answer":"12"}`))
