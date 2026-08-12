@@ -110,7 +110,7 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 	}
 }
 
-func TestWSChannel_DerivesStableDeliveryIDAcrossReconnect(t *testing.T) {
+func TestWSChannelLeavesLegacyDeliveryIDEmptyAcrossReconnect(t *testing.T) {
 	ws := NewWSChannel()
 	received := make(chan InboundMessage, 2)
 	_ = ws.Start(context.Background(), func(msg InboundMessage) {
@@ -139,11 +139,8 @@ func TestWSChannel_DerivesStableDeliveryIDAcrossReconnect(t *testing.T) {
 
 	first := send()
 	replay := send()
-	if first.DeliveryID == "" {
-		t.Fatal("derived delivery ID is empty")
-	}
-	if replay.DeliveryID != first.DeliveryID {
-		t.Fatalf("delivery IDs = %q and %q, want stable replay identity", first.DeliveryID, replay.DeliveryID)
+	if first.DeliveryID != "" || replay.DeliveryID != "" {
+		t.Fatalf("legacy delivery IDs = %q and %q, want empty IDs for ingress assignment", first.DeliveryID, replay.DeliveryID)
 	}
 }
 
@@ -608,8 +605,8 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	if received[0].IdentityChannel != "embed" || received[0].ExternalID != "guest-external-id" {
 		t.Errorf("authenticated identity = %q/%q", received[0].IdentityChannel, received[0].ExternalID)
 	}
-	if received[0].DeliveryID == "" {
-		t.Error("expected a server-derived delivery ID")
+	if received[0].DeliveryID != "" {
+		t.Errorf("delivery ID = %q, want empty legacy ID for ingress assignment", received[0].DeliveryID)
 	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)

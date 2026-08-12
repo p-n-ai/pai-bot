@@ -672,13 +672,24 @@
     }
   });
 
+  function newDeliveryID() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    var bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    return Array.prototype.map.call(bytes, function(value) {
+      return value.toString(16).padStart(2, '0');
+    }).join('');
+  }
+
   function sendMessage() {
     var text = inputEl.value.trim();
     if (!text) return;
     inputEl.value = '';
     addMessage(text, 'user');
 
-    var msg = JSON.stringify({ type: 'message', text: text });
+    var msg = JSON.stringify({ type: 'message', delivery_id: newDeliveryID(), text: text });
     if (connected && ws && ws.readyState === WebSocket.OPEN) {
       ws.send(msg);
     } else {
