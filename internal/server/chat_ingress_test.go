@@ -6,48 +6,96 @@ package server
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
-func TestChatIngressDeduplicatesDeliveriesPerChannel(t *testing.T) {
-	processed := make(chan chat.InboundMessage, 3)
-	ingress, err := newChatIngress(4, func(_ context.Context, message chat.InboundMessage) {
-		processed <- message
-	})
+const testChatIngressTenantID = "11111111-1111-1111-1111-111111111111"
+
+type chatIngressProcessorStub struct {
+	process func(context.Context, chat.InboundMessage) (agent.TurnResult, error)
+	deliver func(context.Context, chat.InboundMessage, agent.TurnResult) error
+}
+
+func (s chatIngressProcessorStub) ProcessTurn(
+	ctx context.Context,
+	message chat.InboundMessage,
+) (agent.TurnResult, error) {
+	return s.process(ctx, message)
+}
+
+func (s chatIngressProcessorStub) DeliverTurn(
+	ctx context.Context,
+	message chat.InboundMessage,
+	result agent.TurnResult,
+) error {
+	return s.deliver(ctx, message, result)
+}
+
+func newTestChatIngress(
+	t *testing.T,
+	workers int,
+	store inboundDeliveryStore,
+	processor InboundTurnProcessor,
+) *ChatIngress {
+	t.Helper()
+	ingress, err := newChatIngress(
+		testChatIngressTenantID,
+		store,
+		processor,
+		chatIngressConfig{
+			LeaseDuration: 90 * time.Millisecond,
+			PollInterval:  5 * time.Millisecond,
+			BaseBackoff:   100 * time.Millisecond,
+			MaxBackoff:    200 * time.Millisecond,
+			WorkerCount:   workers,
+			Now:           time.Now,
+		},
+	)
 	if err != nil {
 		t.Fatalf("newChatIngress() error = %v", err)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ingress.Run(ctx)
-	}()
+	return ingress
+}
 
-	slack := chat.InboundMessage{Channel: "slack", DeliveryID: "delivery-1", Text: "first"}
-	if err := ingress.Enqueue(ctx, slack); err != nil {
-		t.Fatalf("Enqueue(first Slack delivery) error = %v", err)
+func TestChatIngressDeduplicatesExplicitDeliveryPerChannel(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	processed := make(chan chat.InboundMessage, 3)
+	ingress := newTestChatIngress(t, 2, store, chatIngressProcessorStub{
+		process: func(_ context.Context, message chat.InboundMessage) (agent.TurnResult, error) {
+			processed <- message
+			return agent.TurnResult{Text: message.Text}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
+	})
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+
+	slack := testInboundMessage("delivery-1", "first")
+	if err := ingress.Accept(ctx, slack); err != nil {
+		t.Fatalf("Accept(first Slack delivery) error = %v", err)
 	}
-	if err := ingress.Enqueue(ctx, slack); err != nil {
-		t.Fatalf("Enqueue(duplicate Slack delivery) error = %v", err)
+	if err := ingress.Accept(ctx, slack); err != nil {
+		t.Fatalf("Accept(duplicate Slack delivery) error = %v", err)
 	}
-	if err := ingress.Enqueue(ctx, chat.InboundMessage{
-		Channel: "discord", DeliveryID: "delivery-1", Text: "same ID, other channel",
-	}); err != nil {
-		t.Fatalf("Enqueue(Discord delivery) error = %v", err)
+	discord := slack
+	discord.Channel = "discord"
+	discord.ThreadID = "discord-thread"
+	discord.Text = "same ID, other channel"
+	if err := ingress.Accept(ctx, discord); err != nil {
+		t.Fatalf("Accept(Discord delivery) error = %v", err)
 	}
 
-	got := make([]chat.InboundMessage, 0, 2)
-	for len(got) < 2 {
+	for count := 0; count < 2; count++ {
 		select {
-		case message := <-processed:
-			got = append(got, message)
+		case <-processed:
 		case <-time.After(time.Second):
-			t.Fatalf("processed %d messages, want 2 unique channel deliveries", len(got))
+			t.Fatalf("processed %d messages, want two channel-scoped deliveries", count)
 		}
 	}
 	select {
@@ -55,189 +103,412 @@ func TestChatIngressDeduplicatesDeliveriesPerChannel(t *testing.T) {
 		t.Fatalf("duplicate delivery processed: %#v", extra)
 	case <-time.After(25 * time.Millisecond):
 	}
-
-	cancel()
-	<-done
 }
 
-func TestChatIngressProcessesMessagesWithoutDeliveryID(t *testing.T) {
+func TestChatIngressAssignsDistinctIDsToLegacyWebSocketMessages(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
 	processed := make(chan chat.InboundMessage, 2)
-	ingress, err := newChatIngress(2, func(_ context.Context, message chat.InboundMessage) {
-		processed <- message
+	ingress := newTestChatIngress(t, 2, store, chatIngressProcessorStub{
+		process: func(_ context.Context, message chat.InboundMessage) (agent.TurnResult, error) {
+			processed <- message
+			return agent.TurnResult{Text: "ok"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
 	})
-	if err != nil {
-		t.Fatalf("newChatIngress() error = %v", err)
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go ingress.Run(ctx)
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
 
-	message := chat.InboundMessage{Channel: "websocket", UserID: "learner-1", Text: "hello"}
-	if err := ingress.Enqueue(ctx, message); err != nil {
-		t.Fatalf("Enqueue(first message) error = %v", err)
+	message := chat.InboundMessage{
+		Channel: "websocket", UserID: "learner-1", ExternalID: "learner-1", Text: "same text",
 	}
-	if err := ingress.Enqueue(ctx, message); err != nil {
-		t.Fatalf("Enqueue(second message) error = %v", err)
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
 	}
-
-	for i := 0; i < 2; i++ {
-		select {
-		case <-processed:
-		case <-time.After(time.Second):
-			t.Fatalf("processed %d messages without delivery IDs, want 2", i)
-		}
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
+	}
+	first := waitForProcessedMessage(t, processed)
+	second := waitForProcessedMessage(t, processed)
+	if first.DeliveryID == "" || second.DeliveryID == "" || first.DeliveryID == second.DeliveryID {
+		t.Fatalf("generated delivery IDs = %q and %q, want distinct non-empty IDs", first.DeliveryID, second.DeliveryID)
 	}
 }
 
-func TestChatIngressDoesNotBlockIndependentThreads(t *testing.T) {
-	firstStarted := make(chan struct{})
-	releaseFirst := make(chan struct{})
-	secondProcessed := make(chan struct{})
-	ingress, err := newChatIngress(4, func(_ context.Context, message chat.InboundMessage) {
-		switch message.ThreadID {
-		case "slack:C1:T1":
-			close(firstStarted)
-			<-releaseFirst
-		case "slack:C2:T2":
-			close(secondProcessed)
-		}
+func TestChatIngressStoresFailureResultWithoutReprocessing(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	var processCalls atomic.Int32
+	delivered := make(chan agent.TurnResult, 1)
+	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			processCalls.Add(1)
+			return agent.TurnResult{Text: "unsafe partial reply"}, errors.New("model failed after an uncertain mutation")
+		},
+		deliver: func(_ context.Context, _ chat.InboundMessage, result agent.TurnResult) error {
+			delivered <- result
+			return nil
+		},
 	})
-	if err != nil {
-		t.Fatalf("newChatIngress() error = %v", err)
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+	message := testInboundMessage("delivery-failed-processing", "hello")
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go ingress.Run(ctx)
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := ingress.Enqueue(ctx, chat.InboundMessage{
-		Channel: "slack", ThreadID: "slack:C1:T1", DeliveryID: "D1",
-	}); err != nil {
-		t.Fatalf("Enqueue(first thread) error = %v", err)
+	select {
+	case result := <-delivered:
+		if result.Text != chatIngressInterruptedResponse {
+			t.Fatalf("delivered text = %q, want technical response", result.Text)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stored failure response was not delivered")
+	}
+	if calls := processCalls.Load(); calls != 1 {
+		t.Fatalf("processing calls = %d, want one", calls)
+	}
+}
+
+func TestChatIngressRetriesStoredOutputWithoutReprocessing(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	var processCalls atomic.Int32
+	firstDelivery := make(chan struct{}, 1)
+	first := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			processCalls.Add(1)
+			return agent.TurnResult{Text: "durable reply"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error {
+			firstDelivery <- struct{}{}
+			return errors.New("temporary channel failure")
+		},
+	})
+	ctx, cancel, done := runChatIngress(t, first)
+	message := testInboundMessage("delivery-retry", "hello")
+	if err := first.Accept(ctx, message); err != nil {
+		t.Fatal(err)
 	}
 	select {
-	case <-firstStarted:
+	case <-firstDelivery:
 	case <-time.After(time.Second):
-		t.Fatal("first thread did not start")
+		t.Fatal("first delivery attempt did not run")
 	}
-	if err := ingress.Enqueue(ctx, chat.InboundMessage{
-		Channel: "slack", ThreadID: "slack:C2:T2", DeliveryID: "D2",
-	}); err != nil {
-		t.Fatalf("Enqueue(second thread) error = %v", err)
+	waitForInboundStatus(t, store, message.DeliveryID, inboundDeliveryDeliveryPending)
+	stopChatIngress(cancel, done)
+
+	retried := make(chan agent.TurnResult, 1)
+	restarted := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			processCalls.Add(1)
+			return agent.TurnResult{}, errors.New("must not reprocess stored output")
+		},
+		deliver: func(_ context.Context, _ chat.InboundMessage, result agent.TurnResult) error {
+			retried <- result
+			return nil
+		},
+	})
+	_, cancelRestarted, restartedDone := runChatIngress(t, restarted)
+	defer stopChatIngress(cancelRestarted, restartedDone)
+	select {
+	case result := <-retried:
+		if result.Text != "durable reply" {
+			t.Fatalf("retried result = %#v, want exact durable reply", result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("fresh worker did not retry stored output")
+	}
+	if calls := processCalls.Load(); calls != 1 {
+		t.Fatalf("processing calls = %d, want one across restart", calls)
+	}
+}
+
+func TestChatIngressSerializesOneLearnerThroughDelivery(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	firstDeliveryStarted := make(chan struct{})
+	releaseFirstDelivery := make(chan struct{})
+	secondProcessed := make(chan struct{})
+	ingress := newTestChatIngress(t, 2, store, chatIngressProcessorStub{
+		process: func(_ context.Context, message chat.InboundMessage) (agent.TurnResult, error) {
+			if message.Text == "second" {
+				close(secondProcessed)
+			}
+			return agent.TurnResult{Text: message.Text}, nil
+		},
+		deliver: func(_ context.Context, message chat.InboundMessage, _ agent.TurnResult) error {
+			if message.Text == "first" {
+				close(firstDeliveryStarted)
+				<-releaseFirstDelivery
+			}
+			return nil
+		},
+	})
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+	first := testInboundMessage("delivery-1", "first")
+	first.ThreadID = "thread-1"
+	second := testInboundMessage("delivery-2", "second")
+	second.ThreadID = "thread-2"
+	if err := ingress.Accept(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := ingress.Accept(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-firstDeliveryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first delivery did not start")
 	}
 	select {
 	case <-secondProcessed:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("independent thread was blocked by an in-flight turn")
+		t.Fatal("second thread processed before the learner's first delivery completed")
+	case <-time.After(40 * time.Millisecond):
 	}
-	close(releaseFirst)
+	close(releaseFirstDelivery)
+	select {
+	case <-secondProcessed:
+	case <-time.After(time.Second):
+		t.Fatal("second thread did not process after the first delivery completed")
+	}
 }
 
-func TestChatIngressSerializesOneThread(t *testing.T) {
+func TestChatIngressDoesNotBlockDifferentLearners(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
 	firstStarted := make(chan struct{})
 	releaseFirst := make(chan struct{})
-	order := make(chan string, 2)
-	ingress, err := newChatIngress(4, func(_ context.Context, message chat.InboundMessage) {
-		if message.Text == "first" {
-			close(firstStarted)
-			<-releaseFirst
-		}
-		order <- message.Text
+	secondProcessed := make(chan struct{})
+	ingress := newTestChatIngress(t, 2, store, chatIngressProcessorStub{
+		process: func(_ context.Context, message chat.InboundMessage) (agent.TurnResult, error) {
+			if message.UserID == "learner-1" {
+				close(firstStarted)
+				<-releaseFirst
+			} else {
+				close(secondProcessed)
+			}
+			return agent.TurnResult{Text: "ok"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
 	})
-	if err != nil {
-		t.Fatalf("newChatIngress() error = %v", err)
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go ingress.Run(ctx)
-
-	for index, text := range []string{"first", "second"} {
-		if err := ingress.Enqueue(ctx, chat.InboundMessage{
-			Channel: "slack", ThreadID: "slack:C1:T1", DeliveryID: string(rune('1' + index)), Text: text,
-		}); err != nil {
-			t.Fatalf("Enqueue(%s) error = %v", text, err)
-		}
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+	first := testInboundMessage("delivery-1", "first")
+	second := testInboundMessage("delivery-2", "second")
+	second.UserID = "learner-2"
+	second.ExternalID = "learner-2"
+	second.ThreadID = "thread-2"
+	if err := ingress.Accept(ctx, first); err != nil {
+		t.Fatal(err)
 	}
 	select {
 	case <-firstStarted:
 	case <-time.After(time.Second):
-		t.Fatal("first turn did not start")
+		t.Fatal("first learner did not start")
+	}
+	if err := ingress.Accept(ctx, second); err != nil {
+		t.Fatal(err)
 	}
 	select {
-	case got := <-order:
-		t.Fatalf("same-thread turn completed before release: %q", got)
-	case <-time.After(25 * time.Millisecond):
+	case <-secondProcessed:
+	case <-time.After(time.Second):
+		t.Fatal("different learner was blocked")
 	}
 	close(releaseFirst)
-	for _, want := range []string{"first", "second"} {
-		select {
-		case got := <-order:
-			if got != want {
-				t.Fatalf("processed %q, want %q", got, want)
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("timed out waiting for %q", want)
-		}
+}
+
+func TestChatIngressRenewsClaimWhileProcessing(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	release := make(chan struct{})
+	delivered := make(chan struct{})
+	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			<-release
+			return agent.TurnResult{Text: "ok"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error {
+			close(delivered)
+			return nil
+		},
+	})
+	ingress.cfg.LeaseDuration = 30 * time.Millisecond
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+	message := testInboundMessage("delivery-renew", "hello")
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
+	}
+	waitForCondition(t, time.Second, func() bool { return store.renewalCount() >= 2 }, "lease renewal")
+	if _, ok, err := store.ClaimDue(
+		t.Context(), "competing-worker", time.Now(), time.Now().Add(time.Second),
+	); err != nil || ok {
+		t.Fatalf("competing ClaimDue() = %t, %v; want no claim while renewed", ok, err)
+	}
+	close(release)
+	select {
+	case <-delivered:
+	case <-time.After(time.Second):
+		t.Fatal("renewed turn did not finish")
+	}
+	if delivery, ok := store.snapshotByDeliveryID(message.DeliveryID); !ok || delivery.ProcessingAttemptCount != 1 {
+		t.Fatalf("processing state = %#v, want one attempt", delivery)
 	}
 }
 
-func TestChatIngressCapacityBoundsQueuedAndProcessingMessages(t *testing.T) {
-	started := make(chan struct{})
-	release := make(chan struct{})
-	ingress, err := newChatIngress(1, func(_ context.Context, _ chat.InboundMessage) {
-		close(started)
-		<-release
+func TestChatIngressCancelsAndDoesNotPersistAfterLeaseLoss(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	store.failRenewal = true
+	processingCanceled := make(chan struct{})
+	var deliveryCalls atomic.Int32
+	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(ctx context.Context, _ chat.InboundMessage) (agent.TurnResult, error) {
+			<-ctx.Done()
+			close(processingCanceled)
+			return agent.TurnResult{Text: "unsafe late result"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error {
+			deliveryCalls.Add(1)
+			return nil
+		},
 	})
-	if err != nil {
-		t.Fatalf("newChatIngress() error = %v", err)
+	ingress.cfg.LeaseDuration = 60 * time.Millisecond
+	ctx, cancel, done := runChatIngress(t, ingress)
+	message := testInboundMessage("delivery-lost", "hello")
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go ingress.Run(ctx)
-
-	if err := ingress.Enqueue(ctx, chat.InboundMessage{Channel: "slack", ThreadID: "thread-1"}); err != nil {
-		t.Fatalf("Enqueue(first) error = %v", err)
+	select {
+	case <-processingCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("lease loss did not cancel processing")
 	}
-	<-started
-	enqueueCtx, cancelEnqueue := context.WithTimeout(ctx, 25*time.Millisecond)
-	defer cancelEnqueue()
-	if err := ingress.Enqueue(enqueueCtx, chat.InboundMessage{
-		Channel: "slack", ThreadID: "thread-2",
-	}); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Enqueue(over capacity) error = %v, want deadline exceeded", err)
+	stopChatIngress(cancel, done)
+	delivery, ok := store.snapshotByDeliveryID(message.DeliveryID)
+	if !ok || delivery.Status != inboundDeliveryProcessing || delivery.Result.Text != "" {
+		t.Fatalf("state after lease loss = %#v, want uncommitted processing claim", delivery)
 	}
-	close(release)
+	if calls := deliveryCalls.Load(); calls != 0 {
+		t.Fatalf("delivery calls after lease loss = %d, want zero", calls)
+	}
 }
 
 func TestChatIngressRunWaitsForCanceledWorker(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
 	started := make(chan struct{})
 	workerDone := make(chan struct{})
-	ingress, err := newChatIngress(1, func(ctx context.Context, _ chat.InboundMessage) {
-		close(started)
-		<-ctx.Done()
-		close(workerDone)
+	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(ctx context.Context, _ chat.InboundMessage) (agent.TurnResult, error) {
+			close(started)
+			<-ctx.Done()
+			close(workerDone)
+			return agent.TurnResult{}, ctx.Err()
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
 	})
-	if err != nil {
-		t.Fatalf("newChatIngress() error = %v", err)
+	ctx, cancel, done := runChatIngress(t, ingress)
+	if err := ingress.Accept(ctx, testInboundMessage("delivery-cancel", "hello")); err != nil {
+		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	runDone := make(chan struct{})
-	go func() {
-		ingress.Run(ctx)
-		close(runDone)
-	}()
-	if err := ingress.Enqueue(ctx, chat.InboundMessage{Channel: "slack", ThreadID: "thread-1"}); err != nil {
-		t.Fatalf("Enqueue() error = %v", err)
-	}
-	<-started
-	cancel()
 	select {
-	case <-runDone:
+	case <-started:
 	case <-time.After(time.Second):
-		t.Fatal("Run() did not stop after cancellation")
+		t.Fatal("worker did not start")
 	}
+	stopChatIngress(cancel, done)
 	select {
 	case <-workerDone:
 	default:
 		t.Fatal("Run() returned before its worker stopped")
+	}
+}
+
+func testInboundMessage(deliveryID, text string) chat.InboundMessage {
+	return chat.InboundMessage{
+		Channel: "slack", UserID: "learner-1", ExternalID: "learner-1",
+		ThreadID: "thread-1", DeliveryID: deliveryID, Text: text,
+	}
+}
+
+func runChatIngress(t *testing.T, ingress *ChatIngress) (context.Context, context.CancelFunc, <-chan struct{}) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ingress.Run(ctx)
+	}()
+	return ctx, cancel, done
+}
+
+func stopChatIngress(cancel context.CancelFunc, done <-chan struct{}) {
+	cancel()
+	<-done
+}
+
+func waitForProcessedMessage(t *testing.T, messages <-chan chat.InboundMessage) chat.InboundMessage {
+	t.Helper()
+	select {
+	case message := <-messages:
+		return message
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for processed message")
+		return chat.InboundMessage{}
+	}
+}
+
+func waitForInboundStatus(
+	t *testing.T,
+	store *memoryInboundDeliveryStore,
+	deliveryID string,
+	status inboundDeliveryStatus,
+) {
+	t.Helper()
+	waitForCondition(t, time.Second, func() bool {
+		delivery, ok := store.snapshotByDeliveryID(deliveryID)
+		return ok && delivery.Status == status
+	}, "inbound status "+string(status))
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool, description string) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", description)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestChatIngressAcceptIsSafeUnderConcurrentDuplicateRequests(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	processor := chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			return agent.TurnResult{Text: "ok"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
+	}
+	ingress := newTestChatIngress(t, 1, store, processor)
+	message := testInboundMessage("delivery-concurrent", "hello")
+	var workers sync.WaitGroup
+	var failures atomic.Int32
+	for range 16 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			if err := ingress.Accept(t.Context(), message); err != nil {
+				failures.Add(1)
+			}
+		}()
+	}
+	workers.Wait()
+	if failures.Load() != 0 {
+		t.Fatalf("concurrent duplicate acceptance failures = %d", failures.Load())
+	}
+	store.mu.Lock()
+	count := len(store.deliveries)
+	store.mu.Unlock()
+	if count != 1 {
+		t.Fatalf("stored deliveries = %d, want one", count)
 	}
 }
