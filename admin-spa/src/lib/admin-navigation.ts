@@ -53,6 +53,11 @@ const navigationGroups: ReadonlyArray<NavigationGroup> = [
     label: 'Technical tools',
     items: [
       {
+        href: '/build-ai',
+        icon: 'layers',
+        label: 'Build AI',
+      },
+      {
         href: '/dashboard/ai-usage',
         icon: 'activity',
         label: 'AI usage',

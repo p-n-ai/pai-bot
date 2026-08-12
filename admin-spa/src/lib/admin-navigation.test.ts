@@ -65,8 +65,14 @@ describe('admin sidebar navigation', () => {
       withoutCapability.flatMap(({ items }) => items).map(({ label }) => label),
     ).not.toContain('AI settings')
     expect(
+      withoutCapability.flatMap(({ items }) => items).map(({ label }) => label),
+    ).not.toContain('Build AI')
+    expect(
       withCapability.flatMap(({ items }) => items).map(({ label }) => label),
     ).toContain('AI settings')
+    expect(
+      withCapability.flatMap(({ items }) => items).map(({ label }) => label),
+    ).toContain('Build AI')
   })
 
   it('marks only the active destination and its descendants as current', () => {
