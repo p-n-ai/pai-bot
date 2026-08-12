@@ -100,7 +100,7 @@ func (s *SlackChannel) Start(context.Context, func(InboundMessage)) error { retu
 func (s *SlackChannel) Stop() error { return nil }
 
 // WebhookHandler verifies and normalizes Slack Events API requests.
-func (s *SlackChannel) WebhookHandler(handler func(InboundMessage)) http.Handler {
+func (s *SlackChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
@@ -137,8 +137,7 @@ func (s *SlackChannel) WebhookHandler(handler func(InboundMessage)) http.Handler
 			response.WriteHeader(http.StatusOK)
 			return
 		}
-		response.WriteHeader(http.StatusOK)
-		handler(InboundMessage{
+		message := InboundMessage{
 			Channel:    "slack",
 			UserID:     envelope.Event.User,
 			ExternalID: envelope.Event.User,
@@ -146,7 +145,14 @@ func (s *SlackChannel) WebhookHandler(handler func(InboundMessage)) http.Handler
 			MessageID:  envelope.Event.TS,
 			DeliveryID: envelope.EventID,
 			Text:       envelope.Event.Text,
-		})
+		}
+		if handler != nil {
+			if err := handler(request.Context(), message); err != nil {
+				http.Error(response, "temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		response.WriteHeader(http.StatusOK)
 	})
 }
 

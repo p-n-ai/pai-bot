@@ -31,7 +31,7 @@ type recordingWebhookChannel struct {
 	handler http.Handler
 }
 
-func (c *recordingWebhookChannel) WebhookHandler(func(chat.InboundMessage)) http.Handler {
+func (c *recordingWebhookChannel) WebhookHandler(chat.InboundWebhookHandler) http.Handler {
 	return c.handler
 }
 
@@ -135,7 +135,7 @@ func TestGatewayDiscoversFutureWebhookAdapters(t *testing.T) {
 	gw.Register("future-chat", &recordingWebhookChannel{handler: expected})
 	gw.Register("polling-only", &recordingChannel{})
 
-	webhooks := gw.Webhooks(func(chat.InboundMessage) {})
+	webhooks := gw.Webhooks(func(context.Context, chat.InboundMessage) error { return nil })
 	if len(webhooks) != 1 || webhooks["future-chat"] == nil {
 		t.Fatalf("Webhooks() = %#v, want future-chat only", webhooks)
 	}

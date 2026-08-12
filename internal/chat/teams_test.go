@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -55,7 +56,10 @@ func TestTeamsChannelWebhookNormalizesAuthenticatedMessageActivity(t *testing.T)
 	recorder := httptest.NewRecorder()
 
 	var got InboundMessage
-	channel.WebhookHandler(func(message InboundMessage) { got = message }).ServeHTTP(recorder, request)
+	channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
+		got = message
+		return nil
+	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -98,8 +102,9 @@ func TestTeamsChannelWebhookRejectsUnauthenticatedActivity(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/webhook/teams", bytes.NewReader([]byte(`{"type":"message"}`)))
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("unauthenticated activity must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {
@@ -132,12 +137,44 @@ func TestTeamsChannelWebhookRejectsUnendorsedActivityAsForbidden(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer valid-token")
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("unendorsed activity must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestTeamsWebhookReturnsRetryableStatusWhenInboundPersistenceFails(t *testing.T) {
+	channel, err := NewTeamsChannel(TeamsConfig{
+		TokenValidator: teamsTokenValidatorFunc(func(context.Context, string, TeamsAuthenticationContext) error {
+			return nil
+		}),
+		TokenProvider: teamsTokenProviderFunc(func(context.Context) (string, error) {
+			return "connector-token", nil
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{
+		"type":"message","id":"message-fail","text":"hello",
+		"from":{"id":"user-1"},"conversation":{"id":"conversation-1"},
+		"channelId":"msteams","serviceUrl":"https://smba.trafficmanager.net/teams/"
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/webhook/teams", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
+		return errors.New("private database failure")
+	}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if strings.Contains(recorder.Body.String(), "database") {
+		t.Fatalf("response exposed persistence error: %q", recorder.Body.String())
 	}
 }
 

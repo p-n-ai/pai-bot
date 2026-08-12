@@ -203,7 +203,7 @@ func TestWhatsAppWebhookVerification(t *testing.T) {
 		verifyToken: "my-verify-token",
 	}
 
-	handler := ch.WebhookHandler(func(InboundMessage) {})
+	handler := ch.WebhookHandler(func(context.Context, InboundMessage) error { return nil })
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/webhook?hub.mode=subscribe&hub.verify_token=my-verify-token&hub.challenge=challenge-123",
@@ -224,7 +224,7 @@ func TestWhatsAppWebhookVerification_BadToken(t *testing.T) {
 		verifyToken: "my-verify-token",
 	}
 
-	handler := ch.WebhookHandler(func(InboundMessage) {})
+	handler := ch.WebhookHandler(func(context.Context, InboundMessage) error { return nil })
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/webhook?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=challenge-123",
@@ -245,8 +245,9 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 	}
 
 	var got InboundMessage
-	handler := ch.WebhookHandler(func(msg InboundMessage) {
+	handler := ch.WebhookHandler(func(_ context.Context, msg InboundMessage) error {
 		got = msg
+		return nil
 	})
 
 	payload := `{
@@ -299,7 +300,7 @@ func TestWhatsAppWebhookInboundMessage(t *testing.T) {
 
 func TestWhatsAppWebhookRejectsOversizedPayload(t *testing.T) {
 	ch := &WhatsAppChannel{phoneID: "phone-123"}
-	handler := ch.WebhookHandler(func(InboundMessage) {})
+	handler := ch.WebhookHandler(func(context.Context, InboundMessage) error { return nil })
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(strings.Repeat(" ", (1<<20)+1)))
 	w := httptest.NewRecorder()
@@ -313,7 +314,10 @@ func TestWhatsAppWebhookRejectsOversizedPayload(t *testing.T) {
 func TestWhatsAppWebhookRejectsUnsignedPayload(t *testing.T) {
 	ch := &WhatsAppChannel{phoneID: "phone-123", appSecret: whatsappTestAppSecret}
 	called := false
-	handler := ch.WebhookHandler(func(InboundMessage) { called = true })
+	handler := ch.WebhookHandler(func(context.Context, InboundMessage) error {
+		called = true
+		return nil
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"entry":[]}`))
 	w := httptest.NewRecorder()
@@ -330,7 +334,10 @@ func TestWhatsAppWebhookRejectsUnsignedPayload(t *testing.T) {
 func TestWhatsAppWebhookRejectsInvalidSignature(t *testing.T) {
 	ch := &WhatsAppChannel{phoneID: "phone-123", appSecret: whatsappTestAppSecret}
 	called := false
-	handler := ch.WebhookHandler(func(InboundMessage) { called = true })
+	handler := ch.WebhookHandler(func(context.Context, InboundMessage) error {
+		called = true
+		return nil
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"entry":[]}`))
 	req.Header.Set("X-Hub-Signature-256", "sha256="+strings.Repeat("0", sha256.Size*2))
@@ -379,6 +386,27 @@ func TestWhatsAppWebhookAllowsNilHandler(t *testing.T) {
 	}
 }
 
+func TestWhatsAppWebhookReturnsRetryableStatusWhenInboundPersistenceFails(t *testing.T) {
+	channel := &WhatsAppChannel{phoneID: "phone-123", appSecret: whatsappTestAppSecret}
+	payload := `{
+		"entry":[{"changes":[{"value":{
+			"metadata":{"phone_number_id":"phone-123"},
+			"messages":[{"from":"60123456789","id":"wamid.fail","type":"text","text":{"body":"hello"}}]
+		}}]}]
+	}`
+	request := newSignedWhatsAppRequest(payload)
+	recorder := httptest.NewRecorder()
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
+		return errors.New("private database failure")
+	}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if strings.Contains(recorder.Body.String(), "database") {
+		t.Fatalf("response exposed persistence error: %q", recorder.Body.String())
+	}
+}
+
 func TestWhatsAppWebhookIgnoresStatusUpdates(t *testing.T) {
 	ch := &WhatsAppChannel{
 		verifyToken: "tok",
@@ -387,8 +415,9 @@ func TestWhatsAppWebhookIgnoresStatusUpdates(t *testing.T) {
 	}
 
 	called := false
-	handler := ch.WebhookHandler(func(msg InboundMessage) {
+	handler := ch.WebhookHandler(func(_ context.Context, msg InboundMessage) error {
 		called = true
+		return nil
 	})
 
 	// Status update (delivery receipt), not a message.

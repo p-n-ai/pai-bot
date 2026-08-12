@@ -85,8 +85,6 @@ type TopMuxOptions struct {
 	EmbedAuthenticator    EmbedPasswordAuthenticator
 	EmbedBaseURL          string
 	EmbedTokenTTL         time.Duration
-	WACloudChannel        *chat.WhatsAppChannel
-	InboundHandler        func(chat.InboundMessage)
 	AuthService           AuthService
 	JWTSecret             string
 	AccessTokenTTL        time.Duration
@@ -128,9 +126,6 @@ func NewTopMux(opts TopMuxOptions) http.Handler {
 			continue
 		}
 		topMux.Handle("/webhook/"+name, handler)
-	}
-	if opts.WACloudChannel != nil && opts.ChatWebhooks["whatsapp"] == nil {
-		topMux.Handle("/webhook/whatsapp", opts.WACloudChannel.WebhookHandler(opts.InboundHandler))
 	}
 	manager := auth.NewTokenManager(opts.JWTSecret, opts.AccessTokenTTL)
 	embedTokenTTL := opts.EmbedTokenTTL

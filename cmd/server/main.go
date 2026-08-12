@@ -528,8 +528,11 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 					slog.Warn("failed to accept inbound chat message", "channel", msg.Channel, "error", err)
 				}
 			}
+			acceptWebhook := func(requestCtx context.Context, msg chat.InboundMessage) error {
+				return chatIngress.Accept(requestCtx, msg)
+			}
 
-			chatWebhooks := gw.Webhooks(acceptInbound)
+			chatWebhooks := gw.Webhooks(acceptWebhook)
 
 			authService := auth.NewPostgresService(
 				db.Pool,
@@ -606,9 +609,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				EmbedAuthenticator:    authService,
 				EmbedBaseURL:          cfg.Embed.BaseURL,
 				EmbedTokenTTL:         defaultEmbedTokenTTL,
-				WACloudChannel:        waCloudChannel,
 				ChatWebhooks:          chatWebhooks,
-				InboundHandler:        acceptInbound,
 				AuthService:           authService,
 				JWTSecret:             cfg.Auth.JWTSecret,
 				AccessTokenTTL:        defaultAccessTokenTTL,

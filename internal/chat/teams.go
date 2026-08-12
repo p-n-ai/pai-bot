@@ -233,7 +233,7 @@ func newTeamsHTTPClient() *http.Client {
 }
 
 // WebhookHandler authenticates and normalizes Bot Framework message activities.
-func (t *TeamsChannel) WebhookHandler(handler func(InboundMessage)) http.Handler {
+func (t *TeamsChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
@@ -278,7 +278,10 @@ func (t *TeamsChannel) WebhookHandler(handler func(InboundMessage)) http.Handler
 			return
 		}
 		if handler != nil {
-			handler(message)
+			if err := handler(request.Context(), message); err != nil {
+				http.Error(response, "temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
 		}
 		response.WriteHeader(http.StatusOK)
 	})

@@ -43,12 +43,13 @@ func FuzzSlackWebhook(f *testing.F) {
 		request := httptest.NewRequest(http.MethodPost, "/webhook/slack", bytes.NewReader(body))
 		signSlackTestRequest(request, body, "fuzz-signing-secret", now)
 		recorder := httptest.NewRecorder()
-		channel.WebhookHandler(func(message InboundMessage) {
+		channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
 			if message.Channel != "slack" ||
 				message.UserID == "" ||
 				!strings.HasPrefix(message.ThreadID, "slack:") {
 				t.Fatalf("invalid normalized Slack message: %#v", message)
 			}
+			return nil
 		}).ServeHTTP(recorder, request)
 
 		if recorder.Code != http.StatusOK && recorder.Code != http.StatusBadRequest {
@@ -95,8 +96,9 @@ func FuzzDiscordInteractionWebhook(f *testing.F) {
 		request.Header.Set("X-Signature-Timestamp", timestamp)
 		request.Header.Set("X-Signature-Ed25519", hex.EncodeToString(ed25519.Sign(privateKey, signed)))
 		recorder := httptest.NewRecorder()
-		channel.WebhookHandler(func(message InboundMessage) {
+		channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
 			t.Fatalf("interaction webhook dispatched an inbound message: %#v", message)
+			return nil
 		}).ServeHTTP(recorder, request)
 
 		if recorder.Code != http.StatusOK && recorder.Code != http.StatusBadRequest {
@@ -134,12 +136,13 @@ func FuzzTeamsWebhook(f *testing.F) {
 		request := httptest.NewRequest(http.MethodPost, "/webhook/teams", bytes.NewReader(body))
 		request.Header.Set("Authorization", "Bearer fuzz-token")
 		recorder := httptest.NewRecorder()
-		channel.WebhookHandler(func(message InboundMessage) {
+		channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
 			if message.Channel != "teams" ||
 				message.UserID == "" ||
 				!strings.HasPrefix(message.ThreadID, "teams:") {
 				t.Fatalf("invalid normalized Teams message: %#v", message)
 			}
+			return nil
 		}).ServeHTTP(recorder, request)
 
 		if recorder.Code != http.StatusOK && recorder.Code != http.StatusBadRequest {

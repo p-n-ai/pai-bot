@@ -95,7 +95,7 @@ func (w *WhatsAppChannel) Stop() error {
 
 // WebhookHandler returns an http.Handler for the WhatsApp webhook endpoint.
 // GET requests handle verification; POST requests handle inbound messages.
-func (w *WhatsAppChannel) WebhookHandler(handler func(InboundMessage)) http.Handler {
+func (w *WhatsAppChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -124,7 +124,7 @@ func (w *WhatsAppChannel) handleVerification(rw http.ResponseWriter, r *http.Req
 }
 
 // handleInbound parses an inbound WhatsApp webhook payload and dispatches messages.
-func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request, handler func(InboundMessage)) {
+func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request, handler InboundWebhookHandler) {
 	body, err := io.ReadAll(http.MaxBytesReader(rw, r.Body, maxWhatsAppWebhookBodyBytes))
 	if err != nil {
 		slog.Error("whatsapp webhook: read body failed", "error", err)
@@ -147,9 +147,6 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
-
-	// Always respond 200 to avoid retries.
-	rw.WriteHeader(http.StatusOK)
 
 	for _, entry := range payload.Entry {
 		for _, change := range entry.Changes {
@@ -181,11 +178,15 @@ func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request,
 					inbound.FirstName = contact.Profile.Name
 				}
 				if handler != nil {
-					handler(inbound)
+					if err := handler(r.Context(), inbound); err != nil {
+						http.Error(rw, "temporarily unavailable", http.StatusServiceUnavailable)
+						return
+					}
 				}
 			}
 		}
 	}
+	rw.WriteHeader(http.StatusOK)
 }
 
 func (w *WhatsAppChannel) validInboundSignature(header string, body []byte) bool {
