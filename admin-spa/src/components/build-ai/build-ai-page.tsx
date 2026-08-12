@@ -1429,16 +1429,13 @@ function Publish({
         immutable, and educator review cannot waive required safeguards.
       </PageHeader>
       {currentPublishedVersion ? (
-        <div
-          className='mb-7 rounded-xl border border-border bg-muted/40 p-4'
-          role='status'
-        >
+        <output className='mb-7 block rounded-xl border border-border bg-muted/40 p-4'>
           <Status tone='positive'>Published</Status>
           <p className='mt-2 font-medium'>
             Published version {currentPublishedVersion.id} is available. No
             classes changed.
           </p>
-        </div>
+        </output>
       ) : null}
       <section aria-labelledby='readiness-heading'>
         <h2 id='readiness-heading' className='text-lg font-semibold'>

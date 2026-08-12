@@ -1,4 +1,4 @@
-export type CharacterShape =
+export type CharacterSilhouette =
   | 'blob'
   | 'pebble'
   | 'bean'
@@ -20,7 +20,7 @@ export interface CharacterConfig {
   readonly eyeScale: number
   readonly gazeX: number
   readonly gazeY: number
-  readonly shape: CharacterShape
+  readonly silhouette: CharacterSilhouette
   readonly turn: number
 }
 
@@ -30,33 +30,33 @@ export const defaultCharacterConfig: CharacterConfig = {
   eyeScale: 1,
   gazeX: 0,
   gazeY: 0,
-  shape: 'blob',
+  silhouette: 'blob',
   turn: 0,
 }
 
-const colorLabels: Record<CharacterColor, string> = {
+const colorLabels = {
   forest: 'Pandai deep green',
   leaf: 'Pandai leaf',
   mint: 'Pandai mint',
   pandai: 'Pandai green',
-}
+} satisfies Record<CharacterColor, string>
 
-const expressionLabels: Record<CharacterExpression, string> = {
+const expressionLabels = {
   attentive: 'Attentive',
   joyful: 'Joyful',
   neutral: 'Neutral',
   thoughtful: 'Thoughtful',
-}
+} satisfies Record<CharacterExpression, string>
 
-const shapeLabels: Record<CharacterShape, string> = {
+const silhouetteLabels = {
   bean: 'Bean',
   blob: 'Blob',
   capsule: 'Capsule',
   cloud: 'Cloud',
   egg: 'Egg',
   pebble: 'Pebble',
-}
+} satisfies Record<CharacterSilhouette, string>
 
 export function characterSummary(config: CharacterConfig) {
-  return `${shapeLabels[config.shape]} · ${colorLabels[config.color]} · ${expressionLabels[config.expression]}`
+  return `${silhouetteLabels[config.silhouette]} · ${colorLabels[config.color]} · ${expressionLabels[config.expression]}`
 }

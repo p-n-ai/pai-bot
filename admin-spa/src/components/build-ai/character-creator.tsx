@@ -1,10 +1,10 @@
-/* oxlint-disable react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- This bounded local editor keeps each visible control transition beside its state update; extracted children are not memoized. */
+/* oxlint-disable jsx-a11y/prefer-tag-over-role, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- The preview is a generated inline SVG; this bounded local editor keeps visible transitions beside their state updates. */
 import { useEffect, useId, useRef, useState } from 'react'
 import type {
   CharacterColor,
   CharacterConfig,
   CharacterExpression,
-  CharacterShape,
+  CharacterSilhouette,
 } from '@/components/build-ai/character-config'
 
 import { AdminSurface } from '@/components/shared/admin-surface'
@@ -16,8 +16,8 @@ import { cn } from '@/lib/utils'
 const bodyPath =
   'M228.541 114.228C228.541 130.133 225.184 145.994 218.738 160.534C212.674 174.217 203.904 186.669 193.065 196.988C155.933 232.34 99.497 238.596 55.5255 212.24C45.097 205.99 35.6851 198.072 27.7451 188.866C19.1926 178.953 12.3686 167.569 7.65781 155.351C2.60712 142.264 0 128.257 0 114.228C0 98.3219 3.35751 82.4611 9.80315 67.9215C15.8672 54.2382 24.6377 41.7862 35.4767 31.4668C72.6081 -3.88483 129.044 -10.1413 173.016 16.2153C183.444 22.4653 192.856 30.3829 200.796 39.5896C209.349 49.5018 216.173 60.8859 220.883 73.1037C225.934 86.1906 228.541 100.198 228.541 114.228Z'
 
-const shapes: ReadonlyArray<{
-  id: CharacterShape
+const silhouettes: ReadonlyArray<{
+  id: CharacterSilhouette
   label: string
   offsetX: number
   offsetY: number
@@ -192,7 +192,7 @@ export function CharacterCreator({
               <div className='min-w-0'>
                 <p className='font-semibold'>P-Bot character preview</p>
                 <p className='mt-1 truncate text-xs text-muted-foreground'>
-                  {shapeLabel(config.shape)} ·{' '}
+                  {silhouetteLabel(config.silhouette)} ·{' '}
                   {expressionLabel(config.expression)}
                 </p>
               </div>
@@ -212,10 +212,9 @@ export function CharacterCreator({
             <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
               Preview states
             </p>
-            <div
-              className='mt-3 flex flex-wrap gap-2'
-              role='group'
+            <fieldset
               aria-label='Character preview state'
+              className='mt-3 flex flex-wrap gap-2 border-0 p-0'
             >
               {previewStates.map((state) => (
                 <Button
@@ -232,7 +231,7 @@ export function CharacterCreator({
                 <PandaiIcon aria-hidden='true' name='activity' />
                 Blink
               </Button>
-            </div>
+            </fieldset>
           </div>
         </AdminSurface>
       </div>
@@ -244,23 +243,29 @@ export function CharacterCreator({
             Shape one P-Bot family character for every learner-facing chat.
           </p>
           <div className='mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3'>
-            {shapes.map((shape) => (
+            {silhouettes.map((silhouette) => (
               <button
-                aria-pressed={config.shape === shape.id}
+                aria-pressed={config.silhouette === silhouette.id}
                 className={cn(
                   'min-h-28 rounded-xl border border-border p-3 text-left outline-offset-2 transition-[border-color,background-color,box-shadow] hover:border-foreground/40 hover:bg-muted/50 focus-visible:outline-2 motion-reduce:transition-none',
-                  config.shape === shape.id &&
+                  config.silhouette === silhouette.id &&
                     'border-foreground bg-muted ring-1 ring-foreground/15',
                 )}
-                key={shape.id}
+                key={silhouette.id}
                 onClick={() =>
-                  update({ shape: shape.id }, 'Character silhouette changed.')
+                  update(
+                    { silhouette: silhouette.id },
+                    'Character silhouette changed.',
+                  )
                 }
                 type='button'
               >
-                <MiniShape color={colorValue(config.color)} shape={shape} />
+                <MiniSilhouette
+                  color={colorValue(config.color)}
+                  silhouette={silhouette}
+                />
                 <span className='mt-2 block text-sm font-medium'>
-                  {shape.label}
+                  {silhouette.label}
                 </span>
               </button>
             ))}
@@ -431,15 +436,16 @@ function CharacterPreview({
   previewState: string
 }) {
   const clipID = `character-head-${useId().replaceAll(':', '')}`
-  const shape =
-    shapes.find((candidate) => candidate.id === config.shape) ?? shapes[0]
+  const silhouette =
+    silhouettes.find((candidate) => candidate.id === config.silhouette) ??
+    silhouettes[0]
   const state = previewStates.find((candidate) => candidate.id === previewState)
   const expressionID =
     state?.expression === 'resting' ? config.expression : state?.expression
   const expression =
     expressions.find((candidate) => candidate.id === expressionID) ??
     expressions[0]
-  const shapeTransform = `translate(${shape.offsetX} ${shape.offsetY}) translate(114.27 114.27) scale(${shape.scaleX} ${shape.scaleY}) translate(-114.27 -114.27)`
+  const silhouetteTransform = `translate(${silhouette.offsetX} ${silhouette.offsetY}) translate(114.27 114.27) scale(${silhouette.scaleX} ${silhouette.scaleY}) translate(-114.27 -114.27)`
   const eyeTransform = `translate(${(config.gazeX * 13.2).toFixed(2)} ${(config.gazeY * 8.4).toFixed(2)}) translate(114.27 114.27) scale(${config.eyeScale} ${blinking ? 0.04 : config.eyeScale}) translate(-114.27 -114.27)`
 
   return (
@@ -448,7 +454,7 @@ function CharacterPreview({
       className='size-full max-h-[24rem] max-w-[24rem] overflow-visible'
       data-color={config.color}
       data-expression={expression.id}
-      data-shape={config.shape}
+      data-silhouette={config.silhouette}
       role='img'
       viewBox='-22 -22 273 273'
     >
@@ -456,8 +462,8 @@ function CharacterPreview({
         P&amp;AI Tutor character preview · P-Bot
       </title>
       <desc id={`${clipID}-description`}>
-        {shape.label} P-Bot character with the {expression.label.toLowerCase()}{' '}
-        expression.
+        {silhouette.label} P-Bot character with the{' '}
+        {expression.label.toLowerCase()} expression.
       </desc>
       <defs>
         <clipPath id={clipID}>
@@ -470,7 +476,7 @@ function CharacterPreview({
       <g
         className='transition-transform duration-300 ease-out motion-reduce:transition-none'
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-        transform={`rotate(${config.turn} 114.27 114.27) ${shapeTransform}`}
+        transform={`rotate(${config.turn} 114.27 114.27) ${silhouetteTransform}`}
       >
         <circle
           cx='13'
@@ -525,15 +531,15 @@ function CharacterPreview({
   )
 }
 
-function MiniShape({
+function MiniSilhouette({
   color,
-  shape,
+  silhouette,
 }: {
   color: string
-  shape: (typeof shapes)[number]
+  silhouette: (typeof silhouettes)[number]
 }) {
   const clipID = `mini-pbot-${useId().replaceAll(':', '')}`
-  const transform = `translate(${shape.offsetX} ${shape.offsetY}) translate(114.27 114.27) scale(${shape.scaleX} ${shape.scaleY}) translate(-114.27 -114.27)`
+  const transform = `translate(${silhouette.offsetX} ${silhouette.offsetY}) translate(114.27 114.27) scale(${silhouette.scaleX} ${silhouette.scaleY}) translate(-114.27 -114.27)`
   return (
     <svg aria-hidden='true' className='h-14 w-full' viewBox='-15 -15 259 259'>
       <defs>
@@ -639,6 +645,9 @@ function expressionLabel(expression: CharacterExpression) {
   )
 }
 
-function shapeLabel(shape: CharacterShape) {
-  return shapes.find((candidate) => candidate.id === shape)?.label ?? 'Blob'
+function silhouetteLabel(silhouette: CharacterSilhouette) {
+  return (
+    silhouettes.find((candidate) => candidate.id === silhouette)?.label ??
+    'Blob'
+  )
 }

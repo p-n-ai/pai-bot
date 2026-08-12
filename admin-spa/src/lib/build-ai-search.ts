@@ -1,3 +1,5 @@
+import { Option, Schema, flow } from 'effect'
+
 const buildAIPages = [
   'overview',
   'character',
@@ -14,10 +16,19 @@ export interface BuildAISearch {
   readonly page: BuildAIPageKey
 }
 
-/** Parses Build AI query state with Overview as the safe destination. */
-export function parseBuildAISearch(
-  search: Record<string, unknown>,
+const BuildAISearchSchema = Schema.Struct({
+  page: Schema.optionalKey(Schema.Literals(buildAIPages)),
+})
+
+function normalizeBuildAISearch(
+  search: typeof BuildAISearchSchema.Type,
 ): BuildAISearch {
-  const page = buildAIPages.find((candidate) => candidate === search.page)
-  return { page: page ?? 'overview' }
+  return { page: search.page ?? 'overview' }
 }
+
+/** Parses Build AI query state with Overview as the safe destination. */
+export const parseBuildAISearch = flow(
+  Schema.decodeUnknownOption(BuildAISearchSchema),
+  Option.map(normalizeBuildAISearch),
+  Option.getOrElse((): BuildAISearch => ({ page: 'overview' })),
+)
