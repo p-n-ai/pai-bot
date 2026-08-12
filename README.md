@@ -12,7 +12,7 @@ A [Pandai](https://pandai.org) initiative
 
 Open source · self-hostable · cloud or local AI · built for schools
 
-[How P&AI works](#how-pai-works) · [Explore the features](#what-pai-includes) · [About Pandai](#about-pandai) · [Run P&AI locally](#run-pai-locally) · [Develop P&AI](#develop-pai) · [Deploy P&AI](#deploy-pai)
+[Documentation](https://p-n-ai.github.io/pai-bot/getting-started/introduction/) · [How P&AI works](#how-pai-works) · [Explore the features](#what-pai-includes) · [About Pandai](#about-pandai) · [Run P&AI locally](#run-pai-locally) · [Develop P&AI](#develop-pai) · [Deploy P&AI](#deploy-pai)
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/p-n-ai/pai-bot)](https://goreportcard.com/report/github.com/p-n-ai/pai-bot)

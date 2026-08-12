@@ -9,24 +9,24 @@ P&AI Bot is an open-source, self-hostable AI learning agent that teaches student
 
 Unlike generic AI chatbots, P&AI Bot doesn't wait for students to ask questions — it **initiates study sessions**, tracks mastery with spaced repetition, and keeps students motivated through battles, streaks, leaderboards, and goals.
 
-## Core Philosophy
+## Core philosophy
 
 **Content is commodity. Motivation is the moat.**
 
 Every AI can explain quadratic equations. P&AI Bot is the one that texts you at 3pm to review them, celebrates your 7-day streak, and lets you battle your classmate on the same questions.
 
-## Who Is It For?
+## Who is it for?
 
 - **Students** — Get a patient, always-available tutor on the messaging app you already use
 - **Teachers** — See which students struggle, nudge them, and track class progress from a dashboard
 - **Schools** — Self-host on your own servers with full data ownership. No student data leaves your network
 - **Developers** — Extend with new curricula, AI providers, or chat channels. Apache 2.0 licensed
 
-## Current Curriculum
+## Current curriculum
 
 The first curriculum target is **KSSM Matematik** (Malaysian national syllabus) covering Form 1, Form 2, and Form 3, with Algebra topics as the primary validation target. The curriculum system is designed to support any structured syllabus — community contributions welcome.
 
-## Key Capabilities
+## Key capabilities
 
 | Feature | Description |
 |---------|-------------|
@@ -45,6 +45,6 @@ The first curriculum target is **KSSM Matematik** (Malaysian national syllabus) 
 
 P&AI Bot is a **modular monolith** — a single Go binary with clean domain boundaries. See the [Architecture guide](/guides/architecture) for details.
 
-## Getting Started
+## Getting started
 
 Ready to try it? Head to the [Setup guide](/getting-started/setup) to get running in under 10 minutes.

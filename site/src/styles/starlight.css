@@ -1,171 +1,214 @@
-/* ── P&AI Bot — Starlight Theme ──
-   Uses the exact OKLCH values from the admin SPA and landing design system.
-*/
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
 
-/* ── Dark mode (Starlight default) ── */
-:root {
-  /* Accent: landing page primary, hue shifted redder for lighter variants */
-  --sl-color-accent-low: oklch(0.25 0.1 30);
-  --sl-color-accent: oklch(0.553 0.195 38.402);
-  --sl-color-accent-high: oklch(0.78 0.14 30);
-
-  /* Grays: warm-neutral to match landing */
-  --sl-color-white: oklch(0.985 0 0);
-  --sl-color-gray-1: oklch(0.82 0 0);
-  --sl-color-gray-2: oklch(0.708 0 0);
-  --sl-color-gray-3: oklch(0.556 0 0);
-  --sl-color-gray-4: oklch(0.4 0 0);
-  --sl-color-gray-5: oklch(0.269 0 0);
-  --sl-color-gray-6: oklch(0.205 0 0);
-  --sl-color-black: oklch(0.145 0 0);
-
-  /* Backgrounds: exact landing values */
-  --sl-color-bg: oklch(0.145 0 0);
-  --sl-color-bg-nav: oklch(0.18 0 0);
-  --sl-color-bg-sidebar: oklch(0.18 0 0);
-
-  /* Semantic overrides */
-  --sl-color-text-accent: oklch(0.78 0.14 30);
-  --sl-color-bg-accent: oklch(0.553 0.195 38.402);
-
-  /* Fonts */
-  --sl-font: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
-  --sl-font-system-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --sl-line-height-headings: 1.15;
-}
-
-/* ── Light mode ── */
+:root,
+:root[data-theme="dark"],
+[data-theme="dark"] ::backdrop,
 :root[data-theme="light"],
 [data-theme="light"] ::backdrop {
-  --sl-color-accent-low: oklch(0.93 0.06 30);
-  --sl-color-accent: oklch(0.553 0.195 38.402);
-  --sl-color-accent-high: oklch(0.35 0.14 30);
-  --sl-color-text-accent: oklch(0.35 0.14 30);
-  --sl-color-bg-accent: oklch(0.553 0.195 38.402);
-
-  --sl-color-white: oklch(0.145 0 0);
-  --sl-color-gray-1: oklch(0.205 0 0);
-  --sl-color-gray-2: oklch(0.35 0 0);
-  --sl-color-gray-3: oklch(0.45 0 0);
-  --sl-color-gray-4: oklch(0.556 0 0);
-  --sl-color-gray-5: oklch(0.82 0 0);
-  --sl-color-gray-6: oklch(0.94 0 0);
-  --sl-color-gray-7: oklch(0.97 0 0);
-  --sl-color-black: oklch(1 0 0);
-
-  --sl-color-bg: oklch(1 0 0);
-  --sl-color-bg-nav: oklch(0.985 0 0);
-  --sl-color-bg-sidebar: oklch(0.985 0 0);
+  --pandai-canvas: oklch(0.989 0.013 145.472);
+  --pandai-surface: oklch(1 0 0);
+  --pandai-surface-muted: oklch(0.952 0.034 173.507);
+  --pandai-primary: oklch(0.745 0.17 159.438);
+  --pandai-primary-focus: oklch(0.631 0.143 159.699);
+  --pandai-navigation: oklch(0.406 0.073 181.541);
+  --pandai-ink: oklch(0.371 0 0);
+  --pandai-body: oklch(0.51 0 0);
+  --pandai-muted: oklch(0.551 0.023 264.365);
+  --pandai-line: oklch(0.745 0.17 159.438);
+  --sl-color-accent-low: var(--pandai-surface-muted);
+  --sl-color-accent: var(--pandai-navigation);
+  --sl-color-accent-high: var(--pandai-navigation);
+  --sl-color-white: var(--pandai-ink);
+  --sl-color-gray-1: var(--pandai-ink);
+  --sl-color-gray-2: oklch(0.45 0 0);
+  --sl-color-gray-3: var(--pandai-body);
+  --sl-color-gray-4: var(--pandai-muted);
+  --sl-color-gray-5: oklch(0.885 0 0);
+  --sl-color-gray-6: var(--pandai-surface-muted);
+  --sl-color-gray-7: var(--pandai-canvas);
+  --sl-color-black: var(--pandai-surface);
+  --sl-color-bg: var(--pandai-canvas);
+  --sl-color-bg-nav: color-mix(in oklch, var(--pandai-surface) 96%, transparent);
+  --sl-color-bg-sidebar: var(--pandai-surface);
+  --sl-color-text: var(--pandai-body);
+  --sl-color-text-accent: var(--pandai-navigation);
+  --sl-color-bg-accent: var(--pandai-primary);
+  --sl-color-hairline-light: color-mix(in oklch, var(--pandai-line) 55%, transparent);
+  --sl-color-hairline: color-mix(in oklch, var(--pandai-line) 72%, transparent);
+  --sl-color-hairline-shade: var(--pandai-line);
+  --sl-font: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font-system-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --sl-line-height-headings: 1.15;
+  color-scheme: light;
 }
 
-/* ── Header ── */
+html {
+  background: var(--pandai-canvas);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  color: var(--pandai-ink);
+  background: var(--pandai-primary);
+}
+
 header.header {
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid oklch(0.5 0 0 / 10%);
+  border-bottom: 1px solid var(--pandai-line);
+  background: color-mix(in oklch, var(--pandai-surface) 94%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(16px);
 }
 
-/* ── Sidebar ── */
-nav.sidebar-content a[aria-current="page"] {
+.site-title {
+  color: var(--pandai-ink);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.site-title::before {
+  display: inline-grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-inline-end: 0.65rem;
+  place-items: center;
+  border-radius: 10px;
+  color: white;
+  background: var(--pandai-navigation);
+  content: "P";
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
-.sidebar-content ul ul {
-  border-inline-start-color: oklch(0.553 0.195 38.402 / 25%);
+.sidebar-pane {
+  border-inline-end-color: var(--pandai-line);
+  background: var(--pandai-surface);
 }
 
-/* ── Content headings ── */
+.sidebar-content a {
+  border-radius: 10px;
+  color: var(--pandai-body);
+  font-size: 0.875rem;
+  transition: background-color 150ms cubic-bezier(0.23, 1, 0.32, 1), color 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.sidebar-content a:hover {
+  color: var(--pandai-navigation);
+  background: var(--pandai-surface-muted);
+}
+
+.sidebar-content a[aria-current="page"] {
+  color: var(--pandai-ink);
+  background: var(--pandai-primary);
+  font-weight: 600;
+}
+
+.sidebar-content .top-level > li > details > summary,
+.sidebar-content .top-level > li > a {
+  color: var(--pandai-navigation);
+  font-weight: 600;
+}
+
+.main-pane {
+  background: var(--pandai-canvas);
+}
+
+.content-panel + .content-panel {
+  border-top-color: color-mix(in oklch, var(--pandai-line) 55%, transparent);
+}
+
 .sl-markdown-content :is(h1, h2, h3, h4) {
+  color: var(--pandai-ink);
+  font-weight: 600;
   letter-spacing: -0.03em;
-  font-weight: 650;
 }
 
 .sl-markdown-content h1 {
-  font-size: var(--sl-text-4xl);
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
   letter-spacing: -0.04em;
 }
 
-/* Links */
+.sl-markdown-content p,
+.sl-markdown-content li {
+  color: var(--pandai-body);
+  line-height: 1.75;
+}
+
 .sl-markdown-content a:not([class]) {
-  text-decoration-color: oklch(0.553 0.195 38.402 / 40%);
+  color: var(--pandai-navigation);
+  text-decoration-color: color-mix(in oklch, var(--pandai-primary) 70%, transparent);
   text-underline-offset: 3px;
-  transition: text-decoration-color 200ms ease;
 }
 
 .sl-markdown-content a:not([class]):hover {
-  text-decoration-color: oklch(0.553 0.195 38.402);
+  text-decoration-color: var(--pandai-navigation);
 }
 
-/* Inline code */
 .sl-markdown-content :not(pre) > code {
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 0.15em 0.4em;
+  color: var(--pandai-navigation);
+  background: var(--pandai-surface-muted);
   font-size: 0.875em;
 }
 
-/* Code blocks */
-.expressive-code {
-  border-radius: 12px !important;
-  overflow: hidden;
-}
-
 .expressive-code .frame {
-  border-radius: 12px !important;
+  overflow: hidden;
+  border: 1px solid var(--pandai-line) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
 }
 
-/* Tables */
-.sl-markdown-content .table-container,
-.sl-markdown-content table:not([class]) {
-  display: block;
+.sl-markdown-content .table-container {
   overflow-x: auto;
+  border: 1px solid var(--pandai-line);
+  border-radius: 16px;
+  background: var(--pandai-surface);
   -webkit-overflow-scrolling: touch;
 }
 
-.sl-markdown-content table {
-  border-radius: 8px;
+.sl-markdown-content table:not([class]) {
+  display: table;
+  width: 100%;
+  margin: 0;
 }
 
 .sl-markdown-content th {
+  color: var(--pandai-ink);
+  background: var(--pandai-surface-muted);
   font-weight: 600;
 }
 
-/* Cards */
-.card {
-  border-radius: 16px;
-  transition: box-shadow 200ms ease, border-color 200ms ease;
-}
-
-.card:hover {
-  border-color: oklch(0.553 0.195 38.402 / 40%);
-  box-shadow: 0 8px 24px oklch(0.553 0.195 38.402 / 8%);
-}
-
-.card .card-title {
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-/* Asides */
-.starlight-aside {
-  border-radius: 12px;
-  border-left-width: 3px;
-}
-
-/* Pagination */
+.card,
+.starlight-aside,
 .pagination-links a {
-  border-radius: 12px;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
+  border-color: var(--pandai-line);
+  border-radius: 16px;
+  background: var(--pandai-surface);
+  box-shadow: none;
 }
 
+.card:hover,
 .pagination-links a:hover {
-  border-color: oklch(0.553 0.195 38.402 / 40%);
-  box-shadow: 0 4px 16px oklch(0.553 0.195 38.402 / 6%);
+  border-color: var(--pandai-primary-focus);
+  background: var(--pandai-surface-muted);
 }
 
-/* Color scheme */
-:root {
-  color-scheme: dark;
+.card .card-title,
+.pagination-links a {
+  color: var(--pandai-ink);
+  font-weight: 600;
 }
 
-:root[data-theme="light"] {
-  color-scheme: light;
+starlight-theme-select {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-content a {
+    transition: none;
+  }
 }
