@@ -218,6 +218,9 @@ func TestAdminAISettingsGetReturnsClosedRedactedProviderProjections(t *testing.T
 		},
 		Ollama: config.OllamaConfig{URL: "http://127.0.0.1:11434"},
 		Codex:  config.CodexConfig{Enabled: true, Model: "codex-env"},
+		CatalogProviders: map[string]config.CatalogProviderConfig{
+			"cerebras": {APIKey: "cerebras-env-key"},
+		},
 	}
 	store := &memorySettingsStore{envAI: env}
 	handler := newAISettingsHandler(store, nil)
@@ -243,6 +246,12 @@ func TestAdminAISettingsGetReturnsClosedRedactedProviderProjections(t *testing.T
 	effective := credential["effective"].(map[string]any)
 	if effective["set"] != true || effective["last4"] != "9876" || credential["source"] != settings.SourceEnv {
 		t.Fatalf("credential projection = %#v, want redacted env key", credential)
+	}
+	cerebras := decodeProviderProjection(t, payload, settings.ProviderKindAPIKey, "cerebras")
+	model := cerebras["model"].(map[string]any)
+	if cerebras["displayName"] != "Cerebras" || model["baseline"] != "gpt-oss-120b" ||
+		model["effective"] != "gpt-oss-120b" || model["source"] != settings.SourceDefault {
+		t.Fatalf("Cerebras projection = %#v, want catalog default metadata", cerebras)
 	}
 	decodeProviderProjection(t, payload, settings.ProviderKindOllama, "")
 	decodeProviderProjection(t, payload, settings.ProviderKindManagedCodex, "")

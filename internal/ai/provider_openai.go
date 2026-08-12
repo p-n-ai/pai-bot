@@ -104,6 +104,7 @@ func NewDeepSeekProvider(apiKey string, opts ...OpenAIOption) *OpenAIProvider {
 	opts = append([]OpenAIOption{
 		WithBaseURL(defaultDeepSeekBaseURL),
 		WithProviderName("deepseek"),
+		WithDefaultModel("deepseek-chat"),
 	}, opts...)
 	return newOpenAIProvider(apiKey, opts...)
 }
@@ -216,7 +217,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 	if req.MaxTokens > 0 {
 		// Newer OpenAI models (o1+, gpt-5+) reject max_tokens and require
 		// max_completion_tokens instead.
-		if needsMaxCompletionTokens(model) {
+		if usesMaxCompletionTokens(p.name, model) {
 			oaiReq.MaxCompletionTokens = req.MaxTokens
 		} else {
 			oaiReq.MaxTokens = req.MaxTokens
@@ -226,7 +227,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req CompletionRequest) (C
 		temp := req.Temperature
 		oaiReq.Temperature = &temp
 	}
-	if err := applyOpenAIStructuredOutput(p.name, &oaiReq, req.StructuredOutput); err != nil {
+	if err := applyOpenAIStructuredOutput(p.name, model, &oaiReq, req.StructuredOutput); err != nil {
 		return CompletionResponse{}, err
 	}
 
@@ -293,7 +294,7 @@ func (p *directOpenAIProvider) CompleteNative(ctx context.Context, model string,
 	}
 	if opts != nil {
 		if opts.MaxTokens > 0 {
-			if needsMaxCompletionTokens(model) {
+			if usesMaxCompletionTokens(p.name, model) {
 				request.MaxCompletionTokens = opts.MaxTokens
 			} else {
 				request.MaxTokens = opts.MaxTokens
@@ -306,7 +307,7 @@ func (p *directOpenAIProvider) CompleteNative(ctx context.Context, model string,
 				JSONSchema: append(json.RawMessage(nil), opts.StructuredOutput.JSONSchema...),
 				Strict:     opts.StructuredOutput.Strict,
 			}
-			if err := applyOpenAIStructuredOutput(p.name, &request, spec); err != nil {
+			if err := applyOpenAIStructuredOutput(p.name, model, &request, spec); err != nil {
 				return llm.AssistantMessage{}, err
 			}
 		}
@@ -532,7 +533,7 @@ func nativeOpenAIStopReason(reason string) (llm.StopReason, error) {
 	}
 }
 
-func applyOpenAIStructuredOutput(providerName string, oaiReq *openaiRequest, spec *StructuredOutputSpec) error {
+func applyOpenAIStructuredOutput(providerName, model string, oaiReq *openaiRequest, spec *StructuredOutputSpec) error {
 	if spec == nil {
 		return nil
 	}
@@ -543,24 +544,45 @@ func applyOpenAIStructuredOutput(providerName string, oaiReq *openaiRequest, spe
 		return fmt.Errorf("structured output JSON schema is required")
 	}
 
-	if providerName == "deepseek" {
+	switch structuredOutputMode(providerName, model) {
+	case StructuredOutputJSONObject:
 		oaiReq.ResponseFormat = &openaiResponseFormat{Type: "json_object"}
 		oaiReq.Messages = append([]openaiMessage{{
 			Role:    "system",
 			Content: fmt.Sprintf("Return a JSON object only that matches this schema: %s", string(spec.JSONSchema)),
 		}}, oaiReq.Messages...)
 		return nil
+	case StructuredOutputJSONSchema:
+		oaiReq.ResponseFormat = &openaiResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &openaiResponseFormatSchema{
+				Name:   spec.Name,
+				Schema: spec.JSONSchema,
+				Strict: spec.Strict,
+			},
+		}
+		return nil
+	default:
+		return fmt.Errorf("provider %q model %q does not support structured output", providerName, model)
 	}
+}
 
-	oaiReq.ResponseFormat = &openaiResponseFormat{
-		Type: "json_schema",
-		JSONSchema: &openaiResponseFormatSchema{
-			Name:   spec.Name,
-			Schema: spec.JSONSchema,
-			Strict: spec.Strict,
-		},
+func structuredOutputMode(providerName, model string) StructuredOutputMode {
+	if providerName == "deepseek" {
+		return StructuredOutputJSONObject
 	}
-	return nil
+	if definition, ok := LookupProviderDefinition(providerName); ok {
+		capabilities, found := definition.CapabilitiesForModel(model)
+		if !found {
+			return StructuredOutputNone
+		}
+		return capabilities.StructuredOutput
+	}
+	return StructuredOutputJSONSchema
+}
+
+func usesMaxCompletionTokens(providerName, model string) bool {
+	return providerName == "cerebras" || needsMaxCompletionTokens(model)
 }
 
 // needsMaxCompletionTokens returns true for model families that reject the

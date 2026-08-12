@@ -518,7 +518,11 @@ func validateCompleteJSONRequest(req CompletionRequest, out any) error {
 }
 
 func (r *Router) structuredProviderRequest(providerName string, req CompletionRequest) (CompletionRequest, bool) {
-	capabilities, ok := structuredProviderCapabilities(providerName)
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = r.structuredDefaultModelForProvider(providerName)
+	}
+	capabilities, ok := structuredProviderCapabilities(providerName, model)
 	if !ok || !capabilities.StructuredOutput {
 		return CompletionRequest{}, false
 	}
@@ -528,11 +532,7 @@ func (r *Router) structuredProviderRequest(providerName string, req CompletionRe
 	if requestNeedsImageInputs(req) && !capabilities.ImageInputs {
 		return CompletionRequest{}, false
 	}
-	if req.Model != "" {
-		return req, true
-	}
-
-	req.Model = r.structuredDefaultModelForProvider(providerName)
+	req.Model = model
 	return req, true
 }
 
@@ -542,12 +542,16 @@ type providerStructuredCapabilities struct {
 	ImageInputs      bool
 }
 
-func structuredProviderCapabilities(providerName string) (providerStructuredCapabilities, bool) {
+func structuredProviderCapabilities(providerName, model string) (providerStructuredCapabilities, bool) {
 	if definition, ok := LookupProviderDefinition(providerName); ok {
+		capabilities, found := definition.CapabilitiesForModel(model)
+		if !found {
+			return providerStructuredCapabilities{}, false
+		}
 		return providerStructuredCapabilities{
-			StructuredOutput: definition.Capabilities.StructuredOutput,
+			StructuredOutput: capabilities.SupportsStructuredOutput(),
 			SystemMessages:   true,
-			ImageInputs:      definition.Capabilities.Vision,
+			ImageInputs:      capabilities.Vision,
 		}, true
 	}
 	switch providerName {

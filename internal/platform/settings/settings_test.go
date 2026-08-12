@@ -75,13 +75,13 @@ func TestReconcileAICatalogProviderOverrides(t *testing.T) {
 	}
 	st := AISettings{
 		Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
-			APIKeyProviderDeepSeek: {Model: stringPointer("db-deepseek-model")},
-			APIKeyProviderGroq:     {Model: stringPointer("db-groq-model")},
+			APIKeyProvider("deepseek"): {Model: stringPointer("db-deepseek-model")},
+			APIKeyProvider("groq"):     {Model: stringPointer("db-groq-model")},
 		}},
 		Credentials: map[APIKeyProvider]CredentialOverride{
-			APIKeyProviderDeepSeek: {Value: "db-deepseek-secret-9012"},
-			APIKeyProviderGroq:     {Value: "db-groq-secret-1234"},
-			APIKeyProviderMistral:  {Value: "db-mistral-secret-5678"},
+			APIKeyProvider("deepseek"): {Value: "db-deepseek-secret-9012"},
+			APIKeyProvider("groq"):     {Value: "db-groq-secret-1234"},
+			APIKeyProvider("mistral"):  {Value: "db-mistral-secret-5678"},
 		},
 	}
 
@@ -108,16 +108,36 @@ func TestReconcileAICatalogProviderOverrides(t *testing.T) {
 	}
 }
 
+func TestReconcileAICatalogDefaultIsEffectiveSettingsState(t *testing.T) {
+	env := config.AIConfig{CatalogProviders: map[string]config.CatalogProviderConfig{
+		"cerebras": {APIKey: "env-cerebras-key"},
+	}}
+
+	got := ReconcileAI(env, AISettings{})
+	if model := got.Config.CatalogProviders["cerebras"].Model; model != "gpt-oss-120b" {
+		t.Fatalf("runtime Cerebras model = %q, want catalog default", model)
+	}
+	if model := got.Baseline.Providers["cerebras"].Model; model != "gpt-oss-120b" {
+		t.Fatalf("baseline Cerebras model = %q, want catalog default", model)
+	}
+	if model := got.Effective.Providers["cerebras"].Model; model != "gpt-oss-120b" {
+		t.Fatalf("effective Cerebras model = %q, want catalog default", model)
+	}
+	if source := got.ProviderSources["cerebras"].Model; source != SourceDefault {
+		t.Fatalf("Cerebras model source = %q, want default ownership", source)
+	}
+}
+
 func TestReconcileAIDoesNotMutateCatalogEnvironmentBaseline(t *testing.T) {
 	env := config.AIConfig{CatalogProviders: map[string]config.CatalogProviderConfig{
 		"groq": {APIKey: "env-groq-key", Model: "env-groq-model"},
 	}}
 	override := AISettings{
 		Providers: ProviderOverrides{APIKey: map[APIKeyProvider]APIKeyProviderOverride{
-			APIKeyProviderGroq: {Model: stringPointer("db-groq-model")},
+			APIKeyProvider("groq"): {Model: stringPointer("db-groq-model")},
 		}},
 		Credentials: map[APIKeyProvider]CredentialOverride{
-			APIKeyProviderGroq: {Value: "db-groq-secret-1234"},
+			APIKeyProvider("groq"): {Value: "db-groq-secret-1234"},
 		},
 	}
 

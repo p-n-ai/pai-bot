@@ -1,23 +1,13 @@
 import { Option, Schema } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
-export const APIKeyProviderNameSchema = Schema.Literals([
-  'openai',
-  'anthropic',
-  'deepseek',
-  'groq',
-  'xai',
-  'mistral',
-  'cerebras',
-  'google',
-  'openrouter',
-])
+export const APIKeyProviderNameSchema = Schema.String
 
 export type APIKeyProviderName = EffectSchema.Type<
   typeof APIKeyProviderNameSchema
 >
 
-const SettingsSourceSchema = Schema.Literals(['db', 'env', 'none'])
+const SettingsSourceSchema = Schema.Literals(['db', 'env', 'default', 'none'])
 
 export const APIKeyProviderSelectorSchema = Schema.Struct({
   type: Schema.Literal('api_key'),
@@ -91,6 +81,7 @@ const CredentialProjectionSchema = Schema.Struct({
 export const APIKeyProviderProjectionSchema = Schema.Struct({
   type: Schema.Literal('api_key'),
   name: APIKeyProviderNameSchema,
+  displayName: Schema.String,
   model: StringProjectionSchema,
   credential: CredentialProjectionSchema,
   readiness: ProviderReadinessSchema,
@@ -182,5 +173,29 @@ const decodeAISettings = Schema.decodeUnknownOption(AISettingsSchema, {
 
 /** Decodes an unknown response into the exact redacted AI settings contract. */
 export function readAISettings(value: unknown): AISettings | null {
-  return Option.getOrNull(decodeAISettings(value))
+  const settings = Option.getOrNull(decodeAISettings(value))
+  if (!settings) return null
+  const apiKeyNames = new Set<string>()
+  for (const provider of settings.providers) {
+    if (provider.type === 'api_key') {
+      if (
+        !provider.name.trim() ||
+        !provider.displayName.trim() ||
+        apiKeyNames.has(provider.name)
+      ) {
+        return null
+      }
+      apiKeyNames.add(provider.name)
+    }
+  }
+  for (const selector of [
+    settings.defaultProvider.baseline,
+    settings.defaultProvider.override,
+    settings.defaultProvider.effective,
+  ]) {
+    if (selector?.type === 'api_key' && !apiKeyNames.has(selector.name)) {
+      return null
+    }
+  }
+  return settings
 }

@@ -43,6 +43,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'openai',
+      displayName: 'OpenAI',
       model,
       credential,
       readiness,
@@ -50,6 +51,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'anthropic',
+      displayName: 'Anthropic',
       model,
       credential,
       readiness,
@@ -57,6 +59,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'deepseek',
+      displayName: 'DeepSeek',
       model,
       credential,
       readiness,
@@ -64,6 +67,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'groq',
+      displayName: 'Groq',
       model,
       credential,
       readiness,
@@ -71,6 +75,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'xai',
+      displayName: 'xAI',
       model,
       credential,
       readiness,
@@ -78,6 +83,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'mistral',
+      displayName: 'Mistral',
       model,
       credential,
       readiness,
@@ -85,13 +91,20 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'cerebras',
-      model,
+      displayName: 'Cerebras',
+      model: {
+        ...model,
+        baseline: 'gpt-oss-120b',
+        effective: 'gpt-oss-120b',
+        source: 'default',
+      },
       credential,
       readiness,
     },
     {
       type: 'api_key',
       name: 'google',
+      displayName: 'Google',
       model,
       credential,
       readiness,
@@ -99,6 +112,7 @@ export const aiSettingsFixture = {
     {
       type: 'api_key',
       name: 'openrouter',
+      displayName: 'OpenRouter',
       model: { ...model, override: 'runtime-model', source: 'db' },
       credential,
       readiness: { ...readiness, effective: true },
@@ -169,7 +183,7 @@ describe('AI settings response guard', () => {
     ).not.toBeNull()
   })
 
-  it('rejects unknown, partial, and cross-provider variants', () => {
+  it('accepts server-declared API providers and rejects invalid variants', () => {
     const replaceProvider = (provider: unknown) => ({
       ...aiSettingsFixture,
       providers: [provider, ...aiSettingsFixture.providers.slice(1)],
@@ -182,7 +196,7 @@ describe('AI settings response guard', () => {
       readAISettings(
         replaceProvider({
           ...aiSettingsFixture.providers[0],
-          type: 'bedrock',
+          displayName: '',
         }),
       ),
     ).toBeNull()
@@ -190,9 +204,40 @@ describe('AI settings response guard', () => {
       readAISettings(
         replaceProvider({
           ...aiSettingsFixture.providers[0],
-          name: 'azure',
+          type: 'bedrock',
         }),
       ),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        providers: [
+          ...aiSettingsFixture.providers,
+          {
+            ...aiSettingsFixture.providers[0],
+            name: 'azure',
+            displayName: 'Azure AI',
+          },
+        ],
+      }),
+    ).not.toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        defaultProvider: {
+          ...aiSettingsFixture.defaultProvider,
+          effective: { type: 'api_key', name: 'undeclared' },
+        },
+      }),
+    ).toBeNull()
+    expect(
+      readAISettings({
+        ...aiSettingsFixture,
+        providers: [
+          ...aiSettingsFixture.providers,
+          aiSettingsFixture.providers[0],
+        ],
+      }),
     ).toBeNull()
     expect(
       readAISettings(

@@ -70,6 +70,48 @@ func TestRouter_CompleteJSON_UsesCatalogProviderCapabilitiesAndDefaultModel(t *t
 	}
 }
 
+func TestRouter_CompleteJSON_UsesCatalogCapabilitiesForSelectedModel(t *testing.T) {
+	router := newTestRouter()
+	cerebras := ai.NewMockProvider(`{"final_answer":"cerebras"}`)
+	fallback := ai.NewMockProvider(`{"final_answer":"fallback"}`)
+	router.ReplaceProviders([]ai.ProviderRegistration{
+		{Name: "cerebras", Provider: cerebras, DefaultModel: "gpt-oss-120b"},
+		{Name: "openai", Provider: fallback, DefaultModel: "gpt-5.4-mini"},
+	})
+
+	request := ai.CompletionRequest{
+		Messages: []ai.Message{{
+			Role:      "user",
+			Content:   "grade this image",
+			ImageURLs: []string{"data:image/png;base64,AAEC"},
+		}},
+		StructuredOutput: &ai.StructuredOutputSpec{
+			Name:       "grading_result",
+			JSONSchema: json.RawMessage(`{"type":"object","properties":{"final_answer":{"type":"string"}},"required":["final_answer"]}`),
+		},
+	}
+	var out structuredReply
+	_, err := router.CompleteJSON(context.Background(), request, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cerebras.LastRequest != nil || fallback.LastRequest == nil || out.FinalAnswer != "fallback" {
+		t.Fatalf("default Cerebras routing: cerebras=%#v fallback=%#v out=%#v", cerebras.LastRequest, fallback.LastRequest, out)
+	}
+
+	cerebras.LastRequest = nil
+	fallback.LastRequest = nil
+	request.Model = "gemma-4-31b"
+	out = structuredReply{}
+	_, err = router.CompleteJSON(context.Background(), request, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cerebras.LastRequest == nil || fallback.LastRequest != nil || out.FinalAnswer != "cerebras" {
+		t.Fatalf("Gemma routing: cerebras=%#v fallback=%#v out=%#v", cerebras.LastRequest, fallback.LastRequest, out)
+	}
+}
+
 func TestRouter_CompleteJSON_RequiresStructuredOutputSpec(t *testing.T) {
 	router := newTestRouter()
 	router.Register("openai", ai.NewMockProvider(`{"final_answer":"12"}`))

@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/p-n-ai/pai-bot/internal/llm"
 )
 
 func TestProviderCatalogDefinitions(t *testing.T) {
@@ -29,9 +27,42 @@ func TestProviderCatalogDefinitions(t *testing.T) {
 		if len(definition.Models) == 0 {
 			t.Errorf("%s has no models", definition.ID)
 		}
-		if !definition.Capabilities.Chat || !definition.Capabilities.Streaming {
-			t.Errorf("%s lacks base capabilities", definition.ID)
+		for _, model := range definition.Models {
+			if !model.Capabilities.Chat {
+				t.Errorf("%s/%s lacks chat support", definition.ID, model.ID)
+			}
+			if model.Capabilities.Streaming {
+				t.Errorf("%s/%s advertises incremental streaming through the buffered adapter", definition.ID, model.ID)
+			}
+			if model.Capabilities.Tools {
+				t.Errorf("%s/%s advertises tools without a native continuation adapter", definition.ID, model.ID)
+			}
 		}
+	}
+}
+
+func TestProviderCatalogCapabilitiesAreModelScoped(t *testing.T) {
+	groq, _ := LookupProviderDefinition("groq")
+	llama, ok := groq.CapabilitiesForModel("llama-3.3-70b-versatile")
+	if !ok || llama.StructuredOutput != StructuredOutputJSONObject || llama.Vision {
+		t.Fatalf("Groq Llama capabilities = %#v, want text-only JSON object mode", llama)
+	}
+	gptOSS, ok := groq.CapabilitiesForModel("openai/gpt-oss-120b")
+	if !ok || gptOSS.StructuredOutput != StructuredOutputJSONSchema || gptOSS.Vision {
+		t.Fatalf("Groq GPT-OSS capabilities = %#v, want text-only JSON schema mode", gptOSS)
+	}
+
+	cerebras, _ := LookupProviderDefinition("cerebras")
+	defaultModel, ok := cerebras.CapabilitiesForModel(cerebras.DefaultModel)
+	if !ok || defaultModel.Vision {
+		t.Fatalf("Cerebras default capabilities = %#v, want no vision", defaultModel)
+	}
+	gemma, ok := cerebras.CapabilitiesForModel("gemma-4-31b")
+	if !ok || !gemma.Vision {
+		t.Fatalf("Cerebras Gemma capabilities = %#v, want vision", gemma)
+	}
+	if _, ok := cerebras.CapabilitiesForModel("unknown-model"); ok {
+		t.Fatal("unknown catalog model unexpectedly has capabilities")
 	}
 }
 
@@ -75,8 +106,8 @@ func TestNewCatalogProviderRoutesThroughDefinitionEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := provider.(NativeProvider); !ok {
-		t.Fatal("catalog tool-capable provider does not implement NativeProvider")
+	if _, ok := provider.(NativeProvider); ok {
+		t.Fatal("catalog provider must stay outside the native continuation contract")
 	}
 	response, err := provider.Complete(context.Background(), CompletionRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
 	if err != nil {
@@ -84,21 +115,5 @@ func TestNewCatalogProviderRoutesThroughDefinitionEndpoint(t *testing.T) {
 	}
 	if path != "/chat/completions" || request.Model != "deepseek-v4-flash" || response.Content != "ok" {
 		t.Fatalf("path=%q request=%+v response=%+v", path, request, response)
-	}
-	native, ok := provider.(NativeProvider)
-	if !ok {
-		t.Fatal("catalog tool-capable provider does not implement NativeProvider")
-	}
-	message, err := native.CompleteNative(
-		context.Background(),
-		"deepseek-v4-flash",
-		llm.Context{Messages: []llm.Message{llm.UserText("hi")}},
-		nil,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if message.Provider != "deepseek" {
-		t.Fatalf("native provider = %q, want deepseek", message.Provider)
 	}
 }
