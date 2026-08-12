@@ -96,7 +96,7 @@ export function AISettingsPanel() {
           message:
             caught instanceof Error
               ? caught.message
-              : 'AI settings could not be loaded.',
+              : 'Unable to load AI settings. Check your connection and try again.',
         })
       })
   }, [acceptSettings])
@@ -114,7 +114,7 @@ export function AISettingsPanel() {
           message:
             caught instanceof Error
               ? caught.message
-              : 'Codex login status could not be loaded.',
+              : 'Unable to check the Codex connection. Try again.',
         })
       })
   }, [])
@@ -145,7 +145,7 @@ export function AISettingsPanel() {
           message:
             caught instanceof Error
               ? caught.message
-              : 'Codex device login could not be started.',
+              : 'Unable to start Codex verification. Try again.',
         })
       })
       .finally(() => setIsStartingCodex(false))
@@ -166,7 +166,7 @@ export function AISettingsPanel() {
         try {
           const current = settingsRef.current
           if (!current) {
-            throw new Error('AI settings are not loaded.')
+            throw new Error('Reload AI settings before making changes.')
           }
           const next = await updateAISettings({
             ...input,
@@ -202,7 +202,7 @@ export function AISettingsPanel() {
         'provider',
         { defaultProvider: decodeSelectorValue(value) },
         providerSubmit,
-        'Default provider could not be changed.',
+        'Unable to change the default provider. Try again.',
       )
     },
     [providerSubmit, submitSettings],
@@ -212,7 +212,7 @@ export function AISettingsPanel() {
       'provider',
       { defaultProvider: null },
       providerSubmit,
-      'Default provider could not be reset.',
+      'Unable to use the environment default. Try again.',
     )
   }, [providerSubmit, submitSettings])
   const saveModel = useCallback(
@@ -227,7 +227,7 @@ export function AISettingsPanel() {
         'model',
         { provider: modelPatch(provider, model) },
         modelSubmit,
-        'Provider model could not be saved.',
+        'Unable to save the model. Check the model name and try again.',
       )
     },
     [modelInputs, modelSubmit, submitSettings],
@@ -238,7 +238,7 @@ export function AISettingsPanel() {
         'model',
         { provider: modelPatch(provider, null) },
         modelSubmit,
-        'Provider model could not be reset.',
+        'Unable to use the environment model. Try again.',
       )
     },
     [modelSubmit, submitSettings],
@@ -260,7 +260,7 @@ export function AISettingsPanel() {
           },
         },
         keySubmit,
-        `${providerLabels[provider.name]} API key could not be saved.`,
+        `Unable to save the ${providerLabels[provider.name]} API key. Check the key and try again.`,
         () => {
           setKeyInputs((current) => ({ ...current, [provider.name]: '' }))
           setReplacingKeys((current) => ({
@@ -284,7 +284,7 @@ export function AISettingsPanel() {
           },
         },
         keySubmit,
-        `${providerLabels[provider.name]} API key could not be reset.`,
+        `Unable to reset the ${providerLabels[provider.name]} API key. Try again.`,
       )
     },
     [keySubmit, submitSettings],
@@ -298,7 +298,7 @@ export function AISettingsPanel() {
         'enabled',
         { provider: { type: 'ollama', enabled } },
         enabledSubmit,
-        'Ollama availability could not be changed.',
+        'Unable to change Ollama availability. Try again.',
       )
     },
     [enabledSubmit, submitSettings],
@@ -309,7 +309,7 @@ export function AISettingsPanel() {
         'flags',
         { flags: { [name]: !enabled } },
         flagsSubmit,
-        'Feature flag could not be changed.',
+        'Unable to change this AI control. Try again.',
       )
     },
     [flagsSubmit, submitSettings],
@@ -320,7 +320,7 @@ export function AISettingsPanel() {
         'flags',
         { flags: { [name]: null } },
         flagsSubmit,
-        'Feature flag could not be reset.',
+        'Unable to use the default for this AI control. Try again.',
       )
     },
     [flagsSubmit, submitSettings],
@@ -330,7 +330,7 @@ export function AISettingsPanel() {
     return (
       <LoadState
         error={state.status === 'error' ? state.message : null}
-        errorTitle='Could not load AI settings'
+        errorTitle='Unable to load AI settings'
         loadingTitle='Loading AI settings'
         loadingVariant='settings'
         status={state.status}
@@ -344,10 +344,10 @@ export function AISettingsPanel() {
     <div className='mt-8 grid gap-6'>
       <div className='flex flex-wrap items-center gap-2 text-sm text-muted-foreground'>
         <Badge variant={settings.drift ? 'destructive' : 'secondary'}>
-          {settings.drift ? 'Runtime drift' : 'Runtime synchronized'}
+          {settings.drift ? 'Changes pending' : 'Settings in sync'}
         </Badge>
         <span>
-          Desired revision {settings.revision}, applied revision{' '}
+          Requested version {settings.revision}; active version{' '}
           {settings.appliedRevision}
         </span>
       </div>
@@ -411,7 +411,7 @@ function DefaultProviderSection({
 }) {
   return (
     <SettingsSection
-      description='Route tutor turns through this provider unless a task overrides it.'
+      description='Use this provider for tutor conversations unless a specific task selects another.'
       label='Default AI provider'
       title='Default provider'
     >
@@ -447,11 +447,11 @@ function DefaultProviderSection({
             type='button'
             variant='outline'
           >
-            Reset to environment
+            Use environment default
           </Button>
         ) : null}
       </div>
-      <AuthErrorAlert message={error} title='Provider update failed.' />
+      <AuthErrorAlert message={error} title='Unable to update provider' />
     </SettingsSection>
   )
 }
@@ -614,7 +614,7 @@ function APIKeyProviderEditor({
   const showMasked = provider.credential.effective.set && !keyReplacing
   return (
     <SettingsSection
-      description='Runtime model and write-only API credential.'
+      description='Choose the model and save a new API key.'
       label={`${providerLabels[provider.name]} provider`}
       title={providerLabels[provider.name]}
     >
@@ -626,10 +626,10 @@ function APIKeyProviderEditor({
         onSave={onSaveModel}
         provider={provider}
       />
-      <AuthErrorAlert message={modelError} title='Model update failed.' />
+      <AuthErrorAlert message={modelError} title='Unable to update model' />
       <FieldHeading source={provider.credential.source} text='API key' />
       <p className='m-0 text-sm text-muted-foreground'>
-        The key is write-only: it is stored encrypted and never shown again.
+        The key is encrypted after saving and cannot be viewed again.
       </p>
       {showMasked ? (
         <ConfiguredKeyState
@@ -650,7 +650,7 @@ function APIKeyProviderEditor({
           value={keyInput}
         />
       )}
-      <AuthErrorAlert message={keyError} title='API key update failed.' />
+      <AuthErrorAlert message={keyError} title='Unable to update API key' />
     </SettingsSection>
   )
 }
@@ -677,7 +677,7 @@ function OllamaProviderEditor({
   }, [onSetOllamaEnabled])
   return (
     <SettingsSection
-      description='Local Ollama provider. Its endpoint remains deployment-managed.'
+      description='Use the Ollama endpoint configured for this deployment.'
       label='Ollama provider'
       title='Ollama'
     >
@@ -697,11 +697,11 @@ function OllamaProviderEditor({
             type='button'
             variant='outline'
           >
-            Reset Ollama to environment
+            Use environment setting
           </Button>
         ) : null}
       </div>
-      <AuthErrorAlert message={enabledError} title='Ollama update failed.' />
+      <AuthErrorAlert message={enabledError} title='Unable to update Ollama' />
       <ModelEditor
         isPending={isModelPending}
         model={model}
@@ -710,7 +710,7 @@ function OllamaProviderEditor({
         onSave={onSaveModel}
         provider={provider}
       />
-      <AuthErrorAlert message={modelError} title='Model update failed.' />
+      <AuthErrorAlert message={modelError} title='Unable to update model' />
     </SettingsSection>
   )
 }
@@ -731,7 +731,7 @@ function ManagedCodexProviderEditor({
 }) {
   return (
     <SettingsSection
-      description='Server-managed Codex session and runtime model.'
+      description='Connect the managed Codex account and choose its model.'
       label='Managed Codex provider'
       title='Managed Codex'
     >
@@ -748,7 +748,7 @@ function ManagedCodexProviderEditor({
         onSave={onSaveModel}
         provider={provider}
       />
-      <AuthErrorAlert message={modelError} title='Model update failed.' />
+      <AuthErrorAlert message={modelError} title='Unable to update model' />
     </SettingsSection>
   )
 }
@@ -800,7 +800,7 @@ function ModelEditor({
             type='button'
             variant='outline'
           >
-            Reset model to environment
+            Use environment model
           </Button>
         ) : null}
       </form>
@@ -852,7 +852,7 @@ function CodexAuthControls({
             rel='noreferrer'
             target='_blank'
           >
-            Open Codex verification
+            Open Codex verification page
           </a>
         </div>
       ) : null}
@@ -864,7 +864,7 @@ function CodexAuthControls({
               ? auth.message
               : ''
         }
-        title='Codex login failed.'
+        title='Unable to connect Codex'
       />
     </div>
   )
@@ -885,8 +885,8 @@ function ConfiguredKeyState({
 }) {
   return (
     <div className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
-      <span className='font-mono text-foreground'>
-        configured &middot;&middot;&middot;&middot; {last4}
+      <span className='text-foreground'>
+        Saved key &middot;&middot;&middot;&middot; {last4}
         {fromEnv ? (
           <span className='ml-2 font-sans text-muted-foreground'>
             from environment
@@ -909,7 +909,7 @@ function ConfiguredKeyState({
             type='button'
             variant='outline'
           >
-            Reset key to environment
+            Use environment key
           </Button>
         ) : null}
       </div>
@@ -996,13 +996,13 @@ function FeatureFlagsSection({
   ).toSorted()
   return (
     <SettingsSection
-      description='Turn platform-wide AI behaviors on or off for every tenant.'
-      label='AI feature flags'
+      description='Control AI features for every school.'
+      label='AI feature controls'
       title='Feature flags'
     >
       {names.length === 0 ? (
-        <StatePanel title='No feature flags'>
-          The backend did not report any platform AI feature flags.
+        <StatePanel title='No AI feature controls available'>
+          This deployment does not provide any AI feature controls.
         </StatePanel>
       ) : (
         <ul className='m-0 grid list-none gap-2 p-0'>
@@ -1019,7 +1019,7 @@ function FeatureFlagsSection({
           ))}
         </ul>
       )}
-      <AuthErrorAlert message={error} title='Flag update failed.' />
+      <AuthErrorAlert message={error} title='Unable to update AI feature' />
     </SettingsSection>
   )
 }
@@ -1048,7 +1048,7 @@ function FeatureFlagRow({
   return (
     <li className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3 text-sm'>
       <span className='flex flex-wrap items-center gap-2'>
-        <span className='font-mono text-[13px]'>{name}</span>
+        <span className='text-[13px]'>{name}</span>
         <SourceBadge source={source} />
       </span>
       <div className='flex gap-2'>
@@ -1060,7 +1060,7 @@ function FeatureFlagRow({
             type='button'
             variant='outline'
           >
-            Reset
+            Use default
           </Button>
         ) : null}
         <Button
@@ -1090,7 +1090,7 @@ function SettingsSection({
   return (
     <section
       aria-label={label}
-      className='grid gap-5 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 shadow-[0_18px_50px_-42px_rgba(24,48,38,0.55)] sm:p-7'
+      className='grid gap-5 rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] p-5 sm:p-7'
     >
       <header>
         <h2 className='m-0 text-lg leading-tight font-semibold tracking-[-0.02em] text-foreground'>

@@ -55,9 +55,9 @@ describe('ClassResourcesPanel', () => {
 
     expect(await screen.findByText('Algebra revision')).toBeInTheDocument()
     expect(screen.getByText('algebra.pdf')).toBeInTheDocument()
-    expect(screen.getByText('12 page/slide chunks')).toBeInTheDocument()
+    expect(screen.getByText('12 searchable sections')).toBeInTheDocument()
     expect(screen.getByText('Ms Lim')).toBeInTheDocument()
-    expect(screen.getByText('Extraction: Indexed')).toBeInTheDocument()
+    expect(screen.getByText('Ready for tutor search')).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('Form 2 Algebra B'))
     fireEvent.change(screen.getByLabelText('Resource file'), {
@@ -79,7 +79,7 @@ describe('ClassResourcesPanel', () => {
       ),
     )
     expect(
-      await screen.findByText('Resource extracted and indexed.'),
+      await screen.findByText('Resource is ready for tutor search.'),
     ).toBeInTheDocument()
   })
 
@@ -111,7 +111,7 @@ describe('ClassResourcesPanel', () => {
 
     expect(
       await screen.findByText(
-        'Extraction/indexing failed: image-only teacher resource file',
+        'Unable to prepare this file: image-only teacher resource file',
       ),
     ).toBeInTheDocument()
   })
@@ -140,7 +140,7 @@ describe('ClassResourcesPanel', () => {
     renderPanel()
     await screen.findByText('Algebra revision')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide from tutor' }))
     await waitFor(() =>
       expect(apiMocks.setTeacherResourceActive).toHaveBeenCalledWith(
         'resource-1',
@@ -149,10 +149,10 @@ describe('ClassResourcesPanel', () => {
       ),
     )
     expect(
-      await screen.findByRole('button', { name: 'Reactivate' }),
+      await screen.findByRole('button', { name: 'Show to tutor' }),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete resource' }))
     expect(
       await screen.findByText('Delete Algebra revision?'),
     ).toBeInTheDocument()
@@ -184,18 +184,22 @@ describe('ClassResourcesPanel', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Upload resource' }))
     expect(
-      await screen.findByText('Resource extracted and indexed.'),
+      await screen.findByText('Resource is ready for tutor search.'),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Deactivate' })[0])
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Hide from tutor' })[0],
+    )
     expect(
       await screen.findByText('Could not deactivate resource'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText('Resource extracted and indexed.'),
+      screen.queryByText('Resource is ready for tutor search.'),
     ).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Delete resource' })[0],
+    )
     fireEvent.click(
       await screen.findByRole('button', { name: 'Delete resource' }),
     )
@@ -203,7 +207,7 @@ describe('ClassResourcesPanel', () => {
       await screen.findByText('Could not delete resource'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText('Resource extracted and indexed.'),
+      screen.queryByText('Resource is ready for tutor search.'),
     ).not.toBeInTheDocument()
   })
 })

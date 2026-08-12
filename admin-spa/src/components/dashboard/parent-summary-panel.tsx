@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
+
+import type { ParentSummary } from '@/lib/parent-summary-types'
 import {
   BoltIcon,
   HeartHandshakeIcon,
   MessageCircleIcon,
   TrophyIcon,
-} from 'lucide-react'
-import type { CSSProperties } from 'react'
-
-import type { ParentSummary } from '@/lib/parent-summary-types'
+} from '@/components/ui/pandai-icons'
 import { AdminHighlightPanel } from '@/components/shared/admin-highlight-panel'
 import { AdminInsetPanel } from '@/components/shared/admin-inset-panel'
 import {
@@ -56,7 +56,7 @@ export function ParentSummaryPanel({ parentID }: { parentID: string }) {
   if (loadState !== 'ready') {
     return (
       <LoadState
-        error='Try again later.'
+        error='Check your connection and try again.'
         errorTitle='Parent summary unavailable'
         loadingTitle='Loading parent summary'
         status={loadState}
@@ -98,11 +98,11 @@ function ParentSummaryReady({ summary }: { summary: ParentSummary }) {
   return (
     <div className='space-y-6'>
       <PageHero
-        eyebrow='Parent support summary'
+        eyebrow='Weekly overview'
         title={`${summary.child.name} this week`}
         description={view.contextLine}
         aside={heroAside}
-        className='bg-white/85 dark:bg-slate-950/60'
+        className='bg-[var(--admin-surface)]'
       />
 
       <section
@@ -119,7 +119,7 @@ function ParentSummaryReady({ summary }: { summary: ParentSummary }) {
           icon={MessageCircleIcon}
           title='Messages'
           value={String(summary.weekly_stats.messages_exchanged)}
-          note='Student and AI exchanges this week'
+          note='Messages between the student and tutor this week'
         />
         <StatCard
           icon={TrophyIcon}
@@ -188,22 +188,22 @@ function ParentMasteryRow({
   return (
     <div className='space-y-2'>
       <div className='flex items-center justify-between gap-3'>
-        <p className='text-sm font-medium text-slate-900 dark:text-slate-100'>
+        <p className='text-sm font-medium text-[var(--admin-ink)]'>
           {formatParentTopicLabel(item.topic_id)}
         </p>
-        <span className='text-xs tracking-[0.18em] text-slate-500 uppercase dark:text-slate-400'>
+        <span className='text-xs tracking-[0.18em] text-[var(--admin-muted)] uppercase'>
           {score}%
         </span>
       </div>
-      <div className='h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800'>
+      <div className='h-3 overflow-hidden rounded-full bg-[var(--border-general-default)]'>
         <div
           className={`h-full rounded-full ${getParentMasteryTone(item.mastery_score)}`}
           style={progressStyle}
         />
       </div>
-      <p className='text-xs text-slate-500 dark:text-slate-400'>
+      <p className='text-xs text-[var(--admin-muted)]'>
         {item.next_review_at
-          ? `Next review ${formatAdminDateTime(item.next_review_at)}`
+          ? `Next review: ${formatAdminDateTime(item.next_review_at)}`
           : 'No review scheduled yet'}
       </p>
     </div>
@@ -218,22 +218,22 @@ function ParentEncouragementPanel({ summary }: { summary: ParentSummary }) {
       <AdminSurfaceHeader title='Encouragement suggestion' />
       <div className='mt-6 space-y-4'>
         <AdminHighlightPanel className='p-5'>
-          <p className='text-xs font-semibold tracking-[0.22em] text-sky-300 uppercase'>
+          <p className='text-xs font-semibold tracking-[0.22em] text-[var(--admin-nav-muted)] uppercase'>
             Suggested message
           </p>
           <p className='mt-3 text-2xl font-semibold tracking-tight'>
             {view.encouragementHeadline}
           </p>
-          <p className='mt-3 text-sm leading-7 text-slate-200'>
+          <p className='mt-3 text-sm leading-7 text-[var(--admin-nav-muted)]'>
             {view.encouragementText}
           </p>
         </AdminHighlightPanel>
 
         <AdminInsetPanel>
-          <p className='text-sm font-medium text-slate-900 dark:text-slate-100'>
+          <p className='text-sm font-medium text-[var(--admin-ink)]'>
             What this means for home support
           </p>
-          <p className='mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300'>
+          <p className='mt-2 text-sm leading-6 text-[var(--admin-ink-soft)]'>
             Praise one clear win. Ask for one short practice round.
           </p>
         </AdminInsetPanel>

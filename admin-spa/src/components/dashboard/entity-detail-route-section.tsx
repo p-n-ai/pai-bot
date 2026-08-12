@@ -6,18 +6,16 @@ import { AdminPageSection } from '@/components/shared/admin-page-section'
 interface EntityDetailRouteSectionProps {
   children: ReactNode
   description: string
-  eyebrow: string
   title: string
 }
 
 function EntityDetailRouteSection({
   children,
   description,
-  eyebrow,
   title,
 }: EntityDetailRouteSectionProps) {
   return (
-    <AdminPageSection description={description} eyebrow={eyebrow} title={title}>
+    <AdminPageSection description={description} title={title}>
       {children}
     </AdminPageSection>
   )
@@ -27,7 +25,6 @@ export function ParentSummaryRouteSection({ parentID }: { parentID: string }) {
   return (
     <EntityDetailRouteSection
       description='Weekly learner activity, mastery, and suggested encouragement for home support.'
-      eyebrow='Parent support summary'
       title='Child summary'
     >
       <ParentSummaryPanel parentID={parentID} />
@@ -43,7 +40,6 @@ export function StudentDetailRouteSection({
   return (
     <EntityDetailRouteSection
       description='Learner profile, topic progress, streaks, and recent tutoring messages.'
-      eyebrow='Student detail'
       title='Student summary'
     >
       <StudentDetailPanel studentID={studentID} />

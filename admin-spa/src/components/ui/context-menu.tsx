@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
 
-import { CheckIcon, ChevronRightIcon } from 'lucide-react'
+import { CheckIcon, ChevronRightIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 
 function ContextMenu({

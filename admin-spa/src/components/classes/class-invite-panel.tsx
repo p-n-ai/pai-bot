@@ -1,5 +1,5 @@
-import { CopyIcon, MailPlusIcon } from 'lucide-react'
 import { useCallback } from 'react'
+import { CopyIcon, MailPlusIcon } from '@/components/ui/pandai-icons'
 
 import { resolveInviteLink } from '@/components/users/user-management-invite-form'
 import { Button } from '@/components/ui/button'
@@ -60,7 +60,7 @@ export function ClassInvitePanel() {
       </div>
       {invite.error ? (
         <p className='text-sm text-destructive' role='alert'>
-          {invite.error} Try again.
+          {invite.error}
         </p>
       ) : null}
       {invite.latestInvite ? (
@@ -78,7 +78,7 @@ export function ClassInvitePanel() {
           </div>
           <Label htmlFor='class-invite-link'>Activation link</Label>
           <Input
-            className='min-h-11 font-mono text-xs'
+            className='min-h-11 text-xs'
             id='class-invite-link'
             readOnly
             value={resolveInviteLink(invite.latestInvite)}
@@ -91,7 +91,7 @@ export function ClassInvitePanel() {
               variant='outline'
             >
               <CopyIcon data-icon='inline-start' />
-              Copy link
+              Copy activation link
             </Button>
             {invite.copyFeedback ? (
               <span className='text-sm text-muted-foreground'>

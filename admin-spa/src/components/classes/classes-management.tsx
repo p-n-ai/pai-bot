@@ -1,13 +1,13 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import type { GroupDetail, GroupRecord } from '@/lib/group-types'
 import {
   CheckIcon,
   CopyIcon,
   MailPlusIcon,
   PlusIcon,
   UsersIcon,
-} from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-
-import type { GroupDetail, GroupRecord } from '@/lib/group-types'
+} from '@/components/ui/pandai-icons'
 import { AssignedTopicsPanel } from '@/components/classes/assigned-topics-panel'
 import { ClassCreateForm } from '@/components/classes/class-create-form'
 import { ClassInvitePanel } from '@/components/classes/class-invite-panel'
@@ -94,7 +94,7 @@ export function ClassesContent({
     return (
       <StatePanel role='alert' title='Classes unavailable'>
         <div className='grid gap-4'>
-          <p>{state.error} Check your connection and try again.</p>
+          <p>{state.error}</p>
           <Button className='min-h-11 w-fit' onClick={onRetry} type='button'>
             Try again
           </Button>
@@ -120,7 +120,7 @@ export function ClassesContent({
           role='alert'
         >
           <p className='text-sm'>
-            Could not refresh classes. Showing the last loaded list.
+            Unable to refresh classes. The last loaded list is still visible.
           </p>
           <Button
             className='min-h-11 w-full sm:w-auto'
@@ -214,7 +214,7 @@ function ClassActions({
             variant='outline'
           >
             <MailPlusIcon data-icon='inline-start' />
-            Invite an adult
+            Invite staff or parent
           </Button>
         ) : null}
       </div>
@@ -229,7 +229,9 @@ function ClassActions({
               className='text-xl leading-tight font-semibold text-balance'
               id='class-action-title'
             >
-              {openAction === 'create' ? 'Create a class' : 'Invite an adult'}
+              {openAction === 'create'
+                ? 'Create a class'
+                : 'Invite staff or parent'}
             </h2>
             <p className='mt-1 text-sm leading-6 text-muted-foreground'>
               {openAction === 'create'
@@ -413,8 +415,12 @@ function SelectedClassSummary({ group }: { group: GroupRecord }) {
   const copyJoinCode = useCallback(() => {
     setCopyStatus('')
     copyTextToClipboard(group.join_code)
-      .then(() => setCopyStatus('Join code copied'))
-      .catch(() => setCopyStatus('Could not copy the join code'))
+      .then(() => setCopyStatus('Join code copied.'))
+      .catch(() =>
+        setCopyStatus(
+          'Unable to copy the join code. Select and copy the code manually.',
+        ),
+      )
   }, [group.join_code])
 
   return (
@@ -444,17 +450,14 @@ function SelectedClassSummary({ group }: { group: GroupRecord }) {
             Student join code
           </p>
           <p
-            className='mt-1 font-mono text-2xl font-semibold tracking-wider tabular-nums'
+            className='mt-1 text-2xl font-semibold tracking-[0.08em] tabular-nums'
             translate='no'
           >
             {group.join_code}
           </p>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Students send{' '}
-            <span className='font-mono' translate='no'>
-              /join {group.join_code}
-            </span>{' '}
-            to the bot.
+            Students send <span translate='no'>/join {group.join_code}</span> to
+            P&amp;AI Bot.
           </p>
         </div>
         <div className='flex flex-col items-stretch gap-2 sm:items-end'>
@@ -470,7 +473,7 @@ function SelectedClassSummary({ group }: { group: GroupRecord }) {
           {copyStatus ? (
             <span
               className='text-sm text-muted-foreground'
-              role={copyStatus.startsWith('Could not') ? 'alert' : 'status'}
+              role={copyStatus.startsWith('Unable') ? 'alert' : 'status'}
             >
               {copyStatus}
             </span>
@@ -566,7 +569,9 @@ function useSelectedClassDetail(group: GroupRecord | null): {
 }
 
 function readClassDetailError(caught: unknown): string {
-  return caught instanceof Error ? caught.message : 'Class detail failed'
+  return caught instanceof Error
+    ? caught.message
+    : 'Unable to load this class roster.'
 }
 
 function RosterTable({
@@ -670,7 +675,7 @@ function RosterError({
 
 function EmptyRoster() {
   return (
-    <StatePanel title='No members yet'>
+    <StatePanel title='No students yet'>
       Share the join code above. Students will appear here after they join.
     </StatePanel>
   )

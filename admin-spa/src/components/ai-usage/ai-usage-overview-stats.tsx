@@ -12,7 +12,7 @@ export function AIUsageOverviewStats({ view }: { view: AIUsageView }) {
       />
       <StatItem
         label='Messages'
-        note='Current aggregate window'
+        note='Current reporting period'
         value={formatCompactNumber(view.totalMessages)}
       />
       <StatItem

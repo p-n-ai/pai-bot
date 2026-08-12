@@ -264,11 +264,11 @@ const activityDateFormatter = new Intl.DateTimeFormat('en-US', {
 })
 
 const activityTones = [
-  'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-100',
-  'bg-sky-200 text-sky-950 dark:bg-sky-700 dark:text-white',
-  'bg-sky-300 text-sky-950 dark:bg-sky-500 dark:text-slate-950',
-  'bg-sky-500 text-white dark:bg-sky-400 dark:text-slate-950',
-  'bg-sky-600 text-white dark:bg-sky-300 dark:text-slate-950',
+  'bg-[var(--status-neutral-surface)] text-[var(--status-neutral-text)]',
+  'bg-[var(--surface-secondary-default-subtle)] text-[var(--text-tertiary-default)]',
+  'bg-[var(--surface-primary-default-subtle-hover)] text-[var(--text-tertiary-default)]',
+  'bg-[var(--surface-primary-default)] text-[var(--text-default-heading)]',
+  'bg-[var(--surface-tertiary-default)] text-[var(--text-primary-on-color)]',
 ] as const
 
 const activityLevelThresholds = [

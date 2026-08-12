@@ -4,14 +4,14 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   MoreHorizontalIcon,
-} from 'lucide-react'
+} from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
   return (
     <nav
-      aria-label='pagination'
+      aria-label='Pagination'
       data-slot='pagination'
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}

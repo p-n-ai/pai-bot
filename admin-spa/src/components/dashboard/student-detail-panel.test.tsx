@@ -100,7 +100,7 @@ describe('StudentDetailPanel', () => {
     render(<StudentDetailPanel studentID='student_1' />)
 
     expect(
-      await screen.findByText('Student detail unavailable'),
+      await screen.findByText('Learner profile unavailable'),
     ).toBeInTheDocument()
     expect(screen.queryByText('No topic progress yet')).not.toBeInTheDocument()
   })

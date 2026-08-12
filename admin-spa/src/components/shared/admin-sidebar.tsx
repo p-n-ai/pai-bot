@@ -1,11 +1,11 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { LogOutIcon, SparklesIcon, XIcon } from 'lucide-react'
 import { useCallback } from 'react'
 
 import type { AuthUser } from '@/lib/auth-types'
 import type { NavigationItem } from '@/lib/admin-navigation'
 import { useAuth } from '@/auth-provider'
 import { Button } from '@/components/ui/button'
+import { PandaiIcon } from '@/components/ui/pandai-icon'
 import {
   Sidebar,
   SidebarContent,
@@ -53,7 +53,7 @@ export function AdminSidebar() {
   return (
     <Sidebar
       collapsible='offcanvas'
-      className='border-r-0 bg-[var(--admin-ink)] text-[var(--admin-nav-text)]'
+      className='border-r-0 bg-[var(--admin-navigation)] text-[var(--admin-nav-text)]'
     >
       <SidebarHeader className='px-4 pt-5 pb-4'>
         <div className='flex min-h-11 items-center gap-2'>
@@ -64,13 +64,13 @@ export function AdminSidebar() {
             search={dashboardSearch}
             to='/dashboard'
           >
-            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] shadow-[0_0_0_1px_oklch(0.925_0.175_115/0.2),0_8px_24px_oklch(0_0_0/0.18)]'>
-              <SparklesIcon aria-hidden='true' className='size-[18px]' />
+            <span className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--admin-accent)] text-[var(--admin-ink)] ring-1 ring-white/30'>
+              <PandaiIcon className='size-[18px]' name='star' />
               <span className='absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-[var(--admin-ink)] ring-2 ring-[var(--admin-accent)]' />
             </span>
             <span className='min-w-0 leading-tight'>
               <span className='block truncate'>P&AI Bot</span>
-              <span className='mt-0.5 block truncate text-[10px] font-medium tracking-[0.1em] text-[var(--admin-nav-muted)] uppercase'>
+              <span className='mt-0.5 block truncate text-xs font-medium tracking-[0.08em] text-[var(--admin-nav-muted)] uppercase'>
                 Learning OS
               </span>
             </span>
@@ -84,7 +84,7 @@ export function AdminSidebar() {
               type='button'
               variant='ghost'
             >
-              <XIcon aria-hidden='true' />
+              <PandaiIcon name='x' />
             </Button>
           )}
         </div>
@@ -94,7 +94,7 @@ export function AdminSidebar() {
         <nav aria-label='Admin navigation'>
           {visibleGroups.map((group) => (
             <SidebarGroup className='px-0 py-2' key={group.label}>
-              <SidebarGroupLabel className='h-7 px-3 text-[10px] font-semibold tracking-[0.14em] text-[var(--admin-nav-label)] uppercase'>
+              <SidebarGroupLabel className='h-7 px-3 text-xs font-semibold tracking-[0.1em] text-[var(--admin-nav-label)] uppercase'>
                 {group.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
@@ -135,7 +135,7 @@ export function AdminSidebar() {
             type='button'
             variant='ghost'
           >
-            <LogOutIcon aria-hidden='true' />
+            <PandaiIcon name='log-out' />
           </Button>
         </div>
       </SidebarFooter>
@@ -152,15 +152,14 @@ function AdminNavigationLink({
   onNavigate: () => void
   pathname: string
 }) {
-  const { Icon, href, label } = item
+  const { href, icon, label } = item
   const isActive = isNavigationItemActive(href, pathname)
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none data-active:bg-[var(--admin-accent)] data-active:font-semibold data-active:text-[var(--admin-ink)]'
-        isActive={isActive}
+        className='relative h-11 gap-3 rounded-xl px-3 text-[var(--admin-nav-muted)] transition-[background-color,color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white/7 hover:text-white focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none'
       >
         <Link
           aria-current={isActive ? 'page' : undefined}
@@ -169,15 +168,7 @@ function AdminNavigationLink({
           search={href === '/dashboard' ? dashboardSearch : undefined}
           to={href}
         >
-          <span
-            aria-hidden='true'
-            className='absolute left-0 h-5 w-0.5 rounded-full bg-transparent'
-          />
-          <Icon
-            aria-hidden='true'
-            className='text-[var(--admin-nav-label)] group-data-[active=true]/menu-button:text-[var(--admin-ink)]'
-            strokeWidth={1.5}
-          />
+          <PandaiIcon className='text-[var(--admin-nav-label)]' name={icon} />
           <span>{label}</span>
         </Link>
       </SidebarMenuButton>
@@ -186,5 +177,5 @@ function AdminNavigationLink({
 }
 
 function formatRole(role: AuthUser['role'] | undefined): string {
-  return role ? role.replaceAll('_', ' ') : 'Admin workspace'
+  return role ? role.replaceAll('_', ' ') : 'Administrator'
 }

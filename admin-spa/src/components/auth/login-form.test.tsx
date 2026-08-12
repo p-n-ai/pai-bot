@@ -80,7 +80,7 @@ describe('LoginForm', () => {
     render(<LoginForm authError='link_required' onAuthenticated={vi.fn()} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'We found no Google-linked admin account yet.',
+      'No admin account is linked to this Google email.',
     )
   })
 
@@ -130,7 +130,7 @@ describe('LoginForm', () => {
       '/api/auth/google/start?next=%2Fdashboard',
     )
     expect(
-      screen.getByRole('button', { name: 'Redirecting to Google...' }),
+      screen.getByRole('button', { name: 'Opening Google…' }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
     expect(screen.getByLabelText('Email')).toBeDisabled()
@@ -151,7 +151,7 @@ describe('LoginForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(
-      await screen.findByRole('button', { name: 'Signing in...' }),
+      await screen.findByRole('button', { name: 'Signing in…' }),
     ).toBeDisabled()
     expect(screen.getByLabelText('Email')).toBeDisabled()
     expect(screen.getByLabelText('Password')).toBeDisabled()
@@ -184,9 +184,9 @@ describe('LoginForm', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
-    expect(
-      await screen.findByText('Choose a school to continue signing in.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This email belongs to more than one school. Choose where you want to sign in.',
+    )
 
     fireEvent.click(screen.getByRole('combobox', { name: 'School' }))
     fireEvent.click(

@@ -10,8 +10,7 @@ export const Route = createFileRoute('/_authenticated/export')({
 function ExportRoute() {
   return (
     <AdminPageSection
-      description='Download tenant-scoped student, conversation, and progress datasets for reporting, migration, and audit workflows.'
-      eyebrow='School administration'
+      description='Download school records for reporting, migration, or audit work.'
       title='Download records'
     >
       <ExportPanel />

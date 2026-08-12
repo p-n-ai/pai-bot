@@ -25,17 +25,17 @@ describe('AIUsageBudgetSection', () => {
       />,
     )
 
-    const section = screen.getByRole('region', { name: 'Token budget window' })
+    const section = screen.getByRole('region', { name: 'Token budget period' })
 
     expect(
-      within(section).getByRole('heading', { name: 'Token budget window' }),
+      within(section).getByRole('heading', { name: 'Token budget period' }),
     ).toBeInTheDocument()
     expect(
       within(section).getByText(
-        'Budget thresholds and remaining allowance for the active tenant-wide token window.',
+        'Review the limit, dates, and remaining tokens for this school.',
       ),
     ).toBeInTheDocument()
-    expect(within(section).getByText('Window')).toBeInTheDocument()
+    expect(within(section).getByText('Period')).toBeInTheDocument()
     expect(within(section).getByText('Apr 1 to Apr 30')).toBeInTheDocument()
     expect(within(section).getByText('Limit')).toBeInTheDocument()
     expect(within(section).getByText('250K')).toBeInTheDocument()
@@ -56,10 +56,12 @@ describe('AIUsageBudgetSection', () => {
       />,
     )
 
-    const section = screen.getByRole('region', { name: 'Token budget window' })
+    const section = screen.getByRole('region', { name: 'Token budget period' })
 
     expect(
-      within(section).getByText('Budget changes require admin access.'),
+      within(section).getByText(
+        'Ask a school administrator to change this budget.',
+      ),
     ).toBeInTheDocument()
     expect(
       within(section).queryByRole('button', { name: 'Save token budget' }),

@@ -1,4 +1,3 @@
-import { MailPlusIcon, RotateCcwIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 
@@ -7,6 +6,7 @@ import type {
   InviteRecord,
   UserManagementView,
 } from '@/lib/user-management-types'
+import { MailPlusIcon, RotateCcwIcon } from '@/components/ui/pandai-icons'
 import { DataTable } from '@/components/shared/data-table'
 import { LoadState } from '@/components/shared/load-state'
 import { StatePanel } from '@/components/shared/state-panel'
@@ -68,7 +68,8 @@ export function UserManagementPanel() {
         setState({
           status: 'error',
           data: null,
-          error: "User management data isn't available right now.",
+          error:
+            'Unable to load school access. Check your connection and try again.',
         })
       })
     }
@@ -98,8 +99,8 @@ export function UserManagementPanel() {
     return (
       <LoadState
         error={state.error}
-        errorTitle='User management unavailable'
-        loadingTitle='Loading users and invites...'
+        errorTitle='School access unavailable'
+        loadingTitle='Loading users and invites…'
         loadingVariant='users'
         status={state.status}
       />
@@ -210,7 +211,7 @@ function UserManagementReady({
             <div className='mt-6 flex flex-col gap-5 md:col-span-2'>
               <div className='flex items-center justify-between gap-3'>
                 <div>
-                  <h2 className='m-0 text-sm font-semibold text-[#0c0a09]'>
+                  <h2 className='m-0 text-sm font-semibold text-[var(--admin-ink)]'>
                     Admin access
                   </h2>
                 </div>
@@ -304,7 +305,7 @@ function UserDirectoryToolbar({
           <SheetTrigger asChild>
             <Button type='button'>
               <MailPlusIcon data-icon='inline-start' />
-              Invite
+              Invite user
             </Button>
           </SheetTrigger>
           <SheetContent className='w-full overflow-y-auto p-0 sm:max-w-md'>
@@ -404,7 +405,7 @@ function AllUsersTable({ users }: { users: Array<DirectoryUser> }) {
   if (users.length === 0) {
     return (
       <StatePanel title='No users match this search'>
-        Try a different name, role, channel, form, or contact.
+        Change the search term or clear the search field.
       </StatePanel>
     )
   }
@@ -441,7 +442,7 @@ function AdminUsersTable({
   if (users.length === 0) {
     return (
       <StatePanel title='No active users match this search'>
-        Try a different name, role, or email filter.
+        Change the search term or clear the search field.
       </StatePanel>
     )
   }
@@ -510,7 +511,7 @@ function InvitesTable({
   if (invites.length === 0) {
     return (
       <StatePanel title='No pending invites match this search'>
-        Open invite links appear here until they are accepted or expire.
+        Change the search term or clear the search field.
       </StatePanel>
     )
   }

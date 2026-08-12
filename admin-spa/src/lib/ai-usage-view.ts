@@ -122,7 +122,7 @@ const budgetWindowFormatters: Record<
 > = {
   both: (start, end) =>
     `${formatAIUsageDateLabel(start)} to ${formatAIUsageDateLabel(end)}`,
-  empty: () => 'No active token window',
+  empty: () => 'No active budget period',
   end: (_start, end) => `Ends ${formatAIUsageDateLabel(end)}`,
   start: (start) => `Started ${formatAIUsageDateLabel(start)}`,
 }

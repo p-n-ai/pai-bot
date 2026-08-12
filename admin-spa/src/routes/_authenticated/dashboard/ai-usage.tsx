@@ -18,17 +18,18 @@ export const Route = createFileRoute('/_authenticated/dashboard/ai-usage')({
 
 function AIUsageRoute() {
   const { auth } = useAuth()
-  const [state, setState] = useAIUsageState('AI usage failed')
+  const [state, setState] = useAIUsageState(
+    'Unable to load AI usage. Check your connection and try again.',
+  )
 
   return (
     <AdminPageSection
-      description='Token volume, budget status, and provider mix for the current school workspace.'
-      eyebrow='AI operations'
+      description='Review token use, budget status, and AI providers for this school.'
       title='AI usage'
     >
       <AIUsageLoadBoundary
         errorTitle='Unable to load AI usage'
-        loadingTitle='Loading AI usage...'
+        loadingTitle='Loading AI usage…'
         setState={setState}
         state={state}
       >

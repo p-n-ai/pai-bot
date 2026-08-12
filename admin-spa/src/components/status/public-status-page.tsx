@@ -18,12 +18,12 @@ interface StatusRowModel {
 
 const componentCopy = {
   application: {
-    name: 'Application API',
-    description: 'Core application and chat services',
+    name: 'P&AI application',
+    description: 'Admin and chat services',
   },
   ai_provider: {
     name: 'AI provider',
-    description: 'Primary provider response health',
+    description: 'AI response availability',
   },
 } as const
 
@@ -56,16 +56,16 @@ export function PublicStatusPage() {
   const presentation = statusPresentation(viewState)
 
   return (
-    <div className='min-h-svh bg-[oklch(0.982_0.004_250)] text-[oklch(0.22_0.018_255)]'>
-      <div className='mx-auto w-[min(calc(100%-2rem),40rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-12'>
-        <header className='mb-14 sm:mb-16'>
+    <div className='min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'>
+      <div className='mx-auto w-[min(calc(100%-2rem),42rem)] px-[max(0rem,env(safe-area-inset-left))] py-8 sm:py-10'>
+        <header className='mb-10 sm:mb-12'>
           <a
             className='inline-flex min-h-11 items-center gap-3 rounded-lg text-sm font-semibold tracking-[-0.01em] no-underline outline-offset-4 focus-visible:outline-2'
             href='/health'
           >
             <span
               aria-hidden='true'
-              className='grid size-8 place-items-center rounded-lg bg-[oklch(0.22_0.018_255)] text-[11px] font-bold tracking-[-0.04em] text-white'
+              className='grid size-8 place-items-center rounded-lg border border-[var(--border-primary-default)] bg-[var(--surface-tertiary-default)] text-[11px] font-bold tracking-[-0.04em] text-[var(--text-primary-on-color)]'
             >
               P&amp;
             </span>
@@ -73,28 +73,28 @@ export function PublicStatusPage() {
           </a>
         </header>
 
-        <div aria-live='polite' className='grid gap-14'>
+        <div aria-live='polite' className='grid gap-10 sm:gap-12'>
           <section aria-labelledby='status-heading' className='max-w-2xl'>
-            <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[oklch(0.49_0.018_255)]'>
+            <p className='mb-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-default-body)]'>
               <span
                 aria-hidden='true'
                 className={
                   presentation.tone === 'operational'
-                    ? 'size-2.5 rounded-full bg-[oklch(0.58_0.16_153)]'
+                    ? 'size-2.5 rounded-full bg-[var(--surface-primary-default)]'
                     : presentation.tone === 'degraded'
-                      ? 'size-2.5 rounded-full bg-[oklch(0.63_0.18_45)]'
-                      : 'size-2.5 rounded-full bg-[oklch(0.6_0.012_250)]'
+                      ? 'size-2.5 rounded-full bg-[var(--status-warning-border)]'
+                      : 'size-2.5 rounded-full bg-[var(--text-disabled-default)]'
                 }
               />
               {presentation.liveLabel}
             </p>
             <h1
-              className='m-0 text-[clamp(2rem,6vw,3rem)] leading-[1.08] font-semibold tracking-[-0.04em] text-balance'
+              className='m-0 max-w-[18ch] text-[clamp(2rem,5vw,2.5rem)] leading-[1.1] font-semibold tracking-[-0.03em] text-balance'
               id='status-heading'
             >
               {presentation.headline}
             </h1>
-            <p className='mt-4 max-w-[60ch] text-base leading-7 text-pretty text-[oklch(0.49_0.018_255)]'>
+            <p className='mt-4 max-w-[60ch] text-base leading-7 text-pretty text-[var(--text-default-body)]'>
               {presentation.summary}
             </p>
           </section>
@@ -109,7 +109,7 @@ export function PublicStatusPage() {
             >
               System status
             </h2>
-            <ul className='m-0 grid list-none gap-8 p-0'>
+            <ul className='m-0 grid list-none gap-6 p-0'>
               {presentation.components.map((component) => (
                 <StatusRow component={component} key={component.id} />
               ))}
@@ -117,12 +117,12 @@ export function PublicStatusPage() {
           </section>
         </div>
 
-        <footer className='mt-14 text-[13px] leading-5 text-[oklch(0.49_0.018_255)]'>
+        <footer className='mt-10 text-[13px] leading-5 text-[var(--text-default-body)]'>
           <a
             className='inline-flex min-h-11 items-center rounded-sm underline decoration-from-font underline-offset-4 outline-offset-4 focus-visible:outline-2'
             href='/health/status'
           >
-            JSON status
+            View JSON status
           </a>
         </footer>
       </div>
@@ -148,17 +148,17 @@ function StatusRow({ component }: { component: StatusRowModel }) {
         <h3 className='m-0 text-base leading-[1.3] font-semibold'>
           {copy.name}
         </h3>
-        <p className='mt-1.5 text-sm leading-6 text-pretty text-[oklch(0.49_0.018_255)]'>
+        <p className='mt-1.5 text-sm leading-6 text-pretty text-[var(--text-default-body)]'>
           {copy.description}
         </p>
       </div>
       <span
         className={
           operational
-            ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.39_0.13_153)]'
+            ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--text-tertiary-default)]'
             : unavailable
-              ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.16_42)]'
-              : 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[oklch(0.46_0.018_255)]'
+              ? 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--status-warning-text)]'
+              : 'inline-flex w-fit items-center gap-2 text-[13px] font-semibold whitespace-nowrap text-[var(--text-default-body)]'
         }
       >
         <span aria-hidden='true' className='size-2 rounded-full bg-current' />
@@ -192,7 +192,7 @@ function statusPresentation(viewState: StatusViewState): {
     return {
       headline: 'Status currently unavailable',
       summary:
-        'The status service could not be reached. This does not necessarily mean the application is down.',
+        'Unable to check the latest status. P&AI may still be available. Try again shortly.',
       components: [
         { id: 'application', status: 'unknown' },
         { id: 'ai_provider', status: 'unknown' },

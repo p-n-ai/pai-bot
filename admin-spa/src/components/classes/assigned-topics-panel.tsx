@@ -26,8 +26,12 @@ export function AssignedTopicsPanel() {
     <section className='state-panel'>
       <div>
         <p className='eyebrow'>Assigned topics</p>
-        <h2>Topic assignment</h2>
-        <p>Topic assignment (coming soon)</p>
+        <h2 className='text-xl leading-snug font-semibold tracking-[-0.02em]'>
+          Topic assignment
+        </h2>
+        <p className='mt-2 max-w-[65ch] text-sm leading-6'>
+          Topic assignment is not available yet.
+        </p>
       </div>
       <div className='topic-list'>
         {assignedTopics.map((topic) => (
@@ -40,7 +44,7 @@ export function AssignedTopicsPanel() {
         type='button'
         variant='outline'
       >
-        Assign topics to class (coming soon)
+        Topic assignment unavailable
       </Button>
     </section>
   )

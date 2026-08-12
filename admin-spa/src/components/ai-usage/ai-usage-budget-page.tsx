@@ -1,7 +1,6 @@
-import { GaugeIcon } from 'lucide-react'
-
 import type { AIUsageSummary } from '@/lib/ai-usage-types'
 import type { AIUsageView } from '@/lib/ai-usage-view'
+import { GaugeIcon } from '@/components/ui/pandai-icons'
 import { AIUsageBudgetEditor } from '@/components/ai-usage/ai-usage-budget-editor'
 import { formatCompactNumber } from '@/lib/ai-usage-view'
 
@@ -32,12 +31,12 @@ export function AIUsageBudgetPage({
 
   return (
     <section
-      aria-label='AI budget configuration'
-      className='mt-8 overflow-hidden rounded-[1.75rem] bg-[var(--admin-surface)] shadow-[0_24px_80px_-52px_oklch(0.22_0.02_150/0.65)] ring-1 ring-[var(--admin-line)]'
+      aria-label='AI budget settings'
+      className='mt-7 overflow-hidden rounded-[1.5rem] bg-[var(--admin-surface)] ring-1 ring-[var(--admin-line)]'
     >
       <div className='grid lg:grid-cols-[minmax(19rem,0.86fr)_minmax(24rem,1.14fr)]'>
         <BudgetStatusPanel snapshot={snapshot} view={view} />
-        <div className='flex min-w-0 flex-col justify-center p-6 sm:p-8 lg:p-10'>
+        <div className='flex min-w-0 flex-col justify-center p-6 sm:p-8'>
           <AIUsageBudgetEditor
             canManageBudget={canManageBudget}
             onSaved={onSaved}
@@ -57,7 +56,7 @@ function BudgetStatusPanel({
   view: AIUsageView
 }) {
   return (
-    <div className='flex flex-col bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[34rem] lg:p-10'>
+    <div className='flex flex-col bg-[var(--admin-ink)] p-6 text-[var(--admin-surface)] sm:p-8 lg:min-h-[30rem]'>
       <div className='flex items-center justify-between gap-4'>
         <p className='flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-[var(--admin-nav-text)] uppercase'>
           <span
@@ -85,19 +84,18 @@ function BudgetStatusPanel({
 function EmptyBudgetStatus() {
   return (
     <div className='flex flex-1 flex-col'>
-      <div className='my-auto py-12'>
-        <h2 className='max-w-[12ch] text-[clamp(2rem,4vw,3.25rem)] leading-[0.98] font-semibold tracking-[-0.045em] text-balance'>
+      <div className='my-auto py-8'>
+        <h2 className='max-w-[14ch] text-[clamp(2rem,3vw,2.5rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-balance'>
           Set a clear limit for this school.
         </h2>
         <p className='mt-5 max-w-md text-sm leading-6 text-[var(--admin-nav-text)]'>
-          Choose a token allowance and the dates it applies. Usage is measured
-          against one school-wide window.
+          Choose a token allowance and the dates it applies to this school.
         </p>
       </div>
 
       <dl className='grid gap-5 border-t border-white/12 pt-6 text-sm'>
         <BudgetDefinition
-          description='The total tokens available during the window.'
+          description='The total tokens available during the period.'
           label='Allowance'
         />
         <BudgetDefinition
@@ -105,7 +103,7 @@ function EmptyBudgetStatus() {
           label='Schedule'
         />
         <BudgetDefinition
-          description='All AI usage in this school workspace.'
+          description='All AI use across this school.'
           label='Scope'
         />
       </dl>
@@ -122,11 +120,11 @@ function ActiveBudgetStatus({
 }) {
   return (
     <div className='flex flex-1 flex-col'>
-      <div className='my-auto py-12'>
+      <div className='my-auto py-8'>
         <p className='text-sm font-medium text-[var(--admin-nav-text)]'>
           Remaining allowance
         </p>
-        <h2 className='mt-2 text-[clamp(3rem,7vw,5rem)] leading-none font-semibold tracking-[-0.06em] tabular-nums'>
+        <h2 className='mt-2 text-[clamp(2.5rem,5vw,3.5rem)] leading-none font-semibold tracking-[-0.04em] tabular-nums'>
           {formatCompactNumber(snapshot.remaining)}
           <span className='ms-2 text-lg tracking-[-0.02em] text-[var(--admin-nav-muted)]'>
             tokens
@@ -157,7 +155,7 @@ function ActiveBudgetStatus({
           value={formatCompactNumber(snapshot.limit)}
         />
         <div className='col-span-2'>
-          <BudgetMetric label='Window' value={snapshot.window} />
+          <BudgetMetric label='Period' value={snapshot.window} />
         </div>
       </dl>
     </div>

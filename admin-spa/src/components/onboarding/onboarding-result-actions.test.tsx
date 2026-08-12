@@ -41,22 +41,24 @@ describe('OnboardingResultActions', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: 'Welcome to your classroom.' }),
+      screen.getByRole('heading', { name: 'Your first class is ready' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Your first class is ready to share.'),
+      screen.getByText(
+        'Share this link with students joining Form 1 Algebra A.',
+      ),
     ).toBeInTheDocument()
     expect(screen.getByText('Form 1 Algebra A')).toBeInTheDocument()
     expect(screen.getByText('Sekolah Satu')).toBeInTheDocument()
-    expect(screen.getByText('Students')).toBeInTheDocument()
+    expect(screen.getByLabelText('Student join link')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy join link' }))
     await waitFor(() =>
       expect(clipboard).toHaveBeenCalledWith('https://pai.test/join/ALG-F1A'),
     )
-    expect(screen.getByText('Copied')).toBeInTheDocument()
+    expect(screen.getByText('Join link copied.')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open join page' }))
     expect(open).toHaveBeenCalledWith(
       'https://pai.test/join/ALG-F1A',
       '_blank',
@@ -110,9 +112,13 @@ describe('OnboardingResultActions', () => {
       role: 'teacher',
     })
     expect(
-      screen.getByText('1 sent, 1 needing follow-up, 2 processed.'),
+      screen.getByText('2 invites processed: 1 sent, 1 needs follow-up.'),
     ).toBeInTheDocument()
-    expect(screen.getByText('SMTP provider throttled')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Email delivery failed. Copy the activation link and send it directly.',
+      ),
+    ).toBeInTheDocument()
 
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Copy invite link' })[0],
@@ -123,7 +129,9 @@ describe('OnboardingResultActions', () => {
       ),
     )
     expect(
-      await screen.findByText('Copied link for teacher@example.com'),
+      await screen.findByText(
+        'Activation link copied for teacher@example.com.',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -135,7 +143,7 @@ describe('OnboardingResultActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send invites' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'We could not send the invite',
+      'Unable to create the invite',
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Add at least one teacher email.',

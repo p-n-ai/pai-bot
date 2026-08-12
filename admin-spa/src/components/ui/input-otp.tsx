@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { OTPInput, OTPInputContext } from 'input-otp'
 
-import { MinusIcon } from 'lucide-react'
+import { MinusIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 
 type InputOTPSlotState = React.ContextType<

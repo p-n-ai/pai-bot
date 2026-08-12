@@ -51,7 +51,10 @@ function ClassesRoute() {
         setState((current) => ({
           status: 'error',
           groups: current.groups,
-          error: caught instanceof Error ? caught.message : 'Classes failed',
+          error:
+            caught instanceof Error
+              ? caught.message
+              : 'Unable to load classes. Check your connection and try again.',
         }))
       })
   }, [])
@@ -67,7 +70,6 @@ function ClassesRoute() {
   return (
     <AdminPageSection
       description='Create classes, share student join codes, and manage each roster.'
-      eyebrow='Teaching'
       title='Classes'
     >
       <ClassesContent

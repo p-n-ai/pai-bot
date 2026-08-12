@@ -24,7 +24,7 @@ describe('AIUsageProviderBreakdown', () => {
     ).toBeInTheDocument()
     expect(
       within(section).getByText(
-        'Provider and model mix for the recorded AI traffic in this workspace.',
+        'Compare the providers and models used by this school.',
       ),
     ).toBeInTheDocument()
     expect(within(section).getByRole('table')).toBeInTheDocument()
@@ -42,11 +42,11 @@ describe('AIUsageProviderBreakdown', () => {
     const section = screen.getByRole('region', { name: 'Provider breakdown' })
 
     expect(
-      within(section).getByText('No provider traffic recorded'),
+      within(section).getByText('No AI provider activity yet'),
     ).toBeInTheDocument()
     expect(
       within(section).getByText(
-        'Provider rows will populate after the first successful AI requests for this tenant.',
+        'Provider details will appear after the first successful AI response.',
       ),
     ).toBeInTheDocument()
     expect(within(section).getByText('None yet')).toBeInTheDocument()

@@ -46,7 +46,9 @@ function DashboardRoute() {
       .catch((caught: unknown) =>
         runWhenActive(active, () =>
           setClassesError(
-            caught instanceof Error ? caught.message : 'Classes failed',
+            caught instanceof Error
+              ? caught.message
+              : 'Unable to load classes. Check your connection and try again.',
           ),
         ),
       )
@@ -105,7 +107,9 @@ function DashboardRoute() {
           setLeaderboardState({
             status: 'error',
             message:
-              caught instanceof Error ? caught.message : 'Leaderboard failed',
+              caught instanceof Error
+                ? caught.message
+                : 'Unable to load weekly progress. Try again.',
           }),
         ),
       )
@@ -127,7 +131,9 @@ function DashboardRoute() {
       })
       .catch((caught: unknown) => {
         setNudgeMessage(
-          caught instanceof Error ? caught.message : 'Nudge failed',
+          caught instanceof Error
+            ? caught.message
+            : 'Unable to send the nudge. Check your connection and try again.',
         )
       })
       .finally(() => {
@@ -210,5 +216,7 @@ function readNonEmptySearchValue(value: unknown): string | undefined {
 }
 
 function getDashboardErrorMessage(caught: unknown): string {
-  return caught instanceof Error ? caught.message : 'Class data failed'
+  return caught instanceof Error
+    ? caught.message
+    : 'Unable to load class progress. Check your connection and try again.'
 }

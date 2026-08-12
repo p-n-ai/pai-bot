@@ -1,16 +1,17 @@
 const authErrorMessages = {
   tenant_required:
-    'Multiple school accounts match this Google email. Sign in with email once, then link Google from inside the admin UI.',
+    'This Google email matches more than one school. Sign in with email and choose your school.',
   link_required:
-    'We found no Google-linked admin account yet. Sign in with email once, then link Google from inside the admin UI.',
+    'No admin account is linked to this Google email. Sign in with email instead.',
   already_linked:
-    'That Google account is already linked to a different admin account.',
+    'This Google account is linked to another admin account. Sign in with email or contact your platform administrator.',
   flow_invalid: 'Your Google sign-in session expired. Start again.',
   domain_not_allowed:
-    'That Google account is outside the allowed workspace domain for this admin.',
+    'Use a Google account from your school’s approved domain, or sign in with email.',
   provider_unavailable:
-    'Google sign-in is not configured in this environment yet.',
-  google_auth_failed: 'Google sign-in failed. Please try again.',
+    'Google sign-in is unavailable. Sign in with email instead.',
+  google_auth_failed:
+    'Unable to sign in with Google. Try again or sign in with email instead.',
 } as const
 
 export function getAuthErrorMessage(code: string | undefined): string {

@@ -21,8 +21,8 @@ export function AIUsageBudgetEditor({
 }) {
   if (!canManageBudget) {
     return (
-      <StatePanel title='Budget locked'>
-        Budget changes require admin access.
+      <StatePanel title='Budget is read-only'>
+        Ask a school administrator to change this budget.
       </StatePanel>
     )
   }
@@ -43,14 +43,14 @@ function EditableTokenBudget({
   return (
     <form className='grid gap-6' onSubmit={form.handleSubmit}>
       <div>
-        <p className='mb-3 text-[0.6875rem] font-semibold tracking-[0.16em] text-[var(--admin-muted)] uppercase'>
+        <p className='mb-2.5 text-xs font-semibold tracking-[0.12em] text-[var(--admin-muted)] uppercase'>
           Budget settings
         </p>
-        <h3 className='text-2xl font-semibold tracking-[-0.035em] text-[var(--admin-ink)]'>
+        <h3 className='text-xl leading-snug font-semibold tracking-[-0.02em] text-[var(--admin-ink)]'>
           {isConfigured ? 'Update budget' : 'Set a budget'}
         </h3>
         <p className='mt-2 max-w-md text-sm leading-6 text-[var(--admin-muted)]'>
-          Define one token allowance for the current school workspace.
+          Set one token allowance for this school.
         </p>
       </div>
       <BudgetFields
@@ -62,14 +62,14 @@ function EditableTokenBudget({
         setPeriodStart={form.setPeriodStart}
       />
 
-      <AuthErrorAlert message={form.error} title='Budget save failed.' />
+      <AuthErrorAlert message={form.error} title='Unable to save budget' />
 
       <div className='flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between'>
         <p className='max-w-xs text-xs leading-5 text-[var(--admin-muted)]'>
-          Dates define the exact window used to measure this allowance.
+          These dates define when the allowance starts and ends.
         </p>
         <Button disabled={form.isPending} type='submit'>
-          {form.isPending ? 'Saving budget...' : 'Save token budget'}
+          {form.isPending ? 'Saving budget…' : 'Save token budget'}
         </Button>
       </div>
     </form>
@@ -116,7 +116,7 @@ function useTokenBudgetForm({
           setError(
             caught instanceof Error
               ? caught.message
-              : 'Unable to save the token budget window.',
+              : 'Unable to save the AI budget. Check your connection and try again.',
           )
         })
         .finally(finishSubmit)

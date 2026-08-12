@@ -1,11 +1,11 @@
 import { RouterProvider } from '@tanstack/react-router'
-import { XIcon } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { useAuth } from './auth-provider'
 import { Button } from './components/ui/button'
 import { Skeleton } from './components/ui/skeleton'
 import { router } from './router'
+import { XIcon } from '@/components/ui/pandai-icons'
 
 const SKELETON_LINE_KEYS = ['first', 'second', 'third', 'fourth']
 
@@ -24,8 +24,8 @@ export function AdminApp() {
         id='main-content'
       >
         <section className='w-full max-w-140' role='alert'>
-          <h1>Session unavailable</h1>
-          <p>{auth.error.message}</p>
+          <h1>Unable to verify your session</h1>
+          <p>Check your connection and reload the page.</p>
         </section>
       </main>
     )
@@ -38,14 +38,14 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
   return (
     <main
       aria-busy='true'
-      aria-label='Preparing admin workspace'
-      className='flex min-h-svh bg-[#fafaf9] text-[#0c0a09]'
+      aria-label='Loading P&AI Bot'
+      className='flex min-h-svh bg-[var(--surface-secondary-default-hover)] text-[var(--text-default-heading)]'
       id='main-content'
       role='status'
     >
       <Button
-        aria-label='Close loading screen'
-        className='absolute top-4 right-4 z-10 size-9 rounded-full bg-white shadow-sm'
+        aria-label='Continue to sign in'
+        className='absolute top-4 right-4 z-10 size-9 rounded-full bg-[var(--surface-general-default)]'
         onClick={onClose}
         size='icon'
         type='button'
@@ -53,7 +53,7 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
       >
         <XIcon aria-hidden='true' className='size-4' />
       </Button>
-      <aside className='hidden h-svh w-[17rem] shrink-0 border-r border-[#e5e7eb] bg-white p-4 sm:block'>
+      <aside className='hidden h-svh w-[17rem] shrink-0 border-r border-[var(--border-primary-default)] bg-[var(--surface-general-default)] p-4 sm:block'>
         <div className='flex items-center gap-3 px-2 py-3'>
           <Skeleton className='size-9 rounded-lg' />
           <Skeleton className='h-4 w-24' />
@@ -76,7 +76,7 @@ function AdminSessionSkeleton({ onClose }: { onClose: () => void }) {
         </div>
         <Skeleton className='mt-5 h-56 rounded-lg' />
       </section>
-      <span className='sr-only'>Preparing admin workspace</span>
+      <span className='sr-only'>Loading P&amp;AI Bot</span>
     </main>
   )
 }

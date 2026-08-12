@@ -85,7 +85,7 @@ const data: UserManagementView = {
 
 async function openInviteSheet() {
   await screen.findByRole('tab', { name: 'Admin users' })
-  fireEvent.click(screen.getByRole('button', { name: 'Invite' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Invite user' }))
 }
 
 describe('UserManagementPanel', () => {
@@ -131,14 +131,16 @@ describe('UserManagementPanel', () => {
       })
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy activation link' }),
+    )
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
         'http://localhost:3000/activate?token=invite-token',
       )
     })
-    expect(screen.getByText('Copied')).toBeInTheDocument()
+    expect(screen.getByText('Activation link copied.')).toBeInTheDocument()
   }, 10_000)
 
   it('explains when the latest invite email was sent', async () => {
@@ -237,7 +239,7 @@ describe('UserManagementPanel', () => {
 
     expect(
       await screen.findByText(
-        "User management data isn't available right now.",
+        'Unable to load school access. Check your connection and try again.',
       ),
     ).toBeInTheDocument()
     expect(screen.queryByText('database timeout')).not.toBeInTheDocument()

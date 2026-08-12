@@ -18,7 +18,7 @@ export function LoadState({
   const views = {
     error: (
       <StatePanel role='alert' title={errorTitle}>
-        {error ?? 'Request failed'}
+        {error ?? 'Unable to complete this request. Try again.'}
       </StatePanel>
     ),
     loading: loadingVariant ? (

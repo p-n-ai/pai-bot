@@ -15,7 +15,7 @@ export function AdminSurface({
   return (
     <Card
       className={cn(
-        'rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] shadow-[0_14px_40px_oklch(0.25_0.015_150/0.045)] ring-0',
+        'rounded-2xl border border-[var(--admin-line)] bg-[var(--admin-surface)] ring-0',
         className,
       )}
     >
