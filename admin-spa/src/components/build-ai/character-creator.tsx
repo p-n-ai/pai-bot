@@ -1,45 +1,17 @@
 /* oxlint-disable react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop -- This bounded local editor keeps each visible control transition beside its state update; extracted children are not memoized. */
 import { useEffect, useId, useRef, useState } from 'react'
+import type {
+  CharacterColor,
+  CharacterConfig,
+  CharacterExpression,
+  CharacterShape,
+} from '@/components/build-ai/character-config'
 
 import { AdminSurface } from '@/components/shared/admin-surface'
 import { Button } from '@/components/ui/button'
 import { PandaiIcon } from '@/components/ui/pandai-icon'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
-
-export type CharacterShape =
-  | 'blob'
-  | 'pebble'
-  | 'bean'
-  | 'egg'
-  | 'capsule'
-  | 'cloud'
-export type CharacterColor = 'pandai' | 'mint' | 'leaf' | 'forest'
-export type CharacterExpression =
-  | 'neutral'
-  | 'joyful'
-  | 'thoughtful'
-  | 'attentive'
-
-export interface CharacterConfig {
-  readonly color: CharacterColor
-  readonly expression: CharacterExpression
-  readonly eyeScale: number
-  readonly gazeX: number
-  readonly gazeY: number
-  readonly shape: CharacterShape
-  readonly turn: number
-}
-
-export const defaultCharacterConfig: CharacterConfig = {
-  color: 'pandai',
-  expression: 'attentive',
-  eyeScale: 1,
-  gazeX: 0,
-  gazeY: 0,
-  shape: 'blob',
-  turn: 0,
-}
 
 const bodyPath =
   'M228.541 114.228C228.541 130.133 225.184 145.994 218.738 160.534C212.674 174.217 203.904 186.669 193.065 196.988C155.933 232.34 99.497 238.596 55.5255 212.24C45.097 205.99 35.6851 198.072 27.7451 188.866C19.1926 178.953 12.3686 167.569 7.65781 155.351C2.60712 142.264 0 128.257 0 114.228C0 98.3219 3.35751 82.4611 9.80315 67.9215C15.8672 54.2382 24.6377 41.7862 35.4767 31.4668C72.6081 -3.88483 129.044 -10.1413 173.016 16.2153C183.444 22.4653 192.856 30.3829 200.796 39.5896C209.349 49.5018 216.173 60.8859 220.883 73.1037C225.934 86.1906 228.541 100.198 228.541 114.228Z'
@@ -650,16 +622,6 @@ function CharacterSlider({
         value={[value]}
       />
     </div>
-  )
-}
-
-export function characterSummary(config: CharacterConfig) {
-  return `${shapeLabel(config.shape)} · ${colorLabel(config.color)} · ${expressionLabel(config.expression)}`
-}
-
-function colorLabel(color: CharacterColor) {
-  return (
-    colors.find((candidate) => candidate.id === color)?.label ?? 'Pandai green'
   )
 }
 

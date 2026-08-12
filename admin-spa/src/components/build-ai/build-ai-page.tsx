@@ -2,14 +2,14 @@
 import { useCallback, useId, useReducer, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { BuildAIPageKey } from '@/lib/build-ai-search'
-import type { CharacterConfig } from '@/components/build-ai/character-creator'
+import type { CharacterConfig } from '@/components/build-ai/character-config'
 import type { PandaiIconName } from '@/components/ui/pandai-icon'
 
 import {
-  CharacterCreator,
   characterSummary,
   defaultCharacterConfig,
-} from '@/components/build-ai/character-creator'
+} from '@/components/build-ai/character-config'
+import { CharacterCreator } from '@/components/build-ai/character-creator'
 import { AdminSurface } from '@/components/shared/admin-surface'
 import {
   AlertDialog,
