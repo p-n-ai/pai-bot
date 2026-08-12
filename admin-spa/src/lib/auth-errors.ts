@@ -1,13 +1,13 @@
 export function readAuthDisplayError(
-  caught: unknown,
+  cause: unknown,
   fallback: string,
   failedFetchMessage: string,
 ): string {
-  if (!(caught instanceof Error)) {
+  if (!(cause instanceof Error)) {
     return fallback
   }
 
-  return caught.message === 'Failed to fetch'
+  return cause.message === 'Failed to fetch'
     ? failedFetchMessage
-    : caught.message
+    : cause.message
 }

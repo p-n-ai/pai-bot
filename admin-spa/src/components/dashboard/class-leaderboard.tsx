@@ -139,14 +139,13 @@ function LeaderboardRow({
 
 function LeaderboardSkeleton() {
   return (
-    <div
+    <output
       aria-label='Loading weekly progress leaders'
       className='space-y-3'
-      role='status'
     >
       {[0, 1, 2].map((key) => (
         <Skeleton className='h-10 w-full' key={key} />
       ))}
-    </div>
+    </output>
   )
 }

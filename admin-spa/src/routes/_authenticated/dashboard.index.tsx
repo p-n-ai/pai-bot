@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Option, Schema, flow } from 'effect'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DashboardState } from '@/components/dashboard/dashboard-page-view'
@@ -13,6 +14,28 @@ import {
 } from '@/lib/admin-api'
 import { getNudgeSuccessMessage } from '@/lib/dashboard-nudge-copy'
 import { fetchDashboardProgress } from '@/lib/dashboard-progress'
+
+const DashboardSearchSchema = Schema.Struct({
+  class: Schema.optionalKey(Schema.String),
+  student: Schema.optionalKey(Schema.String),
+})
+
+type DashboardSearch = typeof DashboardSearchSchema.Type
+
+function normalizeDashboardSearch(search: DashboardSearch): DashboardSearch {
+  const classID = search.class?.trim()
+  const studentID = search.student?.trim()
+  return {
+    class: classID || undefined,
+    student: studentID || undefined,
+  }
+}
+
+const parseDashboardSearch = flow(
+  Schema.decodeUnknownOption(DashboardSearchSchema),
+  Option.map(normalizeDashboardSearch),
+  Option.getOrElse((): DashboardSearch => ({})),
+)
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   validateSearch: parseDashboardSearch,
@@ -43,11 +66,11 @@ function DashboardRoute() {
     let active = true
     listGroups('class')
       .then((groups) => runWhenActive(active, () => setClasses(groups)))
-      .catch((caught: unknown) =>
+      .catch((cause: unknown) =>
         runWhenActive(active, () =>
           setClassesError(
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to load classes. Check your connection and try again.',
           ),
         ),
@@ -70,12 +93,12 @@ function DashboardRoute() {
           setState({ status: 'ready', result, error: null })
         })
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         runWhenActive(isCurrent(), () => {
           setState({
             status: 'error',
             progress: null,
-            error: getDashboardErrorMessage(caught),
+            error: getDashboardErrorMessage(cause),
           })
         })
       })
@@ -102,13 +125,13 @@ function DashboardRoute() {
           setLeaderboardState({ status: 'ready', entries }),
         ),
       )
-      .catch((caught: unknown) =>
+      .catch((cause: unknown) =>
         runWhenActive(isCurrent(), () =>
           setLeaderboardState({
             status: 'error',
             message:
-              caught instanceof Error
-                ? caught.message
+              cause instanceof Error
+                ? cause.message
                 : 'Unable to load weekly progress. Try again.',
           }),
         ),
@@ -129,10 +152,10 @@ function DashboardRoute() {
       .then(() => {
         setNudgeMessage(getNudgeSuccessMessage(studentName))
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         setNudgeMessage(
-          caught instanceof Error
-            ? caught.message
+          cause instanceof Error
+            ? cause.message
             : 'Unable to send the nudge. Check your connection and try again.',
         )
       })
@@ -202,21 +225,8 @@ function DashboardRoute() {
   )
 }
 
-function parseDashboardSearch(search: Record<string, unknown>) {
-  return {
-    class: readNonEmptySearchValue(search.class),
-    student: readNonEmptySearchValue(search.student),
-  }
-}
-
-function readNonEmptySearchValue(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  return trimmed || undefined
-}
-
-function getDashboardErrorMessage(caught: unknown): string {
-  return caught instanceof Error
-    ? caught.message
+function getDashboardErrorMessage(cause: unknown): string {
+  return cause instanceof Error
+    ? cause.message
     : 'Unable to load class progress. Check your connection and try again.'
 }

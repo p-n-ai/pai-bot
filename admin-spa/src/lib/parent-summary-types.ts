@@ -47,9 +47,5 @@ export interface ParentSummary extends EffectSchema.Type<
   typeof ParentSummarySchema
 > {}
 
-const matchesParentSummary = Schema.is(ParentSummarySchema)
-
 /** Returns whether an unknown response satisfies the complete parent summary contract. */
-export function isParentSummary(value: unknown): value is ParentSummary {
-  return matchesParentSummary(value)
-}
+export const isParentSummary = Schema.is(ParentSummarySchema)

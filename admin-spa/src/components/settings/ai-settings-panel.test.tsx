@@ -391,16 +391,16 @@ describe('AISettingsPanel', () => {
 
   it('serializes cross-section saves against the latest confirmed revision', async () => {
     const flagSave = deferred<AISettings>()
-    const revision4 = {
+    const revision4: AISettings = {
       ...aiSettingsFixture,
       revision: 4,
       appliedRevision: 4,
-    } as unknown as AISettings
-    const revision5 = {
+    }
+    const revision5: AISettings = {
       ...aiSettingsFixture,
       revision: 5,
       appliedRevision: 5,
-    } as unknown as AISettings
+    }
     updateAISettings
       .mockImplementationOnce(() => flagSave.promise)
       .mockResolvedValueOnce(revision5)
@@ -434,16 +434,16 @@ describe('AISettingsPanel', () => {
   })
 
   it('refreshes the revision after a conflict before the next save', async () => {
-    const revision7 = {
+    const revision7: AISettings = {
       ...aiSettingsFixture,
       revision: 7,
       appliedRevision: 7,
-    } as unknown as AISettings
-    const revision8 = {
+    }
+    const revision8: AISettings = {
       ...aiSettingsFixture,
       revision: 8,
       appliedRevision: 8,
-    } as unknown as AISettings
+    }
     getAISettings
       .mockResolvedValueOnce(aiSettingsFixture)
       .mockResolvedValueOnce(revision7)

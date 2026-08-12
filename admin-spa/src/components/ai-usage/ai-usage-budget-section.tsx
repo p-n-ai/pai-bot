@@ -18,11 +18,14 @@ export function AIUsageBudgetSection({
   view: AIUsageView
 }) {
   const hasTokenBudget =
-    typeof usage.budget_limit_tokens === 'number' &&
+    usage.budget_limit_tokens !== null &&
+    usage.budget_limit_tokens !== undefined &&
     usage.budget_limit_tokens > 0
   const usedTokens =
-    typeof usage.budget_remaining_tokens === 'number' &&
-    typeof usage.budget_limit_tokens === 'number'
+    usage.budget_remaining_tokens !== null &&
+    usage.budget_remaining_tokens !== undefined &&
+    usage.budget_limit_tokens !== null &&
+    usage.budget_limit_tokens !== undefined
       ? Math.max(0, usage.budget_limit_tokens - usage.budget_remaining_tokens)
       : null
   const progress =

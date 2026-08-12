@@ -22,20 +22,19 @@ export function ContentSkeleton({
   variant: ContentSkeletonVariant
 }) {
   return (
-    <div
+    <output
       aria-busy='true'
       className='mt-6'
       data-skeleton-variant={variant}
-      role='status'
     >
       <span className='sr-only'>{label}</span>
       {getSkeletonContent(variant)}
-    </div>
+    </output>
   )
 }
 
 function getSkeletonContent(variant: ContentSkeletonVariant): ReactNode {
-  const views: Record<ContentSkeletonVariant, ReactNode> = {
+  const views = {
     analytics: (
       <div className='grid gap-5'>
         <StatGrid count={4} />
@@ -88,7 +87,7 @@ function getSkeletonContent(variant: ContentSkeletonVariant): ReactNode {
         </Surface>
       </div>
     ),
-  }
+  } satisfies Record<ContentSkeletonVariant, ReactNode>
 
   return views[variant]
 }

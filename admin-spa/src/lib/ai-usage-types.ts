@@ -56,9 +56,5 @@ export interface UpsertTokenBudgetWindowInput {
   period_end: string
 }
 
-const matchesAIUsageSummary = Schema.is(AIUsageSummarySchema)
-
 /** Returns whether an unknown response satisfies the complete AI usage contract. */
-export function isAIUsageSummary(value: unknown): value is AIUsageSummary {
-  return matchesAIUsageSummary(value)
-}
+export const isAIUsageSummary = Schema.is(AIUsageSummarySchema)

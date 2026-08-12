@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const APIKeyProviderNameSchema = Schema.Literals([
@@ -177,6 +177,4 @@ const decodeAISettings = Schema.decodeUnknownOption(AISettingsSchema, {
 })
 
 /** Decodes an unknown response into the exact redacted AI settings contract. */
-export function readAISettings(value: unknown): AISettings | null {
-  return Option.getOrNull(decodeAISettings(value))
-}
+export const readAISettings = flow(decodeAISettings, Option.getOrNull)

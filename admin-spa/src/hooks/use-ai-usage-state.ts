@@ -26,7 +26,7 @@ export function useAIUsageState(fallbackError: string) {
 
         setState({ status: 'ready', usage, error: null })
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         if (!active) {
           return
         }
@@ -34,7 +34,7 @@ export function useAIUsageState(fallbackError: string) {
         setState({
           status: 'error',
           usage: null,
-          error: caught instanceof Error ? caught.message : fallbackError,
+          error: cause instanceof Error ? cause.message : fallbackError,
         })
       })
 

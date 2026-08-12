@@ -72,7 +72,7 @@ export function AuthProvider({
             : { status: 'anonymous', session: null, error: null },
         )
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         if (!mounted) {
           return
         }
@@ -80,7 +80,7 @@ export function AuthProvider({
         setAuth({
           status: 'error',
           session: null,
-          error: error instanceof Error ? error : new Error('Auth failed'),
+          error: cause instanceof Error ? cause : new Error('Auth failed'),
         })
       })
 

@@ -33,14 +33,14 @@ function JoinRoute() {
           setState({ status: 'ready', joinClass, error: null })
         }
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         if (active) {
           setState({
             status: 'error',
             joinClass: null,
             error:
-              caught instanceof Error
-                ? caught.message
+              cause instanceof Error
+                ? cause.message
                 : 'Unable to open this class link. Check the link and try again.',
           })
         }

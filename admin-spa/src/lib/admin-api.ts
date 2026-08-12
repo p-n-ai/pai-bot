@@ -501,12 +501,14 @@ async function fetchJSON(
   fetcher: typeof fetch,
   init?: RequestInit,
 ): Promise<unknown> {
+  const headers = Object.fromEntries(new Headers(init?.headers).entries())
+  if (init?.body) {
+    headers['Content-Type'] = 'application/json'
+  }
+
   const response = await fetcher(path, {
     ...init,
-    headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
-    },
+    headers,
     credentials: 'include',
     cache: 'no-store',
   })

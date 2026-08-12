@@ -50,10 +50,12 @@ function findSelectedGroup(
   return groups.find((group) => group.id === selectedClassID) ?? groups[0]
 }
 
-function getClassSummary(groups: Array<GroupRecord>): {
+interface ClassSummary {
   classCount: number
   totalMembers: number
-} {
+}
+
+function getClassSummary(groups: Array<GroupRecord>): ClassSummary {
   const totalMembers = groups.reduce(
     (sum, group) => sum + group.member_count,
     0,
@@ -527,11 +529,15 @@ function readGroupSummary(group: GroupRecord): string {
   return `${group.syllabus ?? 'Class'}, ${group.member_count} ${learnerLabel}`
 }
 
-function useSelectedClassDetail(group: GroupRecord | null): {
+interface SelectedClassDetail {
   record: GroupDetail | null
   error: string
   handleReload: () => void
-} {
+}
+
+function useSelectedClassDetail(
+  group: GroupRecord | null,
+): SelectedClassDetail {
   const [record, setRecord] = useState<GroupDetail | null>(null)
   const [error, setError] = useState('')
   const [reloadCount, setReloadCount] = useState(0)
@@ -554,9 +560,9 @@ function useSelectedClassDetail(group: GroupRecord | null): {
           setRecord(detail)
         }
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         if (!cancelled) {
-          setError(readClassDetailError(caught))
+          setError(readClassDetailError(cause))
         }
       })
 
@@ -568,9 +574,9 @@ function useSelectedClassDetail(group: GroupRecord | null): {
   return { record, error, handleReload }
 }
 
-function readClassDetailError(caught: unknown): string {
-  return caught instanceof Error
-    ? caught.message
+function readClassDetailError(cause: unknown): string {
+  return cause instanceof Error
+    ? cause.message
     : 'Unable to load this class roster.'
 }
 

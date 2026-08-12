@@ -30,17 +30,8 @@ export interface StudentConversation extends EffectSchema.Type<
 const StudentConversations = Schema.mutable(
   Schema.Array(StudentConversationSchema),
 )
-const matchesStudentDetail = Schema.is(StudentDetailSchema)
-const matchesStudentConversations = Schema.is(StudentConversations)
-
 /** Returns whether an unknown response satisfies the student detail contract. */
-export function isStudentDetail(value: unknown): value is StudentDetail {
-  return matchesStudentDetail(value)
-}
+export const isStudentDetail = Schema.is(StudentDetailSchema)
 
 /** Returns whether an unknown response is a valid conversation list. */
-export function isStudentConversations(
-  value: unknown,
-): value is Array<StudentConversation> {
-  return matchesStudentConversations(value)
-}
+export const isStudentConversations = Schema.is(StudentConversations)

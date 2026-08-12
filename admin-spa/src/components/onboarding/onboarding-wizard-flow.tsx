@@ -127,13 +127,13 @@ function OnboardingStepper({
         <p className='text-xs font-semibold tracking-[0.14em] text-[var(--admin-muted)] uppercase'>
           Step {stepIndex + 1} of {onboardingSteps.length}
         </p>
-        <div
+        <progress
           aria-label='Setup progress'
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={progressValue}
           className='h-1.5 w-32 overflow-hidden rounded-full bg-[var(--admin-line)] sm:w-44'
-          role='progressbar'
+          value={progressValue}
         >
           <span
             className={cn(
@@ -141,7 +141,7 @@ function OnboardingStepper({
               getProgressWidthClass(progressValue),
             )}
           />
-        </div>
+        </progress>
       </div>
       <div
         className='grid grid-cols-2 gap-2 sm:grid-cols-4'

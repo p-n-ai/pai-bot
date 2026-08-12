@@ -25,5 +25,5 @@ export function StatePanel({
 }
 
 export function LoadingStatus({ children }: { children: ReactNode }) {
-  return <p role='status'>{children}</p>
+  return <output>{children}</output>
 }

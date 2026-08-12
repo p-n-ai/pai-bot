@@ -195,7 +195,7 @@ function getBudgetSnapshot(
   view: AIUsageView,
 ): BudgetSnapshot {
   const limit = usage.budget_limit_tokens
-  if (typeof limit !== 'number' || limit <= 0) {
+  if (limit === null || limit === undefined || limit <= 0) {
     return { status: 'empty' }
   }
 
@@ -222,5 +222,5 @@ function getBudgetSnapshot(
 function readNonNegativeNumber(
   value: number | null | undefined,
 ): number | null {
-  return typeof value === 'number' ? Math.max(0, value) : null
+  return value === null || value === undefined ? null : Math.max(0, value)
 }

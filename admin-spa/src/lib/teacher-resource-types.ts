@@ -28,12 +28,8 @@ export interface UploadTeacherResourceInput {
   classIDs: Array<string>
 }
 
-const matchesTeacherResource = Schema.is(TeacherResourceSchema)
-
 /** Returns whether an unknown response satisfies the teacher-resource contract. */
-export function isTeacherResource(value: unknown): value is TeacherResource {
-  return matchesTeacherResource(value)
-}
+export const isTeacherResource = Schema.is(TeacherResourceSchema)
 
 export function isAllowedTeacherResourceFile(file: File): boolean {
   const extension = file.name.split('.').pop()?.toLowerCase()

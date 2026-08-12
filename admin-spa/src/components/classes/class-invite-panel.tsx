@@ -64,9 +64,8 @@ export function ClassInvitePanel() {
         </p>
       ) : null}
       {invite.latestInvite ? (
-        <div
+        <output
           className='grid gap-3 rounded-lg border border-border bg-muted/30 p-4'
-          role='status'
         >
           <div>
             <p className='font-medium'>
@@ -99,7 +98,7 @@ export function ClassInvitePanel() {
               </span>
             ) : null}
           </div>
-        </div>
+        </output>
       ) : null}
       <Button
         className='min-h-11 w-full sm:w-fit'

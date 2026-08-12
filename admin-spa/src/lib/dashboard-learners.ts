@@ -49,11 +49,10 @@ function getDashboardLearner(
   let weakestTopicID: string | null = null
 
   for (const topicID of topicIDs) {
-    const score = student.topics[topicID]
-
-    if (typeof score !== 'number') {
+    if (!Object.prototype.hasOwnProperty.call(student.topics, topicID)) {
       continue
     }
+    const score = student.topics[topicID]
 
     scoreCount += 1
     scoreTotal += score
@@ -125,11 +124,11 @@ function compareLearners(
   return left.student.name.localeCompare(right.student.name)
 }
 
-const learnerStatusOrder: Record<DashboardLearner['status'], number> = {
+const learnerStatusOrder = {
   attention: 0,
   unmeasured: 1,
   'on-track': 2,
-}
+} satisfies Record<DashboardLearner['status'], number>
 
 function formatTopicLabel(topicID: string): string {
   return topicID

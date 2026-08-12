@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 
+import type { LoginInput } from '@/lib/auth-client'
 import type { AuthSession, SchoolChoice } from '@/lib/auth-types'
 import { Building2Icon } from '@/components/ui/pandai-icons'
 import { AuthErrorAlert } from '@/components/shared/auth-error-alert'
@@ -83,11 +84,15 @@ export function LoginForm({
 
       beginSubmit()
 
-      loginWithPassword({
+      const input: LoginInput = {
         email: email.value.trim(),
         password: password.value,
-        ...(tenantID ? { tenant_id: tenantID } : {}),
-      })
+      }
+      if (tenantID) {
+        input.tenant_id = tenantID
+      }
+
+      loginWithPassword(input)
         .then((result) => {
           if (result.kind === 'tenant_required') {
             setTenantChoices(result.tenant_choices)
@@ -97,10 +102,10 @@ export function LoginForm({
 
           onAuthenticated(result.session)
         })
-        .catch((caught: unknown) => {
+        .catch((cause: unknown) => {
           setError(
             readAuthDisplayError(
-              caught,
+              cause,
               'Unable to sign in',
               'Unable to reach the sign-in service. Check your connection and try again.',
             ),
@@ -364,16 +369,13 @@ function SchoolSelect({
       className='rounded-xl border border-[var(--border-primary-default)] bg-[var(--surface-primary-default-subtle)] p-3'
       data-disabled={disabled}
     >
-      <div
-        className='mb-3 flex gap-2 text-sm leading-5 text-[var(--text-default-body)]'
-        role='status'
-      >
+      <output className='mb-3 flex gap-2 text-sm leading-5 text-[var(--text-default-body)]'>
         <Building2Icon aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
         <p className='m-0'>
           This email belongs to more than one school. Choose where you want to
           sign in.
         </p>
-      </div>
+      </output>
       <FieldLabel
         className='text-xs font-semibold text-[var(--text-default-heading)]'
         htmlFor={id}

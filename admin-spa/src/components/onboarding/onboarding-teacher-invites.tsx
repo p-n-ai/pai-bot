@@ -295,11 +295,13 @@ async function issueTeacherInvite(email: string): Promise<InviteOutcome> {
   }
 }
 
-function getInviteCounts(inviteOutcomes: Array<InviteOutcome>): {
+interface InviteCounts {
   failed: number
   sent: number
   total: number
-} {
+}
+
+function getInviteCounts(inviteOutcomes: Array<InviteOutcome>): InviteCounts {
   return {
     failed: inviteOutcomes.filter(
       (item) => item.error || item.invite?.delivery_status === 'failed',
@@ -311,15 +313,7 @@ function getInviteCounts(inviteOutcomes: Array<InviteOutcome>): {
   }
 }
 
-function getInviteCountSummary({
-  failed,
-  sent,
-  total,
-}: {
-  failed: number
-  sent: number
-  total: number
-}): string {
+function getInviteCountSummary({ failed, sent, total }: InviteCounts): string {
   const inviteLabel = total === 1 ? 'invite' : 'invites'
   const followUpVerb = failed === 1 ? 'needs' : 'need'
 
@@ -352,9 +346,10 @@ function resolveInviteLink(invite: InviteRecord): string {
     return invite.activation_url
   }
 
-  if (typeof window === 'undefined') {
+  const origin = globalThis.window.location.origin
+  if (!origin) {
     return `/activate?token=${encodeURIComponent(invite.invite_token)}`
   }
 
-  return `${window.location.origin}/activate?token=${encodeURIComponent(invite.invite_token)}`
+  return `${origin}/activate?token=${encodeURIComponent(invite.invite_token)}`
 }

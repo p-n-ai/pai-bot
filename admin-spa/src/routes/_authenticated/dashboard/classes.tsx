@@ -43,7 +43,7 @@ function ClassesRoute() {
             : (groups[0]?.id ?? ''),
         )
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         if (requestVersion.current !== currentRequest) {
           return
         }
@@ -52,8 +52,8 @@ function ClassesRoute() {
           status: 'error',
           groups: current.groups,
           error:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to load classes. Check your connection and try again.',
         }))
       })

@@ -3,7 +3,6 @@
 import * as React from 'react'
 import { OTPInput, OTPInputContext } from 'input-otp'
 
-import { MinusIcon } from '@/components/ui/pandai-icons'
 import { cn } from '@/lib/utils'
 
 type InputOTPSlotState = React.ContextType<
@@ -77,16 +76,13 @@ function InputOTPSlot({
   )
 }
 
-function InputOTPSeparator({ ...props }: React.ComponentProps<'div'>) {
+function InputOTPSeparator({ ...props }: React.ComponentProps<'hr'>) {
   return (
-    <div
+    <hr
       data-slot='input-otp-separator'
       className="flex items-center [&_svg:not([class*='size-'])]:size-4"
-      role='separator'
       {...props}
-    >
-      <MinusIcon />
-    </div>
+    />
   )
 }
 

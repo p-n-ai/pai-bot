@@ -49,15 +49,8 @@ export interface CreateGroupInput {
   subject: 'Mathematics'
 }
 
-const matchesGroupRecord = Schema.is(GroupRecordSchema)
-const matchesGroupDetail = Schema.is(GroupDetailSchema)
-
 /** Returns whether an unknown response satisfies the group summary contract. */
-export function isGroupRecord(value: unknown): value is GroupRecord {
-  return matchesGroupRecord(value)
-}
+export const isGroupRecord = Schema.is(GroupRecordSchema)
 
 /** Returns whether an unknown response satisfies the group detail contract. */
-export function isGroupDetail(value: unknown): value is GroupDetail {
-  return matchesGroupDetail(value)
-}
+export const isGroupDetail = Schema.is(GroupDetailSchema)

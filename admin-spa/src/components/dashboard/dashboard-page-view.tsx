@@ -203,10 +203,9 @@ function ClassSelector({
 
 function DashboardSkeleton() {
   return (
-    <div
+    <output
       className='mt-8 flex flex-col gap-5'
       data-testid='dashboard-skeleton'
-      role='status'
     >
       <span className='sr-only'>Loading class progress</span>
       <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-5'>
@@ -244,7 +243,7 @@ function DashboardSkeleton() {
           </div>
         </div>
       </AdminSurface>
-    </div>
+    </output>
   )
 }
 

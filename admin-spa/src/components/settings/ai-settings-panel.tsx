@@ -52,13 +52,13 @@ type CodexState =
   | { status: 'error'; message: string }
   | { status: 'ready'; auth: CodexAuthStatus }
 
-const providerLabels: Record<APIKeyProviderName, string> = {
+const providerLabels = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
   google: 'Google',
   openrouter: 'OpenRouter',
-}
+} satisfies Record<APIKeyProviderName, string>
 
 export function AISettingsPanel() {
   const [state, setState] = useState<PanelState>({ status: 'loading' })
@@ -90,12 +90,12 @@ export function AISettingsPanel() {
   useEffect(() => {
     getAISettings()
       .then(acceptSettings)
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         setState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to load AI settings. Check your connection and try again.',
         })
       })
@@ -104,16 +104,16 @@ export function AISettingsPanel() {
   const loadCodexStatus = useCallback(() => {
     return getCodexAuthStatus()
       .then((auth) => setCodexState({ status: 'ready', auth }))
-      .catch((caught: unknown) => {
-        if (caught instanceof AdminAPIError && caught.status === 404) {
+      .catch((cause: unknown) => {
+        if (cause instanceof AdminAPIError && cause.status === 404) {
           setCodexState({ status: 'unavailable' })
           return
         }
         setCodexState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to check the Codex connection. Try again.',
         })
       })
@@ -139,12 +139,12 @@ export function AISettingsPanel() {
     setIsStartingCodex(true)
     startCodexDeviceAuth()
       .then((auth) => setCodexState({ status: 'ready', auth }))
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         setCodexState({
           status: 'error',
           message:
-            caught instanceof Error
-              ? caught.message
+            cause instanceof Error
+              ? cause.message
               : 'Unable to start Codex verification. Try again.',
         })
       })

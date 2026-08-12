@@ -1,8 +1,17 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
 const StringArray = Schema.mutable(Schema.Array(Schema.String))
-const ThemeConfig = Schema.Record(Schema.String, Schema.Unknown)
+
+export const EmbedThemeConfigSchema = Schema.Struct({
+  color: Schema.optionalKey(Schema.String),
+  language: Schema.optionalKey(Schema.String),
+  position: Schema.optionalKey(Schema.String),
+})
+
+export interface EmbedThemeConfig extends EffectSchema.Type<
+  typeof EmbedThemeConfigSchema
+> {}
 
 const EmbedConfigWire = Schema.Struct({
   id: Schema.optionalKey(Schema.Unknown),
@@ -29,7 +38,7 @@ export const EmbedConfigSchema = Schema.Struct({
   enabled: Schema.Boolean,
   public_embed_base_url: Schema.String,
   allowed_origins: StringArray,
-  theme_config: ThemeConfig,
+  theme_config: EmbedThemeConfigSchema,
   created_at: Schema.optionalKey(Schema.String),
   updated_at: Schema.optionalKey(Schema.String),
 })
@@ -40,22 +49,18 @@ export interface EmbedConfig extends EffectSchema.Type<
 
 export interface UpdateEmbedConfigInput {
   enabled?: boolean
-  theme_config?: Record<string, unknown>
+  theme_config?: EmbedThemeConfig
 }
 
 const decodeEmbedConfigWire = Schema.decodeUnknownOption(EmbedConfigWire)
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean)
 const decodeString = Schema.decodeUnknownOption(Schema.String)
 const decodeStringArray = Schema.decodeUnknownOption(StringArray)
-const decodeThemeConfig = Schema.decodeUnknownOption(ThemeConfig)
+const decodeThemeConfig = Schema.decodeUnknownOption(EmbedThemeConfigSchema)
 
-/** Decodes and normalizes snake-case or Go-style embed configuration fields. */
-export function readEmbedConfig(value: unknown): EmbedConfig | null {
-  const wire = Option.getOrNull(decodeEmbedConfigWire(value))
-  if (wire === null) {
-    return null
-  }
-
+function normalizeEmbedConfig(
+  wire: typeof EmbedConfigWire.Type,
+): EmbedConfig | null {
   const enabled = Option.getOrNull(decodeBoolean(wire.enabled ?? wire.Enabled))
   const tenantID = Option.getOrNull(
     decodeString(wire.tenant_id ?? wire.TenantID),
@@ -89,3 +94,10 @@ export function readEmbedConfig(value: unknown): EmbedConfig | null {
     ),
   }
 }
+
+/** Decodes and normalizes snake-case or Go-style embed configuration fields. */
+export const readEmbedConfig = flow(
+  decodeEmbedConfigWire,
+  Option.map(normalizeEmbedConfig),
+  Option.getOrNull,
+)

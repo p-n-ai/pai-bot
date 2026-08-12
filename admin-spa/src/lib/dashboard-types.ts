@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 import type { Schema as EffectSchema } from 'effect/Schema'
 
 export const ClassProgressStudentSchema = Schema.Struct({
@@ -32,13 +32,18 @@ export interface ClassProgress extends EffectSchema.Type<
 
 const decodeClassProgress = Schema.decodeUnknownOption(ClassProgressWire)
 
-/** Decodes class progress while normalizing nullable backend slices to arrays. */
-export function readClassProgress(value: unknown): ClassProgress | null {
-  return Option.match(decodeClassProgress(value), {
-    onNone: () => null,
-    onSome: (progress) => ({
-      students: progress.students ?? [],
-      topic_ids: progress.topic_ids ?? [],
-    }),
-  })
+function normalizeClassProgress(
+  progress: typeof ClassProgressWire.Type,
+): ClassProgress {
+  return {
+    students: progress.students ?? [],
+    topic_ids: progress.topic_ids ?? [],
+  }
 }
+
+/** Decodes class progress while normalizing nullable backend slices to arrays. */
+export const readClassProgress = flow(
+  decodeClassProgress,
+  Option.map(normalizeClassProgress),
+  Option.getOrNull,
+)

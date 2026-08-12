@@ -1,6 +1,10 @@
-import { Option, Schema } from 'effect'
+import { Option, Schema, flow } from 'effect'
 
-import { SchoolChoiceSchema, isAuthSession } from './auth-types'
+import {
+  AuthSessionSchema,
+  SchoolChoiceSchema,
+  isAuthSession,
+} from './auth-types'
 import { isSafeRedirectPath } from './rbac-paths'
 import type { AuthSession } from './auth-types'
 
@@ -35,8 +39,6 @@ const TenantRequiredPayloadSchema = Schema.Struct({
   tenant_choices: Schema.mutable(Schema.Array(SchoolChoiceSchema)),
 })
 
-type TenantRequiredPayload = typeof TenantRequiredPayloadSchema.Type
-
 export type LoginResult =
   | {
       kind: 'authenticated'
@@ -55,7 +57,24 @@ const ErrorPayloadSchema = Schema.Struct({
   error: Schema.String,
 })
 
-const matchesAuthCapabilities = Schema.is(AuthCapabilitiesSchema)
+const AuthPayloadSchema = Schema.Union([
+  AuthSessionSchema,
+  TenantRequiredPayloadSchema,
+  ErrorPayloadSchema,
+  Schema.String,
+  Schema.Null,
+])
+
+type AuthPayload = typeof AuthPayloadSchema.Type
+
+const decodeAuthPayload = Schema.decodeUnknownOption(AuthPayloadSchema)
+const readAuthPayload = flow(
+  decodeAuthPayload,
+  Option.getOrElse(() => null),
+)
+const isAuthCapabilities = Schema.is(AuthCapabilitiesSchema)
+const isTenantRequiredPayload = Schema.is(TenantRequiredPayloadSchema)
+const isStringPayload = Schema.is(Schema.String)
 
 /** Reads runtime auth availability without exposing provider credentials. */
 export async function readAuthCapabilities(
@@ -162,7 +181,7 @@ export async function logout(fetcher: typeof fetch = fetch): Promise<void> {
 
 function postAuthJSON(
   path: string,
-  input: unknown,
+  input: LoginInput | AcceptInviteInput,
   fetcher: typeof fetch,
 ): Promise<Response> {
   return fetcher(path, {
@@ -186,7 +205,7 @@ export function buildGoogleLoginURL(nextPath: string | undefined): string {
   return `${url.pathname}${url.search}`
 }
 
-async function readLoginPayload(response: Response): Promise<unknown> {
+async function readLoginPayload(response: Response): Promise<AuthPayload> {
   const text = await response.text()
 
   if (!text.trim()) {
@@ -194,14 +213,14 @@ async function readLoginPayload(response: Response): Promise<unknown> {
   }
 
   try {
-    return JSON.parse(text) as unknown
+    return readAuthPayload(JSON.parse(text))
   } catch {
     return text
   }
 }
 
 function parseLoginFailure(
-  payload: unknown,
+  payload: AuthPayload,
   status: number,
 ): TenantRequiredResult {
   if (isTenantRequiredPayload(payload)) {
@@ -215,13 +234,7 @@ function parseLoginFailure(
   throw new Error(readErrorMessage(payload, `Login failed: ${status}`))
 }
 
-function isTenantRequiredPayload(
-  payload: unknown,
-): payload is TenantRequiredPayload {
-  return Schema.is(TenantRequiredPayloadSchema)(payload)
-}
-
-function readErrorMessage(payload: unknown, fallback: string): string {
+function readErrorMessage(payload: AuthPayload, fallback: string): string {
   if (isInternalAuthFailurePayload(payload)) {
     return 'Sign-in service is taking too long. Try again.'
   }
@@ -229,8 +242,8 @@ function readErrorMessage(payload: unknown, fallback: string): string {
   return readStringPayload(payload) ?? readPayloadError(payload) ?? fallback
 }
 
-function isInternalAuthFailurePayload(payload: unknown): boolean {
-  if (typeof payload !== 'string') {
+function isInternalAuthFailurePayload(payload: AuthPayload): boolean {
+  if (!isStringPayload(payload)) {
     return false
   }
 
@@ -243,19 +256,15 @@ function isInternalAuthFailurePayload(payload: unknown): boolean {
   )
 }
 
-function readStringPayload(payload: unknown): string | undefined {
-  return typeof payload === 'string' ? payload : undefined
+function readStringPayload(payload: AuthPayload): string | undefined {
+  return isStringPayload(payload) ? payload : undefined
 }
 
-function readPayloadError(payload: unknown): string | undefined {
+function readPayloadError(payload: AuthPayload): string | undefined {
   return Option.getOrUndefined(
     Option.map(
       Schema.decodeUnknownOption(ErrorPayloadSchema)(payload),
       (errorPayload) => errorPayload.error,
     ),
   )
-}
-
-function isAuthCapabilities(value: unknown): value is AuthCapabilities {
-  return matchesAuthCapabilities(value)
 }

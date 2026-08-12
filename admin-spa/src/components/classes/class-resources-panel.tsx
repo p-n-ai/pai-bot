@@ -88,9 +88,9 @@ export function ClassResourcesPanel({
           dispatch({ type: 'loaded', resources: items })
         }
       })
-      .catch((caught: unknown) => {
+      .catch((cause: unknown) => {
         if (!cancelled) {
-          dispatch({ type: 'loadFailed', error: readResourceError(caught) })
+          dispatch({ type: 'loadFailed', error: readResourceError(cause) })
         }
       })
 
@@ -348,10 +348,10 @@ function UploadFeedback({
     )
   }
   if (status === 'complete') {
-    return <p role='status'>Resource is ready for tutor search.</p>
+    return <output>Resource is ready for tutor search.</output>
   }
   if (status === 'uploading') {
-    return <p role='status'>Preparing the file for tutor search…</p>
+    return <output>Preparing the file for tutor search…</output>
   }
   return null
 }
@@ -509,12 +509,12 @@ function ResourceItem({
   )
 }
 
-function readResourceError(caught: unknown): string {
-  if (caught instanceof AdminAPIError && caught.status === 401) {
+function readResourceError(cause: unknown): string {
+  if (cause instanceof AdminAPIError && cause.status === 401) {
     return 'Your session expired. Sign in again.'
   }
-  return caught instanceof Error
-    ? caught.message
+  return cause instanceof Error
+    ? cause.message
     : 'Unable to update this resource. Check your connection and try again.'
 }
 
