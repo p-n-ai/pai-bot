@@ -1,5 +1,6 @@
 const buildAIPages = [
   'overview',
+  'character',
   'curriculum',
   'teaching',
   'test',

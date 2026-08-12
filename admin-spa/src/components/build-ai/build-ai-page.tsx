@@ -1,10 +1,11 @@
 /* oxlint-disable react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop -- This local illustrative state machine intentionally keeps event transitions beside their controls; child views are not memoized, so callback identity does not affect rendering. */
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useId, useReducer, useState } from 'react'
 import {
   ActivityIcon,
   AlertTriangleIcon,
   ArrowLeftIcon,
   BookOpenIcon,
+  BotIcon,
   CheckCircle2Icon,
   CircleDotIcon,
   FlaskConicalIcon,
@@ -16,7 +17,13 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { BuildAIPageKey } from '@/lib/build-ai-search'
+import type { CharacterConfig } from '@/components/build-ai/character-creator'
 
+import {
+  CharacterCreator,
+  characterSummary,
+  defaultCharacterConfig,
+} from '@/components/build-ai/character-creator'
 import { AdminSurface } from '@/components/shared/admin-surface'
 import {
   AlertDialog,
@@ -59,6 +66,7 @@ interface TeachingSettings {
 
 interface PublishedVersion {
   readonly authorizedClassCount: number
+  readonly character: CharacterConfig
   readonly curriculumRevision: string
   readonly draftRevision: number
   readonly id: string
@@ -77,6 +85,7 @@ const initialTeachingSettings: TeachingSettings = {
 const initialPublishedVersions = [
   {
     authorizedClassCount: 4,
+    character: defaultCharacterConfig,
     curriculumRevision: '2026.08',
     draftRevision: 17,
     id: '3',
@@ -86,6 +95,7 @@ const initialPublishedVersions = [
   },
   {
     authorizedClassCount: 0,
+    character: defaultCharacterConfig,
     curriculumRevision: '2026.06',
     draftRevision: 12,
     id: '2',
@@ -100,12 +110,215 @@ const initialPublishedVersions = [
   },
 ] as const satisfies ReadonlyArray<PublishedVersion>
 
+interface BuildAIWorkflowState {
+  readonly announcement: string
+  readonly character: CharacterConfig
+  readonly draftBase: string
+  readonly draftRevision: number
+  readonly draftSaved: boolean
+  readonly educatorReviewComplete: boolean
+  readonly previewState: PreviewState
+  readonly publishedVersions: ReadonlyArray<PublishedVersion>
+  readonly savedCharacter: CharacterConfig
+  readonly savedDraftBase: string
+  readonly savedTeachingSettings: TeachingSettings
+  readonly scenario: string
+  readonly teachingSettings: TeachingSettings
+  readonly testState: TestState
+  readonly versionNote: string
+}
+
+type BuildAIWorkflowAction =
+  | {
+      readonly config: CharacterConfig
+      readonly message: string
+      readonly type: 'character-updated'
+    }
+  | { readonly type: 'draft-saved' }
+  | { readonly type: 'changes-discarded' }
+  | { readonly type: 'tests-run' }
+  | { readonly type: 'educator-review-completed' }
+  | { readonly type: 'version-published' }
+  | { readonly type: 'draft-started' }
+  | { readonly state: PreviewState; readonly type: 'preview-updated' }
+  | { readonly scenario: string; readonly type: 'scenario-updated' }
+  | {
+      readonly message: string
+      readonly setting: TeachingSetting
+      readonly type: 'teaching-setting-updated'
+      readonly value: string
+    }
+  | { readonly type: 'version-note-updated'; readonly value: string }
+
+const initialBuildAIWorkflowState: BuildAIWorkflowState = {
+  announcement: '',
+  character: defaultCharacterConfig,
+  draftBase: '3',
+  draftRevision: 18,
+  draftSaved: true,
+  educatorReviewComplete: true,
+  previewState: 'not-run',
+  publishedVersions: initialPublishedVersions,
+  savedCharacter: defaultCharacterConfig,
+  savedDraftBase: '3',
+  savedTeachingSettings: initialTeachingSettings,
+  scenario: 'fractions',
+  teachingSettings: initialTeachingSettings,
+  testState: 'out-of-date',
+  versionNote: '',
+}
+
+function markWorkflowChanged(
+  state: BuildAIWorkflowState,
+  message: string,
+): Pick<BuildAIWorkflowState, 'announcement' | 'draftSaved' | 'previewState'> {
+  return {
+    announcement: `${message} The Draft has unsaved changes.`,
+    draftSaved: false,
+    previewState:
+      state.previewState === 'ready' ? 'out-of-date' : state.previewState,
+  }
+}
+
+function buildAIWorkflowReducer(
+  state: BuildAIWorkflowState,
+  action: BuildAIWorkflowAction,
+): BuildAIWorkflowState {
+  switch (action.type) {
+    case 'character-updated':
+      return {
+        ...state,
+        ...markWorkflowChanged(state, action.message),
+        character: action.config,
+      }
+    case 'teaching-setting-updated':
+      return {
+        ...state,
+        ...markWorkflowChanged(state, action.message),
+        teachingSettings: {
+          ...state.teachingSettings,
+          [action.setting]: action.value,
+        },
+      }
+    case 'draft-saved':
+      return {
+        ...state,
+        announcement:
+          'Draft saved. Existing Published versions and classes are unchanged. Test results and educator review must be refreshed for this saved revision.',
+        draftRevision: state.draftRevision + 1,
+        draftSaved: true,
+        educatorReviewComplete: false,
+        savedCharacter: state.character,
+        savedDraftBase: state.draftBase,
+        savedTeachingSettings: state.teachingSettings,
+        testState: 'out-of-date',
+        versionNote: '',
+      }
+    case 'changes-discarded':
+      return {
+        ...state,
+        announcement: 'Unsaved Draft changes discarded.',
+        character: state.savedCharacter,
+        draftBase: state.savedDraftBase,
+        draftSaved: true,
+        previewState:
+          state.previewState === 'ready' ? 'out-of-date' : state.previewState,
+        teachingSettings: state.savedTeachingSettings,
+      }
+    case 'tests-run':
+      if (!state.draftSaved) {
+        return {
+          ...state,
+          announcement: 'Save the Draft before running required tests.',
+        }
+      }
+      return {
+        ...state,
+        announcement:
+          'Synthetic Test runner completed: required results passed for the exact saved Draft.',
+        testState: 'passed',
+      }
+    case 'educator-review-completed':
+      if (!state.draftSaved || state.testState !== 'passed') {
+        return {
+          ...state,
+          announcement:
+            'Save the Draft and complete required tests before educator review.',
+        }
+      }
+      return {
+        ...state,
+        announcement:
+          'Synthetic educator review completed for the exact saved Draft.',
+        educatorReviewComplete: true,
+      }
+    case 'version-published': {
+      const currentDraftPublished = state.publishedVersions.some(
+        (version) => version.draftRevision === state.draftRevision,
+      )
+      if (currentDraftPublished) return state
+      const nextIdentifier = String(
+        state.publishedVersions.reduce(
+          (maximum, { id }) => Math.max(maximum, Number(id)),
+          0,
+        ) + 1,
+      )
+      const publishedVersion: PublishedVersion = {
+        authorizedClassCount: 0,
+        character: state.character,
+        curriculumRevision: '2026.08',
+        draftRevision: state.draftRevision,
+        id: nextIdentifier,
+        note: state.versionNote.trim(),
+        publisher: 'Nabila',
+        teachingSettings: state.teachingSettings,
+      }
+      return {
+        ...state,
+        announcement: `Published version ${nextIdentifier} is available. No classes changed.`,
+        draftBase: nextIdentifier,
+        publishedVersions: [publishedVersion, ...state.publishedVersions],
+        savedDraftBase: nextIdentifier,
+      }
+    }
+    case 'draft-started': {
+      const sourceVersion =
+        state.publishedVersions.find((version) => version.id === '2') ??
+        initialPublishedVersions[1]
+      const latestPublishedVersion = state.publishedVersions[0]
+      return {
+        ...state,
+        announcement: `Private Draft started from Published version ${sourceVersion.id}. Published version ${latestPublishedVersion.id} remains available and no classes changed.`,
+        character: sourceVersion.character,
+        draftBase: sourceVersion.id,
+        draftSaved: false,
+        educatorReviewComplete: false,
+        teachingSettings: sourceVersion.teachingSettings,
+        testState: 'out-of-date',
+        versionNote: '',
+      }
+    }
+    case 'preview-updated':
+      return { ...state, previewState: action.state }
+    case 'scenario-updated':
+      return {
+        ...state,
+        previewState:
+          state.previewState === 'ready' ? 'out-of-date' : state.previewState,
+        scenario: action.scenario,
+      }
+    case 'version-note-updated':
+      return { ...state, versionNote: action.value }
+  }
+}
+
 const destinations: ReadonlyArray<{
   id: BuildPage
   label: string
   icon: typeof GaugeIcon
 }> = [
   { id: 'overview', label: 'Overview', icon: GaugeIcon },
+  { id: 'character', label: 'Character', icon: BotIcon },
   { id: 'curriculum', label: 'Curriculum', icon: BookOpenIcon },
   { id: 'teaching', label: 'Teaching', icon: Settings2Icon },
   { id: 'test', label: 'Test tutor', icon: FlaskConicalIcon },
@@ -125,25 +338,24 @@ export function BuildAIPage({
   onPageChange: (page: BuildAIPageKey) => void
   page: BuildAIPageKey
 }) {
-  const [announcement, setAnnouncement] = useState('')
-  const [draftBase, setDraftBase] = useState('3')
-  const [savedDraftBase, setSavedDraftBase] = useState('3')
-  const [draftRevision, setDraftRevision] = useState(18)
-  const [draftSaved, setDraftSaved] = useState(true)
-  const [educatorReviewComplete, setEducatorReviewComplete] = useState(true)
-  const [previewState, setPreviewState] = useState<PreviewState>('not-run')
-  const [publishedVersions, setPublishedVersions] = useState<
-    ReadonlyArray<PublishedVersion>
-  >(initialPublishedVersions)
-  const [savedTeachingSettings, setSavedTeachingSettings] = useState(
-    initialTeachingSettings,
+  const [workflow, dispatch] = useReducer(
+    buildAIWorkflowReducer,
+    initialBuildAIWorkflowState,
   )
-  const [scenario, setScenario] = useState('fractions')
-  const [teachingSettings, setTeachingSettings] = useState(
-    initialTeachingSettings,
-  )
-  const [testState, setTestState] = useState<TestState>('out-of-date')
-  const [versionNote, setVersionNote] = useState('')
+  const {
+    announcement,
+    character,
+    draftBase,
+    draftRevision,
+    draftSaved,
+    educatorReviewComplete,
+    previewState,
+    publishedVersions,
+    scenario,
+    teachingSettings,
+    testState,
+    versionNote,
+  } = workflow
 
   const currentDraftPublished = publishedVersions.some(
     (version) => version.draftRevision === draftRevision,
@@ -159,111 +371,47 @@ export function BuildAIPage({
     [onPageChange],
   )
 
-  const markDraftChanged = useCallback((message: string) => {
-    setDraftSaved(false)
-    setPreviewState((current) =>
-      current === 'ready' ? 'out-of-date' : current,
-    )
-    setAnnouncement(`${message} The Draft has unsaved changes.`)
-  }, [])
-
   const updateTeachingSetting = useCallback(
     (setting: TeachingSetting, value: string, message: string) => {
-      setTeachingSettings((current) => ({ ...current, [setting]: value }))
-      markDraftChanged(message)
+      dispatch({ message, setting, type: 'teaching-setting-updated', value })
     },
-    [markDraftChanged],
+    [],
   )
 
-  const saveDraft = useCallback(() => {
-    setDraftRevision((current) => current + 1)
-    setDraftSaved(true)
-    setEducatorReviewComplete(false)
-    setSavedDraftBase(draftBase)
-    setSavedTeachingSettings(teachingSettings)
-    setTestState('out-of-date')
-    setVersionNote('')
-    setAnnouncement(
-      'Draft saved. Existing Published versions and classes are unchanged. Test results and educator review must be refreshed for this saved revision.',
-    )
-  }, [draftBase, teachingSettings])
-
-  const discardChanges = useCallback(() => {
-    setDraftBase(savedDraftBase)
-    setDraftSaved(true)
-    setTeachingSettings(savedTeachingSettings)
-    setPreviewState((current) =>
-      current === 'ready' ? 'out-of-date' : current,
-    )
-    setAnnouncement('Unsaved Draft changes discarded.')
-  }, [savedDraftBase, savedTeachingSettings])
-
-  const runTests = useCallback(() => {
-    if (!draftSaved) {
-      setAnnouncement('Save the Draft before running required tests.')
-      return
-    }
-    setTestState('passed')
-    setAnnouncement(
-      'Synthetic Test runner completed: required results passed for the exact saved Draft.',
-    )
-  }, [draftSaved])
-
-  const completeEducatorReview = useCallback(() => {
-    if (!draftSaved || testState !== 'passed') {
-      setAnnouncement(
-        'Save the Draft and complete required tests before educator review.',
-      )
-      return
-    }
-    setEducatorReviewComplete(true)
-    setAnnouncement(
-      'Synthetic educator review completed for the exact saved Draft.',
-    )
-  }, [draftSaved, testState])
-
-  const publishVersion = useCallback(() => {
-    if (currentDraftPublished) return
-    const nextIdentifier = String(
-      Math.max(...publishedVersions.map(({ id }) => Number(id))) + 1,
-    )
-    const publishedVersion: PublishedVersion = {
-      authorizedClassCount: 0,
-      curriculumRevision: '2026.08',
-      draftRevision,
-      id: nextIdentifier,
-      note: versionNote.trim(),
-      publisher: 'Nabila',
-      teachingSettings,
-    }
-    setPublishedVersions((current) => [publishedVersion, ...current])
-    setDraftBase(nextIdentifier)
-    setSavedDraftBase(nextIdentifier)
-    setAnnouncement(
-      `Published version ${nextIdentifier} is available. No classes changed.`,
-    )
-  }, [
-    currentDraftPublished,
-    draftRevision,
-    publishedVersions,
-    teachingSettings,
-    versionNote,
-  ])
-
-  const startDraft = useCallback(() => {
-    const sourceVersion =
-      publishedVersions.find((version) => version.id === '2') ??
-      initialPublishedVersions[1]
-    setDraftBase(sourceVersion.id)
-    setDraftSaved(false)
-    setEducatorReviewComplete(false)
-    setTeachingSettings(sourceVersion.teachingSettings)
-    setTestState('out-of-date')
-    setVersionNote('')
-    setAnnouncement(
-      `Private Draft started from Published version ${sourceVersion.id}. Published version ${latestPublishedVersion.id} remains available and no classes changed.`,
-    )
-  }, [latestPublishedVersion.id, publishedVersions])
+  const updateCharacter = useCallback(
+    (config: CharacterConfig, message: string) => {
+      dispatch({ config, message, type: 'character-updated' })
+    },
+    [],
+  )
+  const saveDraft = useCallback(() => dispatch({ type: 'draft-saved' }), [])
+  const discardChanges = useCallback(
+    () => dispatch({ type: 'changes-discarded' }),
+    [],
+  )
+  const runTests = useCallback(() => dispatch({ type: 'tests-run' }), [])
+  const completeEducatorReview = useCallback(
+    () => dispatch({ type: 'educator-review-completed' }),
+    [],
+  )
+  const publishVersion = useCallback(
+    () => dispatch({ type: 'version-published' }),
+    [],
+  )
+  const startDraft = useCallback(() => dispatch({ type: 'draft-started' }), [])
+  const setPreviewState = useCallback(
+    (state: PreviewState) => dispatch({ state, type: 'preview-updated' }),
+    [],
+  )
+  const setScenario = useCallback(
+    (nextScenario: string) =>
+      dispatch({ scenario: nextScenario, type: 'scenario-updated' }),
+    [],
+  )
+  const setVersionNote = useCallback(
+    (value: string) => dispatch({ type: 'version-note-updated', value }),
+    [],
+  )
 
   return (
     <section className='mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8'>
@@ -297,6 +445,7 @@ export function BuildAIPage({
         <div className='min-w-0' id='build-ai-content'>
           {page === 'overview' ? (
             <Overview
+              character={character}
               draftBase={draftBase}
               draftRevision={draftRevision}
               draftSaved={draftSaved}
@@ -306,18 +455,22 @@ export function BuildAIPage({
               testState={effectiveTestState}
             />
           ) : null}
+          {page === 'character' ? (
+            <CharacterPage
+              character={character}
+              draftSaved={draftSaved}
+              navigate={navigate}
+              saveDraft={saveDraft}
+              updateCharacter={updateCharacter}
+            />
+          ) : null}
           {page === 'curriculum' ? (
             <Curriculum
               navigate={navigate}
               previewState={previewState}
               scenario={scenario}
               setPreviewState={setPreviewState}
-              setScenario={(value) => {
-                setScenario(value)
-                setPreviewState((current) =>
-                  current === 'ready' ? 'out-of-date' : current,
-                )
-              }}
+              setScenario={setScenario}
             />
           ) : null}
           {page === 'teaching' ? (
@@ -486,6 +639,7 @@ function PageHeader({
 }
 
 function Overview({
+  character,
   draftBase,
   draftRevision,
   draftSaved,
@@ -494,6 +648,7 @@ function Overview({
   navigate,
   testState,
 }: {
+  character: CharacterConfig
   draftBase: string
   draftRevision: number
   draftSaved: boolean
@@ -531,6 +686,12 @@ function Overview({
       <AdminSurface className='shadow-none'>
         <h2 className='text-lg font-semibold'>Tutor state</h2>
         <dl className='mt-4 grid gap-5 border-t border-border pt-5 sm:grid-cols-2'>
+          <StateItem term='Character'>
+            {characterSummary(character)}.{' '}
+            {draftSaved
+              ? 'Saved with the private Draft.'
+              : 'Unsaved character changes. Learners are not affected.'}
+          </StateItem>
           <StateItem term='Curriculum'>
             Pandai KSSM Mathematics Form 1 · revision 2026.08 · approved and
             validated.
@@ -593,6 +754,43 @@ function Overview({
           </TextLink>
         </div>
       </section>
+    </div>
+  )
+}
+
+function CharacterPage({
+  character,
+  draftSaved,
+  navigate,
+  saveDraft,
+  updateCharacter,
+}: {
+  character: CharacterConfig
+  draftSaved: boolean
+  navigate: (page: BuildPage) => void
+  saveDraft: () => void
+  updateCharacter: (config: CharacterConfig, message: string) => void
+}) {
+  return (
+    <div>
+      <PageHeader page='character' title='Character'>
+        Create how the Tutor appears and reacts across learner-facing chat.
+        Character choices stay inside this private Draft until publication.
+      </PageHeader>
+      <CharacterCreator config={character} onChange={updateCharacter} />
+      <div className='mt-8 flex flex-wrap gap-3 border-t border-border pt-7'>
+        <Button className='min-h-11' disabled={draftSaved} onClick={saveDraft}>
+          <SaveIcon aria-hidden='true' />
+          Save Draft
+        </Button>
+        <Button
+          variant='outline'
+          disabled={!draftSaved}
+          onClick={() => navigate('curriculum')}
+        >
+          Continue to Curriculum
+        </Button>
+      </div>
     </div>
   )
 }
@@ -1201,6 +1399,11 @@ function Publish({
       draftSaved ? 'Ready' : 'Needs action',
       'Teaching',
     ],
+    [
+      'Character appearance saved with the Draft',
+      draftSaved ? 'Ready' : 'Needs action',
+      'Character',
+    ],
     ['Curriculum revision approved and validated', 'Ready', 'Curriculum'],
     [
       'Teaching and grounding Test results passed and current',
@@ -1278,18 +1481,21 @@ function Publish({
                 >
                   {status}
                 </Status>
-                {repair === 'Curriculum' ||
+                {repair === 'Character' ||
+                repair === 'Curriculum' ||
                 repair === 'Teaching' ||
                 repair === 'Test tutor' ? (
                   <button
                     className='min-h-10 text-sm font-medium underline underline-offset-4'
                     onClick={() =>
                       navigate(
-                        repair === 'Curriculum'
-                          ? 'curriculum'
-                          : repair === 'Teaching'
-                            ? 'teaching'
-                            : 'test',
+                        repair === 'Character'
+                          ? 'character'
+                          : repair === 'Curriculum'
+                            ? 'curriculum'
+                            : repair === 'Teaching'
+                              ? 'teaching'
+                              : 'test',
                       )
                     }
                     type='button'
@@ -1575,6 +1781,7 @@ function pageSummary(
   draftSaved: boolean,
   testState: TestState,
 ) {
+  if (page === 'character') return 'Configured'
   if (page === 'curriculum') return '2026.08'
   if (page === 'teaching') return draftSaved ? 'Saved' : 'Unsaved changes'
   if (page === 'test') return testLabel(testState)

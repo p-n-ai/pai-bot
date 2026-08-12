@@ -24,7 +24,7 @@ function renderPage(page: BuildAIPageKey = 'overview') {
 }
 
 describe('Build AI illustrative workspace', () => {
-  it('labels synthetic evidence and exposes the six approved destinations', () => {
+  it('labels synthetic evidence and exposes the seven creation destinations', () => {
     renderPage()
 
     expect(screen.getByText(/Synthetic illustrative data only/i)).toBeVisible()
@@ -38,6 +38,7 @@ describe('Build AI illustrative workspace', () => {
         .map((link) => link.textContent),
     ).toEqual([
       'Overview',
+      'Character',
       'Curriculum',
       'Teaching',
       'Test tutor',

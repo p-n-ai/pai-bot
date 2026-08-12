@@ -5,6 +5,7 @@ import { parseBuildAISearch } from './build-ai-search'
 describe('Build AI search state', () => {
   it.each([
     'overview',
+    'character',
     'curriculum',
     'teaching',
     'test',

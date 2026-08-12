@@ -12,7 +12,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BuildAIPage } from './build-ai-page'
 import type { BuildAIPageKey } from '@/lib/build-ai-search'
@@ -22,9 +22,41 @@ function Harness({ initialPage }: { initialPage: BuildAIPageKey }) {
   return <BuildAIPage onPageChange={setPage} page={page} />
 }
 
-afterEach(cleanup)
+class ResizeObserverStub {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+}
+
+beforeEach(() => vi.stubGlobal('ResizeObserver', ResizeObserverStub))
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('Build AI state transitions', () => {
+  it('creates a character inside the Draft before continuing to Curriculum', () => {
+    render(<Harness initialPage='character' />)
+    const preview = screen.getByRole('img', {
+      name: /P&AI Tutor character preview/i,
+    })
+
+    expect(preview).toHaveAttribute('data-shape', 'blob')
+    expect(preview).toHaveAttribute('data-expression', 'attentive')
+    fireEvent.click(screen.getByRole('button', { name: 'Bean' }))
+    expect(preview).toHaveAttribute('data-shape', 'bean')
+    expect(screen.getByTestId('build-ai-live-region')).toHaveTextContent(
+      'Character silhouette changed. The Draft has unsaved changes.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
+    expect(preview).toHaveAttribute('data-expression', 'thoughtful')
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue to Curriculum' }),
+    )
+    expect(screen.getByRole('heading', { name: 'Curriculum' })).toBeVisible()
+  })
+
   it('marks a Teaching preview stale after an edit and saves the Draft', () => {
     render(<Harness initialPage='teaching' />)
     fireEvent.click(screen.getByRole('button', { name: 'Run preview' }))
