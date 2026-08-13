@@ -366,11 +366,7 @@ func prefixedInboundDeliveryColumns(alias string) string {
 	` + alias + `.created_at, ` + alias + `.updated_at`
 }
 
-type inboundDeliveryRow interface {
-	Scan(...any) error
-}
-
-func scanInboundDelivery(row inboundDeliveryRow) (inboundDelivery, error) {
+func scanInboundDelivery(row pgx.Row) (inboundDelivery, error) {
 	var delivery inboundDelivery
 	var inboundJSON, resultJSON []byte
 	err := row.Scan(
