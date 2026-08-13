@@ -13,6 +13,10 @@ export default defineConfig({
       title: "P&AI Bot",
       description: "Open-source AI learning agent that teaches students through chat.",
       favicon: "/favicon.svg",
+      logo: {
+        src: "../docs/assets/pandai-logo.png",
+        alt: "Pandai",
+      },
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/p-n-ai/pai-bot" },
       ],
