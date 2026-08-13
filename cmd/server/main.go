@@ -45,6 +45,22 @@ func focusedPageChannelEnabled(devMode bool, msg chat.InboundMessage) bool {
 	return msg.Channel == "telegram" || (devMode && msg.Channel == "websocket")
 }
 
+type chatIngressProcessor struct {
+	gateway *chat.Gateway
+	router  *server.TenantTurnRouter
+}
+
+func (p chatIngressProcessor) ProcessTurn(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
+	if err := p.gateway.SendTyping(ctx, msg.Channel, msg.DestinationID()); err != nil {
+		slog.Warn("failed to send typing indicator", "error", err)
+	}
+	return p.router.ProcessTurn(ctx, msg)
+}
+
+func (p chatIngressProcessor) DeliverTurn(ctx context.Context, msg chat.InboundMessage, result agent.TurnResult) error {
+	return p.router.DeliverTurn(ctx, msg, result)
+}
+
 type runtimeSettingsUpdater interface {
 	Update(
 		context.Context,
@@ -499,30 +515,18 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			// when we add user enumeration from the database.
 			go scheduler.Start(ctx, []string{})
 
-			// Start long-polling with message handler.
-			// Shared inbound message handler for all channels.
-			processInbound := func(processCtx context.Context, msg chat.InboundMessage) {
-				// Show typing indicator while processing.
-				if err := gw.SendTyping(processCtx, msg.Channel, msg.DestinationID()); err != nil {
-					slog.Warn("failed to send typing indicator", "error", err)
-				}
-
-				_, err := turnRouter.ProcessAndDeliver(processCtx, msg)
-				if err != nil {
-					slog.Error("process or deliver turn failed", "error", err, "user_id", msg.UserID)
-				}
-			}
-			chatIngress, err := server.NewChatIngress(256, processInbound)
+			chatIngress, err := server.NewPostgresChatIngress(
+				store.TenantID(),
+				db.Pool,
+				chatIngressProcessor{gateway: gw, router: turnRouter},
+			)
 			if err != nil {
 				return nil, nil, fmt.Errorf("initialize chat ingress: %w", err)
 			}
-			handleInbound := func(msg chat.InboundMessage) {
-				if err := chatIngress.Enqueue(ctx, msg); err != nil && ctx.Err() == nil {
-					slog.Warn("failed to enqueue inbound chat message", "channel", msg.Channel, "error", err)
-				}
+			acceptInbound := func(acceptCtx context.Context, msg chat.InboundMessage) error {
+				return chatIngress.Accept(acceptCtx, msg)
 			}
-
-			chatWebhooks := gw.Webhooks(handleInbound)
+			chatWebhooks := gw.Webhooks(acceptInbound)
 
 			authService := auth.NewPostgresService(
 				db.Pool,
@@ -599,9 +603,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 				EmbedAuthenticator:    authService,
 				EmbedBaseURL:          cfg.Embed.BaseURL,
 				EmbedTokenTTL:         defaultEmbedTokenTTL,
-				WACloudChannel:        waCloudChannel,
 				ChatWebhooks:          chatWebhooks,
-				InboundHandler:        handleInbound,
 				AuthService:           authService,
 				JWTSecret:             cfg.Auth.JWTSecret,
 				AccessTokenTTL:        defaultAccessTokenTTL,
@@ -619,7 +621,7 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 					defer close(ingressDone)
 					chatIngress.Run(ingressCtx)
 				}()
-				if err := gw.StartAll(ctx, handleInbound); err != nil {
+				if err := gw.StartAll(ctx, acceptInbound); err != nil {
 					cancelIngress()
 					<-ingressDone
 					return err

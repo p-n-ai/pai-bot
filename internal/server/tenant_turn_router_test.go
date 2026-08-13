@@ -12,12 +12,18 @@ import (
 )
 
 type turnProcessorStub struct {
-	messages []chat.InboundMessage
+	messages   []chat.InboundMessage
+	deliveries []chat.InboundMessage
 }
 
-func (s *turnProcessorStub) ProcessAndDeliver(_ context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
+func (s *turnProcessorStub) ProcessTurn(_ context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
 	s.messages = append(s.messages, msg)
 	return agent.TurnResult{}, nil
+}
+
+func (s *turnProcessorStub) DeliverTurn(_ context.Context, msg chat.InboundMessage, _ agent.TurnResult) error {
+	s.deliveries = append(s.deliveries, msg)
+	return nil
 }
 
 func TestTenantTurnRouterRoutesAuthenticatedEmbedByTenant(t *testing.T) {
@@ -41,7 +47,11 @@ func TestTenantTurnRouterRoutesAuthenticatedEmbedByTenant(t *testing.T) {
 		ExternalID:      "telegram-user-b",
 		Text:            "hello",
 	}
-	if _, err := router.ProcessAndDeliver(t.Context(), message); err != nil {
+	result, err := router.ProcessTurn(t.Context(), message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := router.DeliverTurn(t.Context(), message, result); err != nil {
 		t.Fatal(err)
 	}
 	if len(defaultProcessor.messages) != 0 {
@@ -49,6 +59,9 @@ func TestTenantTurnRouterRoutesAuthenticatedEmbedByTenant(t *testing.T) {
 	}
 	if got := tenantProcessors["tenant-b"]; got == nil || len(got.messages) != 1 {
 		t.Fatalf("tenant-b processor messages = %#v", got)
+	}
+	if got := tenantProcessors["tenant-b"]; len(got.deliveries) != 1 {
+		t.Fatalf("tenant-b processor deliveries = %#v", got.deliveries)
 	}
 }
 
@@ -59,7 +72,7 @@ func TestTenantTurnRouterRejectsTenantWithoutInternalIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := router.ProcessAndDeliver(t.Context(), chat.InboundMessage{
+	if _, err := router.ProcessTurn(t.Context(), chat.InboundMessage{
 		Channel:  "embed",
 		TenantID: "tenant-b",
 		UserID:   "untrusted-external-id",

@@ -169,8 +169,8 @@ func TestWSClientOnceRendersTurnWithAndWithoutFocusedPage(t *testing.T) {
 				}
 			}
 			deliverer := server.NewGatewayTurnDeliverer(gateway, conversations, deliveries)
-			if err := channel.Start(context.Background(), func(msg chat.InboundMessage) {
-				_ = deliverer.DeliverTurn(context.Background(), msg, result)
+			if err := channel.Start(context.Background(), func(ctx context.Context, msg chat.InboundMessage) error {
+				return deliverer.DeliverTurn(ctx, msg, result)
 			}); err != nil {
 				t.Fatalf("Start() error = %v", err)
 			}

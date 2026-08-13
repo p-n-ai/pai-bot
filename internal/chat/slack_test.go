@@ -5,14 +5,17 @@ package chat
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,8 +44,9 @@ func TestSlackChannelWebhookNormalizesSignedMessage(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	var got InboundMessage
-	channel.WebhookHandler(func(message InboundMessage) {
+	channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
 		got = message
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -93,7 +97,10 @@ func TestSlackChannelWebhookPreservesThreadRoute(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	var got InboundMessage
-	channel.WebhookHandler(func(message InboundMessage) { got = message }).ServeHTTP(recorder, request)
+	channel.WebhookHandler(func(_ context.Context, message InboundMessage) error {
+		got = message
+		return nil
+	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -115,8 +122,9 @@ func TestSlackChannelWebhookAnswersSignedURLVerification(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/webhook/slack", bytes.NewReader(body))
 	signSlackTestRequest(request, body, "signing-secret", now)
 	recorder := httptest.NewRecorder()
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("URL verification must not dispatch an inbound message")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -137,8 +145,9 @@ func TestSlackChannelWebhookRejectsInvalidSignature(t *testing.T) {
 	request.Header.Set("X-Slack-Signature", "v0=bad")
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("invalid request must not dispatch an inbound message")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {
@@ -158,8 +167,9 @@ func TestSlackChannelWebhookRejectsStaleSignature(t *testing.T) {
 	signSlackTestRequest(request, body, "signing-secret", now.Add(-6*time.Minute))
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("stale request must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {
@@ -183,12 +193,84 @@ func TestSlackChannelWebhookIgnoresBotMessage(t *testing.T) {
 	signSlackTestRequest(request, body, "signing-secret", now)
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("bot message must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
+func TestSlackWebhookAcknowledgesOnlyAfterInboundAccepted(t *testing.T) {
+	now := time.Unix(1_725_000_000, 0)
+	channel, err := NewSlackChannel("xoxb-test", "signing-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.now = func() time.Time { return now }
+	body := []byte(`{
+		"type":"event_callback","event_id":"EvPersist",
+		"event":{"type":"message","user":"U1","channel":"C1","text":"hello","ts":"1.0"}
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/webhook/slack", bytes.NewReader(body))
+	signSlackTestRequest(request, body, "signing-secret", now)
+	recorder := httptest.NewRecorder()
+	accepted := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		channel.WebhookHandler(func(context.Context, InboundMessage) error {
+			close(accepted)
+			<-release
+			return nil
+		}).ServeHTTP(recorder, request)
+		close(done)
+	}()
+	select {
+	case <-accepted:
+	case <-time.After(time.Second):
+		t.Fatal("inbound acceptor was not called")
+	}
+	select {
+	case <-done:
+		t.Fatal("webhook acknowledged before inbound acceptance completed")
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("webhook did not finish after inbound acceptance")
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
+func TestSlackWebhookReturnsRetryableStatusWhenInboundPersistenceFails(t *testing.T) {
+	now := time.Unix(1_725_000_000, 0)
+	channel, err := NewSlackChannel("xoxb-test", "signing-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.now = func() time.Time { return now }
+	body := []byte(`{
+		"type":"event_callback","event_id":"EvFail",
+		"event":{"type":"message","user":"U1","channel":"C1","text":"hello","ts":"1.0"}
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/webhook/slack", bytes.NewReader(body))
+	signSlackTestRequest(request, body, "signing-secret", now)
+	recorder := httptest.NewRecorder()
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
+		return errors.New("private database failure")
+	}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if strings.Contains(recorder.Body.String(), "database") {
+		t.Fatalf("response exposed persistence error: %q", recorder.Body.String())
 	}
 }
 

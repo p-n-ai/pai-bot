@@ -27,7 +27,7 @@ const (
 )
 
 // Start connects to Discord's Gateway for direct message ingress.
-func (d *DiscordChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
+func (d *DiscordChannel) Start(ctx context.Context, handler InboundHandler) error {
 	d.lifecycleMu.Lock()
 	if d.runtime != nil {
 		d.lifecycleMu.Unlock()
@@ -191,7 +191,7 @@ func (d *DiscordChannel) runGateway(
 	connection *websocket.Conn,
 	heartbeatInterval time.Duration,
 	session *discordGatewaySession,
-	handler func(InboundMessage),
+	handler InboundHandler,
 	startup *discordGatewayStartup,
 ) {
 	currentConnection := connection
@@ -274,7 +274,7 @@ func (d *DiscordChannel) consumeGateway(
 	connection *websocket.Conn,
 	heartbeatInterval time.Duration,
 	session *discordGatewaySession,
-	handler func(InboundMessage),
+	handler InboundHandler,
 	startup *discordGatewayStartup,
 ) (discordGatewayDirective, error) {
 	readCtx, cancelRead := context.WithCancel(ctx)
@@ -322,9 +322,6 @@ func (d *DiscordChannel) consumeGateway(
 			if read.err != nil {
 				return discordGatewayDirective{}, read.err
 			}
-			if read.payload.Sequence != nil {
-				session.setSequence(*read.payload.Sequence)
-			}
 			switch read.payload.Op {
 			case 0:
 				switch read.payload.Type {
@@ -346,7 +343,9 @@ func (d *DiscordChannel) consumeGateway(
 					if err := json.Unmarshal(read.payload.Data, &message); err != nil {
 						continue
 					}
-					d.dispatchGatewayMessage(message, handler)
+					if err := d.dispatchGatewayMessage(ctx, message, handler); err != nil {
+						return discordGatewayDirective{}, fmt.Errorf("accept Discord Gateway message: %w", err)
+					}
 				}
 			case 1:
 				if err := sendDiscordHeartbeat(ctx, connection, session.sequence); err != nil {
@@ -365,6 +364,9 @@ func (d *DiscordChannel) consumeGateway(
 				}, nil
 			case 11:
 				heartbeatAcknowledged = true
+			}
+			if read.payload.Sequence != nil {
+				session.setSequence(*read.payload.Sequence)
 			}
 		}
 	}

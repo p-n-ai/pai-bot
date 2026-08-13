@@ -73,14 +73,18 @@ type OutboundMessage struct {
 type Channel interface {
 	SendMessage(ctx context.Context, destination string, msg OutboundMessage) error
 	SendTyping(ctx context.Context, destination string) error
-	Start(ctx context.Context, handler func(InboundMessage)) error
+	Start(ctx context.Context, handler InboundHandler) error
 	Stop() error
 }
+
+// InboundHandler durably accepts one normalized message.
+// Adapters must not acknowledge the message when it returns an error.
+type InboundHandler func(context.Context, InboundMessage) error
 
 // WebhookChannel receives inbound messages through an HTTP webhook.
 type WebhookChannel interface {
 	Channel
-	WebhookHandler(handler func(InboundMessage)) http.Handler
+	WebhookHandler(handler InboundHandler) http.Handler
 }
 
 // Gateway routes messages to/from registered channels.
@@ -157,7 +161,7 @@ func (g *Gateway) SendTyping(ctx context.Context, channel, destination string) e
 }
 
 // Webhook returns the inbound HTTP handler for a registered webhook channel.
-func (g *Gateway) Webhook(name string, handler func(InboundMessage)) (http.Handler, error) {
+func (g *Gateway) Webhook(name string, handler InboundHandler) (http.Handler, error) {
 	channel, ok := g.Channel(name)
 	if !ok {
 		return nil, fmt.Errorf("unknown channel: %s", name)
@@ -170,7 +174,7 @@ func (g *Gateway) Webhook(name string, handler func(InboundMessage)) (http.Handl
 }
 
 // Webhooks returns every registered HTTP ingress adapter by its channel name.
-func (g *Gateway) Webhooks(handler func(InboundMessage)) map[string]http.Handler {
+func (g *Gateway) Webhooks(handler InboundHandler) map[string]http.Handler {
 	webhooks := make(map[string]http.Handler)
 	for _, entry := range g.channelEntries() {
 		channel, ok := entry.channel.(WebhookChannel)
@@ -183,7 +187,7 @@ func (g *Gateway) Webhooks(handler func(InboundMessage)) map[string]http.Handler
 }
 
 // StartAll starts all registered channels with the given message handler.
-func (g *Gateway) StartAll(ctx context.Context, handler func(InboundMessage)) error {
+func (g *Gateway) StartAll(ctx context.Context, handler InboundHandler) error {
 	var started []channelEntry
 	for _, entry := range g.channelEntries() {
 		name, ch := entry.name, entry.channel
@@ -247,7 +251,7 @@ func (m *MockChannel) SendTyping(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *MockChannel) Start(_ context.Context, _ func(InboundMessage)) error {
+func (m *MockChannel) Start(_ context.Context, _ InboundHandler) error {
 	return nil
 }
 

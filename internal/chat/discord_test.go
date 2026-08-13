@@ -5,6 +5,7 @@ package chat
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
@@ -37,8 +38,9 @@ func TestDiscordChannelWebhookRespondsToSignedPing(t *testing.T) {
 	request.Header.Set("X-Signature-Ed25519", hex.EncodeToString(ed25519.Sign(privateKey, append([]byte(timestamp), body...))))
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("Discord ping must not dispatch a tutor message")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -80,8 +82,9 @@ func TestDiscordChannelWebhookRejectsBotTokenForwarding(t *testing.T) {
 	request.Header.Set("X-Discord-Gateway-Token", "discord-bot-token")
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("bot-token forwarding must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {
@@ -107,8 +110,9 @@ func TestDiscordChannelWebhookRejectsInvalidInteractionSignature(t *testing.T) {
 	request.Header.Set("X-Signature-Ed25519", hex.EncodeToString(make([]byte, ed25519.SignatureSize)))
 	recorder := httptest.NewRecorder()
 
-	channel.WebhookHandler(func(InboundMessage) {
+	channel.WebhookHandler(func(context.Context, InboundMessage) error {
 		t.Fatal("invalid interaction must not dispatch")
+		return nil
 	}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusUnauthorized {

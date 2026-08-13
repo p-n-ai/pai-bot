@@ -14,7 +14,8 @@ import (
 )
 
 type TurnProcessor interface {
-	ProcessAndDeliver(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error)
+	ProcessTurn(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error)
+	DeliverTurn(ctx context.Context, msg chat.InboundMessage, result agent.TurnResult) error
 }
 
 type TenantTurnRouter struct {
@@ -39,12 +40,20 @@ func NewTenantTurnRouter(defaultProcessor TurnProcessor, newForTenant func(strin
 	}, nil
 }
 
-func (r *TenantTurnRouter) ProcessAndDeliver(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
+func (r *TenantTurnRouter) ProcessTurn(ctx context.Context, msg chat.InboundMessage) (agent.TurnResult, error) {
 	processor, err := r.processorFor(msg)
 	if err != nil {
 		return agent.TurnResult{}, err
 	}
-	return processor.ProcessAndDeliver(ctx, msg)
+	return processor.ProcessTurn(ctx, msg)
+}
+
+func (r *TenantTurnRouter) DeliverTurn(ctx context.Context, msg chat.InboundMessage, result agent.TurnResult) error {
+	processor, err := r.processorFor(msg)
+	if err != nil {
+		return err
+	}
+	return processor.DeliverTurn(ctx, msg, result)
 }
 
 func (r *TenantTurnRouter) processorFor(msg chat.InboundMessage) (TurnProcessor, error) {

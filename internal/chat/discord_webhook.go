@@ -14,7 +14,7 @@ import (
 const maxDiscordWebhookBody = 1 << 20
 
 // WebhookHandler verifies and handles Discord interactions.
-func (d *DiscordChannel) WebhookHandler(_ func(InboundMessage)) http.Handler {
+func (d *DiscordChannel) WebhookHandler(_ InboundHandler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)

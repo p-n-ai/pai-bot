@@ -31,7 +31,7 @@ type recordingWebhookChannel struct {
 	handler http.Handler
 }
 
-func (c *recordingWebhookChannel) WebhookHandler(func(chat.InboundMessage)) http.Handler {
+func (c *recordingWebhookChannel) WebhookHandler(chat.InboundHandler) http.Handler {
 	return c.handler
 }
 
@@ -45,7 +45,7 @@ func (c *recordingChannel) SendTyping(_ context.Context, userID string) error {
 	return nil
 }
 
-func (c *recordingChannel) Start(context.Context, func(chat.InboundMessage)) error {
+func (c *recordingChannel) Start(context.Context, chat.InboundHandler) error {
 	c.starts++
 	if c.startOrder != nil {
 		*c.startOrder = append(*c.startOrder, c.name)
@@ -135,7 +135,7 @@ func TestGatewayDiscoversFutureWebhookAdapters(t *testing.T) {
 	gw.Register("future-chat", &recordingWebhookChannel{handler: expected})
 	gw.Register("polling-only", &recordingChannel{})
 
-	webhooks := gw.Webhooks(func(chat.InboundMessage) {})
+	webhooks := gw.Webhooks(func(context.Context, chat.InboundMessage) error { return nil })
 	if len(webhooks) != 1 || webhooks["future-chat"] == nil {
 		t.Fatalf("Webhooks() = %#v, want future-chat only", webhooks)
 	}
@@ -149,7 +149,7 @@ func TestGateway_StartAllStartsEachChannel(t *testing.T) {
 	gw.Register("telegram", telegram)
 	gw.Register("whatsapp", whatsapp)
 
-	if err := gw.StartAll(context.Background(), func(chat.InboundMessage) {}); err != nil {
+	if err := gw.StartAll(context.Background(), func(context.Context, chat.InboundMessage) error { return nil }); err != nil {
 		t.Fatalf("StartAll() error = %v", err)
 	}
 	if telegram.starts != 1 || whatsapp.starts != 1 {
@@ -172,7 +172,7 @@ func TestGateway_StartAllDoesNotHoldLockWhileStartingChannel(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- gw.StartAll(context.Background(), func(chat.InboundMessage) {})
+		done <- gw.StartAll(context.Background(), func(context.Context, chat.InboundMessage) error { return nil })
 	}()
 
 	select {
@@ -200,7 +200,7 @@ func TestGateway_StartAllRollsBackStartedChannelsAfterFailure(t *testing.T) {
 	gw.Register("slack", slack)
 	gw.Register("teams", teams)
 
-	err := gw.StartAll(context.Background(), func(chat.InboundMessage) {})
+	err := gw.StartAll(context.Background(), func(context.Context, chat.InboundMessage) error { return nil })
 	if err == nil || !errors.Is(err, slack.startErr) {
 		t.Fatalf("StartAll() error = %v, want Slack startup error", err)
 	}

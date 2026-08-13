@@ -103,8 +103,9 @@ func TestDiscordChannelGatewayReceivesMessagesAndMaintainsSession(t *testing.T) 
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
 	messages := make(chan InboundMessage, 2)
-	if err := channel.Start(t.Context(), func(message InboundMessage) {
+	if err := channel.Start(t.Context(), func(_ context.Context, message InboundMessage) error {
 		messages <- message
+		return nil
 	}); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -216,7 +217,7 @@ func TestDiscordChannelGatewayStopsOnContextCancellation(t *testing.T) {
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
 	ctx, cancel := context.WithCancel(t.Context())
-	if err := channel.Start(ctx, func(InboundMessage) {}); err != nil {
+	if err := channel.Start(ctx, func(context.Context, InboundMessage) error { return nil }); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	<-connected
@@ -252,7 +253,7 @@ func TestDiscordChannelGatewayStartTimesOutWaitingForHello(t *testing.T) {
 	channel.gatewayHandshakeTimeout = 250 * time.Millisecond
 
 	startedAt := time.Now()
-	err := channel.Start(t.Context(), func(InboundMessage) {})
+	err := channel.Start(t.Context(), func(context.Context, InboundMessage) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "HELLO") {
 		t.Fatalf("Start() error = %v, want bounded HELLO timeout", err)
 	}
@@ -320,7 +321,10 @@ func TestDiscordChannelGatewayReconnectsWithResumeAfterOpcodeSeven(t *testing.T)
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
 	channel.gatewayReconnectWait = noDiscordGatewayReconnectWait
-	if err := channel.Start(t.Context(), func(got InboundMessage) { message <- got }); err != nil {
+	if err := channel.Start(t.Context(), func(_ context.Context, got InboundMessage) error {
+		message <- got
+		return nil
+	}); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	t.Cleanup(func() { _ = channel.Stop() })
@@ -389,7 +393,7 @@ func TestDiscordChannelGatewayInvalidSessionReidentifiesWhenNotResumable(t *test
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
 	channel.gatewayReconnectWait = noDiscordGatewayReconnectWait
-	if err := channel.Start(t.Context(), func(InboundMessage) {}); err != nil {
+	if err := channel.Start(t.Context(), func(context.Context, InboundMessage) error { return nil }); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	t.Cleanup(func() { _ = channel.Stop() })
@@ -446,7 +450,7 @@ func TestDiscordChannelGatewayReconnectsAfterDisconnectAndUsesBackoff(t *testing
 		backoffAttempts <- attempt
 		return nil
 	}
-	if err := channel.Start(t.Context(), func(InboundMessage) {}); err != nil {
+	if err := channel.Start(t.Context(), func(context.Context, InboundMessage) error { return nil }); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	t.Cleanup(func() { _ = channel.Stop() })
@@ -490,7 +494,7 @@ func TestDiscordChannelGatewayReportsTerminalRuntimeError(t *testing.T) {
 	defer server.Close()
 
 	channel := newDiscordGatewayTestChannel(t, server.URL)
-	err := channel.Start(t.Context(), func(InboundMessage) {})
+	err := channel.Start(t.Context(), func(context.Context, InboundMessage) error { return nil })
 	<-identified
 	if err == nil || websocket.CloseStatus(err) != websocket.StatusCode(4004) {
 		t.Fatalf("Start() error = %v, want Discord authentication close error", err)
