@@ -11,12 +11,16 @@ import (
 	"github.com/coder/websocket"
 )
 
-func (d *DiscordChannel) dispatchGatewayMessage(message discordGatewayData, handler func(InboundMessage)) {
+func (d *DiscordChannel) dispatchGatewayMessage(
+	ctx context.Context,
+	message discordGatewayData,
+	handler InboundHandler,
+) error {
 	if message.ID == "" ||
 		message.ChannelID == "" ||
 		message.Author.ID == "" ||
 		message.Author.Bot {
-		return
+		return nil
 	}
 
 	guildID := message.GuildID
@@ -27,7 +31,10 @@ func (d *DiscordChannel) dispatchGatewayMessage(message discordGatewayData, hand
 	if firstName == "" {
 		firstName = message.Author.Username
 	}
-	handler(InboundMessage{
+	if handler == nil {
+		return nil
+	}
+	return handler(ctx, InboundMessage{
 		Channel:    "discord",
 		UserID:     message.Author.ID,
 		ExternalID: message.Author.ID,

@@ -94,13 +94,13 @@ func (s *SlackChannel) SendMessage(ctx context.Context, destinationID string, ms
 func (s *SlackChannel) SendTyping(context.Context, string) error { return nil }
 
 // Start is a no-op because Slack messages arrive through the Events API webhook.
-func (s *SlackChannel) Start(context.Context, func(InboundMessage)) error { return nil }
+func (s *SlackChannel) Start(context.Context, InboundHandler) error { return nil }
 
 // Stop is a no-op for webhook-mode Slack channels.
 func (s *SlackChannel) Stop() error { return nil }
 
 // WebhookHandler verifies and normalizes Slack Events API requests.
-func (s *SlackChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
+func (s *SlackChannel) WebhookHandler(handler InboundHandler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)

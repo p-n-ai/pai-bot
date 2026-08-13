@@ -87,7 +87,7 @@ func (t *TeamsChannel) SendTyping(ctx context.Context, destination string) error
 }
 
 // Start is a no-op because Teams activities arrive through the webhook.
-func (t *TeamsChannel) Start(context.Context, func(InboundMessage)) error { return nil }
+func (t *TeamsChannel) Start(context.Context, InboundHandler) error { return nil }
 
 // Stop is a no-op for webhook-mode Teams channels.
 func (t *TeamsChannel) Stop() error { return nil }
@@ -233,7 +233,7 @@ func newTeamsHTTPClient() *http.Client {
 }
 
 // WebhookHandler authenticates and normalizes Bot Framework message activities.
-func (t *TeamsChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
+func (t *TeamsChannel) WebhookHandler(handler InboundHandler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)

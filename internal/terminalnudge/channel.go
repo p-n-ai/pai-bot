@@ -27,7 +27,7 @@ func (c *CaptureChannel) SendTyping(_ context.Context, _ string) error {
 	return nil
 }
 
-func (c *CaptureChannel) Start(_ context.Context, _ func(chat.InboundMessage)) error {
+func (c *CaptureChannel) Start(_ context.Context, _ chat.InboundHandler) error {
 	return nil
 }
 

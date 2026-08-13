@@ -523,16 +523,10 @@ func run(ctx context.Context, cfg *config.Config) (runErr error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("initialize chat ingress: %w", err)
 			}
-			acceptInbound := func(msg chat.InboundMessage) {
-				if err := chatIngress.Accept(ctx, msg); err != nil && ctx.Err() == nil {
-					slog.Warn("failed to accept inbound chat message", "channel", msg.Channel, "error", err)
-				}
+			acceptInbound := func(acceptCtx context.Context, msg chat.InboundMessage) error {
+				return chatIngress.Accept(acceptCtx, msg)
 			}
-			acceptWebhook := func(requestCtx context.Context, msg chat.InboundMessage) error {
-				return chatIngress.Accept(requestCtx, msg)
-			}
-
-			chatWebhooks := gw.Webhooks(acceptWebhook)
+			chatWebhooks := gw.Webhooks(acceptInbound)
 
 			authService := auth.NewPostgresService(
 				db.Pool,

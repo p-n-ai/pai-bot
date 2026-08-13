@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
 type memoryInboundDeliveryStore struct {
@@ -122,7 +123,8 @@ func (s *memoryInboundDeliveryStore) claimableLocked(candidate inboundDelivery, 
 			if earlier.TenantID == candidate.TenantID &&
 				earlier.LearnerKey == candidate.LearnerKey &&
 				earlier.AcceptedSequence < candidate.AcceptedSequence &&
-				earlier.Status != inboundDeliveryDelivered {
+				earlier.Status != inboundDeliveryDelivered &&
+				earlier.Status != inboundDeliveryFailed {
 				return false
 			}
 		}
@@ -135,7 +137,8 @@ func (s *memoryInboundDeliveryStore) claimableLocked(candidate inboundDelivery, 
 			if earlier.TenantID == candidate.TenantID &&
 				earlier.DestinationKey == candidate.DestinationKey &&
 				earlier.AcceptedSequence < candidate.AcceptedSequence &&
-				earlier.Status != inboundDeliveryDelivered {
+				earlier.Status != inboundDeliveryDelivered &&
+				earlier.Status != inboundDeliveryFailed {
 				return false
 			}
 		}
@@ -253,9 +256,34 @@ func (s *memoryInboundDeliveryStore) MarkDelivered(
 	return nil
 }
 
+func (s *memoryInboundDeliveryStore) MarkDeliveryFailed(
+	ctx context.Context,
+	id string,
+	token string,
+	now time.Time,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delivery, ok := s.deliveries[id]
+	if !ok || delivery.Status != inboundDeliveryDelivering || delivery.LeaseToken != token ||
+		delivery.LeaseExpiresAt == nil || !delivery.LeaseExpiresAt.After(now) {
+		return ErrInboundDeliveryLeaseLost
+	}
+	delivery.Status = inboundDeliveryFailed
+	delivery.LeaseToken = ""
+	delivery.LeaseExpiresAt = nil
+	delivery.FailedAt = timePointer(now)
+	delivery.UpdatedAt = now
+	s.deliveries[id] = delivery
+	return nil
+}
+
 func (s *memoryInboundDeliveryStore) RecoverExpiredProcessing(
 	ctx context.Context,
-	result agent.TurnResult,
+	resultFor func(chat.InboundMessage) agent.TurnResult,
 	now time.Time,
 	limit int,
 ) (int64, error) {
@@ -277,7 +305,7 @@ func (s *memoryInboundDeliveryStore) RecoverExpiredProcessing(
 			continue
 		}
 		delivery.Status = inboundDeliveryDeliveryPending
-		delivery.Result = result
+		delivery.Result = resultFor(delivery.Message)
 		delivery.NextAttemptAt = now
 		delivery.LeaseToken = ""
 		delivery.LeaseExpiresAt = nil
@@ -288,7 +316,7 @@ func (s *memoryInboundDeliveryStore) RecoverExpiredProcessing(
 	return recovered, nil
 }
 
-func (s *memoryInboundDeliveryStore) DeleteDeliveredBefore(
+func (s *memoryInboundDeliveryStore) DeleteTerminalBefore(
 	ctx context.Context,
 	before time.Time,
 	limit int,
@@ -306,8 +334,11 @@ func (s *memoryInboundDeliveryStore) DeleteDeliveredBefore(
 		if deleted >= int64(limit) {
 			break
 		}
-		if delivery.Status != inboundDeliveryDelivered || delivery.DeliveredAt == nil ||
-			delivery.DeliveredAt.After(before) {
+		terminalAt := delivery.DeliveredAt
+		if delivery.Status == inboundDeliveryFailed {
+			terminalAt = delivery.FailedAt
+		}
+		if terminalAt == nil || terminalAt.After(before) {
 			continue
 		}
 		delete(s.deliveries, id)
@@ -392,7 +423,9 @@ func TestMemoryInboundDeliveryStoreRecoversProcessingAsStoredResult(t *testing.T
 		t.Fatalf("ClaimDue() = %t, %v", ok, err)
 	}
 	recovered, err := store.RecoverExpiredProcessing(
-		t.Context(), agent.TurnResult{Text: "safe result"}, now.Add(time.Minute), 10,
+		t.Context(), func(chat.InboundMessage) agent.TurnResult {
+			return agent.TurnResult{Text: "safe result"}
+		}, now.Add(time.Minute), 10,
 	)
 	if err != nil || recovered != 1 {
 		t.Fatalf("RecoverExpiredProcessing() = %d, %v", recovered, err)

@@ -84,7 +84,7 @@ func (w *WhatsAppChannel) SendTyping(_ context.Context, _ string) error {
 
 // Start is a no-op for WhatsApp — messages arrive via webhook, not polling.
 // Use WebhookHandler() to mount the HTTP handler on the server mux.
-func (w *WhatsAppChannel) Start(_ context.Context, _ func(InboundMessage)) error {
+func (w *WhatsAppChannel) Start(_ context.Context, _ InboundHandler) error {
 	return nil
 }
 
@@ -95,7 +95,7 @@ func (w *WhatsAppChannel) Stop() error {
 
 // WebhookHandler returns an http.Handler for the WhatsApp webhook endpoint.
 // GET requests handle verification; POST requests handle inbound messages.
-func (w *WhatsAppChannel) WebhookHandler(handler InboundWebhookHandler) http.Handler {
+func (w *WhatsAppChannel) WebhookHandler(handler InboundHandler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -124,7 +124,7 @@ func (w *WhatsAppChannel) handleVerification(rw http.ResponseWriter, r *http.Req
 }
 
 // handleInbound parses an inbound WhatsApp webhook payload and dispatches messages.
-func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request, handler InboundWebhookHandler) {
+func (w *WhatsAppChannel) handleInbound(rw http.ResponseWriter, r *http.Request, handler InboundHandler) {
 	body, err := io.ReadAll(http.MaxBytesReader(rw, r.Body, maxWhatsAppWebhookBodyBytes))
 	if err != nil {
 		slog.Error("whatsapp webhook: read body failed", "error", err)

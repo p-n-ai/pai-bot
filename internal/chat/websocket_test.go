@@ -6,6 +6,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -18,6 +19,15 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/auth"
 )
+
+func recordInbound(handler func(InboundMessage)) InboundHandler {
+	return func(_ context.Context, message InboundMessage) error {
+		handler(message)
+		return nil
+	}
+}
+
+func acceptInboundForTest(context.Context, InboundMessage) error { return nil }
 
 // dialAndAuth connects to the test server and waits until the server has
 // finished registering the authenticated connection.
@@ -65,11 +75,11 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 
 	var received []InboundMessage
 	var mu sync.Mutex
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {
+	_ = ws.Start(context.Background(), recordInbound(func(msg InboundMessage) {
 		mu.Lock()
 		received = append(received, msg)
 		mu.Unlock()
-	})
+	}))
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -83,6 +93,17 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 	msg := []byte(`{"type":"message","delivery_id":"delivery-1","text":"hello world"}`)
 	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 		t.Fatalf("write message: %v", err)
+	}
+	_, acceptedData, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read accepted: %v", err)
+	}
+	var accepted wsOutboundMsg
+	if err := json.Unmarshal(acceptedData, &accepted); err != nil {
+		t.Fatalf("decode accepted: %v", err)
+	}
+	if accepted.Type != "accepted" || accepted.DeliveryID != "delivery-1" {
+		t.Fatalf("accepted response = %#v", accepted)
 	}
 
 	// Give the handler a moment to process.
@@ -110,11 +131,11 @@ func TestWSChannel_ConnectAuthAndMessage(t *testing.T) {
 	}
 }
 
-func TestWSChannelLeavesLegacyDeliveryIDEmptyAcrossReconnect(t *testing.T) {
+func TestWSChannelRejectsMissingDeliveryID(t *testing.T) {
 	ws := NewWSChannel()
-	received := make(chan InboundMessage, 2)
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {
-		received <- msg
+	_ = ws.Start(context.Background(), func(context.Context, InboundMessage) error {
+		t.Fatal("message without a delivery ID reached inbound acceptance")
+		return nil
 	})
 
 	srv := httptest.NewServer(ws.Handler())
@@ -122,31 +143,27 @@ func TestWSChannelLeavesLegacyDeliveryIDEmptyAcrossReconnect(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 	payload := []byte(`{"type":"message","text":"249"}`)
 
-	send := func() InboundMessage {
-		conn := dialAndAuth(t, ws, wsURL, "legacy-user")
-		if err := conn.Write(t.Context(), websocket.MessageText, payload); err != nil {
-			t.Fatalf("write message: %v", err)
-		}
-		select {
-		case msg := <-received:
-			_ = conn.Close(websocket.StatusNormalClosure, "")
-			return msg
-		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for inbound message")
-			return InboundMessage{}
-		}
+	conn := dialAndAuth(t, ws, wsURL, "legacy-user")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+	if err := conn.Write(t.Context(), websocket.MessageText, payload); err != nil {
+		t.Fatalf("write message: %v", err)
 	}
-
-	first := send()
-	replay := send()
-	if first.DeliveryID != "" || replay.DeliveryID != "" {
-		t.Fatalf("legacy delivery IDs = %q and %q, want empty IDs for ingress assignment", first.DeliveryID, replay.DeliveryID)
+	_, data, err := conn.Read(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response wsOutboundMsg
+	if err := json.Unmarshal(data, &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Type != "error" || !strings.Contains(response.Text, "delivery ID") {
+		t.Fatalf("response = %#v, want missing delivery ID error", response)
 	}
 }
 
 func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -193,7 +210,7 @@ func TestWSChannel_SendMessageToCorrectUser(t *testing.T) {
 
 func TestWSChannel_NewConnectionReplacesExistingUserConnection(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -230,7 +247,7 @@ func TestWSChannel_NewConnectionReplacesExistingUserConnection(t *testing.T) {
 
 func TestWSChannel_PlainTextResponseOmitsFocusedPage(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -253,7 +270,7 @@ func TestWSChannel_PlainTextResponseOmitsFocusedPage(t *testing.T) {
 
 func TestWSChannel_SendMessageUnknownUserReturnsError(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	err := ws.SendMessage(context.Background(), "nonexistent", OutboundMessage{Text: "hi"})
 	if err == nil {
@@ -266,7 +283,7 @@ func TestWSChannel_SendMessageUnknownUserReturnsError(t *testing.T) {
 
 func TestWSChannel_DisconnectRemovesUser(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -306,11 +323,11 @@ func TestWSChannel_MultipleConcurrentConnections(t *testing.T) {
 
 	var received []InboundMessage
 	var mu sync.Mutex
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {
+	_ = ws.Start(context.Background(), recordInbound(func(msg InboundMessage) {
 		mu.Lock()
 		received = append(received, msg)
 		mu.Unlock()
-	})
+	}))
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -332,7 +349,7 @@ func TestWSChannel_MultipleConcurrentConnections(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			msg, _ := json.Marshal(wsInboundMsg{Type: "message", Text: "hello from client"})
+			msg, _ := json.Marshal(wsInboundMsg{Type: "message", DeliveryID: fmt.Sprintf("delivery-%d", idx), Text: "hello from client"})
 			if err := conns[idx].Write(ctx, websocket.MessageText, msg); err != nil {
 				t.Errorf("client %d write: %v", idx, err)
 			}
@@ -358,7 +375,7 @@ func TestWSChannel_MultipleConcurrentConnections(t *testing.T) {
 
 func TestWSChannel_ConnectedUsersAreSorted(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -378,7 +395,7 @@ func TestWSChannel_ConnectedUsersAreSorted(t *testing.T) {
 
 func TestWSChannel_SendTyping(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -411,7 +428,7 @@ func TestWSChannel_SendTyping(t *testing.T) {
 
 func TestWSChannel_SendNotification(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -447,7 +464,7 @@ func TestWSChannel_SendNotification(t *testing.T) {
 
 func TestWSChannel_AuthFailure_NoUserID(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -478,7 +495,7 @@ func TestWSChannel_AuthFailure_NoUserID(t *testing.T) {
 
 func TestWSChannel_Stop(t *testing.T) {
 	ws := NewWSChannel()
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -543,11 +560,11 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 
 	var received []InboundMessage
 	var mu sync.Mutex
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {
+	_ = ws.Start(context.Background(), recordInbound(func(msg InboundMessage) {
 		mu.Lock()
 		received = append(received, msg)
 		mu.Unlock()
-	})
+	}))
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -581,7 +598,7 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	}
 
 	// Send a message and verify handler receives it.
-	msg := []byte(`{"type":"message","text":"hello from embed"}`)
+	msg := []byte(`{"type":"message","delivery_id":"embed-delivery-1","text":"hello from embed"}`)
 	if err := conn.Write(ctx, websocket.MessageText, msg); err != nil {
 		t.Fatalf("write message: %v", err)
 	}
@@ -605,8 +622,8 @@ func TestWSChannel_EmbedSubprotocolAuth(t *testing.T) {
 	if received[0].IdentityChannel != "embed" || received[0].ExternalID != "guest-external-id" {
 		t.Errorf("authenticated identity = %q/%q", received[0].IdentityChannel, received[0].ExternalID)
 	}
-	if received[0].DeliveryID != "" {
-		t.Errorf("delivery ID = %q, want empty legacy ID for ingress assignment", received[0].DeliveryID)
+	if received[0].DeliveryID != "embed-delivery-1" {
+		t.Errorf("delivery ID = %q, want embed-delivery-1", received[0].DeliveryID)
 	}
 	if received[0].Text != "hello from embed" {
 		t.Errorf("expected text 'hello from embed', got %q", received[0].Text)
@@ -623,7 +640,7 @@ func TestWSChannel_EmbedSubprotocolAuth_InvalidToken(t *testing.T) {
 	}
 
 	ws := NewEmbedWSChannel(store, tm)
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -652,7 +669,7 @@ func TestWSChannel_EmbedOriginUsesTokenBoundParent(t *testing.T) {
 		AllowedOrigins: []string{"https://example.com"},
 	}
 	ws := NewEmbedWSChannel(store, tm)
-	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
 
@@ -701,7 +718,7 @@ func TestWSChannel_EmbedHandshakeLimitIsPerAuthenticatedIdentity(t *testing.T) {
 	}
 	ws := NewEmbedWSChannel(store, tm)
 	ws.rateLimiter = NewEmbedRateLimiter(1, 30, time.Minute)
-	_ = ws.Start(context.Background(), func(InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
 
@@ -745,7 +762,7 @@ func TestWSChannel_MessageSizeLimit(t *testing.T) {
 	}
 
 	ws := NewEmbedWSChannel(store, tm)
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -833,7 +850,7 @@ func TestWSChannel_EmbedRejectsWithoutJWT(t *testing.T) {
 	}
 
 	ws := NewEmbedWSChannel(store, tm)
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()
@@ -862,7 +879,7 @@ func TestWSChannel_EmbedRejectsUnlistedOrigin(t *testing.T) {
 	}
 
 	ws := NewEmbedWSChannel(store, tm)
-	_ = ws.Start(context.Background(), func(msg InboundMessage) {})
+	_ = ws.Start(context.Background(), acceptInboundForTest)
 
 	srv := httptest.NewServer(ws.Handler())
 	defer srv.Close()

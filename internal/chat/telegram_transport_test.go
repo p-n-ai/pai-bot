@@ -49,41 +49,20 @@ func TestTelegramImageDownloadRejectsOversizedContentLength(t *testing.T) {
 	}
 }
 
-func TestTelegramImageSlotsDoNotLimitHandlerExecution(t *testing.T) {
-	var sentUpdates atomic.Bool
+func TestTelegramAdvancesOffsetOnlyAfterInboundAcceptance(t *testing.T) {
+	var requests atomic.Int32
 	channel, err := NewTelegramChannel("test-token")
 	if err != nil {
 		t.Fatal(err)
 	}
 	channel.baseURL = "https://api.telegram.test/bottest-token"
 	channel.client = &http.Client{Transport: telegramRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
-		switch {
-		case strings.HasSuffix(request.URL.Path, "/getUpdates"):
-			if sentUpdates.Swap(true) {
-				<-request.Context().Done()
-				return nil, request.Context().Err()
-			}
-			updates := make([]tgUpdate, 0, telegramImageConcurrency+2)
-			for i := 1; i <= telegramImageConcurrency+1; i++ {
-				updates = append(updates, tgUpdate{
-					UpdateID: i,
-					Message: &tgMessage{
-						MessageID: i,
-						Photo:     []tgPhoto{{FileID: "image"}},
-						Chat:      tgChat{ID: 123},
-						From:      tgUser{ID: 456},
-					},
-				})
-			}
-			updates = append(updates, tgUpdate{
-				UpdateID: telegramImageConcurrency + 2,
-				Message: &tgMessage{
-					MessageID: telegramImageConcurrency + 2,
-					Text:      "after images",
-					Chat:      tgChat{ID: 123},
-					From:      tgUser{ID: 456},
-				},
-			})
+		if strings.HasSuffix(request.URL.Path, "/getUpdates") {
+			requests.Add(1)
+			updates := []tgUpdate{{
+				UpdateID: 1,
+				Message:  &tgMessage{MessageID: 1, Text: "hello", Chat: tgChat{ID: 123}, From: tgUser{ID: 456}},
+			}}
 			body, marshalErr := json.Marshal(map[string]any{"ok": true, "result": updates})
 			if marshalErr != nil {
 				return nil, marshalErr
@@ -93,45 +72,41 @@ func TestTelegramImageSlotsDoNotLimitHandlerExecution(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(string(body))),
 				Header:     make(http.Header),
 			}, nil
-		case strings.HasSuffix(request.URL.Path, "/getFile"):
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"ok":true,"result":{"file_path":"photos/image.jpg"}}`)),
-				Header:     make(http.Header),
-			}, nil
-		default:
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("image")),
-				Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
-			}, nil
 		}
+		return nil, errors.New("unexpected Telegram request")
 	})}
 
-	handlerRelease := make(chan struct{})
-	textHandled := make(chan struct{})
+	accepted := make(chan struct{})
+	var attempts atomic.Int32
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	if err := channel.Start(ctx, func(message InboundMessage) {
-		if message.HasImage {
-			<-handlerRelease
-			return
+	if err := channel.Start(ctx, func(_ context.Context, message InboundMessage) error {
+		if message.DeliveryID != "1" {
+			t.Errorf("delivery ID = %q, want 1", message.DeliveryID)
 		}
-		close(textHandled)
+		if channel.offset != 0 {
+			t.Errorf("offset before acceptance = %d, want 0", channel.offset)
+		}
+		if attempts.Add(1) == 1 {
+			return errors.New("database unavailable")
+		}
+		close(accepted)
+		cancel()
+		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	select {
-	case <-textHandled:
+	case <-accepted:
 	case <-time.After(2 * time.Second):
-		t.Fatal("text message was blocked by running image handlers")
+		t.Fatal("Telegram update was not retried after failed acceptance")
 	}
-
-	close(handlerRelease)
-	cancel()
 	if err := channel.Stop(); err != nil {
 		t.Fatal(err)
+	}
+	if attempts.Load() != 2 || requests.Load() < 2 {
+		t.Fatalf("attempts = %d, requests = %d; want two acceptance attempts", attempts.Load(), requests.Load())
 	}
 }
 

@@ -117,9 +117,9 @@ func TestPostgresInboundDeliveryStorePersistsLifecycleAcrossRestart(t *testing.T
 	if err != nil || inserted || duplicate.Status != inboundDeliveryDelivered {
 		t.Fatalf("Accept(delivered duplicate) = %#v, %t, %v", duplicate, inserted, err)
 	}
-	deleted, err := restarted.DeleteDeliveredBefore(ctx, retryAt, 10)
+	deleted, err := restarted.DeleteTerminalBefore(ctx, retryAt, 10)
 	if err != nil || deleted != 1 {
-		t.Fatalf("DeleteDeliveredBefore() = %d, %v; want one", deleted, err)
+		t.Fatalf("DeleteTerminalBefore() = %d, %v; want one", deleted, err)
 	}
 }
 
@@ -148,14 +148,14 @@ func TestPostgresInboundDeliveryStoreRecoversCrashWithoutReprocessing(t *testing
 	}
 	recoveryAt := now.Add(time.Minute)
 	recovered, err := newPostgresInboundDeliveryStore(pool).RecoverExpiredProcessing(
-		ctx, agent.TurnResult{Text: chatIngressInterruptedResponse}, recoveryAt, 10,
+		ctx, interruptedTurnResult, recoveryAt, 10,
 	)
 	if err != nil || recovered != 1 {
 		t.Fatalf("RecoverExpiredProcessing() = %d, %v", recovered, err)
 	}
 	recovery, ok, err := store.ClaimDue(ctx, "recovery-delivery", recoveryAt, recoveryAt.Add(time.Minute))
 	if err != nil || !ok || recovery.DeliveryID != firstInput.DeliveryID ||
-		recovery.Status != inboundDeliveryDelivering || recovery.Result.Text != chatIngressInterruptedResponse {
+		recovery.Status != inboundDeliveryDelivering || recovery.Result.Text != interruptedTurnResult(firstInput.Message).Text {
 		t.Fatalf("ClaimDue(recovery result) = %#v, %t, %v", recovery, ok, err)
 	}
 	if err := store.MarkDelivered(ctx, recovery.ID, "recovery-delivery", recoveryAt); err != nil {
@@ -165,6 +165,44 @@ func TestPostgresInboundDeliveryStoreRecoversCrashWithoutReprocessing(t *testing
 	if err != nil || !ok || second.DeliveryID != secondInput.DeliveryID ||
 		second.Status != inboundDeliveryProcessing {
 		t.Fatalf("ClaimDue(second) = %#v, %t, %v", second, ok, err)
+	}
+}
+
+func TestPostgresInboundDeliveryStoreFailedDeliveryUnblocksNextMessage(t *testing.T) {
+	ctx := context.Background()
+	pool := startInboundDeliveryPostgres(t, ctx)
+	tenantID := seedInboundDeliveryTenant(t, ctx, pool, "inbound-failed-delivery")
+	store := newPostgresInboundDeliveryStore(pool)
+	now := time.Date(2026, 8, 13, 10, 0, 0, 0, time.UTC)
+	first := postgresInboundDeliveryInput(tenantID, "delivery-failed", "first")
+	second := postgresInboundDeliveryInput(tenantID, "delivery-next", "second")
+	if _, _, err := store.Accept(ctx, first, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Accept(ctx, second, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	processing, ok, err := store.ClaimDue(ctx, "processor", now, now.Add(time.Minute))
+	if err != nil || !ok || processing.DeliveryID != first.DeliveryID {
+		t.Fatalf("ClaimDue(processing) = %#v, %t, %v", processing, ok, err)
+	}
+	if err := store.CompleteProcessing(ctx, processing.ID, processing.LeaseToken, agent.TurnResult{Text: "reply"}, now); err != nil {
+		t.Fatal(err)
+	}
+	delivering, ok, err := store.ClaimDue(ctx, "deliverer", now, now.Add(time.Minute))
+	if err != nil || !ok || delivering.Status != inboundDeliveryDelivering {
+		t.Fatalf("ClaimDue(delivery) = %#v, %t, %v", delivering, ok, err)
+	}
+	if err := store.MarkDeliveryFailed(ctx, delivering.ID, delivering.LeaseToken, now); err != nil {
+		t.Fatal(err)
+	}
+	next, ok, err := store.ClaimDue(ctx, "next-processor", now.Add(time.Second), now.Add(time.Minute))
+	if err != nil || !ok || next.DeliveryID != second.DeliveryID || next.Status != inboundDeliveryProcessing {
+		t.Fatalf("ClaimDue(next) = %#v, %t, %v", next, ok, err)
+	}
+	deleted, err := store.DeleteTerminalBefore(ctx, now, 10)
+	if err != nil || deleted != 1 {
+		t.Fatalf("DeleteTerminalBefore() = %d, %v; want failed row", deleted, err)
 	}
 }
 

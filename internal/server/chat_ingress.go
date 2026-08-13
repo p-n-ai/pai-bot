@@ -17,20 +17,20 @@ import (
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
 	"github.com/p-n-ai/pai-bot/internal/chat"
+	"github.com/p-n-ai/pai-bot/internal/i18n"
 )
 
 const (
-	chatIngressLeaseDuration   = 30 * time.Second
-	chatIngressPollInterval    = time.Second
-	chatIngressBaseBackoff     = time.Second
-	chatIngressMaxBackoff      = 5 * time.Minute
-	chatIngressRecordRetention = 24 * time.Hour
-	chatIngressCleanupInterval = 10 * time.Minute
-	chatIngressBatchSize       = 1000
-	chatIngressWorkerCount     = 16
+	chatIngressLeaseDuration       = 30 * time.Second
+	chatIngressPollInterval        = time.Second
+	chatIngressBaseBackoff         = time.Second
+	chatIngressMaxBackoff          = 5 * time.Minute
+	chatIngressRecordRetention     = 24 * time.Hour
+	chatIngressCleanupInterval     = 10 * time.Minute
+	chatIngressBatchSize           = 1000
+	chatIngressWorkerCount         = 16
+	chatIngressMaxDeliveryAttempts = 10
 )
-
-const chatIngressInterruptedResponse = "I hit a technical issue while processing that message. Please try again."
 
 type InboundTurnProcessor interface {
 	ProcessTurn(context.Context, chat.InboundMessage) (agent.TurnResult, error)
@@ -38,22 +38,24 @@ type InboundTurnProcessor interface {
 }
 
 type chatIngressConfig struct {
-	LeaseDuration time.Duration
-	PollInterval  time.Duration
-	BaseBackoff   time.Duration
-	MaxBackoff    time.Duration
-	WorkerCount   int
-	Now           func() time.Time
+	LeaseDuration       time.Duration
+	PollInterval        time.Duration
+	BaseBackoff         time.Duration
+	MaxBackoff          time.Duration
+	WorkerCount         int
+	MaxDeliveryAttempts int
+	Now                 func() time.Time
 }
 
 func defaultChatIngressConfig() chatIngressConfig {
 	return chatIngressConfig{
-		LeaseDuration: chatIngressLeaseDuration,
-		PollInterval:  chatIngressPollInterval,
-		BaseBackoff:   chatIngressBaseBackoff,
-		MaxBackoff:    chatIngressMaxBackoff,
-		WorkerCount:   chatIngressWorkerCount,
-		Now:           time.Now,
+		LeaseDuration:       chatIngressLeaseDuration,
+		PollInterval:        chatIngressPollInterval,
+		BaseBackoff:         chatIngressBaseBackoff,
+		MaxBackoff:          chatIngressMaxBackoff,
+		WorkerCount:         chatIngressWorkerCount,
+		MaxDeliveryAttempts: chatIngressMaxDeliveryAttempts,
+		Now:                 time.Now,
 	}
 }
 
@@ -94,8 +96,8 @@ func newChatIngress(
 	if cfg.MaxBackoff < cfg.BaseBackoff {
 		return nil, errors.New("chat ingress max backoff must not be shorter than base backoff")
 	}
-	if cfg.WorkerCount <= 0 {
-		return nil, errors.New("chat ingress worker count must be positive")
+	if cfg.WorkerCount <= 0 || cfg.MaxDeliveryAttempts <= 0 {
+		return nil, errors.New("chat ingress worker and delivery attempt counts must be positive")
 	}
 	if cfg.Now == nil {
 		return nil, errors.New("chat ingress clock is required")
@@ -176,10 +178,10 @@ func (i *ChatIngress) Run(ctx context.Context) {
 			i.recoverExpiredProcessing(ctx)
 			claimWork = true
 		case <-cleanup.C:
-			if _, err := i.store.DeleteDeliveredBefore(
+			if _, err := i.store.DeleteTerminalBefore(
 				ctx, i.now().Add(-chatIngressRecordRetention), chatIngressBatchSize,
 			); err != nil && ctx.Err() == nil {
-				slog.Warn("clean delivered inbound records failed", "error_category", "store")
+				slog.Warn("clean terminal inbound records failed", "error_category", "store")
 			}
 		case <-completed:
 			active--
@@ -223,7 +225,7 @@ func (i *ChatIngress) process(ctx context.Context, delivery inboundDelivery) {
 	}
 	if processErr != nil {
 		slog.Error("process inbound turn failed", "delivery_id", delivery.ID, "error_category", "turn")
-		result = interruptedTurnResult()
+		result = interruptedTurnResult(delivery.Message)
 	}
 	if err := i.store.CompleteProcessing(ctx, delivery.ID, delivery.LeaseToken, result, i.now()); err != nil {
 		if ctx.Err() == nil {
@@ -249,6 +251,19 @@ func (i *ChatIngress) deliver(ctx context.Context, delivery inboundDelivery) {
 	}
 	if deliveryErr != nil {
 		if ctx.Err() != nil {
+			return
+		}
+		if delivery.DeliveryAttemptCount >= i.cfg.MaxDeliveryAttempts {
+			if err := i.store.MarkDeliveryFailed(ctx, delivery.ID, delivery.LeaseToken, i.now()); err != nil {
+				slog.Error("mark inbound delivery failed", "delivery_id", delivery.ID, "error_category", "store")
+				return
+			}
+			slog.Error("inbound turn delivery exhausted retries",
+				"delivery_id", delivery.ID,
+				"attempt_count", delivery.DeliveryAttemptCount,
+				"error_category", "channel",
+			)
+			i.notify()
 			return
 		}
 		nextAttempt := i.now().Add(i.backoff(delivery.DeliveryAttemptCount))
@@ -302,13 +317,13 @@ func withInboundLease[T any](
 				ctx, delivery.ID, delivery.LeaseToken, status, now, now.Add(ingress.cfg.LeaseDuration),
 			); err != nil {
 				cancel()
-				result := <-done
-				return result.value, result.err, err
+				var zero T
+				return zero, nil, err
 			}
 		case <-ctx.Done():
 			cancel()
-			result := <-done
-			return result.value, result.err, ctx.Err()
+			var zero T
+			return zero, nil, ctx.Err()
 		}
 	}
 }
@@ -321,7 +336,7 @@ func (i *ChatIngress) claimDue(ctx context.Context) (inboundDelivery, bool, erro
 func (i *ChatIngress) recoverExpiredProcessing(ctx context.Context) {
 	_, err := i.store.RecoverExpiredProcessing(
 		ctx,
-		agent.TurnResult{Text: chatIngressInterruptedResponse},
+		interruptedTurnResult,
 		i.now(),
 		chatIngressBatchSize,
 	)
@@ -342,8 +357,9 @@ func (i *ChatIngress) acceptInput(message chat.InboundMessage) (
 		return chat.InboundMessage{}, inboundDeliveryAcceptInput{}, errors.New("inbound chat channel is required")
 	}
 	message.TenantID = strings.TrimSpace(message.TenantID)
-	if message.TenantID == "" {
-		message.TenantID = i.defaultTenantID
+	storageTenantID := message.TenantID
+	if storageTenantID == "" {
+		storageTenantID = i.defaultTenantID
 	}
 	message.DeliveryID = strings.TrimSpace(message.DeliveryID)
 	if message.DeliveryID == "" {
@@ -360,7 +376,7 @@ func (i *ChatIngress) acceptInput(message chat.InboundMessage) (
 		return chat.InboundMessage{}, inboundDeliveryAcceptInput{}, errors.New("inbound chat learner and destination are required")
 	}
 	return message, inboundDeliveryAcceptInput{
-		TenantID: message.TenantID, Channel: message.Channel, DeliveryID: message.DeliveryID,
+		TenantID: storageTenantID, Channel: message.Channel, DeliveryID: message.DeliveryID,
 		LearnerKey: learnerKey, DestinationKey: inboundCompositeKey(message.Channel, destination),
 	}, nil
 }
@@ -393,8 +409,8 @@ func inboundCompositeKey(parts ...string) string {
 	return key.String()
 }
 
-func interruptedTurnResult() agent.TurnResult {
-	return agent.TurnResult{Text: chatIngressInterruptedResponse}
+func interruptedTurnResult(message chat.InboundMessage) agent.TurnResult {
+	return agent.TurnResult{Text: i18n.S(message.Language, i18n.MsgTechnicalIssue)}
 }
 
 func (i *ChatIngress) backoff(attempt int) time.Duration {

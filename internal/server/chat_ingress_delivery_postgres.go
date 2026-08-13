@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/p-n-ai/pai-bot/internal/agent"
+	"github.com/p-n-ai/pai-bot/internal/chat"
 )
 
 type postgresInboundDeliveryStore struct {
@@ -133,7 +134,7 @@ func (s *postgresInboundDeliveryStore) ClaimDue(
 					WHERE earlier.tenant_id = delivery.tenant_id
 					  AND earlier.learner_key = delivery.learner_key
 					  AND earlier.accepted_sequence < delivery.accepted_sequence
-					  AND earlier.status <> 'delivered'
+					  AND earlier.status NOT IN ('delivered', 'failed')
 				 ))
 				OR (delivery.status = 'delivery_pending' AND delivery.next_attempt_at <= $2
 				 AND NOT EXISTS (
@@ -141,7 +142,7 @@ func (s *postgresInboundDeliveryStore) ClaimDue(
 					WHERE earlier.tenant_id = delivery.tenant_id
 					  AND earlier.destination_key = delivery.destination_key
 					  AND earlier.accepted_sequence < delivery.accepted_sequence
-					  AND earlier.status <> 'delivered'
+					  AND earlier.status NOT IN ('delivered', 'failed')
 				 ))
 				OR (delivery.status = 'delivering' AND delivery.lease_expires_at <= $2)
 			)
@@ -247,39 +248,82 @@ func (s *postgresInboundDeliveryStore) MarkDelivered(
 	return fencedInboundDeliveryTransition("mark inbound delivery delivered", tag, err)
 }
 
+func (s *postgresInboundDeliveryStore) MarkDeliveryFailed(
+	ctx context.Context,
+	id string,
+	token string,
+	now time.Time,
+) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE chat_inbound_deliveries
+		SET status = 'failed', failed_at = $3,
+		    lease_token = NULL, lease_expires_at = NULL, updated_at = $3
+		WHERE id = $1::uuid AND lease_token = $2 AND status = 'delivering'
+		  AND lease_expires_at > $3`, id, token, now)
+	return fencedInboundDeliveryTransition("mark inbound delivery failed", tag, err)
+}
+
 func (s *postgresInboundDeliveryStore) RecoverExpiredProcessing(
 	ctx context.Context,
-	result agent.TurnResult,
+	resultFor func(chat.InboundMessage) agent.TurnResult,
 	now time.Time,
 	limit int,
 ) (int64, error) {
 	if limit <= 0 {
 		return 0, errors.New("inbound delivery recovery limit must be positive")
 	}
-	payload, err := json.Marshal(newInboundTurnResultPayload(result))
-	if err != nil {
-		return 0, fmt.Errorf("encode recovered inbound result: %w", err)
+	if resultFor == nil {
+		return 0, errors.New("inbound delivery recovery result renderer is required")
 	}
-	tag, err := s.pool.Exec(ctx, `
-		WITH expired AS (
-			SELECT id FROM chat_inbound_deliveries
-			WHERE status = 'processing' AND lease_expires_at <= $1
-			ORDER BY accepted_sequence
-			FOR UPDATE SKIP LOCKED
-			LIMIT $3
-		)
-		UPDATE chat_inbound_deliveries AS delivery
-		SET status = 'delivery_pending', result_payload = $2::jsonb,
-		    next_attempt_at = $1, lease_token = NULL, lease_expires_at = NULL, updated_at = $1
-		FROM expired
-		WHERE delivery.id = expired.id`, now, payload, limit)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return 0, fmt.Errorf("recover expired inbound processing: %w", err)
+		return 0, fmt.Errorf("begin expired inbound processing recovery: %w", err)
 	}
-	return tag.RowsAffected(), nil
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	rows, err := tx.Query(ctx, `
+		SELECT `+inboundDeliveryColumns+`
+		FROM chat_inbound_deliveries
+		WHERE status = 'processing' AND lease_expires_at <= $1
+		ORDER BY accepted_sequence
+		FOR UPDATE SKIP LOCKED
+		LIMIT $2`, now, limit)
+	if err != nil {
+		return 0, fmt.Errorf("select expired inbound processing: %w", err)
+	}
+	var expired []inboundDelivery
+	for rows.Next() {
+		delivery, scanErr := scanInboundDelivery(rows)
+		if scanErr != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan expired inbound processing: %w", scanErr)
+		}
+		expired = append(expired, delivery)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("read expired inbound processing: %w", err)
+	}
+	rows.Close()
+	for _, delivery := range expired {
+		payload, marshalErr := json.Marshal(newInboundTurnResultPayload(resultFor(delivery.Message)))
+		if marshalErr != nil {
+			return 0, fmt.Errorf("encode recovered inbound result: %w", marshalErr)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE chat_inbound_deliveries
+			SET status = 'delivery_pending', result_payload = $2::jsonb,
+			    next_attempt_at = $1, lease_token = NULL, lease_expires_at = NULL, updated_at = $1
+			WHERE id = $3::uuid`, now, payload, delivery.ID); err != nil {
+			return 0, fmt.Errorf("recover expired inbound processing: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit expired inbound processing recovery: %w", err)
+	}
+	return int64(len(expired)), nil
 }
 
-func (s *postgresInboundDeliveryStore) DeleteDeliveredBefore(
+func (s *postgresInboundDeliveryStore) DeleteTerminalBefore(
 	ctx context.Context,
 	before time.Time,
 	limit int,
@@ -290,8 +334,9 @@ func (s *postgresInboundDeliveryStore) DeleteDeliveredBefore(
 	tag, err := s.pool.Exec(ctx, `
 		WITH expired AS (
 			SELECT id FROM chat_inbound_deliveries
-			WHERE status = 'delivered' AND delivered_at <= $1
-			ORDER BY delivered_at, accepted_sequence
+			WHERE (status = 'delivered' AND delivered_at <= $1)
+			   OR (status = 'failed' AND failed_at <= $1)
+			ORDER BY COALESCE(delivered_at, failed_at), accepted_sequence
 			FOR UPDATE SKIP LOCKED
 			LIMIT $2
 		)
@@ -299,7 +344,7 @@ func (s *postgresInboundDeliveryStore) DeleteDeliveredBefore(
 		USING expired
 		WHERE delivery.id = expired.id`, before, limit)
 	if err != nil {
-		return 0, fmt.Errorf("delete delivered inbound records: %w", err)
+		return 0, fmt.Errorf("delete terminal inbound records: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -308,7 +353,7 @@ const inboundDeliveryColumns = `
 	id::text, tenant_id::text, channel, delivery_id, learner_key, destination_key,
 	accepted_sequence, inbound_payload, result_payload, status,
 	processing_attempt_count, delivery_attempt_count, next_attempt_at,
-	COALESCE(lease_token, ''), lease_expires_at, delivered_at, created_at, updated_at`
+	COALESCE(lease_token, ''), lease_expires_at, delivered_at, failed_at, created_at, updated_at`
 
 func prefixedInboundDeliveryColumns(alias string) string {
 	return `
@@ -317,7 +362,8 @@ func prefixedInboundDeliveryColumns(alias string) string {
 	` + alias + `.accepted_sequence, ` + alias + `.inbound_payload, ` + alias + `.result_payload,
 	` + alias + `.status, ` + alias + `.processing_attempt_count, ` + alias + `.delivery_attempt_count,
 	` + alias + `.next_attempt_at, COALESCE(` + alias + `.lease_token, ''),
-	` + alias + `.lease_expires_at, ` + alias + `.delivered_at, ` + alias + `.created_at, ` + alias + `.updated_at`
+	` + alias + `.lease_expires_at, ` + alias + `.delivered_at, ` + alias + `.failed_at,
+	` + alias + `.created_at, ` + alias + `.updated_at`
 }
 
 type inboundDeliveryRow interface {
@@ -332,7 +378,8 @@ func scanInboundDelivery(row inboundDeliveryRow) (inboundDelivery, error) {
 		&delivery.LearnerKey, &delivery.DestinationKey, &delivery.AcceptedSequence,
 		&inboundJSON, &resultJSON, &delivery.Status, &delivery.ProcessingAttemptCount,
 		&delivery.DeliveryAttemptCount, &delivery.NextAttemptAt, &delivery.LeaseToken,
-		&delivery.LeaseExpiresAt, &delivery.DeliveredAt, &delivery.CreatedAt, &delivery.UpdatedAt,
+		&delivery.LeaseExpiresAt, &delivery.DeliveredAt, &delivery.FailedAt,
+		&delivery.CreatedAt, &delivery.UpdatedAt,
 	)
 	if err != nil {
 		return inboundDelivery{}, err

@@ -689,18 +689,22 @@
     inputEl.value = '';
     addMessage(text, 'user');
 
-    var msg = JSON.stringify({ type: 'message', delivery_id: newDeliveryID(), text: text });
-    if (connected && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(msg);
-    } else {
-      queue.push(msg);
-    }
+    var deliveryID = newDeliveryID();
+    queue.push({
+      deliveryID: deliveryID,
+      payload: JSON.stringify({ type: 'message', delivery_id: deliveryID, text: text }),
+      sent: false
+    });
+    flushQueue();
   }
 
   function flushQueue() {
-    while (queue.length > 0 && connected && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(queue.shift());
-    }
+    if (!connected || !ws || ws.readyState !== WebSocket.OPEN) return;
+    queue.forEach(function(item) {
+      if (item.sent) return;
+      ws.send(item.payload);
+      item.sent = true;
+    });
   }
 
   function authenticate(cb) {
@@ -754,6 +758,11 @@
                 loadMessagesFromAPI(null);
               }
               break;
+            case 'accepted':
+              queue = queue.filter(function(item) {
+                return item.deliveryID !== msg.delivery_id;
+              });
+              break;
             case 'response':
               addMessage(msg.text, 'bot');
               break;
@@ -776,6 +785,7 @@
         connected = false;
         sendBtn.disabled = true;
         offlineEl.classList.add('active');
+        queue.forEach(function(item) { item.sent = false; });
         setTimeout(function() {
           reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
           connect();

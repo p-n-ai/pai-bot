@@ -49,12 +49,13 @@ func newTestChatIngress(
 		store,
 		processor,
 		chatIngressConfig{
-			LeaseDuration: 90 * time.Millisecond,
-			PollInterval:  5 * time.Millisecond,
-			BaseBackoff:   100 * time.Millisecond,
-			MaxBackoff:    200 * time.Millisecond,
-			WorkerCount:   workers,
-			Now:           time.Now,
+			LeaseDuration:       90 * time.Millisecond,
+			PollInterval:        5 * time.Millisecond,
+			BaseBackoff:         100 * time.Millisecond,
+			MaxBackoff:          200 * time.Millisecond,
+			WorkerCount:         workers,
+			MaxDeliveryAttempts: chatIngressMaxDeliveryAttempts,
+			Now:                 time.Now,
 		},
 	)
 	if err != nil {
@@ -102,6 +103,31 @@ func TestChatIngressDeduplicatesExplicitDeliveryPerChannel(t *testing.T) {
 	case extra := <-processed:
 		t.Fatalf("duplicate delivery processed: %#v", extra)
 	case <-time.After(25 * time.Millisecond):
+	}
+}
+
+func TestChatIngressRoutesTenantlessMessageThroughDefaultProcessor(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	defaultProcessor := &turnProcessorStub{}
+	router, err := NewTenantTurnRouter(defaultProcessor, func(string) (TurnProcessor, error) {
+		return nil, errors.New("tenant factory must not be called")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingress := newTestChatIngress(t, 1, store, router)
+	ctx, cancel, done := runChatIngress(t, ingress)
+	defer stopChatIngress(cancel, done)
+	message := testInboundMessage("default-tenant-delivery", "hello")
+	if err := ingress.Accept(ctx, message); err != nil {
+		t.Fatal(err)
+	}
+	waitForInboundStatus(t, store, message.DeliveryID, inboundDeliveryDelivered)
+	if len(defaultProcessor.messages) != 1 || len(defaultProcessor.deliveries) != 1 {
+		t.Fatalf("default processor calls = process:%d deliver:%d, want one each", len(defaultProcessor.messages), len(defaultProcessor.deliveries))
+	}
+	if got := defaultProcessor.messages[0].TenantID; got != "" {
+		t.Fatalf("routing tenant = %q, want blank default route", got)
 	}
 }
 
@@ -160,7 +186,7 @@ func TestChatIngressStoresFailureResultWithoutReprocessing(t *testing.T) {
 
 	select {
 	case result := <-delivered:
-		if result.Text != chatIngressInterruptedResponse {
+		if result.Text != interruptedTurnResult(message).Text {
 			t.Fatalf("delivered text = %q, want technical response", result.Text)
 		}
 	case <-time.After(time.Second):
@@ -392,16 +418,15 @@ func TestChatIngressCancelsAndDoesNotPersistAfterLeaseLoss(t *testing.T) {
 	}
 }
 
-func TestChatIngressRunWaitsForCanceledWorker(t *testing.T) {
+func TestChatIngressRunDoesNotWaitForeverForUncooperativeWorker(t *testing.T) {
 	store := newMemoryInboundDeliveryStore()
 	started := make(chan struct{})
-	workerDone := make(chan struct{})
+	release := make(chan struct{})
 	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
-		process: func(ctx context.Context, _ chat.InboundMessage) (agent.TurnResult, error) {
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
 			close(started)
-			<-ctx.Done()
-			close(workerDone)
-			return agent.TurnResult{}, ctx.Err()
+			<-release
+			return agent.TurnResult{Text: "late result"}, nil
 		},
 		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error { return nil },
 	})
@@ -414,11 +439,63 @@ func TestChatIngressRunWaitsForCanceledWorker(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("worker did not start")
 	}
-	stopChatIngress(cancel, done)
+	cancel()
 	select {
-	case <-workerDone:
-	default:
-		t.Fatal("Run() returned before its worker stopped")
+	case <-done:
+		close(release)
+	case <-time.After(250 * time.Millisecond):
+		close(release)
+		t.Fatal("Run() waited indefinitely for work that ignored cancellation")
+	}
+}
+
+func TestChatIngressExhaustedDeliveryDoesNotBlockLaterMessage(t *testing.T) {
+	store := newMemoryInboundDeliveryStore()
+	ingress := newTestChatIngress(t, 1, store, chatIngressProcessorStub{
+		process: func(context.Context, chat.InboundMessage) (agent.TurnResult, error) {
+			return agent.TurnResult{Text: "reply"}, nil
+		},
+		deliver: func(context.Context, chat.InboundMessage, agent.TurnResult) error {
+			return errors.New("permanent channel failure")
+		},
+	})
+	now := time.Now().UTC()
+	firstInput := testInboundDeliveryInput("poison", "first")
+	if _, _, err := store.Accept(t.Context(), firstInput, now); err != nil {
+		t.Fatal(err)
+	}
+	processing, ok, err := store.ClaimDue(t.Context(), "process", now, now.Add(time.Minute))
+	if err != nil || !ok {
+		t.Fatalf("claim processing = %t, %v", ok, err)
+	}
+	if err := store.CompleteProcessing(t.Context(), processing.ID, processing.LeaseToken, agent.TurnResult{Text: "reply"}, now); err != nil {
+		t.Fatal(err)
+	}
+	delivering, ok, err := store.ClaimDue(t.Context(), "deliver", now, now.Add(time.Minute))
+	if err != nil || !ok {
+		t.Fatalf("claim delivery = %t, %v", ok, err)
+	}
+	delivering.DeliveryAttemptCount = ingress.cfg.MaxDeliveryAttempts
+	ingress.deliver(t.Context(), delivering)
+	failed, _ := store.snapshotByDeliveryID("poison")
+	if failed.Status != inboundDeliveryFailed {
+		t.Fatalf("exhausted status = %q, want failed", failed.Status)
+	}
+	if _, _, err := store.Accept(t.Context(), testInboundDeliveryInput("next", "second"), now); err != nil {
+		t.Fatal(err)
+	}
+	next, ok, err := store.ClaimDue(t.Context(), "next-process", now, now.Add(time.Minute))
+	if err != nil || !ok || next.DeliveryID != "next" || next.Status != inboundDeliveryProcessing {
+		t.Fatalf("next claim = %#v, %t, %v", next, ok, err)
+	}
+}
+
+func TestInterruptedTurnResultUsesMessageLanguage(t *testing.T) {
+	english := interruptedTurnResult(chat.InboundMessage{Language: "en"})
+	malay := interruptedTurnResult(chat.InboundMessage{Language: "ms"})
+	chinese := interruptedTurnResult(chat.InboundMessage{Language: "zh"})
+	if english.Text == malay.Text || english.Text == chinese.Text || malay.Text == chinese.Text {
+		t.Fatalf("localized failure results are not distinct: %q, %q, %q", english.Text, malay.Text, chinese.Text)
 	}
 }
 

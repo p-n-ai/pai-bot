@@ -20,20 +20,18 @@ import (
 )
 
 const (
-	telegramMaxMessageLen          = 4096
-	telegramMaxImageBytes    int64 = 8 << 20
-	telegramImageConcurrency       = 4
+	telegramMaxMessageLen       = 4096
+	telegramMaxImageBytes int64 = 8 << 20
 )
 
 // TelegramChannel implements the Channel interface for Telegram Bot API.
 type TelegramChannel struct {
-	token      string
-	baseURL    string
-	client     *http.Client
-	offset     int
-	stop       chan struct{}
-	stopOnce   sync.Once
-	imageSlots chan struct{}
+	token    string
+	baseURL  string
+	client   *http.Client
+	offset   int
+	stop     chan struct{}
+	stopOnce sync.Once
 
 	devMode     bool
 	lifecycleMu sync.Mutex
@@ -51,8 +49,7 @@ func NewTelegramChannel(token string) (*TelegramChannel, error) {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		stop:       make(chan struct{}),
-		imageSlots: make(chan struct{}, telegramImageConcurrency),
+		stop: make(chan struct{}),
 	}, nil
 }
 
@@ -174,7 +171,7 @@ func telegramReplyKeyboardAllowed(chatID string) bool {
 	return !strings.HasPrefix(chatID, "-")
 }
 
-func (t *TelegramChannel) Start(ctx context.Context, handler func(InboundMessage)) error {
+func (t *TelegramChannel) Start(ctx context.Context, handler InboundHandler) error {
 	if err := t.syncCommands(); err != nil {
 		slog.Warn("failed to sync Telegram commands", "error", err)
 	}
@@ -206,7 +203,7 @@ func (t *TelegramChannel) Stop() error {
 	return nil
 }
 
-func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMessage)) {
+func (t *TelegramChannel) pollLoop(ctx context.Context, handler InboundHandler) {
 	slog.Info("Telegram long-polling started")
 	for {
 		select {
@@ -229,9 +226,9 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 			}
 
 			for _, u := range updates {
-				t.offset = u.UpdateID + 1
 				msg, ok := mapTelegramInbound(u)
 				if !ok {
+					t.offset = u.UpdateID + 1
 					continue
 				}
 				if msg.CallbackQueryID != "" {
@@ -241,26 +238,18 @@ func (t *TelegramChannel) pollLoop(ctx context.Context, handler func(InboundMess
 				}
 
 				if msg.HasImage && msg.ImageFileID != "" {
-					select {
-					case t.imageSlots <- struct{}{}:
-					case <-ctx.Done():
-						return
-					case <-t.stop:
-						return
+					dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
+					if err != nil {
+						slog.Warn("failed to fetch telegram image", "error", err)
+					} else {
+						msg.ImageDataURL = dataURL
 					}
-					go func() {
-						dataURL, err := t.getImageDataURL(ctx, msg.ImageFileID)
-						<-t.imageSlots
-						if err != nil {
-							slog.Warn("failed to fetch telegram image", "error", err)
-						} else {
-							msg.ImageDataURL = dataURL
-						}
-						handler(msg)
-					}()
-					continue
 				}
-				go handler(msg)
+				if err := handler(ctx, msg); err != nil {
+					slog.Warn("telegram inbound acceptance failed", "error", err)
+					break
+				}
+				t.offset = u.UpdateID + 1
 			}
 		}
 	}

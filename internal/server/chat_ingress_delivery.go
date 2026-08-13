@@ -28,6 +28,7 @@ const (
 	inboundDeliveryDeliveryPending inboundDeliveryStatus = "delivery_pending"
 	inboundDeliveryDelivering      inboundDeliveryStatus = "delivering"
 	inboundDeliveryDelivered       inboundDeliveryStatus = "delivered"
+	inboundDeliveryFailed          inboundDeliveryStatus = "failed"
 )
 
 type inboundDelivery struct {
@@ -47,6 +48,7 @@ type inboundDelivery struct {
 	LeaseToken             string
 	LeaseExpiresAt         *time.Time
 	DeliveredAt            *time.Time
+	FailedAt               *time.Time
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 }
@@ -66,9 +68,10 @@ type inboundDeliveryStore interface {
 	RenewLease(context.Context, string, string, inboundDeliveryStatus, time.Time, time.Time) error
 	CompleteProcessing(context.Context, string, string, agent.TurnResult, time.Time) error
 	ScheduleDeliveryRetry(context.Context, string, string, time.Time, time.Time) error
+	MarkDeliveryFailed(context.Context, string, string, time.Time) error
 	MarkDelivered(context.Context, string, string, time.Time) error
-	RecoverExpiredProcessing(context.Context, agent.TurnResult, time.Time, int) (int64, error)
-	DeleteDeliveredBefore(context.Context, time.Time, int) (int64, error)
+	RecoverExpiredProcessing(context.Context, func(chat.InboundMessage) agent.TurnResult, time.Time, int) (int64, error)
+	DeleteTerminalBefore(context.Context, time.Time, int) (int64, error)
 }
 
 type inboundMessagePayload struct {
@@ -173,7 +176,7 @@ func validateInboundDeliveryAcceptInput(input inboundDeliveryAcceptInput) error 
 			return fmt.Errorf("inbound delivery %s is required", name)
 		}
 	}
-	if input.Message.TenantID != input.TenantID ||
+	if (input.Message.TenantID != "" && input.Message.TenantID != input.TenantID) ||
 		input.Message.Channel != input.Channel ||
 		input.Message.DeliveryID != input.DeliveryID {
 		return errors.New("inbound delivery identity does not match its message")

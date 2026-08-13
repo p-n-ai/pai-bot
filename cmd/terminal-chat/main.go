@@ -646,7 +646,7 @@ func runWSClientOnceTo(serverURL, userID, text string, out io.Writer) error {
 		if err := json.Unmarshal(data, &resp); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		if resp.Type == "typing" {
+		if resp.Type == "typing" || resp.Type == "accepted" {
 			continue
 		}
 		return writeWSResponse(out, "", resp)

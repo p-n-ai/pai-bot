@@ -30,6 +30,7 @@ type wsInboundMsg struct {
 // wsOutboundMsg is the JSON envelope the server sends over the WebSocket.
 type wsOutboundMsg struct {
 	Type        string         `json:"type"`
+	DeliveryID  string         `json:"delivery_id,omitempty"`
 	Text        string         `json:"text,omitempty"`
 	FocusedPage *wsFocusedPage `json:"focused_page,omitempty"`
 }
@@ -42,7 +43,7 @@ type wsFocusedPage struct {
 type WSChannel struct {
 	mu               sync.RWMutex
 	conns            map[string]*websocket.Conn // userID -> connection
-	handler          func(InboundMessage)       // set by Start()
+	handler          InboundHandler             // set by Start()
 	stop             chan struct{}
 	stopOnce         sync.Once
 	embedConfigStore EmbedConfigStore   // nil for non-embed (terminal-chat) use
@@ -317,6 +318,14 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 			slog.Warn("websocket unexpected message type", "type", msg.Type, "user_id", userID)
 			continue
 		}
+		deliveryID := strings.TrimSpace(msg.DeliveryID)
+		if deliveryID == "" {
+			_ = ws.writeJSON(ctx, conn, wsOutboundMsg{
+				Type: "error",
+				Text: "Message delivery ID is required.",
+			})
+			continue
+		}
 
 		// Content filtering for embed connections.
 		if ws.embedConfigStore != nil && containsPromptInjection(msg.Text) {
@@ -346,16 +355,27 @@ func (ws *WSChannel) readLoop(ctx context.Context, conn *websocket.Conn, userID 
 			if ws.embedConfigStore != nil {
 				channel = "embed"
 			}
-			handler(InboundMessage{
+			if err := handler(ctx, InboundMessage{
 				Channel:         channel,
 				UserID:          userID,
 				TenantID:        claims.TenantID,
 				InternalUserID:  claims.Subject,
 				IdentityChannel: claims.Channel,
 				ExternalID:      externalID,
-				DeliveryID:      strings.TrimSpace(msg.DeliveryID),
+				DeliveryID:      deliveryID,
 				Text:            msg.Text,
-			})
+			}); err != nil {
+				_ = ws.writeJSON(ctx, conn, wsOutboundMsg{
+					Type:       "error",
+					DeliveryID: deliveryID,
+					Text:       "Message was not accepted. Reconnecting to retry.",
+				})
+				_ = conn.Close(websocket.StatusTryAgainLater, "inbound persistence unavailable")
+				return
+			}
+			if err := ws.writeJSON(ctx, conn, wsOutboundMsg{Type: "accepted", DeliveryID: deliveryID}); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -398,7 +418,7 @@ func (ws *WSChannel) SendTyping(ctx context.Context, userID string) error {
 
 // Start sets the inbound message handler. For WebSocket, actual connection
 // handling happens via the HTTP handler — Start just stores the callback.
-func (ws *WSChannel) Start(_ context.Context, handler func(InboundMessage)) error {
+func (ws *WSChannel) Start(_ context.Context, handler InboundHandler) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 	ws.handler = handler
